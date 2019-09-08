@@ -19,6 +19,7 @@
 #pragma once
 
 #include <map>
+#include <unordered_map>
 #include <functional>
 #include "cef-headers.hpp"
 
@@ -126,7 +127,7 @@ public:
 #endif
 
 #if !ENABLE_WASHIDDEN
-	bool pendingDocumentVisibilityState = false;
+	std::unordered_map<int, bool> browserVis;
 
 	void SetFrameDocumentVisibility(CefRefPtr<CefBrowser> browser,
 					CefRefPtr<CefFrame> frame,
