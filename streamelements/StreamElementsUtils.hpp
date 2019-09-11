@@ -169,14 +169,19 @@ public:
 	long level() { return m_level; }
 
 private:
-	long* m_counter;
+	long *m_counter;
 	long m_level;
 };
 
-#define PREVENT_RECURSIVE_REENTRY()                         \
-	static long __recursive_nesting_level = 0L; \
+#define PREVENT_RECURSIVE_REENTRY()                                   \
+	static long __recursive_nesting_level = 0L;                   \
 	RecursiveNestingLevelCounter __recursive_nesting_level_guard( \
-		&__recursive_nesting_level);                           \
-	if (__recursive_nesting_level_guard.level() > 1) return;
+		&__recursive_nesting_level);                          \
+	if (__recursive_nesting_level_guard.level() > 1)              \
+		return;
 
 double GetObsGlobalFramesPerSecond();
+
+/* ========================================================= */
+
+void AdviseHostUserInterfaceStateChanged();

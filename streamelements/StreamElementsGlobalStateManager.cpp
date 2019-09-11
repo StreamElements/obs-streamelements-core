@@ -10,6 +10,7 @@
 #include "cef-headers.hpp"
 
 #include <util/threading.h>
+#include <util/util.hpp>
 
 #include <QPushButton>
 #include <QMessageBox>
@@ -44,7 +45,10 @@ static std::string GetCEFStoragePath()
 {
 	std::string version = GetCefVersionString();
 
-	return obs_module_config_path(version.c_str());
+	BPtr<char> rpath = obs_module_config_path(version.c_str());
+	BPtr<char> path = os_get_abs_path_ptr(rpath.Get());
+
+	return path.Get();
 }
 
 /* ========================================================================= */
@@ -331,6 +335,9 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 					GetInstance();
 			context->self->m_cookieManager =
 				new StreamElementsCookieManager(storagePath);
+			context->self->m_windowStateEventFilter =
+				new WindowStateChangeEventFilter(
+					context->self->mainWindow());
 
 			{
 				// Set up "Live Support" button
@@ -518,6 +525,7 @@ void StreamElementsGlobalStateManager::Shutdown()
 			delete self->m_httpClient;
 			// delete self->m_nativeObsControlsManager; // Singleton
 			delete self->m_cookieManager;
+			delete self->m_windowStateEventFilter;
 		},
 		this);
 
@@ -719,7 +727,88 @@ void StreamElementsGlobalStateManager::Reset(bool deleteAllCookies,
 	StartOnBoardingUI(uiModifier);
 }
 
-void StreamElementsGlobalStateManager::PersistState()
+void StreamElementsGlobalStateManager::SerializeUserInterfaceState(
+	CefRefPtr<CefValue> &output)
+{
+	CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+
+	QByteArray geometry = mainWindow()->saveGeometry();
+	QByteArray windowState = mainWindow()->saveState();
+
+	d->SetString("geometry",
+		     base64_encode(geometry.begin(), geometry.size()));
+	d->SetString("windowState",
+		     base64_encode(windowState.begin(), windowState.size()));
+
+	output->SetDictionary(d);
+}
+
+bool StreamElementsGlobalStateManager::DeserializeUserInterfaceState(
+	CefRefPtr<CefValue> input)
+{
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return false;
+
+	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
+
+	bool result = false;
+
+	if (d->HasKey("geometry") && d->GetType("geometry") == VTYPE_STRING) {
+		auto geometry = d->GetValue("geometry");
+
+		if (geometry.get() && geometry->GetType() == VTYPE_STRING) {
+			blog(LOG_INFO,
+			     "obs-browser: state: restoring geometry: %s",
+			     geometry->GetString().ToString().c_str());
+
+			if (mainWindow()->restoreGeometry(
+				    QByteArray::fromStdString(base64_decode(
+					    geometry->GetString().ToString())))) {
+				// https://bugreports.qt.io/browse/QTBUG-46620
+				if (mainWindow()->isMaximized()) {
+					mainWindow()->setGeometry(
+						QApplication::desktop()
+							->availableGeometry(
+								mainWindow()));
+				}
+
+				result = true;
+			} else {
+				blog(LOG_ERROR,
+				     "obs-browser: state: failed restoring geometry: %s",
+				     geometry->GetString().ToString().c_str());
+			}
+		}
+	}
+
+	if (d->HasKey("windowState") &&
+	    d->GetType("windowState") == VTYPE_STRING) {
+		auto windowState = d->GetValue("windowState");
+
+		if (windowState.get() &&
+		    windowState->GetType() == VTYPE_STRING) {
+			blog(LOG_INFO,
+			     "obs-browser: state: restoring windowState: %s",
+			     windowState->GetString().ToString().c_str());
+
+			if (mainWindow()->restoreState(QByteArray::fromStdString(
+				    base64_decode(windowState->GetString()
+							  .ToString())))) {
+				result = true;
+			} else {
+				blog(LOG_ERROR,
+				     "obs-browser: state: failed restoring windowState: %s",
+				     windowState->GetString()
+					     .ToString()
+					     .c_str());
+			}
+		}
+	}
+
+	return result;
+}
+
+void StreamElementsGlobalStateManager::PersistState(bool sendEventToGuest)
 {
 	PREVENT_RECURSIVE_REENTRY();
 
@@ -733,37 +822,36 @@ void StreamElementsGlobalStateManager::PersistState()
 	CefRefPtr<CefValue> root = CefValue::Create();
 	CefRefPtr<CefDictionaryValue> rootDictionary =
 		CefDictionaryValue::Create();
-	root->SetDictionary(rootDictionary);
 
 	CefRefPtr<CefValue> dockingWidgetsState = CefValue::Create();
 	CefRefPtr<CefValue> notificationBarState = CefValue::Create();
 	CefRefPtr<CefValue> workersState = CefValue::Create();
 	CefRefPtr<CefValue> hotkeysState = CefValue::Create();
+	CefRefPtr<CefValue> userInterfaceState = CefValue::Create();
 
 	GetWidgetManager()->SerializeDockingWidgets(dockingWidgetsState);
 	GetWidgetManager()->SerializeNotificationBar(notificationBarState);
 	GetWorkerManager()->Serialize(workersState);
 	GetHotkeyManager()->SerializeHotkeyBindings(hotkeysState, true);
+	SerializeUserInterfaceState(userInterfaceState);
 
 	rootDictionary->SetValue("dockingBrowserWidgets", dockingWidgetsState);
 	rootDictionary->SetValue("notificationBar", notificationBarState);
 	rootDictionary->SetValue("workers", workersState);
 	rootDictionary->SetValue("hotkeyBindings", hotkeysState);
+	rootDictionary->SetValue("userInterfaceState", userInterfaceState);
 
-	QByteArray geometry = mainWindow()->saveGeometry();
-	QByteArray windowState = mainWindow()->saveState();
-
-	rootDictionary->SetString("geometry", base64_encode(geometry.begin(),
-							    geometry.size()));
-	rootDictionary->SetString("windowState",
-				  base64_encode(windowState.begin(),
-						windowState.size()));
+	root->SetDictionary(rootDictionary);
 
 	CefString json = CefWriteJSON(root, JSON_WRITER_DEFAULT);
 
 	std::string base64EncodedJSON = base64_encode(json.ToString());
 
 	StreamElementsConfig::GetInstance()->SetStartupState(base64EncodedJSON);
+
+	if (sendEventToGuest) {
+		AdviseHostUserInterfaceStateChanged();
+	}
 }
 
 void StreamElementsGlobalStateManager::RestoreState()
@@ -800,6 +888,8 @@ void StreamElementsGlobalStateManager::RestoreState()
 	auto notificationBarState = rootDictionary->GetValue("notificationBar");
 	auto workersState = rootDictionary->GetValue("workers");
 	auto hotkeysState = rootDictionary->GetValue("hotkeyBindings");
+	auto userInterfaceState =
+		rootDictionary->GetValue("userInterfaceState");
 
 	if (workersState.get()) {
 		blog(LOG_INFO, "obs-browser: state: restoring workers: %s",
@@ -838,36 +928,14 @@ void StreamElementsGlobalStateManager::RestoreState()
 		GetHotkeyManager()->DeserializeHotkeyBindings(hotkeysState);
 	}
 
-	auto geometry = rootDictionary->GetValue("geometry");
-	auto windowState = rootDictionary->GetValue("windowState");
-
-	if (geometry.get() && geometry->GetType() == VTYPE_STRING) {
-		blog(LOG_INFO, "obs-browser: state: restoring geometry: %s",
-		     geometry->GetString().ToString().c_str());
-
-		mainWindow()->restoreGeometry(QByteArray::fromStdString(
-			base64_decode(geometry->GetString().ToString())));
-
-		// https://bugreports.qt.io/browse/QTBUG-46620
-		if (mainWindow()->isMaximized()) {
-			mainWindow()->setGeometry(
-				QApplication::desktop()->availableGeometry(
-					mainWindow()));
-		}
-	}
-
-	if (windowState.get() && windowState->GetType() == VTYPE_STRING) {
-		blog(LOG_INFO, "obs-browser: state: restoring windowState: %s",
-		     windowState->GetString().ToString().c_str());
-
-		mainWindow()->restoreState(QByteArray::fromStdString(
-			base64_decode(windowState->GetString().ToString())));
+	if (userInterfaceState.get()) {
+		DeserializeUserInterfaceState(userInterfaceState);
 	}
 }
 
 void StreamElementsGlobalStateManager::OnObsExit()
 {
-	PersistState();
+	PersistState(false);
 
 	m_persistStateEnabled = false;
 }

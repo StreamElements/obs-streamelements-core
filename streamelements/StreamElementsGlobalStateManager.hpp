@@ -18,59 +18,126 @@
 #include "StreamElementsNativeOBSControlsManager.hpp"
 #include "StreamElementsCookieManager.hpp"
 
-class StreamElementsGlobalStateManager :
-	public StreamElementsObsAppMonitor
-{
+class StreamElementsGlobalStateManager : public StreamElementsObsAppMonitor {
+private:
+	class WindowStateChangeEventFilter : public QObject {
+	private:
+		QObject *m_target;
+
+	public:
+		WindowStateChangeEventFilter(QObject *target) : m_target(target)
+		{
+			QCoreApplication::instance()->installEventFilter(this);
+		}
+
+		virtual ~WindowStateChangeEventFilter()
+		{
+			QCoreApplication::instance()->removeEventFilter(this);
+		}
+
+		virtual bool eventFilter(QObject *o, QEvent *e) override
+		{
+			if (o == m_target) {
+				switch (e->type()) {
+				case QEvent::Resize:
+				case QEvent::Move:
+				case QEvent::WindowStateChange:
+					AdviseHostUserInterfaceStateChanged();
+					break;
+				}
+			}
+
+			return QObject::eventFilter(o, e);
+		}
+	};
+
 private:
 	StreamElementsGlobalStateManager();
 	virtual ~StreamElementsGlobalStateManager();
 
 public:
-	static StreamElementsGlobalStateManager* GetInstance();
+	static StreamElementsGlobalStateManager *GetInstance();
 
 public:
-	enum UiModifier
-	{
-		Default = 0,
-		OnBoarding = 1,
-		Import = 2
-	};
+	enum UiModifier { Default = 0, OnBoarding = 1, Import = 2 };
 
-	void Initialize(QMainWindow* obs_main_window);
+	void Initialize(QMainWindow *obs_main_window);
 	void Shutdown();
 
-	void Reset(bool deleteAllCookies = true, UiModifier uiModifier = Default);
+	void Reset(bool deleteAllCookies = true,
+		   UiModifier uiModifier = Default);
 	void DeleteCookies();
 	void StartOnBoardingUI(UiModifier uiModifier);
 	void StopOnBoardingUI();
 	void SwitchToOBSStudio();
 
-	void PersistState();
+	void PersistState(bool sendEventToGuest = true);
 	void RestoreState();
 
-	StreamElementsBrowserWidgetManager* GetWidgetManager() { return m_widgetManager; }
-	StreamElementsObsSceneManager* GetObsSceneManager() { return m_obsSceneManager; }
-	StreamElementsMenuManager* GetMenuManager() { return m_menuManager; }
-	StreamElementsBandwidthTestManager* GetBandwidthTestManager() { return m_bwTestManager; }
-	StreamElementsOutputSettingsManager* GetOutputSettingsManager() { return m_outputSettingsManager; }
-	StreamElementsWorkerManager* GetWorkerManager() { return m_workerManager; }
-	StreamElementsHotkeyManager* GetHotkeyManager() { return m_hotkeyManager; }
-	StreamElementsPerformanceHistoryTracker* GetPerformanceHistoryTracker() { return m_performanceHistoryTracker; }
-	StreamElementsAnalyticsEventsManager* GetAnalyticsEventsManager() { return m_analyticsEventsManager; }
-	StreamElementsLocalWebFilesServer* GetLocalWebFilesServer() { return m_localWebFilesServer; }
-	StreamElementsExternalSceneDataProviderManager* GetExternalSceneDataProviderManager() { return m_externalSceneDataProviderManager; }
-	StreamElementsHttpClient* GetHttpClient() { return m_httpClient; }
-	StreamElementsNativeOBSControlsManager* GetNativeOBSControlsManager() { return m_nativeObsControlsManager; }
-	StreamElementsCookieManager* GetCookieManager() { return m_cookieManager; }
-	QMainWindow* mainWindow() { return m_mainWindow; }
+	StreamElementsBrowserWidgetManager *GetWidgetManager()
+	{
+		return m_widgetManager;
+	}
+	StreamElementsObsSceneManager *GetObsSceneManager()
+	{
+		return m_obsSceneManager;
+	}
+	StreamElementsMenuManager *GetMenuManager() { return m_menuManager; }
+	StreamElementsBandwidthTestManager *GetBandwidthTestManager()
+	{
+		return m_bwTestManager;
+	}
+	StreamElementsOutputSettingsManager *GetOutputSettingsManager()
+	{
+		return m_outputSettingsManager;
+	}
+	StreamElementsWorkerManager *GetWorkerManager()
+	{
+		return m_workerManager;
+	}
+	StreamElementsHotkeyManager *GetHotkeyManager()
+	{
+		return m_hotkeyManager;
+	}
+	StreamElementsPerformanceHistoryTracker *GetPerformanceHistoryTracker()
+	{
+		return m_performanceHistoryTracker;
+	}
+	StreamElementsAnalyticsEventsManager *GetAnalyticsEventsManager()
+	{
+		return m_analyticsEventsManager;
+	}
+	StreamElementsLocalWebFilesServer *GetLocalWebFilesServer()
+	{
+		return m_localWebFilesServer;
+	}
+	StreamElementsExternalSceneDataProviderManager *
+	GetExternalSceneDataProviderManager()
+	{
+		return m_externalSceneDataProviderManager;
+	}
+	StreamElementsHttpClient *GetHttpClient() { return m_httpClient; }
+	StreamElementsNativeOBSControlsManager *GetNativeOBSControlsManager()
+	{
+		return m_nativeObsControlsManager;
+	}
+	StreamElementsCookieManager *GetCookieManager()
+	{
+		return m_cookieManager;
+	}
+	QMainWindow *mainWindow() { return m_mainWindow; }
 
 public:
 	bool DeserializeStatusBarTemporaryMessage(CefRefPtr<CefValue> input);
 	bool DeserializePopupWindow(CefRefPtr<CefValue> input);
-	bool DeserializeModalDialog(CefRefPtr<CefValue> input, CefRefPtr<CefValue>& output);
+	bool DeserializeModalDialog(CefRefPtr<CefValue> input,
+				    CefRefPtr<CefValue> &output);
 
 	void ReportIssue();
 	void UninstallPlugin();
+
+	void SerializeUserInterfaceState(CefRefPtr<CefValue> &output);
+	bool DeserializeUserInterfaceState(CefRefPtr<CefValue> input);
 
 protected:
 	virtual void OnObsExit() override;
@@ -78,42 +145,43 @@ protected:
 private:
 	bool m_persistStateEnabled = false;
 	bool m_initialized = false;
-	QMainWindow* m_mainWindow = nullptr;
-	StreamElementsBrowserWidgetManager* m_widgetManager = nullptr;
-	StreamElementsObsSceneManager* m_obsSceneManager = nullptr;
-	StreamElementsMenuManager* m_menuManager = nullptr;
-	StreamElementsBandwidthTestManager* m_bwTestManager = nullptr;
-	StreamElementsOutputSettingsManager* m_outputSettingsManager = nullptr;
-	StreamElementsWorkerManager* m_workerManager = nullptr;
-	StreamElementsHotkeyManager* m_hotkeyManager = nullptr;
-	StreamElementsPerformanceHistoryTracker* m_performanceHistoryTracker = nullptr;
-	StreamElementsAnalyticsEventsManager* m_analyticsEventsManager = nullptr;
-	StreamElementsCrashHandler* m_crashHandler = nullptr;
-	StreamElementsLocalWebFilesServer* m_localWebFilesServer = nullptr;
-	StreamElementsExternalSceneDataProviderManager* m_externalSceneDataProviderManager = nullptr;
-	StreamElementsHttpClient* m_httpClient = nullptr;
-	StreamElementsNativeOBSControlsManager* m_nativeObsControlsManager = nullptr;
+	QMainWindow *m_mainWindow = nullptr;
+	StreamElementsBrowserWidgetManager *m_widgetManager = nullptr;
+	StreamElementsObsSceneManager *m_obsSceneManager = nullptr;
+	StreamElementsMenuManager *m_menuManager = nullptr;
+	StreamElementsBandwidthTestManager *m_bwTestManager = nullptr;
+	StreamElementsOutputSettingsManager *m_outputSettingsManager = nullptr;
+	StreamElementsWorkerManager *m_workerManager = nullptr;
+	StreamElementsHotkeyManager *m_hotkeyManager = nullptr;
+	StreamElementsPerformanceHistoryTracker *m_performanceHistoryTracker =
+		nullptr;
+	StreamElementsAnalyticsEventsManager *m_analyticsEventsManager =
+		nullptr;
+	StreamElementsCrashHandler *m_crashHandler = nullptr;
+	StreamElementsLocalWebFilesServer *m_localWebFilesServer = nullptr;
+	StreamElementsExternalSceneDataProviderManager
+		*m_externalSceneDataProviderManager = nullptr;
+	StreamElementsHttpClient *m_httpClient = nullptr;
+	StreamElementsNativeOBSControlsManager *m_nativeObsControlsManager =
+		nullptr;
 	StreamElementsCookieManager *m_cookieManager = nullptr;
+	WindowStateChangeEventFilter *m_windowStateEventFilter = nullptr;
 
 private:
-	static StreamElementsGlobalStateManager* s_instance;
+	static StreamElementsGlobalStateManager *s_instance;
 
 private:
-	class ThemeChangeListener :
-		public QDockWidget
-	{
+	class ThemeChangeListener : public QDockWidget {
 	public:
 		ThemeChangeListener();
 
 	protected:
-		virtual void changeEvent(QEvent* event) override;
+		virtual void changeEvent(QEvent *event) override;
 
 		std::string m_currentTheme;
 	};
 
-	class ApplicationStateListener :
-		public QObject
-	{
+	class ApplicationStateListener : public QObject {
 	public:
 		ApplicationStateListener();
 		~ApplicationStateListener();
@@ -125,6 +193,6 @@ private:
 		QTimer m_timer;
 	};
 
-	QDockWidget* m_themeChangeListener;
-	ApplicationStateListener* m_appStateListener;
+	QDockWidget *m_themeChangeListener;
+	ApplicationStateListener *m_appStateListener;
 };

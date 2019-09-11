@@ -608,7 +608,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			result->SetString(
 				StreamElementsGlobalStateManager::GetInstance()->GetWorkerManager()->DeserializeOne(args->GetValue(0)));
 
-			StreamElementsGlobalStateManager::GetInstance()->PersistState();
+			StreamElementsGlobalStateManager::GetInstance()->PersistState(false);
 		}
 	API_HANDLER_END();
 
@@ -627,7 +627,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 					StreamElementsGlobalStateManager::GetInstance()->GetWorkerManager()->Remove(id);
 				}
 
-				StreamElementsGlobalStateManager::GetInstance()->PersistState();
+				StreamElementsGlobalStateManager::GetInstance()->PersistState(false);
 
 				result->SetBool(true);
 			}
@@ -728,7 +728,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			config->GetStartupFlags() | StreamElementsConfig::STARTUP_FLAGS_SIGNED_IN);
 
 		StreamElementsGlobalStateManager::GetInstance()->GetMenuManager()->Update();
-		StreamElementsGlobalStateManager::GetInstance()->PersistState();
+		StreamElementsGlobalStateManager::GetInstance()->PersistState(false);
 
 		result->SetBool(true);
 	API_HANDLER_END()
@@ -740,7 +740,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			config->GetStartupFlags() & ~StreamElementsConfig::STARTUP_FLAGS_SIGNED_IN);
 
 		StreamElementsGlobalStateManager::GetInstance()->GetMenuManager()->Update();
-		StreamElementsGlobalStateManager::GetInstance()->PersistState();
+		StreamElementsGlobalStateManager::GetInstance()->PersistState(false);
 
 		result->SetBool(true);
 	API_HANDLER_END()
@@ -943,6 +943,19 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			->AdviseRequestStartStreamingRejected();
 
 		result->SetBool(true);
+	API_HANDLER_END()
+
+	API_HANDLER_BEGIN("getUserInterfaceState")
+		StreamElementsGlobalStateManager::GetInstance()
+				->SerializeUserInterfaceState(result);
+	API_HANDLER_END()
+
+	API_HANDLER_BEGIN("setUserInterfaceState")
+		if (args->GetSize()) {
+			result->SetBool(StreamElementsGlobalStateManager::GetInstance()
+						->DeserializeUserInterfaceState(
+							args->GetValue(0)));
+		}
 	API_HANDLER_END()
 
 	API_HANDLER_BEGIN("crashProgram")

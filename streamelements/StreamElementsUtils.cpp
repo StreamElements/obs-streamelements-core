@@ -1,5 +1,6 @@
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsConfig.hpp"
+#include "StreamElementsCefClient.hpp"
 #include "Version.hpp"
 
 #if CHROME_VERSION_BUILD >= 3770
@@ -1564,4 +1565,35 @@ double GetObsGlobalFramesPerSecond()
 		       (double)config_get_uint(basicConfig, "Video", "FPSDen");
 		break;
 	}
+}
+
+void AdviseHostUserInterfaceStateChanged()
+{
+	static std::mutex mutex;
+
+	static QTimer *t = nullptr;
+
+	std::lock_guard<std::mutex> guard(mutex);
+
+	if (t == nullptr) {
+		t = new QTimer();
+
+		t->moveToThread(qApp->thread());
+		t->setSingleShot(true);
+
+		QObject::connect(t, &QTimer::timeout, [&]() {
+			std::lock_guard<std::mutex> guard(mutex);
+
+			t->deleteLater();
+			t = nullptr;
+
+			// Advise guest code of user interface state changes
+			StreamElementsCefClient::DispatchJSEvent(
+				"hostUserInterfaceStateChanged",
+				"null");
+		});
+	}
+
+	QMetaObject::invokeMethod(t, "start", Qt::QueuedConnection,
+				  Q_ARG(int, 250));
 }

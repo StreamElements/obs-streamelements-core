@@ -112,7 +112,30 @@ bool StreamElementsWidgetManager::AddDockWidget(
 		return false;
 	}
 
-	QDockWidget* dock = new QDockWidget(title, m_parent);
+	class TrackedDockWidget : public QDockWidget {
+	public:
+		TrackedDockWidget(const QString &title, QWidget *parent = Q_NULLPTR,
+				   Qt::WindowFlags flags = Qt::WindowFlags())
+			: QDockWidget(title, parent, flags)
+		{
+		}
+
+	protected:
+		virtual void resizeEvent(QResizeEvent *event) override {
+			QDockWidget::resizeEvent(event);
+
+			AdviseHostUserInterfaceStateChanged();
+		}
+
+		virtual void moveEvent(QMoveEvent *event) override
+		{
+			QDockWidget::moveEvent(event);
+
+			AdviseHostUserInterfaceStateChanged();
+		}
+	};
+
+	QDockWidget *dock = new TrackedDockWidget(title, m_parent);
 
 	dock->setObjectName(QString(id));
 
