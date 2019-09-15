@@ -310,11 +310,19 @@ std::string StreamElementsBrowserWidgetManager::AddDockBrowserWidget(CefRefPtr<C
 
 	std::string id = QUuid::createUuid().toString().toStdString();
 
+	CefRefPtr<CefDictionaryValue> widgetDictionary = input->GetDictionary();
+
+	if (!requestId.size()) {
+		if (widgetDictionary->HasKey("id") &&
+		    widgetDictionary->GetType("id") == VTYPE_STRING) {
+			requestId =
+				widgetDictionary->GetString("id").ToString();
+		}
+	}
+
 	if (requestId.size() && !m_browserWidgets.count(requestId)) {
 		id = requestId;
 	}
-
-	CefRefPtr<CefDictionaryValue> widgetDictionary = input->GetDictionary();
 
 	if (widgetDictionary.get()) {
 		if (widgetDictionary->HasKey("title") && widgetDictionary->HasKey("url")) {
