@@ -7,29 +7,49 @@ configuration: RelWithDebInfo
 clone_folder: c:\local\source
 init:
 - ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
+environment:
+  BUGSPLAT_USERNAME: ilya77@gmail.com
+  BUGSPLAT_PASSWORD:
+    secure: 9c6LeJtXAXvISt7o1o5lnw==
 install:
 - cmd: >-
-    set PREBUILT_CEF_VERSION=3.3440.1805.gbe070f9
+    set PREBUILT_CEF_VERSION=75.1.16+g16a67c4+chromium-75.0.3770.100
 
-    set PREBUILT_OBS_STUDIO_DIST_URL_64=https://cdn-fastly.obsproject.com/downloads/OBS-Studio-23.2.1-Full-x64.zip
+    set PREBUILT_CEF_URL_64=s3://obs-builds/cef/cef_binary_75.1.16+g16a67c4+chromium-75.0.3770.100_windows64_minimal.zip
+    
+    set PREBUILT_CEF_URL_32=s3://obs-builds/cef/cef_binary_75.1.16+g16a67c4+chromium-75.0.3770.100_windows32_minimal.zip
 
-    set PREBUILT_OBS_STUDIO_DIST_URL_32=https://cdn-fastly.obsproject.com/downloads/OBS-Studio-23.2.1-Full-x86.zip
-  
+
+
+    set PREBUILT_OBS_STUDIO_DIST_URL_64=https://cdn-fastly.obsproject.com/downloads/OBS-Studio-24.0-Full-x64.zip
+
+    set PREBUILT_OBS_STUDIO_DIST_URL_32=https://cdn-fastly.obsproject.com/downloads/OBS-Studio-24.0-Full-x86.zip
+
+
+
+
+    if not exist c:\local md c:\local
+
+
+
+
+    aws s3 cp %PREBUILT_CEF_URL_64% c:\local\cef64.zip
+    
+    aws s3 cp %PREBUILT_CEF_URL_32% c:\local\cef32.zip
+
+
+
     cinst -y git
 
     cinst -y cmake
 
     cinst -y curl
 
-
-    if not exist c:\local md c:\local
-
-
     git clone --recursive https://github.com/jp9000/obs-studio.git c:\local\obs-studio
 
     cd /d c:\local\obs-studio
 
-    git checkout 23.2.1
+    git checkout 24.0.0
 
     git submodule update --init --recursive
 
@@ -46,17 +66,9 @@ install:
 
     if exist BugSplat.zip (curl -kL -o BugSplat.zip https://cdn.streamelements.com/obs/dist/third-party/bugsplat/BugSplatNative.zip -f --retry 5 -z BugSplat.zip) else (curl -kL -o BugSplat.zip https://cdn.streamelements.com/obs/dist/third-party/bugsplat/BugSplatNative.zip -f --retry 5 -C -) 2>&1 >nul:
 
-
-    if exist cef64.zip (curl -kL -o cef64.zip https://cdn-fastly.obsproject.com/downloads/cef_binary_%PREBUILT_CEF_VERSION%_windows64.zip -f --retry 5 -z cef64.zip) else (curl -kL -o cef64.zip https://cdn-fastly.obsproject.com/downloads/cef_binary_%PREBUILT_CEF_VERSION%_windows64.zip -f --retry 5 -C -) 2>&1 >nul:
-
-    if exist cef32.zip (curl -kL -o cef32.zip https://cdn-fastly.obsproject.com/downloads/cef_binary_%PREBUILT_CEF_VERSION%_windows32.zip -f --retry 5 -z cef32.zip) else (curl -kL -o cef32.zip https://cdn-fastly.obsproject.com/downloads/cef_binary_%PREBUILT_CEF_VERSION%_windows32.zip -f --retry 5 -C -) 2>&1 >nul:
-
-
     if exist dependencies2017.zip (curl -kLO https://obsproject.com/downloads/dependencies2017.zip -f --retry 5 -z dependencies2017.zip) else (curl -kLO https://obsproject.com/downloads/dependencies2017.zip -f --retry 5 -C -) 2>&1 >nul:
 
-
     if exist vlc.zip (curl -kLO https://obsproject.com/downloads/vlc.zip -f --retry 5 -z vlc.zip) else (curl -kLO https://obsproject.com/downloads/vlc.zip -f --retry 5 -C -) 2>&1 >nul:
-
 
     if exist obs-studio-dist-32.zip (curl -kL -o obs-studio-dist.zip %PREBUILT_OBS_STUDIO_DIST_URL_32% -f --retry 5 -z obs-studio-dist-32.zip) else (curl -kL -o obs-studio-dist-32.zip %PREBUILT_OBS_STUDIO_DIST_URL_32% -f --retry 5 -C -) 2>&1 >nul:
 
@@ -94,8 +106,6 @@ cache:
 - c:\local\vlc.zip
 - c:\local\obs-studio-dist-32.zip
 - c:\local\obs-studio-dist-64.zip
-- c:\local\cef64.zip
-- c:\local\cef32.zip
 build_script:
 - cmd: >-
     echo ("#define STREAMELEMENTS_PLUGIN_VERSION " + (Get-Date).ToUniversalTime().ToString("yyyyMMdd") + "${Env:APPVEYOR_BUILD_NUMBER}".PadLeft(6, '0')) >c:\local\generate_version.ps1
@@ -119,11 +129,14 @@ build_script:
 
     copy /y c:\local\obs-studio\plugins\obs-browser\streamelements\patch\qt\qalgorithms.h %QTDIR32%\include\qtcore\qalgorithms.h
 
+
+
+
     echo.===================== BUILD 64 BIT - OBS-STUDIO =====================
 
     cd /d c:\local\obs-studio\build64
 
-    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 15 2017 Win64" -DEXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED=true -DBROWSER_PANEL_SUPPORT_ENABLED=true -DENABLE_SCRIPTING=false -DCOPIED_DEPENDENCIES=false -DCOPY_DEPENDENCIES=true -DBUILD_CAPTIONS=true -DCOMPILE_D3D12_HOOK=true -DCEF_ROOT_DIR=c:\local\cef_binary_%PREBUILT_CEF_VERSION%_windows64  -DBUGSPLAT_ROOT_DIR=c:\local\BugSplat ..
+    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 15 2017 Win64" -DEXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED=true -DBROWSER_PANEL_SUPPORT_ENABLED=true -DENABLE_SCRIPTING=false -DCOPIED_DEPENDENCIES=false -DCOPY_DEPENDENCIES=true -DBUILD_CAPTIONS=true -DCOMPILE_D3D12_HOOK=true -DCEF_ROOT_DIR=c:\local\cef_binary_%PREBUILT_CEF_VERSION%_windows64_minimal  -DBUGSPLAT_ROOT_DIR=c:\local\BugSplat ..
 
     cd /d c:\local\obs-studio\build64
 
@@ -135,12 +148,11 @@ build_script:
 
 
 
-
     echo.===================== BUILD 32 BIT - OBS-STUDIO =====================
 
     cd /d c:\local\obs-studio\build32
 
-    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 15 2017" -DEXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED=true -DBROWSER_PANEL_SUPPORT_ENABLED=true -DENABLE_SCRIPTING=false -DCOPIED_DEPENDENCIES=false -DCOPY_DEPENDENCIES=true -DBUILD_CAPTIONS=true -DCOMPILE_D3D12_HOOK=true -DCEF_ROOT_DIR=c:\local\cef_binary_%PREBUILT_CEF_VERSION%_windows32 -DBUGSPLAT_ROOT_DIR=c:\local\BugSplat ..
+    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 15 2017" -DEXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED=true -DBROWSER_PANEL_SUPPORT_ENABLED=true -DENABLE_SCRIPTING=false -DCOPIED_DEPENDENCIES=false -DCOPY_DEPENDENCIES=true -DBUILD_CAPTIONS=true -DCOMPILE_D3D12_HOOK=true -DCEF_ROOT_DIR=c:\local\cef_binary_%PREBUILT_CEF_VERSION%_windows32_minimal -DBUGSPLAT_ROOT_DIR=c:\local\BugSplat ..
 
     cd /d c:\local\obs-studio\build32
 
@@ -274,4 +286,5 @@ deploy:
   on:
     branch: master
 on_success:
-- cmd: set
+- cmd: echo.All done.
+
