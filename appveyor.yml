@@ -21,11 +21,6 @@ install:
 
 
 
-    set PREBUILT_OBS_STUDIO_DIST_URL_64=https://cdn-fastly.obsproject.com/downloads/OBS-Studio-24.0-Full-x64.zip
-
-    set PREBUILT_OBS_STUDIO_DIST_URL_32=https://cdn-fastly.obsproject.com/downloads/OBS-Studio-24.0-Full-x86.zip
-
-
 
 
     if not exist c:\local md c:\local
@@ -70,9 +65,6 @@ install:
 
     if exist vlc.zip (curl -kLO https://obsproject.com/downloads/vlc.zip -f --retry 5 -z vlc.zip) else (curl -kLO https://obsproject.com/downloads/vlc.zip -f --retry 5 -C -) 2>&1 >nul:
 
-    if exist obs-studio-dist-32.zip (curl -kL -o obs-studio-dist.zip %PREBUILT_OBS_STUDIO_DIST_URL_32% -f --retry 5 -z obs-studio-dist-32.zip) else (curl -kL -o obs-studio-dist-32.zip %PREBUILT_OBS_STUDIO_DIST_URL_32% -f --retry 5 -C -) 2>&1 >nul:
-
-    if exist obs-studio-dist-64.zip (curl -kL -o obs-studio-dist.zip %PREBUILT_OBS_STUDIO_DIST_URL_64% -f --retry 5 -z obs-studio-dist-64.zip) else (curl -kL -o obs-studio-dist-64.zip %PREBUILT_OBS_STUDIO_DIST_URL_64% -f --retry 5 -C -) 2>&1 >nul:
 
     7z x -y dependencies2017.zip -odependencies2017
 
@@ -85,9 +77,6 @@ install:
 
     7z x -y c:\local\cef64.zip
 
-    7z x -y c:\local\obs-studio-dist-32.zip -oobs-studio-dist
-
-    7z x -y c:\local\obs-studio-dist-64.zip -oobs-studio-dist
 
     set DepsPath32=c:\local\dependencies2017\win32
 
@@ -104,8 +93,6 @@ cache:
 - c:\local\BugSplat.zip
 - c:\local\dependencies2017.zip
 - c:\local\vlc.zip
-- c:\local\obs-studio-dist-32.zip
-- c:\local\obs-studio-dist-64.zip
 build_script:
 - cmd: >-
     echo ("#define STREAMELEMENTS_PLUGIN_VERSION " + (Get-Date).ToUniversalTime().ToString("yyyyMMdd") + "${Env:APPVEYOR_BUILD_NUMBER}".PadLeft(6, '0')) >c:\local\generate_version.ps1
@@ -161,80 +148,6 @@ build_script:
     echo.Upload 32bit PDBs to BugSplat in case this is a commit to master branch.
 
     if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\BugSplat\bin\SendPdbs.exe /u "%BUGSPLAT_USERNAME%" /p "%BUGSPLAT_PASSWORD%" /a obs-browser /v "%STREAMELEMENTS_PLUGIN_VERSION%" /b OBS_Live /d "c:\local\obs-studio\build32\rundir\%build_config%\obs-plugins\32bit" /f obs-browser.pdb;cef-bootstrap.pdb
-
-
-
-
-    echo.===================== COPY CEF 64 BIT BINARIES FROM OBS-STUDIO-DIST =====================
-
-    cd /d c:\local\obs-studio\build64\rundir\%build_config%\obs-plugins\64bit
-
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\64bit\locales\*.* .\locales
-
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\64bit\cef.pak .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\64bit\cef_100_percent.pak .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\64bit\cef_200_percent.pak .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\64bit\cef_extensions.pak .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\64bit\devtools_resources.pak .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\64bit\icudtl.dat .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\64bit\chrome_elf.dll .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\64bit\libcef.dll .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\64bit\libEGL.dll .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\64bit\libGLESv2.dll .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\64bit\natives_blob.bin .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\64bit\snapshot_blob.bin .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\64bit\v8_context_snapshot.bin .
-
-
-
-
-    
-    
-    echo.===================== COPY CEF 32 BIT BINARIES FROM OBS-STUDIO-DIST =====================
-
-    cd /d c:\local\obs-studio\build32\rundir\%build_config%\obs-plugins\32bit
-
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\32bit\locales\*.* .\locales
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\32bit\cef.pak .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\32bit\cef_100_percent.pak .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\32bit\cef_200_percent.pak .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\32bit\cef_extensions.pak .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\32bit\devtools_resources.pak .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\32bit\icudtl.dat .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\32bit\chrome_elf.dll .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\32bit\libcef.dll .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\32bit\libEGL.dll .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\32bit\libGLESv2.dll .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\32bit\natives_blob.bin .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\32bit\snapshot_blob.bin .
-    
-    copy /Y /B /Z c:\local\obs-studio-dist\obs-plugins\32bit\v8_context_snapshot.bin .
-
-
 
 
 
