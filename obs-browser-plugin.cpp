@@ -215,7 +215,7 @@ static void browser_source_get_defaults(obs_data_t *settings)
 	obs_data_set_default_bool(settings, "shutdown", false);
 	obs_data_set_default_bool(settings, "restart_when_active", false);
 	obs_data_set_default_string(settings, "css", default_css);
-	obs_data_set_default_bool(settings, "reroute_audio", true);
+	obs_data_set_default_bool(settings, "reroute_audio", false);
 }
 
 static bool is_local_file_modified(obs_properties_t *props, obs_property_t *,
@@ -280,6 +280,9 @@ static obs_properties_t *browser_source_get_properties(void *data)
 	obs_property_set_enabled(fps_set, false);
 #endif
 
+	obs_properties_add_bool(props, "reroute_audio",
+				obs_module_text("RerouteAudio"));
+
 	obs_properties_add_int(props, "fps", obs_module_text("FPS"), 1, 60, 1);
 	obs_properties_add_text(props, "css", obs_module_text("CSS"),
 				OBS_TEXT_MULTILINE);
@@ -294,9 +297,6 @@ static obs_properties_t *browser_source_get_properties(void *data)
 			static_cast<BrowserSource *>(data)->Refresh();
 			return false;
 		});
-
-	obs_properties_add_bool(props, "reroute_audio",
-				obs_module_text("RerouteAudio"));
 	return props;
 }
 
