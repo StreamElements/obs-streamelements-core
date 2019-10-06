@@ -60,12 +60,100 @@ static bool manager_initialized = false;
 os_event_t *cef_started_event = nullptr;
 
 static int adapterCount = 0;
-#include "streamelements/StreamElementsGlobalStateManager.hpp"
 static std::wstring deviceId;
 
 #if EXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED
 bool hwaccel = false;
 #endif
+
+/* ========================================================================= */
+
+#include "streamelements/StreamElementsGlobalStateManager.hpp"
+#include "streamelements/StreamElementsUtils.hpp"
+
+static bool on_streamelements_url_modified(obs_properties_t *props,
+					   obs_property_t *,
+					   obs_data_t *settings)
+{
+	/* streamelements: this callback is invoked whenever the URL field
+	 * or is_local_file field are modified by the user.
+	 * it's responsibility is to evaluate whether the browser source
+	 * is pointing to a streamelements overlay URL, and if so - to show
+	 * the "edit ovrelay" button. */
+	bool enable_overlay_editor = false;
+
+	if (!obs_data_get_bool(settings, "is_local_file")) {
+		/* not a local file */
+		const char *p_url = obs_data_get_string(settings, "url");
+
+		if (p_url) {
+			/* valid URL */
+			std::string overlayId;
+			std::string accountId;
+
+			if (ParseStreamElementsOverlayURL(p_url, overlayId,
+							  accountId)) {
+				/* streamelements overlay URL */
+				enable_overlay_editor = true;
+			}
+		}
+	}
+
+	obs_property_t *prop =
+		obs_properties_get(props, "streamelements_edit_overlay");
+
+	if (obs_property_visible(prop) != enable_overlay_editor) {
+		/* show or hide the "edit overlay" button */
+		obs_property_set_visible(prop, enable_overlay_editor);
+
+		/* properties refresh is needed */
+		return true;
+	} else {
+		/* no properties refresh is needed */
+		return false;
+	}
+}
+
+static bool on_streamelements_edit_overlay_click(obs_properties_t *props,
+						 obs_property_t *, void *data)
+{
+	/* this callback handles "edit overlay" button clicks, opening the
+	 * overlay editor in a pop-up window */
+	BrowserSource *bs = static_cast<BrowserSource *>(data);
+
+	if (!bs)
+		return false;
+
+	if (bs->is_local)
+		return false;
+
+	std::string overlayId;
+	std::string accountId;
+
+	if (ParseStreamElementsOverlayURL(bs->url, overlayId, accountId)) {
+		/* valid streamelements overlay URL */
+		std::string editor_url =
+			GetStreamElementsOverlayEditorURL(overlayId, accountId);
+
+		/* create data structure required by popup window OBS.Live API */
+		CefRefPtr<CefValue> root = CefValue::Create();
+		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+
+		d->SetString("url", editor_url);
+		d->SetBool("enableHostApi", false);
+		d->SetString("executeJavaScriptOnLoad", "");
+
+		root->SetDictionary(d);
+
+		/* invoke popup window OBS.Live API to create a pop-up window
+		 * with the overlay editor */
+		StreamElementsGlobalStateManager::GetInstance()
+			->DeserializePopupWindow(root);
+	}
+
+	/* no properties refresh is needed */
+	return false;
+}
 
 /* ========================================================================= */
 
@@ -183,7 +271,8 @@ void unregister_cookie_manager(CefRefPtr<CefCookieManager> cm)
 
 	flush_cookie_manager(cm);
 
-	for (auto it = cookie_managers.begin(); it != cookie_managers.end(); ++it) {
+	for (auto it = cookie_managers.begin(); it != cookie_managers.end();
+	     ++it) {
 		if (it->get() == cm) {
 			cookie_managers.erase(it);
 			return;
@@ -227,6 +316,10 @@ static bool is_local_file_modified(obs_properties_t *props, obs_property_t *,
 	obs_property_set_visible(url, !enabled);
 	obs_property_set_visible(local_file, enabled);
 
+	/* streamelements: invoke URL modified callback to react to
+	 * is_local_file changes */
+	on_streamelements_url_modified(props, nullptr, settings);
+
 	return true;
 }
 
@@ -264,8 +357,23 @@ static obs_properties_t *browser_source_get_properties(void *data)
 	obs_properties_add_path(props, "local_file",
 				obs_module_text("Local file"), OBS_PATH_FILE,
 				"*.*", path->array);
-	obs_properties_add_text(props, "url", obs_module_text("URL"),
+	obs_property_t *prop_url = obs_properties_add_text(
+		props, "url", obs_module_text("URL"),
 				OBS_TEXT_DEFAULT);
+
+	/* streamelements: setup modified callback to check whether URL is
+	 * a streamelements overlay URL. the callback will show or hide
+	 * the "edit overlay" button based on whether the URL matches the
+	 * pattern of an overlay URL */
+	obs_property_set_modified_callback(prop_url,
+					   on_streamelements_url_modified);
+
+	/* streamelements: add "edit overlay" button which will be visible
+	 * only when the URL field contains a streamelements overlay URL */
+	obs_properties_add_button(
+		props, "streamelements_edit_overlay",
+		obs_module_text("StreamElements.Action.EditOverlay"),
+		on_streamelements_edit_overlay_click);
 
 	obs_properties_add_int(props, "width", obs_module_text("Width"), 1,
 			       4096, 1);
@@ -300,7 +408,7 @@ static obs_properties_t *browser_source_get_properties(void *data)
 	return props;
 }
 
-static os_event_t* s_BrowserManagerThreadInitializedEvent = nullptr;
+static os_event_t *s_BrowserManagerThreadInitializedEvent = nullptr;
 
 static CefRefPtr<BrowserApp> app;
 
@@ -368,7 +476,7 @@ static void BrowserInit(void)
 	/* Register http://absolute/ scheme handler for older
 	 * CEF builds which do not support file:// URLs */
 	CefRegisterSchemeHandlerFactory("http", "absolute",
-			new BrowserSchemeHandlerFactory());
+					new BrowserSchemeHandlerFactory());
 #endif
 
 	os_event_signal(s_BrowserManagerThreadInitializedEvent);
@@ -425,7 +533,7 @@ void RegisterBrowserSource()
 #if CHROME_VERSION_BUILD >= 3683
 			    OBS_SOURCE_MONITOR_BY_DEFAULT;
 #else
-		            0;
+			    0;
 #endif
 
 	info.get_properties = browser_source_get_properties;
@@ -645,7 +753,8 @@ bool obs_module_load(void)
 	obs_data_release(private_data);
 #endif
 
-	os_event_init(&s_BrowserManagerThreadInitializedEvent, OS_EVENT_TYPE_AUTO);
+	os_event_init(&s_BrowserManagerThreadInitializedEvent,
+		      OS_EVENT_TYPE_AUTO);
 	obs_browser_initialize();
 	os_event_wait(s_BrowserManagerThreadInitializedEvent);
 	os_event_destroy(s_BrowserManagerThreadInitializedEvent);
@@ -655,7 +764,8 @@ bool obs_module_load(void)
 	obs_frontend_add_event_callback(handle_obs_frontend_event, nullptr);
 
 	// Initialize StreamElements plug-in
-	StreamElementsGlobalStateManager::GetInstance()->Initialize((QMainWindow*)obs_frontend_get_main_window());
+	StreamElementsGlobalStateManager::GetInstance()->Initialize(
+		(QMainWindow *)obs_frontend_get_main_window());
 
 	return true;
 }

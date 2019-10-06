@@ -185,3 +185,11 @@ double GetObsGlobalFramesPerSecond();
 /* ========================================================= */
 
 void AdviseHostUserInterfaceStateChanged();
+
+/* ========================================================= */
+
+bool ParseStreamElementsOverlayURL(std::string url, std::string &overlayId,
+				   std::string &accountId);
+
+std::string GetStreamElementsOverlayEditorURL(std::string overlayId,
+					      std::string accountId);

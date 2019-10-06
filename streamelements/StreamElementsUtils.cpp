@@ -1589,11 +1589,34 @@ void AdviseHostUserInterfaceStateChanged()
 
 			// Advise guest code of user interface state changes
 			StreamElementsCefClient::DispatchJSEvent(
-				"hostUserInterfaceStateChanged",
-				"null");
+				"hostUserInterfaceStateChanged", "null");
 		});
 	}
 
 	QMetaObject::invokeMethod(t, "start", Qt::QueuedConnection,
 				  Q_ARG(int, 250));
+}
+
+bool ParseStreamElementsOverlayURL(std::string url, std::string &overlayId,
+				   std::string &accountId)
+{
+	std::regex url_regex(
+		"^https://streamelements.com/overlay/([^/]+)/([^/]+)$");
+	std::smatch match;
+
+	if (std::regex_match(url, match, url_regex)) {
+		overlayId = match[1].str();
+		accountId = match[2].str();
+
+		return true;
+	}
+
+	return false;
+}
+
+std::string GetStreamElementsOverlayEditorURL(std::string overlayId,
+					      std::string accountId)
+{
+	return std::string("https://streamelements.com/overlay/") + overlayId +
+	       std::string("/editor");
 }
