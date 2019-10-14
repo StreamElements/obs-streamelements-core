@@ -13,11 +13,11 @@ environment:
     secure: 9c6LeJtXAXvISt7o1o5lnw==
 install:
 - cmd: >-
-    set PREBUILT_CEF_VERSION=75.1.16+g16a67c4+chromium-75.0.3770.100
+    set PREBUILT_CEF_VERSION=74.0.0-texture_patch.1946+g7d5cd74+chromium-74.0.3729.157
 
-    set PREBUILT_CEF_URL_64=s3://obs-builds/cef/cef_binary_75.1.16+g16a67c4+chromium-75.0.3770.100_windows64_minimal.zip
+    set PREBUILT_CEF_URL_64=s3://obs-builds/cef/streamelements/cef_binary_74.0.0-texture_patch.1946+g7d5cd74+chromium-74.0.3729.157_windows64_minimal.zip
     
-    set PREBUILT_CEF_URL_32=s3://obs-builds/cef/cef_binary_75.1.16+g16a67c4+chromium-75.0.3770.100_windows32_minimal.zip
+    set PREBUILT_CEF_URL_32=s3://obs-builds/cef/streamelements/cef_binary_74.0.0-texture_patch.1946+g7d5cd74+chromium-74.0.3729.157_windows32_minimal.zip
 
 
 
@@ -119,6 +119,21 @@ build_script:
 
 
 
+    echo.===================== BUILD 64 BIT - CEF - OBS-STUDIO =====================
+
+    cd /d c:\local\cef_binary_%PREBUILT_CEF_VERSION%_windows64_minimal
+
+    mkdir build
+
+    cd build
+
+    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 14 2015 Win64" -DUSE_SANDBOX=true -DUSE_ATL=true -DCEF_RUNTIME_LIBRARY_FLAG=/MT -DCEF_DEBUG_INFO_FLAG=/Zi ..
+
+    msbuild cef.sln /p:Configuration=Release /t:Build
+
+
+
+
     echo.===================== BUILD 64 BIT - OBS-STUDIO =====================
 
     cd /d c:\local\obs-studio\build64
@@ -132,6 +147,21 @@ build_script:
     echo.Upload 64bit PDBs to BugSplat in case this is a commit to master branch.
 
     if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\BugSplat\bin\SendPdbs.exe /u "%BUGSPLAT_USERNAME%" /p "%BUGSPLAT_PASSWORD%" /a obs-browser /v "%STREAMELEMENTS_PLUGIN_VERSION%" /b OBS_Live /d "c:\local\obs-studio\build64\rundir\%build_config%\obs-plugins\64bit" /f obs-browser.pdb;cef-bootstrap.pdb
+
+
+
+    echo.===================== BUILD 32 BIT - CEF - OBS-STUDIO =====================
+
+    cd /d c:\local\cef_binary_%PREBUILT_CEF_VERSION%_windows32_minimal
+
+    mkdir build
+
+    cd build
+
+    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 14 2015" -DUSE_SANDBOX=true -DUSE_ATL=true -DCEF_RUNTIME_LIBRARY_FLAG=/MT -DCEF_DEBUG_INFO_FLAG=/Zi ..
+
+    msbuild cef.sln /p:Configuration=Release /t:Build
+
 
 
 
