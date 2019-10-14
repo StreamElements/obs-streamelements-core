@@ -3,7 +3,7 @@
 #include "StreamElementsCefClient.hpp"
 #include "Version.hpp"
 
-#if CHROME_VERSION_BUILD >= 3770
+#if CHROME_VERSION_BUILD >= 3729
 #include <include/cef_api_hash.h>
 #endif
 
