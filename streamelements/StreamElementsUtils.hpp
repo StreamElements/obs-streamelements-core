@@ -193,3 +193,10 @@ bool ParseStreamElementsOverlayURL(std::string url, std::string &overlayId,
 
 std::string GetStreamElementsOverlayEditorURL(std::string overlayId,
 					      std::string accountId);
+
+/* ========================================================= */
+
+#if ENABLE_DECRYPT_COOKIES
+void StreamElementsDecryptCefCookiesFile(const char *path_utf8);
+void StreamElementsDecryptCefCookiesStoragePath(const char *path_utf8);
+#endif /* ENABLE_DECRYPT_COOKIES */

@@ -454,6 +454,11 @@ static void BrowserInit(void)
 	BPtr<char> conf_path = obs_module_config_path("");
 	os_mkdir(conf_path);
 	BPtr<char> conf_path_abs = os_get_abs_path_ptr(conf_path);
+
+#if ENABLE_DECRYPT_COOKIES
+	StreamElementsDecryptCefCookiesStoragePath(conf_path_abs.Get());
+#endif
+
 	CefString(&settings.locale) = obs_get_locale();
 	CefString(&settings.accept_language_list) = accepted_languages;
 	CefString(&settings.cache_path) = conf_path_abs;

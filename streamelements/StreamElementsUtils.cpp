@@ -11,6 +11,7 @@
 #include <codecvt>
 #include <vector>
 #include <regex>
+#include <unordered_map>
 
 #include <curl/curl.h>
 
@@ -1620,3 +1621,164 @@ std::string GetStreamElementsOverlayEditorURL(std::string overlayId,
 	return std::string("https://streamelements.com/overlay/") + overlayId +
 	       std::string("/editor");
 }
+
+#if ENABLE_DECRYPT_COOKIES
+#include "deps/sqlite/sqlite3.h"
+#include <windows.h>
+#include <wincrypt.h>
+#include <dpapi.h>
+#pragma comment(lib, "crypt32.lib")
+void StreamElementsDecryptCefCookiesFile(const char *path_utf8)
+{
+#ifdef _WIN32
+	sqlite3 *db;
+
+	if (SQLITE_OK !=
+	    sqlite3_open_v2(path_utf8, &db, SQLITE_OPEN_READWRITE, nullptr)) {
+		blog(LOG_ERROR,
+		     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': %s",
+		     path_utf8, sqlite3_errmsg(db));
+
+		sqlite3_close_v2(db);
+
+		return;
+	}
+
+	std::vector<std::string> update_statements;
+
+	const char *sql = "select * from cookies where value = '' and encrypted_value is NOT NULL";
+
+	sqlite3_stmt *stmt;
+
+	if (SQLITE_OK == sqlite3_prepare(db, sql, -1, &stmt, nullptr)) {
+		std::unordered_map<std::string, int> columnNameMap;
+
+		/* Map column names to their indexes */
+		for (int colIndex = 0;; ++colIndex) {
+			const char *col_name =
+				sqlite3_column_name(stmt, colIndex);
+			if (!col_name)
+				break;
+
+			columnNameMap[col_name] = colIndex;
+		}
+
+		auto getStringValue = [&](const char *colName) -> std::string {
+			const int col_index = columnNameMap[colName];
+			const unsigned char *val =
+				sqlite3_column_text(stmt, col_index);
+
+			if (!!val) {
+				const int size =
+					sqlite3_column_bytes(stmt, col_index);
+
+				return std::string((const char *)val,
+						   (size_t)size);
+			}
+
+			return std::string();
+		};
+
+		auto getIntValue = [&](const char *colName) -> int {
+			const int col_index = columnNameMap[colName];
+			return sqlite3_column_int(stmt, col_index);
+		};
+
+		if (columnNameMap.count("name") &&
+		    columnNameMap.count("encrypted_value") &&
+		    columnNameMap.count("host_key") &&
+		    columnNameMap.count("path") &&
+		    columnNameMap.count("priority")) {
+			while (SQLITE_ROW == sqlite3_step(stmt)) {
+				const int encrypted_value_index =
+					columnNameMap["encrypted_value"];
+
+				const void *encrypted_blob =
+					sqlite3_column_blob(
+						stmt, encrypted_value_index);
+				const int encrypted_size = sqlite3_column_bytes(
+					stmt, encrypted_value_index);
+
+				if (!encrypted_size)
+					continue;
+
+				std::string host_key =
+					getStringValue("host_key");
+				std::string path = getStringValue("path");
+				std::string name = getStringValue("name");
+				int priority = getIntValue("priority");
+
+				DATA_BLOB in;
+				in.cbData = encrypted_size;
+				in.pbData = (BYTE *)encrypted_blob;
+
+				DATA_BLOB out;
+
+				if (!CryptUnprotectData(&in, NULL, NULL, NULL,
+							NULL, 0, &out))
+					continue;
+
+				std::string decrypted_value(
+					(const char *)out.pbData,
+					(size_t)out.cbData);
+				::LocalFree(out.pbData);
+
+				char *update_stmt = sqlite3_mprintf(
+					"update cookies set value = %Q, encrypted_value = NULL where value = '' and host_key = %Q and name = %Q and priority = %d",
+					decrypted_value.c_str(),
+					host_key.c_str(), name.c_str(),
+					priority);
+
+				update_statements.push_back(update_stmt);
+
+				sqlite3_free(update_stmt);
+			}
+		} else {
+			blog(LOG_ERROR,
+			     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s' cookies table is missing required columns",
+			     path_utf8);
+		}
+
+		sqlite3_finalize(stmt);
+	} else {
+		blog(LOG_ERROR,
+		     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': %s",
+		     path_utf8, sqlite3_errmsg(db));
+	}
+
+	int done_count = 0;
+	int error_count = 0;
+
+	for (auto item : update_statements) {
+		char *zErrMsg;
+
+		if (SQLITE_OK != sqlite3_exec(db, item.c_str(), nullptr,
+					      nullptr, &zErrMsg)) {
+			blog(LOG_INFO,
+			     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': sqlite3_exec(): %s: %s",
+			     path_utf8, zErrMsg, item.c_str());
+
+			sqlite3_free(zErrMsg);
+
+			++error_count;
+		} else {
+			++done_count;
+		}
+	}
+
+	sqlite3_close_v2(db);
+
+	blog(LOG_INFO,
+	     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': %d succeeded, %d failed",
+	     path_utf8, done_count, error_count);
+#endif
+}
+
+void StreamElementsDecryptCefCookiesStoragePath(const char* path_utf8) {
+	std::string file_path = path_utf8;
+
+	file_path += "/Cookies";
+
+	StreamElementsDecryptCefCookiesFile(file_path.c_str());
+}
+#endif /* ENABLE_DECRYPT_COOKIES */

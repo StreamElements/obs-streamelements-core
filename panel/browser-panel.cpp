@@ -16,6 +16,8 @@
 #include <util/base.h>
 #include <thread>
 
+#include "streamelements/StreamElementsUtils.hpp"
+
 extern bool QueueCEFTask(std::function<void()> task);
 extern "C" void obs_browser_initialize(void);
 extern os_event_t *cef_started_event;
@@ -82,6 +84,10 @@ struct QCefCookieManagerInternal : QCefCookieManager {
 		BPtr<char> rpath = obs_module_config_path(storage_path.c_str());
 		BPtr<char> path = os_get_abs_path_ptr(rpath.Get());
 
+#if ENABLE_DECRYPT_COOKIES
+		StreamElementsDecryptCefCookiesStoragePath(path.Get());
+#endif
+
 #if CHROME_VERSION_BUILD < 3770
 		cm = CefCookieManager::CreateManager(
 			path.Get(), persist_session_cookies, nullptr);
@@ -124,6 +130,10 @@ struct QCefCookieManagerInternal : QCefCookieManager {
 	{
 		BPtr<char> rpath = obs_module_config_path(storage_path.c_str());
 		BPtr<char> path = os_get_abs_path_ptr(rpath.Get());
+
+#if ENABLE_DECRYPT_COOKIES
+		StreamElementsDecryptCefCookiesStoragePath(path.Get());
+#endif
 
 #if CHROME_VERSION_BUILD < 3770
 		return cm->SetStoragePath(path.Get(), persist_session_cookies,

@@ -165,6 +165,7 @@ set(obs-browser_SOURCES
 	streamelements/deps/zip/zip.c
 	streamelements/deps/server/NamedPipesServer.cpp
 	streamelements/deps/server/NamedPipesServerClientHandler.cpp
+	streamelements/deps/sqlite/sqlite3.c
 	)
 set(obs-browser_HEADERS
 	obs-browser-source.hpp
@@ -221,6 +222,8 @@ set(obs-browser_HEADERS
 	streamelements/deps/moodycamel/blockingconcurrentqueue.h
 	streamelements/deps/server/NamedPipesServer.hpp
 	streamelements/deps/server/NamedPipesServerClientHandler.hpp
+	streamelements/deps/sqlite/sqlite3.h
+	streamelements/deps/sqlite/sqlite3ext.h
 	)
 
 # only allow browser panels on win32 for now -- other operating systems

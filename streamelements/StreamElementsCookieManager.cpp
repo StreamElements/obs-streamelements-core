@@ -25,6 +25,9 @@ StreamElementsCookieManager::StreamElementsCookieManager(std::string storagePath
 		return;
 	}
 
+	/* No need to call StreamElementsDecryptCefCookiesStoragePath() here:
+	 * this class is used to initialize CEF version scoped cookie store */
+
 #if CHROME_VERSION_BUILD < 3770
 	m_cookieManager = CefCookieManager::CreateManager(
 		m_storagePath, persist_session_cookies, nullptr);

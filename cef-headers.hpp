@@ -37,6 +37,12 @@
 #include <include/cef_render_process_handler.h>
 #include <include/cef_request_context_handler.h>
 
+#if CHROME_VERSION_BUILD < 3770
+#define ENABLE_DECRYPT_COOKIES 1
+#else
+#define ENABLE_DECRYPT_COOKIES 0
+#endif
+
 #if CHROME_VERSION_BUILD < 3507
 #define ENABLE_WASHIDDEN 1
 #else
