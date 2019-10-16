@@ -140,7 +140,7 @@ static bool on_streamelements_edit_overlay_click(obs_properties_t *props,
 		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
 
 		d->SetString("url", editor_url);
-		d->SetBool("enableHostApi", false);
+		d->SetBool("enableHostApi", true);
 		d->SetString("executeJavaScriptOnLoad", "");
 
 		root->SetDictionary(d);
