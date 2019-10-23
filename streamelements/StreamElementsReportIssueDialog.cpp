@@ -371,7 +371,25 @@ void StreamElementsReportIssueDialog::accept()
 		if (collect_all) {
 			std::vector<std::wstring> blacklist = {
 				L"plugin_config/obs-streamelements/obs-streamelements-update.exe",
-				L"plugin_config/obs-browser/cache/"
+				L"plugin_config/obs-browser/cache/",
+				L"plugin_config/obs-browser/blob_storage/",
+				L"plugin_config/obs-browser/code cache/",
+				L"plugin_config/obs-browser/gpucache/",
+				L"plugin_config/obs-browser/visited links/",
+				L"plugin_config/obs-browser/transportsecurity/",
+				L"plugin_config/obs-browser/videodecodestats/",
+				L"plugin_config/obs-browser/session storage/",
+				L"plugin_config/obs-browser/service worker/",
+				L"plugin_config/obs-browser/pepper data/",
+				L"plugin_config/obs-browser/indexeddb/",
+				L"plugin_config/obs-browser/file system/",
+				L"plugin_config/obs-browser/databases/",
+				L"plugin_config/obs-browser/obs-browser-streamelements.ini.bak",
+				L"plugin_config/obs-browser/cef.",
+				L"plugin_config/obs-browser/obs_profile_cookies/",
+				L"updates/",
+				L"profiler_data/",
+				L"crashes/"
 			};
 
 			// Collect all files
