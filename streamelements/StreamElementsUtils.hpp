@@ -200,3 +200,8 @@ std::string GetStreamElementsOverlayEditorURL(std::string overlayId,
 void StreamElementsDecryptCefCookiesFile(const char *path_utf8);
 void StreamElementsDecryptCefCookiesStoragePath(const char *path_utf8);
 #endif /* ENABLE_DECRYPT_COOKIES */
+
+/* ========================================================= */
+
+std::string GetIdFromPointer(const void *ptr);
+const void *GetPointerFromId(const char *id);

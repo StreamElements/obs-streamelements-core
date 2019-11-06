@@ -789,7 +789,52 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
-				->DeserializeObsBrowserSource(args->GetValue(0), result);
+				->DeserializeObsBrowserSource(args->GetValue(0),
+							      result);
+		}
+	API_HANDLER_END()
+
+	API_HANDLER_BEGIN("addCurrentSceneItemGameCaptureSource")
+		result->SetNull();
+
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsGameCaptureSource(
+					args->GetValue(0), result);
+		}
+	API_HANDLER_END()
+
+	API_HANDLER_BEGIN("addCurrentSceneItemVideoCaptureSource")
+		result->SetNull();
+
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsVideoCaptureSource(
+					args->GetValue(0), result);
+		}
+	API_HANDLER_END()
+
+	API_HANDLER_BEGIN("addCurrentSceneItemObsNativeSource")
+		result->SetNull();
+
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsNativeSource(
+					args->GetValue(0), result);
+		}
+	API_HANDLER_END()
+
+	API_HANDLER_BEGIN("addCurrentSceneItemGroup")
+		result->SetNull();
+
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsSceneItemGroup(
+					args->GetValue(0), result);
 		}
 	API_HANDLER_END()
 
@@ -797,6 +842,48 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetObsSceneManager()
 			->SerializeObsCurrentSceneItems(result);
+	API_HANDLER_END()
+
+	API_HANDLER_BEGIN("removeCurrentSceneItemsByIds")
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->RemoveObsCurrentSceneItemsByIds(
+					args->GetValue(0), result);
+		}
+	API_HANDLER_END()
+
+	API_HANDLER_BEGIN("setCurrentSceneItemPropertiesById")
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SetObsCurrentSceneItemPropertiesById(
+					args->GetValue(0), result);
+		}
+	API_HANDLER_END()
+
+	API_HANDLER_BEGIN("ungroupCurrentSceneItemGroupById")
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->UngroupObsCurrentSceneItemsByGroupId(
+					args->GetValue(0), result);
+		}
+	API_HANDLER_END()
+
+	API_HANDLER_BEGIN("getAvailableInputSourceClasses")
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetObsSceneManager()
+			->SerializeInputSourceClasses(result);
+	API_HANDLER_END()
+
+	API_HANDLER_BEGIN("getSourceClassProperties")
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SerializeSourceClassProperties(
+					args->GetValue(0), result);
+		}
 	API_HANDLER_END()
 
 	API_HANDLER_BEGIN("getHostReleaseGroupProperties")
@@ -955,6 +1042,50 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			result->SetBool(StreamElementsGlobalStateManager::GetInstance()
 						->DeserializeUserInterfaceState(
 							args->GetValue(0)));
+		}
+	API_HANDLER_END()
+
+	API_HANDLER_BEGIN("getAllScenes")
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetObsSceneManager()
+			->SerializeObsScenes(result);
+	API_HANDLER_END()
+
+	API_HANDLER_BEGIN("getCurrentScene")
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetObsSceneManager()
+			->SerializeObsCurrentScene(result);
+	API_HANDLER_END()
+
+	API_HANDLER_BEGIN("addScene")
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsScene(args->GetValue(0), result);
+		}
+	API_HANDLER_END()
+
+	API_HANDLER_BEGIN("setCurrentSceneById")
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SetCurrentObsSceneById(args->GetValue(0), result);
+		}
+	API_HANDLER_END()
+
+	API_HANDLER_BEGIN("removeScenesByIds")
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->RemoveObsScenesByIds(args->GetValue(0), result);
+		}
+	API_HANDLER_END()
+
+	API_HANDLER_BEGIN("setScenePropertiesById")
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SetObsScenePropertiesById(args->GetValue(0), result);
 		}
 	API_HANDLER_END()
 

@@ -194,6 +194,9 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 		}
 		break;
 	}
+	case OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED:
+		name = "hostSceneListChanged";
+		break;
 	case OBS_FRONTEND_EVENT_EXIT:
 		name = "hostExit";
 		break;

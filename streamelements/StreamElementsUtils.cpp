@@ -1646,7 +1646,8 @@ void StreamElementsDecryptCefCookiesFile(const char *path_utf8)
 
 	std::vector<std::string> update_statements;
 
-	const char *sql = "select * from cookies where value = '' and encrypted_value is NOT NULL";
+	const char *sql =
+		"select * from cookies where value = '' and encrypted_value is NOT NULL";
 
 	sqlite3_stmt *stmt;
 
@@ -1774,7 +1775,8 @@ void StreamElementsDecryptCefCookiesFile(const char *path_utf8)
 #endif
 }
 
-void StreamElementsDecryptCefCookiesStoragePath(const char* path_utf8) {
+void StreamElementsDecryptCefCookiesStoragePath(const char *path_utf8)
+{
 	std::string file_path = path_utf8;
 
 	file_path += "/Cookies";
@@ -1782,3 +1784,23 @@ void StreamElementsDecryptCefCookiesStoragePath(const char* path_utf8) {
 	StreamElementsDecryptCefCookiesFile(file_path.c_str());
 }
 #endif /* ENABLE_DECRYPT_COOKIES */
+
+std::string GetIdFromPointer(const void *ptr)
+{
+	char buf[32];
+
+	sprintf_s(buf, "ptr(%p)", ptr);
+
+	return buf;
+}
+
+const void* GetPointerFromId(const char* id)
+{
+	void *ptr;
+
+	if (sscanf(id, "ptr(%p)", &ptr) > 0) {
+		return ptr;
+	} else {
+		return nullptr;
+	}
+}
