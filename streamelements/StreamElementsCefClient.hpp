@@ -11,37 +11,33 @@
 #include <QUrl>
 #include <QDesktopServices>
 
-class StreamElementsCefClientEventHandler :
-	public CefBaseRefCounted
-{
+class StreamElementsCefClientEventHandler : public CefBaseRefCounted {
 public:
 	virtual void OnLoadingStateChange(CefRefPtr<CefBrowser> browser,
-		bool isLoading,
-		bool canGoBack,
-		bool canGoForward) {
+					  bool isLoading, bool canGoBack,
+					  bool canGoForward)
+	{
 		UNREFERENCED_PARAMETER(browser);
 		UNREFERENCED_PARAMETER(isLoading);
 		UNREFERENCED_PARAMETER(canGoBack);
 		UNREFERENCED_PARAMETER(canGoForward);
 	}
 
-
 public:
 	IMPLEMENT_REFCOUNTING(StreamElementsCefClientEventHandler);
 };
 
-class StreamElementsCefClient :
-	public CefClient,
-	public CefLifeSpanHandler,
-	public CefContextMenuHandler,
-	public CefLoadHandler,
-	public CefDisplayHandler,
-	public CefKeyboardHandler,
-	public CefRequestHandler,
+class StreamElementsCefClient : public CefClient,
+				public CefLifeSpanHandler,
+				public CefContextMenuHandler,
+				public CefLoadHandler,
+				public CefDisplayHandler,
+				public CefKeyboardHandler,
+				public CefRequestHandler,
 #if CHROME_VERSION_BUILD >= 3770
-	public CefResourceRequestHandler,
+				public CefResourceRequestHandler,
 #endif
-	public CefDragHandler {
+				public CefDragHandler {
 private:
 	std::string m_containerId = "";
 	std::string m_locationArea = "unknown";
@@ -51,7 +47,8 @@ public:
 		std::string executeJavaScriptCodeOnLoad,
 		CefRefPtr<StreamElementsBrowserMessageHandler> messageHandler,
 		CefRefPtr<StreamElementsCefClientEventHandler> eventHandler,
-		StreamElementsMessageBus::message_destination_filter_flags_t msgDestType);
+		StreamElementsMessageBus::message_destination_filter_flags_t
+			msgDestType);
 
 	virtual ~StreamElementsCefClient();
 
@@ -63,18 +60,19 @@ public:
 	std::string GetLocationArea() { return m_locationArea; }
 	void SetLocationArea(std::string area) { m_locationArea = area; }
 
-	void SerializeForeignPopupWindowsSettings(CefRefPtr<CefValue>& output)
+	void SerializeForeignPopupWindowsSettings(CefRefPtr<CefValue> &output)
 	{
 		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
 
 		d->SetBool("volatileSettings", !m_foreignPopup_inheritSettings);
 		d->SetBool("enableHostApi", m_foreignPopup_enableHostApi);
-		d->SetString("executeJavaScriptOnLoad", m_foreignPopup_executeJavaScriptCodeOnLoad);
+		d->SetString("executeJavaScriptOnLoad",
+			     m_foreignPopup_executeJavaScriptCodeOnLoad);
 
 		output->SetDictionary(d);
 	}
 
-	bool DeserializeForeignPopupWindowsSettings(CefRefPtr<CefValue>& input)
+	bool DeserializeForeignPopupWindowsSettings(CefRefPtr<CefValue> &input)
 	{
 		if (input->GetType() != VTYPE_DICTIONARY) {
 			return false;
@@ -82,17 +80,21 @@ public:
 
 		CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
 
-		if (d->HasKey("executeJavaScriptOnLoad") && d->GetType("executeJavaScriptOnLoad") == VTYPE_STRING) {
+		if (d->HasKey("executeJavaScriptOnLoad") &&
+		    d->GetType("executeJavaScriptOnLoad") == VTYPE_STRING) {
 			m_foreignPopup_executeJavaScriptCodeOnLoad =
-				d->GetString("executeJavaScriptOnLoad").ToString();
+				d->GetString("executeJavaScriptOnLoad")
+					.ToString();
 		}
 
-		if (d->HasKey("enableHostApi") && d->GetType("enableHostApi") == VTYPE_BOOL) {
+		if (d->HasKey("enableHostApi") &&
+		    d->GetType("enableHostApi") == VTYPE_BOOL) {
 			m_foreignPopup_enableHostApi =
 				d->GetBool("enableHostApi");
 		}
 
-		if (d->HasKey("volatileSettings") && d->GetType("volatileSettings") == VTYPE_BOOL) {
+		if (d->HasKey("volatileSettings") &&
+		    d->GetType("volatileSettings") == VTYPE_BOOL) {
 			m_foreignPopup_inheritSettings =
 				!d->GetBool("volatileSettings");
 		}
@@ -101,54 +103,76 @@ public:
 	}
 
 	/* CefClient */
-	virtual CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return this; }
-	virtual CefRefPtr<CefContextMenuHandler> GetContextMenuHandler() override { return this; }
-	virtual CefRefPtr<CefLoadHandler> GetLoadHandler() override { return this; }
-	virtual CefRefPtr<CefDisplayHandler> GetDisplayHandler() override { return this; }
-	virtual CefRefPtr<CefKeyboardHandler> GetKeyboardHandler() override { return this; }
-	virtual CefRefPtr<CefRequestHandler> GetRequestHandler() override { return this; }
-	virtual CefRefPtr<CefDragHandler> GetDragHandler() override { return this; }
+	virtual CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override
+	{
+		return this;
+	}
+	virtual CefRefPtr<CefContextMenuHandler>
+	GetContextMenuHandler() override
+	{
+		return this;
+	}
+	virtual CefRefPtr<CefLoadHandler> GetLoadHandler() override
+	{
+		return this;
+	}
+	virtual CefRefPtr<CefDisplayHandler> GetDisplayHandler() override
+	{
+		return this;
+	}
+	virtual CefRefPtr<CefKeyboardHandler> GetKeyboardHandler() override
+	{
+		return this;
+	}
+	virtual CefRefPtr<CefRequestHandler> GetRequestHandler() override
+	{
+		return this;
+	}
+	virtual CefRefPtr<CefDragHandler> GetDragHandler() override
+	{
+		return this;
+	}
 #if CHROME_VERSION_BUILD >= 3770
-	virtual CefRefPtr<CefResourceRequestHandler> GetResourceRequestHandler(
-		CefRefPtr<CefBrowser> /*browser*/, CefRefPtr<CefFrame> /*frame*/,
-		CefRefPtr<CefRequest> /*request*/, bool /*is_navigation*/,
-		bool /*is_download*/, const CefString& /*request_initiator*/,
-		bool& /*disable_default_handling*/) override
+	virtual CefRefPtr<CefResourceRequestHandler>
+	GetResourceRequestHandler(CefRefPtr<CefBrowser> /*browser*/,
+				  CefRefPtr<CefFrame> /*frame*/,
+				  CefRefPtr<CefRequest> /*request*/,
+				  bool /*is_navigation*/, bool /*is_download*/,
+				  const CefString & /*request_initiator*/,
+				  bool & /*disable_default_handling*/) override
 	{
 		return this;
 	}
 #endif
 
-	virtual bool OnProcessMessageReceived(
-		CefRefPtr<CefBrowser> browser,
+	virtual bool
+	OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
 #if CHROME_VERSION_BUILD >= 3770
-		CefRefPtr<CefFrame> frame,
+				 CefRefPtr<CefFrame> frame,
 #endif
-		CefProcessId source_process,
-		CefRefPtr<CefProcessMessage> message) override;
+				 CefProcessId source_process,
+				 CefRefPtr<CefProcessMessage> message) override;
 
 	/* CefDragHandler */
 
-	virtual bool OnDragEnter(
-		CefRefPtr<CefBrowser> browser,
-		CefRefPtr<CefDragData> dragData,
-		CefDragHandler::DragOperationsMask mask) override
+	virtual bool
+	OnDragEnter(CefRefPtr<CefBrowser> browser,
+		    CefRefPtr<CefDragData> dragData,
+		    CefDragHandler::DragOperationsMask mask) override
 	{
-		blog(
-			LOG_INFO,
-			"obs-browser[%lu]: StreamElementsCefClient::OnDragEnter: rejected drag operation (mask: 0x%08x)",
-			m_cefClientId,
-			(int)mask);
+		blog(LOG_INFO,
+		     "obs-browser[%lu]: StreamElementsCefClient::OnDragEnter: rejected drag operation (mask: 0x%08x)",
+		     m_cefClientId, (int)mask);
 
 		return true;
 	}
 
 	/* CefRequestHandler */
 
-	virtual CefRefPtr<CefResourceHandler> GetResourceHandler(
-		CefRefPtr<CefBrowser> browser,
-		CefRefPtr<CefFrame> frame,
-		CefRefPtr<CefRequest> request) override;
+	virtual CefRefPtr<CefResourceHandler>
+	GetResourceHandler(CefRefPtr<CefBrowser> browser,
+			   CefRefPtr<CefFrame> frame,
+			   CefRefPtr<CefRequest> request) override;
 
 	/*
 	virtual bool OnOpenURLFromTab(
@@ -180,80 +204,73 @@ public:
 	virtual void OnBeforeClose(CefRefPtr<CefBrowser> browser) override;
 
 	virtual bool OnBeforePopup(
-		CefRefPtr<CefBrowser> /*browser*/,
-		CefRefPtr<CefFrame> /*frame*/,
-		const CefString& target_url,
-		const CefString& target_frame_name,
+		CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> /*frame*/,
+		const CefString &target_url, const CefString &target_frame_name,
 		CefLifeSpanHandler::WindowOpenDisposition target_disposition,
 		bool /*user_gesture*/,
-		const CefPopupFeatures& /*popupFeatures*/,
-		CefWindowInfo& windowInfo,
-		CefRefPtr<CefClient>& client,
-		CefBrowserSettings& /*settings*/,
+		const CefPopupFeatures & /*popupFeatures*/,
+		CefWindowInfo &windowInfo, CefRefPtr<CefClient> &client,
+		CefBrowserSettings & /*settings*/,
 #if CHROME_VERSION_BUILD >= 3770
-		CefRefPtr<CefDictionaryValue>& /*extra_info*/,
+		CefRefPtr<CefDictionaryValue> & /*extra_info*/,
 #endif
-		bool* /*no_javascript_access*/) override
+		bool * /*no_javascript_access*/) override
 	{
-		if (!target_url.size() || target_url.ToString() == "about:blank") {
-			blog(
-				LOG_INFO,
-				"obs-browser[%lu]: StreamElementsCefClient::OnBeforePopup: ignore due to target_url: target_url '%s', target_frame_name '%s', target_disposition %d",
-				m_cefClientId,
-				target_url.ToString().c_str(),
-				target_frame_name.ToString().c_str(),
-				(int)target_disposition);
+		if (!target_url
+			     .size() /* || target_url.ToString() == "about:blank"*/) {
+			blog(LOG_INFO,
+			     "obs-browser[%lu]: StreamElementsCefClient::OnBeforePopup: ignore due to target_url: target_url '%s', target_frame_name '%s', target_disposition %d",
+			     m_cefClientId, target_url.ToString().c_str(),
+			     target_frame_name.ToString().c_str(),
+			     (int)target_disposition);
 
 			return true;
 		}
 
 		switch (target_disposition) {
-			case WOD_NEW_FOREGROUND_TAB:
-			case WOD_NEW_BACKGROUND_TAB:
-				blog(
-					LOG_INFO,
-					"obs-browser[%lu]: StreamElementsCefClient::OnBeforePopup: open in desktop browser: target_url '%s', target_frame_name '%s', target_disposition %d",
-					m_cefClientId,
-					target_url.ToString().c_str(),
-					target_frame_name.ToString().c_str(),
-					(int)target_disposition);
+		case WOD_NEW_FOREGROUND_TAB:
+		case WOD_NEW_BACKGROUND_TAB:
+			blog(LOG_INFO,
+			     "obs-browser[%lu]: StreamElementsCefClient::OnBeforePopup: open in desktop browser: target_url '%s', target_frame_name '%s', target_disposition %d",
+			     m_cefClientId, target_url.ToString().c_str(),
+			     target_frame_name.ToString().c_str(),
+			     (int)target_disposition);
 
-				// Open tab popup URLs in user's actual browser
-				QDesktopServices::openUrl(
-					QUrl(target_url.ToString().c_str(),
-						QUrl::TolerantMode));
-				return true;
+			// Open tab popup URLs in user's actual browser
+			QDesktopServices::openUrl(
+				QUrl(target_url.ToString().c_str(),
+				     QUrl::TolerantMode));
+			return true;
 
-			case WOD_SAVE_TO_DISK:
-			case WOD_OFF_THE_RECORD:
-			case WOD_IGNORE_ACTION:
-				blog(
-					LOG_INFO,
-					"obs-browser[%lu]: StreamElementsCefClient::OnBeforePopup: ignore due to target_disposition: target_url '%s', target_frame_name '%s', target_disposition %d",
-					m_cefClientId,
-					target_url.ToString().c_str(),
-					target_frame_name.ToString().c_str(),
-					(int)target_disposition);
+		case WOD_SAVE_TO_DISK:
+		case WOD_OFF_THE_RECORD:
+		case WOD_IGNORE_ACTION:
+			blog(LOG_INFO,
+			     "obs-browser[%lu]: StreamElementsCefClient::OnBeforePopup: ignore due to target_disposition: target_url '%s', target_frame_name '%s', target_disposition %d",
+			     m_cefClientId, target_url.ToString().c_str(),
+			     target_frame_name.ToString().c_str(),
+			     (int)target_disposition);
 
-				return true;
+			return true;
 			break;
 		}
 
-		blog(
-			LOG_INFO,
-			"obs-browser[%lu]: StreamElementsCefClient::OnBeforePopup: allow pop-up: target_url '%s', target_frame_name '%s', target_disposition %d",
-			m_cefClientId,
-			target_url.ToString().c_str(),
-			target_frame_name.ToString().c_str(),
-			(int)target_disposition);
+		blog(LOG_INFO,
+		     "obs-browser[%lu]: StreamElementsCefClient::OnBeforePopup: allow pop-up: target_url '%s', target_frame_name '%s', target_disposition %d",
+		     m_cefClientId, target_url.ToString().c_str(),
+		     target_frame_name.ToString().c_str(),
+		     (int)target_disposition);
 
-		windowInfo.parent_window = (cef_window_handle_t)obs_frontend_get_main_window_handle();
+		windowInfo.parent_window = (cef_window_handle_t)
+			obs_frontend_get_main_window_handle();
 
-		StreamElementsCefClient* clientObj = new StreamElementsCefClient(
-			m_foreignPopup_executeJavaScriptCodeOnLoad,
-			m_foreignPopup_enableHostApi ? new StreamElementsApiMessageHandler() : nullptr,
-			nullptr,
-			StreamElementsMessageBus::DEST_UI);
+		StreamElementsCefClient *clientObj =
+			new StreamElementsCefClient(
+				m_foreignPopup_executeJavaScriptCodeOnLoad,
+				m_foreignPopup_enableHostApi
+					? new StreamElementsApiMessageHandler()
+					: nullptr,
+				nullptr, StreamElementsMessageBus::DEST_UI);
 
 		if (m_foreignPopup_inheritSettings) {
 			clientObj->m_foreignPopup_inheritSettings =
@@ -268,32 +285,32 @@ public:
 
 		client = clientObj;
 
+		windowInfo.parent_window =
+			browser->GetHost()->GetWindowHandle();
+
 		// Allow pop-ups
 		return false;
 	}
 
 	/* CefContextMenuHandler */
-	virtual void OnBeforeContextMenu(
-		CefRefPtr<CefBrowser> browser,
-		CefRefPtr<CefFrame> frame,
-		CefRefPtr<CefContextMenuParams> params,
-		CefRefPtr<CefMenuModel> model) override
+	virtual void OnBeforeContextMenu(CefRefPtr<CefBrowser> browser,
+					 CefRefPtr<CefFrame> frame,
+					 CefRefPtr<CefContextMenuParams> params,
+					 CefRefPtr<CefMenuModel> model) override
 	{
 		// Remove all context menu contributions
 		model->Clear();
 	}
 
 	/* CefLoadHandler */
-	virtual void OnLoadEnd(
-		CefRefPtr<CefBrowser> browser,
-		CefRefPtr<CefFrame> frame,
-		int httpStatusCode) override;
+	virtual void OnLoadEnd(CefRefPtr<CefBrowser> browser,
+			       CefRefPtr<CefFrame> frame,
+			       int httpStatusCode) override;
 
 	virtual void OnLoadError(CefRefPtr<CefBrowser> browser,
-		CefRefPtr<CefFrame> frame,
-		ErrorCode errorCode,
-		const CefString& errorText,
-		const CefString& failedUrl) override;
+				 CefRefPtr<CefFrame> frame, ErrorCode errorCode,
+				 const CefString &errorText,
+				 const CefString &failedUrl) override;
 
 	///
 	// Called after a navigation has been committed and before the browser begins
@@ -309,8 +326,8 @@ public:
 	///
 	/*--cef()--*/
 	virtual void OnLoadStart(CefRefPtr<CefBrowser> browser,
-		CefRefPtr<CefFrame> frame,
-		TransitionType transition_type) override;
+				 CefRefPtr<CefFrame> frame,
+				 TransitionType transition_type) override;
 
 	///
 	// Called when the loading state has changed. This callback will be executed
@@ -321,29 +338,30 @@ public:
 	///
 	/*--cef()--*/
 	virtual void OnLoadingStateChange(CefRefPtr<CefBrowser> browser,
-		bool isLoading,
-		bool canGoBack,
-		bool canGoForward) override;
+					  bool isLoading, bool canGoBack,
+					  bool canGoForward) override;
 
 	/* CefDisplayHandler */
 	virtual void OnTitleChange(CefRefPtr<CefBrowser> browser,
-		const CefString& title) override;
+				   const CefString &title) override;
 
-	virtual void OnFaviconURLChange(CefRefPtr<CefBrowser> browser,
-		const std::vector<CefString>& icon_urls) override;
+	virtual void
+	OnFaviconURLChange(CefRefPtr<CefBrowser> browser,
+			   const std::vector<CefString> &icon_urls) override;
 
 	virtual bool OnConsoleMessage(CefRefPtr<CefBrowser> browser,
 #if CHROME_VERSION_BUILD >= 3282
-		cef_log_severity_t level,
+				      cef_log_severity_t level,
 #endif
-		const CefString &message,
-		const CefString &source,
-		int line) override;
+				      const CefString &message,
+				      const CefString &source,
+				      int line) override;
 
 	/* CefKeyboardHandler */
 	virtual bool OnPreKeyEvent(CefRefPtr<CefBrowser> browser,
-		const CefKeyEvent& event, CefEventHandle os_event,
-		bool* is_keyboard_shortcut) override;
+				   const CefKeyEvent &event,
+				   CefEventHandle os_event,
+				   bool *is_keyboard_shortcut) override;
 
 public:
 	std::string GetExecuteJavaScriptCodeOnLoad()
@@ -361,11 +379,15 @@ private:
 	std::string m_executeJavaScriptCodeOnLoad;
 	CefRefPtr<StreamElementsBrowserMessageHandler> m_messageHandler;
 	CefRefPtr<StreamElementsCefClientEventHandler> m_eventHandler;
-	StreamElementsMessageBus::message_destination_filter_flags_t m_msgDestType;
+	StreamElementsMessageBus::message_destination_filter_flags_t
+		m_msgDestType;
 
 public:
-	static void DispatchJSEvent(std::string event, std::string eventArgsJson);
-	static void DispatchJSEvent(CefRefPtr<CefBrowser> browser, std::string event, std::string eventArgsJson);
+	static void DispatchJSEvent(std::string event,
+				    std::string eventArgsJson);
+	static void DispatchJSEvent(CefRefPtr<CefBrowser> browser,
+				    std::string event,
+				    std::string eventArgsJson);
 
 public:
 	IMPLEMENT_REFCOUNTING(StreamElementsCefClient);

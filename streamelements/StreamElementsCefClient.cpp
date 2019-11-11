@@ -113,11 +113,27 @@ void StreamElementsCefClient::OnLoadStart(CefRefPtr<CefBrowser> browser,
 }
 
 void StreamElementsCefClient::OnLoadEnd(
-	CefRefPtr<CefBrowser> /*browser*/,
+	CefRefPtr<CefBrowser> browser,
 	CefRefPtr<CefFrame> frame,
 	int httpStatusCode)
 {
-	blog(LOG_INFO, "obs-browser[%lu]: completed loading %s frame url '%s' (HTTP status code: %d)",
+#ifdef _WIN32
+	cef_window_handle_t hWnd = browser->GetHost()->GetWindowHandle();
+
+	RECT rect;
+	if (::GetWindowRect(hWnd, &rect)) {
+		LONG width = rect.right - rect.left;
+		LONG height = rect.bottom - rect.top;
+
+		::SetWindowPos(hWnd, nullptr, 0, 0, width, height,
+			       SWP_NOMOVE | SWP_NOOWNERZORDER | SWP_NOZORDER);
+
+		::SendMessage(hWnd, WM_SIZE, 0, MAKELPARAM(width, height));
+	}
+#endif
+
+	blog(LOG_INFO,
+	     "obs-browser[%lu]: completed loading %s frame url '%s' (HTTP status code: %d)",
 		m_cefClientId,
 		frame->IsMain() ? "main" : "child",
 		frame->GetURL().ToString().c_str(),
