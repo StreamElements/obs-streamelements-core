@@ -1854,10 +1854,7 @@ std::string GetUniqueFileNameFromPath(std::string path, size_t maxLength)
 
 std::string GetFolderPathFromFilePath(std::string filePath)
 {
-	char buf[MAX_PATH + 1];
-	os_get_abs_path(filePath.c_str(), buf, sizeof(buf));
-
-	std::string path(buf);
+	std::string path(filePath);
 
 	std::transform(path.begin(), path.end(), path.begin(), [](char ch) {
 		if (ch == '\\')
@@ -1868,7 +1865,10 @@ std::string GetFolderPathFromFilePath(std::string filePath)
 
 	size_t pos = path.find_last_of('/');
 
-	return path.substr(0, pos);
+	if (pos > 0)
+		return path.substr(0, pos);
+	else
+		return ".";
 }
 
 bool ReadListOfObsSceneCollections(std::map<std::string, std::string> &output)

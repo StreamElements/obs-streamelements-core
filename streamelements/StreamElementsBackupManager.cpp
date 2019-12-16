@@ -283,9 +283,9 @@ ScanForFileReferencesToBackup(zip_t *zip, CefRefPtr<CefValue> &node,
 		if (os_file_exists(path.c_str())) {
 			if (!filesMap.count(path)) {
 				std::string fileName =
-					GetUniqueFileNameFromPath(path, 96);
+					GetUniqueFileNameFromPath(path, 48);
 				std::string zipPath =
-					"plugin_config/obs-browser/streamelements_restored_files/" +
+					"obslive_restored_files/" +
 					timestamp + "/" + fileName;
 
 				if (!AddFileToZip(zip, path, zipPath))
@@ -555,8 +555,7 @@ void StreamElementsBackupManager::CreateLocalBackupPackage(
 	time_t time = std::time(nullptr);
 	std::strftime(timestampBuf, sizeof(timestampBuf), "%Y%m%d%H%M%S",
 		      std::localtime(&time));
-	std::string timestamp = timestampBuf + std::string("-") +
-				CreateGloballyUniqueIdString();
+	std::string timestamp = timestampBuf;
 
 	for (auto collection : requestCollections) {
 		if (!AddCollectionToZip(zip, basePath, collection,
@@ -837,7 +836,7 @@ void StreamElementsBackupManager::RestoreBackupPackageContent(
 							.c_str(),
 						_O_WRONLY | _O_CREAT |
 							_O_BINARY,
-						_S_IWRITE /*_S_IREAD | _S_IWRITE*/);
+						_S_IREAD | _S_IWRITE);
 
 					if (-1 == context.handle) {
 						success = false;
