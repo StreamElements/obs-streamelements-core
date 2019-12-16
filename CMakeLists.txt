@@ -16,12 +16,15 @@ find_package(Qt5Core REQUIRED)
 find_package(Qt5Widgets REQUIRED)
 find_package(Libcurl REQUIRED)
 find_package(BugSplat REQUIRED)
+find_package(AngelScript REQUIRED)
 
 include_directories(SYSTEM
 	${Qt5Core_INCLUDES}
 	${Qt5Widgets_INCLUDES}
 	${LIBCURL_INCLUDE_DIRS}
 	${BUGSPLAT_INCLUDE_DIR}
+	${ANGELSCRIPT_INCLUDE_DIR}
+	${ANGELSCRIPT_ADDON_INCLUDE_DIR}
 )
 
 #qt5_wrap_ui(NetworkDialog "networkdialog.ui")
@@ -34,6 +37,11 @@ endif()
 
 if (NOT BUGSPLAT_FOUND)
 	message(STATUS "BugSplat Not found -- obs-browser plugin disabled.")
+	return()
+endif()
+
+if (NOT ANGELSCRIPT_FOUND)
+	message(STATUS "AngelScript Not found -- obs-browser plugin disabled.")
 	return()
 endif()
 
@@ -162,6 +170,9 @@ set(obs-browser_SOURCES
 	streamelements/StreamElementsHttpClient.cpp
 	streamelements/StreamElementsNativeOBSControlsManager.cpp
 	streamelements/StreamElementsCookieManager.cpp
+	streamelements/StreamElementsProfilesManager.cpp
+	streamelements/StreamElementsBackupManager.cpp
+	streamelements/StreamElementsCleanupManager.cpp
 	streamelements/deps/zip/zip.c
 	streamelements/deps/server/NamedPipesServer.cpp
 	streamelements/deps/server/NamedPipesServerClientHandler.cpp
@@ -216,6 +227,9 @@ set(obs-browser_HEADERS
 	streamelements/StreamElementsHttpClient.hpp
 	streamelements/StreamElementsNativeOBSControlsManager.hpp
 	streamelements/StreamElementsCookieManager.hpp
+	streamelements/StreamElementsProfilesManager.hpp
+	streamelements/StreamElementsBackupManager.hpp
+	streamelements/StreamElementsCleanupManager.hpp
 	streamelements/deps/zip/zip.h
 	streamelements/deps/zip/miniz.h
 	streamelements/deps/moodycamel/concurrentqueue.h
@@ -286,6 +300,52 @@ endif(WIN32)
 
 if (APPLE AND XCODE)
 	set_xcode_property(obs-browser-page CLANG_CXX_LIBRARY "libc++")
+endif(APPLE AND XCODE)
+
+# ----------------------------------------------------------------------------
+
+set(obs-browser-streamelements-restore-script-host_SOURCES
+	streamelements/restore-script-host/main.rc
+	streamelements/restore-script-host/main.cpp
+	streamelements/restore-script-host/ScriptEngine.cpp
+	${ANGELSCRIPT_ADDON_INCLUDE_DIR}/scriptstdstring/scriptstdstring.cpp
+	#${ANGELSCRIPT_ADDON_INCLUDE_DIR}/scriptstdstring/scriptstdstring_utils.cpp
+	${ANGELSCRIPT_ADDON_INCLUDE_DIR}/scriptbuilder/scriptbuilder.cpp
+	)
+set(obs-browser-streamelements-restore-script-host_HEADERS
+	streamelements/restore-script-host/main.hpp
+	streamelements/restore-script-host/ScriptEngine.hpp
+	)
+
+set(obs-browser-streamelements-restore-script-host_LIBRARIES
+	${ANGELSCRIPT_LIBRARIES}
+	#libobs
+	#Qt5::Core
+	#Qt5::Widgets
+	#w32-pthreads
+	#${LIBCURL_LIBRARIES}
+	)
+
+add_executable(obs-browser-streamelements-restore-script-host
+	${obs-browser-streamelements-restore-script-host_SOURCES}
+	${obs-browser-streamelements-restore-script-host_HEADERS}
+	)
+
+target_link_libraries(obs-browser-streamelements-restore-script-host
+	${obs-browser-streamelements-restore-script-host_LIBRARIES}
+	)
+
+if (APPLE)
+	set_target_properties(obs-browser-streamelements-restore-script-host PROPERTIES
+		COMPILE_FLAGS "-mmacosx-version-min=10.8")
+endif(APPLE)
+
+if (WIN32)
+	set_target_properties(obs-browser-streamelements-restore-script-host PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS")
+endif(WIN32)
+
+if (APPLE AND XCODE)
+	set_xcode_property(obs-browser-streamelements-restore-script-host CLANG_CXX_LIBRARY "libc++")
 endif(APPLE AND XCODE)
 
 # ----------------------------------------------------------------------------
@@ -389,3 +449,4 @@ endif()
 
 install_obs_plugin_with_data(obs-browser data)
 install_obs_plugin(obs-browser-page)
+install_obs_plugin(obs-browser-streamelements-restore-script-host)

@@ -3,6 +3,7 @@
 #include <obs.h>
 #include <util/threading.h>
 #include <vector>
+#include <functional>
 
 ///
 // Asynchronous task queue processed by a worker thread
@@ -78,6 +79,13 @@ public:
 	// @param args		Task argument
 	//
 	void Enqueue(void(*task_proc)(void*), void* args);
+
+	///
+	// Add task to the processing queue
+	//
+	// @param task_proc	Task callback
+	//
+	void Enqueue(std::function<void()> task_proc);
 
 	///
 	// Remove all pending tasks

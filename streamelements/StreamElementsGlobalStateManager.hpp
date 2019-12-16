@@ -17,6 +17,9 @@
 #include "StreamElementsHttpClient.hpp"
 #include "StreamElementsNativeOBSControlsManager.hpp"
 #include "StreamElementsCookieManager.hpp"
+#include "StreamElementsProfilesManager.hpp"
+#include "StreamElementsBackupManager.hpp"
+#include "StreamElementsCleanupManager.hpp"
 
 class StreamElementsGlobalStateManager : public StreamElementsObsAppMonitor {
 private:
@@ -125,6 +128,18 @@ public:
 	{
 		return m_cookieManager;
 	}
+	StreamElementsProfilesManager *GetProfilesManager()
+	{
+		return m_profilesManager;
+	}
+	StreamElementsBackupManager *GetBackupManager()
+	{
+		return m_backupManager;
+	}
+	StreamElementsCleanupManager *GetCleanupManager()
+	{
+		return m_cleanupManager;
+	}
 	QMainWindow *mainWindow() { return m_mainWindow; }
 
 public:
@@ -165,6 +180,9 @@ private:
 	StreamElementsNativeOBSControlsManager *m_nativeObsControlsManager =
 		nullptr;
 	StreamElementsCookieManager *m_cookieManager = nullptr;
+	StreamElementsProfilesManager *m_profilesManager = nullptr;
+	StreamElementsBackupManager *m_backupManager = nullptr;
+	StreamElementsCleanupManager *m_cleanupManager = nullptr;
 	WindowStateChangeEventFilter *m_windowStateEventFilter = nullptr;
 
 private:

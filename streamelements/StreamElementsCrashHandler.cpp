@@ -94,7 +94,10 @@ static void delete_oldest_file(bool has_prefix, const char *location)
 {
 	UNUSED_PARAMETER(has_prefix);
 
-	std::string      logDir(os_get_config_path_ptr(location));
+	char *basePathPtr = os_get_config_path_ptr(location);
+	std::string logDir(basePathPtr);
+	bfree(basePathPtr);
+
 	std::string      oldestLog;
 	time_t	         oldest_ts = (time_t)-1;
 	struct os_dirent *entry;
@@ -196,7 +199,9 @@ static void main_crash_handler(const char *format, va_list args, void *param)
 	std::string name = "obs-studio/crashes/Crash ";
 	name += GenerateTimeDateFilename("txt");
 
-	std::string path(os_get_config_path_ptr(name.c_str()));
+	char *basePathPtr = os_get_config_path_ptr(name.c_str());
+	std::string path(basePathPtr);
+	bfree(basePathPtr);
 
 	// Write crash report content to crash dump file
 	write_file_content(path, text);

@@ -51,12 +51,15 @@ private:
 		curl_off_t ultotal,
 		curl_off_t ulnow);
 
+	static void DownloadFileAsyncTask(void *task_arg);
+
 public:
 	///
 	// Asynchronously download a file
 	//
 	// @param localFilePath	download destination file path
 	// @param url		source file URL
+	// @param large_file	indicates whether we're expecting a large file
 	// @param callback	function to call when done: callback(download_success, param)
 	// @param param		second parameter to @callback
 	// @param message	message to display while downloading
@@ -68,6 +71,18 @@ public:
 		void(*callback)(bool, void*),
 		void* param,
 		const char* message);
+
+	///
+	// Synchronously download a file
+	//
+	// @param localFilePath	download destination file path
+	// @param url		source file URL
+	// @param large_file	indicates whether we're expecting a large file
+	// @param param		second parameter to @callback
+	// @param message	message to display while downloading
+	//
+	bool DownloadFile(const char *localFilePath, const char *url,
+			  bool large_file, const char *message);
 
 	///
 	// Synchronously upload a file

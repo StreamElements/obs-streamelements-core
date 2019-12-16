@@ -205,3 +205,14 @@ void StreamElementsDecryptCefCookiesStoragePath(const char *path_utf8);
 
 std::string GetIdFromPointer(const void *ptr);
 const void *GetPointerFromId(const char *id);
+
+/* ========================================================= */
+
+bool GetTemporaryFilePath(std::string prefixString, std::string &result);
+std::string GetUniqueFileNameFromPath(std::string path, size_t maxLength);
+std::string GetFolderPathFromFilePath(std::string filePath);
+
+/* ========================================================= */
+
+bool ReadListOfObsSceneCollections(std::map<std::string, std::string> &output);
+bool ReadListOfObsProfiles(std::map<std::string, std::string> &output);

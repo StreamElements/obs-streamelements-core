@@ -2,7 +2,7 @@
 
 #include "../cef-headers.hpp"
 
-#include <include/cef_parser.h>		// CefParseJSON, CefWriteJSON
+#include <include/cef_parser.h> // CefParseJSON, CefWriteJSON
 
 #include "Version.hpp"
 #include "StreamElementsConfig.hpp"
@@ -17,20 +17,23 @@
 #include <codecvt>
 
 /* Incoming messages from renderer process */
-const char* MSG_ON_CONTEXT_CREATED = "CefRenderProcessHandler::OnContextCreated";
-const char* MSG_INCOMING_API_CALL = "StreamElementsApiMessageHandler::OnIncomingApiCall";
+const char *MSG_ON_CONTEXT_CREATED =
+	"CefRenderProcessHandler::OnContextCreated";
+const char *MSG_INCOMING_API_CALL =
+	"StreamElementsApiMessageHandler::OnIncomingApiCall";
 
 /* Outgoing messages to renderer process */
-const char* MSG_BIND_JAVASCRIPT_FUNCTIONS = "CefRenderProcessHandler::BindJavaScriptFunctions";
-const char* MSG_BIND_JAVASCRIPT_PROPS = "CefRenderProcessHandler::BindJavaScriptProperties";
+const char *MSG_BIND_JAVASCRIPT_FUNCTIONS =
+	"CefRenderProcessHandler::BindJavaScriptFunctions";
+const char *MSG_BIND_JAVASCRIPT_PROPS =
+	"CefRenderProcessHandler::BindJavaScriptProperties";
 
 bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 	CefRefPtr<CefBrowser> browser,
 #if CHROME_VERSION_BUILD >= 3770
 	CefRefPtr<CefFrame> /*frame*/,
 #endif
-	CefProcessId /*source_process*/,
-	CefRefPtr<CefProcessMessage> message,
+	CefProcessId /*source_process*/, CefRefPtr<CefProcessMessage> message,
 	const long cefClientId)
 {
 	const std::string &name = message->GetName();
@@ -41,8 +44,7 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 		DispatchHostReadyEventInternal(browser);
 
 		return true;
-	}
-	else if (name == MSG_INCOMING_API_CALL) {
+	} else if (name == MSG_INCOMING_API_CALL) {
 		CefRefPtr<CefValue> result = CefValue::Create();
 		result->SetBool(false);
 
@@ -51,35 +53,35 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 		const int headerSize = args->GetInt(0);
 		std::string id = args->GetString(2).ToString();
 
-		id = id.substr(id.find_last_of('.') + 1); // window.host.XXX -> XXX
+		id = id.substr(id.find_last_of('.') +
+			       1); // window.host.XXX -> XXX
 
 		if (m_apiCallHandlers.count(id)) {
-			CefRefPtr<CefListValue> callArgs = CefListValue::Create();
+			CefRefPtr<CefListValue> callArgs =
+				CefListValue::Create();
 
 			for (int i = headerSize; i < args->GetSize() - 1; ++i) {
-				CefRefPtr<CefValue> parsedValue =
-					CefParseJSON(
-						args->GetString(i),
-						JSON_PARSER_ALLOW_TRAILING_COMMAS);
+				CefRefPtr<CefValue> parsedValue = CefParseJSON(
+					args->GetString(i),
+					JSON_PARSER_ALLOW_TRAILING_COMMAS);
 
-				callArgs->SetValue(
-					callArgs->GetSize(),
-					parsedValue);
+				callArgs->SetValue(callArgs->GetSize(),
+						   parsedValue);
 			}
 
 			struct local_context {
-				StreamElementsApiMessageHandler* self;
+				StreamElementsApiMessageHandler *self;
 				std::string id;
 				CefRefPtr<CefBrowser> browser;
 				CefRefPtr<CefProcessMessage> message;
 				CefRefPtr<CefListValue> callArgs;
 				CefRefPtr<CefValue> result;
-				void (*complete)(void*);
+				void (*complete)(void *);
 				int cef_app_callback_id;
 				long cefClientId;
 			};
 
-			local_context* context = new local_context();
+			local_context *context = new local_context();
 
 			context->self = this;
 			context->id = id;
@@ -87,25 +89,35 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 			context->message = message;
 			context->callArgs = callArgs;
 			context->result = result;
-			context->cef_app_callback_id = message->GetArgumentList()->GetInt(message->GetArgumentList()->GetSize() - 1);
+			context->cef_app_callback_id =
+				message->GetArgumentList()->GetInt(
+					message->GetArgumentList()->GetSize() -
+					1);
 			context->cefClientId = cefClientId;
-			context->complete = [] (void* data) {
-				local_context* context = (local_context*)data;
+			context->complete = [](void *data) {
+				local_context *context = (local_context *)data;
 
 				blog(LOG_INFO,
-					"obs-browser[%lu]: API: completed call to '%s', callback id %d",
-					context->cefClientId,
-					context->id.c_str(),
-					context->cef_app_callback_id);
+				     "obs-browser[%lu]: API: completed call to '%s', callback id %d",
+				     context->cefClientId, context->id.c_str(),
+				     context->cef_app_callback_id);
 
 				if (context->cef_app_callback_id != -1) {
 					// Invoke result callback
 					CefRefPtr<CefProcessMessage> msg =
-						CefProcessMessage::Create("executeCallback");
+						CefProcessMessage::Create(
+							"executeCallback");
 
-					CefRefPtr<CefListValue> callbackArgs = msg->GetArgumentList();
-					callbackArgs->SetInt(0, context->cef_app_callback_id);
-					callbackArgs->SetString(1, CefWriteJSON(context->result, JSON_WRITER_DEFAULT));
+					CefRefPtr<CefListValue> callbackArgs =
+						msg->GetArgumentList();
+					callbackArgs->SetInt(
+						0,
+						context->cef_app_callback_id);
+					callbackArgs->SetString(
+						1,
+						CefWriteJSON(
+							context->result,
+							JSON_WRITER_DEFAULT));
 
 					SendBrowserProcessMessage(
 						context->browser, PID_RENDERER,
@@ -114,37 +126,43 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 			};
 
 			{
-				CefRefPtr<CefValue> callArgsValue = CefValue::Create();
+				CefRefPtr<CefValue> callArgsValue =
+					CefValue::Create();
 				callArgsValue->SetList(context->callArgs);
 				blog(LOG_INFO,
-					"obs-browser[%lu]: API: posting call to '%s', callback id %d, args: %s",
-					context->cefClientId,
-					context->id.c_str(),
-					context->cef_app_callback_id,
-					CefWriteJSON(callArgsValue, JSON_WRITER_DEFAULT).ToString().c_str());
+				     "obs-browser[%lu]: API: posting call to '%s', callback id %d, args: %s",
+				     context->cefClientId, context->id.c_str(),
+				     context->cef_app_callback_id,
+				     CefWriteJSON(callArgsValue,
+						  JSON_WRITER_DEFAULT)
+					     .ToString()
+					     .c_str());
 			}
 
-			QtPostTask([](void* data)
-			{
-				local_context* context = (local_context*)data;
+			QtPostTask(
+				[](void *data) {
+					local_context *context =
+						(local_context *)data;
 
-				blog(LOG_INFO,
-					"obs-browser[%lu]: API: performing call to '%s', callback id %d",
-					context->cefClientId,
-					context->id.c_str(),
-					context->cef_app_callback_id);
+					blog(LOG_INFO,
+					     "obs-browser[%lu]: API: performing call to '%s', callback id %d",
+					     context->cefClientId,
+					     context->id.c_str(),
+					     context->cef_app_callback_id);
 
-				context->self->m_apiCallHandlers[context->id](
-					context->self,
-					context->message,
-					context->callArgs,
-					context->result,
-					context->browser,
-					context->complete,
-					context);
+					context->self
+						->m_apiCallHandlers[context->id](
+							context->self,
+							context->message,
+							context->callArgs,
+							context->result,
+							context->browser,
+							context->complete,
+							context);
 
-				delete context;
-			}, context);
+					delete context;
+				},
+				context);
 		}
 
 		return true;
@@ -153,7 +171,8 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 	return false;
 }
 
-void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlersInternal(CefRefPtr<CefBrowser> browser)
+void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlersInternal(
+	CefRefPtr<CefBrowser> browser)
 {
 	RegisterIncomingApiCallHandlers();
 
@@ -161,13 +180,15 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlersInternal(Ce
 	// with API methods
 	CefRefPtr<CefValue> root = CefValue::Create();
 
-	CefRefPtr<CefDictionaryValue> rootDictionary = CefDictionaryValue::Create();
+	CefRefPtr<CefDictionaryValue> rootDictionary =
+		CefDictionaryValue::Create();
 	root->SetDictionary(rootDictionary);
 
 	for (auto apiCallHandler : m_apiCallHandlers) {
 		CefRefPtr<CefValue> val = CefValue::Create();
 
-		CefRefPtr<CefDictionaryValue> function = CefDictionaryValue::Create();
+		CefRefPtr<CefDictionaryValue> function =
+			CefDictionaryValue::Create();
 
 		function->SetString("message", MSG_INCOMING_API_CALL);
 
@@ -177,23 +198,25 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlersInternal(Ce
 	}
 
 	// Convert data to JSON
-	CefString jsonString =
-		CefWriteJSON(root, JSON_WRITER_DEFAULT);
+	CefString jsonString = CefWriteJSON(root, JSON_WRITER_DEFAULT);
 
 	// Send request to renderer process
-	CefRefPtr<CefProcessMessage> msg = CefProcessMessage::Create(MSG_BIND_JAVASCRIPT_FUNCTIONS);
+	CefRefPtr<CefProcessMessage> msg =
+		CefProcessMessage::Create(MSG_BIND_JAVASCRIPT_FUNCTIONS);
 	msg->GetArgumentList()->SetString(0, "host");
 	msg->GetArgumentList()->SetString(1, jsonString);
 	SendBrowserProcessMessage(browser, PID_RENDERER, msg);
 }
 
-void StreamElementsApiMessageHandler::RegisterApiPropsInternal(CefRefPtr<CefBrowser> browser)
+void StreamElementsApiMessageHandler::RegisterApiPropsInternal(
+	CefRefPtr<CefBrowser> browser)
 {
 	// Context created, request creation of window.host object
 	// with API methods
 	CefRefPtr<CefValue> root = CefValue::Create();
 
-	CefRefPtr<CefDictionaryValue> rootDictionary = CefDictionaryValue::Create();
+	CefRefPtr<CefDictionaryValue> rootDictionary =
+		CefDictionaryValue::Create();
 	root->SetDictionary(rootDictionary);
 
 	rootDictionary->SetBool("hostReady", true);
@@ -202,22 +225,25 @@ void StreamElementsApiMessageHandler::RegisterApiPropsInternal(CefRefPtr<CefBrow
 	rootDictionary->SetInt("apiMinorVersion", HOST_API_VERSION_MINOR);
 
 	// Convert data to JSON
-	CefString jsonString =
-		CefWriteJSON(root, JSON_WRITER_DEFAULT);
+	CefString jsonString = CefWriteJSON(root, JSON_WRITER_DEFAULT);
 
 	// Send request to renderer process
-	CefRefPtr<CefProcessMessage> msg = CefProcessMessage::Create(MSG_BIND_JAVASCRIPT_PROPS);
+	CefRefPtr<CefProcessMessage> msg =
+		CefProcessMessage::Create(MSG_BIND_JAVASCRIPT_PROPS);
 	msg->GetArgumentList()->SetString(0, "host");
 	msg->GetArgumentList()->SetString(1, jsonString);
 	SendBrowserProcessMessage(browser, PID_RENDERER, msg);
 }
 
-void StreamElementsApiMessageHandler::DispatchHostReadyEventInternal(CefRefPtr<CefBrowser> browser)
+void StreamElementsApiMessageHandler::DispatchHostReadyEventInternal(
+	CefRefPtr<CefBrowser> browser)
 {
 	DispatchEventInternal(browser, "hostReady", "null");
 }
 
-void StreamElementsApiMessageHandler::DispatchEventInternal(CefRefPtr<CefBrowser> browser, std::string event, std::string eventArgsJson)
+void StreamElementsApiMessageHandler::DispatchEventInternal(
+	CefRefPtr<CefBrowser> browser, std::string event,
+	std::string eventArgsJson)
 {
 	CefRefPtr<CefProcessMessage> msg =
 		CefProcessMessage::Create("DispatchJSEvent");
@@ -228,7 +254,8 @@ void StreamElementsApiMessageHandler::DispatchEventInternal(CefRefPtr<CefBrowser
 	SendBrowserProcessMessage(browser, PID_RENDERER, msg);
 }
 
-void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandler(std::string id, incoming_call_handler_t handler)
+void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandler(
+	std::string id, incoming_call_handler_t handler)
 {
 	m_apiCallHandlers[id] = handler;
 }
@@ -236,7 +263,9 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandler(std::string
 static std::recursive_mutex s_sync_api_call_mutex;
 
 #define API_HANDLER_BEGIN(name) RegisterIncomingApiCallHandler(name, [](StreamElementsApiMessageHandler*, CefRefPtr<CefProcessMessage> message, CefRefPtr<CefListValue> args, CefRefPtr<CefValue>& result, CefRefPtr<CefBrowser> browser, void (*complete_callback)(void*), void* complete_context) { std::lock_guard<std::recursive_mutex> _api_sync_guard(s_sync_api_call_mutex);
-#define API_HANDLER_END() complete_callback(complete_context); });
+#define API_HANDLER_END()                    \
+	complete_callback(complete_context); \
+	});
 
 void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 {
@@ -246,14 +275,16 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getStartupFlags");
 	{
-		result->SetInt(StreamElementsConfig::GetInstance()->GetStartupFlags());
+		result->SetInt(
+			StreamElementsConfig::GetInstance()->GetStartupFlags());
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("setStartupFlags");
 	{
 		if (args->GetSize()) {
-			StreamElementsConfig::GetInstance()->SetStartupFlags(args->GetValue(0)->GetInt());
+			StreamElementsConfig::GetInstance()->SetStartupFlags(
+				args->GetValue(0)->GetInt());
 
 			result->SetBool(true);
 		}
@@ -273,7 +304,8 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			CefString url = args->GetValue(0)->GetString();
 
-			QUrl navigate_url = QUrl(url.ToString().c_str(), QUrl::TolerantMode);
+			QUrl navigate_url = QUrl(url.ToString().c_str(),
+						 QUrl::TolerantMode);
 			QDesktopServices::openUrl(navigate_url);
 
 			result->SetBool(true);
@@ -286,9 +318,12 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			CefRefPtr<CefValue> barInfo = args->GetValue(0);
 
-			StreamElementsGlobalStateManager::GetInstance()->GetWidgetManager()->DeserializeNotificationBar(barInfo);
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetWidgetManager()
+				->DeserializeNotificationBar(barInfo);
 
-			StreamElementsGlobalStateManager::GetInstance()->PersistState();
+			StreamElementsGlobalStateManager::GetInstance()
+				->PersistState();
 
 			result->SetBool(true);
 		}
@@ -297,7 +332,9 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("hideNotificationBar");
 	{
-		StreamElementsGlobalStateManager::GetInstance()->GetWidgetManager()->HideNotificationBar();
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetWidgetManager()
+			->HideNotificationBar();
 
 		StreamElementsGlobalStateManager::GetInstance()->PersistState();
 
@@ -308,26 +345,42 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("showCentralWidget");
 	{
 		if (args->GetSize()) {
-			CefRefPtr<CefDictionaryValue> rootDictionary = args->GetValue(0)->GetDictionary();
+			CefRefPtr<CefDictionaryValue> rootDictionary =
+				args->GetValue(0)->GetDictionary();
 
-			if (rootDictionary.get() && rootDictionary->HasKey("url")) {
+			if (rootDictionary.get() &&
+			    rootDictionary->HasKey("url")) {
 				// Remove all central widgets
-				while (StreamElementsGlobalStateManager::GetInstance()->GetWidgetManager()->DestroyCurrentCentralBrowserWidget())
-				{
+				while (StreamElementsGlobalStateManager::GetInstance()
+					       ->GetWidgetManager()
+					       ->DestroyCurrentCentralBrowserWidget()) {
 				}
 
 				std::string executeJavaScriptCodeOnLoad;
 
-				if (rootDictionary->HasKey("executeJavaScriptCodeOnLoad")) {
-					executeJavaScriptCodeOnLoad = rootDictionary->GetString("executeJavaScriptCodeOnLoad").ToString();
+				if (rootDictionary->HasKey(
+					    "executeJavaScriptCodeOnLoad")) {
+					executeJavaScriptCodeOnLoad =
+						rootDictionary
+							->GetString(
+								"executeJavaScriptCodeOnLoad")
+							.ToString();
 				}
 
-				StreamElementsGlobalStateManager::GetInstance()->GetWidgetManager()->PushCentralBrowserWidget(
-					rootDictionary->GetString("url").ToString().c_str(),
-					executeJavaScriptCodeOnLoad.c_str());
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->PushCentralBrowserWidget(
+						rootDictionary->GetString("url")
+							.ToString()
+							.c_str(),
+						executeJavaScriptCodeOnLoad
+							.c_str());
 
-				StreamElementsGlobalStateManager::GetInstance()->GetMenuManager()->Update();
-				StreamElementsGlobalStateManager::GetInstance()->PersistState();
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				StreamElementsGlobalStateManager::GetInstance()
+					->PersistState();
 
 				result->SetBool(true);
 			}
@@ -337,11 +390,14 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("hideCentralWidget");
 	{
-		while (StreamElementsGlobalStateManager::GetInstance()->GetWidgetManager()->DestroyCurrentCentralBrowserWidget())
-		{
+		while (StreamElementsGlobalStateManager::GetInstance()
+			       ->GetWidgetManager()
+			       ->DestroyCurrentCentralBrowserWidget()) {
 		}
 
-		StreamElementsGlobalStateManager::GetInstance()->GetMenuManager()->Update();
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetMenuManager()
+			->Update();
 		StreamElementsGlobalStateManager::GetInstance()->PersistState();
 
 		result->SetBool(true);
@@ -354,14 +410,21 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			CefRefPtr<CefValue> widgetInfo = args->GetValue(0);
 
 			std::string id =
-				StreamElementsGlobalStateManager::GetInstance()->GetWidgetManager()->AddDockBrowserWidget(widgetInfo);
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->AddDockBrowserWidget(widgetInfo);
 
-			QDockWidget* dock =
-				StreamElementsGlobalStateManager::GetInstance()->GetWidgetManager()->GetDockWidget(id.c_str());
+			QDockWidget *dock =
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->GetDockWidget(id.c_str());
 
 			if (dock) {
-				StreamElementsGlobalStateManager::GetInstance()->GetMenuManager()->Update();
-				StreamElementsGlobalStateManager::GetInstance()->PersistState();
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				StreamElementsGlobalStateManager::GetInstance()
+					->PersistState();
 
 				result->SetString(id);
 			}
@@ -378,11 +441,19 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				for (int i = 0; i < list->GetSize(); ++i) {
 					CefString id = list->GetString(i);
 
-					StreamElementsGlobalStateManager::GetInstance()->GetWidgetManager()->RemoveDockWidget(id.ToString().c_str());
+					StreamElementsGlobalStateManager::
+						GetInstance()
+							->GetWidgetManager()
+							->RemoveDockWidget(
+								id.ToString()
+									.c_str());
 				}
 
-				StreamElementsGlobalStateManager::GetInstance()->GetMenuManager()->Update();
-				StreamElementsGlobalStateManager::GetInstance()->PersistState();
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				StreamElementsGlobalStateManager::GetInstance()
+					->PersistState();
 
 				result->SetBool(true);
 			}
@@ -392,92 +463,128 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAllDockingWidgets");
 	{
-		StreamElementsGlobalStateManager::GetInstance()->GetWidgetManager()->SerializeDockingWidgets(result);
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetWidgetManager()
+			->SerializeDockingWidgets(result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("toggleDockingWidgetFloatingById")
+	{
 		if (args->GetSize() && args->GetType(0) == VTYPE_STRING) {
 			result->SetBool(
-				StreamElementsGlobalStateManager::GetInstance()->GetWidgetManager()->ToggleWidgetFloatingStateById(
-					args->GetString(0).ToString().c_str()));
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->ToggleWidgetFloatingStateById(
+						args->GetString(0)
+							.ToString()
+							.c_str()));
 
 			if (result->GetBool()) {
-				StreamElementsGlobalStateManager::GetInstance()->GetMenuManager()->Update();
-				StreamElementsGlobalStateManager::GetInstance()->PersistState();
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				StreamElementsGlobalStateManager::GetInstance()
+					->PersistState();
 			}
 		}
+	}
 	API_HANDLER_END()
 
 	API_HANDLER_BEGIN("setDockingWidgetDimensionsById")
-		if (args->GetSize() >= 2 &&
-		    args->GetType(0) == VTYPE_STRING &&
+	{
+		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
 		    args->GetType(1) == VTYPE_DICTIONARY) {
 			int width = -1;
 			int height = -1;
 
-			CefRefPtr<CefDictionaryValue> d = args->GetDictionary(1);
+			CefRefPtr<CefDictionaryValue> d =
+				args->GetDictionary(1);
 
-			if (d->HasKey("width") && d->GetType("width") == VTYPE_INT) {
+			if (d->HasKey("width") &&
+			    d->GetType("width") == VTYPE_INT) {
 				width = d->GetInt("width");
 			}
 
-			if (d->HasKey("height") && d->GetType("height") == VTYPE_INT) {
+			if (d->HasKey("height") &&
+			    d->GetType("height") == VTYPE_INT) {
 				height = d->GetInt("height");
 			}
 
 			result->SetBool(
-				StreamElementsGlobalStateManager::GetInstance()->GetWidgetManager()->SetWidgetDimensionsById(
-					args->GetString(0).ToString().c_str(),
-					width,
-					height));
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->SetWidgetDimensionsById(
+						args->GetString(0)
+							.ToString()
+							.c_str(),
+						width, height));
 
 			if (result->GetBool()) {
-				StreamElementsGlobalStateManager::GetInstance()->GetMenuManager()->Update();
-				StreamElementsGlobalStateManager::GetInstance()->PersistState();
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				StreamElementsGlobalStateManager::GetInstance()
+					->PersistState();
 			}
 		}
+	}
 	API_HANDLER_END()
 
 	API_HANDLER_BEGIN("setDockingWidgetPositionById")
-		if (args->GetSize() >= 2 &&
-			args->GetType(0) == VTYPE_STRING &&
-			args->GetType(1) == VTYPE_DICTIONARY) {
+	{
+		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
+		    args->GetType(1) == VTYPE_DICTIONARY) {
 			int left = -1;
 			int top = -1;
 
-			CefRefPtr<CefDictionaryValue> d = args->GetDictionary(1);
+			CefRefPtr<CefDictionaryValue> d =
+				args->GetDictionary(1);
 
-			if (d->HasKey("left") && d->GetType("left") == VTYPE_INT) {
+			if (d->HasKey("left") &&
+			    d->GetType("left") == VTYPE_INT) {
 				left = d->GetInt("left");
 			}
 
-			if (d->HasKey("top") && d->GetType("top") == VTYPE_INT) {
+			if (d->HasKey("top") &&
+			    d->GetType("top") == VTYPE_INT) {
 				top = d->GetInt("top");
 			}
 
 			result->SetBool(
-				StreamElementsGlobalStateManager::GetInstance()->GetWidgetManager()->SetWidgetPositionById(
-					args->GetString(0).ToString().c_str(),
-					left,
-					top));
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->SetWidgetPositionById(
+						args->GetString(0)
+							.ToString()
+							.c_str(),
+						left, top));
 
 			if (result->GetBool()) {
-				StreamElementsGlobalStateManager::GetInstance()->GetMenuManager()->Update();
-				StreamElementsGlobalStateManager::GetInstance()->PersistState();
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				StreamElementsGlobalStateManager::GetInstance()
+					->PersistState();
 			}
 		}
+	}
 	API_HANDLER_END()
 
 	API_HANDLER_BEGIN("beginOnBoarding");
+	{
 		StreamElementsGlobalStateManager::GetInstance()->Reset();
 
 		result->SetBool(true);
+	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("completeOnBoarding");
-		while (StreamElementsGlobalStateManager::GetInstance()->GetWidgetManager()->DestroyCurrentCentralBrowserWidget())
-		{ }
+	{
+		while (StreamElementsGlobalStateManager::GetInstance()
+			       ->GetWidgetManager()
+			       ->DestroyCurrentCentralBrowserWidget()) {
+		}
 
 		StreamElementsConfig::GetInstance()->SetStartupFlags(
 			StreamElementsConfig::GetInstance()->GetStartupFlags() &
@@ -495,81 +602,127 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			StreamElementsConfig::GetInstance()->GetStartupFlags() |
 			StreamElementsConfig::STARTUP_FLAGS_SIGNED_IN);
 
-		StreamElementsGlobalStateManager::GetInstance()->GetMenuManager()->Update();
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetMenuManager()
+			->Update();
 		StreamElementsGlobalStateManager::GetInstance()->PersistState();
 
 		result->SetBool(true);
+	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("showStatusBarTemporaryMessage");
+	{
 		if (args->GetSize()) {
 			result->SetBool(
-				StreamElementsGlobalStateManager::GetInstance()->DeserializeStatusBarTemporaryMessage(args->GetValue(0)));
+				StreamElementsGlobalStateManager::GetInstance()
+					->DeserializeStatusBarTemporaryMessage(
+						args->GetValue(0)));
 		}
+	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("streamingBandwidthTestBegin");
+	{
 		if (args->GetSize() >= 2) {
 			result->SetBool(
-				StreamElementsGlobalStateManager::GetInstance()->GetBandwidthTestManager()->BeginBandwidthTest(
-					args->GetValue(0),
-					args->GetValue(1),
-					browser));
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetBandwidthTestManager()
+					->BeginBandwidthTest(args->GetValue(0),
+							     args->GetValue(1),
+							     browser));
 		}
+	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("streamingBandwidthTestEnd");
+	{
 		CefRefPtr<CefValue> options;
 
 		if (args->GetSize()) {
 			options = args->GetValue(0);
 		}
 		result->SetDictionary(
-			StreamElementsGlobalStateManager::GetInstance()->GetBandwidthTestManager()->EndBandwidthTest(options));
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetBandwidthTestManager()
+				->EndBandwidthTest(options));
+	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("streamingBandwidthTestGetStatus");
+	{
 		result->SetDictionary(
-			StreamElementsGlobalStateManager::GetInstance()->GetBandwidthTestManager()->GetBandwidthTestStatus());
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetBandwidthTestManager()
+				->GetBandwidthTestStatus());
+	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAvailableEncoders");
-		StreamElementsGlobalStateManager::GetInstance()->GetOutputSettingsManager()->GetAvailableEncoders(result, nullptr);
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetOutputSettingsManager()
+			->GetAvailableEncoders(result, nullptr);
+	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAvailableVideoEncoders");
+	{
 		obs_encoder_type type = OBS_ENCODER_VIDEO;
 
-		StreamElementsGlobalStateManager::GetInstance()->GetOutputSettingsManager()->GetAvailableEncoders(result, &type);
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetOutputSettingsManager()
+			->GetAvailableEncoders(result, &type);
+	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAvailableAudioEncoders");
+	{
 		obs_encoder_type type = OBS_ENCODER_AUDIO;
 
-		StreamElementsGlobalStateManager::GetInstance()->GetOutputSettingsManager()->GetAvailableEncoders(result, &type);
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetOutputSettingsManager()
+			->GetAvailableEncoders(result, &type);
+	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("setStreamingSettings");
+	{
 		if (args->GetSize()) {
 			result->SetBool(
-				StreamElementsGlobalStateManager::GetInstance()->GetOutputSettingsManager()->SetStreamingSettings(args->GetValue(0)));
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetOutputSettingsManager()
+					->SetStreamingSettings(
+						args->GetValue(0)));
 		}
+	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getEncodingSettings");
-		StreamElementsGlobalStateManager::GetInstance()->GetOutputSettingsManager()->GetEncodingSettings(result);
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetOutputSettingsManager()
+			->GetEncodingSettings(result);
+	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("setEncodingSettings");
+	{
 		if (args->GetSize()) {
 			result->SetBool(
-				StreamElementsGlobalStateManager::GetInstance()->GetOutputSettingsManager()->SetEncodingSettings(args->GetValue(0)));
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetOutputSettingsManager()
+					->SetEncodingSettings(
+						args->GetValue(0)));
 		}
+	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getCurrentContainerProperties");
+	{
 		CefRefPtr<StreamElementsCefClient> client =
-			static_cast<StreamElementsCefClient*>(browser->GetHost()->GetClient().get());
+			static_cast<StreamElementsCefClient *>(
+				browser->GetHost()->GetClient().get());
 
 		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
 		result->SetDictionary(d);
@@ -578,10 +731,12 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		std::string id = client->GetContainerId();
 
 		if (id.size()) {
-			StreamElementsBrowserWidgetManager::DockBrowserWidgetInfo* info =
-				StreamElementsGlobalStateManager::GetInstance()
-					->GetWidgetManager()
-					->GetDockBrowserWidgetInfo(id.c_str());
+			StreamElementsBrowserWidgetManager::DockBrowserWidgetInfo
+				*info = StreamElementsGlobalStateManager::
+						GetInstance()
+							->GetWidgetManager()
+							->GetDockBrowserWidgetInfo(
+								id.c_str());
 
 			if (info) {
 				dockingArea = info->m_dockingArea;
@@ -592,31 +747,47 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 		d->SetString("id", id.c_str());
 		d->SetString("dockingArea", dockingArea.c_str());
-		d->SetString("url", browser->GetMainFrame()->GetURL().ToString());
+		d->SetString("url",
+			     browser->GetMainFrame()->GetURL().ToString());
 		d->SetString("theme", GetCurrentThemeName());
+	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("openPopupWindow");
+	{
 		if (args->GetSize()) {
 			result->SetBool(
-				StreamElementsGlobalStateManager::GetInstance()->DeserializePopupWindow(args->GetValue(0)));
+				StreamElementsGlobalStateManager::GetInstance()
+					->DeserializePopupWindow(
+						args->GetValue(0)));
 		}
+	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("addBackgroundWorker");
+	{
 		if (args->GetSize()) {
 			result->SetString(
-				StreamElementsGlobalStateManager::GetInstance()->GetWorkerManager()->DeserializeOne(args->GetValue(0)));
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetWorkerManager()
+					->DeserializeOne(args->GetValue(0)));
 
-			StreamElementsGlobalStateManager::GetInstance()->PersistState(false);
+			StreamElementsGlobalStateManager::GetInstance()
+				->PersistState(false);
 		}
+	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAllBackgroundWorkers");
-		StreamElementsGlobalStateManager::GetInstance()->GetWorkerManager()->Serialize(result);
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetWorkerManager()
+			->Serialize(result);
+	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("removeBackgroundWorkersByIds");
+	{
 		if (args->GetSize()) {
 			CefRefPtr<CefListValue> list = args->GetList(0);
 
@@ -624,83 +795,122 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				for (int i = 0; i < list->GetSize(); ++i) {
 					CefString id = list->GetString(i);
 
-					StreamElementsGlobalStateManager::GetInstance()->GetWorkerManager()->Remove(id);
+					StreamElementsGlobalStateManager::
+						GetInstance()
+							->GetWorkerManager()
+							->Remove(id);
 				}
 
-				StreamElementsGlobalStateManager::GetInstance()->PersistState(false);
+				StreamElementsGlobalStateManager::GetInstance()
+					->PersistState(false);
 
 				result->SetBool(true);
 			}
 		}
+	}
 	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("showModalDialog")
+	API_HANDLER_BEGIN("showModalDialog");
+	{
 		if (args->GetSize()) {
-			StreamElementsGlobalStateManager::GetInstance()->DeserializeModalDialog(
-				args->GetValue(0),
-				result);
+			StreamElementsGlobalStateManager::GetInstance()
+				->DeserializeModalDialog(args->GetValue(0),
+							 result);
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("getSystemCPUUsageTimes")
+	API_HANDLER_BEGIN("getSystemCPUUsageTimes");
+	{
 		SerializeSystemTimes(result);
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("getSystemMemoryUsage")
+	API_HANDLER_BEGIN("getSystemMemoryUsage");
+	{
 		SerializeSystemMemoryUsage(result);
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("getSystemHardwareProperties")
+	API_HANDLER_BEGIN("getSystemHardwareProperties");
+	{
 		SerializeSystemHardwareProperties(result);
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("getAvailableInputSourceTypes")
+	API_HANDLER_BEGIN("getAvailableInputSourceTypes");
+	{
 		SerializeAvailableInputSourceTypes(result);
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("getAllHotkeyBindings")
-		StreamElementsGlobalStateManager::GetInstance()->GetHotkeyManager()->SerializeHotkeyBindings(result);
-	API_HANDLER_END()
+	API_HANDLER_BEGIN("getAllHotkeyBindings");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetHotkeyManager()
+			->SerializeHotkeyBindings(result);
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("getAllManagedHotkeyBindings")
-		StreamElementsGlobalStateManager::GetInstance()->GetHotkeyManager()->SerializeHotkeyBindings(result, true);
-	API_HANDLER_END()
+	API_HANDLER_BEGIN("getAllManagedHotkeyBindings");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetHotkeyManager()
+			->SerializeHotkeyBindings(result, true);
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("addHotkeyBinding")
+	API_HANDLER_BEGIN("addHotkeyBinding");
+	{
 		if (args->GetSize()) {
 			obs_hotkey_id id =
-				StreamElementsGlobalStateManager::GetInstance()->GetHotkeyManager()->DeserializeSingleHotkeyBinding(
-					args->GetValue(0));
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetHotkeyManager()
+					->DeserializeSingleHotkeyBinding(
+						args->GetValue(0));
 
 			if (id != OBS_INVALID_HOTKEY_ID) {
 				result->SetInt((int)id);
-			}
-			else {
+			} else {
 				result->SetNull();
 			}
-		}
-		else result->SetNull();
-	API_HANDLER_END()
+		} else
+			result->SetNull();
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("removeHotkeyBindingById")
+	API_HANDLER_BEGIN("removeHotkeyBindingById");
+	{
 		if (args->GetSize()) {
 			result->SetBool(
-				StreamElementsGlobalStateManager::GetInstance()->GetHotkeyManager()->RemoveHotkeyBindingById(
-					args->GetInt(0)));
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetHotkeyManager()
+					->RemoveHotkeyBindingById(
+						args->GetInt(0)));
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("getHostProperties")
+	API_HANDLER_BEGIN("getHostProperties");
+	{
 		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
 
 		d->SetString("obsVersionString", obs_get_version_string());
 		d->SetString("cefVersionString", GetCefVersionString());
 		d->SetString("cefPlatformApiHash", GetCefPlatformApiHash());
 		d->SetString("cefUniversalApiHash", GetCefUniversalApiHash());
-		d->SetString("hostPluginVersionString", GetStreamElementsPluginVersionString());
-		d->SetString("hostApiVersionString", GetStreamElementsApiVersionString());
-		d->SetString("hostMachineUniqueId", StreamElementsGlobalStateManager::GetInstance()->GetAnalyticsEventsManager()->identity());
-		d->SetString("hostSessionUniqueId", StreamElementsGlobalStateManager::GetInstance()->GetAnalyticsEventsManager()->sessionId());
+		d->SetString("hostPluginVersionString",
+			     GetStreamElementsPluginVersionString());
+		d->SetString("hostApiVersionString",
+			     GetStreamElementsApiVersionString());
+		d->SetString("hostMachineUniqueId",
+			     StreamElementsGlobalStateManager::GetInstance()
+				     ->GetAnalyticsEventsManager()
+				     ->identity());
+		d->SetString("hostSessionUniqueId",
+			     StreamElementsGlobalStateManager::GetInstance()
+				     ->GetAnalyticsEventsManager()
+				     ->sessionId());
 
 #ifdef _WIN32
 		d->SetString("platform", "windows");
@@ -719,71 +929,108 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 #endif
 
 		result->SetDictionary(d);
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("adviseSignedIn")
-		StreamElementsConfig* config = StreamElementsConfig::GetInstance();
-
-		config->SetStartupFlags(
-			config->GetStartupFlags() | StreamElementsConfig::STARTUP_FLAGS_SIGNED_IN);
-
-		StreamElementsGlobalStateManager::GetInstance()->GetMenuManager()->Update();
-		StreamElementsGlobalStateManager::GetInstance()->PersistState(false);
-
-		result->SetBool(true);
-	API_HANDLER_END()
-
-	API_HANDLER_BEGIN("adviseSignedOut")
-		StreamElementsConfig* config = StreamElementsConfig::GetInstance();
+	API_HANDLER_BEGIN("adviseSignedIn");
+	{
+		StreamElementsConfig *config =
+			StreamElementsConfig::GetInstance();
 
 		config->SetStartupFlags(
-			config->GetStartupFlags() & ~StreamElementsConfig::STARTUP_FLAGS_SIGNED_IN);
+			config->GetStartupFlags() |
+			StreamElementsConfig::STARTUP_FLAGS_SIGNED_IN);
 
-		StreamElementsGlobalStateManager::GetInstance()->GetMenuManager()->Update();
-		StreamElementsGlobalStateManager::GetInstance()->PersistState(false);
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetMenuManager()
+			->Update();
+		StreamElementsGlobalStateManager::GetInstance()->PersistState(
+			false);
 
 		result->SetBool(true);
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("broadcastMessage")
+	API_HANDLER_BEGIN("adviseSignedOut");
+	{
+		StreamElementsConfig *config =
+			StreamElementsConfig::GetInstance();
+
+		config->SetStartupFlags(
+			config->GetStartupFlags() &
+			~StreamElementsConfig::STARTUP_FLAGS_SIGNED_IN);
+
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetMenuManager()
+			->Update();
+		StreamElementsGlobalStateManager::GetInstance()->PersistState(
+			false);
+
+		result->SetBool(true);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("broadcastMessage");
+	{
 		if (args->GetSize() && args->GetType(0) == VTYPE_DICTIONARY) {
 			CefRefPtr<CefValue> message = args->GetValue(0);
 
-			StreamElementsMessageBus::GetInstance()->NotifyAllMessageListeners(
-				StreamElementsMessageBus::DEST_ALL_LOCAL,
-				StreamElementsMessageBus::SOURCE_WEB,
-				browser->GetMainFrame()->GetURL().ToString(),
-				message);
+			StreamElementsMessageBus::GetInstance()
+				->NotifyAllMessageListeners(
+					StreamElementsMessageBus::DEST_ALL_LOCAL,
+					StreamElementsMessageBus::SOURCE_WEB,
+					browser->GetMainFrame()
+						->GetURL()
+						.ToString(),
+					message);
 
 			result->SetBool(true);
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("broadcastEvent")
+	API_HANDLER_BEGIN("broadcastEvent");
+	{
 		if (args->GetSize() && args->GetType(0) == VTYPE_DICTIONARY) {
-			CefRefPtr<CefDictionaryValue> d = args->GetDictionary(0);
+			CefRefPtr<CefDictionaryValue> d =
+				args->GetDictionary(0);
 
-			if (d->HasKey("name") && d->GetType("name") == VTYPE_STRING) {
-				StreamElementsMessageBus::GetInstance()->NotifyAllLocalEventListeners(
-					StreamElementsMessageBus::DEST_ALL_LOCAL & ~StreamElementsMessageBus::DEST_BROWSER_SOURCE,
-					StreamElementsMessageBus::SOURCE_WEB,
-					browser->GetMainFrame()->GetURL().ToString(),
-					"hostEventReceived",
-					args->GetValue(0));
+			if (d->HasKey("name") &&
+			    d->GetType("name") == VTYPE_STRING) {
+				StreamElementsMessageBus::GetInstance()
+					->NotifyAllLocalEventListeners(
+						StreamElementsMessageBus::
+								DEST_ALL_LOCAL &
+							~StreamElementsMessageBus::
+								DEST_BROWSER_SOURCE,
+						StreamElementsMessageBus::
+							SOURCE_WEB,
+						browser->GetMainFrame()
+							->GetURL()
+							.ToString(),
+						"hostEventReceived",
+						args->GetValue(0));
 
-				StreamElementsMessageBus::GetInstance()->NotifyAllExternalEventListeners(
-					StreamElementsMessageBus::DEST_ALL_EXTERNAL,
-					StreamElementsMessageBus::SOURCE_WEB,
-					browser->GetMainFrame()->GetURL().ToString(),
-					d->GetString("name"),
-					d->GetValue("data"));
+				StreamElementsMessageBus::GetInstance()
+					->NotifyAllExternalEventListeners(
+						StreamElementsMessageBus::
+							DEST_ALL_EXTERNAL,
+						StreamElementsMessageBus::
+							SOURCE_WEB,
+						browser->GetMainFrame()
+							->GetURL()
+							.ToString(),
+						d->GetString("name"),
+						d->GetValue("data"));
 
 				result->SetBool(true);
 			}
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("addCurrentSceneItemBrowserSource")
+	API_HANDLER_BEGIN("addCurrentSceneItemBrowserSource");
+	{
 		result->SetNull();
 
 		if (args->GetSize()) {
@@ -792,9 +1039,11 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				->DeserializeObsBrowserSource(args->GetValue(0),
 							      result);
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("addCurrentSceneItemGameCaptureSource")
+	API_HANDLER_BEGIN("addCurrentSceneItemGameCaptureSource");
+	{
 		result->SetNull();
 
 		if (args->GetSize()) {
@@ -803,9 +1052,11 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				->DeserializeObsGameCaptureSource(
 					args->GetValue(0), result);
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("addCurrentSceneItemVideoCaptureSource")
+	API_HANDLER_BEGIN("addCurrentSceneItemVideoCaptureSource");
+	{
 		result->SetNull();
 
 		if (args->GetSize()) {
@@ -814,20 +1065,24 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				->DeserializeObsVideoCaptureSource(
 					args->GetValue(0), result);
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("addCurrentSceneItemObsNativeSource")
+	API_HANDLER_BEGIN("addCurrentSceneItemObsNativeSource");
+	{
 		result->SetNull();
 
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
-				->DeserializeObsNativeSource(
-					args->GetValue(0), result);
+				->DeserializeObsNativeSource(args->GetValue(0),
+							     result);
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("addCurrentSceneItemGroup")
+	API_HANDLER_BEGIN("addCurrentSceneItemGroup");
+	{
 		result->SetNull();
 
 		if (args->GetSize()) {
@@ -836,104 +1091,133 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				->DeserializeObsSceneItemGroup(
 					args->GetValue(0), result);
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("getAllCurrentSceneItems")
+	API_HANDLER_BEGIN("getAllCurrentSceneItems");
+	{
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetObsSceneManager()
 			->SerializeObsCurrentSceneItems(result);
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("removeCurrentSceneItemsByIds")
+	API_HANDLER_BEGIN("removeCurrentSceneItemsByIds");
+	{
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
 				->RemoveObsCurrentSceneItemsByIds(
 					args->GetValue(0), result);
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("setCurrentSceneItemPropertiesById")
+	API_HANDLER_BEGIN("setCurrentSceneItemPropertiesById");
+	{
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
 				->SetObsCurrentSceneItemPropertiesById(
 					args->GetValue(0), result);
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("ungroupCurrentSceneItemGroupById")
+	API_HANDLER_BEGIN("ungroupCurrentSceneItemGroupById");
+	{
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
 				->UngroupObsCurrentSceneItemsByGroupId(
 					args->GetValue(0), result);
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("getAvailableInputSourceClasses")
+	API_HANDLER_BEGIN("getAvailableInputSourceClasses");
+	{
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetObsSceneManager()
 			->SerializeInputSourceClasses(result);
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("getSourceClassProperties")
+	API_HANDLER_BEGIN("getSourceClassProperties");
+	{
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
 				->SerializeSourceClassProperties(
 					args->GetValue(0), result);
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("getHostReleaseGroupProperties")
-		std::string quality = ReadProductEnvironmentConfigurationString("Quality");
-		std::string manifestUrl = ReadProductEnvironmentConfigurationString("ManifestUrl");
+	API_HANDLER_BEGIN("getHostReleaseGroupProperties");
+	{
+		std::string quality =
+			ReadProductEnvironmentConfigurationString("Quality");
+		std::string manifestUrl =
+			ReadProductEnvironmentConfigurationString(
+				"ManifestUrl");
 
 		if (quality.size() && manifestUrl.size()) {
-			CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+			CefRefPtr<CefDictionaryValue> d =
+				CefDictionaryValue::Create();
 
 			d->SetString("quality", quality.c_str());
 			d->SetString("manifestUrl", manifestUrl.c_str());
 
 			result->SetDictionary(d);
-		}
-		else {
+		} else {
 			result->SetNull();
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("setHostReleaseGroupProperties")
+	API_HANDLER_BEGIN("setHostReleaseGroupProperties");
+	{
 		if (args->GetSize() && args->GetType(0) == VTYPE_DICTIONARY) {
-			CefRefPtr<CefDictionaryValue> d = args->GetDictionary(0);
+			CefRefPtr<CefDictionaryValue> d =
+				args->GetDictionary(0);
 
-			if (d->HasKey("quality") && d->GetType("quality") == VTYPE_STRING &&
-			    d->HasKey("manifestUrl") && d->GetType("manifestUrl") == VTYPE_STRING) {
+			if (d->HasKey("quality") &&
+			    d->GetType("quality") == VTYPE_STRING &&
+			    d->HasKey("manifestUrl") &&
+			    d->GetType("manifestUrl") == VTYPE_STRING) {
 				std::string quality = d->GetString("quality");
-				std::string manifestUrl = d->GetString("manifestUrl");
+				std::string manifestUrl =
+					d->GetString("manifestUrl");
 
-				bool writeResult = WriteProductEnvironmentConfigurationStrings({
-						{ "", "Quality", quality },
-						{ "", "ManifestUrl", manifestUrl }
-					});
+				bool writeResult =
+					WriteProductEnvironmentConfigurationStrings(
+						{{"", "Quality", quality},
+						 {"", "ManifestUrl",
+						  manifestUrl}});
 
 				result->SetBool(writeResult);
 			}
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("queryHostReleaseGroupUpdateAvailability")
+	API_HANDLER_BEGIN("queryHostReleaseGroupUpdateAvailability");
+	{
 		signal_handler_signal(
 			obs_get_signal_handler(),
-			"streamelements_request_check_for_updates_silent", nullptr);
+			"streamelements_request_check_for_updates_silent",
+			nullptr);
 
 		result->SetBool(true);
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("setContainerForeignPopupWindowsProperties");
+	{
 		if (args->GetSize()) {
 			CefRefPtr<StreamElementsCefClient> client =
-				static_cast<StreamElementsCefClient*>(
+				static_cast<StreamElementsCefClient *>(
 					browser->GetHost()->GetClient().get());
 
 			if (!!client.get()) {
@@ -942,157 +1226,374 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 						args->GetValue(0)));
 			}
 		}
+	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getContainerForeignPopupWindowsProperties");
+	{
 		CefRefPtr<StreamElementsCefClient> client =
-			static_cast<StreamElementsCefClient*>(
+			static_cast<StreamElementsCefClient *>(
 				browser->GetHost()->GetClient().get());
 
 		if (!!client.get()) {
 			client->SerializeForeignPopupWindowsSettings(result);
-		}
-		else {
+		} else {
 			result->SetNull();
 		}
+	}
 	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("getExternalSceneDataProviders")
-		StreamElementsGlobalStateManager::GetInstance()->
-			GetExternalSceneDataProviderManager()->
-			SerializeProviders(result);
-	API_HANDLER_END()
+	API_HANDLER_BEGIN("getExternalSceneDataProviders");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetExternalSceneDataProviderManager()
+			->SerializeProviders(result);
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("getExternalSceneDataSceneCollections")
+	API_HANDLER_BEGIN("getExternalSceneDataSceneCollections");
+	{
 		if (args->GetSize()) {
-			StreamElementsGlobalStateManager::GetInstance()->
-				GetExternalSceneDataProviderManager()->
-				SerializeProviderSceneCollections(args->GetValue(0), result);
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetExternalSceneDataProviderManager()
+				->SerializeProviderSceneCollections(
+					args->GetValue(0), result);
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("getExternalSceneDataSceneCollectionContent")
+	API_HANDLER_BEGIN("getExternalSceneDataSceneCollectionContent");
+	{
 		if (args->GetSize()) {
-			StreamElementsGlobalStateManager::GetInstance()->
-				GetExternalSceneDataProviderManager()->
-				SerializeProviderSceneColletion(args->GetValue(0), result);
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetExternalSceneDataProviderManager()
+				->SerializeProviderSceneColletion(
+					args->GetValue(0), result);
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("httpRequestText")
+	API_HANDLER_BEGIN("httpRequestText");
+	{
 		if (args->GetSize()) {
-			StreamElementsGlobalStateManager::GetInstance()->
-				GetHttpClient()->
-				DeserializeHttpRequestText(args->GetValue(0), result);
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetHttpClient()
+				->DeserializeHttpRequestText(args->GetValue(0),
+							     result);
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("getStreamingStatus")
+	API_HANDLER_BEGIN("getStreamingStatus");
+	{
 		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
 
-		d->SetBool("isStreamingActive", obs_frontend_streaming_active());
+		d->SetBool("isStreamingActive",
+			   obs_frontend_streaming_active());
 
 		result->SetDictionary(d);
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("requestStreamingStart")
+	API_HANDLER_BEGIN("requestStreamingStart");
+	{
 		obs_frontend_streaming_start();
 
 		result->SetBool(true);
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("requestStreamingStop")
+	API_HANDLER_BEGIN("requestStreamingStop");
+	{
 		obs_frontend_streaming_stop();
 
 		result->SetBool(true);
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("setStreamingStartUIHandlerProperties")
+	API_HANDLER_BEGIN("setStreamingStartUIHandlerProperties");
+	{
 		if (args->GetSize()) {
 			result->SetBool(
 				StreamElementsGlobalStateManager::GetInstance()
 					->GetNativeOBSControlsManager()
-					->DeserializeStartStreamingUIHandlerProperties(args->GetValue(0)));
+					->DeserializeStartStreamingUIHandlerProperties(
+						args->GetValue(0)));
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("adviseStreamingStartUIRequestAccepted")
+	API_HANDLER_BEGIN("adviseStreamingStartUIRequestAccepted");
+	{
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetNativeOBSControlsManager()
 			->AdviseRequestStartStreamingAccepted();
 
 		result->SetBool(true);
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("adviseStreamingStartUIRequestRejected")
+	API_HANDLER_BEGIN("adviseStreamingStartUIRequestRejected");
+	{
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetNativeOBSControlsManager()
 			->AdviseRequestStartStreamingRejected();
 
 		result->SetBool(true);
-	API_HANDLER_END()
-
-	API_HANDLER_BEGIN("getUserInterfaceState")
+	}
+	API_HANDLER_END();
+	
+	API_HANDLER_BEGIN("getUserInterfaceState");
+	{
 		StreamElementsGlobalStateManager::GetInstance()
-				->SerializeUserInterfaceState(result);
-	API_HANDLER_END()
+			->SerializeUserInterfaceState(result);
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("setUserInterfaceState")
+	API_HANDLER_BEGIN("setUserInterfaceState");
+	{
 		if (args->GetSize()) {
-			result->SetBool(StreamElementsGlobalStateManager::GetInstance()
-						->DeserializeUserInterfaceState(
-							args->GetValue(0)));
+			result->SetBool(
+				StreamElementsGlobalStateManager::GetInstance()
+					->DeserializeUserInterfaceState(
+						args->GetValue(0)));
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("getAllScenes")
+	API_HANDLER_BEGIN("getAllScenes");
+	{
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetObsSceneManager()
 			->SerializeObsScenes(result);
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("getCurrentScene")
+	API_HANDLER_BEGIN("getCurrentScene");
+	{
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetObsSceneManager()
 			->SerializeObsCurrentScene(result);
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("addScene")
+	API_HANDLER_BEGIN("addScene");
+	{
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
-				->DeserializeObsScene(args->GetValue(0), result);
+				->DeserializeObsScene(args->GetValue(0),
+						      result);
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("setCurrentSceneById")
+	API_HANDLER_BEGIN("setCurrentSceneById");
+	{
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
-				->SetCurrentObsSceneById(args->GetValue(0), result);
+				->SetCurrentObsSceneById(args->GetValue(0),
+							 result);
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("removeScenesByIds")
+	API_HANDLER_BEGIN("removeScenesByIds");
+	{
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
-				->RemoveObsScenesByIds(args->GetValue(0), result);
+				->RemoveObsScenesByIds(args->GetValue(0),
+						       result);
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("setScenePropertiesById")
+	API_HANDLER_BEGIN("setScenePropertiesById");
+	{
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
-				->SetObsScenePropertiesById(args->GetValue(0), result);
+				->SetObsScenePropertiesById(args->GetValue(0),
+							    result);
 		}
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("crashProgram")
+	API_HANDLER_BEGIN("setAuxiliaryMenuItems");
+	{
+		if (args->GetSize()) {
+			result->SetBool(
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->DeserializeAuxiliaryMenuItems(
+						args->GetValue(0)));
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAuxiliaryMenuItems");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetMenuManager()
+			->SerializeAuxiliaryMenuItems(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllProfiles");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetProfilesManager()
+			->SerializeAllProfiles(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getCurrentProfile");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetProfilesManager()
+			->SerializeCurrentProfile(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setCurrentProfile");
+	{
+		if (args->GetSize()) {
+			result->SetBool(
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetProfilesManager()
+					->DeserializeCurrentProfileById(
+						args->GetValue(0)));
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setCurrentProfile");
+	{
+		if (args->GetSize()) {
+			result->SetBool(
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetProfilesManager()
+					->DeserializeCurrentProfileById(
+						args->GetValue(0)));
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllSceneCollections");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetObsSceneManager()
+			->SerializeObsSceneCollections(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getCurrentSceneCollectionProperties");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetObsSceneManager()
+			->SerializeObsCurrentSceneCollection(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addSceneCollection");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsSceneCollection(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setCurrentSceneCollectionById");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsCurrentSceneCollectionById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("createUserEnvironmentBackupPackage");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetBackupManager()
+				->CreateLocalBackupPackage(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("queryUserEnvironmentBackupPackageContent");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetBackupManager()
+				->QueryBackupPackageContent(args->GetValue(0),
+							   result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("restoreUserEnvironmentBackupPackageContent");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetBackupManager()
+				->RestoreBackupPackageContent(args->GetValue(0),
+							      result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("crashProgram");
+	{
 		// Crash
-		*((int*)nullptr) = 12345; // exception
+		*((int *)nullptr) = 12345; // exception
 
 		UNUSED_PARAMETER(result);
-	API_HANDLER_END()
+	}
+	API_HANDLER_END();
+}
+
+bool StreamElementsApiMessageHandler::InvokeHandler::InvokeApiCallAsync(
+	std::string invoke, CefRefPtr<CefListValue> args,
+	std::function<void(CefRefPtr<CefValue>)> callback)
+{
+	if (!m_apiCallHandlers.count(invoke))
+		return false;
+
+	blog(LOG_INFO,
+	     "obs-browser: StreamElementsApiMessageHandler::InvokeHandler::InvokeApiCallAsync: '%s', [%d]",
+	     invoke.c_str(), args->GetSize());
+
+	incoming_call_handler_t handler = m_apiCallHandlers[invoke];
+
+	struct local_context {
+		CefRefPtr<CefValue> result;
+		std::function<void(CefRefPtr<CefValue>)> callback;
+	};
+
+	local_context *context = new local_context();
+
+	context->result = CefValue::Create();
+	context->result->SetBool(false);
+	context->callback = callback;
+
+	handler(
+		this, nullptr, args, context->result, nullptr,
+		[](void *data) {
+			local_context *context = (local_context *)data;
+
+			context->callback(context->result);
+
+			delete context;
+		},
+		context);
 }

@@ -2,7 +2,10 @@
 
 #include "StreamElementsBrowserMessageHandler.hpp"
 
-class StreamElementsApiMessageHandler:
+#include <functional>
+
+class StreamElementsApiMessageHandler
+	:
 	public StreamElementsBrowserMessageHandler
 {
 public:
@@ -38,5 +41,19 @@ private:
 	void DispatchEventInternal(CefRefPtr<CefBrowser> browser, std::string event, std::string eventArgsJson);
 
 public:
+	class InvokeHandler;
+
+public:
 	IMPLEMENT_REFCOUNTING(StreamElementsApiMessageHandler);
+};
+
+class StreamElementsApiMessageHandler::InvokeHandler
+	: public StreamElementsApiMessageHandler {
+public:
+	InvokeHandler() { RegisterIncomingApiCallHandlers(); }
+	~InvokeHandler() {}
+
+	bool
+	InvokeApiCallAsync(std::string invoke, CefRefPtr<CefListValue> args,
+			   std::function<void(CefRefPtr<CefValue>)> callback);
 };

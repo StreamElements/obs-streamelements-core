@@ -59,6 +59,8 @@ install:
     echo add_subdirectory(obs-browser) >c:\local\obs-studio\plugins\CMakeLists.txt
 
 
+    if exist angelscript.zip (curl -kL -o angelscript.zip https://cdn.streamelements.com/obs/dist/third-party/angelscript/angelscript_2.34.0_mt.zip -f --retry 5 -z angelscript.zip) else (curl -kL -o angelscript.zip https://cdn.streamelements.com/obs/dist/third-party/angelscript/angelscript_2.34.0_mt.zip -f --retry 5 -C -) 2>&1 >nul:
+
     if exist BugSplat.zip (curl -kL -o BugSplat.zip https://cdn.streamelements.com/obs/dist/third-party/bugsplat/BugSplatNative.zip -f --retry 5 -z BugSplat.zip) else (curl -kL -o BugSplat.zip https://cdn.streamelements.com/obs/dist/third-party/bugsplat/BugSplatNative.zip -f --retry 5 -C -) 2>&1 >nul:
 
     if exist dependencies2017.zip (curl -kLO https://obsproject.com/downloads/dependencies2017.zip -f --retry 5 -z dependencies2017.zip) else (curl -kLO https://obsproject.com/downloads/dependencies2017.zip -f --retry 5 -C -) 2>&1 >nul:
@@ -70,6 +72,8 @@ install:
 
     7z x -y vlc.zip -ovlc
 
+
+    7z x -y c:\local\angelscript.zip -oc:\local\angelscript
 
     7z x -y c:\local\BugSplat.zip
 
@@ -118,6 +122,19 @@ build_script:
 
 
 
+    echo.===================== BUILD 64 BIT - ANGELSCRIPT - OBS-STUDIO =====================
+
+    cd /d c:\local\angelscript\sdk\angelscript\lib
+
+    md 64bit
+
+    cd 64bit
+
+    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 15 2017 Win64" -DCMAKE_C_FLAGS="/MP /MT" -DCMAKE_CXX_FLAGS="/MP /MT" ..\..\projects\cmake
+
+    msbuild  angelscript.sln /p:Configuration=RelWithDebInfo;OutDir=.
+
+
 
     echo.===================== BUILD 64 BIT - CEF - OBS-STUDIO =====================
 
@@ -138,7 +155,7 @@ build_script:
 
     cd /d c:\local\obs-studio\build64
 
-    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 15 2017 Win64" -DEXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED=true -DBROWSER_PANEL_SUPPORT_ENABLED=true -DENABLE_SCRIPTING=false -DCOPIED_DEPENDENCIES=false -DCOPY_DEPENDENCIES=true -DBUILD_CAPTIONS=true -DCOMPILE_D3D12_HOOK=true -DCEF_ROOT_DIR=c:\local\cef_binary_%PREBUILT_CEF_VERSION%_windows64_minimal  -DBUGSPLAT_ROOT_DIR=c:\local\BugSplat ..
+    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 15 2017 Win64" -DEXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED=true -DBROWSER_PANEL_SUPPORT_ENABLED=true -DENABLE_SCRIPTING=false -DCOPIED_DEPENDENCIES=false -DCOPY_DEPENDENCIES=true -DBUILD_CAPTIONS=true -DCOMPILE_D3D12_HOOK=true -DCEF_ROOT_DIR=c:\local\cef_binary_%PREBUILT_CEF_VERSION%_windows64_minimal -DBUGSPLAT_ROOT_DIR=c:\local\BugSplat -DANGELSCRIPT_ROOT_DIR=c:\local\angelscript ..
 
     cd /d c:\local\obs-studio\build64
 
@@ -149,6 +166,20 @@ build_script:
     if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\BugSplat\bin\SendPdbs.exe /u "%BUGSPLAT_USERNAME%" /p "%BUGSPLAT_PASSWORD%" /a obs-browser /v "%STREAMELEMENTS_PLUGIN_VERSION%" /b OBS_Live /d "c:\local\obs-studio\build64\rundir\%build_config%\obs-plugins\64bit" /f obs-browser.pdb;cef-bootstrap.pdb
 
 
+
+    echo.===================== BUILD 32 BIT - ANGELSCRIPT - OBS-STUDIO =====================
+
+    cd /d c:\local\angelscript\sdk\angelscript\lib
+
+    md 32bit
+
+    cd 32bit
+
+    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 15 2017" -DCMAKE_C_FLAGS="/MP /MT" -DCMAKE_CXX_FLAGS="/MP /MT" ..\..\projects\cmake
+
+    msbuild  angelscript.sln /p:Configuration=RelWithDebInfo;OutDir=.
+
+    
 
     echo.===================== BUILD 32 BIT - CEF - OBS-STUDIO =====================
 
@@ -169,7 +200,7 @@ build_script:
 
     cd /d c:\local\obs-studio\build32
 
-    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 15 2017" -DEXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED=true -DBROWSER_PANEL_SUPPORT_ENABLED=true -DENABLE_SCRIPTING=false -DCOPIED_DEPENDENCIES=false -DCOPY_DEPENDENCIES=true -DBUILD_CAPTIONS=true -DCOMPILE_D3D12_HOOK=true -DCEF_ROOT_DIR=c:\local\cef_binary_%PREBUILT_CEF_VERSION%_windows32_minimal -DBUGSPLAT_ROOT_DIR=c:\local\BugSplat ..
+    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 15 2017" -DEXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED=true -DBROWSER_PANEL_SUPPORT_ENABLED=true -DENABLE_SCRIPTING=false -DCOPIED_DEPENDENCIES=false -DCOPY_DEPENDENCIES=true -DBUILD_CAPTIONS=true -DCOMPILE_D3D12_HOOK=true -DCEF_ROOT_DIR=c:\local\cef_binary_%PREBUILT_CEF_VERSION%_windows32_minimal -DBUGSPLAT_ROOT_DIR=c:\local\BugSplat -DANGELSCRIPT_ROOT_DIR=c:\local\angelscript ..
 
     cd /d c:\local\obs-studio\build32
 

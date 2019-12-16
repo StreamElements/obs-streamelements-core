@@ -831,7 +831,7 @@ StreamElementsObsSceneManager::StreamElementsObsSceneManager(QMainWindow *parent
 
 StreamElementsObsSceneManager::~StreamElementsObsSceneManager()
 {
-	remove_current_scene_signals(this);
+	// remove_current_scene_signals(this);
 
 	obs_frontend_remove_event_callback(handle_obs_frontend_event, this);
 }
@@ -1536,6 +1536,40 @@ StreamElementsObsSceneManager::ObsGetUniqueSceneName(std::string name)
 	return result;
 }
 
+std::string
+StreamElementsObsSceneManager::ObsGetUniqueSceneCollectionName(std::string name)
+{
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
+	std::string result(name);
+
+	char **names = obs_frontend_get_scene_collections();
+
+	int sequence = 0;
+	bool isUnique = false;
+
+	while (!isUnique) {
+		isUnique = true;
+
+		for (size_t idx = 0; names[idx] && isUnique; ++idx) {
+			if (stricmp(result.c_str(), names[idx]) == 0)
+				isUnique = false;
+		}
+
+		if (!isUnique) {
+			++sequence;
+
+			char buf[32];
+			result = name + " ";
+			result += itoa(sequence, buf, 10);
+		}
+	}
+
+	bfree(names);
+
+	return result;
+}
+
 void StreamElementsObsSceneManager::DeserializeObsScene(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
@@ -1995,6 +2029,9 @@ static bool SerializeProp(obs_property_t *prop, CefRefPtr<CefValue> &output)
 	if (!prop)
 		return false;
 
+	if (!obs_property_visible(prop))
+		return false;
+
 	auto safe_str = [](const char *input) -> std::string {
 		if (!input)
 			return "";
@@ -2346,4 +2383,106 @@ void StreamElementsObsSceneManager::UngroupObsCurrentSceneItemsByGroupId(
 	RefreshObsSceneItemsList();
 
 	output->SetBool(true);
+}
+
+void StreamElementsObsSceneManager::SerializeObsSceneCollections(
+	CefRefPtr<CefValue> &output)
+{
+	CefRefPtr<CefListValue> list = CefListValue::Create();
+
+	std::map<std::string, std::string> items;
+	ReadListOfObsSceneCollections(items);
+
+	for (auto item : items) {
+		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+
+		d->SetString("id", item.first);
+		d->SetString("name", item.second);
+
+		list->SetDictionary(list->GetSize(), d);
+	}
+
+	output->SetList(list);
+}
+
+void StreamElementsObsSceneManager::SerializeObsCurrentSceneCollection(
+	CefRefPtr<CefValue> &output)
+{
+	output->SetNull();
+
+	char *name = obs_frontend_get_current_scene_collection();
+
+	std::map<std::string, std::string> items;
+	ReadListOfObsSceneCollections(items);
+
+	for (auto item : items) {
+		if (item.second == name) {
+			CefRefPtr<CefDictionaryValue> d =
+				CefDictionaryValue::Create();
+
+			d->SetString("id", item.first);
+			d->SetString("name", item.second);
+
+			output->SetDictionary(d);
+
+			break;
+		}
+	}
+
+	bfree(name);
+}
+
+void StreamElementsObsSceneManager::DeserializeObsSceneCollection(
+	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
+{
+	output->SetNull();
+
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
+
+	if (!d->HasKey("name") || d->GetType("name") != VTYPE_STRING)
+		return;
+
+	std::string name = ObsGetUniqueSceneCollectionName(
+		d->GetString("name").ToString());
+
+	obs_frontend_add_scene_collection(name.c_str());
+
+	SerializeObsCurrentSceneCollection(output);
+}
+
+void StreamElementsObsSceneManager::DeserializeObsCurrentSceneCollectionById(
+	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
+{
+	output->SetNull();
+
+	if (input->GetType() != VTYPE_STRING)
+		return;
+
+	std::string id = input->GetString().ToString();
+
+	std::string actualId = "";
+
+	std::map<std::string, std::string> items;
+	ReadListOfObsSceneCollections(items);
+
+	for (auto item : items) {
+		if (stricmp(item.second.c_str(), id.c_str()) == 0) {
+			actualId = item.second;
+
+			break;
+		} else if (stricmp(item.first.c_str(), id.c_str()) == 0) {
+			actualId = item.second;
+
+			break;
+		}
+	}
+
+	if (actualId.size()) {
+		obs_frontend_set_current_scene_collection(actualId.c_str());
+
+		SerializeObsCurrentSceneCollection(output);
+	}
 }

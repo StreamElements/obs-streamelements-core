@@ -338,6 +338,12 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 					GetInstance();
 			context->self->m_cookieManager =
 				new StreamElementsCookieManager(storagePath);
+			context->self->m_profilesManager =
+				new StreamElementsProfilesManager();
+			context->self->m_backupManager =
+				new StreamElementsBackupManager();
+			context->self->m_cleanupManager =
+				new StreamElementsCleanupManager();
 			context->self->m_windowStateEventFilter =
 				new WindowStateChangeEventFilter(
 					context->self->mainWindow());
@@ -528,6 +534,9 @@ void StreamElementsGlobalStateManager::Shutdown()
 			delete self->m_httpClient;
 			// delete self->m_nativeObsControlsManager; // Singleton
 			delete self->m_cookieManager;
+			delete self->m_profilesManager;
+			delete self->m_backupManager;
+			delete self->m_cleanupManager;
 			delete self->m_windowStateEventFilter;
 		},
 		this);
@@ -725,6 +734,8 @@ void StreamElementsGlobalStateManager::Reset(bool deleteAllCookies,
 
 	if (deleteAllCookies) {
 		DeleteCookies();
+
+		GetMenuManager()->Reset();
 	}
 
 	StartOnBoardingUI(uiModifier);

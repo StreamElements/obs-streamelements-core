@@ -111,6 +111,27 @@ public:
 
 	std::string GetHeapAnalyticsAppId();
 
+	std::string GetAuxMenuItemsConfig()
+	{
+		const char* value = config_get_string(
+			StreamElementsConfig::GetInstance()->GetConfig(),
+			"Startup", "AuxMenuItems");
+
+		if (!!value)
+			return value;
+		else
+			return "[]";
+	}
+
+	void SetAuxMenuItemsConfig(std::string value)
+	{
+		config_set_string(
+			StreamElementsConfig::GetInstance()->GetConfig(),
+			"Startup", "AuxMenuItems", value.c_str());
+
+		SaveConfig();
+	}
+
 private:
 	config_t* m_config = nullptr;
 

@@ -72,6 +72,19 @@ public:
 	void SetObsScenePropertiesById(CefRefPtr<CefValue> input,
 				       CefRefPtr<CefValue> &output);
 
+	/* Scene collections */
+
+	void SerializeObsSceneCollections(CefRefPtr<CefValue> &output);
+
+	void SerializeObsCurrentSceneCollection(CefRefPtr<CefValue> &output);
+
+	void DeserializeObsSceneCollection(CefRefPtr<CefValue> input,
+					   CefRefPtr<CefValue> &output);
+
+	void
+	DeserializeObsCurrentSceneCollectionById(CefRefPtr<CefValue> input,
+						 CefRefPtr<CefValue> &output);
+
 protected:
 	QMainWindow* mainWindow() { return m_parent; }
 
@@ -91,6 +104,8 @@ protected:
 	std::string ObsGetUniqueSourceName(std::string name);
 
 	std::string ObsGetUniqueSceneName(std::string name);
+
+	std::string ObsGetUniqueSceneCollectionName(std::string name);
 
 protected:
 	std::recursive_mutex m_mutex;

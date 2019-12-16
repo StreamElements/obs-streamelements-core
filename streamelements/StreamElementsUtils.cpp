@@ -1794,7 +1794,7 @@ std::string GetIdFromPointer(const void *ptr)
 	return buf;
 }
 
-const void* GetPointerFromId(const char* id)
+const void *GetPointerFromId(const char *id)
 {
 	void *ptr;
 
@@ -1803,4 +1803,170 @@ const void* GetPointerFromId(const char* id)
 	} else {
 		return nullptr;
 	}
+}
+
+bool GetTemporaryFilePath(std::string prefixString, std::string &result)
+{
+	const size_t BUF_LEN = 2048;
+	wchar_t *pathBuffer = new wchar_t[BUF_LEN];
+
+	if (!::GetTempPathW(BUF_LEN, pathBuffer)) {
+		delete[] pathBuffer;
+
+		return false;
+	}
+
+	std::wstring wtempBufPath(pathBuffer);
+
+	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
+
+	if (0 == ::GetTempFileNameW(wtempBufPath.c_str(),
+				    myconv.from_bytes(prefixString).c_str(), 0,
+				    pathBuffer)) {
+		delete[] pathBuffer;
+
+		return false;
+	}
+
+	wtempBufPath = pathBuffer;
+
+	result = myconv.to_bytes(wtempBufPath);
+
+	delete[] pathBuffer;
+
+	return true;
+}
+
+std::string GetUniqueFileNameFromPath(std::string path, size_t maxLength)
+{
+	std::string guid = clean_guid_string(CreateGloballyUniqueIdString());
+	std::string ext = os_get_path_extension(path.c_str());
+	std::string result = std::regex_replace(
+		path.substr(0, path.size() - ext.size()) + "_" + guid + ext,
+		std::regex("[\\/: ]"), "_");
+
+	if (maxLength > 0 && maxLength < result.size()) {
+		return result.substr(result.size() - maxLength);
+	} else {
+		return result;
+	}
+}
+
+std::string GetFolderPathFromFilePath(std::string filePath)
+{
+	char buf[MAX_PATH + 1];
+	os_get_abs_path(filePath.c_str(), buf, sizeof(buf));
+
+	std::string path(buf);
+
+	std::transform(path.begin(), path.end(), path.begin(), [](char ch) {
+		if (ch == '\\')
+			return '/';
+		else
+			return ch;
+	});
+
+	size_t pos = path.find_last_of('/');
+
+	return path.substr(0, pos);
+}
+
+bool ReadListOfObsSceneCollections(std::map<std::string, std::string> &output)
+{
+	char *basePathPtr = os_get_config_path_ptr("obs-studio/basic/scenes");
+	std::string basePath = basePathPtr;
+	bfree(basePathPtr);
+
+	os_dir_t *dir = os_opendir(basePath.c_str());
+
+	if (!dir)
+		return false;
+
+	struct os_dirent *entry;
+
+	while ((entry = os_readdir(dir)) != NULL) {
+		if (entry->directory || *entry->d_name == '.')
+			continue;
+
+		std::string fileName = entry->d_name;
+
+		std::smatch match;
+
+		if (!std::regex_search(fileName, match,
+				       std::regex("^(.+?)\\.json$")))
+			continue;
+
+		std::string id = match[1].str();
+
+		std::string filePath = basePath + "/" + fileName;
+
+		char *content = os_quick_read_utf8_file(filePath.c_str());
+
+		if (content) {
+			CefRefPtr<CefValue> root =
+				CefParseJSON(CefString(content),
+					     JSON_PARSER_ALLOW_TRAILING_COMMAS);
+
+			if (root.get() && root->GetType() == VTYPE_DICTIONARY) {
+				CefRefPtr<CefDictionaryValue> d =
+					root->GetDictionary();
+
+				if (d->HasKey("name") &&
+				    d->GetType("name") == VTYPE_STRING) {
+					std::string name = d->GetString("name");
+
+					output[id] = name;
+				}
+			}
+
+			bfree(content);
+		}
+	}
+
+	os_closedir(dir);
+
+	return true;
+}
+
+bool ReadListOfObsProfiles(std::map<std::string, std::string> &output)
+{
+	char *basePathPtr = os_get_config_path_ptr("obs-studio/basic/profiles");
+	std::string basePath = basePathPtr;
+	bfree(basePathPtr);
+
+	os_dir_t *dir = os_opendir(basePath.c_str());
+
+	if (!dir)
+		return false;
+
+	struct os_dirent *entry;
+
+	while ((entry = os_readdir(dir)) != NULL) {
+		if (!entry->directory || *entry->d_name == '.')
+			continue;
+
+		std::string id = entry->d_name;
+
+		std::string filePath = basePath + "/" + id + "/basic.ini";
+
+		config_t *ini;
+
+		if (config_open(&ini, filePath.c_str(), CONFIG_OPEN_EXISTING) ==
+		    CONFIG_SUCCESS) {
+			const char *value =
+				config_get_string(ini, "General", "Name");
+
+			if (value) {
+				std::string name = value;
+
+				output[id] = name;
+			}
+
+			config_close(ini);
+		}
+	}
+
+	os_closedir(dir);
+
+	return true;
 }
