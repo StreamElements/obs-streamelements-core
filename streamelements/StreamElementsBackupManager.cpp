@@ -285,8 +285,8 @@ ScanForFileReferencesToBackup(zip_t *zip, CefRefPtr<CefValue> &node,
 				std::string fileName =
 					GetUniqueFileNameFromPath(path, 48);
 				std::string zipPath =
-					"obslive_restored_files/" +
-					timestamp + "/" + fileName;
+					"obslive_restored_files/" + timestamp +
+					"/" + fileName;
 
 				if (!AddFileToZip(zip, path, zipPath))
 					return false;
@@ -486,6 +486,8 @@ StreamElementsBackupManager::~StreamElementsBackupManager() {}
 void StreamElementsBackupManager::CreateLocalBackupPackage(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
 	output->SetNull();
 
 	if (input->GetType() != VTYPE_DICTIONARY)
@@ -587,6 +589,8 @@ void StreamElementsBackupManager::CreateLocalBackupPackage(
 void StreamElementsBackupManager::QueryBackupPackageContent(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
 	output->SetNull();
 
 	if (input->GetType() != VTYPE_DICTIONARY)
@@ -723,6 +727,8 @@ static size_t HandleZipExtract(void *arg, unsigned long long offset,
 void StreamElementsBackupManager::RestoreBackupPackageContent(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
 	output->SetNull();
 
 	/* Never allow restore during streaming or recording */
@@ -1024,9 +1030,31 @@ void StreamElementsBackupManager::RestoreBackupPackageContent(
 		if (proc.startDetached(QString(command.c_str()))) {
 			success = true;
 
+			/* Cleanup temporary resources */
+
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetCleanupManager()
+				->Clean();
+
 			/* Exit OBS */
 
+#ifdef _WIN32
+			/* This is not the nicest way to terminate our own process,
+			 * yet, given that we are not looking for a clean shutdown
+			 * but will rather overwrite settings files, this is
+			 * acceptable.
+			 *
+			 * It is also likely to overcome any shutdown issues OBS
+			 * might have, and which appear from time to time. We definitely
+			 * do NOT want those attributed to Cloud Restore.
+			 */
+			if (!TerminateProcess(GetCurrentProcess(), 0)) {
+				/* Backup shutdown sequence */
+				QApplication::quit();
+			}
+#else
 			QApplication::quit();
+#endif
 		}
 	}
 

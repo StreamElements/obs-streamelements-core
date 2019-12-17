@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cef-headers.hpp"
+#include <mutex>
 
 class StreamElementsBackupManager
 {
@@ -17,4 +18,7 @@ public:
 
 	void RestoreBackupPackageContent(CefRefPtr<CefValue> input,
 					 CefRefPtr<CefValue> &output);
+
+private:
+	std::recursive_mutex m_mutex;
 };

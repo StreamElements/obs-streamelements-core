@@ -691,97 +691,133 @@ static void handle_scene_item_add(void *my_data, calldata_t *cd)
 	add_scene_signals(group_scene_source, my_data);
 }
 
-static void remove_scene_signals(obs_source_t *scene, void *data)
+static void remove_scene_signals(obs_source_t *sceneSource, void *data)
 {
+	if (!sceneSource)
+		return;
+
+	obs_scene_t *scene = obs_scene_from_source(sceneSource);
+
 	if (!scene)
 		return;
 
-	auto handler = obs_source_get_signal_handler(g_current_scene);
+	obs_enter_graphics();
+	obs_scene_atomic_update(
+		scene,
+		[](void *data, obs_scene_t *scene) {
+			obs_source_t *source = obs_scene_get_source(scene);
 
-	signal_handler_disconnect(handler, "item_add", handle_scene_item_add,
-				  data);
-	signal_handler_disconnect(handler, "item_remove", handle_scene_update,
-				  data);
-	signal_handler_disconnect(handler, "reorder", handle_scene_update,
-				  data);
-	signal_handler_disconnect(handler, "item_visible", handle_scene_update,
-				  data);
-	signal_handler_disconnect(handler, "item_locked", handle_scene_update,
-				  data);
-	signal_handler_disconnect(handler, "item_select", handle_scene_update,
-				  data);
-	signal_handler_disconnect(handler, "item_deselect", handle_scene_update,
-				  data);
-	signal_handler_disconnect(handler, "item_transform",
-				  handle_scene_update, data);
+			if (!source)
+				return;
 
-	obs_scene_t *obs_scene = obs_scene_from_source(scene);
+			auto handler =
+				obs_source_get_signal_handler(source);
 
-	obs_scene_enum_items(
-		obs_scene,
-		[](obs_scene_t *scene, obs_sceneitem_t *sceneitem, void *data) {
-			if (obs_sceneitem_is_group(sceneitem)) {
-				/* group */
-				obs_scene_t *group_scene =
-					obs_sceneitem_group_get_scene(
-						sceneitem);
+			signal_handler_disconnect(handler, "item_add",
+						  handle_scene_item_add, data);
+			signal_handler_disconnect(handler, "item_remove",
+						  handle_scene_update, data);
+			signal_handler_disconnect(handler, "reorder",
+						  handle_scene_update, data);
+			signal_handler_disconnect(handler, "item_visible",
+						  handle_scene_update, data);
+			signal_handler_disconnect(handler, "item_locked",
+						  handle_scene_update, data);
+			signal_handler_disconnect(handler, "item_select",
+						  handle_scene_update, data);
+			signal_handler_disconnect(handler, "item_deselect",
+						  handle_scene_update, data);
+			signal_handler_disconnect(handler, "item_transform",
+						  handle_scene_update, data);
 
-				obs_source_t *group_scene_source =
-					obs_scene_get_source(group_scene);
+			obs_scene_enum_items(
+				scene,
+				[](obs_scene_t *scene,
+				   obs_sceneitem_t *sceneitem, void *data) {
+					if (obs_sceneitem_is_group(sceneitem)) {
+						/* group */
+						obs_scene_t *group_scene =
+							obs_sceneitem_group_get_scene(
+								sceneitem);
 
-				remove_scene_signals(group_scene_source, data);
-			}
+						obs_source_t *group_scene_source =
+							obs_scene_get_source(
+								group_scene);
 
-			/* Continue iteration */
-			return true;
+						remove_scene_signals(
+							group_scene_source,
+							data);
+					}
+
+					/* Continue iteration */
+					return true;
+				},
+				data);
 		},
 		data);
+	obs_leave_graphics();
 }
 
-static void add_scene_signals(obs_source_t *scene, void *data)
+static void add_scene_signals(obs_source_t *sceneSource, void *data)
 {
+	if (!sceneSource)
+		return;
+
+	obs_scene_t *scene = obs_scene_from_source(sceneSource);
+
 	if (!scene)
 		return;
 
-	auto handler = obs_source_get_signal_handler(scene);
+	obs_enter_graphics();
+	obs_scene_atomic_update(scene, [](void *data, obs_scene_t *scene) {
+		obs_source_t *source = obs_scene_get_source(scene);
 
-	signal_handler_connect(handler, "item_add", handle_scene_item_add,
-			       data);
-	signal_handler_connect(handler, "item_remove", handle_scene_update,
-			       data);
-	signal_handler_connect(handler, "reorder", handle_scene_update, data);
-	signal_handler_connect(handler, "item_visible", handle_scene_update,
-			       data);
-	signal_handler_connect(handler, "item_locked", handle_scene_update,
-			       data);
-	signal_handler_connect(handler, "item_select", handle_scene_update,
-			       data);
-	signal_handler_connect(handler, "item_deselect", handle_scene_update,
-			       data);
-	signal_handler_connect(handler, "item_transform", handle_scene_update,
-			       data);
+		if (!source)
+			return;
 
-	obs_scene_t *obs_scene = obs_scene_from_source(scene);
+		auto handler = obs_source_get_signal_handler(source);
 
-	obs_scene_enum_items(
-		obs_scene,
-		[](obs_scene_t *scene, obs_sceneitem_t *sceneitem, void *data) {
-			if (obs_sceneitem_is_group(sceneitem)) {
-				/* group */
-				obs_scene_t *group_scene =
-					obs_sceneitem_group_get_scene(
-						sceneitem);
+		signal_handler_connect(handler, "item_add",
+				       handle_scene_item_add, data);
+		signal_handler_connect(handler, "item_remove",
+				       handle_scene_update, data);
+		signal_handler_connect(handler, "reorder", handle_scene_update,
+				       data);
+		signal_handler_connect(handler, "item_visible",
+				       handle_scene_update, data);
+		signal_handler_connect(handler, "item_locked",
+				       handle_scene_update, data);
+		signal_handler_connect(handler, "item_select",
+				       handle_scene_update, data);
+		signal_handler_connect(handler, "item_deselect",
+				       handle_scene_update, data);
+		signal_handler_connect(handler, "item_transform",
+				       handle_scene_update, data);
 
-				obs_source_t *group_scene_source =
-					obs_scene_get_source(group_scene);
+		obs_scene_enum_items(
+			scene,
+			[](obs_scene_t *scene, obs_sceneitem_t *sceneitem,
+			   void *data) {
+				if (obs_sceneitem_is_group(sceneitem)) {
+					/* group */
+					obs_scene_t *group_scene =
+						obs_sceneitem_group_get_scene(
+							sceneitem);
 
-				add_scene_signals(group_scene_source, data);
-			}
+					obs_source_t *group_scene_source =
+						obs_scene_get_source(
+							group_scene);
 
-			/* Continue iteration */
-			return true;
-		},
-		data);
+					add_scene_signals(group_scene_source,
+							  data);
+				}
+
+				/* Continue iteration */
+				return true;
+			},
+			data);
+	}, data);
+	obs_leave_graphics();
 }
 
 static void remove_current_scene_signals(void *data)
@@ -805,20 +841,24 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 	if (event != OBS_FRONTEND_EVENT_SCENE_CHANGED)
 		return;
 
-	obs_source_t *source = obs_frontend_get_current_scene();
+	obs_enter_graphics();
 
-	if (!source)
-		return;
+	obs_source_t *source = obs_frontend_get_current_scene(); // adds ref
 
-	if (g_current_scene != source) {
+	if (source && g_current_scene != source) {
 		remove_current_scene_signals(data);
-		g_current_scene = source;
-		add_current_scene_signals(data);
 
-		obs_source_release(g_current_scene);
+		if (g_current_scene)
+			obs_source_release(g_current_scene); // release saved current scene ref
+
+		g_current_scene = source; // replace ref with new scene
+
+		add_current_scene_signals(data);
 	} else {
 		obs_source_release(source);
 	}
+
+	obs_leave_graphics();
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -826,14 +866,22 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 StreamElementsObsSceneManager::StreamElementsObsSceneManager(QMainWindow *parent)
 	: m_parent(parent)
 {
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
+	obs_enter_graphics();
 	obs_frontend_add_event_callback(handle_obs_frontend_event, this);
+	obs_leave_graphics();
 }
 
 StreamElementsObsSceneManager::~StreamElementsObsSceneManager()
 {
-	// remove_current_scene_signals(this);
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
+	remove_current_scene_signals(this);
+
+	obs_enter_graphics();
 	obs_frontend_remove_event_callback(handle_obs_frontend_event, this);
+	obs_leave_graphics();
 }
 
 void StreamElementsObsSceneManager::ObsAddSourceInternal(
@@ -1611,12 +1659,12 @@ void StreamElementsObsSceneManager::SetCurrentObsSceneById(
 	if (!id.size())
 		return;
 
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
 	const void *sceneIdPointer = GetPointerFromId(id.c_str());
 
 	if (!sceneIdPointer)
 		return;
-
-	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
 	struct obs_frontend_source_list scenes = {};
 
@@ -1743,8 +1791,6 @@ void StreamElementsObsSceneManager::SetObsScenePropertiesById(
 void StreamElementsObsSceneManager::RemoveObsCurrentSceneItemsByIds(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
-	//std::lock_guard<decltype(m_mutex)> guard(m_mutex);
-
 	if (!input.get() || input->GetType() != VTYPE_LIST)
 		return;
 
@@ -2388,6 +2434,8 @@ void StreamElementsObsSceneManager::UngroupObsCurrentSceneItemsByGroupId(
 void StreamElementsObsSceneManager::SerializeObsSceneCollections(
 	CefRefPtr<CefValue> &output)
 {
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
 	CefRefPtr<CefListValue> list = CefListValue::Create();
 
 	std::map<std::string, std::string> items;
@@ -2408,6 +2456,8 @@ void StreamElementsObsSceneManager::SerializeObsSceneCollections(
 void StreamElementsObsSceneManager::SerializeObsCurrentSceneCollection(
 	CefRefPtr<CefValue> &output)
 {
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
 	output->SetNull();
 
 	char *name = obs_frontend_get_current_scene_collection();
@@ -2445,6 +2495,8 @@ void StreamElementsObsSceneManager::DeserializeObsSceneCollection(
 	if (!d->HasKey("name") || d->GetType("name") != VTYPE_STRING)
 		return;
 
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
 	std::string name = ObsGetUniqueSceneCollectionName(
 		d->GetString("name").ToString());
 
@@ -2464,6 +2516,8 @@ void StreamElementsObsSceneManager::DeserializeObsCurrentSceneCollectionById(
 	std::string id = input->GetString().ToString();
 
 	std::string actualId = "";
+
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
 	std::map<std::string, std::string> items;
 	ReadListOfObsSceneCollections(items);

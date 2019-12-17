@@ -12,7 +12,7 @@ public:
 public:
 	void AddPath(std::string path);
 
-protected:
+public:
 	void Clean();
 
 private:

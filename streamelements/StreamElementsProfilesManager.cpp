@@ -12,6 +12,8 @@ StreamElementsProfilesManager::~StreamElementsProfilesManager() {}
 void StreamElementsProfilesManager::SerializeAllProfiles(
 	CefRefPtr<CefValue> &output)
 {
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
 	CefRefPtr<CefListValue> list = CefListValue::Create();
 
 	std::map<std::string, std::string> profiles;
@@ -32,6 +34,8 @@ void StreamElementsProfilesManager::SerializeAllProfiles(
 void StreamElementsProfilesManager::SerializeCurrentProfile(
 	CefRefPtr<CefValue> &output)
 {
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
 	char *currentProfile = obs_frontend_get_current_profile();
 
 	std::string id = currentProfile;
@@ -74,6 +78,8 @@ bool StreamElementsProfilesManager::DeserializeCurrentProfileById(
 
 	if (!id.size())
 		return false;
+
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
 	std::string actualId = "";
 
