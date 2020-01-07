@@ -20,6 +20,7 @@
 #include "StreamElementsProfilesManager.hpp"
 #include "StreamElementsBackupManager.hpp"
 #include "StreamElementsCleanupManager.hpp"
+#include "StreamElementsPreviewManager.hpp"
 
 class StreamElementsGlobalStateManager : public StreamElementsObsAppMonitor {
 private:
@@ -140,6 +141,10 @@ public:
 	{
 		return m_cleanupManager;
 	}
+	StreamElementsPreviewManager* GetPreviewManager()
+	{
+		return m_previewManager;
+	}
 	QMainWindow *mainWindow() { return m_mainWindow; }
 
 public:
@@ -161,6 +166,7 @@ private:
 	bool m_persistStateEnabled = false;
 	bool m_initialized = false;
 	QMainWindow *m_mainWindow = nullptr;
+	QWidget *m_nativeCentralWidget = nullptr;
 	StreamElementsBrowserWidgetManager *m_widgetManager = nullptr;
 	StreamElementsObsSceneManager *m_obsSceneManager = nullptr;
 	StreamElementsMenuManager *m_menuManager = nullptr;
@@ -183,6 +189,7 @@ private:
 	StreamElementsProfilesManager *m_profilesManager = nullptr;
 	StreamElementsBackupManager *m_backupManager = nullptr;
 	StreamElementsCleanupManager *m_cleanupManager = nullptr;
+	StreamElementsPreviewManager *m_previewManager = nullptr;
 	WindowStateChangeEventFilter *m_windowStateEventFilter = nullptr;
 
 private:

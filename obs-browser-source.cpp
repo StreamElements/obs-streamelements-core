@@ -63,6 +63,13 @@ static void SendBrowserVisibility(CefRefPtr<CefBrowser> browser, bool isVisible)
 BrowserSource::BrowserSource(obs_data_t *, obs_source_t *source_)
 	: source(source_)
 {
+	{
+		auto handler = obs_source_get_signal_handler(source_);
+		signal_handler_add(
+			handler,
+			"void streamelements_update_settings(ptr source)");
+	}
+
 	/* defer update */
 	obs_source_update(source, nullptr);
 
@@ -459,6 +466,21 @@ void BrowserSource::Update(obs_data_t *settings)
 	ClearAudioStreams();
 	if (!shutdown_on_invisible || obs_source_showing(source))
 		create_browser = true;
+
+	if (!first_update) {
+		calldata_t cd;
+
+		calldata_init(&cd);
+
+		calldata_set_ptr(&cd, "source", source);
+
+		auto handler = obs_source_get_signal_handler(source);
+
+		signal_handler_signal(handler, "streamelements_update_settings",
+				      &cd);
+
+		calldata_free(&cd);
+	}
 
 	first_update = false;
 }

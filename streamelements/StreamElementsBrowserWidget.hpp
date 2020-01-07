@@ -76,7 +76,7 @@ public:
 	void BrowserHistoryGoBack();
 	void BrowserHistoryGoForward();
 	void BrowserReload(bool ignoreCache);
-	void BrowserLoadInitialPage();
+	void BrowserLoadInitialPage(const char* const url = nullptr);
 
 private:
 	///

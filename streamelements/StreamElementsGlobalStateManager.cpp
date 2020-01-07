@@ -344,6 +344,9 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 				new StreamElementsBackupManager();
 			context->self->m_cleanupManager =
 				new StreamElementsCleanupManager();
+			context->self->m_previewManager =
+				new StreamElementsPreviewManager(
+					context->self->mainWindow());
 			context->self->m_windowStateEventFilter =
 				new WindowStateChangeEventFilter(
 					context->self->mainWindow());
@@ -537,6 +540,7 @@ void StreamElementsGlobalStateManager::Shutdown()
 			delete self->m_profilesManager;
 			delete self->m_backupManager;
 			delete self->m_cleanupManager;
+			delete self->m_previewManager;
 			delete self->m_windowStateEventFilter;
 		},
 		this);

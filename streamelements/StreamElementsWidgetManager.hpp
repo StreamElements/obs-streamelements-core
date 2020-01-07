@@ -67,7 +67,10 @@ public:
 		const Qt::DockWidgetAreas allowedAreas = Qt::AllDockWidgetAreas,
 		const QDockWidget::DockWidgetFeatures features = QDockWidget::AllDockWidgetFeatures);
 
-	virtual bool ToggleWidgetFloatingStateById(const char* const id);
+	virtual bool ShowWidgetById(const char *const id);
+	virtual bool HideWidgetById(const char *const id);
+
+	virtual bool ToggleWidgetFloatingStateById(const char *const id);
 
 	virtual bool SetWidgetDimensionsById(const char* const id, const int width, const int height);
 	virtual bool SetWidgetPositionById(const char* const id, const int left, const int top);

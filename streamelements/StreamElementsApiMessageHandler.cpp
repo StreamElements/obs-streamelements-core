@@ -469,7 +469,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("toggleDockingWidgetFloatingById")
+	API_HANDLER_BEGIN("toggleDockingWidgetFloatingById");
 	{
 		if (args->GetSize() && args->GetType(0) == VTYPE_STRING) {
 			result->SetBool(
@@ -489,9 +489,9 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			}
 		}
 	}
-	API_HANDLER_END()
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("setDockingWidgetDimensionsById")
+	API_HANDLER_BEGIN("setDockingWidgetDimensionsById");
 	{
 		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
 		    args->GetType(1) == VTYPE_DICTIONARY) {
@@ -529,9 +529,9 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			}
 		}
 	}
-	API_HANDLER_END()
+	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("setDockingWidgetPositionById")
+	API_HANDLER_BEGIN("setDockingWidgetPositionById");
 	{
 		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
 		    args->GetType(1) == VTYPE_DICTIONARY) {
@@ -569,7 +569,74 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			}
 		}
 	}
-	API_HANDLER_END()
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setDockingWidgetUrlById");
+	{
+		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
+		    args->GetType(1) == VTYPE_STRING) {
+			result->SetBool(
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->SetWidgetUrlById(args->GetString(0)
+								   .ToString()
+								   .c_str(),
+							   args->GetString(1)
+								   .ToString()
+								   .c_str()));
+
+			if (result->GetBool()) {
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				StreamElementsGlobalStateManager::GetInstance()
+					->PersistState();
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("showDockingWidgetById");
+	{
+		if (args->GetSize() >= 1 && args->GetType(0) == VTYPE_STRING) {
+			result->SetBool(
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->ShowDockWidgetById(args->GetString(0)
+								 .ToString()
+								 .c_str()));
+
+			if (result->GetBool()) {
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				StreamElementsGlobalStateManager::GetInstance()
+					->PersistState();
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("hideDockingWidgetById");
+	{
+		if (args->GetSize() >= 1 && args->GetType(0) == VTYPE_STRING) {
+			result->SetBool(
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->HideDockWidgetById(args->GetString(0)
+								 .ToString()
+								 .c_str()));
+
+			if (result->GetBool()) {
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				StreamElementsGlobalStateManager::GetInstance()
+					->PersistState();
+			}
+		}
+	}
+	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("beginOnBoarding");
 	{
@@ -979,9 +1046,11 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				->NotifyAllMessageListeners(
 					StreamElementsMessageBus::DEST_ALL_LOCAL,
 					StreamElementsMessageBus::SOURCE_WEB,
+					browser ?
 					browser->GetMainFrame()
 						->GetURL()
-						.ToString(),
+							  .ToString()
+						: "urn:streamelements:internal",
 					message);
 
 			result->SetBool(true);
@@ -997,6 +1066,12 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 			if (d->HasKey("name") &&
 			    d->GetType("name") == VTYPE_STRING) {
+				std::string sourceUrl =
+					browser ? browser->GetMainFrame()
+							  ->GetURL()
+							  .ToString()
+						: "urn:streamelements:internal";
+
 				StreamElementsMessageBus::GetInstance()
 					->NotifyAllLocalEventListeners(
 						StreamElementsMessageBus::
@@ -1005,9 +1080,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 								DEST_BROWSER_SOURCE,
 						StreamElementsMessageBus::
 							SOURCE_WEB,
-						browser->GetMainFrame()
-							->GetURL()
-							.ToString(),
+						sourceUrl,
 						"hostEventReceived",
 						args->GetValue(0));
 
@@ -1017,9 +1090,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 							DEST_ALL_EXTERNAL,
 						StreamElementsMessageBus::
 							SOURCE_WEB,
-						browser->GetMainFrame()
-							->GetURL()
-							.ToString(),
+						sourceUrl,
 						d->GetString("name"),
 						d->GetValue("data"));
 

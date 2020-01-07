@@ -316,10 +316,14 @@ void StreamElementsBrowserWidget::BrowserReload(bool ignoreCache)
 	}
 }
 
-void StreamElementsBrowserWidget::BrowserLoadInitialPage()
+void StreamElementsBrowserWidget::BrowserLoadInitialPage(const char *const url)
 {
 	if (!m_cef_browser.get()) {
 		return;
+	}
+
+	if (url) {
+		m_url = url;
 	}
 
 	m_cef_browser->GetMainFrame()->LoadURL(GetInitialPageURLInternal());

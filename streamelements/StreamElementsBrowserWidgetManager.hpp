@@ -66,6 +66,18 @@ public:
 
 	virtual bool SetWidgetDimensionsById(const char* const id, const int width, const int height) override;
 	virtual bool SetWidgetPositionById(const char* const id, const int left, const int top) override;
+	virtual bool SetWidgetUrlById(const char *const id,
+				      const char *const url);
+
+	virtual bool ShowDockWidgetById(const char *const id)
+	{
+		return StreamElementsWidgetManager::ShowWidgetById(id);
+	}
+
+	virtual bool HideDockWidgetById(const char *const id)
+	{
+		return StreamElementsWidgetManager::HideWidgetById(id);
+	}
 
 	virtual bool RemoveDockWidget(const char* const id) override;
 

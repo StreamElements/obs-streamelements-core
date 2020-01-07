@@ -173,6 +173,7 @@ set(obs-browser_SOURCES
 	streamelements/StreamElementsProfilesManager.cpp
 	streamelements/StreamElementsBackupManager.cpp
 	streamelements/StreamElementsCleanupManager.cpp
+	streamelements/StreamElementsPreviewManager.cpp
 	streamelements/deps/zip/zip.c
 	streamelements/deps/server/NamedPipesServer.cpp
 	streamelements/deps/server/NamedPipesServerClientHandler.cpp
@@ -230,6 +231,7 @@ set(obs-browser_HEADERS
 	streamelements/StreamElementsProfilesManager.hpp
 	streamelements/StreamElementsBackupManager.hpp
 	streamelements/StreamElementsCleanupManager.hpp
+	streamelements/StreamElementsPreviewManager.hpp
 	streamelements/deps/zip/zip.h
 	streamelements/deps/zip/miniz.h
 	streamelements/deps/moodycamel/concurrentqueue.h
