@@ -19,6 +19,11 @@
 #include <util/platform.h>
 #include <curl/curl.h>
 
+#include <include/cef_urlrequest.h>
+
+#include <QMenu>
+#include <QWidget>
+
 #define SYNC_ACCESS()                                                    \
 	static std::recursive_mutex __sync_access_mutex;                 \
 	std::lock_guard<std::recursive_mutex> __sync_access_mutex_guard( \
@@ -94,21 +99,19 @@ typedef std::function<bool(void *data, size_t datalen, void *userdata,
 typedef std::function<void(char *data, void *userdata, char *error_msg,
 			   int http_code)>
 	http_client_string_callback_t;
-typedef std::multimap<std::string, std::string> http_client_request_headers_t;
+typedef std::multimap<std::string, std::string> http_client_headers_t;
 
-bool HttpGet(const char *url, http_client_request_headers_t request_headers,
+bool HttpGet(const char *url, http_client_headers_t request_headers,
 	     http_client_callback_t callback, void *userdata);
 
-bool HttpPost(const char *url, http_client_request_headers_t request_headers,
+bool HttpPost(const char *url, http_client_headers_t request_headers,
 	      void *buffer, size_t buffer_len, http_client_callback_t callback,
 	      void *userdata);
 
-bool HttpGetString(const char *url,
-		   http_client_request_headers_t request_headers,
+bool HttpGetString(const char *url, http_client_headers_t request_headers,
 		   http_client_string_callback_t callback, void *userdata);
 
-bool HttpPostString(const char *url,
-		    http_client_request_headers_t request_headers,
+bool HttpPostString(const char *url, http_client_headers_t request_headers,
 		    const char *postData,
 		    http_client_string_callback_t callback, void *userdata);
 
@@ -216,3 +219,87 @@ std::string GetFolderPathFromFilePath(std::string filePath);
 
 bool ReadListOfObsSceneCollections(std::map<std::string, std::string> &output);
 bool ReadListOfObsProfiles(std::map<std::string, std::string> &output);
+
+/* ========================================================= */
+
+class CefCancelableTask : public CefTask {
+private:
+	bool cancelled = false;
+	std::recursive_mutex mutex;
+
+public:
+	std::function<void()> task;
+
+	inline CefCancelableTask(std::function<void()> task_)
+		: task(task_), cancelled(false)
+	{
+	}
+
+	void Cancel()
+	{
+		std::lock_guard <decltype(mutex)> guard(mutex);
+
+		cancelled = true;
+	}
+
+	virtual void Execute() override
+	{
+		std::lock_guard<decltype(mutex)> guard(mutex);
+
+		if (cancelled)
+			return;
+
+#ifdef USE_QT_LOOP
+		QtPostTask([task]() { task(); });
+#else
+		task();
+#endif
+	}
+
+	IMPLEMENT_REFCOUNTING(CefCancelableTask);
+};
+
+CefRefPtr<CefCancelableTask> QueueCefCancelableTask(std::function<void()> task);
+
+/* ========================================================= */
+
+typedef std::function<void(bool success, void *, size_t)>
+	cef_http_request_callback_t;
+
+CefRefPtr<CefCancelableTask>
+CefHttpGetAsync(const char *url,
+		std::function<void(CefRefPtr<CefURLRequest>)> init_callback,
+		cef_http_request_callback_t callback);
+
+/* ========================================================= */
+
+bool DeserializeAndInvokeAction(CefRefPtr<CefValue> input,
+				std::function<void()> defaultAction,
+				std::function<void()> defaultContextMenu);
+
+bool DeserializeMenu(
+	CefRefPtr<CefValue> input, QMenu &menu,
+	std::function<void()> defaultAction = []() {},
+	std::function<void()> defaultContextMenu = []() {});
+
+QWidget *DeserializeAuxiliaryControlWidget(
+	CefRefPtr<CefValue> input,
+	std::function<void()> defaultAction = []() {},
+	std::function<void()> defaultContextMenu = []() {});
+
+QWidget *DeserializeRemoteIconWidget(CefRefPtr<CefValue> input,
+				     QPixmap *defaultPixmap = nullptr);
+
+/* ========================================================= */
+
+void ObsSceneEnumAllItems(obs_scene_t *scene,
+			  std::function<bool(obs_sceneitem_t *)> func);
+
+void ObsSceneEnumAllItems(obs_source_t *source,
+			  std::function<bool(obs_sceneitem_t *)> func);
+
+void ObsCurrentSceneEnumAllItems(std::function<bool(obs_sceneitem_t *)> func);
+
+/* ========================================================= */
+
+bool IsCefValueEqual(CefRefPtr<CefValue> a, CefRefPtr<CefValue> b);

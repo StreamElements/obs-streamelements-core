@@ -605,6 +605,10 @@ void StreamElementsGlobalStateManager::StartOnBoardingUI(UiModifier uiModifier)
 	QtPostTask(
 		[](void *) -> void {
 			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->Reset();
+
+			StreamElementsGlobalStateManager::GetInstance()
 				->GetMenuManager()
 				->Update();
 			StreamElementsGlobalStateManager::GetInstance()
@@ -661,6 +665,10 @@ void StreamElementsGlobalStateManager::SwitchToOBSStudio()
 			StreamElementsConfig::GetInstance()->SetStartupFlags(
 				StreamElementsConfig::
 					STARTUP_FLAGS_ONBOARDING_MODE);
+
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->Reset();
 
 			GetMenuManager()->Update();
 		}

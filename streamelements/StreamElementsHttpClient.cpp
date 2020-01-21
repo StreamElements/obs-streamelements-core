@@ -22,7 +22,7 @@ void StreamElementsHttpClient::DeserializeHttpRequestText(
 		std::string url =
 			d->HasKey("url") ? d->GetString("url") : "";
 
-		http_client_request_headers_t request_headers;
+		http_client_headers_t request_headers;
 
 		if (d->HasKey("headers") && d->GetType("headers") == VTYPE_DICTIONARY) {
 			CefRefPtr<CefDictionaryValue> h = d->GetDictionary("headers");

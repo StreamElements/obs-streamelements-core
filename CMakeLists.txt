@@ -174,6 +174,10 @@ set(obs-browser_SOURCES
 	streamelements/StreamElementsBackupManager.cpp
 	streamelements/StreamElementsCleanupManager.cpp
 	streamelements/StreamElementsPreviewManager.cpp
+	streamelements/StreamElementsSceneItemsMonitor.cpp
+	streamelements/StreamElementsDeferredExecutive.cpp
+	streamelements/StreamElementsRemoteIconLoader.cpp
+	streamelements/StreamElementsScenesListWidgetManager.cpp
 	streamelements/deps/zip/zip.c
 	streamelements/deps/server/NamedPipesServer.cpp
 	streamelements/deps/server/NamedPipesServerClientHandler.cpp
@@ -232,6 +236,10 @@ set(obs-browser_HEADERS
 	streamelements/StreamElementsBackupManager.hpp
 	streamelements/StreamElementsCleanupManager.hpp
 	streamelements/StreamElementsPreviewManager.hpp
+	streamelements/StreamElementsSceneItemsMonitor.hpp
+	streamelements/StreamElementsDeferredExecutive.hpp
+	streamelements/StreamElementsRemoteIconLoader.hpp
+	streamelements/StreamElementsScenesListWidgetManager.hpp
 	streamelements/deps/zip/zip.h
 	streamelements/deps/zip/miniz.h
 	streamelements/deps/moodycamel/concurrentqueue.h

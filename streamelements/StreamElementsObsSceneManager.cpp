@@ -1,6 +1,7 @@
 #include "StreamElementsObsSceneManager.hpp"
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsCefClient.hpp"
+#include "StreamElementsConfig.hpp"
 
 #include <util/platform.h>
 
@@ -9,6 +10,16 @@
 
 #include <QListView>
 #include <QDockWidget>
+#include <QAbstractItemModel>
+#include <QLayout>
+#include <QHBoxLayout>
+#include <QPushButton>
+
+// TODO: TBD: When obs_sceneitem_group_add_item() and obs_sceneitem_group_remove_item()
+//            are fixed, change this to 1
+#define ENABLE_OBS_GROUP_ADD_REMOVE_ITEM 0
+
+static bool s_shutdown = false;
 
 static void sceneitem_addref(obs_sceneitem_t *sceneitem)
 {
@@ -60,8 +71,13 @@ void StreamElementsObsSceneManager::RefreshObsSceneItemsList()
 		return;
 
 	QtExecSync([listView]() -> void {
+#if ENABLE_OBS_GROUP_ADD_REMOVE_ITEM
+		QMetaObject::invokeMethod(listView, "SceneChanged",
+					  Qt::DirectConnection);
+#else
 		QMetaObject::invokeMethod(listView, "ReorderItems",
 					  Qt::DirectConnection);
+#endif
 	});
 
 	return;
@@ -651,6 +667,7 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 		/* Serialize group */
 		struct local_context {
 			CefRefPtr<CefListValue> list;
+			std::vector<obs_sceneitem_t *> groupItems;
 		};
 
 		local_context context;
@@ -664,22 +681,29 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 			   void *param) {
 				local_context *context = (local_context *)param;
 
-				obs_source_t *source = obs_sceneitem_get_source(
-					sceneitem); // does not increase refcount
+				obs_sceneitem_addref(sceneitem); /* will be released below */
 
-				CefRefPtr<CefValue> item = CefValue::Create();
-
-				SerializeSourceAndSceneItem(
-					item, source, sceneitem,
-					context->list->GetSize());
-
-				context->list->SetValue(
-					context->list->GetSize(), item);
+				context->groupItems.push_back(sceneitem);
 
 				// Continue iteration
 				return true;
 			},
 			&context);
+
+		for (auto group_sceneitem : context.groupItems) {
+			obs_source_t *source = obs_sceneitem_get_source(
+				group_sceneitem); // does not increase refcount
+
+			CefRefPtr<CefValue> item = CefValue::Create();
+
+			SerializeSourceAndSceneItem(item, source,
+						    group_sceneitem,
+						    context.list->GetSize());
+
+			context.list->SetValue(context.list->GetSize(), item);
+
+			obs_sceneitem_release(group_sceneitem); /* addref above in obs_sceneitem_group_enum_items callback */
+		}
 
 		/* Group items */
 		root->SetList("items", context.list);
@@ -690,6 +714,33 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 		root->SetValue("settings", SerializeObsSourceSettings(source));
 	}
 
+	root->SetList(
+		"actions",
+		StreamElementsSceneItemsMonitor::GetSceneItemActions(sceneitem)
+			->Copy());
+
+	root->SetValue(
+		"icon",
+		StreamElementsSceneItemsMonitor::GetSceneItemIcon(sceneitem)
+			->Copy());
+
+	root->SetValue(
+		"defaultAction",
+		StreamElementsSceneItemsMonitor::GetSceneItemDefaultAction(
+			sceneitem)
+			->Copy());
+
+	root->SetValue(
+		"auxiliaryData",
+		StreamElementsSceneItemsMonitor::GetSceneItemAuxiliaryData(
+			sceneitem)
+			->Copy());
+
+	root->SetValue("contextMenu",
+		       StreamElementsSceneItemsMonitor::GetSceneItemContextMenu(
+			       sceneitem)
+			       ->Copy());
+
 	result->SetDictionary(root);
 }
 
@@ -699,6 +750,9 @@ static obs_source_t *g_current_scene = nullptr;
 
 static void dispatch_scene_update(void *my_data, calldata_t *cd)
 {
+	if (s_shutdown)
+		return;
+
 	StreamElementsCefClient::DispatchJSEvent(
 		"hostActiveSceneItemListChanged", "null");
 }
@@ -706,6 +760,9 @@ static void dispatch_scene_update(void *my_data, calldata_t *cd)
 static void dispatch_sceneitem_event(obs_sceneitem_t *sceneitem,
 				     std::string eventName)
 {
+	if (s_shutdown)
+		return;
+
 	if (!sceneitem)
 		return;
 
@@ -713,7 +770,7 @@ static void dispatch_sceneitem_event(obs_sceneitem_t *sceneitem,
 
 	/* We need to defer task execution to prevent a deadlock
 	 * when a source is referenced by more than one scene item */
-	QtPostTask([=]() -> void {
+	QtPostTask([sceneitem, eventName]() -> void {
 		if (sceneitem) {
 			CefRefPtr<CefValue> item = CefValue::Create();
 
@@ -741,6 +798,9 @@ static void dispatch_sceneitem_event(obs_sceneitem_t *sceneitem,
 static void dispatch_sceneitem_event(void *my_data, calldata_t *cd,
 				     std::string eventName)
 {
+	if (s_shutdown)
+		return;
+
 	obs_sceneitem_t *sceneitem =
 		(obs_sceneitem_t *)calldata_ptr(cd, "item");
 
@@ -770,69 +830,21 @@ static void dispatch_source_event(void *my_data, calldata_t *cd,
 
 	obs_source_addref(source);
 
-	QtPostTask([=]() -> void {
-		struct local_context {
-			std::string eventName;
-			obs_source_t *source;
-		};
-
-		local_context context;
-
-		context.eventName = eventName;
-		context.source = source;
-
+	QtPostTask([source, eventName, scene, scene_source]() -> void {
 		// For each scene item
-		obs_scene_enum_items(
-			scene,
-			[](obs_scene_t *scene, obs_sceneitem_t *sceneitem,
-			   void *param) {
-				local_context *context = (local_context *)param;
+		ObsSceneEnumAllItems(scene, [source, eventName](
+						    obs_sceneitem_t *sceneitem) {
+			obs_source_t *sceneitem_source =
+				obs_sceneitem_get_source(
+					sceneitem); // does not increase refcount
 
-				obs_source_t *sceneitem_source =
-					obs_sceneitem_get_source(
-						sceneitem); // does not increase refcount
+			if (sceneitem_source == source) {
+				dispatch_sceneitem_event(sceneitem,
+							 eventName);
+			}
 
-				if (sceneitem_source == context->source) {
-					dispatch_sceneitem_event(
-						sceneitem, context->eventName);
-				}
-
-				if (obs_sceneitem_is_group(sceneitem)) {
-					/* group */
-					obs_scene_t *group_scene =
-						obs_sceneitem_group_get_scene(
-							sceneitem);
-
-					// For each scene item
-					obs_scene_enum_items(
-						group_scene,
-						[](obs_scene_t *scene,
-						   obs_sceneitem_t *sceneitem,
-						   void *param) {
-							local_context *context =
-								(local_context *)
-									param;
-
-							obs_source_t *sceneitem_source =
-								obs_sceneitem_get_source(
-									sceneitem); // does not increase refcount
-
-							if (sceneitem_source ==
-							    context->source) {
-								dispatch_sceneitem_event(
-									sceneitem,
-									context->eventName);
-							}
-
-							return true;
-						},
-						context);
-				}
-
-				// Continue iteration
-				return true;
-			},
-			&context);
+			return true;
+		});
 
 		obs_source_release(scene_source);
 		obs_source_release(source);
@@ -867,6 +879,9 @@ static void handle_scene_item_remove(void *my_data, calldata_t *cd)
 
 static void handle_scene_item_reorder(void *my_data, calldata_t *cd)
 {
+	if (s_shutdown)
+		return;
+
 	StreamElementsCefClient::DispatchJSEvent(
 		"hostActiveSceneItemsOrderChanged", "null");
 
@@ -896,6 +911,9 @@ static void handle_scene_item_source_rename(void *my_data, calldata_t *cd)
 
 static void handle_scene_item_add(void *my_data, calldata_t *cd)
 {
+	if (s_shutdown)
+		return;
+
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemAdded");
 	dispatch_scene_update(my_data, cd);
 
@@ -917,6 +935,9 @@ static void handle_scene_item_add(void *my_data, calldata_t *cd)
 
 static void remove_source_signals(obs_source_t *source, void *data)
 {
+	if (s_shutdown)
+		return;
+
 	if (!source)
 		return;
 
@@ -935,6 +956,9 @@ static void remove_source_signals(obs_source_t *source, void *data)
 
 static void add_source_signals(obs_source_t *source, void *data)
 {
+	if (s_shutdown)
+		return;
+
 	auto handler = obs_source_get_signal_handler(source);
 
 	signal_handler_connect(handler, "update_properties",
@@ -949,6 +973,9 @@ static void add_source_signals(obs_source_t *source, void *data)
 
 static void remove_scene_signals(obs_source_t *sceneSource, void *data)
 {
+	if (s_shutdown)
+		return;
+
 	if (!sceneSource)
 		return;
 
@@ -1020,6 +1047,9 @@ static void remove_scene_signals(obs_source_t *sceneSource, void *data)
 
 static void add_scene_signals(obs_source_t *sceneSource, void *data)
 {
+	if (s_shutdown)
+		return;
+
 	if (!sceneSource)
 		return;
 
@@ -1088,6 +1118,9 @@ static void add_scene_signals(obs_source_t *sceneSource, void *data)
 
 static void remove_current_scene_signals(void *data)
 {
+	if (s_shutdown)
+		return;
+
 	if (!g_current_scene)
 		return;
 
@@ -1096,17 +1129,30 @@ static void remove_current_scene_signals(void *data)
 
 static void add_current_scene_signals(void *data)
 {
+	if (s_shutdown)
+		return;
+
 	if (!g_current_scene)
 		return;
 
 	add_scene_signals(g_current_scene, data);
 }
 
-static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
+void StreamElementsObsSceneManager::handle_obs_frontend_event(
+	enum obs_frontend_event event, void *data)
 {
+	if (event == OBS_FRONTEND_EVENT_EXIT) {
+		s_shutdown = true;
+
+		return;
+	}
+
 	if (event != OBS_FRONTEND_EVENT_SCENE_CHANGED &&
 	    event != OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED)
 		return;
+
+	StreamElementsObsSceneManager *self =
+		(StreamElementsObsSceneManager *)data;
 
 	obs_enter_graphics();
 
@@ -1127,6 +1173,12 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 	}
 
 	obs_leave_graphics();
+
+	if (self->m_sceneItemsMonitor)
+		self->m_sceneItemsMonitor->Update();
+
+	if (self->m_scenesWidgetManager)
+		self->m_scenesWidgetManager->Update();
 }
 
 static void handle_source_create(void *data, calldata_t *cd)
@@ -1156,6 +1208,10 @@ StreamElementsObsSceneManager::StreamElementsObsSceneManager(QMainWindow *parent
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
+	m_sceneItemsMonitor = new StreamElementsSceneItemsMonitor(m_parent);
+	m_scenesWidgetManager =
+		new StreamElementsScenesListWidgetManager(m_parent);
+
 	obs_enter_graphics();
 	obs_frontend_add_event_callback(handle_obs_frontend_event, this);
 	obs_leave_graphics();
@@ -1167,13 +1223,27 @@ StreamElementsObsSceneManager::StreamElementsObsSceneManager(QMainWindow *parent
 
 	signal_handler_connect(handler, "source_remove", handle_source_remove,
 			       this);
+
+	DeserializeSceneItemsAuxiliaryActions(
+		CefParseJSON(StreamElementsConfig::GetInstance()
+				     ->GetSceneItemsAuxActionsConfig(),
+			     JSON_PARSER_ALLOW_TRAILING_COMMAS),
+		CefValue::Create());
+
+	DeserializeScenesAuxiliaryActions(
+		CefParseJSON(StreamElementsConfig::GetInstance()
+				     ->GetScenesAuxActionsConfig(),
+			     JSON_PARSER_ALLOW_TRAILING_COMMAS),
+		CefValue::Create());
 }
 
 StreamElementsObsSceneManager::~StreamElementsObsSceneManager()
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
-	remove_current_scene_signals(this);
+	delete m_sceneItemsMonitor;
+
+	// remove_current_scene_signals(this); // this line throws an exception on OBS shutdown
 
 	obs_enter_graphics();
 	obs_frontend_remove_event_callback(handle_obs_frontend_event, this);
@@ -1791,6 +1861,26 @@ static void SerializeObsScene(obs_source_t *scene, CefRefPtr<CefValue> &result)
 	d->SetString("id", GetIdFromPointer(scene));
 	d->SetString("name", obs_source_get_name(scene));
 
+	d->SetValue("icon",
+		    StreamElementsScenesListWidgetManager::GetSceneIcon(scene)
+			    ->Copy());
+
+	d->SetValue(
+		"auxiliaryData",
+		StreamElementsScenesListWidgetManager::GetSceneAuxiliaryData(
+			scene)
+			->Copy());
+
+	d->SetValue("defaultAction",
+		    StreamElementsScenesListWidgetManager::GetSceneDefaultAction(scene)
+			    ->Copy());
+
+	d->SetValue(
+		"contextMenu",
+		StreamElementsScenesListWidgetManager::GetSceneContextMenu(
+			scene)
+			->Copy());
+
 	result->SetDictionary(d);
 }
 
@@ -2082,6 +2172,28 @@ void StreamElementsObsSceneManager::SetObsScenePropertiesById(
 
 				result = true;
 			}
+
+			if (d->HasKey("icon")) {
+				m_scenesWidgetManager->SetSceneIcon(
+					scene, d->GetValue("icon")->Copy());
+			}
+
+			if (d->HasKey("defaultAction")) {
+				m_scenesWidgetManager->SetSceneDefaultAction(
+					scene, d->GetValue("defaultAction")->Copy());
+			}
+
+			if (d->HasKey("contextMenu")) {
+				m_scenesWidgetManager->SetSceneContextMenu(
+					scene,
+					d->GetValue("contextMenu")->Copy());
+			}
+
+			if (d->HasKey("auxiliaryData")) {
+				m_scenesWidgetManager->SetSceneAuxiliaryData(
+					scene,
+					d->GetValue("auxiliaryData")->Copy());
+			}
 		}
 	}
 
@@ -2241,6 +2353,45 @@ void StreamElementsObsSceneManager::SetObsCurrentSceneItemPropertiesById(
 			obs_data_release(settings);
 		}
 
+		if (d->HasKey("actions")) {
+			if (d->GetType("actions") == VTYPE_LIST) {
+				CefRefPtr<CefListValue> actionsList =
+					d->GetList("actions");
+
+				m_sceneItemsMonitor->SetSceneItemActions(
+					context.sceneitem, actionsList);
+			} else {
+				CefRefPtr<CefListValue> emptyList =
+					CefListValue::Create();
+
+				m_sceneItemsMonitor->SetSceneItemActions(
+					context.sceneitem, emptyList);
+			}
+		}
+
+		if (d->HasKey("icon")) {
+			m_sceneItemsMonitor->SetSceneItemIcon(
+				context.sceneitem, d->GetValue("icon")->Copy());
+		}
+
+		if (d->HasKey("defaultAction")) {
+			m_sceneItemsMonitor->SetSceneItemDefaultAction(
+				context.sceneitem,
+				d->GetValue("defaultAction")->Copy());
+		}
+
+		if (d->HasKey("auxiliaryData")) {
+			m_sceneItemsMonitor->SetSceneItemAuxiliaryData(
+				context.sceneitem,
+				d->GetValue("auxiliaryData")->Copy());
+		}
+
+		if (d->HasKey("contextMenu")) {
+			m_sceneItemsMonitor->SetSceneItemContextMenu(
+				context.sceneitem,
+				d->GetValue("contextMenu")->Copy());
+		}
+
 		obs_transform_info info;
 		obs_sceneitem_crop crop;
 
@@ -2280,7 +2431,7 @@ void StreamElementsObsSceneManager::SetObsCurrentSceneItemPropertiesById(
 			obs_leave_graphics();
 		}
 
-#ifdef __NO_SUCH_THING_TO_DISABLE_THIS_PIECE_OF_CODE__
+#if ENABLE_OBS_GROUP_ADD_REMOVE_ITEM
 		// This piece of code just does not work. It seems that
 		// the implementation of `obs_sceneitem_group_remove_item`
 		// is broken.
@@ -2313,35 +2464,15 @@ void StreamElementsObsSceneManager::SetObsCurrentSceneItemPropertiesById(
 							*original_sceneitem =
 								args->sceneitem;
 
-						if (args->current_group) {
-							/*
+						if (args->group) {
+							obs_sceneitem_group_add_item(
+								args->group,
+								args->sceneitem);
+						} else {
 							obs_sceneitem_group_remove_item(
 								args->current_group,
-								args->sceneitem);*/
+								args->sceneitem);
 						}
-
-						if (args->group) {
-							obs_scene_t *group_scene =
-								obs_sceneitem_group_get_scene(
-									args->current_group);
-
-							args->sceneitem = obs_scene_add(
-								group_scene,
-								obs_sceneitem_get_source(
-									args->sceneitem));
-
-							/*obs_sceneitem_group_add_item(
-								args->group,
-								args->sceneitem);*/
-						} else {
-							args->sceneitem = obs_scene_add(
-								scene,
-								obs_sceneitem_get_source(
-									args->sceneitem));
-						}
-
-						obs_sceneitem_remove(
-							original_sceneitem);
 					},
 					&args);
 
@@ -2843,4 +2974,94 @@ void StreamElementsObsSceneManager::DeserializeObsCurrentSceneCollectionById(
 
 		SerializeObsCurrentSceneCollection(output);
 	}
+}
+
+void StreamElementsObsSceneManager::InvokeCurrentSceneItemDefaultActionById(
+	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
+{
+	output->SetNull();
+
+	if (!input.get() || input->GetType() != VTYPE_STRING)
+		return;
+
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
+	obs_sceneitem_t *item =
+		FindSceneItemById(input->GetString().ToString().c_str());
+
+	output->SetBool(
+		m_sceneItemsMonitor->InvokeCurrentSceneItemDefaultAction(item));
+}
+
+void StreamElementsObsSceneManager::InvokeCurrentSceneItemDefaultContextMenuById(
+	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
+{
+	output->SetNull();
+
+	if (!input.get() || input->GetType() != VTYPE_STRING)
+		return;
+
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
+	obs_sceneitem_t *item =
+		FindSceneItemById(input->GetString().ToString().c_str());
+
+	output->SetBool(
+		m_sceneItemsMonitor->InvokeCurrentSceneItemDefaultContextMenu(
+			item));
+}
+
+void StreamElementsObsSceneManager::DeserializeSceneItemsAuxiliaryActions(
+	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
+{
+	if (!m_sceneItemsMonitor)
+		return;
+
+	output->SetBool(
+		m_sceneItemsMonitor->DeserializeSceneItemsAuxiliaryActions(
+			input));
+
+	CefRefPtr<CefValue> m_actions = CefValue::Create();
+	m_sceneItemsMonitor->SerializeSceneItemsAuxiliaryActions(m_actions);
+
+	StreamElementsConfig::GetInstance()->SetSceneItemsAuxActionsConfig(
+		CefWriteJSON(m_actions, JSON_WRITER_DEFAULT));
+
+	StreamElementsConfig::GetInstance()->SaveConfig();
+}
+
+void StreamElementsObsSceneManager::SerializeSceneItemsAuxiliaryActions(
+	CefRefPtr<CefValue> &output)
+{
+	if (!m_sceneItemsMonitor)
+		return;
+
+	m_sceneItemsMonitor->SerializeSceneItemsAuxiliaryActions(output);
+}
+
+void StreamElementsObsSceneManager::DeserializeScenesAuxiliaryActions(
+	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
+{
+	if (!m_scenesWidgetManager)
+		return;
+
+	output->SetBool(
+		m_scenesWidgetManager->DeserializeScenesAuxiliaryActions(input));
+
+	CefRefPtr<CefValue> m_actions = CefValue::Create();
+	m_scenesWidgetManager->SerializeScenesAuxiliaryActions(m_actions);
+
+	StreamElementsConfig::GetInstance()->SetScenesAuxActionsConfig(
+		CefWriteJSON(m_actions, JSON_WRITER_DEFAULT));
+
+	StreamElementsConfig::GetInstance()->SaveConfig();
+}
+
+void StreamElementsObsSceneManager::SerializeScenesAuxiliaryActions(
+	CefRefPtr<CefValue> &output)
+{
+	if (!m_scenesWidgetManager)
+		return;
+
+	m_scenesWidgetManager->SerializeScenesAuxiliaryActions(output);
 }

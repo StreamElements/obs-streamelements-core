@@ -16,6 +16,9 @@
 
 #include <codecvt>
 
+std::shared_ptr<StreamElementsApiMessageHandler::InvokeHandler>
+	StreamElementsApiMessageHandler::InvokeHandler::s_singleton = nullptr;
+
 /* Incoming messages from renderer process */
 const char *MSG_ON_CONTEXT_CREATED =
 	"CefRenderProcessHandler::OnContextCreated";
@@ -1181,6 +1184,66 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				->RemoveObsCurrentSceneItemsByIds(
 					args->GetValue(0), result);
 		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("invokeCurrentSceneItemDefaultActionById");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->InvokeCurrentSceneItemDefaultActionById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("invokeCurrentSceneItemDefaultContextMenuById");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->InvokeCurrentSceneItemDefaultContextMenuById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setCurrentSceneItemsAuxiliaryActions");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeSceneItemsAuxiliaryActions(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getCurrentSceneItemsAuxiliaryActions");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetObsSceneManager()
+			->SerializeSceneItemsAuxiliaryActions(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setScenesAuxiliaryActions");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeScenesAuxiliaryActions(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getScenesAuxiliaryActions");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetObsSceneManager()
+			->SerializeScenesAuxiliaryActions(result);
 	}
 	API_HANDLER_END();
 

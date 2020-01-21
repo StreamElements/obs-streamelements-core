@@ -15,7 +15,8 @@
 StreamElementsMenuManager::StreamElementsMenuManager(QMainWindow *parent)
 	: m_mainWindow(parent)
 {
-	m_handler = new StreamElementsApiMessageHandler::InvokeHandler();
+	m_auxMenuItems = CefValue::Create();
+	m_auxMenuItems->SetNull();
 
 	m_menu = new QMenu("St&reamElements");
 
@@ -28,51 +29,6 @@ StreamElementsMenuManager::~StreamElementsMenuManager()
 {
 	m_menu->menuAction()->setVisible(false);
 	m_menu = nullptr;
-
-	delete m_handler;
-	m_handler = nullptr;
-}
-
-void StreamElementsMenuManager::AddAuxiliaryMenuItems(
-	QMenu *menu, std::vector<aux_menu_item_t> &auxMenuItems,
-	bool requestSeparator)
-{
-	if (!auxMenuItems.size())
-		return;
-
-	if (requestSeparator)
-		menu->addSeparator();
-
-	for (aux_menu_item_t &item : auxMenuItems) {
-		switch (item.type) {
-		case Separator:
-			menu->addSeparator();
-			break;
-
-		case Command: {
-			QAction *auxAction = new QAction(item.title.c_str());
-
-			menu->addAction(auxAction);
-
-			auxAction->connect(
-				auxAction, &QAction::triggered, [item, this]() {
-					// Handle menu action
-					m_handler->InvokeApiCallAsync(
-						item.apiMethod, item.apiArgs,
-						[](CefRefPtr<CefValue>) {});
-				});
-		} break;
-
-		case Container:
-			AddAuxiliaryMenuItems(menu->addMenu(item.title.c_str()),
-					      item.items, false);
-			break;
-
-		default:
-			// Invalid menu item type
-			break;
-		}
-	}
 }
 
 void StreamElementsMenuManager::Update()
@@ -219,7 +175,7 @@ void StreamElementsMenuManager::Update()
 			nullptr);
 	});
 
-	AddAuxiliaryMenuItems(m_menu, m_auxMenuItems, true);
+	DeserializeMenu(m_auxMenuItems, *m_menu);
 
 	m_menu->addSeparator();
 
@@ -293,80 +249,17 @@ void StreamElementsMenuManager::Update()
 	}
 }
 
-bool StreamElementsMenuManager::DeserializeAuxiliaryMenuItemsInternal(
-	CefRefPtr<CefValue> input, std::vector<aux_menu_item_t> &result)
-{
-	if (input->GetType() != VTYPE_LIST)
-		return false;
-
-	CefRefPtr<CefListValue> list = input->GetList();
-
-	result.clear();
-
-	for (size_t index = 0; index < list->GetSize(); ++index) {
-		if (list->GetType(index) != VTYPE_DICTIONARY)
-			continue;
-
-		CefRefPtr<CefDictionaryValue> d = list->GetDictionary(index);
-
-		if (!d->HasKey("type") || d->GetType("type") != VTYPE_STRING)
-			continue;
-
-		aux_menu_item_t item;
-
-		std::string type = d->GetString("type").ToString();
-
-		if (type == "separator") {
-			item.type = Separator;
-		} else if (type == "command") {
-			item.type = Command;
-
-			if (!d->HasKey("title") ||
-			    d->GetType("title") != VTYPE_STRING)
-				continue;
-
-			if (!d->HasKey("invoke") ||
-			    d->GetType("invoke") != VTYPE_STRING)
-				continue;
-
-			if (!d->HasKey("invokeArgs") ||
-			    d->GetType("invokeArgs") != VTYPE_LIST)
-				continue;
-
-			item.title = d->GetString("title").ToString();
-			item.apiMethod = d->GetString("invoke").ToString();
-			item.apiArgs = d->GetList("invokeArgs");
-		} else if (type == "container") {
-			item.type = Container;
-
-			if (!d->HasKey("title") ||
-			    d->GetType("title") != VTYPE_STRING)
-				continue;
-
-			if (!d->HasKey("items") ||
-			    d->GetType("items") != VTYPE_LIST)
-				continue;
-
-			item.title = d->GetString("title").ToString();
-
-			DeserializeAuxiliaryMenuItemsInternal(
-				d->GetValue("items"), item.items);
-		} else
-			continue;
-
-		result.push_back(item);
-	}
-
-	return true;
-}
-
 bool StreamElementsMenuManager::DeserializeAuxiliaryMenuItems(
 	CefRefPtr<CefValue> input)
 {
 	SYNC_ACCESS();
 
-	bool result =
-		DeserializeAuxiliaryMenuItemsInternal(input, m_auxMenuItems);
+	QMenu menu;
+	bool result = DeserializeMenu(input, menu);
+
+	if (result) {
+		m_auxMenuItems = input->Copy();
+	}
 
 	Update();
 
@@ -379,69 +272,25 @@ void StreamElementsMenuManager::Reset()
 {
 	SYNC_ACCESS();
 
-	m_auxMenuItems.clear();
+	m_auxMenuItems->SetNull();
 
 	Update();
 
 	SaveConfig();
 }
 
-CefRefPtr<CefListValue>
-StreamElementsMenuManager::SerializeAuxiliaryMenuItemsInternal(
-	std::vector<aux_menu_item_t> &items)
-{
-	CefRefPtr<CefListValue> list = CefListValue::Create();
-
-	for (auto item : items) {
-		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
-
-		switch (item.type) {
-		case Separator:
-			d->SetString("type", "separator");
-			break;
-
-		case Command:
-			d->SetString("type", "command");
-			d->SetString("title", item.title);
-			d->SetString("invoke", item.apiMethod);
-			d->SetList("invokeArgs", item.apiArgs);
-			break;
-
-		case Container:
-			d->SetString("type", "container");
-			d->SetString("title", item.title);
-			d->SetList("items", SerializeAuxiliaryMenuItemsInternal(
-						    item.items));
-			break;
-
-		default:
-			// Unknown type
-			continue;
-			break;
-		}
-
-		list->SetDictionary(list->GetSize(), d);
-	}
-
-	return list;
-}
-
 void StreamElementsMenuManager::SerializeAuxiliaryMenuItems(
 	CefRefPtr<CefValue> &output)
 {
-	output->SetList(SerializeAuxiliaryMenuItemsInternal(m_auxMenuItems));
+	output = m_auxMenuItems->Copy();
 }
 
 void StreamElementsMenuManager::SaveConfig()
 {
 	SYNC_ACCESS();
 
-	CefRefPtr<CefValue> val = CefValue::Create();
-
-	val->SetList(SerializeAuxiliaryMenuItemsInternal(m_auxMenuItems));
-
 	StreamElementsConfig::GetInstance()->SetAuxMenuItemsConfig(
-		CefWriteJSON(val, JSON_WRITER_DEFAULT).ToString());
+		CefWriteJSON(m_auxMenuItems, JSON_WRITER_DEFAULT).ToString());
 }
 
 void StreamElementsMenuManager::LoadConfig()

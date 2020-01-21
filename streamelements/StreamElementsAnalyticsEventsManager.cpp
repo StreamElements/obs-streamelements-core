@@ -81,7 +81,7 @@ void StreamElementsAnalyticsEventsManager::AddRawEvent(const char* eventName, js
 
 	if (!synchronous) {
 		Enqueue([=]() {
-			http_client_request_headers_t headers;
+			http_client_headers_t headers;
 
 			headers.emplace(
 				std::make_pair<std::string, std::string>(
@@ -97,7 +97,7 @@ void StreamElementsAnalyticsEventsManager::AddRawEvent(const char* eventName, js
 		});
 	}
 	else {
-		http_client_request_headers_t headers;
+		http_client_headers_t headers;
 
 		headers.emplace(
 			std::make_pair<std::string, std::string>(

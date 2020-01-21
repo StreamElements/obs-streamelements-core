@@ -132,6 +132,52 @@ public:
 		SaveConfig();
 	}
 
+	std::string GetSceneItemsAuxActionsConfig()
+	{
+		const char *value = config_get_string(
+			StreamElementsConfig::GetInstance()->GetConfig(),
+			"Startup", "AuxSourcesActions");
+
+		if (!!value)
+			return value;
+		else
+			return "[]";
+	}
+
+	void SetSceneItemsAuxActionsConfig(std::string value)
+	{
+		config_set_string(
+			StreamElementsConfig::GetInstance()->GetConfig(),
+			"Startup", "AuxSourcesActions", value.c_str());
+
+		SaveConfig();
+	}
+
+	std::string GetScenesAuxActionsConfig()
+	{
+		const char *value = config_get_string(
+			StreamElementsConfig::GetInstance()->GetConfig(),
+			"Startup", "AuxScenesActions");
+
+		if (!!value)
+			return value;
+		else
+			return "[]";
+	}
+
+	void SetScenesAuxActionsConfig(std::string value)
+	{
+		config_set_string(
+			StreamElementsConfig::GetInstance()->GetConfig(),
+			"Startup", "AuxScenesActions", value.c_str());
+
+		SaveConfig();
+	}
+
+	bool IsOnBoardingMode() {
+		return (GetStartupFlags() & STARTUP_FLAGS_ONBOARDING_MODE) != 0;
+	}
+
 private:
 	config_t* m_config = nullptr;
 
