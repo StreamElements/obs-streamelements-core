@@ -571,10 +571,9 @@ void StreamElementsSceneItemsMonitor::SetSceneItemAuxiliaryData(
 				  data, false);
 }
 
-static void
-deserializeAuxSceneItemsControls(StreamElementsSceneItemsMonitor *monitor,
-				 obs_sceneitem_t *scene_item,
-				 QWidget *auxWidget, QWidget *parentWidget)
+static void deserializeAuxSceneItemsControls(
+	StreamElementsSceneItemsMonitor *monitor, obs_sceneitem_t *scene_item,
+	QWidget *auxWidget, QWidget *parentWidget, QLabel *nativeIconLabel)
 {
 	auxWidget->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Maximum);
 
@@ -609,7 +608,11 @@ deserializeAuxSceneItemsControls(StreamElementsSceneItemsMonitor *monitor,
 			continue;
 
 		auxLayout->addWidget(control);
-		auxLayout->addSpacing(2);
+
+		if (obs_get_version() >= MAKE_SEMANTIC_VERSION(24, 0, 0)) {
+			/* OBS 24 added spacing between action icons */
+			auxLayout->addSpacing(2);
+		}
 	}
 }
 
@@ -617,7 +620,8 @@ static void deserializeSceneItemIcon(StreamElementsSceneItemsMonitor *monitor,
 				     obs_scene_t *scene,
 				     obs_sceneitem_t *scene_item,
 				     QWidget *iconWidget, QWidget *parentWidget,
-				     QPixmap *defaultPixmap)
+				     QPixmap *defaultPixmap,
+				     QLabel *nativeIconLabel)
 {
 	iconWidget->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Maximum);
 
@@ -640,7 +644,9 @@ static void deserializeSceneItemIcon(StreamElementsSceneItemsMonitor *monitor,
 		monitor->GetSceneItemIcon(scene_item), defaultPixmap);
 
 	iconLayout->addWidget(itemIcon);
-	iconLayout->addSpacing(2);
+	if (!nativeIconLabel) {
+		iconLayout->addSpacing(2);
+	}
 }
 
 void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
@@ -740,17 +746,13 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 				iconWidget->setObjectName(
 					"streamelements_icon_widget");
 
-				// TODO: TBD: When OBS 25 is released, only leave the first IF
-				if (nativeIconLabel)
+				if (nativeIconLabel) {
+					/* Only if native icon is enabled */
 					layout->insertWidget(
 						layout->indexOf(
 							nativeIconLabel),
 						iconWidget);
-				else
-					layout->insertWidget(
-						layout->indexOf(
-							nativeTextLabel),
-						iconWidget);
+				}
 
 				/* Create and add auxiliary actions widget to the item's layout */
 
@@ -780,10 +782,12 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 				deserializeSceneItemIcon(this, scene,
 							 scene_item, iconWidget,
 							 widget,
-							 &defaultIconPixmap);
+							 &defaultIconPixmap,
+							 nativeIconLabel);
 
 				deserializeAuxSceneItemsControls(
-					this, scene_item, auxWidget, widget);
+					this, scene_item, auxWidget, widget,
+					nativeIconLabel);
 
 				{
 					QVariant value(QString(
