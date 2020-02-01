@@ -607,49 +607,47 @@ void StreamElementsScenesListWidgetManager::ScheduleUpdateWidgets()
 
 void StreamElementsScenesListWidgetManager::UpdateScenesToolbar()
 {
-	QtPostTask([=]() {
-		QWidget *widget = m_scenesToolBar->findChild<QWidget *>(
-			"streamelements_scenes_toolbar_aux_actions");
+	QWidget *widget = m_scenesToolBar->findChild<QWidget *>(
+		"streamelements_scenes_toolbar_aux_actions");
 
-		if (widget)
-			m_scenesToolBar->layout()->removeWidget(widget);
+	if (widget)
+		m_scenesToolBar->layout()->removeWidget(widget);
 
-		widget = new QWidget();
-		widget->setObjectName(
-			"streamelements_scenes_toolbar_aux_actions");
+	widget = new QWidget();
+	widget->setObjectName(
+		"streamelements_scenes_toolbar_aux_actions");
 
-		QHBoxLayout *layout = new QHBoxLayout();
-		layout->setContentsMargins(0, 0, 0, 0);
-		widget->setLayout(layout);
+	QHBoxLayout *layout = new QHBoxLayout();
+	layout->setContentsMargins(0, 0, 0, 0);
+	widget->setLayout(layout);
 
-		layout->addSpacerItem(new QSpacerItem(
-			16, 16, QSizePolicy::Expanding, QSizePolicy::Minimum));
+	layout->addSpacerItem(new QSpacerItem(
+		16, 16, QSizePolicy::Expanding, QSizePolicy::Minimum));
 
-		if (!m_scenesToolBarActions.get() ||
-		    m_scenesToolBarActions->GetType() != VTYPE_LIST)
-			return;
+	if (!m_scenesToolBarActions.get() ||
+		m_scenesToolBarActions->GetType() != VTYPE_LIST)
+		return;
 
-		CefRefPtr<CefListValue> list =
-			m_scenesToolBarActions->GetList();
+	CefRefPtr<CefListValue> list =
+		m_scenesToolBarActions->GetList();
 
-		for (size_t index = 0; index < list->GetSize(); ++index) {
-			QWidget *control = DeserializeAuxiliaryControlWidget(
-				list->GetValue(index));
+	for (size_t index = 0; index < list->GetSize(); ++index) {
+		QWidget *control = DeserializeAuxiliaryControlWidget(
+			list->GetValue(index));
 
-			if (!control)
-				continue;
+		if (!control)
+			continue;
 
-			layout->addWidget(control);
-			layout->addSpacing(1);
-		}
+		layout->addWidget(control);
+		layout->addSpacing(1);
+	}
 
-		widget->setStyleSheet("background: none");
+	widget->setStyleSheet("background: none");
 
-		widget->setSizePolicy(QSizePolicy::Expanding,
-				      QSizePolicy::Minimum);
+	widget->setSizePolicy(QSizePolicy::Expanding,
+				QSizePolicy::Minimum);
 
-		m_scenesToolBar->addWidget(widget);
-	});
+	m_scenesToolBar->addWidget(widget);
 }
 
 void StreamElementsScenesListWidgetManager::UpdateWidgets()
@@ -660,49 +658,47 @@ void StreamElementsScenesListWidgetManager::UpdateWidgets()
 
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
 
-	QtPostTask([=]() {
-		bool isSignedIn =
-			!StreamElementsConfig::GetInstance()->IsOnBoardingMode();
+	bool isSignedIn =
+		!StreamElementsConfig::GetInstance()->IsOnBoardingMode();
 
-		for (int rowIndex = 0; rowIndex < m_nativeWidget->count() &&
-				       rowIndex < sources.sources.num;
-		     ++rowIndex) {
-			if (!isSignedIn) {
-				m_nativeWidget->item(rowIndex)->setIcon(
-					QIcon());
+	for (int rowIndex = 0; rowIndex < m_nativeWidget->count() &&
+				rowIndex < sources.sources.num;
+		++rowIndex) {
+		if (!isSignedIn) {
+			m_nativeWidget->item(rowIndex)->setIcon(
+				QIcon());
 
-				continue;
-			}
-
-			obs_source_t *scene = sources.sources.array[rowIndex];
-
-			ItemData *data =
-				SourceDataManager::instance()->data(scene);
-
-			if (!data) {
-				data = new ItemData(
-					[this]() { ScheduleUpdateWidgets(); });
-
-				SourceDataManager::instance()->setData(scene,
-								       data);
-
-				data->DeserializeIcon(GetSceneIcon(scene));
-
-				data->DeserializeDefaultAction(
-					GetSceneDefaultAction(scene));
-
-				data->DeserializeContextMenu(
-					GetSceneContextMenu(scene));
-			}
-
-			m_nativeWidget->item(rowIndex)->setIcon(data->icon());
+			continue;
 		}
 
-		obs_source_release(current_scene);
+		obs_source_t *scene = sources.sources.array[rowIndex];
 
-		obs_frontend_source_list_free(
-			(obs_frontend_source_list *)&sources);
-	});
+		ItemData *data =
+			SourceDataManager::instance()->data(scene);
+
+		if (!data) {
+			data = new ItemData(
+				[this]() { ScheduleUpdateWidgets(); });
+
+			SourceDataManager::instance()->setData(scene,
+								data);
+
+			data->DeserializeIcon(GetSceneIcon(scene));
+
+			data->DeserializeDefaultAction(
+				GetSceneDefaultAction(scene));
+
+			data->DeserializeContextMenu(
+				GetSceneContextMenu(scene));
+		}
+
+		m_nativeWidget->item(rowIndex)->setIcon(data->icon());
+	}
+
+	obs_source_release(current_scene);
+
+	obs_frontend_source_list_free(
+		(obs_frontend_source_list *)&sources);
 }
 
 void StreamElementsScenesListWidgetManager::HandleScenesItemDoubleClicked(

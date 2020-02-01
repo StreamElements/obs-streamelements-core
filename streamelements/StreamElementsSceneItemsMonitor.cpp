@@ -396,10 +396,8 @@ void StreamElementsSceneItemsMonitor::HandleSceneItemsModelItemMoved(
 
 void StreamElementsSceneItemsMonitor::ScheduleUpdateSceneItemsWidgets()
 {
-	QtPostTask([=]() {
-		m_updateSceneItemsWidgetsThrottledExecutive.Signal(
-			[this]() { UpdateSceneItemsWidgets(); }, 250);
-	});
+	m_updateSceneItemsWidgetsThrottledExecutive.Signal(
+		[this]() { UpdateSceneItemsWidgets(); }, 250);
 }
 
 typedef std::vector<obs_sceneitem_t *> sceneitems_vector_t;
@@ -446,6 +444,9 @@ CefRefPtr<CefValue> StreamElementsSceneItemsMonitor::GetSceneItemPropertyValue(
 {
 	CefRefPtr<CefValue> result = CefValue::Create();
 	result->SetNull();
+
+	if (!scene_item)
+		return result;
 
 	obs_data_t *scene_item_private_data =
 		obs_sceneitem_get_private_settings(scene_item);
@@ -651,159 +652,157 @@ static void deserializeSceneItemIcon(StreamElementsSceneItemsMonitor *monitor,
 
 void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 {
-	QtPostTask([=]() {
-		sceneitems_vector_t sceneItems;
+	sceneitems_vector_t sceneItems;
 
-		obs_source_t *sceneSource = obs_frontend_get_current_scene();
-		obs_scene_t *scene = obs_scene_from_source(
-			sceneSource); // does not increment refcount
+	obs_source_t *sceneSource = obs_frontend_get_current_scene();
+	obs_scene_t *scene = obs_scene_from_source(
+		sceneSource); // does not increment refcount
 
-		obs_scene_enum_items(scene, retrieveSceneItemsWithAddRef,
-				     &sceneItems);
+	obs_scene_enum_items(scene, retrieveSceneItemsWithAddRef,
+				&sceneItems);
 
-		for (int rowIndex = 0;
-		     rowIndex < m_sceneItemsModel->rowCount() &&
-		     rowIndex < sceneItems.size();
-		     ++rowIndex) {
-			obs_sceneitem_t *scene_item = sceneItems[rowIndex];
+	for (int rowIndex = 0;
+		rowIndex < m_sceneItemsModel->rowCount() &&
+		rowIndex < sceneItems.size();
+		++rowIndex) {
+		obs_sceneitem_t *scene_item = sceneItems[rowIndex];
 
-			QModelIndex index =
-				m_sceneItemsModel->index(rowIndex, 0);
-			QWidget *widget =
-				m_sceneItemsListView->indexWidget(index);
+		QModelIndex index =
+			m_sceneItemsModel->index(rowIndex, 0);
+		QWidget *widget =
+			m_sceneItemsListView->indexWidget(index);
 
-			if (!widget)
-				continue;
+		if (!widget)
+			continue;
 
-			QBoxLayout *layout =
-				dynamic_cast<QBoxLayout *>(widget->layout());
+		QBoxLayout *layout =
+			dynamic_cast<QBoxLayout *>(widget->layout());
 
-			if (!layout)
-				continue;
+		if (!layout)
+			continue;
 
-			bool isSignedIn = !StreamElementsConfig::GetInstance()
-						   ->IsOnBoardingMode();
+		bool isSignedIn = !StreamElementsConfig::GetInstance()
+						->IsOnBoardingMode();
 
-			{
-				QList<QWidget *> list =
-					widget->findChildren<QWidget *>(
-						"streamelements_aux_widget",
-						Qt::FindChildrenRecursively);
+		{
+			QList<QWidget *> list =
+				widget->findChildren<QWidget *>(
+					"streamelements_aux_widget",
+					Qt::FindChildrenRecursively);
 
-				for (QWidget *w : list) {
-					w->setVisible(false);
-					layout->removeWidget(w);
-				}
+			for (QWidget *w : list) {
+				w->setVisible(false);
+				layout->removeWidget(w);
 			}
+		}
 
-			{
-				QList<QWidget *> list =
-					widget->findChildren<QWidget *>(
-						"streamelements_icon_widget",
-						Qt::FindChildrenRecursively);
+		{
+			QList<QWidget *> list =
+				widget->findChildren<QWidget *>(
+					"streamelements_icon_widget",
+					Qt::FindChildrenRecursively);
 
-				for (QWidget *w : list) {
-					w->setVisible(false);
-					layout->removeWidget(w);
-				}
+			for (QWidget *w : list) {
+				w->setVisible(false);
+				layout->removeWidget(w);
 			}
+		}
 
-			QPixmap defaultIconPixmap(16, 16);
-			defaultIconPixmap.fill(Qt::transparent);
+		QPixmap defaultIconPixmap(16, 16);
+		defaultIconPixmap.fill(Qt::transparent);
 
-			QLabel *nativeIconLabel = nullptr;
-			QLabel *nativeTextLabel = nullptr;
+		QLabel *nativeIconLabel = nullptr;
+		QLabel *nativeTextLabel = nullptr;
 
-			{
-				QList<QLabel *> list =
-					widget->findChildren<QLabel *>(
-						QString(),
-						Qt::FindDirectChildrenOnly);
+		{
+			QList<QLabel *> list =
+				widget->findChildren<QLabel *>(
+					QString(),
+					Qt::FindDirectChildrenOnly);
 
-				for (QLabel *label : list) {
-					if (label->pixmap()) {
-						// Native icon
-						label->setVisible(!isSignedIn);
+			for (QLabel *label : list) {
+				if (label->pixmap()) {
+					// Native icon
+					label->setVisible(!isSignedIn);
 
-						if (!nativeIconLabel) {
-							nativeIconLabel = label;
-						}
-
-						if (isSignedIn) {
-							defaultIconPixmap =
-								*label->pixmap();
-						}
-					} else {
-						nativeTextLabel = label;
+					if (!nativeIconLabel) {
+						nativeIconLabel = label;
 					}
-				}
-			}
 
-			if (isSignedIn) {
-				/* Create and add icon widget to the item's layout */
-
-				QWidget *iconWidget = new QWidget();
-				iconWidget->setObjectName(
-					"streamelements_icon_widget");
-
-				if (nativeIconLabel) {
-					/* Only if native icon is enabled */
-					layout->insertWidget(
-						layout->indexOf(
-							nativeIconLabel),
-						iconWidget);
-				}
-
-				/* Create and add auxiliary actions widget to the item's layout */
-
-				QWidget *auxWidget = new QWidget();
-				auxWidget->setObjectName(
-					"streamelements_aux_widget");
-
-				int auxWidgetPos =
-					nativeTextLabel
-						? layout->indexOf(
-							  nativeTextLabel) +
-							  1
-						: widget->children().count() >=
-								  6
-							  ? layout->count() -
-								    3 // OBS 25+ has an icon
-							  : layout->count() -
-								    2; // OBS 24- has no icon
-
-#ifndef __APPLE__
-				layout->insertWidget(auxWidgetPos, auxWidget);
-#else
-				layout->insertWidget(auxWidgetPos - 1,
-						     auxWidget);
-#endif
-
-				deserializeSceneItemIcon(this, scene,
-							 scene_item, iconWidget,
-							 widget,
-							 &defaultIconPixmap,
-							 nativeIconLabel);
-
-				deserializeAuxSceneItemsControls(
-					this, scene_item, auxWidget, widget,
-					nativeIconLabel);
-
-				{
-					QVariant value(QString(
-						GetIdFromPointer(scene_item)
-							.c_str()));
-
-					widget->setProperty(
-						WIDGET_PROP_SCENE_ITEM_ID,
-						value);
+					if (isSignedIn) {
+						defaultIconPixmap =
+							*label->pixmap();
+					}
+				} else {
+					nativeTextLabel = label;
 				}
 			}
 		}
 
-		release_sceneitems(&sceneItems);
-		obs_source_release(sceneSource);
-	});
+		if (isSignedIn) {
+			/* Create and add icon widget to the item's layout */
+
+			QWidget *iconWidget = new QWidget();
+			iconWidget->setObjectName(
+				"streamelements_icon_widget");
+
+			if (nativeIconLabel) {
+				/* Only if native icon is enabled */
+				layout->insertWidget(
+					layout->indexOf(
+						nativeIconLabel),
+					iconWidget);
+			}
+
+			/* Create and add auxiliary actions widget to the item's layout */
+
+			QWidget *auxWidget = new QWidget();
+			auxWidget->setObjectName(
+				"streamelements_aux_widget");
+
+			int auxWidgetPos =
+				nativeTextLabel
+					? layout->indexOf(
+							nativeTextLabel) +
+							1
+					: widget->children().count() >=
+								6
+							? layout->count() -
+								3 // OBS 25+ has an icon
+							: layout->count() -
+								2; // OBS 24- has no icon
+
+#ifndef __APPLE__
+			layout->insertWidget(auxWidgetPos, auxWidget);
+#else
+			layout->insertWidget(auxWidgetPos - 1,
+						auxWidget);
+#endif
+
+			deserializeSceneItemIcon(this, scene,
+							scene_item, iconWidget,
+							widget,
+							&defaultIconPixmap,
+							nativeIconLabel);
+
+			deserializeAuxSceneItemsControls(
+				this, scene_item, auxWidget, widget,
+				nativeIconLabel);
+
+			{
+				QVariant value(QString(
+					GetIdFromPointer(scene_item)
+						.c_str()));
+
+				widget->setProperty(
+					WIDGET_PROP_SCENE_ITEM_ID,
+					value);
+			}
+		}
+	}
+
+	release_sceneitems(&sceneItems);
+	obs_source_release(sceneSource);
 }
 
 bool StreamElementsSceneItemsMonitor::InvokeCurrentSceneItemDefaultAction(
@@ -908,47 +907,45 @@ bool StreamElementsSceneItemsMonitor::InvokeCurrentSceneItemDefaultContextMenu(
 
 void StreamElementsSceneItemsMonitor::UpdateSceneItemsToolbar()
 {
-	QtPostTask([=]() {
-		QWidget *widget = m_sceneItemsToolBar->findChild<QWidget *>(
-			"streamelements_sources_toolbar_aux_actions");
+	QWidget *widget = m_sceneItemsToolBar->findChild<QWidget *>(
+		"streamelements_sources_toolbar_aux_actions");
 
-		if (widget)
-			m_sceneItemsToolBar->layout()->removeWidget(widget);
+	if (widget)
+		m_sceneItemsToolBar->layout()->removeWidget(widget);
 
-		widget = new QWidget();
-		widget->setObjectName(
-			"streamelements_sources_toolbar_aux_actions");
+	widget = new QWidget();
+	widget->setObjectName(
+		"streamelements_sources_toolbar_aux_actions");
 
-		QHBoxLayout *layout = new QHBoxLayout();
-		layout->setContentsMargins(0, 0, 0, 0);
-		widget->setLayout(layout);
+	QHBoxLayout *layout = new QHBoxLayout();
+	layout->setContentsMargins(0, 0, 0, 0);
+	widget->setLayout(layout);
 
-		layout->addSpacerItem(new QSpacerItem(
-			16, 16, QSizePolicy::Expanding, QSizePolicy::Minimum));
+	layout->addSpacerItem(new QSpacerItem(
+		16, 16, QSizePolicy::Expanding, QSizePolicy::Minimum));
 
-		if (!m_sceneItemsToolBarActions.get() ||
-		    m_sceneItemsToolBarActions->GetType() != VTYPE_LIST)
-			return;
+	if (!m_sceneItemsToolBarActions.get() ||
+		m_sceneItemsToolBarActions->GetType() != VTYPE_LIST)
+		return;
 
-		CefRefPtr<CefListValue> list =
-			m_sceneItemsToolBarActions->GetList();
+	CefRefPtr<CefListValue> list =
+		m_sceneItemsToolBarActions->GetList();
 
-		for (size_t index = 0; index < list->GetSize(); ++index) {
-			QWidget *control = DeserializeAuxiliaryControlWidget(
-				list->GetValue(index));
+	for (size_t index = 0; index < list->GetSize(); ++index) {
+		QWidget *control = DeserializeAuxiliaryControlWidget(
+			list->GetValue(index));
 
-			if (!control)
-				continue;
+		if (!control)
+			continue;
 
-			layout->addWidget(control);
-			layout->addSpacing(1);
-		}
+		layout->addWidget(control);
+		layout->addSpacing(1);
+	}
 
-		widget->setStyleSheet("background: none");
+	widget->setStyleSheet("background: none");
 
-		widget->setSizePolicy(QSizePolicy::Expanding,
-				      QSizePolicy::Minimum);
+	widget->setSizePolicy(QSizePolicy::Expanding,
+				QSizePolicy::Minimum);
 
-		m_sceneItemsToolBar->addWidget(widget);
-	});
+	m_sceneItemsToolBar->addWidget(widget);
 }

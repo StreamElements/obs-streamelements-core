@@ -308,6 +308,8 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 				new StreamElementsLocalWebFilesServer(
 					webRootPath ? webRootPath : "");
 			bfree(webRootPath);
+			context->self->m_cookieManager =
+				new StreamElementsCookieManager(storagePath);
 			context->self->m_httpClient =
 				new StreamElementsHttpClient();
 			context->self->m_analyticsEventsManager =
@@ -336,8 +338,6 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			context->self->m_nativeObsControlsManager =
 				StreamElementsNativeOBSControlsManager::
 					GetInstance();
-			context->self->m_cookieManager =
-				new StreamElementsCookieManager(storagePath);
 			context->self->m_profilesManager =
 				new StreamElementsProfilesManager();
 			context->self->m_backupManager =
@@ -536,12 +536,12 @@ void StreamElementsGlobalStateManager::Shutdown()
 			delete self->m_externalSceneDataProviderManager;
 			delete self->m_httpClient;
 			// delete self->m_nativeObsControlsManager; // Singleton
-			delete self->m_cookieManager;
 			delete self->m_profilesManager;
 			delete self->m_backupManager;
 			delete self->m_cleanupManager;
 			delete self->m_previewManager;
 			delete self->m_windowStateEventFilter;
+			delete self->m_cookieManager;
 		},
 		this);
 
