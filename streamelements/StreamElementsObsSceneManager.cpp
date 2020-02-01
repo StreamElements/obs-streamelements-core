@@ -949,16 +949,12 @@ static void remove_source_signals(obs_source_t *source, void *data)
 
 	signal_handler_disconnect(handler, "rename",
 				  handle_scene_item_source_rename, data);
-
-	obs_source_release(source);
 }
 
 static void add_source_signals(obs_source_t *source, void *data)
 {
 	if (s_shutdown)
 		return;
-
-	obs_source_addref(source);
 
 	auto handler = obs_source_get_signal_handler(source);
 
