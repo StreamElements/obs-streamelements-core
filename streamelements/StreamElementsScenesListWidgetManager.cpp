@@ -237,10 +237,9 @@ protected:
 				handled = DeserializeAndInvokeAction(
 					value, defaultAction,
 					defaultContextMenu);
-
-				if (scene)
-					obs_source_release(scene);
 			}
+
+			obs_source_release(scene);
 
 			return handled;
 		}
@@ -291,8 +290,7 @@ protected:
 				}
 			}
 
-			if (scene)
-				obs_source_release(scene);
+			obs_source_release(scene);
 
 			return handled;
 		}
@@ -325,8 +323,6 @@ StreamElementsScenesListWidgetManager::StreamElementsScenesListWidgetManager(
 	m_eventFilter = new ScenesLocalEventFilter(this);
 
 	QApplication::instance()->installEventFilter(m_eventFilter);
-	//m_nativeWidget->viewport()->installEventFilter(m_eventFilter);
-	//m_nativeWidget->installEventFilter(m_eventFilter);
 
 	m_scenesToolBar =
 		(QToolBar *)scenesDock->findChild<QToolBar *>("scenesToolbar");
@@ -336,7 +332,7 @@ StreamElementsScenesListWidgetManager::StreamElementsScenesListWidgetManager(
 
 	m_scenesToolBarActions->SetNull();
 
-	QtPostTask([this]() {
+	//QtPostTask([this]() {
 		auto model = m_nativeWidget->model();
 
 		/* Subscribe to signals */
@@ -367,21 +363,11 @@ StreamElementsScenesListWidgetManager::StreamElementsScenesListWidgetManager(
 				 &StreamElementsScenesListWidgetManager::
 					 HandleScenesItemDoubleClicked);
 
-		//m_nativeWidget->setVisible(false);
-		//m_nativeWidget->setDisabled(true);
-
-		m_nativeWidget->setEditTriggers(
-			QAbstractItemView::NoEditTriggers);
-
-		//m_editDelegate = new SceneListItemDelegate();
-		//m_prevEditDelegate = m_nativeWidget->itemDelegate();
-		//m_nativeWidget->setItemDelegate(m_editDelegate);
-
 		ScheduleUpdateWidgets();
 		UpdateScenesToolbar();
 
 		m_enableSignals = true;
-	});
+	//});
 }
 
 StreamElementsScenesListWidgetManager::~StreamElementsScenesListWidgetManager()
@@ -657,6 +643,9 @@ void StreamElementsScenesListWidgetManager::UpdateWidgets()
 	obs_frontend_get_scenes(&sources);
 
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
+
+	if (!current_scene)
+		return;
 
 	bool isSignedIn =
 		!StreamElementsConfig::GetInstance()->IsOnBoardingMode();

@@ -1839,7 +1839,8 @@ bool GetTemporaryFilePath(std::string prefixString, std::string &result)
 std::string GetUniqueFileNameFromPath(std::string path, size_t maxLength)
 {
 	std::string guid = clean_guid_string(CreateGloballyUniqueIdString());
-	std::string ext = os_get_path_extension(path.c_str());
+	const char *ext_cstr = os_get_path_extension(path.c_str());
+	std::string ext = ext_cstr ? ext_cstr : "";
 	std::string result = std::regex_replace(
 		path.substr(0, path.size() - ext.size()) + "_" + guid + ext,
 		std::regex("[\\/: ]"), "_");
@@ -2474,6 +2475,9 @@ void ObsSceneEnumAllItems(obs_scene_t *scene,
 void ObsSceneEnumAllItems(obs_source_t *source,
 			  std::function<bool(obs_sceneitem_t *)> func)
 {
+	if (!source)
+		return;
+
 	obs_scene_t *scene =
 		obs_scene_from_source(source); // does not increment refcount
 
@@ -2483,6 +2487,9 @@ void ObsSceneEnumAllItems(obs_source_t *source,
 void ObsCurrentSceneEnumAllItems(std::function<bool(obs_sceneitem_t *)> func)
 {
 	obs_source_t *sceneSource = obs_frontend_get_current_scene();
+
+	if (!sceneSource)
+		return;
 
 	ObsSceneEnumAllItems(sceneSource, func);
 

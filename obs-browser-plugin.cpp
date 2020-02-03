@@ -652,12 +652,14 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *)
 		break;
 	case OBS_FRONTEND_EVENT_SCENE_CHANGED: {
 		OBSSource source = obs_frontend_get_current_scene();
-		obs_source_release(source);
 
 		if (!source)
 			break;
 
 		const char *name = obs_source_get_name(source);
+
+		obs_source_release(source);
+
 		if (!name)
 			break;
 

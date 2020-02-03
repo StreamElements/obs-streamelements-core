@@ -55,6 +55,9 @@ static obs_sceneitem_t *FindSceneItemByIdAddRef(std::string id)
 
 	obs_source_t *currentScene = obs_frontend_get_current_scene();
 
+	if (!currentScene)
+		return nullptr;
+
 	obs_scene_t *scene = obs_scene_from_source(
 		currentScene); // does not increment refcount
 
@@ -69,6 +72,9 @@ static obs_sceneitem_t *FindSceneItemByIdAddRef(std::string id)
 	});
 
 	obs_source_release(currentScene);
+
+	if (context.sceneitem)
+		obs_sceneitem_addref(context.sceneitem);
 
 	return context.sceneitem;
 }
@@ -178,10 +184,10 @@ public:
 				handled = DeserializeAndInvokeAction(
 					value, defaultAction,
 					defaultContextMenu);
-
-				if (scene_item)
-					obs_sceneitem_release(scene_item);
 			}
+
+			if (scene_item)
+				obs_sceneitem_release(scene_item);
 
 			return handled;
 		}
@@ -652,25 +658,28 @@ static void deserializeSceneItemIcon(StreamElementsSceneItemsMonitor *monitor,
 
 void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 {
+	if (!m_sceneItemsModel)
+		return;
+
 	sceneitems_vector_t sceneItems;
 
 	obs_source_t *sceneSource = obs_frontend_get_current_scene();
+
+	if (!sceneSource)
+		return;
+
 	obs_scene_t *scene = obs_scene_from_source(
 		sceneSource); // does not increment refcount
 
-	obs_scene_enum_items(scene, retrieveSceneItemsWithAddRef,
-				&sceneItems);
+	obs_scene_enum_items(scene, retrieveSceneItemsWithAddRef, &sceneItems);
 
-	for (int rowIndex = 0;
-		rowIndex < m_sceneItemsModel->rowCount() &&
-		rowIndex < sceneItems.size();
-		++rowIndex) {
+	for (int rowIndex = 0; rowIndex < m_sceneItemsModel->rowCount() &&
+			       rowIndex < sceneItems.size();
+	     ++rowIndex) {
 		obs_sceneitem_t *scene_item = sceneItems[rowIndex];
 
-		QModelIndex index =
-			m_sceneItemsModel->index(rowIndex, 0);
-		QWidget *widget =
-			m_sceneItemsListView->indexWidget(index);
+		QModelIndex index = m_sceneItemsModel->index(rowIndex, 0);
+		QWidget *widget = m_sceneItemsListView->indexWidget(index);
 
 		if (!widget)
 			continue;
@@ -681,14 +690,13 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 		if (!layout)
 			continue;
 
-		bool isSignedIn = !StreamElementsConfig::GetInstance()
-						->IsOnBoardingMode();
+		bool isSignedIn =
+			!StreamElementsConfig::GetInstance()->IsOnBoardingMode();
 
 		{
-			QList<QWidget *> list =
-				widget->findChildren<QWidget *>(
-					"streamelements_aux_widget",
-					Qt::FindChildrenRecursively);
+			QList<QWidget *> list = widget->findChildren<QWidget *>(
+				"streamelements_aux_widget",
+				Qt::FindChildrenRecursively);
 
 			for (QWidget *w : list) {
 				w->setVisible(false);
@@ -697,10 +705,9 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 		}
 
 		{
-			QList<QWidget *> list =
-				widget->findChildren<QWidget *>(
-					"streamelements_icon_widget",
-					Qt::FindChildrenRecursively);
+			QList<QWidget *> list = widget->findChildren<QWidget *>(
+				"streamelements_icon_widget",
+				Qt::FindChildrenRecursively);
 
 			for (QWidget *w : list) {
 				w->setVisible(false);
@@ -715,10 +722,8 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 		QLabel *nativeTextLabel = nullptr;
 
 		{
-			QList<QLabel *> list =
-				widget->findChildren<QLabel *>(
-					QString(),
-					Qt::FindDirectChildrenOnly);
+			QList<QLabel *> list = widget->findChildren<QLabel *>(
+				QString(), Qt::FindDirectChildrenOnly);
 
 			for (QLabel *label : list) {
 				if (label->pixmap()) {
@@ -743,60 +748,50 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 			/* Create and add icon widget to the item's layout */
 
 			QWidget *iconWidget = new QWidget();
-			iconWidget->setObjectName(
-				"streamelements_icon_widget");
+			iconWidget->setObjectName("streamelements_icon_widget");
 
 			if (nativeIconLabel) {
 				/* Only if native icon is enabled */
 				layout->insertWidget(
-					layout->indexOf(
-						nativeIconLabel),
+					layout->indexOf(nativeIconLabel),
 					iconWidget);
 			}
 
 			/* Create and add auxiliary actions widget to the item's layout */
 
 			QWidget *auxWidget = new QWidget();
-			auxWidget->setObjectName(
-				"streamelements_aux_widget");
+			auxWidget->setObjectName("streamelements_aux_widget");
 
 			int auxWidgetPos =
 				nativeTextLabel
-					? layout->indexOf(
-							nativeTextLabel) +
-							1
-					: widget->children().count() >=
-								6
-							? layout->count() -
-								3 // OBS 25+ has an icon
-							: layout->count() -
-								2; // OBS 24- has no icon
+					? layout->indexOf(nativeTextLabel) + 1
+					: widget->children().count() >= 6
+						  ? layout->count() -
+							    3 // OBS 25+ has an icon
+						  : layout->count() -
+							    2; // OBS 24- has no icon
 
 #ifndef __APPLE__
 			layout->insertWidget(auxWidgetPos, auxWidget);
 #else
-			layout->insertWidget(auxWidgetPos - 1,
-						auxWidget);
+			layout->insertWidget(auxWidgetPos - 1, auxWidget);
 #endif
 
-			deserializeSceneItemIcon(this, scene,
-							scene_item, iconWidget,
-							widget,
-							&defaultIconPixmap,
-							nativeIconLabel);
+			deserializeSceneItemIcon(this, scene, scene_item,
+						 iconWidget, widget,
+						 &defaultIconPixmap,
+						 nativeIconLabel);
 
-			deserializeAuxSceneItemsControls(
-				this, scene_item, auxWidget, widget,
-				nativeIconLabel);
+			deserializeAuxSceneItemsControls(this, scene_item,
+							 auxWidget, widget,
+							 nativeIconLabel);
 
 			{
 				QVariant value(QString(
-					GetIdFromPointer(scene_item)
-						.c_str()));
+					GetIdFromPointer(scene_item).c_str()));
 
-				widget->setProperty(
-					WIDGET_PROP_SCENE_ITEM_ID,
-					value);
+				widget->setProperty(WIDGET_PROP_SCENE_ITEM_ID,
+						    value);
 			}
 		}
 	}
@@ -813,6 +808,10 @@ bool StreamElementsSceneItemsMonitor::InvokeCurrentSceneItemDefaultAction(
 	sceneitems_vector_t sceneItems;
 
 	obs_source_t *sceneSource = obs_frontend_get_current_scene();
+
+	if (!sceneSource)
+		return false;
+
 	obs_scene_t *scene = obs_scene_from_source(
 		sceneSource); // does not increment refcount
 
@@ -866,6 +865,10 @@ bool StreamElementsSceneItemsMonitor::InvokeCurrentSceneItemDefaultContextMenu(
 	sceneitems_vector_t sceneItems;
 
 	obs_source_t *sceneSource = obs_frontend_get_current_scene();
+
+	if (!sceneSource)
+		return false;
+
 	obs_scene_t *scene = obs_scene_from_source(
 		sceneSource); // does not increment refcount
 
@@ -914,22 +917,20 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsToolbar()
 		m_sceneItemsToolBar->layout()->removeWidget(widget);
 
 	widget = new QWidget();
-	widget->setObjectName(
-		"streamelements_sources_toolbar_aux_actions");
+	widget->setObjectName("streamelements_sources_toolbar_aux_actions");
 
 	QHBoxLayout *layout = new QHBoxLayout();
 	layout->setContentsMargins(0, 0, 0, 0);
 	widget->setLayout(layout);
 
-	layout->addSpacerItem(new QSpacerItem(
-		16, 16, QSizePolicy::Expanding, QSizePolicy::Minimum));
+	layout->addSpacerItem(new QSpacerItem(16, 16, QSizePolicy::Expanding,
+					      QSizePolicy::Minimum));
 
 	if (!m_sceneItemsToolBarActions.get() ||
-		m_sceneItemsToolBarActions->GetType() != VTYPE_LIST)
+	    m_sceneItemsToolBarActions->GetType() != VTYPE_LIST)
 		return;
 
-	CefRefPtr<CefListValue> list =
-		m_sceneItemsToolBarActions->GetList();
+	CefRefPtr<CefListValue> list = m_sceneItemsToolBarActions->GetList();
 
 	for (size_t index = 0; index < list->GetSize(); ++index) {
 		QWidget *control = DeserializeAuxiliaryControlWidget(
@@ -944,8 +945,7 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsToolbar()
 
 	widget->setStyleSheet("background: none");
 
-	widget->setSizePolicy(QSizePolicy::Expanding,
-				QSizePolicy::Minimum);
+	widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
 
 	m_sceneItemsToolBar->addWidget(widget);
 }
