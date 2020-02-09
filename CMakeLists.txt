@@ -178,6 +178,7 @@ set(obs-browser_SOURCES
 	streamelements/StreamElementsDeferredExecutive.cpp
 	streamelements/StreamElementsRemoteIconLoader.cpp
 	streamelements/StreamElementsScenesListWidgetManager.cpp
+	streamelements/deps/StackWalker/StackWalker.cpp
 	streamelements/deps/zip/zip.c
 	streamelements/deps/server/NamedPipesServer.cpp
 	streamelements/deps/server/NamedPipesServerClientHandler.cpp
@@ -240,6 +241,7 @@ set(obs-browser_HEADERS
 	streamelements/StreamElementsDeferredExecutive.hpp
 	streamelements/StreamElementsRemoteIconLoader.hpp
 	streamelements/StreamElementsScenesListWidgetManager.hpp
+	streamelements/deps/StackWalker/StackWalker.h
 	streamelements/deps/zip/zip.h
 	streamelements/deps/zip/miniz.h
 	streamelements/deps/moodycamel/concurrentqueue.h

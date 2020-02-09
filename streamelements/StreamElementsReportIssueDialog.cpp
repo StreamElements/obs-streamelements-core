@@ -26,6 +26,50 @@
 
 #include <QMessageBox>
 
+static std::string get_newest_file(const char *location)
+{
+	char *basePathPtr = os_get_config_path_ptr(location);
+	std::string logDir(basePathPtr);
+	bfree(basePathPtr);
+
+	std::string newestLog;
+	time_t newest_ts = 0;
+	struct os_dirent *entry;
+
+	unsigned int maxLogs = (unsigned int)config_get_uint(
+		obs_frontend_get_global_config(), "General", "MaxLogs");
+
+	os_dir_t *dir = os_opendir(logDir.c_str());
+	if (dir) {
+		unsigned int count = 0;
+
+		while ((entry = os_readdir(dir)) != NULL) {
+			if (entry->directory || *entry->d_name == '.')
+				continue;
+
+			std::string filePath =
+				logDir + "/" + std::string(entry->d_name);
+			struct stat st;
+			if (0 == os_stat(filePath.c_str(), &st)) {
+				time_t ts = st.st_ctime;
+
+				if (ts) {
+					if (ts > newest_ts) {
+						newestLog = filePath;
+						newest_ts = ts;
+					}
+
+					count++;
+				}
+			}
+		}
+
+		os_closedir(dir);
+	}
+
+	return newestLog;
+}
+
 #pragma optimize("", off)
 static double GetCpuCoreBenchmark(const uint64_t CPU_BENCH_TOTAL, uint64_t& cpu_bench_delta)
 {
@@ -354,7 +398,7 @@ void StreamElementsReportIssueDialog::accept()
 			return true;
 		};
 
-		std::string package_manifest = "generator=report_issue\nversion=3\n";
+		std::string package_manifest = "generator=report_issue\nversion=4\n";
 		addBufferToZip((BYTE*)package_manifest.c_str(), package_manifest.size(), L"manifest.ini");
 
 		// Add user-provided description
@@ -389,6 +433,8 @@ void StreamElementsReportIssueDialog::accept()
 				L"plugin_config/obs-browser/obs_profile_cookies/",
 				L"updates/",
 				L"profiler_data/",
+				L"obslive_restored_files/",
+				L"plugin_config/obs-browser/streamelements_restored_files/",
 				L"crashes/"
 			};
 
@@ -419,6 +465,17 @@ void StreamElementsReportIssueDialog::accept()
 						local_to_zip_files_map[local_path] = L"obs-studio\\" + zip_path;
 					}
 				}
+			}
+
+			std::string lastCrashLog =
+				get_newest_file("obs-studio/crashes");
+
+			if (lastCrashLog.size()) {
+				std::wstring_convert<std::codecvt_utf8<wchar_t>>
+					myconv;
+
+				local_to_zip_files_map[myconv.from_bytes(lastCrashLog)] =
+					std::wstring(L"obs-studio\\crashes\\crash.log");
 			}
 		}
 		else {
