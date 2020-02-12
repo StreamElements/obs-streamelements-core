@@ -2503,3 +2503,36 @@ bool IsCefValueEqual(CefRefPtr<CefValue> a, CefRefPtr<CefValue> b)
 
 	return json1 == json2;
 }
+
+void ObsEnumAllScenes(std::function < bool(obs_source_t * scene)> func)
+{
+	struct local_context {
+		std::vector<obs_source_t *> list;
+	};
+
+	local_context context;
+
+	obs_enum_scenes(
+		[](void *data, obs_source_t *scene) -> bool {
+			local_context *context = (local_context *)data;
+
+			
+			if (!obs_source_is_group(scene)) {
+				obs_source_addref(scene);
+
+				context->list.push_back(scene);
+			}
+
+			return true;
+		},
+		&context);
+
+	for (auto scene : context.list) {
+		if (!func(scene))
+			break;
+	}
+
+	for (auto scene : context.list) {
+		obs_source_release(scene);
+	}
+}

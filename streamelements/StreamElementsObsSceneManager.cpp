@@ -770,17 +770,11 @@ static obs_scene_t *get_sceneitem_root_scene(obs_sceneitem_t* sceneitem)
 {
 	obs_scene_t *result = nullptr;
 
-	struct obs_frontend_source_list scenes = {};
-
-	obs_frontend_get_scenes(&scenes);
-
-	for (size_t idx = 0; idx < scenes.sources.num; ++idx) {
+	ObsEnumAllScenes([&](obs_source_t *sceneSource) -> bool {
 		/* Get the scene (a scene is a source) */
-		obs_scene_t *scene =
-			obs_scene_from_source(scenes.sources.array[idx]);
+		obs_scene_t *scene = obs_scene_from_source(sceneSource);
 
-		ObsSceneEnumAllItems(scene,
-				     [&](obs_sceneitem_t *item) -> bool {
+		ObsSceneEnumAllItems(scene, [&](obs_sceneitem_t *item) -> bool {
 			if (item == sceneitem) {
 				result = scene;
 
@@ -789,9 +783,9 @@ static obs_scene_t *get_sceneitem_root_scene(obs_sceneitem_t* sceneitem)
 
 			return true;
 		});
-	}
 
-	obs_frontend_source_list_free(&scenes);
+		return !result;
+	});
 
 	return result;
 }
@@ -895,17 +889,27 @@ static void dispatch_sceneitem_event(obs_sceneitem_t *sceneitem,
 		return;
 
 	if (sceneitem) {
-		CefRefPtr<CefValue> item = CefValue::Create();
+		obs_sceneitem_addref(sceneitem);
 
-		obs_source_t *sceneitem_source =
-			obs_sceneitem_get_source(sceneitem);
+		QtPostTask([sceneitem, eventName]() {
+			CefRefPtr<CefValue> item = CefValue::Create();
 
-		SerializeSourceAndSceneItem(item, sceneitem_source, sceneitem);
+			obs_source_t *sceneitem_source =
+				obs_sceneitem_get_source(sceneitem);
 
-		std::string json =
-			CefWriteJSON(item, JSON_WRITER_DEFAULT).ToString();
+			// this can deadlock due to full_lock(obs_scene) in obs_sceneitem_get_group
+			SerializeSourceAndSceneItem(item, sceneitem_source,
+						    sceneitem);
 
-		StreamElementsCefClient::DispatchJSEvent(eventName, json);
+			std::string json =
+				CefWriteJSON(item, JSON_WRITER_DEFAULT)
+					.ToString();
+
+			StreamElementsCefClient::DispatchJSEvent(eventName,
+								 json);
+
+			obs_sceneitem_release(sceneitem);
+		});
 	} else {
 		StreamElementsCefClient::DispatchJSEvent(eventName, "null");
 	}

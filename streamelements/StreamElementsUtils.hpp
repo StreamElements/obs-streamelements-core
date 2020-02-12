@@ -303,3 +303,7 @@ void ObsCurrentSceneEnumAllItems(std::function<bool(obs_sceneitem_t *)> func);
 /* ========================================================= */
 
 bool IsCefValueEqual(CefRefPtr<CefValue> a, CefRefPtr<CefValue> b);
+
+/* ========================================================= */
+
+void ObsEnumAllScenes(std::function<bool(obs_source_t *scene)> func);
