@@ -579,7 +579,8 @@ SerializeObsSceneItemCompositionSettings(obs_source_t *source,
 static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 					obs_source_t *source,
 					obs_sceneitem_t *sceneitem,
-					const int order = -1)
+					const int order = -1,
+					bool serializeDetails = true)
 {
 	CefRefPtr<CefDictionaryValue> root = CefDictionaryValue::Create();
 
@@ -602,108 +603,124 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 		root->SetInt("order", order);
 	}
 
-	{
-		obs_source_t *parent_scene = obs_frontend_get_current_scene();
-
-		if (parent_scene) {
-			obs_scene_t *scene =
-				obs_scene_from_source(parent_scene);
-
-			obs_sceneitem_t *group =
-				obs_sceneitem_get_group(scene, sceneitem);
-			if (!!group) {
-				root->SetString("parentId",
-						GetIdFromPointer(group));
-			}
-
-			obs_source_release(parent_scene);
-		}
-	}
-
 	root->SetDictionary(
 		"composition",
 		SerializeObsSceneItemCompositionSettings(source, sceneitem));
 
-	if (obs_sceneitem_is_group(sceneitem)) {
-		/* Serialize group */
-		struct local_context {
-			CefRefPtr<CefListValue> list;
-			std::vector<obs_sceneitem_t *> groupItems;
-		};
-
-		local_context context;
-
-		context.list = CefListValue::Create();
-		context.groupItems.clear();
-
-		/* Serialize group items */
-		obs_sceneitem_group_enum_items(
-			sceneitem,
-			[](obs_scene_t *scene, obs_sceneitem_t *sceneitem,
-			   void *param) {
-				local_context *context = (local_context *)param;
-
-				obs_sceneitem_addref(
-					sceneitem); /* will be released below */
-
-				context->groupItems.push_back(sceneitem);
-
-				// Continue iteration
-				return true;
-			},
-			&context);
-
-		for (auto group_sceneitem : context.groupItems) {
-			obs_source_t *source = obs_sceneitem_get_source(
-				group_sceneitem); // does not increase refcount
-
-			CefRefPtr<CefValue> item = CefValue::Create();
-
-			SerializeSourceAndSceneItem(item, source,
-						    group_sceneitem,
-						    context.list->GetSize());
-
-			context.list->SetValue(context.list->GetSize(), item);
-
-			obs_sceneitem_release(
-				group_sceneitem); /* addref above in obs_sceneitem_group_enum_items callback */
-		}
-
-		/* Group items */
-		root->SetList("items", context.list);
-	} else if (source && strcmp(obs_source_get_id(source), "scene") == 0) {
-		/* Scene source */
-	} else {
+	if (!obs_sceneitem_is_group(sceneitem) && source &&
+	    strcmp(obs_source_get_id(source), "scene") != 0) {
 		/* Not a group and not a scene */
 		root->SetValue("settings", SerializeObsSourceSettings(source));
 	}
 
-	root->SetList(
-		"actions",
-		StreamElementsSceneItemsMonitor::GetSceneItemActions(sceneitem)
-			->Copy());
+	if (serializeDetails) {
+		{
+			obs_source_t *parent_scene =
+				obs_frontend_get_current_scene();
 
-	root->SetValue(
-		"icon",
-		StreamElementsSceneItemsMonitor::GetSceneItemIcon(sceneitem)
-			->Copy());
+			if (parent_scene) {
+				obs_scene_t *scene =
+					obs_scene_from_source(parent_scene);
 
-	root->SetValue(
-		"defaultAction",
-		StreamElementsSceneItemsMonitor::GetSceneItemDefaultAction(
-			sceneitem)
-			->Copy());
+				obs_sceneitem_t *group =
+					obs_sceneitem_get_group(scene,
+								sceneitem);
+				if (!!group) {
+					root->SetString(
+						"parentId",
+						GetIdFromPointer(group));
+				}
 
-	root->SetValue(
-		"auxiliaryData",
-		StreamElementsSceneItemsMonitor::GetSceneItemAuxiliaryData(
-			sceneitem)
-			->Copy());
+				obs_source_release(parent_scene);
+			}
+		}
 
-	root->SetValue("contextMenu",
-		       StreamElementsSceneItemsMonitor::GetSceneItemContextMenu(
-			       sceneitem)
-			       ->Copy());
+		if (obs_sceneitem_is_group(sceneitem)) {
+			/* Serialize group */
+			struct local_context {
+				CefRefPtr<CefListValue> list;
+				std::vector<obs_sceneitem_t *> groupItems;
+			};
+
+			local_context context;
+
+			context.list = CefListValue::Create();
+			context.groupItems.clear();
+
+			/* Serialize group items */
+			obs_sceneitem_group_enum_items(
+				sceneitem,
+				[](obs_scene_t *scene,
+				   obs_sceneitem_t *sceneitem, void *param) {
+					local_context *context =
+						(local_context *)param;
+
+					obs_sceneitem_addref(
+						sceneitem); /* will be released below */
+
+					context->groupItems.push_back(
+						sceneitem);
+
+					// Continue iteration
+					return true;
+				},
+				&context);
+
+			for (auto group_sceneitem : context.groupItems) {
+				obs_source_t *source = obs_sceneitem_get_source(
+					group_sceneitem); // does not increase refcount
+
+				CefRefPtr<CefValue> item = CefValue::Create();
+
+				SerializeSourceAndSceneItem(
+					item, source, group_sceneitem,
+					context.list->GetSize(),
+					serializeDetails);
+
+				context.list->SetValue(context.list->GetSize(),
+						       item);
+
+				obs_sceneitem_release(
+					group_sceneitem); /* addref above in obs_sceneitem_group_enum_items callback */
+			}
+
+			/* Group items */
+			root->SetList("items", context.list);
+		} else if (source &&
+			   strcmp(obs_source_get_id(source), "scene") == 0) {
+			/* Scene source */
+		} else {
+			/* Not a group and not a scene, handled above */
+		}
+
+		root->SetList(
+			"actions",
+			StreamElementsSceneItemsMonitor::GetSceneItemActions(
+				sceneitem)
+				->Copy());
+
+		root->SetValue(
+			"icon",
+			StreamElementsSceneItemsMonitor::GetSceneItemIcon(
+				sceneitem)
+				->Copy());
+
+		root->SetValue("defaultAction",
+			       StreamElementsSceneItemsMonitor::
+				       GetSceneItemDefaultAction(sceneitem)
+					       ->Copy());
+
+		root->SetValue("auxiliaryData",
+			       StreamElementsSceneItemsMonitor::
+				       GetSceneItemAuxiliaryData(sceneitem)
+					       ->Copy());
+
+		root->SetValue(
+			"contextMenu",
+			StreamElementsSceneItemsMonitor::GetSceneItemContextMenu(
+				sceneitem)
+				->Copy());
+	}
 
 	result->SetDictionary(root);
 }
@@ -766,26 +783,30 @@ static bool is_active_scene(obs_scene_t *scene)
 	return result;
 }
 
-static obs_scene_t *get_sceneitem_root_scene(obs_sceneitem_t* sceneitem)
+static bool is_child_of_current_scene(obs_sceneitem_t* sceneitem)
 {
-	obs_scene_t *result = nullptr;
+	bool result = false;
 
-	ObsEnumAllScenes([&](obs_source_t *sceneSource) -> bool {
-		/* Get the scene (a scene is a source) */
-		obs_scene_t *scene = obs_scene_from_source(sceneSource);
+	obs_source_t *root_scene_source = obs_frontend_get_current_scene();
+	obs_scene_t *root_scene = obs_scene_from_source(root_scene_source);
 
-		ObsSceneEnumAllItems(scene, [&](obs_sceneitem_t *item) -> bool {
-			if (item == sceneitem) {
-				result = scene;
+	obs_scene_t *parent_scene = obs_sceneitem_get_scene(sceneitem);
+	if (!obs_scene_is_group(parent_scene)) {
+		if (root_scene == parent_scene)
+			result = true;
+	} else {
+		// how to get parent scene?!
+		obs_source_t* group_source = obs_scene_get_source(parent_scene);
 
-				return false;
-			}
+		const char *group_name = obs_source_get_name(group_source);
 
-			return true;
-		});
+		obs_sceneitem_t* group_sceneitem = obs_scene_get_group(root_scene, group_name);
 
-		return !result;
-	});
+		if (group_sceneitem)
+			result = true;
+	}
+
+	obs_source_release(root_scene_source);
 
 	return result;
 }
@@ -798,24 +819,7 @@ static bool is_active_scene(obs_sceneitem_t *sceneitem)
 	if (!sceneitem)
 		return false;
 
-	obs_scene_t *sceneitem_scene = get_sceneitem_root_scene(sceneitem);
-
-	if (!sceneitem_scene)
-		return false;
-
-	obs_source_t *current_scene_source = obs_frontend_get_current_scene();
-
-	if (!current_scene_source)
-		return false;
-
-	bool result = false;
-
-	if (sceneitem_scene == obs_scene_from_source(current_scene_source))
-		result = true;
-
-	obs_source_release(current_scene_source);
-
-	return result;
+	return is_child_of_current_scene(sceneitem);
 }
 
 static void dispatch_scene_event(obs_scene_t *scene,
@@ -825,17 +829,24 @@ static void dispatch_scene_event(obs_scene_t *scene,
 	if (s_shutdown)
 		return;
 
-	if (is_active_scene(scene)) {
-		StreamElementsCefClient::DispatchJSEvent(currentSceneEventName,
-							 "null");
-	}
+	//obs_scene_addref(scene);
 
-	CefRefPtr<CefValue> item = CefValue::Create();
+	//QtPostTask([scene, currentSceneEventName, otherSceneEventName]() {
+		if (is_active_scene(scene)) {
+			StreamElementsCefClient::DispatchJSEvent(
+				currentSceneEventName, "null");
+		}
 
-	SerializeObsScene(scene, item);
+		CefRefPtr<CefValue> item = CefValue::Create();
 
-	StreamElementsCefClient::DispatchJSEvent(
-		otherSceneEventName, CefWriteJSON(item, JSON_WRITER_DEFAULT));
+		SerializeObsScene(scene, item);
+
+		StreamElementsCefClient::DispatchJSEvent(
+			otherSceneEventName,
+			CefWriteJSON(item, JSON_WRITER_DEFAULT));
+
+		//obs_scene_release(scene);
+	//});
 }
 
 static void dispatch_scene_event(obs_source_t *source,
@@ -880,7 +891,8 @@ static void dispatch_scene_update(void *my_data, calldata_t *cd)
 }
 
 static void dispatch_sceneitem_event(obs_sceneitem_t *sceneitem,
-				     std::string eventName)
+				     std::string eventName,
+				     bool serializeDetails = true)
 {
 	if (s_shutdown)
 		return;
@@ -889,9 +901,9 @@ static void dispatch_sceneitem_event(obs_sceneitem_t *sceneitem,
 		return;
 
 	if (sceneitem) {
-		obs_sceneitem_addref(sceneitem);
+		//obs_sceneitem_addref(sceneitem);
 
-		QtPostTask([sceneitem, eventName]() {
+		//QtPostTask([sceneitem, eventName, serializeDetails]() {
 			CefRefPtr<CefValue> item = CefValue::Create();
 
 			obs_source_t *sceneitem_source =
@@ -899,7 +911,7 @@ static void dispatch_sceneitem_event(obs_sceneitem_t *sceneitem,
 
 			// this can deadlock due to full_lock(obs_scene) in obs_sceneitem_get_group
 			SerializeSourceAndSceneItem(item, sceneitem_source,
-						    sceneitem);
+						    sceneitem, -1, serializeDetails);
 
 			std::string json =
 				CefWriteJSON(item, JSON_WRITER_DEFAULT)
@@ -908,8 +920,8 @@ static void dispatch_sceneitem_event(obs_sceneitem_t *sceneitem,
 			StreamElementsCefClient::DispatchJSEvent(eventName,
 								 json);
 
-			obs_sceneitem_release(sceneitem);
-		});
+			//obs_sceneitem_release(sceneitem);
+		//});
 	} else {
 		StreamElementsCefClient::DispatchJSEvent(eventName, "null");
 	}
@@ -917,7 +929,8 @@ static void dispatch_sceneitem_event(obs_sceneitem_t *sceneitem,
 
 static void dispatch_sceneitem_event(obs_sceneitem_t *sceneitem,
 				     std::string currentSceneEventName,
-				     std::string otherSceneEventName)
+				     std::string otherSceneEventName,
+				     bool serializeDetails = true)
 {
 	if (s_shutdown)
 		return;
@@ -925,22 +938,33 @@ static void dispatch_sceneitem_event(obs_sceneitem_t *sceneitem,
 	if (!sceneitem)
 		return;
 
-	if (is_active_scene(sceneitem)) {
-		dispatch_sceneitem_event(sceneitem, currentSceneEventName);
-	}
+	//obs_sceneitem_addref(sceneitem);
 
-	dispatch_sceneitem_event(sceneitem, otherSceneEventName);
+	//QtPostTask([sceneitem, currentSceneEventName, otherSceneEventName,
+	//	    serializeDetails]() {
+		if (is_active_scene(sceneitem)) {
+			dispatch_sceneitem_event(sceneitem,
+						 currentSceneEventName,
+						 serializeDetails);
+		}
+
+		//obs_sceneitem_release(sceneitem);
+
+		dispatch_sceneitem_event(sceneitem, otherSceneEventName,
+					 serializeDetails);
+	//});
 }
 
 static void dispatch_sceneitem_event(void *my_data, calldata_t *cd,
 				     std::string currentSceneEventName,
-				     std::string otherSceneEventName)
+				     std::string otherSceneEventName,
+				     bool serializeDetails = true)
 {
 	obs_sceneitem_t *sceneitem =
 		(obs_sceneitem_t *)calldata_ptr(cd, "item");
 
 	dispatch_sceneitem_event(sceneitem, currentSceneEventName,
-				 otherSceneEventName);
+				 otherSceneEventName, serializeDetails);
 }
 
 static void dispatch_source_event(void *my_data, calldata_t *cd,
@@ -968,21 +992,29 @@ static void dispatch_source_event(void *my_data, calldata_t *cd,
 		return;
 	}
 
-	// For each scene item
-	ObsSceneEnumAllItems(scene, [&](obs_sceneitem_t *sceneitem) {
-		obs_source_t *sceneitem_source = obs_sceneitem_get_source(
-			sceneitem); // does not increase refcount
+	//obs_source_addref(source);
 
-		if (sceneitem_source == source) {
-			dispatch_sceneitem_event(sceneitem,
-						 currentSceneEventName,
-						 otherSceneEventName);
-		}
+	//QtPostTask([scene, scene_source, source, currentSceneEventName,
+	//	    otherSceneEventName]() {
+		// For each scene item
+		ObsSceneEnumAllItems(scene, [&](obs_sceneitem_t *sceneitem) {
+			obs_source_t *sceneitem_source =
+				obs_sceneitem_get_source(
+					sceneitem); // does not increase refcount
 
-		return true;
-	});
+			if (sceneitem_source == source) {
+				dispatch_sceneitem_event(sceneitem,
+							 currentSceneEventName,
+							 otherSceneEventName,
+							 false);
+			}
 
-	obs_source_release(scene_source);
+			return true;
+		});
+
+		//obs_source_release(source);
+		obs_source_release(scene_source);
+	//});
 }
 
 static void add_scene_signals(obs_source_t *scene, void *data);
@@ -993,21 +1025,21 @@ static void remove_scene_signals(obs_scene_t *scene, void *data);
 static void handle_scene_item_transform(void *my_data, calldata_t *cd)
 {
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemTransformed",
-				 "hostSceneItemTransformed");
+				 "hostSceneItemTransformed", false);
 	dispatch_scene_update(my_data, cd);
 }
 
 static void handle_scene_item_select(void *my_data, calldata_t *cd)
 {
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemSelected",
-				 "hostSceneItemSelected");
+				 "hostSceneItemSelected", false);
 	dispatch_scene_update(my_data, cd);
 }
 
 static void handle_scene_item_deselect(void *my_data, calldata_t *cd)
 {
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemUnselected",
-				 "hostSceneItemUnselected");
+				 "hostSceneItemUnselected", false);
 	dispatch_scene_update(my_data, cd);
 }
 
@@ -1020,7 +1052,7 @@ static void handle_scene_item_remove(void *my_data, calldata_t *cd)
 		return;
 
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemRemoved",
-				 "hostSceneItemRemoved");
+				 "hostSceneItemRemoved", false);
 	dispatch_scene_update(my_data, cd);
 
 	if (!obs_sceneitem_is_group(sceneitem))
@@ -1071,7 +1103,7 @@ static void handle_scene_item_add(void *my_data, calldata_t *cd)
 		return;
 
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemAdded",
-				 "hostSceneItemAdded");
+				 "hostSceneItemAdded", false);
 	dispatch_scene_update(my_data, cd);
 
 	if (!obs_sceneitem_is_group(sceneitem))
@@ -1422,6 +1454,8 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 
 				if (!!args->group &&
 				    obs_sceneitem_is_group(args->group)) {
+					// TODO: TBD: this call causes a crash on shutdown of OBS
+					//            discuss with Jim and eliminate from upcoming OBS 25
 					obs_sceneitem_group_add_item(
 						args->group, args->sceneitem);
 				} else {
@@ -1550,7 +1584,7 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 			}
 
 			// Result
-			SerializeSourceAndSceneItem(output, source, sceneitem);
+			SerializeSourceAndSceneItem(output, source, sceneitem, true);
 
 			obs_sceneitem_release(sceneitem);
 		}
@@ -1616,7 +1650,7 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 			}
 
 			// Result
-			SerializeSourceAndSceneItem(output, source, sceneitem);
+			SerializeSourceAndSceneItem(output, source, sceneitem, true);
 
 			obs_sceneitem_release(sceneitem);
 		}
@@ -1743,7 +1777,7 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 
 				// Result
 				SerializeSourceAndSceneItem(output, source,
-							    sceneitem);
+							    sceneitem, true);
 
 				obs_sceneitem_release(sceneitem);
 			}
@@ -1818,7 +1852,7 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 			}
 
 			// Result
-			SerializeSourceAndSceneItem(output, source, sceneitem);
+			SerializeSourceAndSceneItem(output, source, sceneitem, true);
 
 			obs_sceneitem_release(sceneitem);
 		}
