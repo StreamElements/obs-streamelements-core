@@ -21,6 +21,129 @@
 
 bool s_shutdown = false;
 
+///////////////////////////////////////////////////////////////////////////
+
+static bool is_active_scene(obs_scene_t *scene)
+{
+	if (!scene)
+		return false;
+
+	obs_source_t *current_scene_source = obs_frontend_get_current_scene();
+
+	if (!current_scene_source)
+		return false;
+
+	bool result = false;
+
+	if (scene == obs_scene_from_source(current_scene_source))
+		result = true;
+
+	obs_source_release(current_scene_source);
+
+	return result;
+}
+
+static bool is_child_of_current_scene(obs_sceneitem_t* sceneitem)
+{
+	bool result = false;
+
+	obs_source_t *root_scene_source = obs_frontend_get_current_scene();
+	obs_scene_t *root_scene = obs_scene_from_source(root_scene_source);
+
+	obs_scene_t *parent_scene = obs_sceneitem_get_scene(sceneitem);
+	if (!obs_scene_is_group(parent_scene)) {
+		if (root_scene == parent_scene)
+			result = true;
+	} else {
+		// how to get parent scene?!
+		obs_source_t* group_source = obs_scene_get_source(parent_scene);
+
+		const char *group_name = obs_source_get_name(group_source);
+
+		obs_sceneitem_t* group_sceneitem = obs_scene_get_group(root_scene, group_name);
+
+		if (group_sceneitem)
+			result = true;
+	}
+
+	obs_source_release(root_scene_source);
+
+	return result;
+}
+
+static bool is_active_scene(obs_sceneitem_t *sceneitem)
+{
+	if (s_shutdown)
+		return false;
+
+	if (!sceneitem)
+		return false;
+
+	return is_child_of_current_scene(sceneitem);
+}
+
+static obs_source_t *get_scene_source_by_id_addref(std::string id, bool getCurrentIfNoId = false)
+{
+	obs_source_t *result = nullptr;
+
+	if (id.size()) {
+		const void *ptr = GetPointerFromId(id.c_str());
+
+		struct obs_frontend_source_list scenes = {};
+
+		obs_frontend_get_scenes(&scenes);
+
+		for (size_t idx = 0; idx < scenes.sources.num; ++idx) {
+			obs_source_t *source = scenes.sources.array[idx];
+
+			if (ptr == source) {
+				result = source;
+
+				break;
+			}
+		}
+
+		obs_frontend_source_list_free(&scenes);
+	}
+
+	if (result) {
+		obs_source_addref(result);
+	} else if (getCurrentIfNoId) {
+		result = obs_frontend_get_current_scene();
+	}
+
+	return result;
+}
+
+static obs_source_t *
+get_scene_source_by_id_addref(CefRefPtr<CefDictionaryValue> root,
+			      std::string sceneIdFieldName,
+			      bool getCurrentIfNoId = false)
+{
+	std::string sceneId =
+		root->HasKey(sceneIdFieldName) &&
+				root->GetType(sceneIdFieldName) == VTYPE_STRING
+			? root->GetString(sceneIdFieldName).ToString()
+			: "";
+
+	return get_scene_source_by_id_addref(sceneId, getCurrentIfNoId);
+}
+
+static obs_source_t *
+get_scene_source_by_id_addref(CefRefPtr<CefValue> input,
+			      std::string sceneIdFieldName,
+			      bool getCurrentIfNoId = false)
+{
+	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
+		return get_scene_source_by_id_addref("", getCurrentIfNoId);
+	else
+		return get_scene_source_by_id_addref(input->GetDictionary(),
+						     sceneIdFieldName,
+						     getCurrentIfNoId);
+}
+
+///////////////////////////////////////////////////////////////////////////
+
 void StreamElementsObsSceneManager::RefreshObsSceneItemsList()
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
@@ -110,7 +233,7 @@ void StreamElementsObsSceneManager::RefreshObsSceneItemsList()
 	obs_source_release(currentScene);
 }
 
-static obs_sceneitem_t *FindSceneItemById(std::string id)
+static obs_sceneitem_t *FindSceneItemById(std::string id, bool addRef = false)
 {
 	if (!id.size())
 		return nullptr;
@@ -127,27 +250,40 @@ static obs_sceneitem_t *FindSceneItemById(std::string id)
 	if (!context.searchPtr)
 		return nullptr;
 
-	obs_source_t *currentScene = obs_frontend_get_current_scene();
+	struct obs_frontend_source_list scenes = {};
 
-	if (!currentScene)
-		return nullptr;
+	obs_frontend_get_scenes(&scenes);
 
-	obs_scene_t *scene = obs_scene_from_source(
-		currentScene); // does not increment refcount
+	for (size_t idx = 0; idx < scenes.sources.num; ++idx) {
+		/* Get the scene (a scene is a source) */
+		obs_source_t *sceneSource = scenes.sources.array[idx];
 
-	ObsSceneEnumAllItems(scene, [&](obs_sceneitem_t *sceneitem) -> bool {
-		if (context.searchPtr == sceneitem) {
-			context.sceneitem = sceneitem;
+		obs_scene_t *scene = obs_scene_from_source(
+			sceneSource); // does not increment refcount
 
-			/* Found what we're looking for, stop iteration */
-			return false;
+		ObsSceneEnumAllItems(
+			scene, [&](obs_sceneitem_t *sceneitem) -> bool {
+				if (context.searchPtr == sceneitem) {
+					context.sceneitem = sceneitem;
+
+					/* Found what we're looking for, stop iteration */
+					return false;
+				}
+
+				/* Continue or stop iteration */
+				return !context.sceneitem;
+			});
+
+		if (context.sceneitem) {
+			break;
 		}
+	}
 
-		/* Continue or stop iteration */
-		return !context.sceneitem;
-	});
+	obs_frontend_source_list_free(&scenes);
 
-	obs_source_release(currentScene);
+	if (context.sceneitem && addRef) {
+		obs_sceneitem_addref(context.sceneitem);
+	}
 
 	return context.sceneitem;
 }
@@ -732,6 +868,8 @@ static void SerializeObsScene(obs_source_t *scene, CefRefPtr<CefValue> &result)
 	d->SetString("id", GetIdFromPointer(scene));
 	d->SetString("name", obs_source_get_name(scene));
 
+	d->SetBool("active", is_active_scene(obs_scene_from_source(scene)));
+
 	d->SetValue("icon",
 		    StreamElementsScenesListWidgetManager::GetSceneIcon(scene)
 			    ->Copy());
@@ -762,65 +900,6 @@ static void SerializeObsScene(obs_scene_t *scene, CefRefPtr<CefValue> &result)
 }
 
 ///////////////////////////////////////////////////////////////////////
-
-static bool is_active_scene(obs_scene_t *scene)
-{
-	if (!scene)
-		return false;
-
-	obs_source_t *current_scene_source = obs_frontend_get_current_scene();
-
-	if (!current_scene_source)
-		return false;
-
-	bool result = false;
-
-	if (scene == obs_scene_from_source(current_scene_source))
-		result = true;
-
-	obs_source_release(current_scene_source);
-
-	return result;
-}
-
-static bool is_child_of_current_scene(obs_sceneitem_t* sceneitem)
-{
-	bool result = false;
-
-	obs_source_t *root_scene_source = obs_frontend_get_current_scene();
-	obs_scene_t *root_scene = obs_scene_from_source(root_scene_source);
-
-	obs_scene_t *parent_scene = obs_sceneitem_get_scene(sceneitem);
-	if (!obs_scene_is_group(parent_scene)) {
-		if (root_scene == parent_scene)
-			result = true;
-	} else {
-		// how to get parent scene?!
-		obs_source_t* group_source = obs_scene_get_source(parent_scene);
-
-		const char *group_name = obs_source_get_name(group_source);
-
-		obs_sceneitem_t* group_sceneitem = obs_scene_get_group(root_scene, group_name);
-
-		if (group_sceneitem)
-			result = true;
-	}
-
-	obs_source_release(root_scene_source);
-
-	return result;
-}
-
-static bool is_active_scene(obs_sceneitem_t *sceneitem)
-{
-	if (s_shutdown)
-		return false;
-
-	if (!sceneitem)
-		return false;
-
-	return is_child_of_current_scene(sceneitem);
-}
 
 static void dispatch_scene_event(obs_scene_t *scene,
 				 std::string currentSceneEventName,
@@ -1201,7 +1280,8 @@ static void remove_scene_signals(obs_source_t *sceneSource, void *data)
 	remove_scene_signals(scene, data);
 }
 
-static void add_scene_signals(obs_scene_t *scene, void *data) {
+static void add_scene_signals(obs_scene_t *scene, void *data)
+{
 	if (!scene)
 		return;
 
@@ -1552,6 +1632,12 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 				      ? root->GetString("parentId").ToString()
 				      : "";
 
+	std::string sceneId = root->HasKey("sceneId") &&
+					      root->GetType("sceneId") ==
+						      VTYPE_STRING
+				      ? root->GetString("sceneId").ToString()
+				      : "";
+
 	obs_data_t *settings = obs_data_create();
 
 	bool parsed =
@@ -1563,7 +1649,7 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 		// Add browser source
 
 		obs_source_t *parent_scene =
-			nullptr; // user default: current scene
+			get_scene_source_by_id_addref(sceneId, false);
 
 		obs_source_t *source;
 		obs_sceneitem_t *sceneitem;
@@ -1572,6 +1658,10 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 				     source_class.c_str(), unique_name.c_str(),
 				     settings, nullptr, false, &source,
 				     &sceneitem);
+
+		if (parent_scene) {
+			obs_source_release(parent_scene);
+		}
 
 		if (sceneitem) {
 			obs_transform_info info;
@@ -1618,6 +1708,12 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 				      ? root->GetString("parentId").ToString()
 				      : "";
 
+	std::string sceneId = root->HasKey("sceneId") &&
+					      root->GetType("sceneId") ==
+						      VTYPE_STRING
+				      ? root->GetString("sceneId").ToString()
+				      : "";
+
 	obs_data_t *settings = obs_data_create();
 
 	bool parsed =
@@ -1629,7 +1725,7 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 		// Add game capture source
 
 		obs_source_t *parent_scene =
-			nullptr; // user default: current scene
+			get_scene_source_by_id_addref(sceneId, false);
 
 		obs_source_t *source;
 		obs_sceneitem_t *sceneitem;
@@ -1638,6 +1734,10 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 				     source_class.c_str(), unique_name.c_str(),
 				     settings, nullptr, false, &source,
 				     &sceneitem);
+
+		if (parent_scene) {
+			obs_source_release(parent_scene);
+		}
 
 		if (sceneitem) {
 			obs_transform_info info;
@@ -1694,6 +1794,12 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 					      root->GetType("parentId") ==
 						      VTYPE_STRING
 				      ? root->GetString("parentId").ToString()
+				      : "";
+
+	std::string sceneId = root->HasKey("sceneId") &&
+					      root->GetType("sceneId") ==
+						      VTYPE_STRING
+				      ? root->GetString("sceneId").ToString()
 				      : "";
 
 	obs_data_t *settings = obs_data_create();
@@ -1753,7 +1859,7 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 			// Add game capture source
 
 			obs_source_t *parent_scene =
-				nullptr; // user default: current scene
+				get_scene_source_by_id_addref(sceneId, false);
 
 			obs_source_t *source;
 			obs_sceneitem_t *sceneitem;
@@ -1762,6 +1868,10 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 				parent_scene, FindSceneItemById(groupId),
 				source_class.c_str(), unique_name.c_str(),
 				settings, nullptr, true, &source, &sceneitem);
+
+			if (parent_scene) {
+				obs_source_release(parent_scene);
+			}
 
 			if (sceneitem) {
 				obs_transform_info info;
@@ -1814,6 +1924,12 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 				      ? root->GetString("parentId").ToString()
 				      : "";
 
+	std::string sceneId = root->HasKey("sceneId") &&
+					      root->GetType("sceneId") ==
+						      VTYPE_STRING
+				      ? root->GetString("sceneId").ToString()
+				      : "";
+
 	bool preferExistingSourceReference =
 		root->HasKey("preferExistingSourceReference")
 			? root->GetBool("preferExistingSourceReference")
@@ -1830,7 +1946,7 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 		// Add game capture source
 
 		obs_source_t *parent_scene =
-			nullptr; // user default: current scene
+			get_scene_source_by_id_addref(sceneId, false);
 
 		obs_source_t *source;
 		obs_sceneitem_t *sceneitem;
@@ -1840,6 +1956,10 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 				     settings, nullptr,
 				     preferExistingSourceReference, &source,
 				     &sceneitem);
+
+		if (parent_scene) {
+			obs_source_release(parent_scene);
+		}
 
 		if (sceneitem) {
 			obs_transform_info info;
@@ -1884,7 +2004,13 @@ void StreamElementsObsSceneManager::DeserializeObsSceneItemGroup(
 	args.unique_name =
 		ObsGetUniqueSourceName(root->GetString("name").ToString());
 
-	obs_source_t *parent_scene = obs_frontend_get_current_scene();
+	std::string sceneId = root->HasKey("sceneId") &&
+					      root->GetType("sceneId") ==
+						      VTYPE_STRING
+				      ? root->GetString("sceneId").ToString()
+				      : "";
+
+	obs_source_t *parent_scene = get_scene_source_by_id_addref(sceneId, false);
 
 	if (!parent_scene)
 		return;
@@ -1932,7 +2058,8 @@ void StreamElementsObsSceneManager::DeserializeObsSceneItemGroup(
 	RefreshObsSceneItemsList();
 }
 
-void StreamElementsObsSceneManager::SerializeObsCurrentSceneItems(
+void StreamElementsObsSceneManager::SerializeObsSceneItems(
+	CefRefPtr<CefValue> &input,
 	CefRefPtr<CefValue> &output)
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
@@ -1940,7 +2067,7 @@ void StreamElementsObsSceneManager::SerializeObsCurrentSceneItems(
 	output->SetNull();
 
 	// Get list of scenes
-	obs_source_t *sceneSource = obs_frontend_get_current_scene();
+	obs_source_t *sceneSource = get_scene_source_by_id_addref(input, "id", true);
 
 	if (!sceneSource) {
 		return;
@@ -2125,6 +2252,12 @@ void StreamElementsObsSceneManager::DeserializeObsScene(
 	if (!d->HasKey("name"))
 		return;
 
+	bool activate = true;
+
+	if (d->HasKey("active") && d->GetType("active") == VTYPE_BOOL &&
+	    !d->GetBool("active"))
+		activate = false;
+
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
 	std::string name = ObsGetUniqueSceneName(d->GetString("name"));
@@ -2132,10 +2265,11 @@ void StreamElementsObsSceneManager::DeserializeObsScene(
 	obs_scene_t *scene = obs_scene_create(name.c_str());
 	QApplication::processEvents();
 
-	SerializeObsScene(scene, output);
+	if (activate) {
+		obs_frontend_set_current_scene(obs_scene_get_source(scene));
+	}
 
-	obs_frontend_set_current_scene(obs_scene_get_source(scene));
-	QApplication::processEvents();
+	SerializeObsScene(scene, output);
 
 	obs_scene_release(scene);
 }
@@ -2305,7 +2439,7 @@ void StreamElementsObsSceneManager::SetObsScenePropertiesById(
 	output->SetBool(result);
 }
 
-void StreamElementsObsSceneManager::RemoveObsCurrentSceneItemsByIds(
+void StreamElementsObsSceneManager::RemoveObsSceneItemsByIds(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
 	if (!input.get() || input->GetType() != VTYPE_LIST)
@@ -2319,7 +2453,6 @@ void StreamElementsObsSceneManager::RemoveObsCurrentSceneItemsByIds(
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
 	struct local_context {
-		std::unordered_map<const void *, std::string> ptr_to_id_map;
 		std::list<obs_sceneitem_t *> scene_items_to_remove;
 	};
 
@@ -2330,49 +2463,24 @@ void StreamElementsObsSceneManager::RemoveObsCurrentSceneItemsByIds(
 			continue;
 
 		std::string id = list->GetString(index);
-		const void *ptr = GetPointerFromId(id.c_str());
 
-		if (!ptr)
-			continue;
+		obs_sceneitem_t *item = FindSceneItemById(id, true);
 
-		context.ptr_to_id_map[ptr] = id;
+		if (item) {
+			context.scene_items_to_remove.push_back(item);
+		}
 	}
 
-	if (context.ptr_to_id_map.empty())
-		return;
-
 	output->SetBool(true);
-
-	obs_source_t *currentScene = obs_frontend_get_current_scene();
-
-	if (!currentScene)
-		return;
-
-	obs_scene_t *scene = obs_scene_from_source(
-		currentScene); // does not increment refcount
-
-	ObsSceneEnumAllItems(scene, [&](obs_sceneitem_t *sceneitem) -> bool {
-		if (context.ptr_to_id_map.count(sceneitem)) {
-			context.scene_items_to_remove.push_back(sceneitem);
-		}
-
-		/* Continue iteration */
-		return true;
-	});
 
 	for (obs_sceneitem_t *sceneitem : context.scene_items_to_remove) {
 		/* Remove the scene item */
 		obs_sceneitem_remove(sceneitem);
-
-		// QApplication::processEvents();
+		obs_sceneitem_release(sceneitem);
 	}
-
-	obs_source_release(currentScene);
-
-	// QApplication::processEvents();
 }
 
-void StreamElementsObsSceneManager::SetObsCurrentSceneItemPropertiesById(
+void StreamElementsObsSceneManager::SetObsSceneItemPropertiesById(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
@@ -2391,6 +2499,11 @@ void StreamElementsObsSceneManager::SetObsCurrentSceneItemPropertiesById(
 	if (!ptr)
 		return;
 
+	std::string sceneId = d->HasKey("sceneId") && d->GetType("sceneId") ==
+							      VTYPE_STRING
+				      ? d->GetString("sceneId").ToString()
+				      : "";
+
 	std::string groupId = d->HasKey("parentId") && d->GetType("parentId") ==
 							       VTYPE_STRING
 				      ? d->GetString("parentId").ToString()
@@ -2405,7 +2518,7 @@ void StreamElementsObsSceneManager::SetObsCurrentSceneItemPropertiesById(
 
 	context.ptr = ptr;
 
-	obs_source_t *currentScene = obs_frontend_get_current_scene();
+	obs_source_t *currentScene = get_scene_source_by_id_addref(sceneId, true);
 
 	if (!currentScene)
 		return;
@@ -2937,7 +3050,7 @@ void StreamElementsObsSceneManager::SerializeSourceClassProperties(
 	obs_properties_destroy(props);
 }
 
-void StreamElementsObsSceneManager::UngroupObsCurrentSceneItemsByGroupId(
+void StreamElementsObsSceneManager::UngroupObsSceneItemsByGroupId(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
 	if (input->GetType() != VTYPE_DICTIONARY)

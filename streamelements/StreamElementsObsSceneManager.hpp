@@ -58,16 +58,17 @@ public:
 	void DeserializeObsSceneItemGroup(CefRefPtr<CefValue> &input,
 					  CefRefPtr<CefValue> &output);
 
-	void SerializeObsCurrentSceneItems(CefRefPtr<CefValue> &output);
+	void SerializeObsSceneItems(CefRefPtr<CefValue> &input,
+				    CefRefPtr<CefValue> &output);
 
-	void RemoveObsCurrentSceneItemsByIds(CefRefPtr<CefValue> input,
-					     CefRefPtr<CefValue> &output);
+	void RemoveObsSceneItemsByIds(CefRefPtr<CefValue> input,
+				      CefRefPtr<CefValue> &output);
 
-	void SetObsCurrentSceneItemPropertiesById(CefRefPtr<CefValue> input,
-						  CefRefPtr<CefValue> &output);
+	void SetObsSceneItemPropertiesById(CefRefPtr<CefValue> input,
+					   CefRefPtr<CefValue> &output);
 
-	void UngroupObsCurrentSceneItemsByGroupId(CefRefPtr<CefValue> input,
-						  CefRefPtr<CefValue> &output);
+	void UngroupObsSceneItemsByGroupId(CefRefPtr<CefValue> input,
+					   CefRefPtr<CefValue> &output);
 
 	void
 	InvokeCurrentSceneItemDefaultActionById(CefRefPtr<CefValue> input,

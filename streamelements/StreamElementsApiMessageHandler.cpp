@@ -1116,7 +1116,33 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("addSceneItemBrowserSource");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsBrowserSource(args->GetValue(0),
+							      result);
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("addCurrentSceneItemGameCaptureSource");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsGameCaptureSource(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addSceneItemGameCaptureSource");
 	{
 		result->SetNull();
 
@@ -1142,7 +1168,33 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("addSceneItemVideoCaptureSource");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsVideoCaptureSource(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("addCurrentSceneItemObsNativeSource");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsNativeSource(args->GetValue(0),
+							     result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addSceneItemObsNativeSource");
 	{
 		result->SetNull();
 
@@ -1168,11 +1220,49 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("addSceneItemGroup");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsSceneItemGroup(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("getAllCurrentSceneItems");
 	{
-		StreamElementsGlobalStateManager::GetInstance()
-			->GetObsSceneManager()
-			->SerializeObsCurrentSceneItems(result);
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SerializeObsSceneItems(args->GetValue(0), result);
+		} else {
+			CefRefPtr<CefValue> nullArg = CefValue::Create();
+
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SerializeObsSceneItems(nullArg, result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllSceneItems");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SerializeObsSceneItems(args->GetValue(0),
+							 result);
+		} else {
+			CefRefPtr<CefValue> nullArg = CefValue::Create();
+
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SerializeObsSceneItems(nullArg, result);
+		}
 	}
 	API_HANDLER_END();
 
@@ -1181,8 +1271,19 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
-				->RemoveObsCurrentSceneItemsByIds(
+				->RemoveObsSceneItemsByIds(
 					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeSceneItemsByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->RemoveObsSceneItemsByIds(args->GetValue(0),
+							   result);
 		}
 	}
 	API_HANDLER_END();
@@ -1252,7 +1353,18 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
-				->SetObsCurrentSceneItemPropertiesById(
+				->SetObsSceneItemPropertiesById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setSceneItemPropertiesById");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SetObsSceneItemPropertiesById(
 					args->GetValue(0), result);
 		}
 	}
@@ -1263,7 +1375,18 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
-				->UngroupObsCurrentSceneItemsByGroupId(
+				->UngroupObsSceneItemsByGroupId(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("ungroupSceneItemGroupById");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->UngroupObsSceneItemsByGroupId(
 					args->GetValue(0), result);
 		}
 	}
