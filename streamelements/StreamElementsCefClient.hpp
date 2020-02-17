@@ -34,6 +34,7 @@ class StreamElementsCefClient : public CefClient,
 				public CefDisplayHandler,
 				public CefKeyboardHandler,
 				public CefRequestHandler,
+				public CefRenderHandler,
 #if CHROME_VERSION_BUILD >= 3770
 				public CefResourceRequestHandler,
 #endif
@@ -129,6 +130,10 @@ public:
 		return this;
 	}
 	virtual CefRefPtr<CefDragHandler> GetDragHandler() override
+	{
+		return this;
+	}
+	virtual CefRefPtr<CefRenderHandler> GetRenderHandler() override
 	{
 		return this;
 	}
@@ -362,6 +367,34 @@ public:
 				   const CefKeyEvent &event,
 				   CefEventHandle os_event,
 				   bool *is_keyboard_shortcut) override;
+
+	/* CefRenderHandler */
+#if CHROME_VERSION_BUILD >= 3578
+	virtual void GetViewRect(
+#else
+	virtual bool GetViewRect(
+#endif
+		CefRefPtr<CefBrowser> browser, CefRect &rect) override
+	{
+		rect.Set(0, 0, 1920, 1080);
+	}
+
+	virtual void OnPaint(CefRefPtr<CefBrowser> browser,
+			     PaintElementType type, const RectList &dirtyRects,
+			     const void *buffer, int width, int height) override
+	{
+		// NOOP
+	}
+
+#if EXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED
+	virtual void OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,
+					PaintElementType type,
+					const RectList &dirtyRects,
+					void *shared_handle) override
+	{
+		// NOOP
+	}
+#endif
 
 public:
 	std::string GetExecuteJavaScriptCodeOnLoad()

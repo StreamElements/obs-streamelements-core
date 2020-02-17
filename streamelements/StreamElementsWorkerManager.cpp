@@ -5,7 +5,7 @@
 #include <QUuid>
 #include <QWidget>
 
-#include <include/cef_parser.h>		// CefParseJSON, CefWriteJSON
+#include <include/cef_parser.h> // CefParseJSON, CefWriteJSON
 
 class BrowserTask : public CefTask {
 public:
@@ -19,19 +19,22 @@ public:
 
 static bool QueueCEFTask(std::function<void()> task)
 {
-	return CefPostTask(TID_UI, CefRefPtr<BrowserTask>(new BrowserTask(task)));
+	return CefPostTask(TID_UI,
+			   CefRefPtr<BrowserTask>(new BrowserTask(task)));
 }
 
 /* ========================================================================= */
 
-class StreamElementsWorkerManager::StreamElementsWorker: public QWidget
-{
+class StreamElementsWorkerManager::StreamElementsWorker : public QWidget {
 public:
-	StreamElementsWorker(std::string id, std::string content, std::string url):
-		QWidget(),
-		m_content(content),
-		m_url(url),
-		m_cef_browser(nullptr)
+	StreamElementsWorker(std::string id, std::string content,
+			     std::string url,
+			     std::string executeJavascriptOnLoad)
+		: QWidget(),
+		  m_content(content),
+		  m_url(url),
+		  m_executeJavascriptOnLoad(executeJavascriptOnLoad),
+		  m_cef_browser(nullptr)
 	{
 		cef_window_handle_t windowHandle = (cef_window_handle_t)winId();
 
@@ -43,20 +46,21 @@ public:
 			RECT clientRect;
 			clientRect.top = 0;
 			clientRect.left = 0;
-			clientRect.right = 100;
-			clientRect.bottom = 100;
+			clientRect.right = 1920;
+			clientRect.bottom = 1080;
 
 			// CEF window attributes
 			CefWindowInfo windowInfo;
-			windowInfo.width = 100;
-			windowInfo.height = 100;
-			windowInfo.windowless_rendering_enabled = false;
-			windowInfo.SetAsChild(windowHandle, clientRect);
+			windowInfo.width = 1920;
+			windowInfo.height = 1080;
+			windowInfo.windowless_rendering_enabled = true;
+			//windowInfo.SetAsChild(windowHandle, clientRect);
 
 			CefBrowserSettings cefBrowserSettings;
 
 			cefBrowserSettings.Reset();
-			cefBrowserSettings.javascript_close_windows = STATE_DISABLED;
+			cefBrowserSettings.javascript_close_windows =
+				STATE_DISABLED;
 			cefBrowserSettings.local_storage = STATE_ENABLED;
 			cefBrowserSettings.databases = STATE_ENABLED;
 			cefBrowserSettings.web_security = STATE_ENABLED;
@@ -64,7 +68,7 @@ public:
 
 			CefRefPtr<StreamElementsCefClient> cefClient =
 				new StreamElementsCefClient(
-					"",
+					m_executeJavascriptOnLoad,
 					new StreamElementsApiMessageHandler(),
 					nullptr,
 					StreamElementsMessageBus::DEST_WORKER);
@@ -82,7 +86,8 @@ public:
 					->GetCookieManager()
 					->GetCefRequestContext());
 
-			m_cef_browser->GetMainFrame()->LoadStringW(content, url);
+			m_cef_browser->GetMainFrame()->LoadStringW(content,
+								   url);
 		});
 	}
 
@@ -91,9 +96,8 @@ public:
 		if (m_cef_browser.get()) {
 			// Detach browser to prevent WM_CLOSE event from being sent
 			// from CEF to the parent window.
-			::SetParent(
-				m_cef_browser->GetHost()->GetWindowHandle(),
-				0L);
+			::SetParent(m_cef_browser->GetHost()->GetWindowHandle(),
+				    0L);
 
 			m_cef_browser->GetHost()->CloseBrowser(true);
 			m_cef_browser = NULL;
@@ -102,24 +106,20 @@ public:
 
 	std::string GetUrl() { return m_url; }
 	std::string GetContent() { return m_content; }
+	std::string GetExecuteJavaScriptOnLoad() { return m_executeJavascriptOnLoad; }
 
 private:
 	std::string m_content;
 	std::string m_url;
+	std::string m_executeJavascriptOnLoad;
 	CefRefPtr<CefBrowser> m_cef_browser;
 };
 
-StreamElementsWorkerManager::StreamElementsWorkerManager()
-{
-}
+StreamElementsWorkerManager::StreamElementsWorkerManager() {}
 
-StreamElementsWorkerManager::~StreamElementsWorkerManager()
-{
-}
+StreamElementsWorkerManager::~StreamElementsWorkerManager() {}
 
-void StreamElementsWorkerManager::OnObsExit()
-{
-}
+void StreamElementsWorkerManager::OnObsExit() {}
 
 void StreamElementsWorkerManager::RemoveAll()
 {
@@ -130,7 +130,10 @@ void StreamElementsWorkerManager::RemoveAll()
 	}
 }
 
-std::string StreamElementsWorkerManager::Add(std::string requestedId, std::string content, std::string url)
+std::string
+StreamElementsWorkerManager::Add(std::string requestedId, std::string content,
+				 std::string url,
+				 std::string executeJavascriptOnLoad)
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
@@ -140,7 +143,8 @@ std::string StreamElementsWorkerManager::Add(std::string requestedId, std::strin
 		id = QUuid::createUuid().toString().toStdString();
 	}
 
-	m_items[id] = new StreamElementsWorker(id, content, url);
+	m_items[id] = new StreamElementsWorker(id, content, url,
+					       executeJavascriptOnLoad);
 
 	return id;
 }
@@ -150,7 +154,7 @@ void StreamElementsWorkerManager::Remove(std::string id)
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
 	if (m_items.count(id)) {
-		StreamElementsWorker* item = m_items[id];
+		StreamElementsWorker *item = m_items[id];
 
 		m_items.erase(id);
 
@@ -169,7 +173,8 @@ std::string StreamElementsWorkerManager::GetContent(std::string id)
 	return "";
 }
 
-void StreamElementsWorkerManager::GetIdentifiers(std::vector<std::string>& result)
+void StreamElementsWorkerManager::GetIdentifiers(
+	std::vector<std::string> &result)
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
@@ -178,7 +183,7 @@ void StreamElementsWorkerManager::GetIdentifiers(std::vector<std::string>& resul
 	}
 }
 
-void StreamElementsWorkerManager::Serialize(CefRefPtr<CefValue>& output)
+void StreamElementsWorkerManager::Serialize(CefRefPtr<CefValue> &output)
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
@@ -187,18 +192,21 @@ void StreamElementsWorkerManager::Serialize(CefRefPtr<CefValue>& output)
 
 	for (auto it = m_items.begin(); it != m_items.end(); ++it) {
 		CefRefPtr<CefValue> itemValue = CefValue::Create();
-		CefRefPtr<CefDictionaryValue> item = CefDictionaryValue::Create();
+		CefRefPtr<CefDictionaryValue> item =
+			CefDictionaryValue::Create();
 		itemValue->SetDictionary(item);
 
 		item->SetString("id", it->first);
 		item->SetString("content", it->second->GetContent());
 		item->SetString("url", it->second->GetUrl());
+		item->SetString("executeJavaScriptOnLoad",
+				it->second->GetExecuteJavaScriptOnLoad());
 
 		root->SetValue(it->first, itemValue);
 	}
 }
 
-void StreamElementsWorkerManager::Deserialize(CefRefPtr<CefValue>& input)
+void StreamElementsWorkerManager::Deserialize(CefRefPtr<CefValue> &input)
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
@@ -210,20 +218,40 @@ void StreamElementsWorkerManager::Deserialize(CefRefPtr<CefValue>& input)
 			for (auto key : keys) {
 				std::string id = key.ToString();
 
-				CefRefPtr<CefDictionaryValue> dict = root->GetDictionary(key);
+				CefRefPtr<CefDictionaryValue> dict =
+					root->GetDictionary(key);
 
-				if (!!dict.get() && dict->HasKey("content") && dict->HasKey("url")) {
-					std::string content = dict->GetString("content");
-					std::string url = dict->GetString("url");
+				if (!!dict.get() && dict->HasKey("content") &&
+				    dict->HasKey("url")) {
+					std::string content =
+						dict->GetString("content");
+					std::string url =
+						dict->GetString("url");
 
-					Add(id, content, url);
+					std::string executeJavaScriptOnLoad =
+						"";
+
+					if (dict->HasKey(
+						    "executeJavaScriptOnLoad") &&
+					    dict->GetType(
+						    "executeJavaScriptOnLoad") ==
+						    VTYPE_STRING) {
+						executeJavaScriptOnLoad =
+							dict->GetString(
+								    "executeJavaScriptOnLoad")
+								.ToString();
+					}
+
+					Add(id, content, url,
+					    executeJavaScriptOnLoad);
 				}
 			}
 		}
 	}
 }
 
-bool StreamElementsWorkerManager::SerializeOne(std::string id, CefRefPtr<CefValue>& output)
+bool StreamElementsWorkerManager::SerializeOne(std::string id,
+					       CefRefPtr<CefValue> &output)
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
@@ -233,23 +261,39 @@ bool StreamElementsWorkerManager::SerializeOne(std::string id, CefRefPtr<CefValu
 	item->SetString("id", id);
 	item->SetString("content", m_items[id]->GetContent());
 	item->SetString("url", m_items[id]->GetUrl());
+	item->SetString("executeJavaScriptOnLoad",
+			m_items[id]->GetExecuteJavaScriptOnLoad());
 
 	return true;
 }
 
-std::string StreamElementsWorkerManager::DeserializeOne(CefRefPtr<CefValue> input)
+std::string
+StreamElementsWorkerManager::DeserializeOne(CefRefPtr<CefValue> input)
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
 	if (input.get() && input->GetType() == VTYPE_DICTIONARY) {
 		CefRefPtr<CefDictionaryValue> dict = input->GetDictionary();
 
-		if (!!dict.get() && dict->HasKey("content") && dict->HasKey("url")) {
-			std::string id = dict->HasKey("id") ? dict->GetString("id") : "";
+		if (!!dict.get() && dict->HasKey("content") &&
+		    dict->HasKey("url")) {
+			std::string id =
+				dict->HasKey("id") ? dict->GetString("id") : "";
 			std::string content = dict->GetString("content");
 			std::string url = dict->GetString("url");
 
-			return Add(id, content, url);
+					std::string executeJavaScriptOnLoad = "";
+
+			if (dict->HasKey("executeJavaScriptOnLoad") &&
+			    dict->GetType("executeJavaScriptOnLoad") ==
+				    VTYPE_STRING) {
+				executeJavaScriptOnLoad =
+					dict->GetString(
+						    "executeJavaScriptOnLoad")
+						.ToString();
+			}
+
+			return Add(id, content, url, executeJavaScriptOnLoad);
 		}
 	}
 

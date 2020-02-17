@@ -19,6 +19,9 @@
 //            are fixed, change this to 1
 #define ENABLE_OBS_GROUP_ADD_REMOVE_ITEM 0
 
+// obs_scene_get_group deadlocks on full_lock(scene) when inside a scene signal handler
+#define ENABLE_GET_GROUP_SCENE_IN_SIGNAL_HANDLER 0
+
 bool s_shutdown = false;
 
 ///////////////////////////////////////////////////////////////////////////
@@ -55,6 +58,7 @@ static bool is_child_of_current_scene(obs_sceneitem_t* sceneitem)
 		if (root_scene == parent_scene)
 			result = true;
 	} else {
+#if ENABLE_GET_GROUP_SCENE_IN_SIGNAL_HANDLER
 		// how to get parent scene?!
 		obs_source_t* group_source = obs_scene_get_source(parent_scene);
 
@@ -64,6 +68,7 @@ static bool is_child_of_current_scene(obs_sceneitem_t* sceneitem)
 
 		if (group_sceneitem)
 			result = true;
+#endif
 	}
 
 	obs_source_release(root_scene_source);
