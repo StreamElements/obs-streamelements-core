@@ -606,8 +606,8 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				StreamElementsGlobalStateManager::GetInstance()
 					->GetWidgetManager()
 					->ShowDockWidgetById(args->GetString(0)
-								 .ToString()
-								 .c_str()));
+								     .ToString()
+								     .c_str()));
 
 			if (result->GetBool()) {
 				StreamElementsGlobalStateManager::GetInstance()
@@ -627,8 +627,8 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				StreamElementsGlobalStateManager::GetInstance()
 					->GetWidgetManager()
 					->HideDockWidgetById(args->GetString(0)
-								 .ToString()
-								 .c_str()));
+								     .ToString()
+								     .c_str()));
 
 			if (result->GetBool()) {
 				StreamElementsGlobalStateManager::GetInstance()
@@ -1049,9 +1049,8 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				->NotifyAllMessageListeners(
 					StreamElementsMessageBus::DEST_ALL_LOCAL,
 					StreamElementsMessageBus::SOURCE_WEB,
-					browser ?
-					browser->GetMainFrame()
-						->GetURL()
+					browser ? browser->GetMainFrame()
+							  ->GetURL()
 							  .ToString()
 						: "urn:streamelements:internal",
 					message);
@@ -1083,8 +1082,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 								DEST_BROWSER_SOURCE,
 						StreamElementsMessageBus::
 							SOURCE_WEB,
-						sourceUrl,
-						"hostEventReceived",
+						sourceUrl, "hostEventReceived",
 						args->GetValue(0));
 
 				StreamElementsMessageBus::GetInstance()
@@ -1093,8 +1091,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 							DEST_ALL_EXTERNAL,
 						StreamElementsMessageBus::
 							SOURCE_WEB,
-						sourceUrl,
-						d->GetString("name"),
+						sourceUrl, d->GetString("name"),
 						d->GetValue("data"));
 
 				result->SetBool(true);
@@ -1238,7 +1235,8 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
-				->SerializeObsSceneItems(args->GetValue(0), result);
+				->SerializeObsSceneItems(args->GetValue(0),
+							 result);
 		} else {
 			CefRefPtr<CefValue> nullArg = CefValue::Create();
 
@@ -1271,8 +1269,8 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
-				->RemoveObsSceneItemsByIds(
-					args->GetValue(0), result);
+				->RemoveObsSceneItemsByIds(args->GetValue(0),
+							   result);
 		}
 	}
 	API_HANDLER_END();
@@ -1599,7 +1597,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		result->SetBool(true);
 	}
 	API_HANDLER_END();
-	
+
 	API_HANDLER_BEGIN("getUserInterfaceState");
 	{
 		StreamElementsGlobalStateManager::GetInstance()
@@ -1781,8 +1779,8 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetBackupManager()
-				->CreateLocalBackupPackage(
-					args->GetValue(0), result);
+				->CreateLocalBackupPackage(args->GetValue(0),
+							   result);
 		}
 	}
 	API_HANDLER_END();
@@ -1793,7 +1791,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetBackupManager()
 				->QueryBackupPackageContent(args->GetValue(0),
-							   result);
+							    result);
 		}
 	}
 	API_HANDLER_END();
@@ -1806,6 +1804,16 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				->RestoreBackupPackageContent(args->GetValue(0),
 							      result);
 		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("reloadAllBrowserSources");
+	{
+		extern void ReloadAllBrowserSources();
+
+		ReloadAllBrowserSources();
+
+		result->SetBool(true);
 	}
 	API_HANDLER_END();
 

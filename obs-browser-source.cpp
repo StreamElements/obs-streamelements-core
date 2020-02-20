@@ -531,6 +531,13 @@ static void ExecuteOnAllBrowsers(BrowserFunc func)
 	}
 }
 
+void ReloadAllBrowserSources()
+{
+	ExecuteOnAllBrowsers([=](CefRefPtr<CefBrowser> cefBrowser) {
+		cefBrowser->ReloadIgnoreCache();
+	});
+}
+
 void DispatchJSEvent(std::string eventName, std::string jsonString)
 {
 	ExecuteOnAllBrowsers([=](CefRefPtr<CefBrowser> cefBrowser) {
