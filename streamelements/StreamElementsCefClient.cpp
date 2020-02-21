@@ -155,6 +155,9 @@ void StreamElementsCefClient::OnLoadError(CefRefPtr<CefBrowser> browser,
 	const CefString& errorText,
 	const CefString& failedUrl)
 {
+	if (!frame)
+		return;
+
 	blog(LOG_WARNING, "obs-browser[%lu]: error loading %s frame url '%s': %s (%d)",
 		m_cefClientId,
 		frame->IsMain() ? "main" : "child",
@@ -192,7 +195,7 @@ void StreamElementsCefClient::OnLoadError(CefRefPtr<CefBrowser> browser,
 	htmlString = std::regex_replace(htmlString, std::regex("\\$\\{error.text\\}"), error.str());
 	htmlString = std::regex_replace(htmlString, std::regex("\\$\\{error.url\\}"), failedUrl.ToString());
 
-	frame->GetBrowser()->GetMainFrame()->LoadStringW(htmlString, failedUrl);
+	frame->LoadStringW(htmlString, failedUrl);
 }
 
 void StreamElementsCefClient::OnLoadingStateChange(CefRefPtr<CefBrowser> browser,
