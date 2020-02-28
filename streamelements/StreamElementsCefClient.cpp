@@ -7,8 +7,8 @@
 #include "json11/json11.hpp"
 #include <obs-frontend-api.h>
 #include <obs-hotkey.h>
-#include <include/cef_parser.h>		// CefParseJSON, CefWriteJSON
-#include <include/cef_urlrequest.h>	// CefURLRequestClient
+#include <include/cef_parser.h>     // CefParseJSON, CefWriteJSON
+#include <include/cef_urlrequest.h> // CefURLRequestClient
 #include <regex>
 #include <sstream>
 #include <algorithm>
@@ -23,18 +23,25 @@ static std::vector<CefRefPtr<CefBrowser>> s_browsers;
 
 /* ========================================================================= */
 
-static bool SetWindowIconFromBuffer(cef_window_handle_t windowHandle, void* buffer, size_t buffer_len)
+static bool SetWindowIconFromBuffer(cef_window_handle_t windowHandle,
+				    void *buffer, size_t buffer_len)
 {
-	size_t offset = ::LookupIconIdFromDirectoryEx((PBYTE)buffer, TRUE, 0, 0, LR_DEFAULTCOLOR);
+	size_t offset = ::LookupIconIdFromDirectoryEx((PBYTE)buffer, TRUE, 0, 0,
+						      LR_DEFAULTCOLOR);
 
 	if (offset) {
 		size_t size = buffer_len - offset;
 
-		HICON hIcon = ::CreateIconFromResourceEx((PBYTE)buffer + offset, (DWORD)size, TRUE, 0x00030000, 0, 0, LR_SHARED);
+		HICON hIcon = ::CreateIconFromResourceEx((PBYTE)buffer + offset,
+							 (DWORD)size, TRUE,
+							 0x00030000, 0, 0,
+							 LR_SHARED);
 
 		if (hIcon) {
-			::SendMessage(windowHandle, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
-			::SendMessage(windowHandle, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+			::SendMessage(windowHandle, WM_SETICON, ICON_BIG,
+				      (LPARAM)hIcon);
+			::SendMessage(windowHandle, WM_SETICON, ICON_SMALL,
+				      (LPARAM)hIcon);
 
 			return true;
 		}
@@ -43,14 +50,16 @@ static bool SetWindowIconFromBuffer(cef_window_handle_t windowHandle, void* buff
 	return false;
 }
 
-static bool SetWindowIconFromResource(cef_window_handle_t windowHandle, QString& resource)
+static bool SetWindowIconFromResource(cef_window_handle_t windowHandle,
+				      QString &resource)
 {
 	QFile file(resource);
 
 	if (file.open(QIODevice::ReadOnly)) {
 		QByteArray data = file.readAll();
 
-		return SetWindowIconFromBuffer(windowHandle, data.begin(), data.size());
+		return SetWindowIconFromBuffer(windowHandle, data.begin(),
+					       data.size());
 	}
 
 	return false;
@@ -69,9 +78,9 @@ using namespace json11;
 
 /* ========================================================================= */
 
-#define CEF_REQUIRE_UI_THREAD()       DCHECK(CefCurrentlyOn(TID_UI));
-#define CEF_REQUIRE_IO_THREAD()       DCHECK(CefCurrentlyOn(TID_IO));
-#define CEF_REQUIRE_FILE_THREAD()     DCHECK(CefCurrentlyOn(TID_FILE));
+#define CEF_REQUIRE_UI_THREAD() DCHECK(CefCurrentlyOn(TID_UI));
+#define CEF_REQUIRE_IO_THREAD() DCHECK(CefCurrentlyOn(TID_IO));
+#define CEF_REQUIRE_FILE_THREAD() DCHECK(CefCurrentlyOn(TID_FILE));
 #define CEF_REQUIRE_RENDERER_THREAD() DCHECK(CefCurrentlyOn(TID_RENDERER));
 
 /* ========================================================================= */
@@ -82,40 +91,59 @@ StreamElementsCefClient::StreamElementsCefClient(
 	std::string executeJavaScriptCodeOnLoad,
 	CefRefPtr<StreamElementsBrowserMessageHandler> messageHandler,
 	CefRefPtr<StreamElementsCefClientEventHandler> eventHandler,
-	StreamElementsMessageBus::message_destination_filter_flags_t msgDestType) :
-	m_executeJavaScriptCodeOnLoad(executeJavaScriptCodeOnLoad),
-	m_messageHandler(messageHandler),
-	m_eventHandler(eventHandler),
-	m_msgDestType(msgDestType),
-	m_cefClientId(os_atomic_inc_long(&s_cefClientId))
+	StreamElementsMessageBus::message_destination_filter_flags_t msgDestType)
+	: m_executeJavaScriptCodeOnLoad(executeJavaScriptCodeOnLoad),
+	  m_messageHandler(messageHandler),
+	  m_eventHandler(eventHandler),
+	  m_msgDestType(msgDestType),
+	  m_cefClientId(os_atomic_inc_long(&s_cefClientId))
 {
-	blog(LOG_INFO, "obs-browser[%lu]: StreamElementsCefClient: initialized", m_cefClientId);
+	blog(LOG_INFO, "obs-browser[%lu]: StreamElementsCefClient: initialized",
+	     m_cefClientId);
 }
 
 StreamElementsCefClient::~StreamElementsCefClient()
 {
-	blog(LOG_INFO, "obs-browser[%lu]: StreamElementsCefClient: destroyed", m_cefClientId);
+	blog(LOG_INFO, "obs-browser[%lu]: StreamElementsCefClient: destroyed",
+	     m_cefClientId);
+}
+
+/* ========================================================================= */
+
+static std::string sanitize_url(std::string input)
+{
+	std::string result = input;
+
+	if (result.size() > 5 && result.substr(0, 5) == "data:") {
+		result = "data:HIDDEN";
+	} else {
+		size_t pos = result.find('#');
+		if (pos >= 0) {
+			result = result.substr(0, pos);
+		}
+	}
+
+	return result;
 }
 
 /* ========================================================================= */
 
 void StreamElementsCefClient::OnLoadStart(CefRefPtr<CefBrowser> browser,
-	CefRefPtr<CefFrame> frame,
-	TransitionType transition_type)
+					  CefRefPtr<CefFrame> frame,
+					  TransitionType transition_type)
 {
 	char buf[16];
 
-	blog(LOG_INFO, "obs-browser[%lu]: start loading %s frame url '%s' (transition_type: %s)",
-		m_cefClientId,
-		frame->IsMain() ? "main" : "child",
-		frame->GetURL().ToString().c_str(),
-		ltoa((long)transition_type, buf, 16));
+	blog(LOG_INFO,
+	     "obs-browser[%lu]: start loading %s frame url '%s' (transition_type: %s)",
+	     m_cefClientId, frame->IsMain() ? "main" : "child",
+	     sanitize_url(frame->GetURL().ToString()).c_str(),
+	     ltoa((long)transition_type, buf, 16));
 }
 
-void StreamElementsCefClient::OnLoadEnd(
-	CefRefPtr<CefBrowser> browser,
-	CefRefPtr<CefFrame> frame,
-	int httpStatusCode)
+void StreamElementsCefClient::OnLoadEnd(CefRefPtr<CefBrowser> browser,
+					CefRefPtr<CefFrame> frame,
+					int httpStatusCode)
 {
 #ifdef _WIN32
 	cef_window_handle_t hWnd = browser->GetHost()->GetWindowHandle();
@@ -134,36 +162,33 @@ void StreamElementsCefClient::OnLoadEnd(
 
 	blog(LOG_INFO,
 	     "obs-browser[%lu]: completed loading %s frame url '%s' (HTTP status code: %d)",
-		m_cefClientId,
-		frame->IsMain() ? "main" : "child",
-		frame->GetURL().ToString().c_str(),
-		httpStatusCode);
+	     m_cefClientId, frame->IsMain() ? "main" : "child",
+	     sanitize_url(frame->GetURL().ToString()).c_str(), httpStatusCode);
 
 	if (m_executeJavaScriptCodeOnLoad.empty() || !frame->IsMain()) {
 		return;
 	}
 
-	frame->ExecuteJavaScript(
-		CefString(m_executeJavaScriptCodeOnLoad),
-		frame->GetURL(),
-		0);
+	frame->ExecuteJavaScript(CefString(m_executeJavaScriptCodeOnLoad),
+				 frame->GetURL(), 0);
 }
 
 void StreamElementsCefClient::OnLoadError(CefRefPtr<CefBrowser> browser,
-	CefRefPtr<CefFrame> frame,
-	ErrorCode errorCode,
-	const CefString& errorText,
-	const CefString& failedUrl)
+					  CefRefPtr<CefFrame> frame,
+					  ErrorCode errorCode,
+					  const CefString &errorText,
+					  const CefString &failedUrl)
 {
 	if (!frame)
 		return;
 
-	blog(LOG_WARNING, "obs-browser[%lu]: error loading %s frame url '%s': %s (%d)",
-		m_cefClientId,
-		frame->IsMain() ? "main" : "child",
-		failedUrl.ToString().c_str(),
-		errorText.size() ? errorText.ToString().c_str() : "Unknown error code",
-		(int)errorCode);
+	blog(LOG_WARNING,
+	     "obs-browser[%lu]: error loading %s frame url '%s': %s (%d)",
+	     m_cefClientId, frame->IsMain() ? "main" : "child",
+	     sanitize_url(failedUrl.ToString()).c_str(),
+	     errorText.size() ? errorText.ToString().c_str()
+			      : "Unknown error code",
+	     (int)errorCode);
 
 	if (errorCode == ERR_ABORTED) {
 		// Don't display an error for downloaded files and
@@ -180,34 +205,39 @@ void StreamElementsCefClient::OnLoadError(CefRefPtr<CefBrowser> browser,
 
 	if (!htmlString.size()) {
 		// Default
-		htmlString = "<html><body><h1>error page</h1><p>${error.code}</p><p>${error.url}</p></body></html>";
+		htmlString =
+			"<html><body><h1>error page</h1><p>${error.code}</p><p>${error.url}</p></body></html>";
 	}
 
 	std::stringstream error;
 	if (errorText.size()) {
 		error << errorText.ToString();
-	}
-	else {
-		error << "UNKNOWN" << " (" << (int)errorCode << ")";
+	} else {
+		error << "UNKNOWN"
+		      << " (" << (int)errorCode << ")";
 	}
 
-	htmlString = std::regex_replace(htmlString, std::regex("\\$\\{error.code\\}"), error.str());
-	htmlString = std::regex_replace(htmlString, std::regex("\\$\\{error.text\\}"), error.str());
-	htmlString = std::regex_replace(htmlString, std::regex("\\$\\{error.url\\}"), failedUrl.ToString());
+	htmlString = std::regex_replace(
+		htmlString, std::regex("\\$\\{error.code\\}"), error.str());
+	htmlString = std::regex_replace(
+		htmlString, std::regex("\\$\\{error.text\\}"), error.str());
+	htmlString = std::regex_replace(htmlString,
+					std::regex("\\$\\{error.url\\}"),
+					failedUrl.ToString());
 
 	frame->LoadStringW(htmlString, failedUrl);
 }
 
-void StreamElementsCefClient::OnLoadingStateChange(CefRefPtr<CefBrowser> browser,
-	bool isLoading,
-	bool canGoBack,
+void StreamElementsCefClient::OnLoadingStateChange(
+	CefRefPtr<CefBrowser> browser, bool isLoading, bool canGoBack,
 	bool canGoForward)
 {
 	if (!m_eventHandler.get()) {
 		return;
 	}
 
-	m_eventHandler->OnLoadingStateChange(browser, isLoading, canGoBack, canGoForward);
+	m_eventHandler->OnLoadingStateChange(browser, isLoading, canGoBack,
+					     canGoForward);
 }
 
 /* ========================================================================= */
@@ -217,36 +247,32 @@ bool StreamElementsCefClient::OnProcessMessageReceived(
 #if CHROME_VERSION_BUILD >= 3770
 	CefRefPtr<CefFrame> frame,
 #endif
-	CefProcessId source_process,
-	CefRefPtr<CefProcessMessage> message)
+	CefProcessId source_process, CefRefPtr<CefProcessMessage> message)
 {
 	const std::string &name = message->GetName();
 	Json json;
 
 	if (name == "getCurrentScene") {
 		json = Json::object{};
-	}
-	else if (name == "getStatus") {
+	} else if (name == "getStatus") {
 		json = Json::object{
-			{ "recording", obs_frontend_recording_active() },
-			{ "streaming", obs_frontend_streaming_active() },
-			{ "replaybuffer", obs_frontend_replay_buffer_active() }
-		};
+			{"recording", obs_frontend_recording_active()},
+			{"streaming", obs_frontend_streaming_active()},
+			{"replaybuffer", obs_frontend_replay_buffer_active()}};
 
 	}
 #if CHROME_VERSION_BUILD >= 3770
 	else if (m_messageHandler.get() &&
 		 m_messageHandler->OnProcessMessageReceived(
-			 browser, frame, source_process, message, m_cefClientId)) {
+			 browser, frame, source_process, message,
+			 m_cefClientId)) {
 		return true;
 	}
 
 #else
 	else if (m_messageHandler.get() &&
-			 m_messageHandler->OnProcessMessageReceived(
-				 browser, source_process, message,
-				 m_cefClientId))
-	{
+		 m_messageHandler->OnProcessMessageReceived(
+			 browser, source_process, message, m_cefClientId)) {
 		return true;
 	}
 #endif
@@ -268,9 +294,9 @@ bool StreamElementsCefClient::OnProcessMessageReceived(
 }
 
 void StreamElementsCefClient::OnTitleChange(CefRefPtr<CefBrowser> browser,
-	const CefString& title)
+					    const CefString &title)
 {
-	if (!browser || !browser->GetHost()  || title.empty()) {
+	if (!browser || !browser->GetHost() || title.empty()) {
 		return;
 	}
 
@@ -286,12 +312,13 @@ void StreamElementsCefClient::OnTitleChange(CefRefPtr<CefBrowser> browser,
 	//
 
 #ifdef _WIN32
-	SetWindowTextW(browser->GetHost()->GetWindowHandle(), title.ToWString().c_str());
+	SetWindowTextW(browser->GetHost()->GetWindowHandle(),
+		       title.ToWString().c_str());
 #endif
 }
 
-void StreamElementsCefClient::OnFaviconURLChange(CefRefPtr<CefBrowser> browser,
-	const std::vector<CefString>& icon_urls)
+void StreamElementsCefClient::OnFaviconURLChange(
+	CefRefPtr<CefBrowser> browser, const std::vector<CefString> &icon_urls)
 {
 	UNREFERENCED_PARAMETER(browser);
 	UNREFERENCED_PARAMETER(icon_urls);
@@ -299,25 +326,22 @@ void StreamElementsCefClient::OnFaviconURLChange(CefRefPtr<CefBrowser> browser,
 
 bool StreamElementsCefClient::OnConsoleMessage(CefRefPtr<CefBrowser>,
 #if CHROME_VERSION_BUILD >= 3282
-	cef_log_severity_t level,
+					       cef_log_severity_t level,
 #endif
-	const CefString &message,
-	const CefString &source,
-	int line)
+					       const CefString &message,
+					       const CefString &source,
+					       int line)
 {
 	blog(LOG_INFO, "obs-browser[%lu]: CONSOLE: %s (source: %s:%d)",
-		m_cefClientId,
-		message.ToString().c_str(),
-		source.ToString().c_str(),
-		line);
+	     m_cefClientId, message.ToString().c_str(),
+	     source.ToString().c_str(), line);
 
 	return false;
 }
 
 void StreamElementsCefClient::OnAfterCreated(CefRefPtr<CefBrowser> browser)
 {
-	SetWindowDefaultIcon(
-		browser->GetHost()->GetWindowHandle());
+	SetWindowDefaultIcon(browser->GetHost()->GetWindowHandle());
 
 	{
 		std::lock_guard<std::recursive_mutex> guard(s_browsers_mutex);
@@ -325,10 +349,9 @@ void StreamElementsCefClient::OnAfterCreated(CefRefPtr<CefBrowser> browser)
 		s_browsers.push_back(browser);
 
 		StreamElementsMessageBus::GetInstance()->AddBrowserListener(
-				browser, m_msgDestType);
+			browser, m_msgDestType);
 	}
 }
-
 
 void StreamElementsCefClient::OnBeforeClose(CefRefPtr<CefBrowser> browser)
 {
@@ -336,14 +359,16 @@ void StreamElementsCefClient::OnBeforeClose(CefRefPtr<CefBrowser> browser)
 
 	StreamElementsMessageBus::GetInstance()->RemoveBrowserListener(browser);
 
-	auto index = std::find(s_browsers.begin(), s_browsers.end(), browser.get());
+	auto index =
+		std::find(s_browsers.begin(), s_browsers.end(), browser.get());
 
 	if (index != s_browsers.end()) {
 		s_browsers.erase(index);
 	}
 }
 
-void StreamElementsCefClient::DispatchJSEvent(std::string event, std::string eventArgsJson)
+void StreamElementsCefClient::DispatchJSEvent(std::string event,
+					      std::string eventArgsJson)
 {
 	std::lock_guard<std::recursive_mutex> guard(s_browsers_mutex);
 
@@ -358,7 +383,9 @@ void StreamElementsCefClient::DispatchJSEvent(std::string event, std::string eve
 	}
 }
 
-void StreamElementsCefClient::DispatchJSEvent(CefRefPtr<CefBrowser> browser, std::string event, std::string eventArgsJson)
+void StreamElementsCefClient::DispatchJSEvent(CefRefPtr<CefBrowser> browser,
+					      std::string event,
+					      std::string eventArgsJson)
 {
 	if (!browser.get()) {
 		return;
@@ -374,7 +401,9 @@ void StreamElementsCefClient::DispatchJSEvent(CefRefPtr<CefBrowser> browser, std
 }
 
 bool StreamElementsCefClient::OnPreKeyEvent(CefRefPtr<CefBrowser> browser,
-	const CefKeyEvent& event, CefEventHandle os_event, bool* is_keyboard_shortcut)
+					    const CefKeyEvent &event,
+					    CefEventHandle os_event,
+					    bool *is_keyboard_shortcut)
 {
 	UNREFERENCED_PARAMETER(os_event);
 	UNREFERENCED_PARAMETER(is_keyboard_shortcut);
@@ -387,15 +416,17 @@ bool StreamElementsCefClient::OnPreKeyEvent(CefRefPtr<CefBrowser> browser,
 		return false;
 	}
 
-	StreamElementsGlobalStateManager* global = StreamElementsGlobalStateManager::GetInstance();
+	StreamElementsGlobalStateManager *global =
+		StreamElementsGlobalStateManager::GetInstance();
 
 	if (!global) {
 		return false;
 	}
 
-	obs_key_combination_t combo = { 0 };
+	obs_key_combination_t combo = {0};
 
-	bool pressed = event.type == KEYEVENT_KEYDOWN || event.type == KEYEVENT_RAWKEYDOWN;
+	bool pressed = event.type == KEYEVENT_KEYDOWN ||
+		       event.type == KEYEVENT_RAWKEYDOWN;
 
 #ifdef _WIN32
 	// Bit 30 - the previous key state
@@ -426,15 +457,15 @@ bool StreamElementsCefClient::OnPreKeyEvent(CefRefPtr<CefBrowser> browser,
 	// We'll align our resolution of modifiers to what OBS supports.
 	//
 	static const modifier_map_t mods_map_pressed[] = {
-		{ VK_SHIFT, INTERACT_SHIFT_KEY },
+		{VK_SHIFT, INTERACT_SHIFT_KEY},
 		//{ VK_LSHIFT, INTERACT_SHIFT_KEY },
 		//{ VK_RSHIFT, INTERACT_SHIFT_KEY },
 
 		//{ VK_LCONTROL, INTERACT_CONTROL_KEY },
 		//{ VK_RCONTROL, INTERACT_CONTROL_KEY },
-		{ VK_CONTROL, INTERACT_CONTROL_KEY },
+		{VK_CONTROL, INTERACT_CONTROL_KEY},
 
-		{ VK_MENU, INTERACT_ALT_KEY },
+		{VK_MENU, INTERACT_ALT_KEY},
 		//{ VK_LMENU, INTERACT_ALT_KEY },
 		//{ VK_RMENU, INTERACT_ALT_KEY },
 
@@ -447,11 +478,14 @@ bool StreamElementsCefClient::OnPreKeyEvent(CefRefPtr<CefBrowser> browser,
 	};
 
 	for (auto map_item : mods_map_pressed) {
-		if (map_item.virtualKey != 0 && map_item.virtualKey != virtualKeyCode) {
-			SHORT keyState = ::GetAsyncKeyState(map_item.virtualKey);
+		if (map_item.virtualKey != 0 &&
+		    map_item.virtualKey != virtualKeyCode) {
+			SHORT keyState =
+				::GetAsyncKeyState(map_item.virtualKey);
 
 			if (keyState != 0) {
-				combo.modifiers = combo.modifiers | map_item.obs;
+				combo.modifiers = combo.modifiers |
+						  map_item.obs;
 			}
 		}
 	}
@@ -478,7 +512,8 @@ bool StreamElementsCefClient::OnPreKeyEvent(CefRefPtr<CefBrowser> browser,
 	}
 	*/
 
-	global->GetHotkeyManager()->keyCombinationTriggered(browser, combo, pressed);
+	global->GetHotkeyManager()->keyCombinationTriggered(browser, combo,
+							    pressed);
 
 	// Keyboard events which occur while CEF browser is in focus
 	// are not bubbled up.
@@ -497,27 +532,23 @@ class BrowserSchemeHandler : public CefResourceHandler {
 	int64 remaining = 0;
 
 public:
-	virtual bool ProcessRequest(
-			CefRefPtr<CefRequest> request,
-			CefRefPtr<CefCallback> callback) override;
-	virtual void GetResponseHeaders(
-			CefRefPtr<CefResponse> response,
-			int64 &response_length,
-			CefString &redirectUrl) override;
-	virtual bool ReadResponse(
-			void *data_out,
-			int bytes_to_read,
-			int &bytes_read,
-			CefRefPtr<CefCallback> callback) override;
+	virtual bool ProcessRequest(CefRefPtr<CefRequest> request,
+				    CefRefPtr<CefCallback> callback) override;
+	virtual void GetResponseHeaders(CefRefPtr<CefResponse> response,
+					int64 &response_length,
+					CefString &redirectUrl) override;
+	virtual bool ReadResponse(void *data_out, int bytes_to_read,
+				  int &bytes_read,
+				  CefRefPtr<CefCallback> callback) override;
 	virtual void Cancel() override;
 
 	IMPLEMENT_REFCOUNTING(BrowserSchemeHandler);
 };
 
-CefRefPtr<CefResourceHandler> StreamElementsCefClient::GetResourceHandler(
-	CefRefPtr<CefBrowser> browser,
-	CefRefPtr<CefFrame> frame,
-	CefRefPtr<CefRequest> request)
+CefRefPtr<CefResourceHandler>
+StreamElementsCefClient::GetResourceHandler(CefRefPtr<CefBrowser> browser,
+					    CefRefPtr<CefFrame> frame,
+					    CefRefPtr<CefRequest> request)
 {
 	///
 	// Intercept requests to //absolute/ and locally mapped hosts
