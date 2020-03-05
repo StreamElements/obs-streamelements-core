@@ -198,7 +198,8 @@ StreamElementsLocalWebFilesServer::StreamElementsLocalWebFilesServer(std::string
 
 	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
 
-	for (auto& p : std::experimental::filesystem::directory_iterator(m_rootFolder)) {
+	for (auto &p :
+	     std::experimental::filesystem::directory_iterator(m_rootFolder)) {
 		std::string path = myconv.to_bytes(p.path().c_str());
 
 		if (std::experimental::filesystem::is_directory(path)) {

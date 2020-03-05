@@ -3,6 +3,7 @@
 #include <QTimer>
 
 #include <mutex>
+#include <functional>
 
 class StreamElementsDeferredExecutive
 {

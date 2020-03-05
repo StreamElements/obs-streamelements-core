@@ -5,6 +5,7 @@
 #include <thread>
 #include <mutex>
 #include <vector>
+#include <functional>
 #include "streamelements/deps/moodycamel/blockingconcurrentqueue.h"
 
 // Single named pipes client handler.

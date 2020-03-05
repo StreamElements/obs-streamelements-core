@@ -184,10 +184,17 @@ void StreamElementsMenuManager::Update()
 	m_menu->addAction(check_for_updates_action);
 	check_for_updates_action->connect(
 		check_for_updates_action, &QAction::triggered, [this] {
+			calldata_t *cd = calldata_create();
+			calldata_set_bool(cd, "allow_downgrade", false);
+			calldata_set_bool(cd, "force_install", false);
+			calldata_set_bool(cd, "allow_use_last_response", false);
+
 			signal_handler_signal(
 				obs_get_signal_handler(),
 				"streamelements_request_check_for_updates",
-				nullptr);
+				cd);
+
+			calldata_free(cd);
 		});
 
 	m_menu->addSeparator();

@@ -304,7 +304,7 @@ ScriptEngine::ScriptEngine()
 		asFUNCTION(ui_error), asCALL_CDECL);
 }
 
-ScriptEngine ::~ScriptEngine()
+ScriptEngine::~ScriptEngine()
 {
 	m_engine->ShutDownAndRelease();
 }
@@ -352,6 +352,8 @@ bool ScriptEngine::ExecuteString(const char *script)
 
 		mod->Discard();
 	}
+
+	return result;
 }
 
 bool ScriptEngine::ExecuteFile(const char *path)

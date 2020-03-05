@@ -42,10 +42,13 @@ public:
 	StreamElementsFileSystemMapper(std::string rootFolderPath) :
 		m_rootFolderPath(rootFolderPath)
 	{
-		for (auto& p : std::experimental::filesystem::directory_iterator(rootFolderPath)) {
+		for (auto &p :
+		     std::experimental::filesystem::directory_iterator(
+			     rootFolderPath)) {
 			std::wstring path = p.path();
 
-			if (!std::experimental::filesystem::is_regular_file(path)) {
+			if (!std::experimental::filesystem::is_regular_file(
+				    path)) {
 				continue;
 			}
 
@@ -127,13 +130,13 @@ public:
 			absolute_path = path;
 
 			return true;
-		}
-		else if (std::experimental::filesystem::is_regular_file(path + ".html")) {
+		} else if (std::experimental::filesystem::is_regular_file(
+				   path + ".html")) {
 			absolute_path = path + ".html";
 
 			return true;
-		}
-		else if (std::experimental::filesystem::is_regular_file(path + "/index.html")) {
+		} else if (std::experimental::filesystem::is_regular_file(
+				   path + "/index.html")) {
 			absolute_path = path + "/index.html";
 
 			return true;

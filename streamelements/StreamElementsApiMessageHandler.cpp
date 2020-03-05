@@ -1459,10 +1459,49 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("queryHostReleaseGroupUpdateAvailability");
 	{
+		bool allowDowngrade = false;
+		bool forceInstall = false;
+		bool allowUseLastResponse = true;
+
+		if (args->GetSize() > 0) {
+			if (args->GetValue(0)->GetType() == VTYPE_DICTIONARY) {
+				CefRefPtr<CefDictionaryValue> d =
+					args->GetDictionary(0);
+
+				if (d->HasKey("allowDowngrade") &&
+				    d->GetType("allowDowngrade") ==
+					    VTYPE_BOOL) {
+					allowDowngrade =
+						d->GetBool("allowDowngrade");
+				}
+
+				if (d->HasKey("forceInstall") &&
+				    d->GetType("forceInstall") ==
+					    VTYPE_BOOL) {
+					forceInstall =
+						d->GetBool("forceInstall");
+				}
+
+				if (d->HasKey("allowUseLastResponse") &&
+				    d->GetType("allowUseLastResponse") == VTYPE_BOOL) {
+					allowUseLastResponse =
+						d->GetBool("allowUseLastResponse");
+				}
+			}
+		}
+
+		calldata_t *cd = calldata_create();
+		calldata_set_bool(cd, "allow_downgrade", allowDowngrade);
+		calldata_set_bool(cd, "force_install", forceInstall);
+		calldata_set_bool(cd, "allow_use_last_response",
+				  allowUseLastResponse);
+
 		signal_handler_signal(
 			obs_get_signal_handler(),
 			"streamelements_request_check_for_updates_silent",
-			nullptr);
+			cd);
+
+		calldata_free(cd);
 
 		result->SetBool(true);
 	}
