@@ -379,6 +379,11 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 				QObject::connect(
 					liveSupport, &QPushButton::clicked,
 					[]() {
+						StreamElementsGlobalStateManager::GetInstance()
+							->GetAnalyticsEventsManager()
+							->trackEvent(
+								"Live Support Clicked");
+
 						QUrl navigate_url = QUrl(
 							obs_module_text(
 								"StreamElements.Action.LiveSupport.URL"),
