@@ -2182,13 +2182,22 @@ bool DeserializeMenu(CefRefPtr<CefValue> input, QMenu &menu,
 		if (type == "separator") {
 			menu.addSeparator();
 		} else if (type == "command") {
+			bool enabled = true;
+
+			if (d->HasKey("enabled") &&
+			    d->GetType("enabled") == VTYPE_BOOL) {
+				enabled = d->GetBool("enabled");
+			}
+
 			if (!d->HasKey("title") ||
 			    d->GetType("title") != VTYPE_STRING)
 				return false;
 
-			if (!d->HasKey("invoke") ||
-			    d->GetType("invoke") != VTYPE_STRING)
-				return false;
+			if (enabled) {
+				if (!d->HasKey("invoke") ||
+				    d->GetType("invoke") != VTYPE_STRING)
+					return false;
+			}
 
 			std::string title = d->GetString("title");
 
@@ -2198,6 +2207,7 @@ bool DeserializeMenu(CefRefPtr<CefValue> input, QMenu &menu,
 				iconUrl.size() ? iconUrl.c_str() : nullptr);
 
 			auxAction->setText(title.c_str());
+			auxAction->setEnabled(enabled);
 
 			menu.addAction(auxAction);
 
@@ -2214,12 +2224,19 @@ bool DeserializeMenu(CefRefPtr<CefValue> input, QMenu &menu,
 					return true;
 				});
 		} else if (type == "container") {
+			bool enabled = true;
+
+			if (d->HasKey("enabled") &&
+			    d->GetType("enabled") == VTYPE_BOOL) {
+				enabled = d->GetBool("enabled");
+			}
+
 			if (!d->HasKey("title") ||
 			    d->GetType("title") != VTYPE_STRING)
 				return false;
 
 			if (!d->HasKey("items") ||
-			    d->GetType("items") != VTYPE_LIST)
+				d->GetType("items") != VTYPE_LIST)
 				return false;
 
 			std::string iconUrl = getIconUrl(d);
@@ -2229,6 +2246,8 @@ bool DeserializeMenu(CefRefPtr<CefValue> input, QMenu &menu,
 
 			submenu->setTitle(
 				d->GetString("title").ToString().c_str());
+
+			submenu->setEnabled(enabled);
 
 			menu.addMenu(submenu);
 
