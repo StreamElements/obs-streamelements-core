@@ -723,13 +723,13 @@ void StreamElementsGlobalStateManager::DeleteCookies()
 	}
 }
 
-extern void DispatchJSEvent(std::string eventName, std::string jsonString);
+extern void DispatchJSEvent(std::string eventName, std::string jsonString, BrowserSource* browser);
 
 static void DispatchJSEventAllBrowsers(const char *eventName,
 				       const char *jsonString)
 {
 	StreamElementsCefClient::DispatchJSEvent(eventName, jsonString);
-	DispatchJSEvent(eventName, jsonString);
+	DispatchJSEvent(eventName, jsonString, nullptr);
 }
 
 void StreamElementsGlobalStateManager::Reset(bool deleteAllCookies,

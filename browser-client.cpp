@@ -129,8 +129,11 @@ bool BrowserClient::OnProcessMessageReceived(
 		json = Json::object{
 			{"recording", obs_frontend_recording_active()},
 			{"streaming", obs_frontend_streaming_active()},
+			{"recordingPaused", obs_frontend_recording_paused()},
 			{"replaybuffer", obs_frontend_replay_buffer_active()}};
 
+	} else if (name == "saveReplayBuffer") {
+		obs_frontend_replay_buffer_save();
 	} else {
 #if CHROME_VERSION_BUILD >= 3770
 		return streamelementsMessageHandler.OnProcessMessageReceived(
@@ -397,19 +400,13 @@ void BrowserClient::OnLoadEnd(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame> frame,
 	if (frame->IsMain()) {
 		std::string base64EncodedCSS = base64_encode(source->css);
 
-		std::string href;
-		href += "data:text/css;charset=utf-8;base64,";
-		href += base64EncodedCSS;
-
 		std::string script;
-		script += "var link = document.createElement('link');";
-		script += "link.setAttribute('rel', 'stylesheet');";
-		script += "link.setAttribute('type', 'text/css');";
-		script += "link.setAttribute('href', '" + href + "');";
-		script +=
-			"document.getElementsByTagName('head')[0].appendChild(link);";
+		script += "const obsCSS = document.createElement('style');";
+		script += "obsCSS.innerHTML = atob(\"" + base64EncodedCSS +
+			  "\");";
+		script += "document.querySelector('head').appendChild(obsCSS);";
 
-		frame->ExecuteJavaScript(script, href, 0);
+		frame->ExecuteJavaScript(script, "", 0);
 	}
 }
 
