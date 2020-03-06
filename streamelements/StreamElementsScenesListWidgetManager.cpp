@@ -184,6 +184,16 @@ protected:
 		if (!o)
 			return false;
 
+		if (e->type() == QEvent::Paint) {
+			/* Every time the widget is painted, check whether it's viewMode()
+			 * has changed.
+			 *
+			 * If so, widgets must be updated with features supported by each
+			 * viewMode()
+			 */
+			m_manager->CheckViewMode();
+		}
+
 		if (e->type() != QEvent::MouseButtonDblClick && e->type() != QEvent::ContextMenu)
 			return false;
 
@@ -320,6 +330,8 @@ StreamElementsScenesListWidgetManager::StreamElementsScenesListWidgetManager(
 	if (!m_nativeWidget)
 		return;
 
+	m_prevViewMode = m_nativeWidget->viewMode();
+
 	m_eventFilter = new ScenesLocalEventFilter(this);
 
 	QApplication::instance()->installEventFilter(m_eventFilter);
@@ -370,7 +382,19 @@ StreamElementsScenesListWidgetManager::StreamElementsScenesListWidgetManager(
 	//});
 }
 
-StreamElementsScenesListWidgetManager::~StreamElementsScenesListWidgetManager()
+void StreamElementsScenesListWidgetManager::CheckViewMode()
+{
+	QListWidget::ViewMode mode = m_nativeWidget->viewMode();
+
+	if (mode != m_prevViewMode) {
+		m_prevViewMode = mode;
+
+		ScheduleUpdateWidgets();
+	}
+}
+
+StreamElementsScenesListWidgetManager::
+		~StreamElementsScenesListWidgetManager()
 {
 	m_enableSignals = false;
 
@@ -681,7 +705,12 @@ void StreamElementsScenesListWidgetManager::UpdateWidgets()
 				GetSceneContextMenu(scene));
 		}
 
-		m_nativeWidget->item(rowIndex)->setIcon(data->icon());
+		if (m_nativeWidget->viewMode() == QListView::IconMode) {
+			/* Grid Mode: icons are not supported */
+			m_nativeWidget->item(rowIndex)->setIcon(QIcon());
+		} else {
+			m_nativeWidget->item(rowIndex)->setIcon(data->icon());
+		}
 	}
 
 	obs_source_release(current_scene);

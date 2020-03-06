@@ -1900,4 +1900,6 @@ bool StreamElementsApiMessageHandler::InvokeHandler::InvokeApiCallAsync(
 			delete context;
 		},
 		context);
+
+	return true;
 }

@@ -64,6 +64,8 @@ public:
 
 	QListWidget *GetScenesListWidget() { return m_nativeWidget; }
 
+	void CheckViewMode();
+
 private:
 	void HandleScenesModelReset();
 	void HandleScenesModelItemInsertedRemoved(const QModelIndex &, int,
@@ -90,4 +92,5 @@ private:
 	CefRefPtr<CefValue> m_scenesToolBarActions = CefValue::Create();
 	QToolBar *m_scenesToolBar = nullptr;
 	QObject *m_eventFilter = nullptr;
+	QListWidget::ViewMode m_prevViewMode = QListView::ListMode;
 };

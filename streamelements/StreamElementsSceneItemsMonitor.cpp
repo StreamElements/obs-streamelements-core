@@ -119,6 +119,15 @@ public:
 		if (!mouse && !contextMenu)
 			return false;
 
+		if (target->objectName() == QString("preview")) {
+			/* OBS preview pane */
+			if (e->type() == QEvent::ContextMenu) {
+				// TODO: TBD: Handle context menu for preview window events
+			}
+
+			return false; // not handled
+		}
+
 		/* Make sure events belong to QListView item widgets */
 		if (!target->parent() ||
 		    !m_monitor->GetSceneItemsListView()->viewport() ||
