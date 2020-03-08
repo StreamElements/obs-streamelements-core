@@ -15,9 +15,14 @@
 #include <QHBoxLayout>
 #include <QPushButton>
 
-// TODO: TBD: When obs_sceneitem_group_add_item() and obs_sceneitem_group_remove_item()
-//            are fixed, change this to 1
+// obs_sceneitem_group_add_item() and obs_sceneitem_group_remove_item()
+// APIs are fixed in OBS 25 and are broken in previous versions.
+//
+#if LIBOBS_API_MAJOR_VER >= 25
+#define ENABLE_OBS_GROUP_ADD_REMOVE_ITEM 1
+#else
 #define ENABLE_OBS_GROUP_ADD_REMOVE_ITEM 0
+#endif
 
 // obs_scene_get_group deadlocks on full_lock(scene) when inside a scene signal handler
 #define ENABLE_GET_GROUP_SCENE_IN_SIGNAL_HANDLER 0
@@ -151,10 +156,43 @@ get_scene_source_by_id_addref(CefRefPtr<CefValue> input,
 
 ///////////////////////////////////////////////////////////////////////////
 
+static void signal_parent_scene(obs_scene_t *parent, const char *command,
+				calldata_t *params)
+{
+	calldata_set_ptr(params, "scene", parent);
+
+	obs_source_t *source = obs_scene_get_source(parent);
+
+	if (!source)
+		return;
+
+	signal_handler_t *handler = obs_source_get_signal_handler(source);
+
+	if (!handler)
+		return;
+
+	signal_handler_signal(handler, command, params);
+}
+
+static void signal_refresh(obs_scene_t *scene)
+{
+	struct calldata params;
+	uint8_t stack[128];
+
+	calldata_init_fixed(&params, stack, sizeof(stack));
+	signal_parent_scene(scene, "refresh", &params);
+}
+
 void StreamElementsObsSceneManager::RefreshObsSceneItemsList()
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
+	obs_source_t *scene_source = obs_frontend_get_current_scene();
+	obs_scene_t* current_scene = obs_scene_from_source(scene_source);
+	signal_refresh(current_scene);
+	obs_source_release(scene_source);
+
+#if LIBOBS_API_MAJOR_VER < 25
 	/*
 	 * This is a *HACK* which overrides an oversight in group
 	 * management API: when scene item group is added to the scene
@@ -191,53 +229,7 @@ void StreamElementsObsSceneManager::RefreshObsSceneItemsList()
 #endif
 	});
 
-	return;
-
-	/*
-	 * ReorderItems() refreshes the sources list only if source count differs
-	 * from previous source count.
-	 *
-	 * To make sure source list is refreshed, we add an empty group, refresh,
-	 * and the remove that group and refresh again.
-	 */
-
-	obs_source_t *currentScene = obs_frontend_get_current_scene();
-
-	if (!currentScene)
-		return;
-
-	obs_scene_t *scene = obs_scene_from_source(
-		currentScene); // does not increment refcount
-
-	struct atomic_update_args {
-		std::string unique_name;
-		obs_source_t *source = nullptr;
-		obs_sceneitem_t *sceneitem = nullptr;
-	};
-
-	atomic_update_args args;
-
-	args.unique_name = ObsGetUniqueSourceName("____REFRESH____");
-
-	args.sceneitem = obs_scene_add_group(scene, args.unique_name.c_str());
-
-	QtExecSync([listView]() -> void {
-		QMetaObject::invokeMethod(listView, "ReorderItems",
-					  Qt::DirectConnection);
-	});
-
-	QApplication::sendPostedEvents();
-
-	obs_sceneitem_remove(args.sceneitem);
-
-	QtExecSync([listView]() -> void {
-		QMetaObject::invokeMethod(listView, "ReorderItems",
-					  Qt::DirectConnection);
-	});
-
-	QApplication::sendPostedEvents();
-
-	obs_source_release(currentScene);
+#endif
 }
 
 static obs_sceneitem_t *FindSceneItemById(std::string id, bool addRef = false)
@@ -2033,7 +2025,7 @@ void StreamElementsObsSceneManager::DeserializeObsSceneItemGroup(
 				      : "";
 
 	obs_source_t *parent_scene =
-		get_scene_source_by_id_addref(sceneId, false);
+		get_scene_source_by_id_addref(sceneId, true);
 
 	if (!parent_scene)
 		return;
