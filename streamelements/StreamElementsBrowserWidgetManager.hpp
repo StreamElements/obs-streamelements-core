@@ -23,11 +23,13 @@ public:
 		{
 			m_url = other.m_url;
 			m_executeJavaScriptOnLoad = other.m_executeJavaScriptOnLoad;
+			m_reloadPolicy = other.m_reloadPolicy;
 		}
 
 	public:
 		std::string m_url;
 		std::string m_executeJavaScriptOnLoad;
+		std::string m_reloadPolicy = "reload";
 	};
 
 public:
@@ -58,6 +60,7 @@ public:
 		const char* const title,
 		const char* const url,
 		const char* const executeJavaScriptCodeOnLoad,
+		const char* const reloadPolicy,
 		const Qt::DockWidgetArea area,
 		const Qt::DockWidgetAreas allowedAreas = Qt::AllDockWidgetAreas,
 		const QDockWidget::DockWidgetFeatures features = QDockWidget::AllDockWidgetFeatures);

@@ -294,7 +294,8 @@ void StreamElementsBrowserWidgetManager::PushCentralBrowserWidget(
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
 	StreamElementsBrowserWidget *widget = new StreamElementsBrowserWidget(
-		nullptr, url, executeJavaScriptCodeOnLoad, "center", "");
+		nullptr, url, executeJavaScriptCodeOnLoad, "reload", "center",
+		"");
 
 	PushCentralWidget(widget);
 }
@@ -334,6 +335,7 @@ std::string StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 			std::string url;
 			std::string dockingAreaString = "floating";
 			std::string executeJavaScriptOnLoad;
+			std::string reloadPolicy = "reload";
 			bool visible = true;
 			QSizePolicy sizePolicy(QSizePolicy::Preferred,
 					       QSizePolicy::Preferred);
@@ -348,6 +350,13 @@ std::string StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 
 			title = widgetDictionary->GetString("title");
 			url = widgetDictionary->GetString("url");
+
+			if (widgetDictionary->HasKey("reloadPolicy") &&
+			    widgetDictionary->GetType("reloadPolicy") ==
+				    VTYPE_STRING) {
+				reloadPolicy = widgetDictionary->GetString(
+					"reloadPolicy");
+			}
 
 			if (widgetDictionary->HasKey("dockingArea")) {
 				dockingAreaString = widgetDictionary->GetString(
@@ -420,7 +429,7 @@ std::string StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 			if (AddDockBrowserWidget(
 				    id.c_str(), title.c_str(), url.c_str(),
 				    executeJavaScriptOnLoad.c_str(),
-				    dockingArea)) {
+				    reloadPolicy.c_str(), dockingArea)) {
 				QDockWidget *widget = GetDockWidget(id.c_str());
 
 				widget->setVisible(!visible);
@@ -458,7 +467,8 @@ std::string StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 bool StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 	const char *const id, const char *const title, const char *const url,
 	const char *const executeJavaScriptCodeOnLoad,
-	const Qt::DockWidgetArea area, const Qt::DockWidgetAreas allowedAreas,
+	const char *const reloadPolicy, const Qt::DockWidgetArea area,
+	const Qt::DockWidgetAreas allowedAreas,
 	const QDockWidget::DockWidgetFeatures features)
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
@@ -500,7 +510,7 @@ bool StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 	forwardAction->setEnabled(false);
 
 	StreamElementsBrowserWidget *widget = new StreamElementsBrowserWidget(
-		nullptr, url, executeJavaScriptCodeOnLoad,
+		nullptr, url, executeJavaScriptCodeOnLoad, reloadPolicy,
 		DockWidgetAreaToString(area).c_str(), id);
 
 	widget->connect(widget,
@@ -514,8 +524,16 @@ bool StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 
 	main->setCentralWidget(widget);
 
+	std::string reloadPolicyCopy = reloadPolicy;
+
 	reloadAction->connect(reloadAction, &QAction::triggered,
-			      [widget] { widget->BrowserReload(true); });
+			      [widget, reloadPolicyCopy] {
+				      if (reloadPolicyCopy == "navigate") {
+					      widget->BrowserLoadInitialPage();
+				      } else {
+					      widget->BrowserReload(true);
+				      }
+			      });
 
 	backAction->connect(backAction, &QAction::triggered,
 			    [widget] { widget->BrowserHistoryGoBack(); });
@@ -729,6 +747,8 @@ StreamElementsBrowserWidgetManager::GetDockBrowserWidgetInfo(
 	result->m_executeJavaScriptOnLoad =
 		m_browserWidgets[id]->GetExecuteJavaScriptCodeOnLoad();
 
+	result->m_reloadPolicy = m_browserWidgets[id]->GetReloadPolicy();
+
 	return result;
 }
 
@@ -763,6 +783,8 @@ void StreamElementsBrowserWidgetManager::SerializeDockingWidgets(
 			widgetDictionary->SetString(
 				"executeJavaScriptOnLoad",
 				info->m_executeJavaScriptOnLoad);
+			widgetDictionary->SetString("reloadPolicy",
+						    info->m_reloadPolicy);
 			widgetDictionary->SetBool("visible", info->m_visible);
 
 			QDockWidget *widget = GetDockWidget(id.c_str());
@@ -915,7 +937,8 @@ void StreamElementsBrowserWidgetManager::ShowNotificationBar(
 	HideNotificationBar();
 
 	m_notificationBarBrowserWidget = new StreamElementsBrowserWidget(
-		nullptr, url, executeJavaScriptCodeOnLoad, "notification", "");
+		nullptr, url, executeJavaScriptCodeOnLoad, "reload",
+		"notification", "");
 
 	const Qt::ToolBarArea NOTIFICATION_BAR_AREA = Qt::TopToolBarArea;
 

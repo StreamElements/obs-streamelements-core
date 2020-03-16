@@ -36,6 +36,7 @@ class StreamElementsBrowserWidget:
 private:
 	std::string m_url;
 	std::string m_executeJavaScriptCodeOnLoad;
+	std::string m_reloadPolicy;
 	std::string m_pendingLocationArea;
 	std::string m_pendingId;
 	StreamElementsApiMessageHandler* m_requestedApiMessageHandler;
@@ -49,6 +50,7 @@ public:
 		QWidget* parent,
 		const char* const url,
 		const char* const executeJavaScriptCodeOnLoad,
+		const char* const reloadPolicy,
 		const char* const locationArea,
 		const char* const id,
 		StreamElementsApiMessageHandler* apiMessageHandler = nullptr,
@@ -69,6 +71,7 @@ public:
 public:
 	std::string GetStartUrl();
 	std::string GetExecuteJavaScriptCodeOnLoad();
+	std::string GetReloadPolicy();
 	std::string GetCurrentUrl();
 
 	bool BrowserHistoryCanGoBack();

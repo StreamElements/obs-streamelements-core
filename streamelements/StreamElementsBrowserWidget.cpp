@@ -35,7 +35,8 @@ static bool QueueCEFTask(std::function<void()> task)
 StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 	QWidget *parent, const char *const url,
 	const char *const executeJavaScriptCodeOnLoad,
-	const char *const locationArea, const char *const id,
+	const char *const reloadPolicy, const char *const locationArea,
+	const char *const id,
 	StreamElementsApiMessageHandler *apiMessageHandler, bool isIncognito)
 	: QWidget(parent),
 	  m_url(url),
@@ -44,6 +45,7 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 	  m_executeJavaScriptCodeOnLoad(executeJavaScriptCodeOnLoad == nullptr
 						? ""
 						: executeJavaScriptCodeOnLoad),
+	  m_reloadPolicy(reloadPolicy),
 	  m_pendingLocationArea(locationArea == nullptr ? "" : locationArea),
 	  m_pendingId(id == nullptr ? "" : id),
 	  m_requestedApiMessageHandler(apiMessageHandler),
@@ -267,6 +269,11 @@ std::string StreamElementsBrowserWidget::GetExecuteJavaScriptCodeOnLoad()
 	return m_executeJavaScriptCodeOnLoad;
 }
 
+std::string StreamElementsBrowserWidget::GetReloadPolicy()
+{
+	return m_reloadPolicy;
+}
+
 bool StreamElementsBrowserWidget::BrowserHistoryCanGoBack()
 {
 	if (!m_cef_browser.get()) {
@@ -326,5 +333,10 @@ void StreamElementsBrowserWidget::BrowserLoadInitialPage(const char *const url)
 		m_url = url;
 	}
 
-	m_cef_browser->GetMainFrame()->LoadURL(GetInitialPageURLInternal());
+	if (m_cef_browser->GetMainFrame()->GetURL() == m_url) {
+		m_cef_browser->ReloadIgnoreCache();
+	} else {
+		m_cef_browser->GetMainFrame()->LoadURL(
+			GetInitialPageURLInternal());
+	}
 }

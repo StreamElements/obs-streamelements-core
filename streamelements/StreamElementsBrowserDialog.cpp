@@ -85,6 +85,7 @@ int StreamElementsBrowserDialog::exec()
 		nullptr,
 		m_url.c_str(),
 		m_executeJavaScriptOnLoad.c_str(),
+		"reload",
 		"dialog",
 		"",
 		new StreamElementsDialogApiMessageHandler(this),
