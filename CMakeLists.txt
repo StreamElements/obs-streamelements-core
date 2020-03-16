@@ -452,6 +452,11 @@ if (UNIX AND NOT APPLE)
 	install(DIRECTORY "${CEF_ROOT_DIR}/Release/" DESTINATION "${OBS_PLUGIN_DESTINATION}")
 endif()
 
+if (UNIX AND NOT APPLE)
+	install(DIRECTORY "${CEF_ROOT_DIR}/Resources/" DESTINATION "${OBS_PLUGIN_DESTINATION}")
+	install(DIRECTORY "${CEF_ROOT_DIR}/Release/" DESTINATION "${OBS_PLUGIN_DESTINATION}")
+endif()
+
 if(APPLE AND NOT BROWSER_DEPLOY)
 	add_custom_command(TARGET obs-browser POST_BUILD
 		COMMAND "install_name_tool" -change
