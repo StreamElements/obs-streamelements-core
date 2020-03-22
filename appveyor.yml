@@ -46,7 +46,7 @@ install:
 
     cd /d c:\local\obs-studio
 
-    git checkout 24.0.3
+    git checkout 25.0.1
 
     git submodule update --init --recursive
 
