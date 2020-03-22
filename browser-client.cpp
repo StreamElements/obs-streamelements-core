@@ -175,7 +175,8 @@ bool BrowserClient::GetViewRect(
 #endif
 	}
 
-	rect.Set(0, 0, source->width, source->height);
+	rect.Set(0, 0, source->width < 1 ? 1 : source->width,
+		 source->height < 1 ? 1 : source->height);
 #if CHROME_VERSION_BUILD >= 3578
 	return;
 #else
