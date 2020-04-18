@@ -197,6 +197,18 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 	case OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED:
 		name = "hostSceneListChanged";
 		break;
+	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED:
+		name = "hostSceneCollectionChanged";
+		break;
+	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_LIST_CHANGED:
+		name = "hostSceneCollectionListChanged";
+		break;
+	case OBS_FRONTEND_EVENT_PROFILE_CHANGED:
+		name = "hostProfileChanged";
+		break;
+	case OBS_FRONTEND_EVENT_PROFILE_LIST_CHANGED:
+		name = "hostProfileListChanged";
+		break;
 	case OBS_FRONTEND_EVENT_EXIT:
 		name = "hostExit";
 		break;

@@ -2637,29 +2637,6 @@ void StreamElementsObsSceneManager::SetObsSceneItemPropertiesById(
 						 d->GetBool("locked"));
 		}
 
-		if (d->HasKey("order") && d->GetType("order") == VTYPE_INT) {
-			int order = d->GetInt("order");
-
-			auto update = [&]() -> void {
-				if (!obs_sceneitem_get_scene(context.sceneitem))
-					return;
-
-				obs_sceneitem_set_order_position(
-					context.sceneitem, order);
-			};
-
-			using update_t = decltype(update);
-
-			obs_enter_graphics();
-			obs_scene_atomic_update(
-				scene,
-				[](void *data, obs_scene_t *) {
-					(*reinterpret_cast<update_t *>(data))();
-				},
-				&update);
-			obs_leave_graphics();
-		}
-
 #if ENABLE_OBS_GROUP_ADD_REMOVE_ITEM
 		// This piece of code just does not work. It seems that
 		// the implementation of `obs_sceneitem_group_remove_item`
@@ -2711,6 +2688,29 @@ void StreamElementsObsSceneManager::SetObsSceneItemPropertiesById(
 			}
 		}
 #endif
+
+		if (d->HasKey("order") && d->GetType("order") == VTYPE_INT) {
+			int order = d->GetInt("order");
+
+			auto update = [&]() -> void {
+				if (!obs_sceneitem_get_scene(context.sceneitem))
+					return;
+
+				obs_sceneitem_set_order_position(
+					context.sceneitem, order);
+			};
+
+			using update_t = decltype(update);
+
+			obs_enter_graphics();
+			obs_scene_atomic_update(
+				scene,
+				[](void *data, obs_scene_t *) {
+					(*reinterpret_cast<update_t *>(data))();
+				},
+				&update);
+			obs_leave_graphics();
+		}
 
 		// Result
 		SerializeSourceAndSceneItem(output, source, context.sceneitem);

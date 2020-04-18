@@ -137,6 +137,26 @@ public:
 		m_itemData.erase(key);
 	}
 
+	void removeDataNotInList(obs_frontend_source_list sources)
+	{
+		std::unordered_map<obs_source_t *, bool> sourcesMap;
+		for (size_t i = 0; i < sources.sources.num; ++i) {
+			sourcesMap[sources.sources.array[i]] = true;
+		}
+
+		std::vector<obs_source_t *> deleteList;
+
+		for (auto kv : m_itemData) {
+			if (!sourcesMap.count(kv.first)) {
+				deleteList.emplace_back(kv.first);
+			}
+		}
+
+		for (obs_source_t *key : deleteList) {
+			removeData(key);
+		}
+	}
+
 	void setData(obs_source_t *key, ItemData *value)
 	{
 		removeData(key);
@@ -673,6 +693,8 @@ void StreamElementsScenesListWidgetManager::UpdateWidgets()
 
 	bool isSignedIn =
 		!StreamElementsConfig::GetInstance()->IsOnBoardingMode();
+
+	SourceDataManager::instance()->removeDataNotInList(sources);
 
 	for (int rowIndex = 0; rowIndex < m_nativeWidget->count() &&
 				rowIndex < sources.sources.num;
