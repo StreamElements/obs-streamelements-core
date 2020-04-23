@@ -2287,6 +2287,15 @@ DeserializeAuxiliaryControlWidget(CefRefPtr<CefValue> input,
 		}
 	}
 
+	std::string styleSheet =
+		"QToolTip { color: #eeeeee; background-color: #000000; } ";
+
+	if (d->HasKey("color") && d->GetType("color") == VTYPE_STRING) {
+		styleSheet += "QPushButton { color: ";
+		styleSheet += d->GetString("color").ToString() + ";";
+		styleSheet += " }";
+	}
+
 	if (type == "container") {
 		if (!d->HasKey("items") || d->GetType("items") != VTYPE_LIST)
 			return nullptr;
@@ -2324,8 +2333,7 @@ DeserializeAuxiliaryControlWidget(CefRefPtr<CefValue> input,
 			control->setToolTip(tooltip.c_str());
 		}
 
-		control->setStyleSheet(
-			"QToolTip { color: #eeeeee; background-color: #000000; }");
+		control->setStyleSheet(styleSheet.c_str());
 
 		QObject::connect(control, &QPushButton::clicked, HandleClick);
 
@@ -2364,8 +2372,7 @@ DeserializeAuxiliaryControlWidget(CefRefPtr<CefValue> input,
 			control->setToolTip(tooltip.c_str());
 		}
 
-		control->setStyleSheet(
-			"QToolTip { color: #eeeeee; background-color: #000000; }");
+		control->setStyleSheet(styleSheet.c_str());
 
 		QObject::connect(control, &QPushButton::clicked, HandleClick);
 
@@ -2424,6 +2431,9 @@ bool DeserializeAndInvokeAction(CefRefPtr<CefValue> input,
 	} else if (invoke == ":defaultContextMenu") {
 		defaultContextMenu();
 
+		return true;
+	} else if (invoke == ":none") {
+		// No action
 		return true;
 	} else {
 		return StreamElementsApiMessageHandler::InvokeHandler::

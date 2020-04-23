@@ -19,6 +19,15 @@ public:
 	virtual ~StreamElementsObsSceneManager();
 
 public:
+	void Update()
+	{
+		if (m_sceneItemsMonitor)
+			m_sceneItemsMonitor->Update();
+
+		if (m_scenesWidgetManager)
+			m_scenesWidgetManager->Update();
+	}
+
 	void Reset()
 	{
 		DeserializeSceneItemsAuxiliaryActions(CefValue::Create(),
@@ -27,11 +36,7 @@ public:
 		DeserializeScenesAuxiliaryActions(CefValue::Create(),
 						  CefValue::Create());
 
-		if (m_sceneItemsMonitor)
-			m_sceneItemsMonitor->Update();
-
-		if (m_scenesWidgetManager)
-			m_scenesWidgetManager->Update();
+		Update();
 	}
 
 	/* Sources */

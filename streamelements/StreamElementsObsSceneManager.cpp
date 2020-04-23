@@ -873,6 +873,12 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 			StreamElementsSceneItemsMonitor::GetSceneItemContextMenu(
 				sceneitem)
 				->Copy());
+
+		root->SetValue(
+			"uiSettings",
+			StreamElementsSceneItemsMonitor::GetSceneItemUISettings(
+				sceneitem)
+				->Copy());
 	}
 
 	result->SetDictionary(root);
@@ -1121,9 +1127,26 @@ static void handle_scene_item_transform(void *my_data, calldata_t *cd)
 
 static void handle_scene_item_select(void *my_data, calldata_t *cd)
 {
-	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemSelected",
-				 "hostSceneItemSelected", false);
-	dispatch_scene_update(my_data, cd);
+	obs_sceneitem_t *sceneitem =
+		(obs_sceneitem_t *)calldata_ptr(cd, "item");
+
+	bool enabled =
+		StreamElementsSceneItemsMonitor::GetSceneItemUISettingsEnabled(
+			sceneitem);
+
+	if (enabled) {
+		dispatch_sceneitem_event(my_data, cd,
+					 "hostActiveSceneItemSelected",
+					 "hostSceneItemSelected", false);
+		dispatch_scene_update(my_data, cd);
+	} else {
+		obs_sceneitem_select(sceneitem, false);
+	}
+
+	auto sceneManager = (StreamElementsObsSceneManager *)my_data;
+
+	if (sceneManager)
+		sceneManager->Update();
 }
 
 static void handle_scene_item_deselect(void *my_data, calldata_t *cd)
@@ -1131,6 +1154,11 @@ static void handle_scene_item_deselect(void *my_data, calldata_t *cd)
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemUnselected",
 				 "hostSceneItemUnselected", false);
 	dispatch_scene_update(my_data, cd);
+
+	auto sceneManager = (StreamElementsObsSceneManager *)my_data;
+
+	if (sceneManager)
+		sceneManager->Update();
 }
 
 static void handle_scene_item_remove(void *my_data, calldata_t *cd)
@@ -1151,6 +1179,11 @@ static void handle_scene_item_remove(void *my_data, calldata_t *cd)
 	obs_scene_t *group_scene = obs_sceneitem_group_get_scene(sceneitem);
 
 	remove_scene_signals(group_scene, my_data);
+
+	auto sceneManager = (StreamElementsObsSceneManager *)my_data;
+
+	if (sceneManager)
+		sceneManager->Update();
 }
 
 static void handle_scene_item_reorder(void *my_data, calldata_t *cd)
@@ -1159,6 +1192,11 @@ static void handle_scene_item_reorder(void *my_data, calldata_t *cd)
 			     "hostSceneItemOrderChanged");
 
 	dispatch_scene_update(my_data, cd);
+
+	auto sceneManager = (StreamElementsObsSceneManager *)my_data;
+
+	if (sceneManager)
+		sceneManager->Update();
 }
 
 static void handle_scene_item_source_update_props(void *my_data, calldata_t *cd)
@@ -1202,6 +1240,11 @@ static void handle_scene_item_add(void *my_data, calldata_t *cd)
 	obs_scene_t *group_scene = obs_sceneitem_group_get_scene(sceneitem);
 
 	add_scene_signals(group_scene, my_data);
+
+	auto sceneManager = (StreamElementsObsSceneManager *)my_data;
+
+	if (sceneManager)
+		sceneManager->Update();
 }
 
 static void remove_source_signals(obs_source_t *source, void *data)
@@ -2616,6 +2659,12 @@ void StreamElementsObsSceneManager::SetObsSceneItemPropertiesById(
 			m_sceneItemsMonitor->SetSceneItemContextMenu(
 				context.sceneitem,
 				d->GetValue("contextMenu")->Copy());
+		}
+
+		if (d->HasKey("uiSettings")) {
+			m_sceneItemsMonitor->SetSceneItemUISettings(
+				context.sceneitem,
+				d->GetValue("uiSettings")->Copy());
 		}
 
 		obs_transform_info info;

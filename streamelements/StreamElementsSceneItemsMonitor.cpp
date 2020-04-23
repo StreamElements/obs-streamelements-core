@@ -17,6 +17,8 @@
 #include <QLabel>
 #include <QMenu>
 #include <QContextMenuEvent>
+#include <QGraphicsOpacityEffect>
+#include <QToolButton>
 
 static const char *ITEM_PRIVATE_DATA_KEY_UI_AUXILIARY_ACTIONS =
 	"streamelements_aux_ui_actions";
@@ -30,6 +32,8 @@ static const char *ITEM_PRIVATE_DATA_KEY_UI_CONTEXT_MENU =
 	"streamelements_ui_context_menu";
 
 static const char *ITEM_PRIVATE_DATA_KEY_APPDATA = "streamelements_app_data";
+
+static const char *ITEM_PRIVATE_DATA_KEY_UI_SETTINGS = "streamelements_ui_settings";
 
 static const char *WIDGET_PROP_DEFAULT_ACTION_BYPASS_COUNT =
 	"streamelements_default_action_bypass_count";
@@ -89,6 +93,247 @@ static obs_sceneitem_t *GetObjectSceneItemAddRef(QObject *o)
 		       : nullptr;
 }
 
+typedef std::vector<obs_sceneitem_t *> sceneitem_list_t;
+
+static void ReleaseSceneItemsList(sceneitem_list_t* list) {
+	for (auto sceneitem : *list) {
+		obs_sceneitem_release(sceneitem);
+	}
+
+	delete list;
+}
+
+static sceneitem_list_t* GetSelectedSceneItemsAddRef()
+{
+	obs_source_t *sceneSource = obs_frontend_get_current_scene();
+
+	obs_scene_t *scene = obs_scene_from_source(sceneSource); // does not increment refcount
+
+	sceneitem_list_t* sceneItems = new sceneitem_list_t();
+
+	obs_scene_enum_items(scene,
+			     [](obs_scene_t *scene, obs_sceneitem_t *sceneitem,
+				void *param) {
+			sceneitem_list_t *list = (sceneitem_list_t *)param;
+
+			if (obs_sceneitem_selected(sceneitem)) {
+				obs_sceneitem_addref(sceneitem);
+
+				list->push_back(sceneitem);
+			}
+
+			// Continue iteration
+			return true;
+		},
+		sceneItems);
+
+	obs_source_release(sceneSource);
+
+	return sceneItems;
+}
+
+static bool
+SceneItemHasCustomContextMenu(obs_sceneitem_t* scene_item)
+{
+	CefRefPtr<CefValue> value =
+		StreamElementsSceneItemsMonitor::GetSceneItemContextMenu(
+			scene_item);
+
+	if (value->GetType() == VTYPE_LIST && value->GetList()->GetSize()) {
+		return true;
+	}
+
+	return false;
+}
+
+static bool HandleDefaultActionRequest(obs_sceneitem_t *scene_item,
+				       StreamElementsSceneItemsMonitor *monitor,
+				       QEvent *e)
+{
+	bool handled = false;
+
+	bool enabled =
+		StreamElementsSceneItemsMonitor::GetSceneItemUISettingsEnabled(
+			scene_item);
+
+	if (!enabled) {
+		handled = true;
+	} else {
+		CefRefPtr<CefValue> value = StreamElementsSceneItemsMonitor::
+			GetSceneItemDefaultAction(scene_item);
+
+		if (value->GetType() == VTYPE_DICTIONARY) {
+			auto defaultAction = [monitor, scene_item]() {
+				if (!scene_item)
+					return;
+
+				monitor
+					->InvokeCurrentSceneItemDefaultAction(
+						scene_item);
+			};
+
+			auto defaultContextMenu = [monitor, scene_item]() {
+				if (!scene_item)
+					return;
+
+				monitor
+					->InvokeCurrentSceneItemDefaultAction(
+						scene_item);
+			};
+
+			handled = DeserializeAndInvokeAction(
+				value, defaultAction, defaultContextMenu);
+		}
+	}
+
+	return handled;
+}
+
+static bool
+HandleSceneItemContextMenuRequest(obs_sceneitem_t *scene_item,
+				  StreamElementsSceneItemsMonitor *monitor,
+				  QEvent *e)
+{
+	bool handled = false;
+
+	bool enabled =
+		StreamElementsSceneItemsMonitor::GetSceneItemUISettingsEnabled(
+			scene_item);
+
+	if (!enabled) {
+		handled = true;
+	} else {
+		CefRefPtr<CefValue> value =
+			StreamElementsSceneItemsMonitor::GetSceneItemContextMenu(
+				scene_item);
+
+		if (value->GetType() == VTYPE_LIST &&
+		    value->GetList()->GetSize()) {
+			auto defaultAction = [monitor, scene_item]() {
+				if (!scene_item)
+					return;
+
+				monitor->InvokeCurrentSceneItemDefaultAction(
+					scene_item);
+			};
+
+			auto defaultContextMenu = [monitor, scene_item]() {
+				if (!scene_item)
+					return;
+
+				monitor->InvokeCurrentSceneItemDefaultContextMenu(
+					scene_item);
+			};
+
+			QMenu menu; //(m_mainWindow);
+
+			handled = DeserializeMenu(value, menu, defaultAction,
+						  defaultContextMenu);
+
+			if (handled) {
+				QContextMenuEvent *event =
+					dynamic_cast<QContextMenuEvent *>(e);
+
+				if (event)
+					menu.exec(event->globalPos());
+				else
+					handled = false;
+			}
+		}
+	}
+
+	return handled;
+}
+
+static bool IsContextMenuAllowed() {
+	bool allowed = true;
+
+	sceneitem_list_t *list = GetSelectedSceneItemsAddRef();
+
+	if (list->size() > 1) {
+		// Selected items list >1 - OBS default behavior if no item has custom
+		// context menu.
+		//
+		// We can not disable context menu altogether due to "Group Items" menu
+		// item which is special to multiple item selection.
+		//
+		for (auto scene_item : *list) {
+			if (SceneItemHasCustomContextMenu(scene_item)) {
+				// Item has custom context menu, we don't allow default context
+				// menu in this case since it can lead to inconsistency.
+				//
+				// We also do not allow custom context menu in this case.
+				allowed = false;
+				break;
+			}
+
+			if (!StreamElementsSceneItemsMonitor::
+				    GetSceneItemUISettingsMultiselectContextMenuEnabled(
+					    scene_item)) {
+				// Context menu for multiple scene items is explicitly disabled
+				// by uiSettings of any selected scene item: disable context menu
+				// in this case.
+				allowed = false;
+				break;
+			}
+		}
+	} else if (list->size() == 1) {
+		// Single seelcted scene item
+		allowed = true;
+	}
+
+	ReleaseSceneItemsList(list);
+
+	return allowed;
+}
+
+static bool IsSceneItemSettingsActionAllowed()
+{
+	bool allowed = true;
+
+	sceneitem_list_t *list = GetSelectedSceneItemsAddRef();
+
+	allowed = list->size() == 1;
+
+	if (allowed) {
+		allowed = StreamElementsSceneItemsMonitor::
+			GetSceneItemUISettingsEnabled((*list)[0]);
+	}
+
+	if (allowed) {
+		auto scene_item = (*list)[0];
+
+		CefRefPtr<CefValue> value = StreamElementsSceneItemsMonitor::
+			GetSceneItemDefaultAction(scene_item);
+
+		if (value->GetType() == VTYPE_DICTIONARY) {
+			// Default action override is in effect
+			allowed = false;
+		}
+	}
+
+	ReleaseSceneItemsList(list);
+
+	return allowed;
+}
+
+static bool IsSceneItemReorderActionAllowed() {
+	bool allowed = true;
+
+	sceneitem_list_t *list = GetSelectedSceneItemsAddRef();
+
+	allowed = list->size() == 1;
+
+	if (allowed) {
+		allowed = StreamElementsSceneItemsMonitor::
+			GetSceneItemUISettingsEnabled((*list)[0]);
+	}
+
+	ReleaseSceneItemsList(list);
+
+	return allowed;
+}
+
 static class SceneItemsLocalEventFilter : public QObject {
 private:
 	QMainWindow *m_mainWindow;
@@ -122,7 +367,29 @@ public:
 		if (target->objectName() == QString("preview")) {
 			/* OBS preview pane */
 			if (e->type() == QEvent::ContextMenu) {
-				// TODO: TBD: Handle context menu for preview window events
+				// Handle context menu for preview window events
+				bool handled = !IsContextMenuAllowed();
+
+				if (!handled) {
+					sceneitem_list_t *list =
+						GetSelectedSceneItemsAddRef();
+
+					if (list->size() > 0) {
+						// First selected scene item
+						obs_sceneitem_t *scene_item =
+							(*list)[0];
+
+						handled =
+							HandleSceneItemContextMenuRequest(
+								scene_item,
+								this->m_monitor,
+								e);
+					}
+
+					ReleaseSceneItemsList(list);
+				}
+
+				return handled;
 			}
 
 			return false; // not handled
@@ -136,14 +403,18 @@ public:
 			return false;
 
 		QWidget *o = dynamic_cast<QWidget *>(target);
-		/*
-		QWidget *o = m_monitor->GetWidgetAtLocalPosition(
-			mouse ? mouse->localPos() : contextMenu->pos());*/
 
 		if (!o)
 			return false;
 
 		if (e->type() == QEvent::MouseButtonDblClick) {
+			auto mouseEvent = dynamic_cast<QMouseEvent *>(e);
+
+			if (mouseEvent->button() != Qt::LeftButton) {
+				// No right mouse button doubleclicks
+				return true;
+			}
+
 			QVariant bypassValue = o->property(
 				WIDGET_PROP_DEFAULT_ACTION_BYPASS_COUNT);
 			if (bypassValue.isValid()) {
@@ -167,33 +438,8 @@ public:
 
 			bool handled = false;
 
-			CefRefPtr<CefValue> value =
-				StreamElementsSceneItemsMonitor::
-					GetSceneItemDefaultAction(scene_item);
-
-			if (value->GetType() == VTYPE_DICTIONARY) {
-				auto defaultAction = [this, scene_item]() {
-					if (!scene_item)
-						return;
-
-					this->m_monitor
-						->InvokeCurrentSceneItemDefaultAction(
-							scene_item);
-				};
-
-				auto defaultContextMenu = [this, scene_item]() {
-					if (!scene_item)
-						return;
-
-					this->m_monitor
-						->InvokeCurrentSceneItemDefaultAction(
-							scene_item);
-				};
-
-				handled = DeserializeAndInvokeAction(
-					value, defaultAction,
-					defaultContextMenu);
-			}
+			handled = HandleDefaultActionRequest(
+				scene_item, this->m_monitor, e);
 
 			if (scene_item)
 				obs_sceneitem_release(scene_item);
@@ -208,47 +454,11 @@ public:
 			if (!scene_item)
 				return false;
 
-			CefRefPtr<CefValue> value =
-				StreamElementsSceneItemsMonitor::
-					GetSceneItemContextMenu(scene_item);
+			bool handled = !IsContextMenuAllowed();
 
-			bool handled = false;
-
-			if (value->GetType() == VTYPE_LIST &&
-			    value->GetList()->GetSize()) {
-				auto defaultAction = [this, scene_item]() {
-					if (!scene_item)
-						return;
-
-					this->m_monitor
-						->InvokeCurrentSceneItemDefaultAction(
-							scene_item);
-				};
-
-				auto defaultContextMenu = [this, scene_item]() {
-					if (!scene_item)
-						return;
-
-					this->m_monitor
-						->InvokeCurrentSceneItemDefaultContextMenu(
-							scene_item);
-				};
-
-				QMenu menu; //(m_mainWindow);
-
-				handled = DeserializeMenu(value, menu,
-							  defaultAction,
-							  defaultContextMenu);
-
-				if (handled) {
-					QContextMenuEvent *event = dynamic_cast<
-						QContextMenuEvent *>(e);
-
-					if (event)
-						menu.exec(event->globalPos());
-					else
-						handled = false;
-				}
+			if (!handled) {
+				handled = HandleSceneItemContextMenuRequest(
+					scene_item, this->m_monitor, e);
 			}
 
 			if (scene_item)
@@ -573,6 +783,7 @@ void StreamElementsSceneItemsMonitor::SetSceneItemContextMenu(
 				  ITEM_PRIVATE_DATA_KEY_UI_CONTEXT_MENU, menu);
 }
 
+
 CefRefPtr<CefValue> StreamElementsSceneItemsMonitor::GetSceneItemAuxiliaryData(
 	obs_sceneitem_t *scene_item)
 {
@@ -584,6 +795,53 @@ void StreamElementsSceneItemsMonitor::SetSceneItemAuxiliaryData(
 	obs_sceneitem_t *scene_item, CefRefPtr<CefValue> data)
 {
 	SetSceneItemPropertyValue(scene_item, ITEM_PRIVATE_DATA_KEY_APPDATA,
+				  data, false);
+}
+
+CefRefPtr<CefValue> StreamElementsSceneItemsMonitor::GetSceneItemUISettings(
+	obs_sceneitem_t *scene_item)
+{
+	return GetSceneItemPropertyValue(scene_item, ITEM_PRIVATE_DATA_KEY_UI_SETTINGS);
+}
+
+bool StreamElementsSceneItemsMonitor::GetSceneItemUISettingsEnabled(
+	obs_sceneitem_t *scene_item)
+{
+	CefRefPtr<CefValue> settings = GetSceneItemUISettings(scene_item);
+
+	if (!settings || settings->GetType() != VTYPE_DICTIONARY)
+		return true;
+
+	CefRefPtr<CefDictionaryValue> d = settings->GetDictionary();
+
+	if (d->HasKey("enabled") && d->GetType("enabled") == VTYPE_BOOL)
+		return d->GetBool("enabled");
+	else
+		return true;
+}
+
+bool StreamElementsSceneItemsMonitor::GetSceneItemUISettingsMultiselectContextMenuEnabled(
+	obs_sceneitem_t *scene_item)
+{
+	CefRefPtr<CefValue> settings = GetSceneItemUISettings(scene_item);
+
+	if (!settings || settings->GetType() != VTYPE_DICTIONARY)
+		return true;
+
+	CefRefPtr<CefDictionaryValue> d = settings->GetDictionary();
+
+	if (d->HasKey("multipleItemsContextMenuEnabled") &&
+	    d->GetType("multipleItemsContextMenuEnabled") == VTYPE_BOOL)
+		return d->GetBool("multipleItemsContextMenuEnabled");
+	else
+		return true;
+}
+
+void StreamElementsSceneItemsMonitor::SetSceneItemUISettings(
+	obs_sceneitem_t *scene_item, CefRefPtr<CefValue> data)
+{
+	SetSceneItemPropertyValue(scene_item,
+				  ITEM_PRIVATE_DATA_KEY_UI_SETTINGS,
 				  data, false);
 }
 
@@ -665,6 +923,46 @@ static void deserializeSceneItemIcon(StreamElementsSceneItemsMonitor *monitor,
 	}
 }
 
+static void
+deserializeSceneItemUISettings(StreamElementsSceneItemsMonitor *monitor,
+			       obs_scene_t *scene, obs_sceneitem_t *scene_item,
+			       QWidget *widget, bool isSignedIn)
+{
+	double opacity = 1.0;
+	bool enabled = true;
+
+	if (isSignedIn) {
+		CefRefPtr<CefValue> settings =
+			monitor->GetSceneItemUISettings(scene_item);
+
+		if (!!settings && settings->GetType() == VTYPE_DICTIONARY) {
+			CefRefPtr<CefDictionaryValue> d =
+				settings->GetDictionary();
+
+			if (d->HasKey("opacity") &&
+			    d->GetType("opacity") == VTYPE_DOUBLE) {
+				opacity = max(min(d->GetDouble("opacity"), 1.0),
+					      0.0);
+			}
+
+			if (d->HasKey("enabled") &&
+			    d->GetType("enabled") == VTYPE_BOOL) {
+				enabled = d->GetBool("enabled");
+			}
+		}
+	}
+
+	if (opacity < 1.0) {
+		auto effect = new QGraphicsOpacityEffect(widget);
+		effect->setOpacity(opacity);
+		widget->setGraphicsEffect(effect);
+	} else {
+		widget->setGraphicsEffect(nullptr);
+	}
+
+	widget->setEnabled(enabled);
+}
+
 void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 {
 	if (!m_sceneItemsModel)
@@ -681,6 +979,32 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 		sceneSource); // does not increment refcount
 
 	obs_scene_enum_items(scene, retrieveSceneItemsWithAddRef, &sceneItems);
+
+	for (auto toolButton : m_sceneItemsToolBar->findChildren<QToolButton *>()) {
+		auto action = toolButton->defaultAction();
+
+		if (!action)
+			continue;
+
+		bool enabled = true;
+
+		if (action->objectName() == "actionSourceProperties") {
+			enabled = IsSceneItemSettingsActionAllowed();
+		} else if (action->objectName() == "actionSourceUp" ||
+			   action->objectName() == "actionSourceDown") {
+			enabled = IsSceneItemReorderActionAllowed();
+		}
+
+		toolButton->setEnabled(enabled);
+
+		if (enabled) {
+			toolButton->setGraphicsEffect(nullptr);
+		} else {
+			auto effect = new QGraphicsOpacityEffect(toolButton);
+			effect->setOpacity(0.2);
+			toolButton->setGraphicsEffect(effect);
+		}
+	}
 
 	for (int rowIndex = 0; rowIndex < m_sceneItemsModel->rowCount() &&
 			       rowIndex < sceneItems.size();
@@ -701,6 +1025,9 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 
 		bool isSignedIn =
 			!StreamElementsConfig::GetInstance()->IsOnBoardingMode();
+
+		deserializeSceneItemUISettings(this, scene, scene_item, widget,
+					       isSignedIn);
 
 		{
 			QList<QWidget *> list = widget->findChildren<QWidget *>(

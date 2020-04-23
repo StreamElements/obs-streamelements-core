@@ -10,6 +10,7 @@
 #include <QAbstractItemModel>
 #include <QToolBar>
 #include <QListWidget>
+#include <QToolButton>
 
 #include <obs.h>
 
@@ -59,6 +60,18 @@ public:
 		obs_sceneitem_t *scene_item);
 
 	void SetSceneItemAuxiliaryData(obs_sceneitem_t *scene_item,
+				       CefRefPtr<CefValue> data);
+
+	CefRefPtr<CefValue> static GetSceneItemUISettings(
+		obs_sceneitem_t *scene_item);
+
+	bool static GetSceneItemUISettingsEnabled(
+		obs_sceneitem_t *scene_item);
+
+	bool static GetSceneItemUISettingsMultiselectContextMenuEnabled(
+		obs_sceneitem_t *scene_item);
+
+	void SetSceneItemUISettings(obs_sceneitem_t *scene_item,
 				       CefRefPtr<CefValue> data);
 
 	bool InvokeCurrentSceneItemDefaultAction(obs_sceneitem_t *scene_item);
@@ -116,14 +129,12 @@ protected:
 private:
 	QMainWindow *m_mainWindow;
 	QListView *m_sceneItemsListView = nullptr;
-	//QListView *m_scenesListView = nullptr;
-	//QListWidget *m_scenesListWidget = nullptr;
 	QToolBar *m_sceneItemsToolBar = nullptr;
 	QAbstractItemModel *m_sceneItemsModel = nullptr;
-	//QAbstractItemModel *m_scenesModel = nullptr;
 	bool m_enableSignals = false;
 	StreamElementsDeferredExecutive
 		m_updateSceneItemsWidgetsThrottledExecutive;
 	QObject *m_eventFilter = nullptr;
 	CefRefPtr<CefValue> m_sceneItemsToolBarActions = CefValue::Create();
+	QToolButton *m_nativeActionSourcePropertiesButton = nullptr;
 };
