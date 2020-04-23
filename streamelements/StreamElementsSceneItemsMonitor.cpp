@@ -246,6 +246,9 @@ HandleSceneItemContextMenuRequest(obs_sceneitem_t *scene_item,
 }
 
 static bool IsContextMenuAllowed() {
+	if (StreamElementsConfig::GetInstance()->IsOnBoardingMode())
+		return true;
+
 	bool allowed = true;
 
 	sceneitem_list_t *list = GetSelectedSceneItemsAddRef();
@@ -289,6 +292,9 @@ static bool IsContextMenuAllowed() {
 
 static bool IsSceneItemSettingsActionAllowed()
 {
+	if (StreamElementsConfig::GetInstance()->IsOnBoardingMode())
+		return true;
+
 	bool allowed = true;
 
 	sceneitem_list_t *list = GetSelectedSceneItemsAddRef();
@@ -318,6 +324,9 @@ static bool IsSceneItemSettingsActionAllowed()
 }
 
 static bool IsSceneItemReorderActionAllowed() {
+	if (StreamElementsConfig::GetInstance()->IsOnBoardingMode())
+		return true;
+
 	bool allowed = true;
 
 	sceneitem_list_t *list = GetSelectedSceneItemsAddRef();
@@ -980,6 +989,9 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 
 	obs_scene_enum_items(scene, retrieveSceneItemsWithAddRef, &sceneItems);
 
+	bool isSignedIn =
+		!StreamElementsConfig::GetInstance()->IsOnBoardingMode();
+
 	for (auto toolButton : m_sceneItemsToolBar->findChildren<QToolButton *>()) {
 		auto action = toolButton->defaultAction();
 
@@ -1022,9 +1034,6 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 
 		if (!layout)
 			continue;
-
-		bool isSignedIn =
-			!StreamElementsConfig::GetInstance()->IsOnBoardingMode();
 
 		deserializeSceneItemUISettings(this, scene, scene_item, widget,
 					       isSignedIn);
