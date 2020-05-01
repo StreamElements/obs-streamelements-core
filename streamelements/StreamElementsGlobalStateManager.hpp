@@ -159,6 +159,10 @@ public:
 	void SerializeUserInterfaceState(CefRefPtr<CefValue> &output);
 	bool DeserializeUserInterfaceState(CefRefPtr<CefValue> input);
 
+private:
+	std::recursive_mutex m_mutex;
+	long m_apiTransactionLevel = 0;
+
 protected:
 	virtual void OnObsExit() override;
 

@@ -2565,3 +2565,82 @@ void ObsEnumAllScenes(std::function < bool(obs_source_t * scene)> func)
 		obs_source_release(scene);
 	}
 }
+
+class TimedObsApiTransactionHandle {
+private:
+	static std::map<std::string, TimedObsApiTransactionHandle *> s_map;
+	static std::recursive_mutex s_mutex;
+
+public:
+	static std::string Create(int timeoutMilliseconds = 60000)
+	{
+		std::lock_guard<std::recursive_mutex> guard(s_mutex);
+
+		std::string id = CreateGloballyUniqueIdString();
+
+		s_map[id] = new TimedObsApiTransactionHandle(id, timeoutMilliseconds,
+						       [id]() { Destroy(id); });
+
+		if (s_map.size() == 1) {
+			obs_frontend_defer_save_begin();
+		}
+
+		return id;
+	}
+
+	static void Destroy(std::string id) {
+		std::lock_guard<std::recursive_mutex> guard(s_mutex);
+
+		if (!s_map.count(id))
+			return;
+
+		delete s_map[id];
+
+		s_map.erase(id);
+
+		if (s_map.size() == 0) {
+			obs_frontend_defer_save_end();
+		}
+	}
+
+private:
+	TimedObsApiTransactionHandle(
+		std::string id,
+		int timeoutMilliseconds, std::function<void()> onTimer)
+		: m_id(id), m_onTimer(onTimer)
+	{
+		m_timer = new QTimer();
+		m_timer->moveToThread(qApp->thread());
+		m_timer->setInterval(timeoutMilliseconds);
+		m_timer->setSingleShot(true);
+		QObject::connect(m_timer, &QTimer::timeout, [this]() {
+			m_onTimer();
+		});
+		QMetaObject::invokeMethod(m_timer, "start",
+					  Qt::QueuedConnection,
+					  Q_ARG(int, timeoutMilliseconds));
+	}
+
+	~TimedObsApiTransactionHandle() {
+		QMetaObject::invokeMethod(m_timer, "stop",
+					  Qt::QueuedConnection, Q_ARG(int, 0));
+
+		m_timer->deleteLater();
+	}
+
+private:
+	std::string m_id;
+	std::function<void()> m_onTimer;
+	QTimer *m_timer;
+};
+
+std::map<std::string, TimedObsApiTransactionHandle *> TimedObsApiTransactionHandle::s_map;
+std::recursive_mutex TimedObsApiTransactionHandle::s_mutex;
+
+std::string CreateTimedObsApiTransaction(int timeoutMilliseconds) {
+	return TimedObsApiTransactionHandle::Create(timeoutMilliseconds);
+}
+
+void CompleteTimedObsApiTransaction(std::string id) {
+	TimedObsApiTransactionHandle::Destroy(id);
+}

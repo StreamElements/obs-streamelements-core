@@ -307,3 +307,8 @@ bool IsCefValueEqual(CefRefPtr<CefValue> a, CefRefPtr<CefValue> b);
 /* ========================================================= */
 
 void ObsEnumAllScenes(std::function<bool(obs_source_t *scene)> func);
+
+/* ========================================================= */
+
+std::string CreateTimedObsApiTransaction(int timeoutMilliseconds = 60000);
+void CompleteTimedObsApiTransaction(std::string id);

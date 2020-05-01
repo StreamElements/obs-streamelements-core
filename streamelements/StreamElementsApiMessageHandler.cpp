@@ -1856,6 +1856,22 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("beginDeferSaveTransaction");
+	{
+		result->SetString(CreateTimedObsApiTransaction());
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("completeDeferSaveTransaction");
+	{
+		if (args->GetSize() && args->GetType(0) == VTYPE_STRING) {
+			CompleteTimedObsApiTransaction(args->GetString(0));
+
+			result->SetBool(true);
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("crashProgram");
 	{
 		// Crash
