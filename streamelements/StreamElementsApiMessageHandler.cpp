@@ -1872,6 +1872,18 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("getAllCookies");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->SerializeCookies(args->GetValue(0), result);
+		} else {
+			StreamElementsGlobalStateManager::GetInstance()
+				->SerializeCookies(CefValue::Create(), result);
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("crashProgram");
 	{
 		// Crash

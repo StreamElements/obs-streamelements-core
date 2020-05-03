@@ -15,7 +15,7 @@
  * of existing functionality).
  */
 #ifndef HOST_API_VERSION_MINOR
-#define HOST_API_VERSION_MINOR 33
+#define HOST_API_VERSION_MINOR 34
 #endif
 
 /* Numeric value in the YYYYMMDDHHmmss format, indicating the current

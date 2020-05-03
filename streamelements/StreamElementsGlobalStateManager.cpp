@@ -740,6 +740,112 @@ void StreamElementsGlobalStateManager::DeleteCookies()
 	}
 }
 
+void StreamElementsGlobalStateManager::SerializeCookies(
+	CefRefPtr<CefValue> &input, CefRefPtr<CefValue> &output)
+{
+	output->SetNull();
+
+	class CookieVisitor : public CefCookieVisitor {
+	public:
+		std::string domainFilter;
+		std::string nameFilter;
+
+		CefRefPtr<CefListValue> result;
+		os_event_t *event;
+
+	public:
+		CookieVisitor(os_event_t *completionEvent)
+			: result(CefListValue::Create()), event(completionEvent)
+		{
+		}
+
+		~CookieVisitor() {
+			os_event_signal(event);
+		}
+
+		virtual bool Visit(const CefCookie &cookie, int count,
+				   int total, bool &deleteCookie) override
+		{
+			UNUSED_PARAMETER(count);
+			UNUSED_PARAMETER(total);
+
+			CefString value(&cookie.value);
+			CefString domain(&cookie.domain);
+			CefString name(&cookie.name);
+
+			if (domainFilter.size() && domain != domainFilter)
+				return true;
+
+			if (nameFilter.size() && name != nameFilter)
+				return true;
+
+			CefRefPtr<CefDictionaryValue> d =
+					CefDictionaryValue::Create();
+
+			d->SetString("name", name);
+			d->SetString("value", value);
+			d->SetString("domain", domain);
+			d->SetString("path", CefString(&cookie.path));
+			d->SetBool("httponly", cookie.httponly);
+			d->SetBool("secure", cookie.secure);
+
+			result->SetDictionary(result->GetSize(), d);
+
+			return true;
+		}
+
+	public:
+		IMPLEMENT_REFCOUNTING(CookieVisitor);
+	};
+
+	os_event_t *event;
+	os_event_init(&event, OS_EVENT_TYPE_AUTO);
+
+	bool success = false;
+	CefRefPtr<CefListValue> list = CefListValue::Create();
+
+	CefRefPtr<CookieVisitor> visitor = new CookieVisitor(event);
+
+	visitor->result = list;
+
+	if (input && input->GetType() == VTYPE_DICTIONARY) {
+		CefRefPtr<CefDictionaryValue> d =
+			input->GetDictionary();
+
+		if (d->HasKey("domain") &&
+			d->GetType("domain") == VTYPE_STRING) {
+			visitor->domainFilter = d->GetString("domain");
+		}
+
+		if (d->HasKey("name") &&
+		    d->GetType("name") == VTYPE_STRING) {
+			visitor->nameFilter = d->GetString("name");
+		}
+	}
+
+	success =
+		m_cookieManager->GetCefCookieManager()->VisitAllCookies(
+			visitor);
+
+	// VisitAllCookies() is executed on an async thread.
+	//
+	// Visitor destructor will be called onse VisitAllCookies() is done,
+	// and will indicate completion by raising event.
+	//
+	visitor = nullptr;
+
+	if (!success) {
+		blog(LOG_ERROR,
+		     "m_cookieManager->GetCefCookieManager()->VisitAllCookies() failed.");
+	} else {
+		os_event_wait(event);
+
+		output->SetList(list);
+	}
+
+	os_event_destroy(event);
+}
+
 extern void DispatchJSEvent(std::string eventName, std::string jsonString, BrowserSource* browser);
 
 static void DispatchJSEventAllBrowsers(const char *eventName,

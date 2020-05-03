@@ -71,6 +71,8 @@ public:
 	void Reset(bool deleteAllCookies = true,
 		   UiModifier uiModifier = Default);
 	void DeleteCookies();
+	void SerializeCookies(CefRefPtr<CefValue> &input,
+			      CefRefPtr<CefValue> &output);
 	void StartOnBoardingUI(UiModifier uiModifier);
 	void StopOnBoardingUI();
 	void SwitchToOBSStudio();
