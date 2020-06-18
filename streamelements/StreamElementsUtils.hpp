@@ -188,6 +188,7 @@ double GetObsGlobalFramesPerSecond();
 /* ========================================================= */
 
 void AdviseHostUserInterfaceStateChanged();
+void AdviseHostHotkeyBindingsChanged();
 
 /* ========================================================= */
 

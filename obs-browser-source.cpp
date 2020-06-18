@@ -65,7 +65,7 @@ static void SendBrowserVisibility(CefRefPtr<CefBrowser> browser, bool isVisible)
 void DispatchJSEvent(std::string eventName, std::string jsonString,
 		     BrowserSource *browser = nullptr);
 
-BrowserSource::BrowserSource(obs_data_t *, obs_source_t *source_)
+BrowserSource::BrowserSource(obs_data_t *settings, obs_source_t *source_)
 	: source(source_)
 {
 	{
@@ -74,6 +74,11 @@ BrowserSource::BrowserSource(obs_data_t *, obs_source_t *source_)
 			handler,
 			"void streamelements_update_settings(ptr source)");
 	}
+
+	/* init source dimensions upfront: they are used to make sure
+	 * the source was indeed initialized */
+	width = (int)obs_data_get_int(settings, "width");
+	height = (int)obs_data_get_int(settings, "height");
 
 	/* defer update */
 	obs_source_update(source, nullptr);

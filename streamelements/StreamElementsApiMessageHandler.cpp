@@ -10,6 +10,7 @@
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsCefClient.hpp"
 #include "StreamElementsMessageBus.hpp"
+#include "StreamElementsPleaseWaitWindow.hpp"
 
 #include <QDesktopServices>
 #include <QUrl>
@@ -79,7 +80,7 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 				CefRefPtr<CefProcessMessage> message;
 				CefRefPtr<CefListValue> callArgs;
 				CefRefPtr<CefValue> result;
-				void (*complete)(void *);
+				std::function<void()> complete;
 				int cef_app_callback_id;
 				long cefClientId;
 			};
@@ -97,9 +98,7 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 					message->GetArgumentList()->GetSize() -
 					1);
 			context->cefClientId = cefClientId;
-			context->complete = [](void *data) {
-				local_context *context = (local_context *)data;
-
+			context->complete = [context]() {
 				blog(LOG_INFO,
 				     "obs-browser[%lu]: API: completed call to '%s', callback id %d",
 				     context->cefClientId, context->id.c_str(),
@@ -143,10 +142,7 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 			}
 
 			QtPostTask(
-				[](void *data) {
-					local_context *context =
-						(local_context *)data;
-
+				[context]() {
 					blog(LOG_INFO,
 					     "obs-browser[%lu]: API: performing call to '%s', callback id %d",
 					     context->cefClientId,
@@ -160,18 +156,54 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 							context->callArgs,
 							context->result,
 							context->browser,
-							context->complete,
-							context);
+							context->cefClientId,
+							context->complete);
 
 					delete context;
-				},
-				context);
+				});
 		}
 
 		return true;
 	}
 
 	return false;
+}
+
+void StreamElementsApiMessageHandler::InvokeApiCallHandlerAsync(
+	CefRefPtr<CefProcessMessage> message, CefRefPtr<CefBrowser> browser,
+	std::string invokeId, CefRefPtr<CefListValue> invokeArgs,
+	std::function<void(CefRefPtr<CefValue>)> result_callback,
+	const long cefClientId,
+	const bool enable_logging)
+{
+	CefRefPtr<CefValue> result = CefValue::Create();
+	result->SetNull();
+
+	if (!m_apiCallHandlers.count(invokeId)) {
+		blog(LOG_ERROR, "obs-browser[%lu]: API: invalid API call to '%s'",
+		     cefClientId, invokeId.c_str());
+
+		result_callback(result);
+
+		return;
+	}
+
+	if (enable_logging) {
+		blog(LOG_INFO, "obs-browser[%lu]: API: performing call to '%s'",
+		     cefClientId, invokeId.c_str());
+	}
+
+	auto handler = m_apiCallHandlers[invokeId];
+
+	handler(this, message, invokeArgs, result, browser, cefClientId, [=]() {
+		if (enable_logging) {
+			blog(LOG_INFO,
+			     "obs-browser[%lu]: API: completed call to '%s'",
+			     cefClientId, invokeId.c_str());
+		}
+
+		result_callback(result);
+	});
 }
 
 void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlersInternal(
@@ -265,9 +297,9 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandler(
 
 static std::recursive_mutex s_sync_api_call_mutex;
 
-#define API_HANDLER_BEGIN(name) RegisterIncomingApiCallHandler(name, [](StreamElementsApiMessageHandler*, CefRefPtr<CefProcessMessage> message, CefRefPtr<CefListValue> args, CefRefPtr<CefValue>& result, CefRefPtr<CefBrowser> browser, void (*complete_callback)(void*), void* complete_context) { std::lock_guard<std::recursive_mutex> _api_sync_guard(s_sync_api_call_mutex);
+#define API_HANDLER_BEGIN(name) RegisterIncomingApiCallHandler(name, [](StreamElementsApiMessageHandler*, CefRefPtr<CefProcessMessage> message, CefRefPtr<CefListValue> args, CefRefPtr<CefValue>& result, CefRefPtr<CefBrowser> browser, const long cefClientId, std::function<void()> complete_callback) { std::lock_guard<std::recursive_mutex> _api_sync_guard(s_sync_api_call_mutex);
 #define API_HANDLER_END()                    \
-	complete_callback(complete_context); \
+	complete_callback(); \
 	});
 
 void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
@@ -275,6 +307,105 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	//RegisterIncomingApiCallHandler("getWidgets", [](StreamElementsApiMessageHandler*, CefRefPtr<CefProcessMessage> message, CefRefPtr<CefListValue> args, CefRefPtr<CefValue>& result) {
 	//	result->SetBool(true);
 	//});
+
+	RegisterIncomingApiCallHandler(
+		"batchInvokeSeries",
+		[](StreamElementsApiMessageHandler *self,
+		   CefRefPtr<CefProcessMessage> message,
+		   CefRefPtr<CefListValue> args, CefRefPtr<CefValue> &result,
+		   CefRefPtr<CefBrowser> browser,
+		   const long cefClientId,
+		   std::function<void()> complete_callback) {
+			result->SetNull();
+
+			if (args->GetSize() < 1) {
+				complete_callback();
+				return;
+			}
+
+			if (args->GetType(0) != VTYPE_LIST) {
+				complete_callback();
+				return;
+			}
+
+			struct local_context {
+				CefRefPtr<CefValue> queueIndex =
+					CefValue::Create();
+				CefRefPtr<CefListValue> queue =
+					CefListValue::Create();
+				CefRefPtr<CefListValue> results =
+					CefListValue::Create();
+				std::function<void()> process;
+				std::function<void()> done;
+			};
+
+			local_context *context = new local_context();
+			context->queueIndex->SetInt(0);
+			context->queue = args->GetList(0);
+			context->done = [=]() {
+				obs_frontend_defer_save_end();
+
+				result->SetList(context->results);
+				complete_callback();
+				delete context;
+			};
+
+			context->process = [=]() {
+				size_t index = context->queueIndex->GetInt();
+
+				if (index >= context->queue->GetSize()) {
+					// End of queue
+					context->done();
+					return;
+				}
+
+				if (context->queue->GetType(index) !=
+				    VTYPE_DICTIONARY) {
+					// Invalid queue element type
+					context->done();
+					return;
+				}
+
+				CefRefPtr<CefDictionaryValue> d =
+					context->queue->GetDictionary(index);
+
+				if (!d->HasKey("invoke") ||
+				    !d->HasKey("invokeArgs") ||
+				    d->GetType("invoke") != VTYPE_STRING ||
+				    d->GetType("invokeArgs") != VTYPE_LIST) {
+					// Invalid queue element structure
+					context->done();
+					return;
+				}
+
+				std::string invokeId =
+					d->GetString("invoke").ToString();
+
+				CefRefPtr<CefListValue> invokeArgs =
+					d->GetList("invokeArgs");
+
+				self->InvokeApiCallHandlerAsync(
+					message, browser, invokeId, invokeArgs,
+					[=](CefRefPtr<CefValue> callResult) {
+						context->results->SetValue(
+							context->results
+								->GetSize(),
+							callResult);
+
+						context->queueIndex->SetInt(
+							context->queueIndex
+								->GetInt() +
+							1);
+
+						context->process();
+					},
+					cefClientId);
+			};
+
+			obs_frontend_defer_save_begin();
+
+			context->process();
+		});
 
 	API_HANDLER_BEGIN("getStartupFlags");
 	{
@@ -1918,16 +2049,11 @@ bool StreamElementsApiMessageHandler::InvokeHandler::InvokeApiCallAsync(
 	context->result->SetBool(false);
 	context->callback = callback;
 
-	handler(
-		this, nullptr, args, context->result, nullptr,
-		[](void *data) {
-			local_context *context = (local_context *)data;
+	handler(this, nullptr, args, context->result, nullptr, -1, [context]() {
+		context->callback(context->result);
 
-			context->callback(context->result);
-
-			delete context;
-		},
-		context);
+		delete context;
+	});
 
 	return true;
 }

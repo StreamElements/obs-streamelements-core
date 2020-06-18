@@ -124,6 +124,10 @@ public:
 						 CefRefPtr<CefValue> &output);
 
 protected:
+	void DeserializeAuxiliaryObsSceneItemProperties(
+		obs_sceneitem_t *sceneitem, CefRefPtr<CefDictionaryValue> d);
+
+protected:
 	QMainWindow *mainWindow() { return m_parent; }
 
 	void ObsAddSourceInternal(obs_source_t *parentScene,
@@ -142,6 +146,9 @@ protected:
 	std::string ObsGetUniqueSceneName(std::string name);
 
 	std::string ObsGetUniqueSceneCollectionName(std::string name);
+
+	std::string ObsSetUniqueSourceName(obs_source_t *source,
+					   std::string name);
 
 private:
 	static void handle_obs_frontend_event(enum obs_frontend_event event,

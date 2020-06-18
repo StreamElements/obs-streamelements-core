@@ -1,5 +1,6 @@
 #include "StreamElementsHotkeyManager.hpp"
 #include "StreamElementsCefClient.hpp"
+#include "StreamElementsUtils.hpp"
 
 #include <util/dstr.h>
 #include <obs-module.h>
@@ -114,7 +115,7 @@ static CefRefPtr<CefDictionaryValue> SerializeKeyCombination(obs_key_combination
 
 void StreamElementsHotkeyManager::hotkey_change_handler(void*, calldata_t*)
 {
-	StreamElementsCefClient::DispatchJSEvent("hostHotkeyBindingsChanged", "null");
+	AdviseHostHotkeyBindingsChanged();
 }
 
 static const char* HOTKEY_BINDINGS_CHANGED_SIGNAL_NAMES[] = {

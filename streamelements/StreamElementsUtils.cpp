@@ -3,6 +3,7 @@
 #include "StreamElementsCefClient.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
 #include "StreamElementsRemoteIconLoader.hpp"
+#include "StreamElementsPleaseWaitWindow.hpp"
 #include "Version.hpp"
 
 #if CHROME_VERSION_BUILD >= 3729
@@ -1597,6 +1598,36 @@ void AdviseHostUserInterfaceStateChanged()
 				  Q_ARG(int, 250));
 }
 
+void AdviseHostHotkeyBindingsChanged()
+{
+	static std::mutex mutex;
+
+	static QTimer *t = nullptr;
+
+	std::lock_guard<std::mutex> guard(mutex);
+
+	if (t == nullptr) {
+		t = new QTimer();
+
+		t->moveToThread(qApp->thread());
+		t->setSingleShot(true);
+
+		QObject::connect(t, &QTimer::timeout, [&]() {
+			std::lock_guard<std::mutex> guard(mutex);
+
+			t->deleteLater();
+			t = nullptr;
+
+			// Advise guest code of user interface state changes
+			StreamElementsCefClient::DispatchJSEvent(
+				"hostHotkeyBindingsChanged", "null");
+		});
+	}
+
+	QMetaObject::invokeMethod(t, "start", Qt::QueuedConnection,
+				  Q_ARG(int, 250));
+}
+
 bool ParseStreamElementsOverlayURL(std::string url, std::string &overlayId,
 				   std::string &accountId)
 {
@@ -2582,6 +2613,8 @@ public:
 						       [id]() { Destroy(id); });
 
 		if (s_map.size() == 1) {
+			StreamElementsPleaseWaitWindow::GetInstance()->Show();
+
 			obs_frontend_defer_save_begin();
 		}
 
@@ -2600,6 +2633,8 @@ public:
 
 		if (s_map.size() == 0) {
 			obs_frontend_defer_save_end();
+
+			StreamElementsPleaseWaitWindow::GetInstance()->Hide();
 		}
 	}
 

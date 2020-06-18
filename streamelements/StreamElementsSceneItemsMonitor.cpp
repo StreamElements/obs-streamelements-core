@@ -176,8 +176,7 @@ static bool HandleDefaultActionRequest(obs_sceneitem_t *scene_item,
 				if (!scene_item)
 					return;
 
-				monitor
-					->InvokeCurrentSceneItemDefaultAction(
+				monitor->InvokeCurrentSceneItemDefaultContextMenu(
 						scene_item);
 			};
 

@@ -15,6 +15,8 @@
 #include <QHBoxLayout>
 #include <QPushButton>
 
+//#define CP(a) blog(LOG_INFO, "checkpoint %d", a)
+
 // obs_sceneitem_group_add_item() and obs_sceneitem_group_remove_item()
 // APIs are fixed in OBS 25 and are broken in previous versions.
 //
@@ -1494,7 +1496,7 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 	obs_sceneitem_t **output_sceneitem)
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
-
+	
 	bool releaseParentScene = false;
 
 	if (parentScene == NULL) {
@@ -1545,8 +1547,6 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 		// Not reusing an existing source, create a new one
 		source = obs_source_create(sourceId, sourceName, NULL,
 					   sourceHotkeyData);
-
-		QApplication::processEvents();
 
 		obs_source_update(source, sourceSettings);
 	}
@@ -1626,6 +1626,33 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 
 	if (releaseParentScene) {
 		obs_source_release(parentScene);
+	}
+}
+
+std::string
+StreamElementsObsSceneManager::ObsSetUniqueSourceName(obs_source_t *source,
+						      std::string name)
+{
+	bool mustChange = true;
+
+	obs_source_t *existing = obs_get_source_by_name(name.c_str());
+
+	if (existing) {
+		if (existing == source) {
+			mustChange = false;
+		}
+
+		obs_source_release(existing);
+	}
+
+	if (mustChange) {
+		std::string unique = ObsGetUniqueSourceName(name);
+
+		obs_source_set_name(source, unique.c_str());
+
+		return unique;
+	} else {
+		return name;
 	}
 }
 
@@ -1727,6 +1754,9 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 				obs_sceneitem_set_crop(sceneitem, &crop);
 			}
 
+			DeserializeAuxiliaryObsSceneItemProperties(sceneitem,
+								   root);
+
 			// Result
 			SerializeSourceAndSceneItem(output, source, sceneitem,
 						    true);
@@ -1803,6 +1833,9 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 				obs_sceneitem_set_info(sceneitem, &info);
 				obs_sceneitem_set_crop(sceneitem, &crop);
 			}
+
+			DeserializeAuxiliaryObsSceneItemProperties(sceneitem,
+								   root);
 
 			// Result
 			SerializeSourceAndSceneItem(output, source, sceneitem,
@@ -1941,6 +1974,9 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 							       &crop);
 				}
 
+				DeserializeAuxiliaryObsSceneItemProperties(
+					sceneitem, root);
+
 				// Result
 				SerializeSourceAndSceneItem(output, source,
 							    sceneitem, true);
@@ -2027,6 +2063,9 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 				obs_sceneitem_set_crop(sceneitem, &crop);
 			}
 
+			DeserializeAuxiliaryObsSceneItemProperties(sceneitem,
+								   root);
+
 			// Result
 			SerializeSourceAndSceneItem(output, source, sceneitem,
 						    true);
@@ -2102,6 +2141,9 @@ void StreamElementsObsSceneManager::DeserializeObsSceneItemGroup(
 			obs_sceneitem_set_info(args.sceneitem, &info);
 			obs_sceneitem_set_crop(args.sceneitem, &crop);
 		}
+
+		DeserializeAuxiliaryObsSceneItemProperties(args.sceneitem,
+							   root);
 
 		// Result
 		SerializeSourceAndSceneItem(
@@ -2321,7 +2363,7 @@ void StreamElementsObsSceneManager::DeserializeObsScene(
 	std::string name = ObsGetUniqueSceneName(d->GetString("name"));
 
 	obs_scene_t *scene = obs_scene_create(name.c_str());
-	QApplication::processEvents();
+	//QApplication::processEvents();
 
 	if (activate) {
 		obs_frontend_set_current_scene(obs_scene_get_source(scene));
@@ -2362,7 +2404,7 @@ void StreamElementsObsSceneManager::SetCurrentObsSceneById(
 
 		if (sceneIdPointer == (void *)scene) {
 			obs_frontend_set_current_scene(scene);
-			QApplication::processEvents();
+			//QApplication::processEvents();
 
 			SerializeObsScene(scene, output);
 
@@ -2427,7 +2469,7 @@ void StreamElementsObsSceneManager::RemoveObsScenesByIds(
 
 	obs_frontend_source_list_free(&scenes);
 
-	QApplication::processEvents();
+	//QApplication::processEvents();
 }
 
 void StreamElementsObsSceneManager::SetObsScenePropertiesById(
@@ -2458,9 +2500,9 @@ void StreamElementsObsSceneManager::SetObsScenePropertiesById(
 
 		if (scene == ptr) {
 			if (d->HasKey("name")) {
-				obs_source_set_name(
+				ObsSetUniqueSourceName(
 					scene,
-					d->GetString("name").ToString().c_str());
+					d->GetString("name").ToString());
 
 				result = true;
 			}
@@ -2492,7 +2534,8 @@ void StreamElementsObsSceneManager::SetObsScenePropertiesById(
 
 	obs_frontend_source_list_free(&scenes);
 
-	// QApplication::processEvents();
+	// This one is required, otherwise icon is not always reset
+	QApplication::processEvents();
 
 	output->SetBool(result);
 }
@@ -2538,6 +2581,142 @@ void StreamElementsObsSceneManager::RemoveObsSceneItemsByIds(
 	}
 }
 
+void StreamElementsObsSceneManager::DeserializeAuxiliaryObsSceneItemProperties(
+	obs_sceneitem_t *sceneitem, CefRefPtr<CefDictionaryValue> d)
+{
+	if (d->HasKey("actions")) {
+		if (d->GetType("actions") == VTYPE_LIST) {
+			CefRefPtr<CefListValue> actionsList =
+				d->GetList("actions");
+
+			m_sceneItemsMonitor->SetSceneItemActions(
+				sceneitem, actionsList);
+		} else {
+			CefRefPtr<CefListValue> emptyList =
+				CefListValue::Create();
+
+			m_sceneItemsMonitor->SetSceneItemActions(
+				sceneitem, emptyList);
+		}
+	}
+
+	if (d->HasKey("icon")) {
+		m_sceneItemsMonitor->SetSceneItemIcon(
+			sceneitem, d->GetValue("icon")->Copy());
+	}
+
+	if (d->HasKey("defaultAction")) {
+		m_sceneItemsMonitor->SetSceneItemDefaultAction(
+			sceneitem,
+			d->GetValue("defaultAction")->Copy());
+	}
+
+	if (d->HasKey("auxiliaryData")) {
+		m_sceneItemsMonitor->SetSceneItemAuxiliaryData(
+			sceneitem,
+			d->GetValue("auxiliaryData")->Copy());
+	}
+
+	if (d->HasKey("contextMenu")) {
+		m_sceneItemsMonitor->SetSceneItemContextMenu(
+			sceneitem, d->GetValue("contextMenu")->Copy());
+	}
+
+	if (d->HasKey("uiSettings")) {
+		m_sceneItemsMonitor->SetSceneItemUISettings(
+			sceneitem, d->GetValue("uiSettings")->Copy());
+	}
+
+#if ENABLE_OBS_GROUP_ADD_REMOVE_ITEM
+	std::string groupId = d->HasKey("parentId") && d->GetType("parentId") ==
+							       VTYPE_STRING
+				      ? d->GetString("parentId").ToString()
+				      : "";
+
+	// It seems that the implementation of
+	// `obs_sceneitem_group_remove_item` is broken in
+	// OBS versions older than 25.0.0, so this piece of
+	// code just does not work.
+	{
+		struct atomic_update_args {
+			obs_sceneitem_t *group;
+			obs_sceneitem_t *current_group;
+			obs_sceneitem_t *sceneitem;
+		};
+
+		atomic_update_args args;
+		args.sceneitem = sceneitem;
+		args.group = FindSceneItemById(groupId);
+		args.current_group =
+			obs_sceneitem_get_group(obs_sceneitem_get_scene(sceneitem), sceneitem);
+
+		if (args.group != args.current_group) {
+			obs_enter_graphics();
+
+			obs_scene_atomic_update(
+				obs_sceneitem_get_scene(sceneitem),
+				[](void *data, obs_scene_t *scene) {
+					atomic_update_args *args =
+						(atomic_update_args *)data;
+
+					obs_sceneitem_t *original_sceneitem =
+						args->sceneitem;
+
+					if (args->group) {
+						obs_sceneitem_group_add_item(
+							args->group,
+							args->sceneitem);
+					} else {
+						obs_sceneitem_group_remove_item(
+							args->current_group,
+							args->sceneitem);
+					}
+				},
+				&args);
+
+			obs_leave_graphics();
+
+			RefreshObsSceneItemsList();
+		}
+	}
+#endif
+
+	if (d->HasKey("order") && d->GetType("order") == VTYPE_INT) {
+		int order = d->GetInt("order");
+
+		auto update = [&]() -> void {
+			if (!obs_sceneitem_get_scene(sceneitem))
+				return;
+
+			obs_sceneitem_set_order_position(sceneitem,
+							 order);
+		};
+
+		using update_t = decltype(update);
+
+		obs_enter_graphics();
+		obs_scene_atomic_update(
+			obs_sceneitem_get_scene(sceneitem),
+			[](void *data, obs_scene_t *) {
+				(*reinterpret_cast<update_t *>(data))();
+			},
+			&update);
+		obs_leave_graphics();
+	}
+
+	if (d->HasKey("visible") && d->GetType("visible") == VTYPE_BOOL) {
+		obs_sceneitem_set_visible(sceneitem, d->GetBool("visible"));
+	}
+
+	if (d->HasKey("selected") && d->GetType("selected") == VTYPE_BOOL) {
+		obs_sceneitem_select(sceneitem, d->GetBool("selected"));
+	}
+
+	if (d->HasKey("locked") && d->GetType("locked") == VTYPE_BOOL) {
+		obs_sceneitem_set_locked(sceneitem, d->GetBool("locked"));
+	}
+}
+
 void StreamElementsObsSceneManager::SetObsSceneItemPropertiesById(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
@@ -2560,11 +2739,6 @@ void StreamElementsObsSceneManager::SetObsSceneItemPropertiesById(
 	std::string sceneId = d->HasKey("sceneId") && d->GetType("sceneId") ==
 							      VTYPE_STRING
 				      ? d->GetString("sceneId").ToString()
-				      : "";
-
-	std::string groupId = d->HasKey("parentId") && d->GetType("parentId") ==
-							       VTYPE_STRING
-				      ? d->GetString("parentId").ToString()
 				      : "";
 
 	struct local_context {
@@ -2593,16 +2767,10 @@ void StreamElementsObsSceneManager::SetObsSceneItemPropertiesById(
 		obs_source_t *source = obs_sceneitem_get_source(
 			context.sceneitem); // does not increment refcount
 
-		if (d->HasKey("visible") &&
-		    d->GetType("visible") == VTYPE_BOOL) {
-			obs_sceneitem_set_visible(context.sceneitem,
-						  d->GetBool("visible"));
-		}
-
 		if (d->HasKey("name")) {
-			obs_source_set_name(
+			ObsSetUniqueSourceName(
 				source,
-				d->GetString("name").ToString().c_str());
+				d->GetString("name").ToString());
 
 			result = true;
 		}
@@ -2622,51 +2790,6 @@ void StreamElementsObsSceneManager::SetObsSceneItemPropertiesById(
 			obs_data_release(settings);
 		}
 
-		if (d->HasKey("actions")) {
-			if (d->GetType("actions") == VTYPE_LIST) {
-				CefRefPtr<CefListValue> actionsList =
-					d->GetList("actions");
-
-				m_sceneItemsMonitor->SetSceneItemActions(
-					context.sceneitem, actionsList);
-			} else {
-				CefRefPtr<CefListValue> emptyList =
-					CefListValue::Create();
-
-				m_sceneItemsMonitor->SetSceneItemActions(
-					context.sceneitem, emptyList);
-			}
-		}
-
-		if (d->HasKey("icon")) {
-			m_sceneItemsMonitor->SetSceneItemIcon(
-				context.sceneitem, d->GetValue("icon")->Copy());
-		}
-
-		if (d->HasKey("defaultAction")) {
-			m_sceneItemsMonitor->SetSceneItemDefaultAction(
-				context.sceneitem,
-				d->GetValue("defaultAction")->Copy());
-		}
-
-		if (d->HasKey("auxiliaryData")) {
-			m_sceneItemsMonitor->SetSceneItemAuxiliaryData(
-				context.sceneitem,
-				d->GetValue("auxiliaryData")->Copy());
-		}
-
-		if (d->HasKey("contextMenu")) {
-			m_sceneItemsMonitor->SetSceneItemContextMenu(
-				context.sceneitem,
-				d->GetValue("contextMenu")->Copy());
-		}
-
-		if (d->HasKey("uiSettings")) {
-			m_sceneItemsMonitor->SetSceneItemUISettings(
-				context.sceneitem,
-				d->GetValue("uiSettings")->Copy());
-		}
-
 		obs_transform_info info;
 		obs_sceneitem_crop crop;
 
@@ -2675,91 +2798,8 @@ void StreamElementsObsSceneManager::SetObsSceneItemPropertiesById(
 			obs_sceneitem_set_crop(context.sceneitem, &crop);
 		}
 
-		if (d->HasKey("selected") &&
-		    d->GetType("selected") == VTYPE_BOOL) {
-			obs_sceneitem_select(context.sceneitem,
-					     d->GetBool("selected"));
-		}
-
-		if (d->HasKey("locked") && d->GetType("locked") == VTYPE_BOOL) {
-			obs_sceneitem_set_locked(context.sceneitem,
-						 d->GetBool("locked"));
-		}
-
-#if ENABLE_OBS_GROUP_ADD_REMOVE_ITEM
-		// This piece of code just does not work. It seems that
-		// the implementation of `obs_sceneitem_group_remove_item`
-		// is broken.
-		//
-		// TODO: TBD: implement when a fix is available
-		{
-			struct atomic_update_args {
-				obs_sceneitem_t *group;
-				obs_sceneitem_t *current_group;
-				obs_sceneitem_t *sceneitem;
-			};
-
-			atomic_update_args args;
-			args.sceneitem = context.sceneitem;
-			args.group = FindSceneItemById(groupId);
-			args.current_group = obs_sceneitem_get_group(
-				scene, context.sceneitem);
-
-			if (args.group != args.current_group) {
-				obs_enter_graphics();
-
-				obs_scene_atomic_update(
-					scene,
-					[](void *data, obs_scene_t *scene) {
-						atomic_update_args *args =
-							(atomic_update_args *)
-								data;
-
-						obs_sceneitem_t
-							*original_sceneitem =
-								args->sceneitem;
-
-						if (args->group) {
-							obs_sceneitem_group_add_item(
-								args->group,
-								args->sceneitem);
-						} else {
-							obs_sceneitem_group_remove_item(
-								args->current_group,
-								args->sceneitem);
-						}
-					},
-					&args);
-
-				obs_leave_graphics();
-
-				RefreshObsSceneItemsList();
-			}
-		}
-#endif
-
-		if (d->HasKey("order") && d->GetType("order") == VTYPE_INT) {
-			int order = d->GetInt("order");
-
-			auto update = [&]() -> void {
-				if (!obs_sceneitem_get_scene(context.sceneitem))
-					return;
-
-				obs_sceneitem_set_order_position(
-					context.sceneitem, order);
-			};
-
-			using update_t = decltype(update);
-
-			obs_enter_graphics();
-			obs_scene_atomic_update(
-				scene,
-				[](void *data, obs_scene_t *) {
-					(*reinterpret_cast<update_t *>(data))();
-				},
-				&update);
-			obs_leave_graphics();
-		}
+		DeserializeAuxiliaryObsSceneItemProperties(context.sceneitem,
+							   d);
 
 		// Result
 		SerializeSourceAndSceneItem(output, source, context.sceneitem);
