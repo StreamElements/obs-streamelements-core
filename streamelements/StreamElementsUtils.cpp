@@ -5,6 +5,7 @@
 #include "StreamElementsRemoteIconLoader.hpp"
 #include "StreamElementsPleaseWaitWindow.hpp"
 #include "Version.hpp"
+#include "wide-string.hpp"
 
 #if CHROME_VERSION_BUILD >= 3729
 #include <include/cef_api_hash.h>
@@ -2678,4 +2679,228 @@ std::string CreateTimedObsApiTransaction(int timeoutMilliseconds) {
 
 void CompleteTimedObsApiTransaction(std::string id) {
 	TimedObsApiTransactionHandle::Destroy(id);
+}
+
+/* ========================================================= */
+
+static bool GetBool(CefRefPtr<CefDictionaryValue> input, std::string key,
+		    bool defaultValue = false)
+{
+	if (!input->HasKey(key) || input->GetType(key) != VTYPE_BOOL)
+		return defaultValue;
+
+	return input->GetBool(key);
+}
+
+static int GetInt(CefRefPtr<CefDictionaryValue> input, std::string key,
+		    int defaultValue = 0)
+{
+	if (!input->HasKey(key) || input->GetType(key) != VTYPE_INT)
+		return defaultValue;
+
+	return input->GetInt(key);
+}
+
+static std::string GetString(CefRefPtr<CefDictionaryValue> input, std::string key,
+		  std::string defaultValue = "")
+{
+	if (!input->HasKey(key) || input->GetType(key) != VTYPE_STRING)
+		return defaultValue;
+
+	return input->GetString(key).ToString();
+}
+
+static std::wstring GetWString(CefRefPtr<CefDictionaryValue> input,
+			     std::string key, std::wstring defaultValue = L"")
+{
+	if (!input->HasKey(key) || input->GetType(key) != VTYPE_STRING)
+		return defaultValue;
+
+	return input->GetString(key).ToString16();
+}
+
+static cef_event_flags_t DeserializeCefEventModifiers(CefRefPtr<CefValue> input) {
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return EVENTFLAG_NONE;
+
+	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
+
+	uint32 result = EVENTFLAG_NONE;
+
+	if (GetBool(d, "altKey"))
+		result |= EVENTFLAG_ALT_DOWN;
+	if (GetBool(d, "ctrlKey"))
+		result |= EVENTFLAG_CONTROL_DOWN;
+	if (GetBool(d, "metaKey"))
+		result |= EVENTFLAG_COMMAND_DOWN;
+	if (GetBool(d, "shiftKey"))
+		result |= EVENTFLAG_SHIFT_DOWN;
+	if (GetBool(d, "capsLock"))
+		result |= EVENTFLAG_CAPS_LOCK_ON;
+	if (GetBool(d, "numLock"))
+		result |= EVENTFLAG_NUM_LOCK_ON;
+	if (GetBool(d, "primaryMouseButton"))
+		result |= EVENTFLAG_LEFT_MOUSE_BUTTON;
+	if (GetBool(d, "secondaryMouseButton"))
+		result |= EVENTFLAG_RIGHT_MOUSE_BUTTON;
+	if (GetBool(d, "auxiliaryMouseButton"))
+		result |= EVENTFLAG_MIDDLE_MOUSE_BUTTON;
+
+	switch (GetInt(d, "location", -1)) {
+	case 0x00: // DOM_KEY_LOCATION_STANDARD
+		// No special mod
+		break;
+	case 0x01: // DOM_KEY_LOCATION_LEFT
+		result |= EVENTFLAG_IS_LEFT;
+		break;
+	case 0x02: // DOM_KEY_LOCATION_RIGHT
+		result |= EVENTFLAG_IS_RIGHT;
+		break;
+	case 0x03: // DOM_KEY_LOCATION_NUMPAD
+		result |= EVENTFLAG_IS_KEY_PAD;
+		break;
+	default:
+		std::string location = GetString(d, "location");
+
+		if (location == "left") {
+			result |= EVENTFLAG_IS_LEFT;
+		} else if (location == "right") {
+			result |= EVENTFLAG_IS_RIGHT;
+		} else if (location == "numPad" || location == "keyPad") {
+			result |= EVENTFLAG_IS_KEY_PAD;
+		}
+		break;
+	}
+
+	return (cef_event_flags_t)result;
+}
+
+bool DeserializeCefMouseEvent(CefRefPtr<CefValue> input, CefMouseEvent &output)
+{
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return false;
+
+	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
+
+	output.Reset();
+	output.modifiers = DeserializeCefEventModifiers(input);
+	output.x = GetInt(d, "x");
+	output.y = GetInt(d, "y");
+
+	return true;
+}
+
+bool DeserializeCefKeyEvent(CefRefPtr<CefValue> input, CefKeyEvent& output)
+{
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return false;
+
+	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
+
+	int native_vkey_code = GetInt(d, "code", -1);
+	std::wstring key = GetWString(d, "key");
+	int charCode = GetInt(d, "charCode", -1);
+	if (charCode < 0 && !key.empty())
+		charCode = key[0];
+
+	output.Reset();
+	output.modifiers = DeserializeCefEventModifiers(input);
+	output.native_key_code = 0;
+	output.windows_key_code = native_vkey_code >= 0 ? native_vkey_code : charCode;
+	output.character = charCode;
+
+	std::string type = GetString(d, "type");
+	if (type == "rawkeydown") {
+		output.type = KEYEVENT_RAWKEYDOWN;
+	} else if (type == "keydown") {
+		output.type = KEYEVENT_KEYDOWN;
+	} else if (type == "keyup") {
+		output.type = KEYEVENT_KEYUP;
+	} else if (type == "keypress") {
+		output.type = KEYEVENT_CHAR;
+	} else {
+		return false;
+	}
+
+	return true;
+}
+
+bool DeserializeCefMouseButtonType(CefRefPtr<CefValue> input,
+				   CefBrowserHost::MouseButtonType &output)
+{
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return false;
+
+	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
+
+	std::string button = GetString(d, "button");
+
+	if (button == "left") {
+		output = MBT_LEFT;
+	} else if (button == "right") {
+		output = MBT_RIGHT;
+	} else if (button == "auxiliary" || button == "middle") {
+		output = MBT_MIDDLE;
+	} else {
+		return false;
+	}
+
+	return true;
+}
+
+bool DeserializeCefMouseEventCount(CefRefPtr<CefValue> input, int& output) {
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return false;
+
+	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
+
+	output = GetInt(d, "eventCount", 1);
+
+	if (output < 1)
+		output = 1;
+
+	return true;
+}
+
+bool DeserializeCefMouseEventType(CefRefPtr<CefValue> input,
+				  CefMouseEventType &output)
+{
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return false;
+
+	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
+
+	std::string type = GetString(d, "type");
+
+	if (type == "mousedown") {
+		output = Down;
+	} else if (type == "mouseup") {
+		output = Up;
+	} else if (type == "mousemove") {
+		output = Move;
+	} else if (type == "wheel") {
+		output = Wheel;
+	}
+
+	return true;
+}
+
+bool DeserializeCefMouseWheelEventArgs(CefRefPtr<CefValue> input,
+				       CefMouseWheelEventArgs &output)
+{
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return false;
+
+	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
+
+	output.deltaX = GetInt(d, "deltaX", 0);
+	output.deltaY = GetInt(d, "deltaY", 0);
+
+	if (output.deltaX < 0)
+		output.deltaX = 0;
+
+	if (output.deltaY < 0)
+		output.deltaY = 0;
+
+	return output.deltaX > 0 || output.deltaY > 0;
 }

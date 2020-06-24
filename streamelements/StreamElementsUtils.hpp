@@ -313,3 +313,27 @@ void ObsEnumAllScenes(std::function<bool(obs_source_t *scene)> func);
 
 std::string CreateTimedObsApiTransaction(int timeoutMilliseconds = 60000);
 void CompleteTimedObsApiTransaction(std::string id);
+
+/* ========================================================= */
+
+enum CefMouseEventType {
+	Move,
+	Down,
+	Up,
+	Wheel,
+};
+
+struct CefMouseWheelEventArgs {
+	int deltaX = 0;
+	int deltaY = 0;
+};
+
+bool DeserializeCefMouseEvent(CefRefPtr<CefValue> input, CefMouseEvent &output);
+bool DeserializeCefKeyEvent(CefRefPtr<CefValue> input, CefKeyEvent &output);
+bool DeserializeCefMouseButtonType(CefRefPtr<CefValue> input,
+				   CefBrowserHost::MouseButtonType &output);
+bool DeserializeCefMouseEventCount(CefRefPtr<CefValue> input, int &output);
+bool DeserializeCefMouseEventType(CefRefPtr<CefValue> input,
+				  CefMouseEventType &output);
+bool DeserializeCefMouseWheelEventArgs(CefRefPtr<CefValue> input,
+				       CefMouseWheelEventArgs &output);

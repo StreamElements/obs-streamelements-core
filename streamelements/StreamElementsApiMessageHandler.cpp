@@ -2015,6 +2015,84 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("dispatchKeyboardEvent");
+	{
+		if (args->GetSize()) {
+			CefKeyEvent keyEvent;
+			if (DeserializeCefKeyEvent(args->GetValue(0),
+						   keyEvent)) {
+				browser->GetHost()->SendKeyEvent(keyEvent);
+
+				result->SetBool(true);
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("dispatchMouseEvent");
+	{
+		if (args->GetSize()) {
+			CefMouseEvent mouseEvent;
+			CefMouseEventType mouseEventType;
+
+			bool deserializeResult = true;
+
+			deserializeResult &= DeserializeCefMouseEventType(
+				args->GetValue(0), mouseEventType);
+
+			deserializeResult &= DeserializeCefMouseEvent(
+				args->GetValue(0), mouseEvent);
+
+			if (deserializeResult) {
+				switch (mouseEventType) {
+				case Down:
+				case Up:
+					CefBrowserHost::MouseButtonType mouseButton;
+
+					if (DeserializeCefMouseButtonType(
+						    args->GetValue(0), mouseButton)) {
+						int mouseEventCount =
+							DeserializeCefMouseEventCount(
+								args->GetValue(0),
+								mouseEventCount);
+
+						browser->GetHost()->SendMouseClickEvent(
+							mouseEvent, mouseButton,
+							mouseEventType == Up,
+							mouseEventCount);
+
+						result->SetBool(true);
+					}
+					break;
+				case Move:
+					browser->GetHost()->SendMouseMoveEvent(
+						mouseEvent, false);
+
+					result->SetBool(true);
+					break;
+				case Wheel:
+					CefMouseWheelEventArgs
+						mouseWheelEventArgs;
+					if (DeserializeCefMouseWheelEventArgs(
+						    args->GetValue(0),
+						    mouseWheelEventArgs)) {
+						browser->GetHost()
+							->SendMouseWheelEvent(
+								mouseEvent,
+								mouseWheelEventArgs
+									.deltaX,
+								mouseWheelEventArgs
+									.deltaY);
+
+						result->SetBool(true);
+					}
+					break;
+				}
+			}
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("crashProgram");
 	{
 		// Crash
