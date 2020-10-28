@@ -1,10 +1,14 @@
 # obs-browser
 
-CEF Based obs-studio browser plugin
+obs-browser introduces a cross-platform Browser Source, powered by CEF ([Chromium Embedded Framework](https://bitbucket.org/chromiumembedded/cef/src/master/README.md)), to OBS Studio. A Browser Source allows the user to integrate web-based overlays into their scenes, with complete access to modern web APIs.
+
+On Windows, this also adds support for Service Integration (linking third party services) and Browser Docks (webpages loaded into the interface itself). macOS support for service integration & browser docks is in the works, and Linux support is planned.
+
+**This plugin is included by default** on official packages on Windows and macOS. While Linux is supported, the official ppa does not currently include the browser source [due to a conflict with GTK](https://github.com/obsproject/obs-browser/issues/219).
 
 ## JS Bindings
 
-obs-browser provides a global object that allows access to some OBS-specific functionality from JavaScript.
+obs-browser provides a global object that allows access to some OBS-specific functionality from JavaScript. This can be used to create an overlay that adapts dynamically to changes in OBS.
 
 ### Get Browser Plugin Version
 
@@ -190,7 +194,7 @@ Build in Xcode (⌘+B)
 #### Getting
 
 *  Download CEF Windows 64bit from [http://opensource.spotify.com/cefbuilds/index.html](http://opensource.spotify.com/cefbuilds/index.html)
-  *  Use CEF branch 3440 or newer (3579 if you want shared texture support)
+  *  Use CEF branch 3770
 *  Extract and cd into the folder
 
 #### Setting Up the Project
