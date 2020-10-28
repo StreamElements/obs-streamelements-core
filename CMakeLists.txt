@@ -61,6 +61,16 @@ if(APPLE)
 	endif()
 endif()
 
+if(UNIX AND NOT APPLE)
+	find_package(X11 REQUIRED)
+	if(NOT X11_FOUND)
+		message(STATUS "X11 Not found -- obs-browser plugin disabled.")
+		return()
+	endif()
+	include_directories("${X11_INCLUDE_DIR}")
+endif()
+
+
 configure_file(
 	"${CMAKE_CURRENT_SOURCE_DIR}/browser-config.h.in"
 	"${CMAKE_CURRENT_BINARY_DIR}/browser-config.h")
@@ -281,6 +291,8 @@ if(USE_QT_LOOP)
 	target_compile_definitions(obs-browser PRIVATE USE_QT_LOOP)
 endif()
 
+set_target_properties(obs-browser PROPERTIES FOLDER "plugins/obs-browser")
+
 # ----------------------------------------------------------------------------
 
 set(obs-browser-page_SOURCES
@@ -302,6 +314,7 @@ add_executable(obs-browser-page
 target_link_libraries(obs-browser-page
 	${CEF_LIBRARIES}
 	)
+set_target_properties(obs-browser-page PROPERTIES FOLDER "plugins/obs-browser")
 
 if (APPLE)
 	set_target_properties(obs-browser-page PROPERTIES
@@ -371,6 +384,10 @@ if (WIN32)
 		COMMAND ${CMAKE_COMMAND} -E copy_directory
 		"${CEF_ROOT_DIR}/Resources"
 		"${CMAKE_BINARY_DIR}/rundir/$<CONFIGURATION>/obs-plugins/${BITS}bit/"
+	)
+
+	target_sources(obs-browser-page
+		PRIVATE obs-browser-page.manifest
 	)
 
 	add_custom_command(TARGET obs-browser POST_BUILD
