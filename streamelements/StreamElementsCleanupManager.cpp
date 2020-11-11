@@ -1,5 +1,6 @@
 #include "StreamElementsCleanupManager.hpp"
 
+#include <sys/stat.h>
 #include <obs.h>
 #include <util/platform.h>
 

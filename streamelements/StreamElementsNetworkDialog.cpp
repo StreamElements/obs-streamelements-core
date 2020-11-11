@@ -2,7 +2,13 @@
 #include "StreamElementsUtils.hpp"
 #include "ui_StreamElementsNetworkDialog.h"
 
+#ifdef WIN32
 #include <io.h>
+#else
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <unistd.h>
+#endif
 #include <fcntl.h>
 
 #include <obs.h>
@@ -11,6 +17,14 @@
 #include <codecvt>
 
 #include <QCloseEvent>
+
+#ifndef S_IWRITE
+#define S_IWRITE 0
+#endif
+
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
 
 inline std::string GetCommandLineOptionValue(const std::string key)
 {
@@ -194,7 +208,7 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 	local_context *context = (local_context *)userdata;
 
 	if (size * nmemb > 0)
-		return _write(context->local_file_handle, ptr, size * nmemb);
+		return write(context->local_file_handle, ptr, size * nmemb);
 	else
 		return 0;
 }
@@ -267,7 +281,7 @@ void StreamElementsNetworkDialog::DownloadFileAsyncTask(void *task_arg)
 	}
 
 	// Close open write file handle
-	_close(task_context->local_file_handle);
+	::close(task_context->local_file_handle);
 
 	// Call the user-defined callback with user-defined parameter
 	task_context->user_callback(result, task_context->user_param);
@@ -288,9 +302,14 @@ void StreamElementsNetworkDialog::DownloadFileAsync(
 {
 	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
 	std::string localPath(localFilePath);
+#ifdef WIN32
 	int fd = _wopen(myconv.from_bytes(localPath).c_str(),
-			_O_WRONLY | _O_BINARY,
-			_S_IWRITE /*_S_IREAD | _S_IWRITE*/);
+			O_WRONLY | O_BINARY,
+			S_IWRITE /*_S_IREAD | _S_IWRITE*/);
+#else
+	int fd = ::open(localPath.c_str(),
+			O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
+#endif
 	if (fd < 0) {
 		callback(false, param);
 		return;

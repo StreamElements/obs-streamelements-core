@@ -2,6 +2,7 @@
 #include "StreamElementsGlobalStateManager.hpp"
 #include "StreamElementsUtils.hpp"
 #include <filesystem>
+#include <experimental/filesystem>
 #include <codecvt>
 #include <algorithm>
 #include <obs.h>
@@ -82,7 +83,7 @@ public:
 #ifdef WIN32
 		m_inputStream.open(to_wide(m_filePath), std::ifstream::binary);
 #else
-		inputStream.open(fileName, std::ifstream::binary);
+		m_inputStream.open(m_filePath, std::ifstream::binary);
 #endif
 
 		if (!m_inputStream.is_open()) {
@@ -200,7 +201,7 @@ StreamElementsLocalWebFilesServer::StreamElementsLocalWebFilesServer(std::string
 
 	for (auto &p :
 	     std::experimental::filesystem::directory_iterator(m_rootFolder)) {
-		std::string path = myconv.to_bytes(p.path().c_str());
+		std::string path = p.path().string();
 
 		if (std::experimental::filesystem::is_directory(path)) {
 			std::string host = path;

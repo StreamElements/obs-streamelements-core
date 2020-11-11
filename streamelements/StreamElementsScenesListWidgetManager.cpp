@@ -14,6 +14,9 @@
 #include <QAbstractListModel>
 #include <QMouseEvent>
 
+#include <map>
+#include <unordered_map>
+
 static const char *ITEM_PRIVATE_DATA_KEY_UI_ICON = "streamelements_ui_icon";
 
 static const char *ITEM_PRIVATE_DATA_KEY_APPDATA = "streamelements_app_data";

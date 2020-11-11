@@ -30,11 +30,14 @@ public:
 
 	void Reset()
 	{
+		auto out1 = CefValue::Create();
+		auto out2 = CefValue::Create();
+
 		DeserializeSceneItemsAuxiliaryActions(CefValue::Create(),
-						      CefValue::Create());
+						      out1);
 
 		DeserializeScenesAuxiliaryActions(CefValue::Create(),
-						  CefValue::Create());
+						  out2);
 
 		Update();
 	}
@@ -48,22 +51,22 @@ public:
 
 	/* Scene items */
 
-	void DeserializeObsBrowserSource(CefRefPtr<CefValue> &input,
+	void DeserializeObsBrowserSource(CefRefPtr<CefValue> input,
 					 CefRefPtr<CefValue> &output);
 
-	void DeserializeObsGameCaptureSource(CefRefPtr<CefValue> &input,
+	void DeserializeObsGameCaptureSource(CefRefPtr<CefValue> input,
 					     CefRefPtr<CefValue> &output);
 
-	void DeserializeObsVideoCaptureSource(CefRefPtr<CefValue> &input,
+	void DeserializeObsVideoCaptureSource(CefRefPtr<CefValue> input,
 					      CefRefPtr<CefValue> &output);
 
-	void DeserializeObsNativeSource(CefRefPtr<CefValue> &input,
+	void DeserializeObsNativeSource(CefRefPtr<CefValue> input,
 					CefRefPtr<CefValue> &output);
 
-	void DeserializeObsSceneItemGroup(CefRefPtr<CefValue> &input,
+	void DeserializeObsSceneItemGroup(CefRefPtr<CefValue> input,
 					  CefRefPtr<CefValue> &output);
 
-	void SerializeObsSceneItems(CefRefPtr<CefValue> &input,
+	void SerializeObsSceneItems(CefRefPtr<CefValue> input,
 				    CefRefPtr<CefValue> &output);
 
 	void RemoveObsSceneItemsByIds(CefRefPtr<CefValue> input,

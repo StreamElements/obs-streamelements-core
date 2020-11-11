@@ -1,3 +1,5 @@
+#ifdef _WIN32
+
 #include "NamedPipesServer.hpp"
 
 #include <obs.h>
@@ -204,3 +206,5 @@ void NamedPipesServer::ThreadProc()
 
 	m_running = false;
 }
+
+#endif

@@ -13,10 +13,13 @@
 #include <sstream>
 #include <algorithm>
 
+#include <QMainWindow>
 #include <QWindow>
 #include <QIcon>
 #include <QWidget>
 #include <QFile>
+#include <QMessageBox>
+#include <QInputDialog>
 
 static std::recursive_mutex s_browsers_mutex;
 static std::vector<CefRefPtr<CefBrowser>> s_browsers;
@@ -26,6 +29,7 @@ static std::vector<CefRefPtr<CefBrowser>> s_browsers;
 static bool SetWindowIconFromBuffer(cef_window_handle_t windowHandle,
 				    void *buffer, size_t buffer_len)
 {
+#ifdef WIN32
 	size_t offset = ::LookupIconIdFromDirectoryEx((PBYTE)buffer, TRUE, 0, 0,
 						      LR_DEFAULTCOLOR);
 
@@ -46,6 +50,7 @@ static bool SetWindowIconFromBuffer(cef_window_handle_t windowHandle,
 			return true;
 		}
 	}
+#endif
 
 	return false;
 }
@@ -53,6 +58,7 @@ static bool SetWindowIconFromBuffer(cef_window_handle_t windowHandle,
 static bool SetWindowIconFromResource(cef_window_handle_t windowHandle,
 				      QString &resource)
 {
+#ifdef WIN32
 	QFile file(resource);
 
 	if (file.open(QIODevice::ReadOnly)) {
@@ -61,15 +67,20 @@ static bool SetWindowIconFromResource(cef_window_handle_t windowHandle,
 		return SetWindowIconFromBuffer(windowHandle, data.begin(),
 					       data.size());
 	}
+#endif
 
 	return false;
 }
 
 static bool SetWindowDefaultIcon(cef_window_handle_t windowHandle)
 {
+#ifdef WIN32
 	QString icon(":/images/icon.ico");
 
 	return SetWindowIconFromResource(windowHandle, icon);
+#else
+	return false;
+#endif
 }
 
 /* ========================================================================= */
@@ -132,13 +143,11 @@ void StreamElementsCefClient::OnLoadStart(CefRefPtr<CefBrowser> browser,
 					  CefRefPtr<CefFrame> frame,
 					  TransitionType transition_type)
 {
-	char buf[16];
-
 	blog(LOG_INFO,
-	     "obs-browser[%lu]: start loading %s frame url '%s' (transition_type: %s)",
+	     "obs-browser[%lu]: start loading %s frame url '%s' (transition_type: %lx)",
 	     m_cefClientId, frame->IsMain() ? "main" : "child",
 	     sanitize_url(frame->GetURL().ToString()).c_str(),
-	     ltoa((long)transition_type, buf, 16));
+	     (long)transition_type);
 }
 
 void StreamElementsCefClient::OnLoadEnd(CefRefPtr<CefBrowser> browser,
@@ -225,7 +234,7 @@ void StreamElementsCefClient::OnLoadError(CefRefPtr<CefBrowser> browser,
 					std::regex("\\$\\{error.url\\}"),
 					failedUrl.ToString());
 
-	frame->LoadStringW(htmlString, failedUrl);
+	frame->LoadString(htmlString, failedUrl);
 }
 
 void StreamElementsCefClient::OnLoadingStateChange(
@@ -405,6 +414,7 @@ bool StreamElementsCefClient::OnPreKeyEvent(CefRefPtr<CefBrowser> browser,
 					    CefEventHandle os_event,
 					    bool *is_keyboard_shortcut)
 {
+#ifdef WIN32
 	UNREFERENCED_PARAMETER(os_event);
 	UNREFERENCED_PARAMETER(is_keyboard_shortcut);
 
@@ -520,6 +530,7 @@ bool StreamElementsCefClient::OnPreKeyEvent(CefRefPtr<CefBrowser> browser,
 	//
 	// Send the keystroke to the hotkey processing queue.
 	obs_hotkey_inject_event(combo, pressed);
+#endif
 
 	return false;
 }
@@ -556,4 +567,70 @@ StreamElementsCefClient::GetResourceHandler(CefRefPtr<CefBrowser> browser,
 	return StreamElementsGlobalStateManager::GetInstance()
 		->GetLocalWebFilesServer()
 		->GetCefResourceHandler(browser, frame, request);
+}
+
+bool StreamElementsCefClient::OnJSDialog(
+	CefRefPtr<CefBrowser> browser, const CefString &origin_url,
+	   CefJSDialogHandler::JSDialogType dialog_type,
+	   const CefString &message_text, const CefString &default_prompt_text,
+	   CefRefPtr<CefJSDialogCallback> callback, bool &suppress_message)
+{
+	WId windowHandle = (WId)browser->GetMainFrame()
+				   ->GetBrowser()
+				   ->GetHost()
+				   ->GetWindowHandle();
+
+#ifdef WIN32
+	windowHandle = (WId)::GetParent((HWND)windowHandle);
+#endif
+
+	QWidget *parentWidget = QWidget::find(windowHandle);
+    
+	QString dialogTitle =
+		origin_url.empty() ? "OBS.Live"
+				   : CefFormatUrlForSecurityDisplay(origin_url).ToString().c_str();
+
+	CefString resultBuffer = "";
+
+	//QMainWindow* mainWindow = (QMainWindow *)obs_frontend_get_main_window();
+	//QWidget *parentWidget = (QWidget *)mainWindow;
+
+	switch (dialog_type) {
+	case JSDIALOGTYPE_ALERT:
+        {
+            QMessageBox msgBox;
+            msgBox.setParent(parentWidget);
+            msgBox.setIcon(QMessageBox::Information);
+            msgBox.setText(message_text.ToString().c_str());
+            msgBox.setWindowTitle(dialogTitle);
+            
+            SetAlwaysOnTop(&msgBox, true);
+            
+            msgBox.exec();
+
+            callback->Continue(true, resultBuffer);
+        }
+		return true;
+
+	case JSDIALOGTYPE_CONFIRM:
+        {
+            QMessageBox msgBox;
+            msgBox.setParent(parentWidget);
+            msgBox.setIcon(QMessageBox::Information);
+            msgBox.setText(message_text.ToString().c_str());
+            msgBox.setWindowTitle(dialogTitle);
+            msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+
+            SetAlwaysOnTop(&msgBox, true);
+
+            bool ok = msgBox.exec() == QMessageBox::Yes;
+
+            callback->Continue(ok, resultBuffer);
+        }
+		return true;
+
+	default:
+		suppress_message = false;
+		return false;
+	}
 }

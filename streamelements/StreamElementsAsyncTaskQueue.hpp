@@ -4,6 +4,7 @@
 #include <util/threading.h>
 #include <vector>
 #include <functional>
+#include <string>
 
 ///
 // Asynchronous task queue processed by a worker thread

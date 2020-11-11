@@ -114,23 +114,24 @@ void StreamElementsBrowserWidget::InitBrowserAsyncInternal()
 
 			StreamElementsBrowserWidget *self = this;
 
-			// Client area rectangle
-			RECT clientRect;
-
-			clientRect.left = 0;
-			clientRect.top = 0;
-			clientRect.right = self->width();
-			clientRect.bottom = self->height();
-
 			// CEF window attributes
 			CefWindowInfo windowInfo;
-			windowInfo.width = clientRect.right - clientRect.left;
-			windowInfo.height = clientRect.bottom - clientRect.top;
 			windowInfo.windowless_rendering_enabled = false;
+
+			QSize size = self->size();
+
+#ifdef WIN32
+			size *= devicePixelRatio();
+
+			// Client area rectangle
+			RECT clientRect = {0, 0, size.width(), size.height()};
+
 			windowInfo.SetAsChild(self->m_window_handle,
 					      clientRect);
-			//windowInfo.SetAsPopup(0, CefString("Window Name"));
-
+#else
+			windowInfo.SetAsChild(self->m_window_handle, 0, 0,
+					      size.width(), size.height());
+#endif
 			CefBrowserSettings cefBrowserSettings;
 
 			cefBrowserSettings.Reset();

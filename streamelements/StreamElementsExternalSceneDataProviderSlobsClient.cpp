@@ -1,4 +1,6 @@
 #include "StreamElementsExternalSceneDataProviderSlobsClient.hpp"
+#include <experimental/filesystem>
+#include <filesystem>
 
 bool StreamElementsExternalSceneDataProviderSlobsClient::GetSceneCollections(
 	std::vector<scene_collection_t>& result)

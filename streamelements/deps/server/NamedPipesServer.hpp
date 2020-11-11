@@ -1,5 +1,7 @@
 #pragma once
 
+#ifdef _WIN32
+
 #include <windows.h>
 #include <thread>
 #include <mutex>
@@ -50,3 +52,5 @@ private:
 
 	std::list<NamedPipesServerClientHandler*> m_clients;
 };
+
+#endif

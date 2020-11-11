@@ -9,22 +9,50 @@
 
 #include "deps/zip/zip.h"
 
+#include <sys/stat.h>
+
 #include <obs.h>
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 #include <util/platform.h>
 #include "cef-headers.hpp"
 
+#ifdef WIN32
 #include <windows.h>
+#endif
 
 #include <thread>
 #include <iostream>
 #include <filesystem>
+#include <experimental/filesystem>
 #include <stdio.h>
 #include <fcntl.h>
+#ifdef WIN32
 #include <io.h>
+#else
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#include <pwd.h>
+#include <time.h>
+#endif
 
 #include <QMessageBox>
+#include <QScreen>
+#include <QPixmap>
+#include <QWindow>
+#include <QMainWindow>
+#include <QByteArray>
+#include <QBuffer>
+
+#include <string>
+#include <regex>
+
+#ifndef BYTE
+	typedef unsigned char BYTE;
+#endif
 
 static std::string get_newest_file(const char *location)
 {
@@ -79,9 +107,6 @@ static double GetCpuCoreBenchmark(const uint64_t CPU_BENCH_TOTAL, uint64_t& cpu_
 
 	for (uint64_t bench = 0; bench < CPU_BENCH_TOTAL; ++bench) {
 		cpu_bench_accumulator *= cpu_bench_accumulator;
-		//if (dialog.cancelled()) {
-		//	goto cancelled;
-		//}
 	}
 
 	uint64_t cpu_bench_end = os_gettime_ns();
@@ -147,6 +172,7 @@ void StreamElementsReportIssueDialog::accept()
 			ui->txtIssue->toPlainText().trimmed().toStdWString());
 
 		const size_t BUF_LEN = 2048;
+#ifdef WIN32
 		wchar_t pathBuffer[BUF_LEN];
 
 		if (!::GetTempPathW(BUF_LEN, pathBuffer)) {
@@ -175,6 +201,14 @@ void StreamElementsReportIssueDialog::accept()
 		wtempBufPath += L".zip";
 
 		tempBufPath = wstring_to_utf8(wtempBufPath);
+#else
+		char pid_buf[32];
+		sprintf(pid_buf, "%d", getpid());
+
+		tempBufPath = "/tmp/";
+		tempBufPath += pid_buf;
+		tempBufPath += ".zip";
+#endif
 
 		char programDataPathBuf[BUF_LEN];
 		int ret = os_get_config_path(programDataPathBuf, BUF_LEN, "obs-studio");
@@ -232,12 +266,18 @@ void StreamElementsReportIssueDialog::accept()
 
 		auto addFileToZip = [&](std::wstring localPath, std::wstring zipPath)
 		{
+#ifdef WIN32
 			int fd = _wsopen(
 				localPath.c_str(),
-				_O_RDONLY | _O_BINARY,
-				_SH_DENYNO,
+				O_RDONLY | O_BINARY,
+				SH_DENYNO,
 				0 /*_S_IREAD | _S_IWRITE*/);
+#else
+			std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
 
+			int fd = ::open(myconv.to_bytes(localPath).c_str(),
+					 O_RDONLY);
+#endif
 			if (-1 != fd) {
 				size_t BUF_LEN = 32768;
 
@@ -245,20 +285,20 @@ void StreamElementsReportIssueDialog::accept()
 
 				zip_entry_open(zip, wstring_to_utf8(zipPath).c_str());
 
-				int read = _read(fd, buf, BUF_LEN);
+				int read = ::read(fd, buf, BUF_LEN);
 				while (read > 0) {
 					if (0 != zip_entry_write(zip, buf, read)) {
 						break;
 					}
 
-					read = _read(fd, buf, BUF_LEN);
+					read = ::read(fd, buf, BUF_LEN);
 				}
 
 				zip_entry_close(zip);
 
 				delete[] buf;
 
-				_close(fd);
+				::close(fd);
 			}
 			else {
 				blog(LOG_ERROR,
@@ -267,133 +307,36 @@ void StreamElementsReportIssueDialog::accept()
 			}
 		};
 
-		auto addWindowCaptureToZip = [&](const HWND& hWnd, int nBitCount, std::wstring zipPath)
+		auto addWindowCaptureToZip = [&](std::wstring zipPath)
 		{
-			//calculate the number of color indexes in the color table
-			int nColorTableEntries = -1;
-			switch (nBitCount)
-			{
-			case 1:
-				nColorTableEntries = 2;
-				break;
-			case 4:
-				nColorTableEntries = 16;
-				break;
-			case 8:
-				nColorTableEntries = 256;
-				break;
-			case 16:
-			case 24:
-			case 32:
-				nColorTableEntries = 0;
-				break;
-			default:
-				nColorTableEntries = -1;
-				break;
+			QMainWindow* mainWindow =
+				StreamElementsGlobalStateManager::GetInstance()
+					->mainWindow();
+
+			WId winId = mainWindow->winId();
+
+			QScreen *screen = QGuiApplication::primaryScreen();
+			if (const QWindow *window =
+				    mainWindow->windowHandle()) {
+				screen = window->screen();
 			}
 
-			if (nColorTableEntries == -1)
-			{
-				// printf("bad bits-per-pixel argument\n");
-				return false;
-			}
+			QPixmap pixmap = screen->grabWindow(winId);
 
-			HDC hDC = GetDC(hWnd);
-			HDC hMemDC = CreateCompatibleDC(hDC);
+			// This won't grab CEF windows' content on Win32
+			// QPixmap pixmap = mainWindow->grab();
 
-			int nWidth = 0;
-			int nHeight = 0;
-
-			if (hWnd != HWND_DESKTOP)
-			{
-				RECT rect;
-				GetClientRect(hWnd, &rect);
-				nWidth = rect.right - rect.left;
-				nHeight = rect.bottom - rect.top;
-			}
-			else
-			{
-				nWidth = ::GetSystemMetrics(SM_CXSCREEN);
-				nHeight = ::GetSystemMetrics(SM_CYSCREEN);
-			}
-
-			HBITMAP hBMP = CreateCompatibleBitmap(hDC, nWidth, nHeight);
-			SelectObject(hMemDC, hBMP);
-			BitBlt(hMemDC, 0, 0, nWidth, nHeight, hDC, 0, 0, SRCCOPY);
-
-			int nStructLength = sizeof(BITMAPINFOHEADER) + sizeof(RGBQUAD) * nColorTableEntries;
-			LPBITMAPINFOHEADER lpBitmapInfoHeader = (LPBITMAPINFOHEADER)new char[nStructLength];
-			::ZeroMemory(lpBitmapInfoHeader, nStructLength);
-
-			lpBitmapInfoHeader->biSize = sizeof(BITMAPINFOHEADER);
-			lpBitmapInfoHeader->biWidth = nWidth;
-			lpBitmapInfoHeader->biHeight = nHeight;
-			lpBitmapInfoHeader->biPlanes = 1;
-			lpBitmapInfoHeader->biBitCount = nBitCount;
-			lpBitmapInfoHeader->biCompression = BI_RGB;
-			lpBitmapInfoHeader->biXPelsPerMeter = 0;
-			lpBitmapInfoHeader->biYPelsPerMeter = 0;
-			lpBitmapInfoHeader->biClrUsed = nColorTableEntries;
-			lpBitmapInfoHeader->biClrImportant = nColorTableEntries;
-
-			DWORD dwBytes = ((DWORD)nWidth * nBitCount) / 32;
-			if (((DWORD)nWidth * nBitCount) % 32) {
-				dwBytes++;
-			}
-			dwBytes *= 4;
-
-			DWORD dwSizeImage = dwBytes * nHeight;
-			lpBitmapInfoHeader->biSizeImage = dwSizeImage;
-
-			LPBYTE lpDibBits = 0;
-			HBITMAP hBitmap = ::CreateDIBSection(hMemDC, (LPBITMAPINFO)lpBitmapInfoHeader, DIB_RGB_COLORS, (void**)&lpDibBits, NULL, 0);
-			SelectObject(hMemDC, hBitmap);
-			BitBlt(hMemDC, 0, 0, nWidth, nHeight, hDC, 0, 0, SRCCOPY);
-			ReleaseDC(hWnd, hDC);
-
-			BITMAPFILEHEADER bmfh;
-			bmfh.bfType = 0x4d42;  // 'BM'
-			int nHeaderSize = sizeof(BITMAPINFOHEADER) + sizeof(RGBQUAD) * nColorTableEntries;
-			bmfh.bfSize = 0;
-			bmfh.bfReserved1 = bmfh.bfReserved2 = 0;
-			bmfh.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER) + sizeof(RGBQUAD) * nColorTableEntries;
+			QByteArray bytes;
+			QBuffer buffer(&bytes);
+			buffer.open(QIODevice::WriteOnly);
+			pixmap.save(&buffer, "BMP");
 
 			zip_entry_open(zip, wstring_to_utf8(zipPath).c_str());
 
-			DWORD nColorTableSize = 0;
-			if (nBitCount != 24) {
-				nColorTableSize = (1ULL << nBitCount) * sizeof(RGBQUAD);
-			}
-			else {
-				nColorTableSize = 0;
-			}
-
-			zip_entry_write(zip, &bmfh, sizeof(BITMAPFILEHEADER));
-			zip_entry_write(zip, lpBitmapInfoHeader, nHeaderSize);
-
-			if (nBitCount < 16)
-			{
-				//int nBytesWritten = 0;
-				RGBQUAD *rgbTable = new RGBQUAD[nColorTableEntries * sizeof(RGBQUAD)];
-				//fill RGBQUAD table and write it in file
-				for (int i = 0; i < nColorTableEntries; ++i)
-				{
-					rgbTable[i].rgbRed = rgbTable[i].rgbGreen = rgbTable[i].rgbBlue = i;
-					rgbTable[i].rgbReserved = 0;
-
-					zip_entry_write(zip, &rgbTable[i], sizeof(RGBQUAD));
-				}
-
-				delete[] rgbTable;
-			}
-
-			zip_entry_write(zip, lpDibBits, dwSizeImage);
+			zip_entry_write(zip, buffer.data().constData(),
+					buffer.size());
 
 			zip_entry_close(zip);
-
-			::DeleteObject(hBMP);
-			::DeleteObject(hBitmap);
-			delete[]lpBitmapInfoHeader;
 
 			return true;
 		};
@@ -405,16 +348,15 @@ void StreamElementsReportIssueDialog::accept()
 		addBufferToZip((BYTE*)descriptionText.c_str(), descriptionText.size(), L"description.txt");
 
 		// Add window capture
-		addWindowCaptureToZip(
-			(HWND)StreamElementsGlobalStateManager::GetInstance()->mainWindow()->winId(),
-			24,
-			L"obs-main-window.bmp");
+		addWindowCaptureToZip(L"obs-main-window.bmp");
 
 		std::map<std::wstring, std::wstring> local_to_zip_files_map;
 
 		if (collect_all) {
 			std::vector<std::wstring> blacklist = {
-				L"plugin_config/obs-streamelements/obs-streamelements-update.exe",
+                L"plugin_config/obs-streamelements/obs-streamelements-update.exe",
+                L"plugin_config/obs-streamelements/obs-streamelements-update.pkg",
+                L"plugin_config/obs-streamelements/obs-streamelements-update.dmg",
 				L"plugin_config/obs-browser/cache/",
 				L"plugin_config/obs-browser/blob_storage/",
 				L"plugin_config/obs-browser/code cache/",
@@ -444,7 +386,7 @@ void StreamElementsReportIssueDialog::accept()
 					     programDataPathBuf)) {
 				if (!std::experimental::filesystem::is_directory(
 					    i.path())) {
-					std::wstring local_path = i.path().c_str();
+					std::wstring local_path = i.path().wstring();
 					std::wstring zip_path = local_path.substr(obsDataPath.size() + 1);
 
 					std::wstring zip_path_lcase = zip_path;
@@ -487,6 +429,57 @@ void StreamElementsReportIssueDialog::accept()
 			local_to_zip_files_map[obsDataPath + L"\\plugin_config\\obs-browser\\obs-browser-streamelements.ini"] = L"obs-studio\\plugin_config\\obs-browser\\obs-browser-streamelements.ini";
 			local_to_zip_files_map[obsDataPath + L"\\global.ini"] = L"obs-studio\\global.ini";
 		}
+        
+#ifdef __APPLE__
+        // Add apple crash logs
+
+        {
+            const time_t MAX_SECONDS_OLD = 60 * 60 * 24 * 3;
+
+            struct timespec now;
+            clock_gettime(CLOCK_REALTIME, &now);
+
+            struct passwd* pw = getpwuid(getuid());
+
+            std::string logsPath = pw->pw_dir;
+            logsPath += "/Library/Logs/DiagnosticReports";
+
+            DIR* dir = opendir(logsPath.c_str());
+
+            if (dir) {
+                while (struct dirent* ent = readdir(dir)) {
+                    if (ent->d_type == DT_REG && ent->d_name[0] != '.') {
+                        std::string fileName = ent->d_name;
+
+                        std::smatch match;
+
+                        if (!std::regex_search(fileName, match,
+                                    std::regex("^(.+?)\\.(crash|diag)$")))
+                            continue;
+
+                        std::string filePath = logsPath + "/" + fileName;
+
+                        struct stat entstat;
+
+                        if (lstat(filePath.c_str(), &entstat) != 0) continue;
+
+                        time_t delta = now.tv_sec - entstat.st_mtimespec.tv_sec;
+
+                        if (delta < MAX_SECONDS_OLD) {
+                            std::string zipFilePath = "crashes/" + fileName;
+                            
+                            std::wstring_convert<std::codecvt_utf8<wchar_t>>
+                                myconv;
+
+                            local_to_zip_files_map[myconv.from_bytes(filePath)] = myconv.from_bytes(zipFilePath);
+                        }
+                    }
+                }
+
+                closedir(dir);
+            }
+        }
+#endif
 
 		dialog.setMessage(obs_module_text("StreamElements.ReportIssue.Progress.Message.CollectingFiles"));
 
@@ -495,7 +488,7 @@ void StreamElementsReportIssueDialog::accept()
 
 		for (auto item : local_to_zip_files_map) {
 			if (dialog.cancelled()) {
-				goto cancelled;
+				break;
 			}
 
 			++count;
@@ -505,145 +498,181 @@ void StreamElementsReportIssueDialog::accept()
 			dialog.setProgress(0, (int)total, (int)count);
 		}
 
-		if (dialog.cancelled()) {
-			goto cancelled;
-		}
-
-		dialog.setMessage(obs_module_text("StreamElements.ReportIssue.Progress.Message.CollectingCpuBenchmark"));
-		qApp->sendPostedEvents();
-
-		/*
-		uint64_t cpu_bench_begin = os_gettime_ns();
-		const uint64_t CPU_BENCH_TOTAL = 10000000;
-		uint64_t cpu_bench_accumulator = 2L;
-
-		for (uint64_t bench = 0; bench < CPU_BENCH_TOTAL; ++bench) {
-			cpu_bench_accumulator *= cpu_bench_accumulator;
-			//if (dialog.cancelled()) {
-			//	goto cancelled;
-			//}
-		}
-
-		uint64_t cpu_bench_end = os_gettime_ns();
-		uint64_t cpu_bench_delta = cpu_bench_end - cpu_bench_begin;
-		double cpu_benchmark = (double)CPU_BENCH_TOTAL / (double)cpu_bench_delta;
-		*/
-
+		double cpu_benchmark = 0;
 		const uint64_t CPU_BENCH_TOTAL = 10000000;
 		uint64_t cpu_bench_delta = 0;
-		double cpu_benchmark = GetCpuCoreBenchmark(CPU_BENCH_TOTAL, cpu_bench_delta);
 
-		if (dialog.cancelled()) {
-			goto cancelled;
+		if (!dialog.cancelled()) {
+			dialog.setMessage(obs_module_text(
+				"StreamElements.ReportIssue.Progress.Message.CollectingCpuBenchmark"));
+			qApp->sendPostedEvents();
+
+			cpu_benchmark = GetCpuCoreBenchmark(
+				CPU_BENCH_TOTAL, cpu_bench_delta);
 		}
 
-		dialog.setMessage(obs_module_text("StreamElements.ReportIssue.Progress.Message.CollectingSysInfo"));
-		qApp->sendPostedEvents();
-
-		{
-			CefRefPtr<CefValue> basicInfo = CefValue::Create();
-			CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
-			basicInfo->SetDictionary(d);
-
-			std::string bench; bench += (cpu_benchmark);
-			d->SetString("obsVersion", obs_get_version_string());
-			d->SetString("cefVersion", GetCefVersionString());
-			d->SetString("cefApiHash", GetCefPlatformApiHash());
-#ifdef _WIN32
-			d->SetString("platform", "windows");
-#elif APPLE
-			d->SetString("platform", "macos");
-#elif LINUX
-			d->SetString("platform", "linux");
-#else
-			d->SetString("platform", "other");
-#endif
-			d->SetString("streamelementsPluginVersion", GetStreamElementsPluginVersionString());
-			d->SetDouble("cpuCoreBenchmarkScore", (double)cpu_benchmark);
-			d->SetDouble("cpuCoreBenchmarkOpsCount", (double)CPU_BENCH_TOTAL);
-			d->SetDouble("cpuCoreBenchmarkNanoseconds", (double)cpu_bench_delta);
-#ifdef _WIN64
-			d->SetString("platformArch", "64bit");
-#else
-			d->SetString("platformArch", "32bit");
-#endif
-			d->SetString("machineUniqueId", GetComputerSystemUniqueId());
-
-			addCefValueToZip(basicInfo, L"system\\basic.json");
-		}
-
-		{
-			CefRefPtr<CefValue> sysHardwareInfo = CefValue::Create();
-
-			SerializeSystemHardwareProperties(sysHardwareInfo);
-
-			addCefValueToZip(sysHardwareInfo, L"system\\hardware.json");
-		}
-
-		{
-			CefRefPtr<CefValue> sysMemoryInfo = CefValue::Create();
-
-			SerializeSystemMemoryUsage(sysMemoryInfo);
-
-			addCefValueToZip(sysMemoryInfo, L"system\\memory.json");
-		}
-
-		{
-			// Histogram CPU & memory usage (past hour, 1 minute intervals)
-
-			auto cpuUsageHistory =
-				StreamElementsGlobalStateManager::GetInstance()->GetPerformanceHistoryTracker()->getCpuUsageSnapshot();
-
-			auto memoryUsageHistory =
-				StreamElementsGlobalStateManager::GetInstance()->GetPerformanceHistoryTracker()->getMemoryUsageSnapshot();
-
-			char lineBuf[512];
+		if (!dialog.cancelled()) {
+			dialog.setMessage(obs_module_text(
+				"StreamElements.ReportIssue.Progress.Message.CollectingSysInfo"));
+			qApp->sendPostedEvents();
 
 			{
-				std::vector<std::string> lines;
+				CefRefPtr<CefValue> basicInfo =
+					CefValue::Create();
+				CefRefPtr<CefDictionaryValue> d =
+					CefDictionaryValue::Create();
+				basicInfo->SetDictionary(d);
 
-				lines.push_back("totalSeconds,busySeconds,idleSeconds");
-				for (auto item : cpuUsageHistory) {
-					sprintf(lineBuf, "%1.2Lf,%1.2Lf,%1.2Lf", item.totalSeconds, item.busySeconds, item.idleSeconds);
+				std::string bench;
+				bench += (cpu_benchmark);
+				d->SetString("obsVersion",
+					     obs_get_version_string());
+				d->SetString("cefVersion",
+					     GetCefVersionString());
+				d->SetString("cefApiHash",
+					     GetCefPlatformApiHash());
+#ifdef WIN32
+				d->SetString("platform", "windows");
+#elif defined(__APPLE__)
+				d->SetString("platform", "macos");
+#elif defined(__linux__)
+				d->SetString("platform", "linux");
+#endif
 
-					lines.push_back(lineBuf);
-				}
+                if (sizeof(void*) == 8) {
+                    d->SetString("platformArch", "64bit");
+                } else {
+                    d->SetString("platformArch", "32bit");
+                }
 
-				addLinesBufferToZip(lines, L"system\\usage_history_cpu.csv");
+                d->SetString(
+					"streamelementsPluginVersion",
+					GetStreamElementsPluginVersionString());
+				d->SetDouble("cpuCoreBenchmarkScore",
+					     (double)cpu_benchmark);
+				d->SetDouble("cpuCoreBenchmarkOpsCount",
+					     (double)CPU_BENCH_TOTAL);
+				d->SetDouble("cpuCoreBenchmarkNanoseconds",
+					     (double)cpu_bench_delta);
+
+                d->SetString("machineUniqueId",
+					     GetComputerSystemUniqueId());
+
+				addCefValueToZip(basicInfo,
+						 L"system\\basic.json");
 			}
 
 			{
-				std::vector<std::string> lines;
+				CefRefPtr<CefValue> sysHardwareInfo =
+					CefValue::Create();
 
-				lines.push_back("totalSeconds,memoryUsedPercentage");
+				SerializeSystemHardwareProperties(
+					sysHardwareInfo);
 
-				size_t index = 0;
-				for (auto item : memoryUsageHistory) {
-					if (index < cpuUsageHistory.size()) {
-						auto totalSec = cpuUsageHistory[index].totalSeconds;
+				addCefValueToZip(sysHardwareInfo,
+						 L"system\\hardware.json");
+			}
 
-						sprintf(lineBuf, "%1.2Lf,%d",
-							totalSec,
-							item.dwMemoryLoad // % Used
-						);
+			{
+				CefRefPtr<CefValue> sysMemoryInfo =
+					CefValue::Create();
+
+				SerializeSystemMemoryUsage(sysMemoryInfo);
+
+				addCefValueToZip(sysMemoryInfo,
+						 L"system\\memory.json");
+			}
+
+			{
+				// Histogram CPU & memory usage (past hour, 1 minute intervals)
+
+				auto cpuUsageHistory =
+					StreamElementsGlobalStateManager::GetInstance()
+						->GetPerformanceHistoryTracker()
+						->getCpuUsageSnapshot();
+
+				auto memoryUsageHistory =
+					StreamElementsGlobalStateManager::GetInstance()
+						->GetPerformanceHistoryTracker()
+						->getMemoryUsageSnapshot();
+
+				char lineBuf[512];
+
+				{
+					std::vector<std::string> lines;
+
+					lines.push_back(
+						"totalSeconds,busySeconds,idleSeconds");
+					for (auto item : cpuUsageHistory) {
+						sprintf(lineBuf,
+							"%1.2Lf,%1.2Lf,%1.2Lf",
+							item.totalSeconds,
+							item.busySeconds,
+							item.idleSeconds);
+
+						lines.push_back(lineBuf);
 					}
-					else {
-						sprintf(lineBuf, "%1.2Lf,%d",
-							0.0,
-							item.dwMemoryLoad // % Used
-						);
-					}
 
-					lines.push_back(lineBuf);
-
-					++index;
+					addLinesBufferToZip(
+						lines,
+						L"system\\usage_history_cpu.csv");
 				}
 
-				addLinesBufferToZip(lines, L"system\\usage_history_memory.csv");
+				{
+					std::vector<std::string> lines;
+
+					lines.push_back(
+						"totalSeconds,memoryUsedPercentage");
+
+					size_t index = 0;
+					for (auto item : memoryUsageHistory) {
+						if (index <
+						    cpuUsageHistory.size()) {
+							auto totalSec =
+								cpuUsageHistory[index]
+									.totalSeconds;
+
+#ifdef WIN32
+							sprintf(lineBuf,
+								"%1.2Lf,%d",
+								totalSec,
+								item.dwMemoryLoad // % Used
+							);
+#else
+							sprintf(lineBuf,
+								"%1.2Lf,%d",
+								totalSec,
+								item // % Used
+							);
+#endif
+						} else {
+#ifdef WIN32
+							sprintf(lineBuf,
+								"%1.2Lf,%d",
+								0.0,
+								item.dwMemoryLoad // % Used
+							);
+#else
+							sprintf(lineBuf,
+								"%1.2Lf,%d",
+								0.0,
+								item // % Used
+							);
+#endif
+						}
+
+						lines.push_back(lineBuf);
+
+						++index;
+					}
+
+					addLinesBufferToZip(
+						lines,
+						L"system\\usage_history_memory.csv");
+				}
 			}
 		}
 
-cancelled:
 		zip_close(zip);
 
 		if (!dialog.cancelled()) {

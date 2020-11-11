@@ -15,19 +15,23 @@ StreamElementsControllerServer::StreamElementsControllerServer(StreamElementsMes
 		OnMsgReceivedInternal(str);
 	};
 
+#ifdef _WIN32
 	m_server = new NamedPipesServer(
 		PIPE_NAME,
 		msgReceiver,
 		MAX_CLIENTS);
 
 	m_server->Start();
+#endif
 }
 
 StreamElementsControllerServer::~StreamElementsControllerServer()
 {
+#ifdef _WIN32
 	m_server->Stop();
 
 	delete m_server;
+#endif
 }
 
 void StreamElementsControllerServer::OnMsgReceivedInternal(std::string& msg)
@@ -75,7 +79,9 @@ void StreamElementsControllerServer::NotifyAllClients(
 
 	std::string buf = CefWriteJSON(root, JSON_WRITER_DEFAULT);
 
+#ifdef _WIN32
 	m_server->WriteMessage(buf.c_str(), buf.size());
+#endif
 }
 
 void StreamElementsControllerServer::SendEventAllClients(

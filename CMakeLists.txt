@@ -1,6 +1,14 @@
 cmake_minimum_required(VERSION 2.8.12)
 project(obs-browser)
 
+if (WIN32)
+	set(ENABLE_BUGSPLAT TRUE)
+	set(ENABLE_ANGELSCRIPT TRUE)
+else()
+	set(ENABLE_BUGSPLAT FALSE)
+	set(ENABLE_ANGELSCRIPT FALSE)
+endif(WIN32)
+
 set(CMAKE_PREFIX_PATH "${QTDIR}")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}")
 set(CMAKE_INCLUDE_CURRENT_DIR TRUE)
@@ -15,17 +23,31 @@ find_package(CEF QUIET)
 find_package(Qt5Core REQUIRED)
 find_package(Qt5Widgets REQUIRED)
 find_package(Libcurl REQUIRED)
-find_package(BugSplat REQUIRED)
-find_package(AngelScript REQUIRED)
+if (ENABLE_BUGSPLAT)
+	find_package(BugSplat REQUIRED)
+endif()
+if (ENABLE_ANGELSCRIPT)
+	find_package(AngelScript REQUIRED)
+endif()
 
 include_directories(SYSTEM
 	${Qt5Core_INCLUDES}
 	${Qt5Widgets_INCLUDES}
 	${LIBCURL_INCLUDE_DIRS}
-	${BUGSPLAT_INCLUDE_DIR}
-	${ANGELSCRIPT_INCLUDE_DIR}
-	${ANGELSCRIPT_ADDON_INCLUDE_DIR}
 )
+
+if (ENABLE_BUGSPLAT)
+	include_directories(SYSTEM
+		${BUGSPLAT_INCLUDE_DIR}
+	)
+endif()
+
+if (ENABLE_ANGELSCRIPT)
+	include_directories(SYSTEM
+		${ANGELSCRIPT_INCLUDE_DIR}
+		${ANGELSCRIPT_ADDON_INCLUDE_DIR}
+	)
+endif()
 
 #qt5_wrap_ui(NetworkDialog "networkdialog.ui")
 qt5_add_resources(obs-browser-streamelements_QRC_SOURCES "streamelements/streamelements.qrc")
@@ -35,12 +57,12 @@ if(NOT CEF_FOUND)
 	return()
 endif()
 
-if (NOT BUGSPLAT_FOUND)
+if (NOT BUGSPLAT_FOUND AND ENABLE_BUGSPLAT)
 	message(STATUS "BugSplat Not found -- obs-browser plugin disabled.")
 	return()
 endif()
 
-if (NOT ANGELSCRIPT_FOUND)
+if (NOT ANGELSCRIPT_FOUND AND ENABLE_ANGELSCRIPT)
 	message(STATUS "AngelScript Not found -- obs-browser plugin disabled.")
 	return()
 endif()
@@ -78,20 +100,53 @@ configure_file(
 include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 include_directories("${CEF_ROOT_DIR}")
 
+if (APPLE)
+	add_custom_command(
+		OUTPUT
+			${CMAKE_CURRENT_SOURCE_DIR}/streamelements/mach_exc.h
+			${CMAKE_CURRENT_SOURCE_DIR}/streamelements/mach_excServer.c
+			${CMAKE_CURRENT_SOURCE_DIR}/streamelements/mach_excUser.c
+		MAIN_DEPENDENCY /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk/usr/include/mach/mach_exc.defs
+		WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/streamelements
+		COMMAND mig -v /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk/usr/include/mach/mach_exc.defs
+	)
+endif(APPLE)
+
 # ----------------------------------------------------------------------------
 
-set(obs-browser_LIBRARIES
-	libobs
-	obs-frontend-api
-	Qt5::Core
-	Qt5::Widgets
-	w32-pthreads
-	${LIBCURL_LIBRARIES}
-	${BUGSPLAT_LIBRARIES}
-	)
+if (ENABLE_BUGSPLAT)
+	set(obs-browser_LIBRARIES
+		libobs
+		obs-frontend-api
+		Qt5::Core
+		Qt5::Widgets
+		w32-pthreads
+		${LIBCURL_LIBRARIES}
+		${BUGSPLAT_LIBRARIES}
+		)
+else()
+	set(obs-browser_LIBRARIES
+		libobs
+		obs-frontend-api
+		Qt5::Core
+		Qt5::Widgets
+		#w32-pthreads
+		${LIBCURL_LIBRARIES}
+		)
+endif()
 
 list(APPEND obs-browser_LIBRARIES
 	${CEF_LIBRARIES})
+
+if (APPLE)
+	list(APPEND obs-browser_LIBRARIES
+		${CEF_LIBRARIES}
+		"-framework IOKit"
+		"-framework Foundation"
+		"-framework System"
+        "-framework SystemConfiguration"
+	)
+endif(APPLE)
 
 if(BROWSER_PANEL_SUPPORT_ENABLED OR USE_QT_LOOP)
 	if(DEFINED QTDIR${_lib_suffix})
@@ -170,7 +225,6 @@ set(obs-browser_SOURCES
 	streamelements/StreamElementsPerformanceHistoryTracker.cpp
 	streamelements/StreamElementsNetworkDialog.cpp
 	streamelements/StreamElementsAnalyticsEventsManager.cpp
-	streamelements/StreamElementsCrashHandler.cpp
 	streamelements/StreamElementsMessageBus.cpp
 	streamelements/StreamElementsBrowserSourceApiMessageHandler.cpp
 	streamelements/StreamElementsControllerServer.cpp
@@ -195,6 +249,20 @@ set(obs-browser_SOURCES
 	streamelements/deps/server/NamedPipesServerClientHandler.cpp
 	streamelements/deps/sqlite/sqlite3.c
 	)
+
+if (APPLE)
+    list(APPEND obs-browser_SOURCES
+        streamelements/StreamElementsUtils.mm
+        streamelements/StreamElementsCrashHandler.mm
+		streamelements/mach_excServer.c
+		streamelements/mach_excUser.c
+    )
+else()
+    list(APPEND obs-browser_SOURCES
+        streamelements/StreamElementsCrashHandler.cpp
+    )
+endif(APPLE)
+
 set(obs-browser_HEADERS
 	obs-browser-source.hpp
 	browser-scheme.hpp
@@ -264,6 +332,12 @@ set(obs-browser_HEADERS
 	streamelements/deps/sqlite/sqlite3ext.h
 	)
 
+if (APPLE)
+    list(APPEND obs-browser_HEADERS
+		streamelements/mach_exc.h
+    )
+endif(APPLE)
+
 # only allow browser panels on win32 for now -- other operating systems
 # need more testing
 if(WIN32 AND BROWSER_PANEL_SUPPORT_ENABLED)
@@ -293,6 +367,11 @@ endif()
 
 set_target_properties(obs-browser PROPERTIES FOLDER "plugins/obs-browser")
 
+if (APPLE)
+	set_target_properties(obs-browser PROPERTIES
+		COMPILE_FLAGS "-mmacosx-version-min=10.15 -target x86_64-apple-macos10.15")
+endif(APPLE)
+
 # ----------------------------------------------------------------------------
 
 set(obs-browser-page_SOURCES
@@ -318,7 +397,7 @@ set_target_properties(obs-browser-page PROPERTIES FOLDER "plugins/obs-browser")
 
 if (APPLE)
 	set_target_properties(obs-browser-page PROPERTIES
-		COMPILE_FLAGS "-mmacosx-version-min=10.8")
+		COMPILE_FLAGS "-mmacosx-version-min=10.15 -target x86_64-apple-macos10.15")
 endif(APPLE)
 
 if (WIN32)
@@ -332,49 +411,51 @@ endif()
 
 # ----------------------------------------------------------------------------
 
-set(obs-browser-streamelements-restore-script-host_SOURCES
-	streamelements/restore-script-host/main.rc
-	streamelements/restore-script-host/main.cpp
-	streamelements/restore-script-host/ScriptEngine.cpp
-	${ANGELSCRIPT_ADDON_INCLUDE_DIR}/scriptstdstring/scriptstdstring.cpp
-	#${ANGELSCRIPT_ADDON_INCLUDE_DIR}/scriptstdstring/scriptstdstring_utils.cpp
-	${ANGELSCRIPT_ADDON_INCLUDE_DIR}/scriptbuilder/scriptbuilder.cpp
-	)
-set(obs-browser-streamelements-restore-script-host_HEADERS
-	streamelements/restore-script-host/main.hpp
-	streamelements/restore-script-host/ScriptEngine.hpp
-	)
+if(ENABLE_ANGELSCRIPT)
+	set(obs-browser-streamelements-restore-script-host_SOURCES
+		streamelements/restore-script-host/main.rc
+		streamelements/restore-script-host/main.cpp
+		streamelements/restore-script-host/ScriptEngine.cpp
+		${ANGELSCRIPT_ADDON_INCLUDE_DIR}/scriptstdstring/scriptstdstring.cpp
+		#${ANGELSCRIPT_ADDON_INCLUDE_DIR}/scriptstdstring/scriptstdstring_utils.cpp
+		${ANGELSCRIPT_ADDON_INCLUDE_DIR}/scriptbuilder/scriptbuilder.cpp
+		)
+	set(obs-browser-streamelements-restore-script-host_HEADERS
+		streamelements/restore-script-host/main.hpp
+		streamelements/restore-script-host/ScriptEngine.hpp
+		)
 
-set(obs-browser-streamelements-restore-script-host_LIBRARIES
-	${ANGELSCRIPT_LIBRARIES}
-	#libobs
-	#Qt5::Core
-	#Qt5::Widgets
-	#w32-pthreads
-	#${LIBCURL_LIBRARIES}
-	)
+	set(obs-browser-streamelements-restore-script-host_LIBRARIES
+		${ANGELSCRIPT_LIBRARIES}
+		#libobs
+		#Qt5::Core
+		#Qt5::Widgets
+		#w32-pthreads
+		#${LIBCURL_LIBRARIES}
+		)
 
-add_executable(obs-browser-streamelements-restore-script-host
-	${obs-browser-streamelements-restore-script-host_SOURCES}
-	${obs-browser-streamelements-restore-script-host_HEADERS}
-	)
+	add_executable(obs-browser-streamelements-restore-script-host
+		${obs-browser-streamelements-restore-script-host_SOURCES}
+		${obs-browser-streamelements-restore-script-host_HEADERS}
+		)
 
-target_link_libraries(obs-browser-streamelements-restore-script-host
-	${obs-browser-streamelements-restore-script-host_LIBRARIES}
-	)
+	target_link_libraries(obs-browser-streamelements-restore-script-host
+		${obs-browser-streamelements-restore-script-host_LIBRARIES}
+		)
 
-if (APPLE)
-	set_target_properties(obs-browser-streamelements-restore-script-host PROPERTIES
-		COMPILE_FLAGS "-mmacosx-version-min=10.8")
-endif(APPLE)
+	if (APPLE)
+		set_target_properties(obs-browser-streamelements-restore-script-host PROPERTIES
+			COMPILE_FLAGS "-mmacosx-version-min=10.15 -target x86_64-apple-macos10.15")
+	endif(APPLE)
 
-if (WIN32)
-	set_target_properties(obs-browser-streamelements-restore-script-host PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS")
-endif(WIN32)
+	if (WIN32)
+		set_target_properties(obs-browser-streamelements-restore-script-host PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS")
+	endif(WIN32)
 
-if (APPLE AND XCODE)
-	set_xcode_property(obs-browser-streamelements-restore-script-host CLANG_CXX_LIBRARY "libc++")
-endif(APPLE AND XCODE)
+	if (APPLE AND XCODE)
+		set_xcode_property(obs-browser-streamelements-restore-script-host CLANG_CXX_LIBRARY "libc++")
+	endif(APPLE AND XCODE)
+endif()
 
 # ----------------------------------------------------------------------------
 
@@ -417,14 +498,16 @@ if (WIN32)
 		"${CMAKE_BINARY_DIR}/rundir/$<CONFIGURATION>/bin/${BITS}bit/"
 	)
 
-	# Copy BugSplat binary files
-	foreach( bugsplat_bin_file ${BUGSPLAT_BIN_FILES})
-		add_custom_command(TARGET obs-browser POST_BUILD
-			COMMAND ${CMAKE_COMMAND} -E copy
-			${bugsplat_bin_file}
-			"${CMAKE_BINARY_DIR}/rundir/$<CONFIGURATION>/bin/${BITS}bit/"
-		)
-	endforeach( bugsplat_bin_file )
+	if(ENABLE_BUGSPLAT)
+		# Copy BugSplat binary files
+		foreach( bugsplat_bin_file ${BUGSPLAT_BIN_FILES})
+			add_custom_command(TARGET obs-browser POST_BUILD
+				COMMAND ${CMAKE_COMMAND} -E copy
+				${bugsplat_bin_file}
+				"${CMAKE_BINARY_DIR}/rundir/$<CONFIGURATION>/bin/${BITS}bit/"
+			)
+		endforeach( bugsplat_bin_file )
+	endif()
 endif()
 
 if(APPLE AND NOT BROWSER_DEPLOY)
@@ -432,63 +515,33 @@ if(APPLE AND NOT BROWSER_DEPLOY)
 		COMMAND "install_name_tool" -change
 		"@rpath/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework"
 		"${CEF_LIBRARY}/Chromium Embedded Framework"
-		"obs-browser.so")
+		"${CMAKE_BUILD_TYPE}/obs-browser.so")
 	add_custom_command(TARGET obs-browser-page POST_BUILD
 		COMMAND "install_name_tool" -change
 		"@rpath/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework"
 		"${CEF_LIBRARY}/Chromium Embedded Framework"
-		"obs-browser-page")
-endif()
+		"${CMAKE_BUILD_TYPE}/obs-browser-page")
 
-if(APPLE AND NOT BROWSER_DEPLOY)
 	add_custom_command(TARGET obs-browser POST_BUILD
-		COMMAND "install_name_tool" -change
-		"@rpath/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework"
-		"${CEF_LIBRARY}/Chromium Embedded Framework"
-		"obs-browser.so")
-	add_custom_command(TARGET obs-browser-page POST_BUILD
-		COMMAND "install_name_tool" -change
-		"@rpath/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework"
-		"${CEF_LIBRARY}/Chromium Embedded Framework"
-		"obs-browser-page")
-endif()
+		COMMAND "/bin/mkdir" -p
+		"${CMAKE_BINARY_DIR}/rundir/$<CONFIGURATION>/Frameworks"
+	)
 
-if(APPLE AND NOT BROWSER_DEPLOY)
 	add_custom_command(TARGET obs-browser POST_BUILD
-		COMMAND "install_name_tool" -change
-		"@rpath/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework"
-		"${CEF_LIBRARY}/Chromium Embedded Framework"
-		"obs-browser.so")
-	add_custom_command(TARGET obs-browser-page POST_BUILD
-		COMMAND "install_name_tool" -change
-		"@rpath/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework"
-		"${CEF_LIBRARY}/Chromium Embedded Framework"
-		"obs-browser-page")
+		COMMAND "/bin/cp" -R
+		"${CEF_ROOT_DIR}/Release/Chromium Embedded Framework.framework"
+		"${CMAKE_BINARY_DIR}/rundir/$<CONFIGURATION>/Frameworks/Chromium Embedded Framework.framework"
+	)
 endif()
 
 if (UNIX AND NOT APPLE)
 	install(DIRECTORY "${CEF_ROOT_DIR}/Resources/" DESTINATION "${OBS_PLUGIN_DESTINATION}")
 	install(DIRECTORY "${CEF_ROOT_DIR}/Release/" DESTINATION "${OBS_PLUGIN_DESTINATION}")
-endif()
-
-if (UNIX AND NOT APPLE)
-	install(DIRECTORY "${CEF_ROOT_DIR}/Resources/" DESTINATION "${OBS_PLUGIN_DESTINATION}")
-	install(DIRECTORY "${CEF_ROOT_DIR}/Release/" DESTINATION "${OBS_PLUGIN_DESTINATION}")
-endif()
-
-if(APPLE AND NOT BROWSER_DEPLOY)
-	add_custom_command(TARGET obs-browser POST_BUILD
-		COMMAND "install_name_tool" -change
-		"@rpath/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework"
-		"${CEF_LIBRARY}/Chromium Embedded Framework"
-		"obs-browser.so")
-	add_custom_command(TARGET obs-browser-page POST_BUILD
-		COMMAND "install_name_tool" -change
-		"@rpath/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework"
-		"${CEF_LIBRARY}/Chromium Embedded Framework"
-		"obs-browser-page")
 endif()
 
 install_obs_plugin_with_data(obs-browser data)
 install_obs_plugin(obs-browser-page)
-install_obs_plugin(obs-browser-streamelements-restore-script-host)
+
+if (ENABLE_ANGELSCRIPT)
+	install_obs_plugin(obs-browser-streamelements-restore-script-host)
+endif()

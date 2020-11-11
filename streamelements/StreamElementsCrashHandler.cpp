@@ -30,6 +30,7 @@
  */
 
 #include "StreamElementsCrashHandler.hpp"
+
 #include "StreamElementsGlobalStateManager.hpp"
 #include "deps/StackWalker/StackWalker.h"
 #include <util/base.h>
@@ -47,6 +48,7 @@
 #include "bugsplat.h"
 #include "deps/zip/zip.h"
 #include <iostream>
+#include <experimental/filesystem>
 #include <filesystem>
 #include <stdio.h>
 #include <fcntl.h>
@@ -627,7 +629,7 @@ static inline void AddObsConfigurationFiles()
 	     std::experimental::filesystem::recursive_directory_iterator(
 		     programDataPathBuf)) {
 		if (!std::experimental::filesystem::is_directory(i.path())) {
-			std::wstring local_path = i.path().c_str();
+			std::wstring local_path = i.path().wstring();
 			std::wstring zip_path =
 				local_path.substr(obsDataPath.size() + 1);
 
@@ -672,22 +674,24 @@ static inline void AddObsConfigurationFiles()
 		d->SetString("obsVersion", obs_get_version_string());
 		d->SetString("cefVersion", GetCefVersionString());
 		d->SetString("cefApiHash", GetCefPlatformApiHash());
-#ifdef _WIN32
+
+#ifdef WIN32
 		d->SetString("platform", "windows");
-#elif APPLE
+#elif defined(__APPLE__)
 		d->SetString("platform", "macos");
-#elif LINUX
+#elif defined(__linux__)
 		d->SetString("platform", "linux");
-#else
-		d->SetString("platform", "other");
 #endif
+
+		if (sizeof(void*) == 8) {
+			d->SetString("platformArch", "64bit");
+		} else {
+			d->SetString("platformArch", "32bit");
+		}
+
 		d->SetString("streamelementsPluginVersion",
 			     GetStreamElementsPluginVersionString());
-#ifdef _WIN64
-		d->SetString("platformArch", "64bit");
-#else
-		d->SetString("platformArch", "32bit");
-#endif
+
 		d->SetString("machineUniqueId", GetComputerSystemUniqueId());
 
 		addCefValueToZip(basicInfo, L"system\\basic.json");

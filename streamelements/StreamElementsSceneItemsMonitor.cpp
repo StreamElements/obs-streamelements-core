@@ -20,6 +20,14 @@
 #include <QGraphicsOpacityEffect>
 #include <QToolButton>
 
+#ifndef max
+#define max(a, b) (((a) > (b)) ? (a) : (b))
+#endif
+
+#ifndef min
+#define min(a, b) (((a) < (b)) ? (a) : (b))
+#endif
+
 static const char *ITEM_PRIVATE_DATA_KEY_UI_AUXILIARY_ACTIONS =
 	"streamelements_aux_ui_actions";
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#ifdef _WIN32
+
 #include <windows.h>
 #include <string>
 #include <thread>
@@ -44,3 +46,4 @@ private:
 	moodycamel::BlockingConcurrentQueue<std::vector<char>> m_readQueue;
 };
 
+#endif

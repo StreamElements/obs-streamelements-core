@@ -1,9 +1,14 @@
 #include "StreamElementsProfilesManager.hpp"
 #include "StreamElementsUtils.hpp"
+#include <string.h>
 #include <obs.h>
 #include <obs-frontend-api.h>
 #include <util/config-file.h>
 #include <util/platform.h>
+
+#ifndef WIN32
+#define stricmp strcasecmp
+#endif
 
 StreamElementsProfilesManager::StreamElementsProfilesManager() {}
 

@@ -18,10 +18,11 @@ StreamElementsConfig::~StreamElementsConfig()
 config_t* StreamElementsConfig::GetConfig()
 {
 	if (!m_config) {
+		char *configPath = obs_module_config_path(CONFIG_FILE_NAME);
 		config_open(
-			&m_config,
-			obs_module_config_path(CONFIG_FILE_NAME),
+			&m_config, configPath,
 			CONFIG_OPEN_ALWAYS);
+		bfree(configPath);
 
 		config_set_default_uint(m_config, "Header", "Version", STREAMELEMENTS_PLUGIN_VERSION);
 		config_set_default_uint(m_config, "Startup", "Flags", STARTUP_FLAGS_ONBOARDING_MODE);
@@ -44,6 +45,7 @@ std::string StreamElementsConfig::GetHeapAnalyticsAppId()
 {
 	std::string result = "413792583";
 
+#ifdef WIN32
 	const char* REG_KEY_PATH = "SOFTWARE\\StreamElements";
 	const char* REG_VALUE_NAME = "HeapAnalyticsAppId";
 
@@ -78,6 +80,7 @@ std::string StreamElementsConfig::GetHeapAnalyticsAppId()
 	}
 
 	delete[] buffer;
+#endif
 
 	return result;
 }

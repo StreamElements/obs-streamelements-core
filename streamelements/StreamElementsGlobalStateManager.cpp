@@ -15,6 +15,11 @@
 #include <QPushButton>
 #include <QMessageBox>
 
+#ifndef WIN32
+#include <errno.h>
+#include <string.h>
+#endif
+
 /* ========================================================================= */
 
 void register_cookie_manager(CefRefPtr<CefCookieManager> cm);
@@ -26,6 +31,7 @@ void flush_cookie_managers();
 
 static QString GetLastErrorMsg()
 {
+#ifdef WIN32
 	LPWSTR bufPtr = NULL;
 	DWORD err = GetLastError();
 	FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER |
@@ -37,6 +43,11 @@ static QString GetLastErrorMsg()
 			 : QString("Unknown Error %1").arg(err);
 	LocalFree(bufPtr);
 	return result;
+#else
+	QString result = strerror(errno);
+
+	return result;
+#endif
 }
 
 /* ========================================================================= */
@@ -46,9 +57,14 @@ static std::string GetCEFStoragePath()
 	std::string version = GetCefVersionString();
 
 	BPtr<char> rpath = obs_module_config_path(version.c_str());
+
+#ifdef WIN32
 	BPtr<char> path = os_get_abs_path_ptr(rpath.Get());
 
 	return path.Get();
+#else
+	return rpath.Get();
+#endif
 }
 
 /* ========================================================================= */
@@ -106,6 +122,7 @@ StreamElementsGlobalStateManager::ThemeChangeListener::ThemeChangeListener()
 	: QDockWidget()
 {
 	setVisible(false);
+	setFloating(true);
 }
 
 void StreamElementsGlobalStateManager::ThemeChangeListener::changeEvent(
@@ -308,9 +325,15 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 				new ApplicationStateListener();
 			context->self->m_themeChangeListener =
 				new ThemeChangeListener();
+#ifdef WIN32
 			context->self->mainWindow()->addDockWidget(
 				Qt::NoDockWidgetArea,
 				context->self->m_themeChangeListener);
+#else
+			context->self->mainWindow()->addDockWidget(
+				Qt::BottomDockWidgetArea,
+				context->self->m_themeChangeListener);
+#endif
 
 			std::string storagePath = GetCEFStoragePath();
 			int os_mkdirs_ret = os_mkdirs(storagePath.c_str());
@@ -529,10 +552,11 @@ void StreamElementsGlobalStateManager::Shutdown()
 	//flush_cookie_manager(GetCookieManager()->GetCefCookieManager());
 	//flush_cookie_managers();
 
-	// Shutdown on the main thread
-	delete m_crashHandler;
+#ifdef WIN32
+    // Shutdown on the main thread
+    delete m_crashHandler;
 
-	QtExecSync(
+    QtExecSync(
 		[](void *data) -> void {
 			StreamElementsGlobalStateManager *self =
 				(StreamElementsGlobalStateManager *)data;
@@ -561,6 +585,7 @@ void StreamElementsGlobalStateManager::Shutdown()
 			delete self->m_cookieManager;
 		},
 		this);
+#endif
 
 	m_initialized = false;
 }
@@ -741,7 +766,7 @@ void StreamElementsGlobalStateManager::DeleteCookies()
 }
 
 void StreamElementsGlobalStateManager::SerializeCookies(
-	CefRefPtr<CefValue> &input, CefRefPtr<CefValue> &output)
+	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
 	output->SetNull();
 
@@ -1188,7 +1213,11 @@ bool StreamElementsGlobalStateManager::DeserializePopupWindow(
 		QueueCEFTask([this, url, executeJavaScriptOnLoad,
 			      enableHostApi]() {
 			CefWindowInfo windowInfo;
+#ifdef WIN32
 			windowInfo.SetAsPopup(0, ""); // Initial title
+#else
+			// TODO: TBD: Check if special handling is required for MacOS
+#endif
 
 			CefBrowserSettings cefBrowserSettings;
 
@@ -1233,6 +1262,13 @@ void StreamElementsGlobalStateManager::ReportIssue()
 	}
 }
 
+#ifndef WIN32
+void StreamElementsGlobalStateManager::UninstallPlugin()
+{
+	QMessageBox::information(mainWindow(), "Unsupported",
+				 "This function is not currently supported");
+}
+#else
 #include <shlwapi.h>
 #pragma comment(lib, "Shlwapi.lib")
 void StreamElementsGlobalStateManager::UninstallPlugin()
@@ -1319,3 +1355,4 @@ void StreamElementsGlobalStateManager::UninstallPlugin()
 		}
 	}
 }
+#endif

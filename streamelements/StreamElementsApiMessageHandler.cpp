@@ -1113,21 +1113,19 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				     ->GetAnalyticsEventsManager()
 				     ->sessionId());
 
-#ifdef _WIN32
+#ifdef WIN32
 		d->SetString("platform", "windows");
-#elif APPLE
+#elif defined(__APPLE__)
 		d->SetString("platform", "macos");
-#elif LINUX
+#elif defined(__linux__)
 		d->SetString("platform", "linux");
-#else
-		d->SetString("platform", "other");
 #endif
 
-#ifdef _WIN64
-		d->SetString("platformArch", "64bit");
-#else
-		d->SetString("platformArch", "32bit");
-#endif
+		if (sizeof(void*) == 8) {
+			d->SetString("platformArch", "64bit");
+		} else {
+			d->SetString("platformArch", "32bit");
+		}
 
 		result->SetDictionary(d);
 	}
@@ -2096,8 +2094,8 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("crashProgram");
 	{
 		// Crash
-		*((int *)nullptr) = 12345; // exception
-
+		*((int *)0x133713337) = 12345; // exception
+        
 		UNUSED_PARAMETER(result);
 	}
 	API_HANDLER_END();

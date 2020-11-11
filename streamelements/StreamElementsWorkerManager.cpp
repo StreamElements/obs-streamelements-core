@@ -43,18 +43,11 @@ public:
 				return;
 			}
 
-			RECT clientRect;
-			clientRect.top = 0;
-			clientRect.left = 0;
-			clientRect.right = 1920;
-			clientRect.bottom = 1080;
-
 			// CEF window attributes
 			CefWindowInfo windowInfo;
 			windowInfo.width = 1920;
 			windowInfo.height = 1080;
 			windowInfo.windowless_rendering_enabled = true;
-			//windowInfo.SetAsChild(windowHandle, clientRect);
 
 			CefBrowserSettings cefBrowserSettings;
 
@@ -86,7 +79,7 @@ public:
 					->GetCookieManager()
 					->GetCefRequestContext());
 
-			m_cef_browser->GetMainFrame()->LoadStringW(content,
+			m_cef_browser->GetMainFrame()->LoadString(content,
 								   url);
 		});
 	}
@@ -94,10 +87,12 @@ public:
 	~StreamElementsWorker()
 	{
 		if (m_cef_browser.get()) {
+#ifdef WIN32
 			// Detach browser to prevent WM_CLOSE event from being sent
 			// from CEF to the parent window.
 			::SetParent(m_cef_browser->GetHost()->GetWindowHandle(),
 				    0L);
+#endif
 
 			m_cef_browser->GetHost()->CloseBrowser(true);
 			m_cef_browser = NULL;

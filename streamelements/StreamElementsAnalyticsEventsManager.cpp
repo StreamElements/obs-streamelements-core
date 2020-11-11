@@ -70,6 +70,14 @@ void StreamElementsAnalyticsEventsManager::AddRawEvent(const char* eventName, js
 	props["pluginVersion"] = GetStreamElementsPluginVersionString();
 	props["obsVersion"] = obs_get_version_string();
 
+#ifdef WIN32
+    props["platform"] = "windows";
+#elif defined(__APPLE__)
+    props["platform"] = "macos";
+#elif defined(__linux__)
+    props["platform"] = "linux";
+#endif
+
 	json11::Json json = json11::Json::object{
 		{ "app_id", m_appId },
 		{ "event", eventName },

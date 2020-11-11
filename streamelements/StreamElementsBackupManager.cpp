@@ -9,13 +9,31 @@
 
 #include "deps/zip/zip.h"
 
+#ifdef WIN32
 #include <io.h>
+#else
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <unistd.h>
+#endif
 #include <fcntl.h>
 
 #include <vector>
 #include <map>
 #include <codecvt>
 #include <regex>
+
+#ifndef BYTE
+typedef unsigned char BYTE;
+#endif
+
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
+
+#ifndef SH_DENYNO
+#define SH_DENYNO 0
+#endif
 
 static bool GetLocalPathFromURL(std::string url, std::string &path)
 {
@@ -27,7 +45,7 @@ static bool GetLocalPathFromURL(std::string url, std::string &path)
 
 	bool result = false;
 
-	QtExecSync([&]() {
+	QtExecSync([path,url,&result]() {
 		obs_frontend_push_ui_translation(obs_module_get_string);
 
 		StreamElementsNetworkDialog netDialog(
@@ -56,10 +74,15 @@ static bool AddFileToZip(zip_t *zip, std::string localPath, std::string zipPath)
 {
 	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
 
+#ifdef WIN32
 	int fd = _wsopen(myconv.from_bytes(localPath).c_str(),
-			 _O_RDONLY | _O_BINARY, _SH_DENYNO,
-			 0 /*_S_IREAD | _S_IWRITE*/);
-
+			 O_RDONLY | O_BINARY, SH_DENYNO,
+			 0 /*S_IREAD | S_IWRITE*/);
+#else
+    int fd = ::open(localPath.c_str(),
+             O_RDONLY);
+#endif
+    
 	if (-1 != fd) {
 		size_t BUF_LEN = 32768;
 
@@ -68,7 +91,7 @@ static bool AddFileToZip(zip_t *zip, std::string localPath, std::string zipPath)
 		if (0 == zip_entry_open(zip, zipPath.c_str())) {
 			bool success = true;
 
-			int read = _read(fd, buf, BUF_LEN);
+			int read = ::read(fd, buf, BUF_LEN);
 			while (read > 0 && success) {
 				int retVal = zip_entry_write(zip, buf, read);
 				if (retVal < 0) {
@@ -77,14 +100,14 @@ static bool AddFileToZip(zip_t *zip, std::string localPath, std::string zipPath)
 					break;
 				}
 
-				read = _read(fd, buf, BUF_LEN);
+				read = ::read(fd, buf, BUF_LEN);
 			}
 
 			zip_entry_close(zip);
 
 			delete[] buf;
 
-			_close(fd);
+			::close(fd);
 
 			return success;
 		} else {
@@ -721,7 +744,7 @@ static size_t HandleZipExtract(void *arg, unsigned long long offset,
 {
 	zip_extract_context_t *context = (zip_extract_context_t *)arg;
 
-	return _write(context->handle, data, size);
+	return ::write(context->handle, data, size);
 };
 
 void StreamElementsBackupManager::RestoreBackupPackageContent(
@@ -770,8 +793,17 @@ void StreamElementsBackupManager::RestoreBackupPackageContent(
 
 	std::string url = in->GetString("url").ToString();
 
+    char *basePathPtr = os_get_config_path_ptr("obs-studio");
+    std::string destBasePath = basePathPtr;
+    bfree(basePathPtr);
+
+    std::string outputPath = destBasePath.substr(
+        0, destBasePath.size() -
+               std::string("/obs-studio").size());
+
 	std::string extractPath;
 
+#ifdef WIN32
 	if (!GetTemporaryFilePath("obs-live-restore-content", extractPath))
 		return;
 
@@ -785,7 +817,10 @@ void StreamElementsBackupManager::RestoreBackupPackageContent(
 
 	if (MKDIR_ERROR == os_mkdirs(extractPath.c_str()))
 		return;
-
+#else
+    extractPath = destBasePath;
+#endif
+    
 	std::string localPath;
 
 	if (!GetLocalPathFromURL(url, localPath))
@@ -826,24 +861,30 @@ void StreamElementsBackupManager::RestoreBackupPackageContent(
 
 					zip_extract_context_t context;
 
-					std::transform(
-						destFilePath.begin(),
-						destFilePath.end(),
-						destFilePath.begin(),
-						[](char ch) {
-							if (ch == '/')
-								return '\\';
-							else
-								return ch;
-						});
+#ifdef WIN32
+                    std::transform(
+                        destFilePath.begin(),
+                        destFilePath.end(),
+                        destFilePath.begin(),
+                        [](char ch) {
+                            if (ch == '/')
+                                return '\\';
+                            else
+                                return ch;
+                        });
 
-					context.handle = _wopen(
+                    context.handle = _wopen(
 						myconv.from_bytes(destFilePath)
 							.c_str(),
-						_O_WRONLY | _O_CREAT |
-							_O_BINARY,
-						_S_IREAD | _S_IWRITE);
-
+						O_WRONLY | O_CREAT |
+							O_BINARY,
+						S_IREAD | S_IWRITE);
+#else
+                    context.handle = ::open(
+                        destFilePath.c_str(),
+                        O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
+#endif
+                    
 					if (-1 == context.handle) {
 						success = false;
 					} else {
@@ -857,7 +898,7 @@ void StreamElementsBackupManager::RestoreBackupPackageContent(
 							/* Success */
 						}
 
-						_close(context.handle);
+						::close(context.handle);
 					}
 				}
 			}
@@ -873,190 +914,207 @@ void StreamElementsBackupManager::RestoreBackupPackageContent(
 
 	/* Replace file monikers for Scene Collections */
 
-	char *basePathPtr = os_get_config_path_ptr("obs-studio");
-	std::string destBasePath = basePathPtr;
-	bfree(basePathPtr);
+#ifdef WIN32
+    if (ScanForFileReferencesMonikersToRestore(extractPath, destBasePath)) {
+        std::string scriptPath;
+        if (!GetTemporaryFilePath("obs-restore-script", scriptPath))
+            return;
 
-	if (ScanForFileReferencesMonikersToRestore(extractPath, destBasePath)) {
-		std::string scriptPath;
-		if (!GetTemporaryFilePath("obs-restore-script", scriptPath))
-			return;
+        std::string script = R"(
+            void main() {
+                wait_pid(${OBS_PID}, 0);
 
-		std::string script = R"(
-			void main() {
-				wait_pid(${OBS_PID}, 0);
+                uint64 count = 0;
+                while (!filesystem_move("${SRC_PATH}\*", "${DEST_PATH}")) {
+                    ++count;
+                    if (count > 2) {
+                        if (ui_confirm("${CONFIRM_STOP_MOVE_TEXT}", "${CONFIRM_STOP_MOVE_TITLE}"))
+                            return;
+                        else
+                            count = 0;
+                    }
+                }
 
-				uint64 count = 0;
-				while (!filesystem_move("${SRC_PATH}\*", "${DEST_PATH}")) {
-					++count;
-					if (count > 2) {
-						if (ui_confirm("${CONFIRM_STOP_MOVE_TEXT}", "${CONFIRM_STOP_MOVE_TITLE}"))
-							return;
-						else
-							count = 0;
-					}
-				}
+                shell_execute("${OBS_EXE_PATH}", "${OBS_ARGS}", "${OBS_EXE_FOLDER}");
 
-				shell_execute("${OBS_EXE_PATH}", "${OBS_ARGS}", "${OBS_EXE_FOLDER}");
+                filesystem_delete("${SCRIPT_PATH}");
+                filesystem_delete("${EXTRACT_ROOT_PATH}");
+            }
+        )";
 
-				filesystem_delete("${SCRIPT_PATH}");
-				filesystem_delete("${EXTRACT_ROOT_PATH}");
-			}
-		)";
+        char obs_pid_buffer[32];
+        ltoa(GetCurrentProcessId(), obs_pid_buffer, 10);
 
-		char obs_pid_buffer[32];
-		ltoa(GetCurrentProcessId(), obs_pid_buffer, 10);
+        std::string cwd;
+        cwd.resize(MAX_PATH);
 
-		std::string cwd;
-		cwd.resize(MAX_PATH);
+        wchar_t obs_path_utf16[MAX_PATH];
+        GetModuleFileNameW(NULL, obs_path_utf16, MAX_PATH);
 
-		wchar_t obs_path_utf16[MAX_PATH];
-		GetModuleFileNameW(NULL, obs_path_utf16, MAX_PATH);
+        std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
 
-		std::string outputPath = destBasePath.substr(
-			0, destBasePath.size() -
-				   std::string("\\obs-studio").size());
+        std::string obsArgs = "";
 
-		std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
+        {
+            int argc;
+            LPWSTR *wArgv =
+                CommandLineToArgvW(GetCommandLineW(), &argc);
 
-		std::string obsArgs = "";
+            for (int i = 1; i < argc; ++i) {
+                std::string arg = myconv.to_bytes(wArgv[i]);
 
-		{
-			int argc;
-			LPWSTR *wArgv =
-				CommandLineToArgvW(GetCommandLineW(), &argc);
+                if (arg.size() && arg.find_first_of(' ') >= 0) {
+                    if (arg.substr(0, 1) != "\"")
+                        arg = "\"" + arg;
+                    if (arg.substr(arg.size() - 1, 1) !=
+                        "\"")
+                        arg += "\"";
+                }
 
-			for (int i = 1; i < argc; ++i) {
-				std::string arg = myconv.to_bytes(wArgv[i]);
+                if (obsArgs.size())
+                    obsArgs += " ";
 
-				if (arg.size() && arg.find_first_of(' ') >= 0) {
-					if (arg.substr(0, 1) != "\"")
-						arg = "\"" + arg;
-					if (arg.substr(arg.size() - 1, 1) !=
-					    "\"")
-						arg += "\"";
-				}
+                obsArgs += arg;
+            }
 
-				if (obsArgs.size())
-					obsArgs += " ";
+            LocalFree(wArgv);
+        }
 
-				obsArgs += arg;
-			}
+        std::map<std::string, std::string> vars;
 
-			LocalFree(wArgv);
-		}
+        vars["OBS_PID"] = obs_pid_buffer;
+        vars["SRC_PATH"] = extractPath;
+        vars["DEST_PATH"] = outputPath;
+        vars["CONFIRM_STOP_MOVE_TEXT"] = obs_module_text(
+            "StreamElements.BackupRestore.MoveRestoredFilesAbortConfirmation.Text");
+        vars["CONFIRM_STOP_MOVE_TITLE"] = obs_module_text(
+            "StreamElements.BackupRestore.MoveRestoredFilesAbortConfirmation.Title");
+        vars["OBS_EXE_PATH"] = myconv.to_bytes(obs_path_utf16);
+        vars["OBS_ARGS"] = obsArgs;
+        vars["OBS_EXE_FOLDER"] =
+            os_getcwd((char *)cwd.data(), cwd.size());
+        vars["SCRIPT_PATH"] = scriptPath;
+        vars["EXTRACT_ROOT_PATH"] = extractRootPath;
 
-		std::map<std::string, std::string> vars;
+        for (auto var : vars) {
+            std::string regex = "\\$\\{" + var.first + "\\}";
 
-		vars["OBS_PID"] = obs_pid_buffer;
-		vars["SRC_PATH"] = extractPath;
-		vars["DEST_PATH"] = outputPath;
-		vars["CONFIRM_STOP_MOVE_TEXT"] = obs_module_text(
-			"StreamElements.BackupRestore.MoveRestoredFilesAbortConfirmation.Text");
-		vars["CONFIRM_STOP_MOVE_TITLE"] = obs_module_text(
-			"StreamElements.BackupRestore.MoveRestoredFilesAbortConfirmation.Title");
-		vars["OBS_EXE_PATH"] = myconv.to_bytes(obs_path_utf16);
-		vars["OBS_ARGS"] = obsArgs;
-		vars["OBS_EXE_FOLDER"] =
-			os_getcwd((char *)cwd.data(), cwd.size());
-		vars["SCRIPT_PATH"] = scriptPath;
-		vars["EXTRACT_ROOT_PATH"] = extractRootPath;
+            std::string val = "";
 
-		for (auto var : vars) {
-			std::string regex = "\\$\\{" + var.first + "\\}";
+            for (char ch : var.second) {
+                switch (ch) {
+                case '\"':
+                case '\'':
+                case '\\':
+                    val.push_back('\\');
+                    val.push_back(ch);
+                    break;
+                case '\t':
+                    val.push_back('\\');
+                    val.push_back('t');
+                    break;
+                case '\r':
+                    val.push_back('\\');
+                    val.push_back('r');
+                    break;
+                case '\n':
+                    val.push_back('\\');
+                    val.push_back('n');
+                    break;
+                default:
+                    val.push_back(ch);
+                }
+            }
 
-			std::string val = "";
+            script = std::regex_replace(script, std::regex(regex),
+                            val);
+        }
 
-			for (char ch : var.second) {
-				switch (ch) {
-				case '\"':
-				case '\'':
-				case '\\':
-					val.push_back('\\');
-					val.push_back(ch);
-					break;
-				case '\t':
-					val.push_back('\\');
-					val.push_back('t');
-					break;
-				case '\r':
-					val.push_back('\\');
-					val.push_back('r');
-					break;
-				case '\n':
-					val.push_back('\\');
-					val.push_back('n');
-					break;
-				default:
-					val.push_back(ch);
-				}
-			}
+        /* Spawn move backup to config process */
 
-			script = std::regex_replace(script, std::regex(regex),
-						    val);
-		}
+        std::string scriptHostExePath =
+            obs_get_module_binary_path(obs_current_module());
+        scriptHostExePath = scriptHostExePath.substr(
+            0, scriptHostExePath.find_last_of('/') + 1);
 
-		/* Spawn move backup to config process */
+        scriptHostExePath +=
+            "obs-browser-streamelements-restore-script-host.exe";
 
-		std::string scriptHostExePath =
-			obs_get_module_binary_path(obs_current_module());
-		scriptHostExePath = scriptHostExePath.substr(
-			0, scriptHostExePath.find_last_of('/') + 1);
-#ifdef _WIN32
-		scriptHostExePath +=
-			"obs-browser-streamelements-restore-script-host.exe";
+        std::transform(scriptHostExePath.begin(),
+                   scriptHostExePath.end(),
+                   scriptHostExePath.begin(),
+                   [](char ch) { return ch == '/' ? '\\' : ch; });
 
-		std::transform(scriptHostExePath.begin(),
-			       scriptHostExePath.end(),
-			       scriptHostExePath.begin(),
-			       [](char ch) { return ch == '/' ? '\\' : ch; });
+        if (!os_quick_write_utf8_file(scriptPath.c_str(),
+                          script.c_str(), script.size(),
+                          false))
+            return;
+
+        std::string command = "\"";
+        command += scriptHostExePath;
+        command += "\" \"";
+        command += scriptPath;
+        command += "\"";
+
+        QProcess proc;
+        if (proc.startDetached(QString(command.c_str()))) {
+            success = true;
+
+            /* Cleanup temporary resources */
+
+            StreamElementsGlobalStateManager::GetInstance()
+                ->GetCleanupManager()
+                ->Clean();
+
+            /* Exit OBS */
+
+            /* This is not the nicest way to terminate our own process,
+             * yet, given that we are not looking for a clean shutdown
+             * but will rather overwrite settings files, this is
+             * acceptable.
+             *
+             * It is also likely to overcome any shutdown issues OBS
+             * might have, and which appear from time to time. We definitely
+             * do NOT want those attributed to Cloud Restore.
+             */
+            if (!TerminateProcess(GetCurrentProcess(), 0)) {
+                /* Backup shutdown sequence */
+                QApplication::quit();
+            }
+        }
+    }
 #else
-		scriptHostExePath +=
-			"obs-browser-streamelements-restore-script-host";
+    if (ScanForFileReferencesMonikersToRestore(extractPath, destBasePath)) {
+        /* Cleanup temporary resources */
+
+        StreamElementsGlobalStateManager::GetInstance()
+            ->GetCleanupManager()
+            ->Clean();
+
+        QProcess proc;
+        if (proc.startDetached(
+            QCoreApplication::instance()->applicationFilePath(),
+            QCoreApplication::instance()->arguments()
+        )) {
+            success = true;
+
+            /* Exit OBS */
+
+            /* This is not the nicest way to terminate our own process,
+             * yet, given that we are not looking for a clean shutdown
+             * but will rather overwrite settings files, this is
+             * acceptable.
+             *
+             * It is also likely to overcome any shutdown issues OBS
+             * might have, and which appear from time to time. We definitely
+             * do NOT want those attributed to Cloud Restore.
+             */
+            
+            ::exit(0);
+            QApplication::quit();
+        }
+    }
 #endif
-
-		if (!os_quick_write_utf8_file(scriptPath.c_str(),
-					      script.c_str(), script.size(),
-					      false))
-			return;
-
-		std::string command = "\"";
-		command += scriptHostExePath;
-		command += "\" \"";
-		command += scriptPath;
-		command += "\"";
-
-		QProcess proc;
-		if (proc.startDetached(QString(command.c_str()))) {
-			success = true;
-
-			/* Cleanup temporary resources */
-
-			StreamElementsGlobalStateManager::GetInstance()
-				->GetCleanupManager()
-				->Clean();
-
-			/* Exit OBS */
-
-#ifdef _WIN32
-			/* This is not the nicest way to terminate our own process,
-			 * yet, given that we are not looking for a clean shutdown
-			 * but will rather overwrite settings files, this is
-			 * acceptable.
-			 *
-			 * It is also likely to overcome any shutdown issues OBS
-			 * might have, and which appear from time to time. We definitely
-			 * do NOT want those attributed to Cloud Restore.
-			 */
-			if (!TerminateProcess(GetCurrentProcess(), 0)) {
-				/* Backup shutdown sequence */
-				QApplication::quit();
-			}
-#else
-			QApplication::quit();
-#endif
-		}
-	}
 
 	output->SetBool(success);
 }

@@ -11,6 +11,10 @@
 #include <QUrl>
 #include <QDesktopServices>
 
+#ifndef UNREFERENCED_PARAMETER
+#define UNREFERENCED_PARAMETER(P) (P)
+#endif
+
 class StreamElementsCefClientEventHandler : public CefBaseRefCounted {
 public:
 	virtual void OnLoadingStateChange(CefRefPtr<CefBrowser> browser,
@@ -35,6 +39,7 @@ class StreamElementsCefClient : public CefClient,
 				public CefKeyboardHandler,
 				public CefRequestHandler,
 				public CefRenderHandler,
+				public CefJSDialogHandler,
 #if CHROME_VERSION_BUILD >= 3770
 				public CefResourceRequestHandler,
 #endif
@@ -73,7 +78,7 @@ public:
 		output->SetDictionary(d);
 	}
 
-	bool DeserializeForeignPopupWindowsSettings(CefRefPtr<CefValue> &input)
+	bool DeserializeForeignPopupWindowsSettings(CefRefPtr<CefValue> input)
 	{
 		if (input->GetType() != VTYPE_DICTIONARY) {
 			return false;
@@ -104,6 +109,10 @@ public:
 	}
 
 	/* CefClient */
+	virtual CefRefPtr<CefJSDialogHandler> GetJSDialogHandler() override
+	{
+		return this;
+	}
 	virtual CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override
 	{
 		return this;
@@ -266,8 +275,12 @@ public:
 		     target_frame_name.ToString().c_str(),
 		     (int)target_disposition);
 
-		windowInfo.parent_window = (cef_window_handle_t)
-			obs_frontend_get_main_window_handle();
+#ifdef WIN32
+		windowInfo.parent_window =
+#else
+		windowInfo.parent_view =
+#endif
+			(cef_window_handle_t)obs_frontend_get_main_window_handle();
 
 		StreamElementsCefClient *clientObj =
 			new StreamElementsCefClient(
@@ -290,7 +303,11 @@ public:
 
 		client = clientObj;
 
+#ifdef WIN32
 		windowInfo.parent_window =
+#else
+		windowInfo.parent_view =
+#endif
 			browser->GetHost()->GetWindowHandle();
 
 		// Allow pop-ups
@@ -385,6 +402,15 @@ public:
 	{
 		// NOOP
 	}
+
+	/* CefJSDialogHandler */
+	virtual bool OnJSDialog(CefRefPtr<CefBrowser> browser,
+				const CefString &origin_url,
+				CefJSDialogHandler::JSDialogType dialog_type,
+				const CefString &message_text,
+				const CefString &default_prompt_text,
+				CefRefPtr<CefJSDialogCallback> callback,
+				bool &suppress_message);
 
 #if EXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED
 	virtual void OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,

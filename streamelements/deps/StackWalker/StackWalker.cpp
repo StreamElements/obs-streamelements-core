@@ -1,3 +1,5 @@
+#if defined(_MSC_VER)
+
 /**********************************************************************
  *
  * StackWalker.cpp
@@ -1467,3 +1469,5 @@ void StackWalker::OnOutput(LPCSTR buffer)
 {
   OutputDebugStringA(buffer);
 }
+
+#endif //defined(_MSC_VER)

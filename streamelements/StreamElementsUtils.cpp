@@ -7,6 +7,8 @@
 #include "Version.hpp"
 #include "wide-string.hpp"
 
+#define GLOBAL_ENV_CONFIG_FILE_NAME "obs-studio/streamelements-env.ini"
+
 #if CHROME_VERSION_BUILD >= 3729
 #include <include/cef_api_hash.h>
 #endif
@@ -20,6 +22,8 @@
 #include <curl/curl.h>
 
 #include <obs-frontend-api.h>
+#include <obs-module.h>
+#include <util/config-file.h>
 
 #include <QUrl>
 #include <QFile>
@@ -28,6 +32,33 @@
 #include <regex>
 
 #include "deps/picosha2/picosha2.h"
+
+#ifndef WIN32
+#include <mach/mach_types.h>
+#include <mach/mach_init.h>
+#include <mach/mach_host.h>
+#include <mach/host_info.h>
+#include <mach/mach_time.h>
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#include <unistd.h>
+#endif
+
+#ifndef WIN32
+	#define sprintf_s sprintf
+
+	#ifndef WCHAR
+	typedef wchar_t WCHAR;
+	#endif
+
+	#ifndef DWORD
+	typedef unsigned long DWORD;
+	#endif
+
+	#ifndef HKEY
+	typedef void *HKEY;
+	#endif
+#endif
 
 /* ========================================================= */
 
@@ -204,6 +235,7 @@ std::string LoadResourceString(std::string path)
 
 /* ========================================================= */
 
+#ifdef WIN32
 static uint64_t FromFileTime(const FILETIME &ft)
 {
 	ULARGE_INTEGER uli = {0};
@@ -211,6 +243,7 @@ static uint64_t FromFileTime(const FILETIME &ft)
 	uli.HighPart = ft.dwHighDateTime;
 	return uli.QuadPart;
 }
+#endif
 
 void SerializeSystemTimes(CefRefPtr<CefValue> &output)
 {
@@ -218,11 +251,11 @@ void SerializeSystemTimes(CefRefPtr<CefValue> &output)
 
 	output->SetNull();
 
+#ifdef WIN32
 	FILETIME idleTime;
 	FILETIME kernelTime;
 	FILETIME userTime;
 
-#ifdef _WIN32
 	if (::GetSystemTimes(&idleTime, &kernelTime, &userTime)) {
 		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
 		output->SetDictionary(d);
@@ -278,12 +311,29 @@ void SerializeSystemTimes(CefRefPtr<CefValue> &output)
 		d->SetDouble("totalSeconds", kernelRat + userRat);
 		d->SetDouble("busySeconds", kernelRat + userRat - idleRat);
 	}
+#else
+    mach_port_t mach_port = mach_host_self();
+    host_cpu_load_info_data_t cpu_load_info;
+
+    mach_msg_type_number_t cpu_load_info_count = HOST_CPU_LOAD_INFO_COUNT;
+    if (host_statistics((host_t)mach_port, HOST_CPU_LOAD_INFO, (host_info_t)&cpu_load_info, &cpu_load_info_count) == KERN_SUCCESS) {
+        CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+        output->SetDictionary(d);
+
+        d->SetDouble("idleSeconds", (double)(cpu_load_info.cpu_ticks[CPU_STATE_IDLE]) / (double)CLOCKS_PER_SEC);
+        d->SetDouble("kernelSeconds", (double)(cpu_load_info.cpu_ticks[CPU_STATE_SYSTEM]) / (double)CLOCKS_PER_SEC);
+        d->SetDouble("userSeconds", (double)(cpu_load_info.cpu_ticks[CPU_STATE_USER] + cpu_load_info.cpu_ticks[CPU_STATE_NICE]) / (double)CLOCKS_PER_SEC);
+        d->SetDouble("totalSeconds", (double)(cpu_load_info.cpu_ticks[CPU_STATE_SYSTEM] + cpu_load_info.cpu_ticks[CPU_STATE_USER] + cpu_load_info.cpu_ticks[CPU_STATE_IDLE] + cpu_load_info.cpu_ticks[CPU_STATE_NICE]) / (double)CLOCKS_PER_SEC);
+        d->SetDouble("busySeconds", (double)(cpu_load_info.cpu_ticks[CPU_STATE_SYSTEM] + cpu_load_info.cpu_ticks[CPU_STATE_USER] + cpu_load_info.cpu_ticks[CPU_STATE_NICE]) / (double)CLOCKS_PER_SEC);
+    }
 #endif
 }
 
 void SerializeSystemMemoryUsage(CefRefPtr<CefValue> &output)
 {
 	output->SetNull();
+
+    const uint64_t DIV = 1048576;
 
 #ifdef _WIN32
 	MEMORYSTATUSEX mem;
@@ -293,8 +343,6 @@ void SerializeSystemMemoryUsage(CefRefPtr<CefValue> &output)
 	if (GlobalMemoryStatusEx(&mem)) {
 		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
 		output->SetDictionary(d);
-
-		const DWORDLONG DIV = 1048576;
 
 		d->SetString("units", "MB");
 		d->SetInt("memoryUsedPercentage", mem.dwMemoryLoad);
@@ -307,6 +355,39 @@ void SerializeSystemMemoryUsage(CefRefPtr<CefValue> &output)
 		d->SetInt("totalPageFileSize", mem.ullTotalPageFile / DIV);
 		d->SetInt("freePageFileSize", mem.ullAvailPageFile / DIV);
 	}
+#else
+    mach_port_t mach_port = mach_host_self();
+    vm_statistics_data_t vm_stats;
+
+    mach_msg_type_number_t vm_info_count = HOST_VM_INFO_COUNT;
+    vm_size_t page_size;
+    if (host_statistics((host_t)mach_port, HOST_VM_INFO, (host_info_t)&vm_stats, &vm_info_count) == KERN_SUCCESS &&
+        host_page_size(mach_port, &page_size) == KERN_SUCCESS) {
+        int64_t free_memory = (int64_t)vm_stats.free_count * (int64_t)page_size;
+        int64_t used_memory = ((int64_t)vm_stats.active_count + (int64_t)vm_stats.inactive_count + (int64_t)vm_stats.wire_count) * (int64_t)page_size;
+        int64_t total_memory = free_memory + used_memory;
+
+        CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+        output->SetDictionary(d);
+
+        d->SetString("units", "MB");
+        d->SetInt("memoryUsedPercentage", used_memory * 100L / total_memory);
+        d->SetInt("totalVirtualMemory", total_memory / DIV);
+        d->SetInt("freeVirtualMemory", free_memory / DIV);
+        d->SetInt("freeExtendedVirtualMemory", 0);
+        d->SetInt("totalPageFileSize", 0);
+        d->SetInt("freePageFileSize", 0);
+        
+        {
+            int mib[2] = { CTL_HW, HW_MEMSIZE };
+            int64_t physical_memory;
+            size_t length = sizeof(physical_memory);
+            sysctl(mib, 2, &physical_memory, &length, NULL, 0);
+
+            d->SetInt("totalPhysicalMemory", physical_memory / DIV);
+            d->SetInt("freePhysicalMemory", free_memory / DIV); // inaccurate
+        }
+    }
 #endif
 }
 
@@ -314,6 +395,7 @@ static CefString getRegStr(HKEY parent, const WCHAR *subkey, const WCHAR *key)
 {
 	CefString result;
 
+#ifdef WIN32
 	DWORD dataSize = 0;
 
 	if (ERROR_SUCCESS == ::RegGetValueW(parent, subkey, key, RRF_RT_ANY,
@@ -328,6 +410,7 @@ static CefString getRegStr(HKEY parent, const WCHAR *subkey, const WCHAR *key)
 
 		delete[] buffer;
 	}
+#endif
 
 	return result;
 };
@@ -335,21 +418,26 @@ static CefString getRegStr(HKEY parent, const WCHAR *subkey, const WCHAR *key)
 static DWORD getRegDWORD(HKEY parent, const WCHAR *subkey, const WCHAR *key)
 {
 	DWORD result = 0;
+
+#ifdef WIN32
 	DWORD dataSize = sizeof(DWORD);
 
 	::RegGetValueW(parent, subkey, key, RRF_RT_DWORD, NULL, &result,
 		       &dataSize);
+#endif
 
 	return result;
 }
 
+#ifdef _WIN32
 void SerializeSystemHardwareProperties(CefRefPtr<CefValue> &output)
 {
 	output->SetNull();
 
-#ifdef _WIN32
 	CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
 	output->SetDictionary(d);
+
+    d->SetString("platform", "windows");
 
 	SYSTEM_INFO info;
 
@@ -380,33 +468,6 @@ void SerializeSystemHardwareProperties(CefRefPtr<CefValue> &output)
 
 	d->SetInt("cpuCount", info.dwNumberOfProcessors);
 	d->SetInt("cpuLevel", info.wProcessorLevel);
-
-	/*
-	CefRefPtr<CefDictionaryValue> f = CefDictionaryValue::Create();
-
-	f->SetBool("PF_3DNOW_INSTRUCTIONS_AVAILABLE", ::IsProcessorFeaturePresent(PF_3DNOW_INSTRUCTIONS_AVAILABLE));
-	f->SetBool("PF_CHANNELS_ENABLED", ::IsProcessorFeaturePresent(PF_CHANNELS_ENABLED));
-	f->SetBool("PF_COMPARE_EXCHANGE_DOUBLE", ::IsProcessorFeaturePresent(PF_COMPARE_EXCHANGE_DOUBLE));
-	f->SetBool("PF_COMPARE_EXCHANGE128", ::IsProcessorFeaturePresent(PF_COMPARE_EXCHANGE128));
-	f->SetBool("PF_COMPARE64_EXCHANGE128", ::IsProcessorFeaturePresent(PF_COMPARE64_EXCHANGE128));
-	f->SetBool("PF_FASTFAIL_AVAILABLE", ::IsProcessorFeaturePresent(PF_FASTFAIL_AVAILABLE));
-	f->SetBool("PF_FLOATING_POINT_EMULATED", ::IsProcessorFeaturePresent(PF_FLOATING_POINT_EMULATED));
-	f->SetBool("PF_FLOATING_POINT_PRECISION_ERRATA", ::IsProcessorFeaturePresent(PF_FLOATING_POINT_PRECISION_ERRATA));
-	f->SetBool("PF_MMX_INSTRUCTIONS_AVAILABLE", ::IsProcessorFeaturePresent(PF_MMX_INSTRUCTIONS_AVAILABLE));
-	f->SetBool("PF_NX_ENABLED", ::IsProcessorFeaturePresent(PF_NX_ENABLED));
-	f->SetBool("PF_PAE_ENABLED", ::IsProcessorFeaturePresent(PF_PAE_ENABLED));
-	f->SetBool("PF_RDTSC_INSTRUCTION_AVAILABLE", ::IsProcessorFeaturePresent(PF_RDTSC_INSTRUCTION_AVAILABLE));
-	f->SetBool("PF_RDWRFSGSBASE_AVAILABLE", ::IsProcessorFeaturePresent(PF_RDWRFSGSBASE_AVAILABLE));
-	f->SetBool("PF_SECOND_LEVEL_ADDRESS_TRANSLATION", ::IsProcessorFeaturePresent(PF_SECOND_LEVEL_ADDRESS_TRANSLATION));
-	f->SetBool("PF_SSE3_INSTRUCTIONS_AVAILABLE", ::IsProcessorFeaturePresent(PF_SSE3_INSTRUCTIONS_AVAILABLE));
-	f->SetBool("PF_VIRT_FIRMWARE_ENABLED", ::IsProcessorFeaturePresent(PF_VIRT_FIRMWARE_ENABLED));
-	f->SetBool("PF_XMMI_INSTRUCTIONS_AVAILABLE", ::IsProcessorFeaturePresent(PF_XMMI_INSTRUCTIONS_AVAILABLE));
-	f->SetBool("PF_XMMI64_INSTRUCTIONS_AVAILABLE", ::IsProcessorFeaturePresent(PF_XMMI64_INSTRUCTIONS_AVAILABLE));
-	f->SetBool("PF_XSAVE_ENABLED", ::IsProcessorFeaturePresent(PF_XSAVE_ENABLED));
-
-	CefRefPtr<CefValue> featuresValue = CefValue::Create();
-	featuresValue->SetDictionary(f);
-	d->SetValue("cpuFeatures", featuresValue);*/
 
 	{
 		CefRefPtr<CefListValue> cpuList = CefListValue::Create();
@@ -518,8 +579,10 @@ void SerializeSystemHardwareProperties(CefRefPtr<CefValue> &output)
 
 		d->SetDictionary("bios", bios);
 	}
-#endif
+    
+    d->SetString("os", "Windows");
 }
+#endif
 
 /* ========================================================= */
 
@@ -712,15 +775,16 @@ std::string GetStreamElementsApiVersionString()
 
 /* ========================================================= */
 
+#ifdef WIN32
 #include <winhttp.h>
 #pragma comment(lib, "Winhttp.lib")
 void SetGlobalCURLOptions(CURL *curl, const char *url)
 {
+    // TODO: TBD: MacOS: http://mirror.informatimago.com/next/developer.apple.com/qa/qa2001/qa1234.html
 	std::string proxy =
 		GetCommandLineOptionValue("streamelements-http-proxy");
 
 	if (!proxy.size()) {
-#ifdef _WIN32
 		WINHTTP_CURRENT_USER_IE_PROXY_CONFIG config;
 
 		if (WinHttpGetIEProxyConfigForCurrentUser(&config)) {
@@ -768,7 +832,6 @@ void SetGlobalCURLOptions(CURL *curl, const char *url)
 				GlobalFree((HGLOBAL)config.lpszAutoConfigUrl);
 			}
 		}
-#endif
 	}
 
 	if (proxy.size()) {
@@ -776,6 +839,7 @@ void SetGlobalCURLOptions(CURL *curl, const char *url)
 		curl_easy_setopt(curl, CURLOPT_PROXY, proxy.c_str());
 	}
 }
+#endif
 
 struct http_callback_context {
 	http_client_callback_t callback;
@@ -1039,6 +1103,7 @@ static std::string ReadEnvironmentConfigString(const char *regValueName,
 {
 	std::string result = "";
 
+#ifdef WIN32
 	std::string REG_KEY_PATH = GetEnvironmentConfigRegKeyPath(productName);
 
 	DWORD bufLen = 16384;
@@ -1053,6 +1118,21 @@ static std::string ReadEnvironmentConfigString(const char *regValueName,
 	}
 
 	delete[] buffer;
+#else
+	config_t *config;
+
+	char *filePath = os_get_config_path_ptr(GLOBAL_ENV_CONFIG_FILE_NAME);
+	config_open(&config, filePath, CONFIG_OPEN_ALWAYS);
+	bfree(filePath);
+
+	const char* str = config_get_string(config, productName ? productName : "Global", regValueName);
+
+	if (str) {
+		result = str;
+	}
+
+	config_close(config);
+#endif
 
 	return result;
 }
@@ -1062,6 +1142,7 @@ bool WriteEnvironmentConfigString(const char *regValueName,
 {
 	bool result = false;
 
+#ifdef WIN32
 	std::string REG_KEY_PATH = GetEnvironmentConfigRegKeyPath(productName);
 
 	LSTATUS lResult = RegSetKeyValueA(HKEY_LOCAL_MACHINE,
@@ -1075,10 +1156,27 @@ bool WriteEnvironmentConfigString(const char *regValueName,
 	} else {
 		result = true;
 	}
+#else
+	config_t *config;
 
+	char *filePath = os_get_config_path_ptr(GLOBAL_ENV_CONFIG_FILE_NAME);
+	config_open(&config, filePath, CONFIG_OPEN_ALWAYS);
+	bfree(filePath);
+
+	config_set_string(config,
+				      productName ? productName : "Global",
+				      regValueName, regValue);
+
+	config_save_safe(config, "tmp", "bak");
+
+	config_close(config);
+
+	result = true;
+#endif
 	return result;
 }
 
+#ifdef WIN32
 #include <shlwapi.h>
 #pragma comment(lib, "Shlwapi.lib")
 static std::wstring GetCurrentDllFolderPathW()
@@ -1103,9 +1201,20 @@ static std::wstring GetCurrentDllFolderPathW()
 
 	return result;
 }
+#endif
 
 bool WriteEnvironmentConfigStrings(streamelements_env_update_requests requests)
 {
+#ifndef WIN32
+	for (auto req : requests) {
+		if (!WriteEnvironmentConfigString(req.key.c_str(), req.value.c_str(),
+						  req.product.c_str())) {
+			return false;
+		}
+	}
+
+	return true;
+#else
 	std::vector<std::string> args;
 
 	for (auto req : requests) {
@@ -1144,6 +1253,7 @@ bool WriteEnvironmentConfigStrings(streamelements_env_update_requests requests)
 	BOOL bResult = hInst > (HINSTANCE)32;
 
 	return bResult;
+#endif
 }
 
 std::string ReadProductEnvironmentConfigurationString(const char *key)
@@ -1169,10 +1279,14 @@ bool WriteProductEnvironmentConfigurationStrings(
 
 /* ========================================================= */
 
+#ifndef WIN32
+#include <uuid/uuid.h>
+#endif
+
 std::string CreateGloballyUniqueIdString()
 {
 	std::string result;
-
+#ifdef WIN32
 	const int GUID_STRING_LENGTH = 39;
 
 	GUID guid;
@@ -1183,13 +1297,24 @@ std::string CreateGloballyUniqueIdString()
 
 	guidStr[GUID_STRING_LENGTH - 2] = 0;
 	result = wstring_to_utf8(guidStr + 1);
+#else
+	uuid_t uuid;
+
+	uuid_generate_time(uuid);
+
+	char buf[128];
+	uuid_unparse(uuid, buf);
+
+	result = buf;
+#endif
 
 	return result;
 }
 
+#ifdef WIN32
 #include <bcrypt.h>
 #pragma comment(lib, "bcrypt.lib")
-static std::string CreateCryptoSecureRandomNumberString()
+std::string CreateCryptoSecureRandomNumberString()
 {
 	std::string result = "0";
 
@@ -1214,11 +1339,14 @@ static std::string CreateCryptoSecureRandomNumberString()
 
 	return result;
 }
+#endif
 
+#ifdef WIN32
 #include <wbemidl.h>
 #pragma comment(lib, "wbemuuid.lib")
 #pragma comment(lib, "OleAut32.lib")
 #pragma comment(lib, "Advapi32.lib")
+// MacOS version implemented in StreamElementsUtils.mm
 std::string GetComputerSystemUniqueId()
 {
 	const char *REG_VALUE_NAME = "MachineUniqueIdentifier";
@@ -1378,6 +1506,7 @@ std::string GetComputerSystemUniqueId()
 
 	return result;
 }
+#endif
 
 bool ParseQueryString(std::string input,
 		      std::map<std::string, std::string> &result)
@@ -1520,6 +1649,8 @@ bool VerifySessionSignedAbsolutePathURL(std::string url, std::string &path)
 
 bool IsAlwaysOnTop(QWidget *window)
 {
+    if (!window) return false;
+    
 #ifdef WIN32
 	DWORD exStyle = GetWindowLong((HWND)window->winId(), GWL_EXSTYLE);
 	return (exStyle & WS_EX_TOPMOST) != 0;
@@ -1530,6 +1661,8 @@ bool IsAlwaysOnTop(QWidget *window)
 
 void SetAlwaysOnTop(QWidget *window, bool enable)
 {
+    if (!window) return;
+
 #ifdef WIN32
 	HWND hwnd = (HWND)window->winId();
 	SetWindowPos(hwnd, enable ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0,
@@ -1838,6 +1971,7 @@ const void *GetPointerFromId(const char *id)
 
 bool GetTemporaryFilePath(std::string prefixString, std::string &result)
 {
+#ifdef WIN32
 	const size_t BUF_LEN = 2048;
 	wchar_t *pathBuffer = new wchar_t[BUF_LEN];
 
@@ -1866,6 +2000,24 @@ bool GetTemporaryFilePath(std::string prefixString, std::string &result)
 	delete[] pathBuffer;
 
 	return true;
+#else
+	static int serial = 0;
+
+	++serial;
+
+	result = "/tmp/";
+	char pid_str[32];
+	sprintf(pid_str, "%d", getpid());
+	result += prefixString;
+	result += ".";
+	result += pid_str;
+	result += ".";
+	char serial_str[32];
+	sprintf(serial_str, "%d", serial);
+	result += serial_str;
+
+	return true;
+#endif
 }
 
 std::string GetUniqueFileNameFromPath(std::string path, size_t maxLength)
@@ -2716,7 +2868,7 @@ static std::wstring GetWString(CefRefPtr<CefDictionaryValue> input,
 	if (!input->HasKey(key) || input->GetType(key) != VTYPE_STRING)
 		return defaultValue;
 
-	return input->GetString(key).ToString16();
+	return input->GetString(key).ToWString();
 }
 
 static cef_event_flags_t DeserializeCefEventModifiers(CefRefPtr<CefValue> input) {

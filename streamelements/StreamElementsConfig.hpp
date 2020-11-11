@@ -3,7 +3,7 @@
 #include <obs-module.h>
 #include <util/config-file.h>
 
-#include <xstring>
+#include <string>
 
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsMessageBus.hpp"

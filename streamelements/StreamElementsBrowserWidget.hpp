@@ -27,6 +27,11 @@
 
 #include <QtWidgets>
 
+#ifdef APPLE
+#include <QMacCocoaViewContainer>
+#include <Cocoa/Cocoa.h>
+#endif
+
 class StreamElementsBrowserWidget:
 	public QWidget
 
@@ -297,18 +302,22 @@ protected:
 	void HideBrowser()
 	{
 		if (m_cef_browser.get() != NULL) {
+#ifdef WIN32
 			::ShowWindow(
 				m_cef_browser->GetHost()->GetWindowHandle(),
 				SW_HIDE);
+#endif
 		}
 	}
 
 	void ShowBrowser()
 	{
 		if (m_cef_browser.get() != NULL) {
+#ifdef WIN32
 			::ShowWindow(
 				m_cef_browser->GetHost()->GetWindowHandle(),
 				SW_SHOW);
+#endif
 		}
 	}
 
@@ -319,11 +328,13 @@ protected:
 		if (m_cef_browser.get() != NULL) {
 			HideBrowser();
 
+#ifdef WIN32
 			// Detach browser to prevent WM_CLOSE event from being sent
 			// from CEF to the parent window.
 			::SetParent(
 				m_cef_browser->GetHost()->GetWindowHandle(),
 				0L);
+#endif
 
 			m_cef_browser->GetHost()->CloseBrowser(true);
 			m_cef_browser = NULL;

@@ -7,6 +7,7 @@
 
 #include "obs.h"
 #include "obs-hotkey.h"
+#include "obs-frontend-api.h"
 
 #include <mutex>
 #include <algorithm>

@@ -5,6 +5,12 @@
 #include <string>
 #include <codecvt>
 #include <filesystem>
+#include <experimental/filesystem>
+
+#ifndef WIN32
+#include <stdio.h>
+#define MAX_PATH FILENAME_MAX
+#endif
 
 class StreamElementsExternalSceneDataProviderSlobsClient :
 	public StreamElementsExternalSceneDataProvider

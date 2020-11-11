@@ -1,3 +1,5 @@
+#ifdef _WIN32
+
 #include "NamedPipesServerClientHandler.hpp"
 #include <memory.h>
 #include <obs.h>
@@ -151,3 +153,5 @@ void NamedPipesServerClientHandler::ThreadProc()
 		}
 	}
 }
+
+#endif

@@ -208,6 +208,7 @@ void StreamElementsMenuManager::Update()
 				->SwitchToOBSStudio();
 		});
 
+#ifdef WIN32
 	QAction *uninstall =
 		new QAction(obs_module_text("StreamElements.Action.Uninstall"));
 	m_menu->addAction(uninstall);
@@ -215,6 +216,7 @@ void StreamElementsMenuManager::Update()
 		StreamElementsGlobalStateManager::GetInstance()
 			->UninstallPlugin();
 	});
+#endif
 
 	m_menu->addSeparator();
 

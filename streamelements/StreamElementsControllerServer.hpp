@@ -1,6 +1,9 @@
 #pragma once
 
+#ifdef _WIN32
 #include "deps/server/NamedPipesServer.hpp"
+#endif
+
 #include "cef-headers.hpp"
 
 class StreamElementsMessageBus;
@@ -81,5 +84,7 @@ private:
 
 private:
 	StreamElementsMessageBus* m_bus = nullptr;
-	NamedPipesServer* m_server = nullptr;
+#ifdef _WIN32
+	NamedPipesServer *m_server = nullptr;
+#endif
 };
