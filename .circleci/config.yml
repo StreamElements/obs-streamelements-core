@@ -8,6 +8,8 @@ jobs:
       - run:
           name: Build
           command: |
+            printf "Building STREAMELEMENTS_PLUGIN_VERSION %s\n" `date +%Y.%m.%d.${CIRCLE_BUILD_NUM}`
+
             export TERM=xterm-256color
 
             brew install awscli
@@ -16,9 +18,15 @@ jobs:
 
             git clone --recursive https://github.com/obsproject/obs-studio.git
 
+            rm -rf obs-studio/plugins/obs-browser
+
             mv project obs-studio/plugins/obs-browser
 
             cd obs-studio
+
+            printf "#define STREAMELEMENTS_PLUGIN_VERSION %s%06dL\n" `date +%Y%m%d` ${CIRCLE_BUILD_NUM} >plugins/obs-browser/streamelements/Version.generated.hpp
+
+            cat plugins/obs-browser/streamelements/Version.generated.hpp
 
             ./CI/full-build-macos.sh -b
 
@@ -26,7 +34,7 @@ jobs:
 
             if [ ${CIRCLE_BRANCH} = master ]; then
               aws s3 cp "build/OBS.app/Contents/PlugIns/obs-browser.so" "s3://obs-builds/obs-browser/latest/macos/obs-browser.so";
-              aws s3 sync "build/OBS.app/Contents/Frameworks/Chromium Embedded Framework.framework" "s3://obs-builds/obs-browser/latest/macos/Chromium Embedded Framework.framework" --dryrun;
+              aws s3 sync "build/OBS.app/Contents/Frameworks/Chromium Embedded Framework.framework" "s3://obs-builds/obs-browser/latest/macos/Chromium Embedded Framework.framework";
             else
               exit 0;
             fi;
