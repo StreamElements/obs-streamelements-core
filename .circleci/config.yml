@@ -12,7 +12,7 @@ jobs:
 
             export TERM=xterm-256color
 
-            brew install awscli
+            brew install awscli zip
             
             cd ..
 
@@ -33,9 +33,10 @@ jobs:
             echo "Branch: ${CIRCLE_BRANCH}"
 
             if [ ${CIRCLE_BRANCH} = master ]; then
-              aws s3 cp "build/OBS.app/Contents/PlugIns/obs-browser.so" "s3://obs-builds/obs-browser/latest/macos/obs-browser.so";
-              aws s3 cp "build/OBS.app/Contents/PlugIns/obs-browser-page" "s3://obs-builds/obs-browser/latest/macos/obs-browser-page";
-              aws s3 sync "build/OBS.app/Contents/Frameworks/Chromium Embedded Framework.framework" "s3://obs-builds/obs-browser/latest/macos/Chromium Embedded Framework.framework";
+              cd build
+              zip -rv9 obs-browser.zip OBS.app
+              aws s3 cp "obs-browser.zip" "s3://obs-builds/obs-browser/latest/macos/obs-browser.zip";
+              cd ..
             else
               exit 0;
             fi;
