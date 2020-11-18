@@ -36,8 +36,8 @@ jobs:
               cd build
               zip -rv9 obs-browser.zip OBS.app
               aws s3 cp "obs-browser.zip" "s3://obs-builds/obs-browser/latest/macos/obs-browser.zip";
-              aws s3 cp "plugins/obs-browser/streamelements/Version.generated.hpp" Version.generated.hpp
               cd ..
+              aws s3 cp "plugins/obs-browser/streamelements/Version.generated.hpp" Version.generated.hpp
             else
               exit 0;
             fi;
