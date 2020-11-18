@@ -14,6 +14,7 @@
 
 #include <QPushButton>
 #include <QMessageBox>
+#include <QGuiApplication>
 
 #ifndef WIN32
 #include <errno.h>
@@ -311,8 +312,17 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	context.self = this;
 	context.obs_main_window = obs_main_window;
 
-	QtExecSync(
-		[](void *data) -> void {
+	QtExecSync([](void *data) -> void {
+#ifdef __APPLE__
+        {
+            // Set application icon from app bundle's Resources/obs.icns
+            const char* iconFilePath = "../Resources/obs.icns";
+            if (os_file_exists(iconFilePath)) {
+                qApp->setWindowIcon(QIcon(iconFilePath));
+            }
+        }
+#endif
+        
 			local_context *context = (local_context *)data;
 
 			// http://doc.qt.io/qt-5/qmainwindow.html#DockOption-enum
