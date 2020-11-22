@@ -53,7 +53,6 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 {
 	// Create native window
 	setAttribute(Qt::WA_NativeWindow);
-	// setAttribute(Qt::WA_QuitOnClose, false);
 
 	// This influences docking widget width/height
 	//setMinimumWidth(200);
@@ -88,7 +87,7 @@ std::string StreamElementsBrowserWidget::GetInitialPageURLInternal()
 	htmlString = std::regex_replace(htmlString, std::regex("\\$\\{URL\\}"),
 					m_url);
 	std::string base64uri =
-		"data:text/html;base64," +
+		"data:text/html;base64," +	
 		CefBase64Encode(htmlString.c_str(), htmlString.size())
 			.ToString();
 

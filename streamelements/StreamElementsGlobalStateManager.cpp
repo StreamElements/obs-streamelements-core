@@ -230,6 +230,17 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 	case OBS_FRONTEND_EVENT_EXIT:
 		name = "hostExit";
 		break;
+	case OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED:
+		if (StreamElementsGlobalStateManager::GetInstance()
+			    ->GetWidgetManager()
+			    ->HasCentralBrowserWidget()) {
+			// Due to the way we are now managing the central widget
+			// (constrained by MacOS support), we must make sure that
+			// the Studio Mode is disabled while the central widget
+			// is visible, otherwise it will take up its space.
+			obs_frontend_set_preview_program_mode(false);
+		}
+		break;
 	default:
 		return;
 	}

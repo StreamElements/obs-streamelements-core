@@ -8,7 +8,7 @@
 #include <QApplication>
 
 StreamElementsWidgetManager::StreamElementsWidgetManager(QMainWindow *parent)
-	: m_parent(parent), m_nativeCentralWidget(nullptr)
+	: m_parent(parent)//, m_nativeCentralWidget(nullptr)
 {
 	assert(parent);
 }
@@ -29,36 +29,67 @@ StreamElementsWidgetManager::~StreamElementsWidgetManager() {}
 // QApplication::sendPostedEvents().
 // Then we reset the new central widget minimum size to 0x0.
 //
-void StreamElementsWidgetManager::PushCentralWidget(QWidget *widget)
+void StreamElementsWidgetManager::PushCentralWidget(
+	QWidget *widget)
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
+	if (m_currentCentralWidget) return;
+
+	// This will be additionally enforced by OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED event
+	// handler in handle_obs_frontend_event defined in StreamElementsGlobalStateManager.cpp
+	obs_frontend_set_preview_program_mode(false);
+
+	// Make sure changes take effect by draining the event queue
 	QApplication::sendPostedEvents();
-	QSize prevSize = mainWindow()->centralWidget()->size();
 
-	widget->setMinimumSize(prevSize);
+	//QSize prevSize = mainWindow()->centralWidget()->size();
 
-	m_nativeCentralWidget = m_parent->takeCentralWidget();
+	//widget->setMinimumSize(prevSize);
 
-	m_parent->setCentralWidget(widget);
+	//m_nativeCentralWidget = m_parent->takeCentralWidget();
+
+	//m_parent->setCentralWidget(widget);
+
+	QLayout* layout = m_parent->centralWidget()->findChild<QLayout*>("previewLayout");
+	QWidget* preview = m_parent->centralWidget()->findChild<QWidget*>("preview");
+
+	preview->setVisible(false);
+	layout->addWidget(widget);
+
+	m_currentCentralWidget = widget;
 
 	// Drain event queue
-	QApplication::sendPostedEvents();
+	//QApplication::sendPostedEvents();
 
-	widget->setMinimumSize(0, 0);
+	//widget->setMinimumSize(0, 0);
 }
 
 bool StreamElementsWidgetManager::DestroyCurrentCentralWidget()
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
+	if (!m_currentCentralWidget) return false;
+
+	QLayout* layout = m_parent->centralWidget()->findChild<QLayout*>("previewLayout");
+	QWidget* preview = m_parent->centralWidget()->findChild<QWidget*>("preview");
+
+	m_currentCentralWidget->setVisible(false);
+
+	m_currentCentralWidget->parentWidget()->layout()->removeWidget(m_currentCentralWidget);
+	m_currentCentralWidget->deleteLater();
+
+	preview->setVisible(true);
+
+	m_currentCentralWidget = nullptr;
+	/*
 	if (!!m_nativeCentralWidget) {
 		SaveDockWidgetsGeometry();
 
 		QApplication::sendPostedEvents();
 		QSize currSize = mainWindow()->centralWidget()->size();
 
-		m_parent->setCentralWidget(m_nativeCentralWidget);
+//		m_parent->setCentralWidget(m_nativeCentralWidget);
 
 		m_nativeCentralWidget = nullptr;
 
@@ -71,15 +102,18 @@ bool StreamElementsWidgetManager::DestroyCurrentCentralWidget()
 
 		RestoreDockWidgetsGeometry();
 	}
+	*/
 
-	return nullptr;
+	// No more widgets
+	return false;
 }
 
 bool StreamElementsWidgetManager::HasCentralWidget()
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
-	return !!m_nativeCentralWidget;
+	return !!m_currentCentralWidget;
+	//return !!m_nativeCentralWidget;
 }
 
 void StreamElementsWidgetManager::OnObsExit()
