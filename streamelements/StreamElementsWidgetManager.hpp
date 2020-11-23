@@ -94,8 +94,8 @@ protected:
 
 private:
 	QMainWindow* m_parent;
-	//QWidget* m_nativeCentralWidget;
-	QWidget* m_currentCentralWidget = nullptr;
+	QWidget* m_nativeCentralWidget = nullptr;
+	//QWidget* m_currentCentralWidget = nullptr;
 
 	std::map<std::string, QDockWidget*> m_dockWidgets;
 	std::map<std::string, Qt::DockWidgetArea> m_dockWidgetAreas;
