@@ -20,6 +20,9 @@
 #include <string>
 #include <algorithm>
 
+#include <QApplication>
+#include <QProcess>
+
 #if CHROME_VERSION_BUILD >= 3729
 #include <include/cef_api_hash.h>
 #endif
@@ -306,4 +309,47 @@ void SetGlobalCURLOptions(CURL *curl, const char *url)
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
         curl_easy_setopt(curl, CURLOPT_PROXY, proxy.c_str());
     }
+}
+
+void RestartCurrentApplication()
+{
+    bool success = false;
+
+    NSRunningApplication* app = [NSRunningApplication currentApplication];
+
+    if (app) {
+        QProcess proc;
+        QStringList args = { [app.bundleURL.path UTF8String] };
+        success = proc.startDetached("/usr/bin/open", args);
+        //success = [NSWorkspace.sharedWorkspace launchApplication:app.bundleURL.path];
+
+        blog(LOG_INFO, "obs-browser: RestartCurrentApplication: restart with /usr/bin/open %s: %s",
+            args[0].toStdString().c_str(),
+            success ? "success" : "error");
+    }
+
+    if (!success) {
+	    QProcess proc;
+	    success = proc.startDetached(
+		    QCoreApplication::instance()->applicationFilePath(),
+		    QCoreApplication::instance()->arguments()
+	    );
+
+        blog(LOG_INFO, "obs-browser: RestartCurrentApplication: restart with QProcess: %s", success ? "success" : "error");
+    }
+
+    /* Exit OBS */
+
+    /* This is not the nicest way to terminate our own process,
+        * yet, given that we are not looking for a clean shutdown
+        * but will rather overwrite settings files, this is
+        * acceptable.
+        *
+        * It is also likely to overcome any shutdown issues OBS
+        * might have, and which appear from time to time. We definitely
+        * do NOT want those attributed to Cloud Restore.
+        */
+    
+    ::exit(0);
+    QApplication::quit();
 }

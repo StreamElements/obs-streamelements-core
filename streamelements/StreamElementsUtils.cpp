@@ -29,6 +29,8 @@
 #include <QFile>
 #include <QDir>
 #include <QUrl>
+#include <QApplication>
+#include <QProcess>
 #include <regex>
 
 #include "deps/picosha2/picosha2.h"
@@ -3056,3 +3058,33 @@ bool DeserializeCefMouseWheelEventArgs(CefRefPtr<CefValue> input,
 
 	return output.deltaX > 0 || output.deltaY > 0;
 }
+
+#ifdef WIN32
+void RestartCurrentApplication()
+{
+	bool success = false;
+
+	QProcess proc;
+	if (proc.startDetached(
+		QCoreApplication::instance()->applicationFilePath(),
+		QCoreApplication::instance()->arguments()
+	)) {
+		success = true;
+
+		/* Exit OBS */
+
+		/* This is not the nicest way to terminate our own process,
+			* yet, given that we are not looking for a clean shutdown
+			* but will rather overwrite settings files, this is
+			* acceptable.
+			*
+			* It is also likely to overcome any shutdown issues OBS
+			* might have, and which appear from time to time. We definitely
+			* do NOT want those attributed to Cloud Restore.
+			*/
+		
+		::exit(0);
+		QApplication::quit();
+	}
+}
+#endif

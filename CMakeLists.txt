@@ -141,6 +141,7 @@ list(APPEND obs-browser_LIBRARIES
 if (APPLE)
 	list(APPEND obs-browser_LIBRARIES
 		${CEF_LIBRARIES}
+		"-framework AppKit"
 		"-framework IOKit"
 		"-framework Foundation"
 		"-framework System"

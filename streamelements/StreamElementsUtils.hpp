@@ -338,3 +338,5 @@ bool DeserializeCefMouseEventType(CefRefPtr<CefValue> input,
 				  CefMouseEventType &output);
 bool DeserializeCefMouseWheelEventArgs(CefRefPtr<CefValue> input,
 				       CefMouseWheelEventArgs &output);
+
+void RestartCurrentApplication();

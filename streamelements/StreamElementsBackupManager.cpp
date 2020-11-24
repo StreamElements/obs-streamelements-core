@@ -1091,28 +1091,9 @@ void StreamElementsBackupManager::RestoreBackupPackageContent(
             ->GetCleanupManager()
             ->Clean();
 
-        QProcess proc;
-        if (proc.startDetached(
-            QCoreApplication::instance()->applicationFilePath(),
-            QCoreApplication::instance()->arguments()
-        )) {
-            success = true;
+	RestartCurrentApplication();
 
-            /* Exit OBS */
-
-            /* This is not the nicest way to terminate our own process,
-             * yet, given that we are not looking for a clean shutdown
-             * but will rather overwrite settings files, this is
-             * acceptable.
-             *
-             * It is also likely to overcome any shutdown issues OBS
-             * might have, and which appear from time to time. We definitely
-             * do NOT want those attributed to Cloud Restore.
-             */
-            
-            ::exit(0);
-            QApplication::quit();
-        }
+	success = true;
     }
 #endif
 
