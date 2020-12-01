@@ -140,6 +140,10 @@ void StreamElementsBrowserWidget::InitBrowserAsyncInternal()
 			cefBrowserSettings.databases = STATE_ENABLED;
 			cefBrowserSettings.web_security = STATE_ENABLED;
 			cefBrowserSettings.webgl = STATE_ENABLED;
+			cefBrowserSettings.default_font_size = 16;
+			cefBrowserSettings.default_fixed_font_size = 16;
+			cefBrowserSettings.minimum_font_size = 16;
+			cefBrowserSettings.minimum_logical_font_size = 16;
 
 			if (m_requestedApiMessageHandler == nullptr) {
 				m_requestedApiMessageHandler =
