@@ -46,6 +46,7 @@
 #include <QMainWindow>
 #include <QByteArray>
 #include <QBuffer>
+#include <QDesktopWidget>
 
 #include <string>
 #include <regex>
@@ -309,11 +310,10 @@ void StreamElementsReportIssueDialog::accept()
 
 		auto addWindowCaptureToZip = [&](std::wstring zipPath)
 		{
-			QMainWindow* mainWindow =
+#ifdef WIN32
+			QMainWindow *mainWindow =
 				StreamElementsGlobalStateManager::GetInstance()
 					->mainWindow();
-
-			WId winId = mainWindow->winId();
 
 			QScreen *screen = QGuiApplication::primaryScreen();
 			if (const QWindow *window =
@@ -321,10 +321,19 @@ void StreamElementsReportIssueDialog::accept()
 				screen = window->screen();
 			}
 
-			QPixmap pixmap = screen->grabWindow(winId);
+			QPixmap pixmap =
+				screen->grabWindow(mainWindow->winId());
 
 			// This won't grab CEF windows' content on Win32
 			// QPixmap pixmap = mainWindow->grab();
+#else
+			QDesktopWidget desktop;
+			QScreen *screen = QGuiApplication::screens().at(
+				desktop.screenNumber(this));
+			QRect screenRect = screen->geometry();
+			QPixmap pixmap = screen->grabWindow(0, screenRect.x(),
+				screenRect.y(), screenRect.width(), screenRect.height());
+#endif
 
 			QByteArray bytes;
 			QBuffer buffer(&bytes);
