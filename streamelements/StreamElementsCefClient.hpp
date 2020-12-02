@@ -27,6 +27,9 @@ public:
 		UNREFERENCED_PARAMETER(canGoForward);
 	}
 
+	virtual void OnGotFocus(CefRefPtr<CefBrowser>) {
+	}
+
 public:
 	IMPLEMENT_REFCOUNTING(StreamElementsCefClientEventHandler);
 };
@@ -40,6 +43,7 @@ class StreamElementsCefClient : public CefClient,
 				public CefRequestHandler,
 				public CefRenderHandler,
 				public CefJSDialogHandler,
+				public CefFocusHandler,
 #if CHROME_VERSION_BUILD >= 3770
 				public CefResourceRequestHandler,
 #endif
@@ -143,6 +147,10 @@ public:
 		return this;
 	}
 	virtual CefRefPtr<CefRenderHandler> GetRenderHandler() override
+	{
+		return this;
+	}
+	virtual CefRefPtr<CefFocusHandler> GetFocusHandler() override
 	{
 		return this;
 	}
@@ -320,8 +328,10 @@ public:
 					 CefRefPtr<CefContextMenuParams> params,
 					 CefRefPtr<CefMenuModel> model) override
 	{
+#ifdef WIN32
 		// Remove all context menu contributions
 		model->Clear();
+#endif
 	}
 
 	/* CefLoadHandler */
@@ -394,6 +404,9 @@ public:
 		CefRefPtr<CefBrowser> browser, CefRect &rect) override
 	{
 		rect.Set(0, 0, 1920, 1080);
+#if CHROME_VERSION_BUILD < 3578
+		return true;
+#endif
 	}
 
 	virtual void OnPaint(CefRefPtr<CefBrowser> browser,
@@ -410,7 +423,12 @@ public:
 				const CefString &message_text,
 				const CefString &default_prompt_text,
 				CefRefPtr<CefJSDialogCallback> callback,
-				bool &suppress_message);
+				bool &suppress_message) override;
+
+	/* CefFocusHandler */
+	virtual void OnGotFocus(CefRefPtr<CefBrowser> browser) override;
+	virtual bool OnSetFocus(CefRefPtr<CefBrowser> browser, CefFocusHandler::FocusSource source) override;
+	virtual void OnTakeFocus(CefRefPtr<CefBrowser> browser, bool next) override;
 
 #if EXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED
 	virtual void OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,

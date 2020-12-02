@@ -634,3 +634,27 @@ bool StreamElementsCefClient::OnJSDialog(
 		return false;
 	}
 }
+
+/* CefFocusHandler */
+
+void StreamElementsCefClient::OnGotFocus(CefRefPtr<CefBrowser> browser)
+{
+	blog(LOG_INFO, "OnGotFocus");
+
+	if (m_eventHandler) {
+		m_eventHandler->OnGotFocus(browser);
+	}
+}
+
+bool StreamElementsCefClient::OnSetFocus(CefRefPtr<CefBrowser> browser, CefFocusHandler::FocusSource source)
+{
+	blog(LOG_INFO, "OnSetFocus: source: %s", source == FOCUS_SOURCE_NAVIGATION ? "navigation" : (source == FOCUS_SOURCE_SYSTEM ? "system" : "other"));
+
+	// Allow focus to be set
+	return false;
+}
+
+void StreamElementsCefClient::OnTakeFocus(CefRefPtr<CefBrowser> browser, bool next)
+{
+	blog(LOG_INFO, "OnTakeFocus: next: %s", next ? "true" : "false");
+}

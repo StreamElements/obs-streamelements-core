@@ -207,6 +207,20 @@ protected:
 		}
 	}
 
+	virtual void focusInEvent(QFocusEvent* event) override
+	{
+		QWidget::focusInEvent(event);
+
+		blog(LOG_INFO, "QWidget::focusInEvent: reason %d: %s", event->reason(), m_url.c_str());
+	}
+
+	virtual void focusOutEvent(QFocusEvent* event) override
+	{
+		QWidget::focusOutEvent(event);
+
+		blog(LOG_INFO, "QWidget::focusOutEvent: %s", m_url.c_str());
+	}
+
 private:
 	void UpdateBrowserSize()
 	{
@@ -382,6 +396,14 @@ private:
 				StreamElementsBrowserWidget* widget = (StreamElementsBrowserWidget*)data;
 
 				widget->emitBrowserStateChanged();
+			}, m_widget);
+		}
+
+		virtual void OnGotFocus(CefRefPtr<CefBrowser>) override {
+			QtPostTask([](void* data) {
+				StreamElementsBrowserWidget* widget = (StreamElementsBrowserWidget*)data;
+
+				widget->setFocus();
 			}, m_widget);
 		}
 
