@@ -326,13 +326,14 @@ public:
 	virtual void OnBeforeContextMenu(CefRefPtr<CefBrowser> browser,
 					 CefRefPtr<CefFrame> frame,
 					 CefRefPtr<CefContextMenuParams> params,
-					 CefRefPtr<CefMenuModel> model) override
-	{
-#ifdef WIN32
-		// Remove all context menu contributions
-		model->Clear();
-#endif
-	}
+					 CefRefPtr<CefMenuModel> model) override;
+
+
+	virtual bool RunContextMenu(CefRefPtr<CefBrowser> browser,
+					CefRefPtr<CefFrame> frame,
+					CefRefPtr<CefContextMenuParams> params,
+					CefRefPtr<CefMenuModel> model,
+					CefRefPtr<CefRunContextMenuCallback> callback) override;
 
 	/* CefLoadHandler */
 	virtual void OnLoadEnd(CefRefPtr<CefBrowser> browser,

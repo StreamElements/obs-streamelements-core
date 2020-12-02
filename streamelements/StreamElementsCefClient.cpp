@@ -20,6 +20,9 @@
 #include <QFile>
 #include <QMessageBox>
 #include <QInputDialog>
+#include <QMenu>
+#include <QAction>
+#include <QCursor>
 
 static std::recursive_mutex s_browsers_mutex;
 static std::vector<CefRefPtr<CefBrowser>> s_browsers;
@@ -657,4 +660,36 @@ bool StreamElementsCefClient::OnSetFocus(CefRefPtr<CefBrowser> browser, CefFocus
 void StreamElementsCefClient::OnTakeFocus(CefRefPtr<CefBrowser> browser, bool next)
 {
 	blog(LOG_INFO, "OnTakeFocus: next: %s", next ? "true" : "false");
+}
+
+void StreamElementsCefClient::OnBeforeContextMenu(CefRefPtr<CefBrowser> browser,
+					CefRefPtr<CefFrame> frame,
+					CefRefPtr<CefContextMenuParams> params,
+					CefRefPtr<CefMenuModel> model)
+{
+	if (!params->IsEditable()) {
+		// Not an editable element:
+		// we only allow context menus on editable elements
+		model->Clear();
+
+		return;
+	}
+
+	model->SetLabel(MENU_ID_UNDO, obs_module_text("StreamElements.Action.Undo"));
+	model->SetLabel(MENU_ID_REDO, obs_module_text("StreamElements.Action.Redo"));
+	model->SetLabel(MENU_ID_CUT, obs_module_text("StreamElements.Action.Cut"));
+	model->SetLabel(MENU_ID_COPY, obs_module_text("StreamElements.Action.Copy"));
+	model->SetLabel(MENU_ID_PASTE, obs_module_text("StreamElements.Action.Paste"));
+	model->SetLabel(MENU_ID_DELETE, obs_module_text("StreamElements.Action.Delete"));
+	model->SetLabel(MENU_ID_SELECT_ALL, obs_module_text("StreamElements.Action.SelectAll"));
+}
+
+bool StreamElementsCefClient::RunContextMenu(CefRefPtr<CefBrowser> browser,
+					CefRefPtr<CefFrame> frame,
+					CefRefPtr<CefContextMenuParams> params,
+					CefRefPtr<CefMenuModel> model,
+					CefRefPtr<CefRunContextMenuCallback> callback)
+{
+	// Native menu
+	return false;
 }
