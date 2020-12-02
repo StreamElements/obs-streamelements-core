@@ -241,7 +241,7 @@ public:
 			}
 		}
 
-		return QSize(m_iconSize, m_iconSize);
+		return QSize(m_iconSize, m_iconSize) * devicePixelRatio();
 	}
 
 	virtual QSize sizeHint() const override
