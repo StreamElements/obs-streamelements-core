@@ -24,6 +24,8 @@ jobs:
 
             cd obs-studio
 
+            git checkout 26.0.1
+
             printf "#define STREAMELEMENTS_PLUGIN_VERSION %s%06dL\n" `date +%Y%m%d` ${CIRCLE_BUILD_NUM} >plugins/obs-browser/streamelements/Version.generated.hpp
 
             cat plugins/obs-browser/streamelements/Version.generated.hpp
