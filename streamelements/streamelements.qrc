@@ -11,6 +11,8 @@
 		<file>images/toolbar/home.ico</file>
 		<file>images/toolbar/reload.ico</file>
 		<file>images/toolbar/reload.png</file>
+		<file>images/toolbar/close.png</file>
+		<file>images/toolbar/dockToggle.png</file>
 
 		<file>html/error.html</file>
 		<file>html/loading.html</file>

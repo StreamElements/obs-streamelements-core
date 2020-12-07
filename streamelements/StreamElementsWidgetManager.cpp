@@ -166,6 +166,26 @@ bool StreamElementsWidgetManager::AddDockWidget(
 
 			AdviseHostUserInterfaceStateChanged();
 		}
+
+		virtual void closeEvent(QCloseEvent *event) override
+		{
+			event->ignore();
+
+			setVisible(false);
+		}
+
+		virtual bool event(QEvent* event) override
+		{
+			if (event->type() == QEvent::NonClientAreaMouseButtonDblClick) {
+				event->ignore();
+
+				setFloating(!isFloating());
+
+				return true;
+			}
+
+			return QDockWidget::event(event);
+		}
 	};
 
 	QDockWidget *dock = new TrackedDockWidget(title, m_parent);
@@ -175,6 +195,7 @@ bool StreamElementsWidgetManager::AddDockWidget(
 	dock->setAllowedAreas(allowedAreas);
 	dock->setFeatures(features);
 	dock->setWidget(widget);
+	dock->setWindowTitle(title);
 
 	m_parent->addDockWidget(area, dock);
 

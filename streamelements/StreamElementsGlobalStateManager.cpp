@@ -119,17 +119,32 @@ void StreamElementsGlobalStateManager::ApplicationStateListener::
 
 /* ========================================================================= */
 
+static void SetMainWindowStyle()
+{
+	blog(LOG_INFO, "SetMainWindowStyle");
+
+	QMainWindow* main = (QMainWindow*)obs_frontend_get_main_window();
+
+	//qApp->setStyleSheet("QMainWindow::separator { border: none; padding: 0; margin: 0; }");
+	//qApp->setStyleSheet("QDockWindow { margin: 0 4px 4px 4px; }");
+//			dock->setStyleSheet("QDockWidget { margin: 0 -4px -4px -4px; }");
+}
+
 StreamElementsGlobalStateManager::ThemeChangeListener::ThemeChangeListener()
 	: QDockWidget()
 {
 	setVisible(false);
 	setFloating(true);
+
+	SetMainWindowStyle();
 }
 
 void StreamElementsGlobalStateManager::ThemeChangeListener::changeEvent(
 	QEvent *event)
 {
 	if (event->type() == QEvent::StyleChange) {
+		//SetMainWindowStyle();
+
 		std::string newTheme = GetCurrentThemeName();
 
 		if (newTheme != m_currentTheme) {
