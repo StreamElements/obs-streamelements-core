@@ -53,8 +53,10 @@ Descriptions for these events can be [found here](https://obsproject.com/docs/re
 * obsRecordingStopped
 * obsReplaybufferStarting
 * obsReplaybufferStarted
+* obsReplaybufferSaved
 * obsReplaybufferStopping
 * obsReplaybufferStopped
+* obsExit
 
 ### Get the current scene
 
@@ -144,7 +146,7 @@ window.obsstudio.onActiveChange = function(active) {
 
 #### Getting
 
-*  Download CEF Mac 64 from [http://opensource.spotify.com/cefbuilds/index.html](http://opensource.spotify.com/cefbuilds/index.html)
+*  Download CEF Mac 64 from [https://cef-builds.spotifycdn.com/index.html](https://cef-builds.spotifycdn.com/index.html)
     *  Use CEF branch 3770
 *  Extract and cd into the folder
 
@@ -193,7 +195,7 @@ Build in Xcode (⌘+B)
 
 #### Getting
 
-*  Download CEF Windows 64bit from [http://opensource.spotify.com/cefbuilds/index.html](http://opensource.spotify.com/cefbuilds/index.html)
+*  Download CEF Windows 64bit from [https://cef-builds.spotifycdn.com/index.html](https://cef-builds.spotifycdn.com/index.html)
   *  Use CEF branch 3770
 *  Extract and cd into the folder
 

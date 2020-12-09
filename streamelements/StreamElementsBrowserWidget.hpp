@@ -33,6 +33,10 @@
 #include <Cocoa/Cocoa.h>
 #endif
 
+#if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
+#define SUPPORTS_FRACTIONAL_SCALING
+#endif
+
 class StreamElementsBrowserWidget:
 	public QWidget
 
@@ -225,7 +229,11 @@ private:
 	void UpdateBrowserSize()
 	{
 		if (!!m_cef_browser.get()) {
+#ifdef SUPPORTS_FRACTIONAL_SCALING
+			QSize size = this->size() * devicePixelRatioF();
+#else
 			QSize size = this->size() * devicePixelRatio();
+#endif
 
 #ifdef WIN32
 			// Make sure window updates on multiple monitors with different DPI

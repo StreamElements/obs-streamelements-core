@@ -120,7 +120,11 @@ void StreamElementsBrowserWidget::InitBrowserAsyncInternal()
 			QSize size = self->size();
 
 #ifdef WIN32
+#ifdef SUPPORTS_FRACTIONAL_SCALING
+			size *= devicePixelRatioF();
+#else
 			size *= devicePixelRatio();
+#endif
 
 			// Client area rectangle
 			RECT clientRect = {0, 0, size.width(), size.height()};

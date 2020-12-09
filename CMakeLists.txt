@@ -402,7 +402,8 @@ if (APPLE)
 endif(APPLE)
 
 if (WIN32)
-	set_target_properties(obs-browser-page PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS")
+	set_target_properties(obs-browser PROPERTIES LINK_FLAGS "/IGNORE:4099")
+	set_target_properties(obs-browser-page PROPERTIES LINK_FLAGS "/IGNORE:4099 /SUBSYSTEM:WINDOWS")
 endif(WIN32)
 
 if (UNIX AND NOT APPLE)
@@ -486,9 +487,6 @@ if (WIN32)
 		"${CEF_ROOT_DIR}/Release/libGLESv2.dll"
 		"${CMAKE_BINARY_DIR}/rundir/$<CONFIGURATION>/obs-plugins/${BITS}bit/"
 		COMMAND ${CMAKE_COMMAND} -E copy
-		"${CEF_ROOT_DIR}/Release/natives_blob.bin"
-		"${CMAKE_BINARY_DIR}/rundir/$<CONFIGURATION>/obs-plugins/${BITS}bit/"
-		COMMAND ${CMAKE_COMMAND} -E copy
 		"${CEF_ROOT_DIR}/Release/snapshot_blob.bin"
 		"${CMAKE_BINARY_DIR}/rundir/$<CONFIGURATION>/obs-plugins/${BITS}bit/"
 		COMMAND ${CMAKE_COMMAND} -E copy
@@ -498,6 +496,13 @@ if (WIN32)
 		"${CMAKE_CURRENT_SOURCE_DIR}/streamelements/qt.conf"
 		"${CMAKE_BINARY_DIR}/rundir/$<CONFIGURATION>/bin/${BITS}bit/"
 	)
+	if(EXISTS "${CEF_ROOT_DIR}/Release/natives_blob.bin")
+		add_custom_command(TARGET obs-browser POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy
+			"${CEF_ROOT_DIR}/Release/natives_blob.bin"
+			"${CMAKE_BINARY_DIR}/rundir/$<CONFIGURATION>/obs-plugins/${BITS}bit/"
+		)
+	endif()
 
 	if(ENABLE_BUGSPLAT)
 		# Copy BugSplat binary files

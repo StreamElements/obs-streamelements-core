@@ -257,7 +257,11 @@ public:
 			}
 		}
 
+#ifdef SUPPORTS_FRACTIONAL_SCALING
+		return QSize(m_iconSize, m_iconSize) * devicePixelRatioF();
+#else
 		return QSize(m_iconSize, m_iconSize) * devicePixelRatio();
+#endif
 	}
 
 	virtual QSize sizeHint() const override

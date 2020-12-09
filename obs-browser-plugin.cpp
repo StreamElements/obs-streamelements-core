@@ -24,6 +24,7 @@
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 #include <obs.hpp>
+#include <obs-config.h>
 #include <functional>
 #include <thread>
 #include <mutex>
@@ -469,7 +470,9 @@ static void BrowserInit(void)
 	CefString(&settings.locale) = obs_get_locale();
 	CefString(&settings.accept_language_list) = accepted_languages;
 	CefString(&settings.cache_path) = conf_path_abs;
-	CefString(&settings.browser_subprocess_path) = path;
+	char *abs_path = os_get_abs_path_ptr(path.c_str());
+	CefString(&settings.browser_subprocess_path) = abs_path;
+	bfree(abs_path);
 
 	bool tex_sharing_avail = false;
 
@@ -586,7 +589,7 @@ void RegisterBrowserSource()
 	info.video_render = [](void *data, gs_effect_t *) {
 		static_cast<BrowserSource *>(data)->Render();
 	};
-#if CHROME_VERSION_BUILD >= 3683
+#if CHROME_VERSION_BUILD >= 3683 && CHROME_VERSION_BUILD < 4103
 	info.audio_mix = [](void *data, uint64_t *ts_out,
 			    struct audio_output_data *audio_output,
 			    size_t channels, size_t sample_rate) {
@@ -684,6 +687,12 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *)
 	case OBS_FRONTEND_EVENT_REPLAY_BUFFER_STARTED:
 		DispatchJSEvent("obsReplaybufferStarted", "");
 		break;
+#if (LIBOBS_API_MAJOR_VER >= 26 && LIBOBS_API_MINOR_VER >= 1) || \
+	LIBOBS_API_MAJOR_VER >= 27
+	case OBS_FRONTEND_EVENT_REPLAY_BUFFER_SAVED:
+		DispatchJSEvent("obsReplaybufferSaved", "");
+		break;
+#endif
 	case OBS_FRONTEND_EVENT_REPLAY_BUFFER_STOPPING:
 		DispatchJSEvent("obsReplaybufferStopping", "");
 		break;
@@ -787,7 +796,7 @@ static void check_hwaccel_support(void)
 bool obs_module_load(void)
 {
 	blog(LOG_INFO, "[obs-browser]: Version %s", OBS_BROWSER_VERSION_STRING);
-
+	blog(LOG_INFO, "[obs-browser]: CEF Version %s", CEF_VERSION);
 #ifdef USE_QT_LOOP
 	qRegisterMetaType<MessageTask>("MessageTask");
 #endif
