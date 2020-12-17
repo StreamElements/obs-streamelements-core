@@ -244,10 +244,12 @@ set(obs-browser_SOURCES
 	streamelements/StreamElementsRemoteIconLoader.cpp
 	streamelements/StreamElementsScenesListWidgetManager.cpp
 	streamelements/StreamElementsPleaseWaitWindow.cpp
+	streamelements/StreamElementsHttpServerManager.cpp
 	streamelements/deps/StackWalker/StackWalker.cpp
 	streamelements/deps/zip/zip.c
 	streamelements/deps/server/NamedPipesServer.cpp
 	streamelements/deps/server/NamedPipesServerClientHandler.cpp
+	streamelements/deps/server/HttpServer.cpp
 	streamelements/deps/sqlite/sqlite3.c
 	)
 
@@ -322,6 +324,7 @@ set(obs-browser_HEADERS
 	streamelements/StreamElementsRemoteIconLoader.hpp
 	streamelements/StreamElementsScenesListWidgetManager.hpp
 	streamelements/StreamElementsPleaseWaitWindow.hpp
+	streamelements/StreamElementsHttpServerManager.hpp
 	streamelements/deps/StackWalker/StackWalker.h
 	streamelements/deps/zip/zip.h
 	streamelements/deps/zip/miniz.h
@@ -329,8 +332,10 @@ set(obs-browser_HEADERS
 	streamelements/deps/moodycamel/blockingconcurrentqueue.h
 	streamelements/deps/server/NamedPipesServer.hpp
 	streamelements/deps/server/NamedPipesServerClientHandler.hpp
+	streamelements/deps/server/HttpServer.hpp
 	streamelements/deps/sqlite/sqlite3.h
 	streamelements/deps/sqlite/sqlite3ext.h
+	streamelements/deps/cpp-httplib/httplib.h
 	)
 
 if (APPLE)

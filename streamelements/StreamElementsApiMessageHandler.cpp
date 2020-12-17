@@ -2091,6 +2091,44 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("addBrowserScopedHttpServer");
+	{
+		if (args->GetSize()) {
+			StreamElementsMessageBus::GetInstance()
+				->DeserializeBrowserHttpServer(
+					browser, args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllBrowserScopedHttpServers");
+	{
+		StreamElementsMessageBus::GetInstance()
+			->SerializeBrowserHttpServers(browser, result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeBrowserScopedHttpServersByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsMessageBus::GetInstance()
+				->RemoveBrowserHttpServersByIds(
+					browser, args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("sendHttpRequestResponse");
+	{
+		if (args->GetSize() >= 2) {
+			StreamElementsMessageBus::GetInstance()
+				->DeserializeHttpRequestResponse(
+					args->GetValue(0), args->GetValue(1),
+					result);
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("crashProgram");
 	{
 		// Crash

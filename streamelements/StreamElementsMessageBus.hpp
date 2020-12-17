@@ -7,6 +7,9 @@
 #include "cef-headers.hpp"
 
 #include "StreamElementsControllerServer.hpp"
+#include "StreamElementsHttpServerManager.hpp"
+
+#include <util/threading.h>
 
 // Message bus for exchanging messages between:
 //
@@ -48,6 +51,27 @@ public:
 	void RemoveBrowserListener(CefRefPtr<CefBrowser> browser);
 
 public:
+	void DeserializeBrowserHttpServer(CefRefPtr<CefBrowser> browser,
+					  CefRefPtr<CefValue> input,
+					  CefRefPtr<CefValue> &output);
+
+	void SerializeBrowserHttpServers(CefRefPtr<CefBrowser> browser,
+					  CefRefPtr<CefValue> &output);
+
+	void RemoveBrowserHttpServersByIds(CefRefPtr<CefBrowser> browser,
+					   CefRefPtr<CefValue> input,
+					   CefRefPtr<CefValue> &output);
+
+public:
+	// Deliver event message to specific browser
+	//
+	void NotifyBrowserEventListener(CefRefPtr<CefBrowser> browser,
+					std::string scope,
+					std::string source,
+					std::string sourceAddress,
+					std::string event,
+					CefRefPtr<CefValue> payload);
+
 	// Deliver event message to all local listeners (CEF UI, CEF Dialog, Background Worker)
 	// except Browser Sources.
 	//
@@ -115,8 +139,39 @@ public:
 	virtual void PublishSystemState();
 
 private:
+	class WaitingHttpRequestState {
+	public:
+		WaitingHttpRequestState(const HttpServer::request_t *req,
+					HttpServer::response_t *res)
+			: request(req), response(res)
+		{
+			os_event_init(&event, OS_EVENT_TYPE_MANUAL);
+		}
+		~WaitingHttpRequestState()
+		{
+			os_event_destroy(event);
+		}
+
+	public:
+		os_event_t *event = nullptr;
+		const HttpServer::request_t *request;
+		HttpServer::response_t *response;
+	};
+
+public:
+	void DeserializeHttpRequestResponse(CefRefPtr<CefValue> idInput,
+					    CefRefPtr<CefValue> responseInput,
+					    CefRefPtr<CefValue> &output);
+
+private:
 	std::recursive_mutex m_browser_list_mutex;
 	std::map<CefRefPtr<CefBrowser>, message_destination_filter_flags_t> m_browser_list;
+	std::map<int,
+		 std::shared_ptr<StreamElementsHttpServerManager>>
+		m_browser_http_servers;
+	std::recursive_mutex m_waiting_http_requests_mutex;
+	std::map<std::string, std::shared_ptr<WaitingHttpRequestState>>
+		m_waiting_http_requests;
 	StreamElementsControllerServer m_external_controller_server;
 
 private:

@@ -27,6 +27,9 @@
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
 
+// Must include before <windows.h>
+#include "streamelements/deps/server/HttpServer.hpp"
+
 #include <include/cef_app.h>
 #include <include/cef_base.h>
 #include <include/cef_task.h>
