@@ -132,6 +132,24 @@ public:
 		SaveConfig();
 	}
 
+	bool GetShowBuiltInMenuItems()
+	{
+		const bool value = config_get_bool(
+			StreamElementsConfig::GetInstance()->GetConfig(),
+			"Startup", "ShowBuiltInMenuItems");
+
+		return value;
+	}
+
+	void SetShowBuiltInMenuItems(bool value)
+	{
+		config_set_bool(
+			StreamElementsConfig::GetInstance()->GetConfig(),
+			"Startup", "ShowBuiltInMenuItems", value);
+
+		SaveConfig();
+	}
+
 	std::string GetSceneItemsAuxActionsConfig()
 	{
 		const char *value = config_get_string(

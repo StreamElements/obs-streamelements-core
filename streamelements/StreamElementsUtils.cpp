@@ -2329,6 +2329,93 @@ private:
 	CefRefPtr<StreamElementsRemoteIconLoader> loader;
 };
 
+bool DeserializeDocksMenu(QMenu& menu)
+{
+	StreamElementsGlobalStateManager::GetInstance()
+		->GetWidgetManager()
+		->EnterCriticalSection();
+
+	std::vector<std::string> widgetIds;
+	StreamElementsGlobalStateManager::GetInstance()
+		->GetWidgetManager()
+		->GetDockBrowserWidgetIdentifiers(widgetIds);
+
+	std::vector<StreamElementsBrowserWidgetManager::DockBrowserWidgetInfo *>
+		widgets;
+	for (auto id : widgetIds) {
+		auto info = StreamElementsGlobalStateManager::GetInstance()
+				    ->GetWidgetManager()
+				    ->GetDockBrowserWidgetInfo(id.c_str());
+
+		if (info) {
+			widgets.push_back(info);
+		}
+	}
+
+	std::sort(
+		widgets.begin(), widgets.end(),
+		[](StreamElementsBrowserWidgetManager::DockBrowserWidgetInfo *a,
+		   StreamElementsBrowserWidgetManager::DockBrowserWidgetInfo
+			   *b) { return a->m_title < b->m_title; });
+
+	StreamElementsGlobalStateManager::GetInstance()
+		->GetWidgetManager()
+		->LeaveCriticalSection();
+
+	for (auto widget : widgets) {
+		// widget->m_visible
+		QAction *widget_action =
+			new QAction(QString(widget->m_title.c_str()));
+		menu.addAction(widget_action);
+
+		std::string id = widget->m_id;
+		bool isVisible = widget->m_visible;
+
+		widget_action->setCheckable(true);
+		widget_action->setChecked(isVisible);
+
+		QObject::connect(widget_action, &QAction::triggered, [id, isVisible, widget_action] {
+			QDockWidget *dock =
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->GetDockWidget(id.c_str());
+
+			if (dock) {
+				if (isVisible) {
+					// Hide
+					StreamElementsGlobalStateManager::GetInstance()
+						->GetAnalyticsEventsManager()
+						->trackDockWidgetEvent(
+							dock, "Hide",
+							json11::Json::object{
+								{"actionSource",
+								 "Menu"}});
+				} else {
+					// Show
+					StreamElementsGlobalStateManager::GetInstance()
+						->GetAnalyticsEventsManager()
+						->trackDockWidgetEvent(
+							dock, "Show",
+							json11::Json::object{
+								{"actionSource",
+								 "Menu"}});
+				}
+
+				dock->setVisible(!isVisible);
+
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetMenuManager()->Update();
+			}
+		});
+	}
+
+	for (auto widget : widgets) {
+		delete widget;
+	}
+
+	return true;
+}
+
 bool DeserializeMenu(CefRefPtr<CefValue> input, QMenu &menu,
 		     std::function<void()> defaultAction,
 		     std::function<void()> defaultContextMenu)
@@ -2421,24 +2508,50 @@ bool DeserializeMenu(CefRefPtr<CefValue> input, QMenu &menu,
 			    d->GetType("title") != VTYPE_STRING)
 				return false;
 
-			if (!d->HasKey("items") ||
-				d->GetType("items") != VTYPE_LIST)
-				return false;
-
 			std::string iconUrl = getIconUrl(d);
 
-			QMenu *submenu = new QRemoteIconMenu(
-				iconUrl.size() ? iconUrl.c_str() : nullptr);
+			if (d->HasKey("items") &&
+			    d->GetType("items") == VTYPE_LIST) {
+				QMenu *submenu = new QRemoteIconMenu(
+					iconUrl.size() ? iconUrl.c_str()
+						       : nullptr);
 
-			submenu->setTitle(
-				d->GetString("title").ToString().c_str());
+				submenu->setTitle(d->GetString("title")
+							  .ToString()
+							  .c_str());
 
-			submenu->setEnabled(enabled);
+				submenu->setEnabled(enabled);
 
-			menu.addMenu(submenu);
+				menu.addMenu(submenu);
 
-			if (!DeserializeMenu(d->GetValue("items"), *submenu))
+				if (!DeserializeMenu(d->GetValue("items"),
+						     *submenu))
+					return false;
+			} else if (d->HasKey("itemsSource") && d->GetType("itemsSource") == VTYPE_STRING) {
+				std::string itemsSource =
+					d->GetString("itemsSource");
+
+				if (itemsSource == ":dockingWidgets") {
+					QMenu *submenu = new QRemoteIconMenu(
+						iconUrl.size() ? iconUrl.c_str()
+							       : nullptr);
+
+					submenu->setTitle(d->GetString("title")
+								  .ToString()
+								  .c_str());
+
+					submenu->setEnabled(enabled);
+
+					menu.addMenu(submenu);
+
+					if (!DeserializeDocksMenu(*submenu))
+						return false;
+				} else {
+					return false;
+				}
+			} else {
 				return false;
+			}
 		} else {
 			return false;
 		}

@@ -27,6 +27,8 @@ config_t* StreamElementsConfig::GetConfig()
 		config_set_default_uint(m_config, "Header", "Version", STREAMELEMENTS_PLUGIN_VERSION);
 		config_set_default_uint(m_config, "Startup", "Flags", STARTUP_FLAGS_ONBOARDING_MODE);
 		config_set_default_string(m_config, "Startup", "State", "");
+		config_set_default_bool(m_config, "Startup",
+					"ShowBuiltInMenuItems", true);
 	}
 
 	return m_config;

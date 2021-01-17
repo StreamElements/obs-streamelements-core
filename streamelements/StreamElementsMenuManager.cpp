@@ -33,16 +33,18 @@ StreamElementsMenuManager::~StreamElementsMenuManager()
 
 void StreamElementsMenuManager::Update()
 {
-	SYNC_ACCESS();
+	QtPostTask([this]() { UpdateInternal(); });
+}
 
+void StreamElementsMenuManager::UpdateInternal()
+{
 	if (!m_menu)
 		return;
 
 	m_menu->clear();
 
-	auto addURL = [this](QString title, QString url) {
+	auto createURL = [this](QString title, QString url) -> QAction * {
 		QAction *menu_action = new QAction(title);
-		m_menu->addAction(menu_action);
 
 		menu_action->connect(
 			menu_action, &QAction::triggered, [this, url] {
@@ -50,130 +52,60 @@ void StreamElementsMenuManager::Update()
 					QUrl(url, QUrl::TolerantMode);
 				QDesktopServices::openUrl(navigate_url);
 			});
+
+		return menu_action;
 	};
 
-	QAction *onboarding_action = new QAction(
-		obs_module_text("StreamElements.Action.ForceOnboarding"));
-	m_menu->addAction(onboarding_action);
-	onboarding_action->connect(onboarding_action, &QAction::triggered, [this] {
-		QtPostTask(
-			[](void *) -> void {
-				StreamElementsGlobalStateManager::GetInstance()
-					->Reset(false,
-						StreamElementsGlobalStateManager::
-							OnBoarding);
-			},
-			nullptr);
-	});
+	if (m_showBuiltInMenuItems) {
+		QMenu *setupMenu = new QMenu(obs_module_text(
+			"StreamElements.Action.SetupContainer"));
 
-	addURL(obs_module_text("StreamElements.Action.Overlays"),
-	       obs_module_text("StreamElements.Action.Overlays.URL"));
-	addURL(obs_module_text("StreamElements.Action.GroundControl"),
-	       obs_module_text("StreamElements.Action.GroundControl.URL"));
-	m_menu->addSeparator();
-	{
-		StreamElementsGlobalStateManager::GetInstance()
-			->GetWidgetManager()
-			->EnterCriticalSection();
+		m_menu->addMenu(setupMenu);
 
-		std::vector<std::string> widgetIds;
-		StreamElementsGlobalStateManager::GetInstance()
-			->GetWidgetManager()
-			->GetDockBrowserWidgetIdentifiers(widgetIds);
+		QAction *onboarding_action = new QAction(obs_module_text(
+			"StreamElements.Action.ForceOnboarding"));
+		setupMenu->addAction(onboarding_action);
+		onboarding_action->connect(onboarding_action, &QAction::triggered, [this] {
+			QtPostTask(
+				[](void *) -> void {
+					StreamElementsGlobalStateManager::GetInstance()
+						->Reset(false,
+							StreamElementsGlobalStateManager::
+								OnBoarding);
+				},
+				nullptr);
+		});
 
-		std::vector<StreamElementsBrowserWidgetManager::
-				    DockBrowserWidgetInfo *>
-			widgets;
-		for (auto id : widgetIds) {
-			auto info =
-				StreamElementsGlobalStateManager::GetInstance()
-					->GetWidgetManager()
-					->GetDockBrowserWidgetInfo(id.c_str());
+		setupMenu->addAction(createURL(
+			obs_module_text("StreamElements.Action.Overlays"),
+			obs_module_text("StreamElements.Action.Overlays.URL")));
 
-			if (info) {
-				widgets.push_back(info);
-			}
+		// Docks
+		{
+			QMenu *docksMenu = new QMenu(obs_module_text(
+				"StreamElements.Action.DocksContainer"));
+
+			DeserializeDocksMenu(*docksMenu);
+
+			m_menu->addMenu(docksMenu);
 		}
 
-		std::sort(widgets.begin(), widgets.end(),
-			  [](StreamElementsBrowserWidgetManager::
-				     DockBrowserWidgetInfo *a,
-			     StreamElementsBrowserWidgetManager::
-				     DockBrowserWidgetInfo *b) {
-				  return a->m_title < b->m_title;
-			  });
+		QAction *import_action = new QAction(
+			obs_module_text("StreamElements.Action.Import"));
+		m_menu->addAction(import_action);
+		import_action->connect(import_action, &QAction::triggered, [this] {
+			QtPostTask(
+				[](void *) -> void {
+					StreamElementsGlobalStateManager::GetInstance()
+						->Reset(false,
+							StreamElementsGlobalStateManager::
+								Import);
+				},
+				nullptr);
+		});
 
-		StreamElementsGlobalStateManager::GetInstance()
-			->GetWidgetManager()
-			->LeaveCriticalSection();
-
-		for (auto widget : widgets) {
-			// widget->m_visible
-			QAction *widget_action =
-				new QAction(QString(widget->m_title.c_str()));
-			m_menu->addAction(widget_action);
-
-			std::string id = widget->m_id;
-			bool isVisible = widget->m_visible;
-
-			widget_action->setCheckable(true);
-			widget_action->setChecked(isVisible);
-
-			QObject::connect(widget_action, &QAction::triggered, [this, id, isVisible, widget_action] {
-				QDockWidget *dock =
-					StreamElementsGlobalStateManager::
-						GetInstance()
-							->GetWidgetManager()
-							->GetDockWidget(
-								id.c_str());
-
-				if (dock) {
-					if (isVisible) {
-						// Hide
-						StreamElementsGlobalStateManager::GetInstance()
-							->GetAnalyticsEventsManager()
-							->trackDockWidgetEvent(
-								dock, "Hide",
-								json11::Json::object{
-									{"actionSource",
-									 "Menu"}});
-					} else {
-						// Show
-						StreamElementsGlobalStateManager::GetInstance()
-							->GetAnalyticsEventsManager()
-							->trackDockWidgetEvent(
-								dock, "Show",
-								json11::Json::object{
-									{"actionSource",
-									 "Menu"}});
-					}
-
-					dock->setVisible(!isVisible);
-
-					Update();
-				}
-			});
-		}
-
-		for (auto widget : widgets) {
-			delete widget;
-		}
+		m_menu->addSeparator();
 	}
-	m_menu->addSeparator();
-
-	QAction *import_action =
-		new QAction(obs_module_text("StreamElements.Action.Import"));
-	m_menu->addAction(import_action);
-	import_action->connect(import_action, &QAction::triggered, [this] {
-		QtPostTask(
-			[](void *) -> void {
-				StreamElementsGlobalStateManager::GetInstance()
-					->Reset(false,
-						StreamElementsGlobalStateManager::
-							Import);
-			},
-			nullptr);
-	});
 
 	DeserializeMenu(m_auxMenuItems, *m_menu);
 
@@ -197,38 +129,21 @@ void StreamElementsMenuManager::Update()
 			calldata_free(cd);
 		});
 
-	m_menu->addSeparator();
+	QMenu *helpMenu = new QMenu(
+		obs_module_text("StreamElements.Action.HelpContainer"));
 
-	QAction *stop_onboarding_ui = new QAction(
-		obs_module_text("StreamElements.Action.StopOnBoardingUI"));
-	m_menu->addAction(stop_onboarding_ui);
-	stop_onboarding_ui->connect(
-		stop_onboarding_ui, &QAction::triggered, [this] {
-			StreamElementsGlobalStateManager::GetInstance()
-				->SwitchToOBSStudio();
-		});
-
-#ifdef WIN32
-	QAction *uninstall =
-		new QAction(obs_module_text("StreamElements.Action.Uninstall"));
-	m_menu->addAction(uninstall);
-	uninstall->connect(uninstall, &QAction::triggered, [this] {
-		StreamElementsGlobalStateManager::GetInstance()
-			->UninstallPlugin();
-	});
-#endif
-
-	m_menu->addSeparator();
+	m_menu->addMenu(helpMenu);
 
 	QAction *report_issue = new QAction(
 		obs_module_text("StreamElements.Action.ReportIssue"));
-	m_menu->addAction(report_issue);
+	helpMenu->addAction(report_issue);
 	report_issue->connect(report_issue, &QAction::triggered, [this] {
 		StreamElementsGlobalStateManager::GetInstance()->ReportIssue();
 	});
 
-	addURL(obs_module_text("StreamElements.Action.LiveSupport"),
-	       obs_module_text("StreamElements.Action.LiveSupport.URL"));
+	helpMenu->addAction(createURL(
+		obs_module_text("StreamElements.Action.LiveSupport.MenuItem"),
+		obs_module_text("StreamElements.Action.LiveSupport.URL")));
 
 	m_menu->addSeparator();
 
@@ -238,31 +153,43 @@ void StreamElementsMenuManager::Update()
 			(StreamElementsConfig::GetInstance()->GetStartupFlags() &
 			 StreamElementsConfig::STARTUP_FLAGS_SIGNED_IN);
 
-		QAction *logout_action = new QAction(
-			isLoggedIn
-				? obs_module_text(
-					  "StreamElements.Action.ResetStateSignOut")
-				: obs_module_text(
-					  "StreamElements.Action.ResetStateSignIn"));
-		m_menu->addAction(logout_action);
-		logout_action->connect(
-			logout_action, &QAction::triggered, [this] {
-				QtPostTask(
-					[](void *) -> void {
-						StreamElementsGlobalStateManager::
-							GetInstance()
-								->Reset();
-					},
-					nullptr);
-			});
+		auto reset_action_handler = [this] {
+			QtPostTask(
+				[](void *) -> void {
+					StreamElementsGlobalStateManager::
+						GetInstance()
+							->Reset();
+				},
+				nullptr);
+		};
+
+		if (isLoggedIn) {
+			m_menu->setStyleSheet(
+				"QMenu::item:default { color: #F53656; }");
+
+			QAction *logout_action = new QAction(obs_module_text(
+				"StreamElements.Action.ResetStateSignOut"));
+			logout_action->setObjectName("signOutAction");
+
+			m_menu->addAction(logout_action);
+			logout_action->connect(logout_action,
+					       &QAction::triggered,
+					       reset_action_handler);
+			m_menu->setDefaultAction(logout_action);
+		} else {
+			QAction *login_action = new QAction(obs_module_text(
+				"StreamElements.Action.ResetStateSignIn"));
+			m_menu->addAction(login_action);
+			login_action->connect(login_action,
+					       &QAction::triggered,
+					       reset_action_handler);
+		}
 	}
 }
 
 bool StreamElementsMenuManager::DeserializeAuxiliaryMenuItems(
 	CefRefPtr<CefValue> input)
 {
-	SYNC_ACCESS();
-
 	QMenu menu;
 	bool result = DeserializeMenu(input, menu);
 
@@ -279,9 +206,8 @@ bool StreamElementsMenuManager::DeserializeAuxiliaryMenuItems(
 
 void StreamElementsMenuManager::Reset()
 {
-	SYNC_ACCESS();
-
 	m_auxMenuItems->SetNull();
+	m_showBuiltInMenuItems = true;
 
 	Update();
 
@@ -296,15 +222,17 @@ void StreamElementsMenuManager::SerializeAuxiliaryMenuItems(
 
 void StreamElementsMenuManager::SaveConfig()
 {
-	SYNC_ACCESS();
-
 	StreamElementsConfig::GetInstance()->SetAuxMenuItemsConfig(
 		CefWriteJSON(m_auxMenuItems, JSON_WRITER_DEFAULT).ToString());
+
+	StreamElementsConfig::GetInstance()->SetShowBuiltInMenuItems(
+		m_showBuiltInMenuItems);
 }
 
 void StreamElementsMenuManager::LoadConfig()
 {
-	SYNC_ACCESS();
+	m_showBuiltInMenuItems =
+		StreamElementsConfig::GetInstance()->GetShowBuiltInMenuItems();
 
 	CefRefPtr<CefValue> val = CefParseJSON(
 		StreamElementsConfig::GetInstance()->GetAuxMenuItemsConfig(),
@@ -314,4 +242,16 @@ void StreamElementsMenuManager::LoadConfig()
 		return;
 
 	DeserializeAuxiliaryMenuItems(val);
+}
+
+void StreamElementsMenuManager::SetShowBuiltInMenuItems(bool show)
+{
+	m_showBuiltInMenuItems = show;
+
+	Update();
+}
+
+bool StreamElementsMenuManager::GetShowBuiltInMenuItems()
+{
+	return m_showBuiltInMenuItems;
 }

@@ -28,6 +28,9 @@ public:
 
 	void Reset();
 
+	void SetShowBuiltInMenuItems(bool show);
+	bool GetShowBuiltInMenuItems();
+
 protected:
 	QMainWindow* mainWindow() { return m_mainWindow; }
 
@@ -35,7 +38,11 @@ protected:
 	void LoadConfig();
 
 private:
+	void UpdateInternal();
+
+private:
 	QMainWindow* m_mainWindow;
 	QMenu* m_menu;
 	CefRefPtr<CefValue> m_auxMenuItems = CefValue::Create();
+	bool m_showBuiltInMenuItems = true;
 };

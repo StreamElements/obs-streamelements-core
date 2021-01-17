@@ -2129,6 +2129,26 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("setShowBuiltInMenuItems");
+	{
+		if (args->GetSize() >= 1 && args->GetType(0) == VTYPE_BOOL) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetMenuManager()
+				->SetShowBuiltInMenuItems(args->GetBool(0));
+
+			result->SetBool(true);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getShowBuiltInMenuItems");
+	{
+		result->SetBool(StreamElementsGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->GetShowBuiltInMenuItems());
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("crashProgram");
 	{
 		// Crash

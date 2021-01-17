@@ -279,6 +279,8 @@ bool DeserializeAndInvokeAction(CefRefPtr<CefValue> input,
 				std::function<void()> defaultAction,
 				std::function<void()> defaultContextMenu);
 
+bool DeserializeDocksMenu(QMenu &menu);
+
 bool DeserializeMenu(
 	CefRefPtr<CefValue> input, QMenu &menu,
 	std::function<void()> defaultAction = []() {},
