@@ -2358,10 +2358,6 @@ bool DeserializeDocksMenu(QMenu& menu)
 		   StreamElementsBrowserWidgetManager::DockBrowserWidgetInfo
 			   *b) { return a->m_title < b->m_title; });
 
-	StreamElementsGlobalStateManager::GetInstance()
-		->GetWidgetManager()
-		->LeaveCriticalSection();
-
 	for (auto widget : widgets) {
 		// widget->m_visible
 		QAction *widget_action =
@@ -2375,6 +2371,10 @@ bool DeserializeDocksMenu(QMenu& menu)
 		widget_action->setChecked(isVisible);
 
 		QObject::connect(widget_action, &QAction::triggered, [id, isVisible, widget_action] {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetWidgetManager()
+				->EnterCriticalSection();
+
 			QDockWidget *dock =
 				StreamElementsGlobalStateManager::GetInstance()
 					->GetWidgetManager()
@@ -2406,12 +2406,20 @@ bool DeserializeDocksMenu(QMenu& menu)
 				StreamElementsGlobalStateManager::GetInstance()
 					->GetMenuManager()->Update();
 			}
+
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetWidgetManager()
+				->LeaveCriticalSection();
 		});
 	}
 
 	for (auto widget : widgets) {
 		delete widget;
 	}
+
+	StreamElementsGlobalStateManager::GetInstance()
+		->GetWidgetManager()
+		->LeaveCriticalSection();
 
 	return true;
 }

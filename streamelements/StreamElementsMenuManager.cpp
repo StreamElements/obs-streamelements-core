@@ -33,11 +33,15 @@ StreamElementsMenuManager::~StreamElementsMenuManager()
 
 void StreamElementsMenuManager::Update()
 {
-	QtPostTask([this]() { UpdateInternal(); });
+	SYNC_ACCESS();
+
+	UpdateInternal();
 }
 
 void StreamElementsMenuManager::UpdateInternal()
 {
+	SYNC_ACCESS();
+
 	if (!m_menu)
 		return;
 
@@ -66,14 +70,10 @@ void StreamElementsMenuManager::UpdateInternal()
 			"StreamElements.Action.ForceOnboarding"));
 		setupMenu->addAction(onboarding_action);
 		onboarding_action->connect(onboarding_action, &QAction::triggered, [this] {
-			QtPostTask(
-				[](void *) -> void {
-					StreamElementsGlobalStateManager::GetInstance()
-						->Reset(false,
-							StreamElementsGlobalStateManager::
-								OnBoarding);
-				},
-				nullptr);
+			StreamElementsGlobalStateManager::GetInstance()
+				->Reset(false,
+					StreamElementsGlobalStateManager::
+						OnBoarding);
 		});
 
 		setupMenu->addAction(createURL(
@@ -94,14 +94,10 @@ void StreamElementsMenuManager::UpdateInternal()
 			obs_module_text("StreamElements.Action.Import"));
 		m_menu->addAction(import_action);
 		import_action->connect(import_action, &QAction::triggered, [this] {
-			QtPostTask(
-				[](void *) -> void {
-					StreamElementsGlobalStateManager::GetInstance()
-						->Reset(false,
-							StreamElementsGlobalStateManager::
-								Import);
-				},
-				nullptr);
+			StreamElementsGlobalStateManager::GetInstance()
+				->Reset(false,
+					StreamElementsGlobalStateManager::
+						Import);
 		});
 
 		m_menu->addSeparator();
@@ -154,13 +150,9 @@ void StreamElementsMenuManager::UpdateInternal()
 			 StreamElementsConfig::STARTUP_FLAGS_SIGNED_IN);
 
 		auto reset_action_handler = [this] {
-			QtPostTask(
-				[](void *) -> void {
-					StreamElementsGlobalStateManager::
-						GetInstance()
-							->Reset();
-				},
-				nullptr);
+			StreamElementsGlobalStateManager::
+				GetInstance()
+					->Reset();
 		};
 
 		if (isLoggedIn) {
@@ -190,6 +182,8 @@ void StreamElementsMenuManager::UpdateInternal()
 bool StreamElementsMenuManager::DeserializeAuxiliaryMenuItems(
 	CefRefPtr<CefValue> input)
 {
+	SYNC_ACCESS();
+
 	QMenu menu;
 	bool result = DeserializeMenu(input, menu);
 
@@ -206,6 +200,8 @@ bool StreamElementsMenuManager::DeserializeAuxiliaryMenuItems(
 
 void StreamElementsMenuManager::Reset()
 {
+	SYNC_ACCESS();
+
 	m_auxMenuItems->SetNull();
 	m_showBuiltInMenuItems = true;
 
@@ -222,6 +218,8 @@ void StreamElementsMenuManager::SerializeAuxiliaryMenuItems(
 
 void StreamElementsMenuManager::SaveConfig()
 {
+	SYNC_ACCESS();
+
 	StreamElementsConfig::GetInstance()->SetAuxMenuItemsConfig(
 		CefWriteJSON(m_auxMenuItems, JSON_WRITER_DEFAULT).ToString());
 
@@ -231,6 +229,8 @@ void StreamElementsMenuManager::SaveConfig()
 
 void StreamElementsMenuManager::LoadConfig()
 {
+	SYNC_ACCESS();
+
 	m_showBuiltInMenuItems =
 		StreamElementsConfig::GetInstance()->GetShowBuiltInMenuItems();
 
