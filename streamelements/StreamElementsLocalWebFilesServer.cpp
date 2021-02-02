@@ -186,13 +186,97 @@ private:
 	int64_t m_remaining = 0;
 };
 
-StreamElementsLocalWebFilesServer::StreamElementsLocalWebFilesServer(std::string rootFolder) :
-	m_rootFolder(rootFolder)
+///
+// CefResourceHandler implementation to serve pre-defined base64 encoded content
+//
+class StreamElementsBase64StringCefResourceHandlerImpl
+	: public CefResourceHandler {
+public:
+	StreamElementsBase64StringCefResourceHandlerImpl(
+		std::string contentType, std::string base64)
+		: m_data_offset(0),
+		  m_contentType(contentType),
+		  m_data(CefBase64Decode(base64))
+	{
+	}
+
+	virtual bool ProcessRequest(CefRefPtr<CefRequest> request,
+				    CefRefPtr<CefCallback> callback) override
+	{
+		callback->Continue();
+
+		return true;
+	}
+
+	virtual void GetResponseHeaders(CefRefPtr<CefResponse> response,
+					int64 &response_length,
+					CefString &redirectUrl) override
+	{
+		if (!response) {
+			return;
+		}
+
+		CefResponse::HeaderMap headers;
+
+		headers.emplace(std::make_pair<CefString, CefString>(
+			"Pragma", "no-cache"));
+		headers.emplace(std::make_pair<CefString, CefString>(
+			"Cache-Control", "no-cache"));
+		headers.emplace(std::make_pair<CefString, CefString>(
+			"Access-Control-Allow-Origin", "*"));
+		headers.emplace(std::make_pair<CefString, CefString>(
+			"Access-Control-Allow-Methods", "GET, HEAD"));
+
+		response->SetStatus(200);
+		response->SetStatusText("OK");
+		response->SetHeaderMap(headers);
+		response->SetMimeType(m_contentType);
+		response_length = m_data->GetSize();
+		redirectUrl = "";
+	}
+
+	virtual bool ReadResponse(void *data_out, int bytes_to_read,
+				  int &bytes_read,
+				  CefRefPtr<CefCallback> callback) override
+	{
+		bytes_read =
+			m_data->GetData(data_out, bytes_to_read, m_data_offset);
+
+		m_data_offset += bytes_read;
+
+		callback->Continue();
+
+		return (bytes_read > 0);
+	}
+
+	virtual void Cancel() override {}
+
+	IMPLEMENT_REFCOUNTING(StreamElementsBase64StringCefResourceHandlerImpl);
+
+private:
+	size_t m_data_offset = 0;
+	std::string m_contentType;
+	CefRefPtr<CefBinaryValue> m_data;
+};
+
+
+StreamElementsLocalWebFilesServer::StreamElementsLocalWebFilesServer(
+	std::string rootFolder)
+	: m_rootFolder(rootFolder),
+	  m_sessionId(CreateGloballyUniqueIdString()),
+	  m_HEADER_INTERCEPT_CONTENT_TYPE(std::string("X-Intercept-") +
+					  m_sessionId +
+					  std::string("-ContentType")),
+	  m_HEADER_INTERCEPT_BASE64_CONTENT(std::string("X-Intercept-") +
+					    m_sessionId +
+					    std::string("-Base64-Content"))
+
 {
+
 	if (!std::experimental::filesystem::is_directory(m_rootFolder)) {
 		blog(LOG_WARNING,
-			"obs-browser: StreamElementsLocalWebFilesServer: folder does not exist: %s",
-			m_rootFolder.c_str());
+		     "obs-browser: StreamElementsLocalWebFilesServer: folder does not exist: %s",
+		     m_rootFolder.c_str());
 
 		return;
 	}
@@ -217,16 +301,17 @@ StreamElementsLocalWebFilesServer::StreamElementsLocalWebFilesServer(std::string
 			}
 
 			// transform host to lower-case
-			std::transform(host.begin(), host.end(), host.begin(), ::tolower);
+			std::transform(host.begin(), host.end(), host.begin(),
+				       ::tolower);
 
 			// add to map
 			m_hostsMap[host] =
-				std::make_shared<StreamElementsFileSystemMapper>(path);
+				std::make_shared<StreamElementsFileSystemMapper>(
+					path);
 
 			blog(LOG_INFO,
-				"obs-browser: StreamElementsLocalWebFilesServer: added mapping between '%s' and '%s'.",
-				host.c_str(),
-				path.c_str());
+			     "obs-browser: StreamElementsLocalWebFilesServer: added mapping between '%s' and '%s'.",
+			     host.c_str(), path.c_str());
 		}
 	}
 }
@@ -278,9 +363,19 @@ CefRefPtr<CefResourceHandler> StreamElementsLocalWebFilesServer::GetCefResourceH
 	// Examine request
 	//////////////////////////////////////////////////////////////////////
 
+	CefRequest::HeaderMap headers;
+	request->GetHeaderMap(headers);
+
+	if (headers.count(m_HEADER_INTERCEPT_CONTENT_TYPE) &&
+	    headers.count(m_HEADER_INTERCEPT_BASE64_CONTENT)) {
+		return new StreamElementsBase64StringCefResourceHandlerImpl(
+			headers.find(m_HEADER_INTERCEPT_CONTENT_TYPE)->second,
+			headers.find(m_HEADER_INTERCEPT_BASE64_CONTENT)->second);
+	}
+
 	std::string method = request->GetMethod().ToString();
 
-	if (method != "GET" && method != "HEAD") {
+	if (method != "GET" && method != "HEAD" && method != "POST" && method != "PUT") {
 		return nullptr;
 	}
 
@@ -332,4 +427,31 @@ CefRefPtr<CefResourceHandler> StreamElementsLocalWebFilesServer::GetCefResourceH
 	//////////////////////////////////////////////////////////////////////
 
 	return nullptr;
+}
+
+CefRefPtr<CefRequest>
+StreamElementsLocalWebFilesServer::CreateCefRequestForString(
+	std::string data, std::string contentType, std::string url)
+{
+	
+	CefRefPtr<CefRequest> result = CefRequest::Create();
+
+	CefRequest::HeaderMap headers;
+	CefRefPtr<CefPostData> postData = CefPostData::Create();
+
+	headers.insert(std::make_pair<CefString, CefString>(
+		m_HEADER_INTERCEPT_CONTENT_TYPE, contentType));
+
+	headers.insert(std::make_pair<CefString, CefString>(
+		m_HEADER_INTERCEPT_BASE64_CONTENT,
+		CefBase64Encode(data.data(), data.size())));
+
+	headers.insert(std::make_pair<CefString, CefString>("Unknown", "test"));
+	headers.insert(std::make_pair<CefString, CefString>("Authorization", "Intercept 123123123"));
+
+	result->Set(CefString(url), CefString("INTERCEPT"), postData, headers);
+	result->SetHeaderMap(headers);
+	result->SetFlags(0x01); // Skip cache
+
+	return result;
 }
