@@ -34,19 +34,7 @@ public:
 		CefRefPtr<CefFrame> frame,
 		CefRefPtr<CefRequest> request);
 
-	///
-	// Create a CEF request for serving a pre-defined string & content type
-	// off a specified URL.
-	//
-	CefRefPtr<CefRequest> CreateCefRequestForString(std::string data,
-							std::string contentType,
-							std::string url);
-
 private:
 	std::string m_rootFolder;
 	std::map<std::string, std::shared_ptr<StreamElementsFileSystemMapper>> m_hostsMap;
-
-	const std::string m_sessionId;
-	const std::string m_HEADER_INTERCEPT_CONTENT_TYPE;
-	const std::string m_HEADER_INTERCEPT_BASE64_CONTENT;
 };

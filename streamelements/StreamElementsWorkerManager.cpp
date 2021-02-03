@@ -27,18 +27,17 @@ static bool QueueCEFTask(std::function<void()> task)
 
 class StreamElementsWorkerManager::StreamElementsWorker : public QWidget {
 public:
-	StreamElementsWorker(std::string id, std::string content,
+	StreamElementsWorker(std::string id,
 			     std::string url,
 			     std::string executeJavascriptOnLoad)
 		: QWidget(),
-		  m_content(content),
 		  m_url(url),
 		  m_executeJavascriptOnLoad(executeJavascriptOnLoad),
 		  m_cef_browser(nullptr)
 	{
 		cef_window_handle_t windowHandle = (cef_window_handle_t)winId();
 
-		QueueCEFTask([this, windowHandle, id, content, url]() {
+		QueueCEFTask([this, windowHandle, id, url]() {
 			if (!!m_cef_browser.get()) {
 				return;
 			}
@@ -79,8 +78,7 @@ public:
 					->GetCookieManager()
 					->GetCefRequestContext());
 
-			m_cef_browser->GetMainFrame()->LoadString(content,
-								   url);
+			m_cef_browser->GetMainFrame()->LoadURL(url);
 		});
 	}
 
@@ -100,11 +98,9 @@ public:
 	}
 
 	std::string GetUrl() { return m_url; }
-	std::string GetContent() { return m_content; }
 	std::string GetExecuteJavaScriptOnLoad() { return m_executeJavascriptOnLoad; }
 
 private:
-	std::string m_content;
 	std::string m_url;
 	std::string m_executeJavascriptOnLoad;
 	CefRefPtr<CefBrowser> m_cef_browser;
@@ -126,7 +122,7 @@ void StreamElementsWorkerManager::RemoveAll()
 }
 
 std::string
-StreamElementsWorkerManager::Add(std::string requestedId, std::string content,
+StreamElementsWorkerManager::Add(std::string requestedId,
 				 std::string url,
 				 std::string executeJavascriptOnLoad)
 {
@@ -138,7 +134,7 @@ StreamElementsWorkerManager::Add(std::string requestedId, std::string content,
 		id = QUuid::createUuid().toString().toStdString();
 	}
 
-	m_items[id] = new StreamElementsWorker(id, content, url,
+	m_items[id] = new StreamElementsWorker(id, url,
 					       executeJavascriptOnLoad);
 
 	return id;
@@ -155,17 +151,6 @@ void StreamElementsWorkerManager::Remove(std::string id)
 
 		delete item;
 	}
-}
-
-std::string StreamElementsWorkerManager::GetContent(std::string id)
-{
-	std::lock_guard<std::recursive_mutex> guard(m_mutex);
-
-	if (m_items.count(id)) {
-		return m_items[id]->GetContent();
-	}
-
-	return "";
 }
 
 void StreamElementsWorkerManager::GetIdentifiers(
@@ -192,7 +177,6 @@ void StreamElementsWorkerManager::Serialize(CefRefPtr<CefValue> &output)
 		itemValue->SetDictionary(item);
 
 		item->SetString("id", it->first);
-		item->SetString("content", it->second->GetContent());
 		item->SetString("url", it->second->GetUrl());
 		item->SetString("executeJavaScriptOnLoad",
 				it->second->GetExecuteJavaScriptOnLoad());
@@ -216,10 +200,8 @@ void StreamElementsWorkerManager::Deserialize(CefRefPtr<CefValue> &input)
 				CefRefPtr<CefDictionaryValue> dict =
 					root->GetDictionary(key);
 
-				if (!!dict.get() && dict->HasKey("content") &&
-				    dict->HasKey("url")) {
-					std::string content =
-						dict->GetString("content");
+				if (!!dict.get() &&
+				    dict->HasKey("url") && dict->GetType("url") == VTYPE_STRING) {
 					std::string url =
 						dict->GetString("url");
 
@@ -237,8 +219,7 @@ void StreamElementsWorkerManager::Deserialize(CefRefPtr<CefValue> &input)
 								.ToString();
 					}
 
-					Add(id, content, url,
-					    executeJavaScriptOnLoad);
+					Add(id, url, executeJavaScriptOnLoad);
 				}
 			}
 		}
@@ -254,7 +235,6 @@ bool StreamElementsWorkerManager::SerializeOne(std::string id,
 	output->SetDictionary(item);
 
 	item->SetString("id", id);
-	item->SetString("content", m_items[id]->GetContent());
 	item->SetString("url", m_items[id]->GetUrl());
 	item->SetString("executeJavaScriptOnLoad",
 			m_items[id]->GetExecuteJavaScriptOnLoad());
@@ -270,14 +250,12 @@ StreamElementsWorkerManager::DeserializeOne(CefRefPtr<CefValue> input)
 	if (input.get() && input->GetType() == VTYPE_DICTIONARY) {
 		CefRefPtr<CefDictionaryValue> dict = input->GetDictionary();
 
-		if (!!dict.get() && dict->HasKey("content") &&
-		    dict->HasKey("url")) {
+		if (!!dict.get() && dict->HasKey("url") && dict->GetType("url") == VTYPE_STRING) {
 			std::string id =
 				dict->HasKey("id") ? dict->GetString("id") : "";
-			std::string content = dict->GetString("content");
 			std::string url = dict->GetString("url");
 
-					std::string executeJavaScriptOnLoad = "";
+			std::string executeJavaScriptOnLoad = "";
 
 			if (dict->HasKey("executeJavaScriptOnLoad") &&
 			    dict->GetType("executeJavaScriptOnLoad") ==
@@ -288,7 +266,7 @@ StreamElementsWorkerManager::DeserializeOne(CefRefPtr<CefValue> input)
 						.ToString();
 			}
 
-			return Add(id, content, url, executeJavaScriptOnLoad);
+			return Add(id, url, executeJavaScriptOnLoad);
 		}
 	}
 

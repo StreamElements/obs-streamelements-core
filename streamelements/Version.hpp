@@ -6,7 +6,7 @@
  * signatures).
  */
 #ifndef HOST_API_VERSION_MAJOR
-#define HOST_API_VERSION_MAJOR 1
+#define HOST_API_VERSION_MAJOR 2
 #endif
 
 /* Numeric value indicating the current minor version of the API.
@@ -15,7 +15,7 @@
  * of existing functionality).
  */
 #ifndef HOST_API_VERSION_MINOR
-#define HOST_API_VERSION_MINOR 38
+#define HOST_API_VERSION_MINOR 0
 #endif
 
 /* Numeric value in the YYYYMMDDHHmmss format, indicating the current

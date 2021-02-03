@@ -262,15 +262,7 @@ private:
 
 StreamElementsLocalWebFilesServer::StreamElementsLocalWebFilesServer(
 	std::string rootFolder)
-	: m_rootFolder(rootFolder),
-	  m_sessionId(CreateGloballyUniqueIdString()),
-	  m_HEADER_INTERCEPT_CONTENT_TYPE(std::string("X-Intercept-") +
-					  m_sessionId +
-					  std::string("-ContentType")),
-	  m_HEADER_INTERCEPT_BASE64_CONTENT(std::string("X-Intercept-") +
-					    m_sessionId +
-					    std::string("-Base64-Content"))
-
+	: m_rootFolder(rootFolder)
 {
 
 	if (!std::experimental::filesystem::is_directory(m_rootFolder)) {
@@ -363,16 +355,6 @@ CefRefPtr<CefResourceHandler> StreamElementsLocalWebFilesServer::GetCefResourceH
 	// Examine request
 	//////////////////////////////////////////////////////////////////////
 
-	CefRequest::HeaderMap headers;
-	request->GetHeaderMap(headers);
-
-	if (headers.count(m_HEADER_INTERCEPT_CONTENT_TYPE) &&
-	    headers.count(m_HEADER_INTERCEPT_BASE64_CONTENT)) {
-		return new StreamElementsBase64StringCefResourceHandlerImpl(
-			headers.find(m_HEADER_INTERCEPT_CONTENT_TYPE)->second,
-			headers.find(m_HEADER_INTERCEPT_BASE64_CONTENT)->second);
-	}
-
 	std::string method = request->GetMethod().ToString();
 
 	if (method != "GET" && method != "HEAD" && method != "POST" && method != "PUT") {
@@ -427,31 +409,4 @@ CefRefPtr<CefResourceHandler> StreamElementsLocalWebFilesServer::GetCefResourceH
 	//////////////////////////////////////////////////////////////////////
 
 	return nullptr;
-}
-
-CefRefPtr<CefRequest>
-StreamElementsLocalWebFilesServer::CreateCefRequestForString(
-	std::string data, std::string contentType, std::string url)
-{
-	
-	CefRefPtr<CefRequest> result = CefRequest::Create();
-
-	CefRequest::HeaderMap headers;
-	CefRefPtr<CefPostData> postData = CefPostData::Create();
-
-	headers.insert(std::make_pair<CefString, CefString>(
-		m_HEADER_INTERCEPT_CONTENT_TYPE, contentType));
-
-	headers.insert(std::make_pair<CefString, CefString>(
-		m_HEADER_INTERCEPT_BASE64_CONTENT,
-		CefBase64Encode(data.data(), data.size())));
-
-	headers.insert(std::make_pair<CefString, CefString>("Unknown", "test"));
-	headers.insert(std::make_pair<CefString, CefString>("Authorization", "Intercept 123123123"));
-
-	result->Set(CefString(url), CefString("INTERCEPT"), postData, headers);
-	result->SetHeaderMap(headers);
-	result->SetFlags(0x01); // Skip cache
-
-	return result;
 }

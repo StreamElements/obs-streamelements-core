@@ -22,7 +22,7 @@ public:
 
 public:
 	void RemoveAll();
-	std::string Add(std::string requestedId, std::string content,
+	std::string Add(std::string requestedId,
 			std::string url, std::string executeJavascriptOnLoad);
 	void Remove(std::string id);
 	std::string GetContent(std::string id);

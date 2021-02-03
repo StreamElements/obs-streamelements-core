@@ -237,10 +237,10 @@ void StreamElementsCefClient::OnLoadError(CefRefPtr<CefBrowser> browser,
 					std::regex("\\$\\{error.url\\}"),
 					failedUrl.ToString());
 
-	frame->LoadRequest(StreamElementsGlobalStateManager::GetInstance()
-				   ->GetLocalWebFilesServer()
-				   ->CreateCefRequestForString(
-					   htmlString, "text/html", failedUrl));
+	std::string dataURI = "data:text/html;base64,";
+	dataURI +=
+		CefBase64Encode(htmlString.data(), htmlString.size()).ToString();
+	frame->LoadURL(CefString(dataURI));
 }
 
 void StreamElementsCefClient::OnLoadingStateChange(
