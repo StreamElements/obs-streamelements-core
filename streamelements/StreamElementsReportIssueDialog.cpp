@@ -24,7 +24,6 @@
 #include <thread>
 #include <iostream>
 #include <filesystem>
-#include <experimental/filesystem>
 #include <stdio.h>
 #include <fcntl.h>
 #ifdef WIN32
@@ -390,10 +389,10 @@ void StreamElementsReportIssueDialog::accept()
 			};
 
 			// Collect all files
-			for (auto &i : std::experimental::filesystem::
+			for (auto &i : std::filesystem::
 				     recursive_directory_iterator(
 					     programDataPathBuf)) {
-				if (!std::experimental::filesystem::is_directory(
+				if (!std::filesystem::is_directory(
 					    i.path())) {
 					std::wstring local_path = i.path().wstring();
 					std::wstring zip_path = local_path.substr(obsDataPath.size() + 1);

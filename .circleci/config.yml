@@ -2,7 +2,7 @@ version: 2.1
 jobs:
   build:
     macos:
-      xcode: 12.1.0
+      xcode: 12.3.0
     steps:
       - checkout
       - run:
@@ -23,8 +23,6 @@ jobs:
             mv project obs-studio/plugins/obs-browser
 
             cd obs-studio
-
-            git checkout 26.0.1
 
             printf "#define STREAMELEMENTS_PLUGIN_VERSION %s%06dL\n" `date +%Y%m%d` ${CIRCLE_BUILD_NUM} >plugins/obs-browser/streamelements/Version.generated.hpp
 

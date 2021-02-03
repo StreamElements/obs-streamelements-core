@@ -199,7 +199,14 @@ void StreamElementsBrowserWidget::InitBrowserAsyncInternal()
 				windowInfo, cefClient,
 				GetInitialPageURLInternal(), cefBrowserSettings,
 #if CHROME_VERSION_BUILD >= 3770
+#if ENABLE_CREATE_BROWSER_API
+				m_requestedApiMessageHandler
+					? m_requestedApiMessageHandler
+						  ->CreateBrowserArgsDictionary()
+					: CefRefPtr<CefDictionaryValue>(),
+#else
 				CefRefPtr<CefDictionaryValue>(),
+#endif
 #endif
 				cefRequestContext);
 

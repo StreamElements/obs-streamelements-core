@@ -327,13 +327,14 @@ void BrowserSource::SendKeyClick(const struct obs_key_event *event, bool key_up)
 	uint32_t modifiers = event->modifiers;
 #else
 	uint32_t native_scancode = event->native_scancode;
-	UNUSED_PARAMETER(modifiers);
 #endif
 
 	ExecuteOnBrowser(
 		[=](CefRefPtr<CefBrowser> cefBrowser) {
 			CefKeyEvent e;
+#ifdef _WIN32
 			e.windows_key_code = native_vkey;
+#endif
 #ifdef __APPLE__
 			e.native_key_code = native_scancode;
 #endif
@@ -347,8 +348,9 @@ void BrowserSource::SendKeyClick(const struct obs_key_event *event, bool key_up)
 			}
 
 			//e.native_key_code = native_vkey;
+#ifdef _WIN32
 			e.modifiers = modifiers;
-
+#endif
 			cefBrowser->GetHost()->SendKeyEvent(e);
 			if (!text.empty() && !key_up) {
 				e.type = KEYEVENT_CHAR;

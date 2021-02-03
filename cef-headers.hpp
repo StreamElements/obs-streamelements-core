@@ -42,6 +42,12 @@
 #include <include/cef_jsdialog_handler.h>
 #include <include/cef_focus_handler.h>
 
+#if CHROME_VERSION_BUILD >= 4183
+#define ENABLE_CREATE_BROWSER_API 1
+#else
+#define ENABLE_CREATE_BROWSER_API 0
+#endif
+
 #if CHROME_VERSION_BUILD < 3770
 #define ENABLE_DECRYPT_COOKIES 1
 #else

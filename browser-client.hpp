@@ -64,12 +64,6 @@ public:
 	int frames_per_buffer;
 #endif
 
-#if CHROME_VERSION_BUILD >= 4103
-	int sample_rate;
-	int channels;
-	ChannelLayout channel_layout;
-	int frames_per_buffer;
-#endif
 	inline BrowserClient(BrowserSource *bs_, bool sharing_avail,
 			     bool reroute_audio_)
 		: sharing_available(sharing_avail),

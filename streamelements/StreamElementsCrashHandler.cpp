@@ -48,7 +48,6 @@
 #include "bugsplat.h"
 #include "deps/zip/zip.h"
 #include <iostream>
-#include <experimental/filesystem>
 #include <filesystem>
 #include <stdio.h>
 #include <fcntl.h>
@@ -626,9 +625,9 @@ static inline void AddObsConfigurationFiles()
 
 	// Collect all files
 	for (auto &i :
-	     std::experimental::filesystem::recursive_directory_iterator(
+	     std::filesystem::recursive_directory_iterator(
 		     programDataPathBuf)) {
-		if (!std::experimental::filesystem::is_directory(i.path())) {
+		if (!std::filesystem::is_directory(i.path())) {
 			std::wstring local_path = i.path().wstring();
 			std::wstring zip_path =
 				local_path.substr(obsDataPath.size() + 1);

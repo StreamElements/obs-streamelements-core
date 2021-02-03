@@ -682,8 +682,7 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *)
 	case OBS_FRONTEND_EVENT_REPLAY_BUFFER_STARTED:
 		DispatchJSEvent("obsReplaybufferStarted", "");
 		break;
-#if (LIBOBS_API_MAJOR_VER >= 26 && LIBOBS_API_MINOR_VER >= 1) || \
-	LIBOBS_API_MAJOR_VER >= 27
+#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(26, 1, 0)
 	case OBS_FRONTEND_EVENT_REPLAY_BUFFER_SAVED:
 		DispatchJSEvent("obsReplaybufferSaved", "");
 		break;
@@ -694,12 +693,14 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *)
 	case OBS_FRONTEND_EVENT_REPLAY_BUFFER_STOPPED:
 		DispatchJSEvent("obsReplaybufferStopped", "");
 		break;
+#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(26, 1, 1)
 	case OBS_FRONTEND_EVENT_VIRTUALCAM_STARTED:
 		DispatchJSEvent("obsVirtualcamStarted", "");
 		break;
 	case OBS_FRONTEND_EVENT_VIRTUALCAM_STOPPED:
 		DispatchJSEvent("obsVirtualcamStopped", "");
 		break;
+#endif
 	case OBS_FRONTEND_EVENT_SCENE_CHANGED: {
 		OBSSource source = obs_frontend_get_current_scene();
 

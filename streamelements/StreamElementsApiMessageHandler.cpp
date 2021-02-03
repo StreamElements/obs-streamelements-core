@@ -206,18 +206,52 @@ void StreamElementsApiMessageHandler::InvokeApiCallHandlerAsync(
 	});
 }
 
-void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlersInternal(
-	CefRefPtr<CefBrowser> browser)
+#if ENABLE_CREATE_BROWSER_API
+CefRefPtr<CefDictionaryValue>
+StreamElementsApiMessageHandler::CreateBrowserArgsDictionary()
 {
-	RegisterIncomingApiCallHandlers();
-
-	// Context created, request creation of window.host object
-	// with API methods
-	CefRefPtr<CefValue> root = CefValue::Create();
-
 	CefRefPtr<CefDictionaryValue> rootDictionary =
 		CefDictionaryValue::Create();
-	root->SetDictionary(rootDictionary);
+
+	CefRefPtr<CefDictionaryValue> seRoot = CefDictionaryValue::Create();
+
+	seRoot->SetDictionary("api", CreateApiSpecDictionaryInternal());
+
+	rootDictionary->SetDictionary("streamelements", seRoot);
+
+	return rootDictionary;
+}
+
+CefRefPtr<CefDictionaryValue>
+StreamElementsApiMessageHandler::CreateApiSpecDictionaryInternal()
+{
+	CefRefPtr<CefDictionaryValue> rootDictionary =
+		CefDictionaryValue::Create();
+
+	CefRefPtr<CefDictionaryValue> propsRoot = CefDictionaryValue::Create();
+
+	propsRoot->SetString("container", "host");
+	propsRoot->SetDictionary("items", CreateApiPropsDictionaryInternal());
+
+	rootDictionary->SetDictionary("properties", propsRoot);
+
+	CefRefPtr<CefDictionaryValue> funcsRoot = CefDictionaryValue::Create();
+
+	funcsRoot->SetString("container", "host");
+	funcsRoot->SetDictionary("items",
+				 CreateApiCallHandlersDictionaryInternal());
+
+	rootDictionary->SetDictionary("functions", funcsRoot);
+
+	return rootDictionary;
+}
+#endif
+
+CefRefPtr<CefDictionaryValue>
+StreamElementsApiMessageHandler::CreateApiCallHandlersDictionaryInternal()
+{
+	CefRefPtr<CefDictionaryValue> rootDictionary =
+		CefDictionaryValue::Create();
 
 	for (auto apiCallHandler : m_apiCallHandlers) {
 		CefRefPtr<CefValue> val = CefValue::Create();
@@ -232,6 +266,18 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlersInternal(
 		rootDictionary->SetValue(apiCallHandler.first, val);
 	}
 
+	return rootDictionary;
+}
+
+void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlersInternal(
+	CefRefPtr<CefBrowser> browser)
+{
+	// Context created, request creation of window.host object
+	// with API methods
+	CefRefPtr<CefValue> root = CefValue::Create();
+
+	root->SetDictionary(CreateApiCallHandlersDictionaryInternal());
+
 	// Convert data to JSON
 	CefString jsonString = CefWriteJSON(root, JSON_WRITER_DEFAULT);
 
@@ -243,6 +289,20 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlersInternal(
 	SendBrowserProcessMessage(browser, PID_RENDERER, msg);
 }
 
+CefRefPtr<CefDictionaryValue>
+StreamElementsApiMessageHandler::CreateApiPropsDictionaryInternal()
+{
+	CefRefPtr<CefDictionaryValue> rootDictionary =
+		CefDictionaryValue::Create();
+
+	rootDictionary->SetBool("hostReady", true);
+	rootDictionary->SetBool("hostContainerHidden", m_initialHiddenState);
+	rootDictionary->SetInt("apiMajorVersion", HOST_API_VERSION_MAJOR);
+	rootDictionary->SetInt("apiMinorVersion", HOST_API_VERSION_MINOR);
+
+	return rootDictionary;
+}
+
 void StreamElementsApiMessageHandler::RegisterApiPropsInternal(
 	CefRefPtr<CefBrowser> browser)
 {
@@ -250,14 +310,7 @@ void StreamElementsApiMessageHandler::RegisterApiPropsInternal(
 	// with API methods
 	CefRefPtr<CefValue> root = CefValue::Create();
 
-	CefRefPtr<CefDictionaryValue> rootDictionary =
-		CefDictionaryValue::Create();
-	root->SetDictionary(rootDictionary);
-
-	rootDictionary->SetBool("hostReady", true);
-	rootDictionary->SetBool("hostContainerHidden", m_initialHiddenState);
-	rootDictionary->SetInt("apiMajorVersion", HOST_API_VERSION_MAJOR);
-	rootDictionary->SetInt("apiMinorVersion", HOST_API_VERSION_MINOR);
+	root->SetDictionary(CreateApiPropsDictionaryInternal());
 
 	// Convert data to JSON
 	CefString jsonString = CefWriteJSON(root, JSON_WRITER_DEFAULT);

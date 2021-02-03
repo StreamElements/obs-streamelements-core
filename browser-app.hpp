@@ -137,4 +137,27 @@ public:
 #endif
 
 	IMPLEMENT_REFCOUNTING(BrowserApp);
+
+#if ENABLE_CREATE_BROWSER_API
+public:
+	// Gets information from CefBrowserHost::CreateBrowserSync()
+	virtual void
+	OnBrowserCreated(CefRefPtr<CefBrowser> browser,
+			 CefRefPtr<CefDictionaryValue> extra_info) override;
+
+	virtual void OnBrowserDestroyed(CefRefPtr<CefBrowser> browser) override;
+
+private:
+	std::mutex m_createBrowserArgsMutex;
+	std::map<int, CefRefPtr<CefDictionaryValue>> m_createBrowserArgs;
+#endif
+
+private:
+	void SEBindJavaScriptProperties(CefRefPtr<CefV8Value> globalObj,
+					CefString containerName,
+					CefRefPtr<CefDictionaryValue> root);
+
+	void SEBindJavaScriptFunctions(CefRefPtr<CefV8Value> globalObj,
+				       CefString containerName,
+				       CefRefPtr<CefDictionaryValue> root);
 };

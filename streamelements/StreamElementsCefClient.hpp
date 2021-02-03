@@ -431,7 +431,7 @@ public:
 	virtual bool OnSetFocus(CefRefPtr<CefBrowser> browser, CefFocusHandler::FocusSource source) override;
 	virtual void OnTakeFocus(CefRefPtr<CefBrowser> browser, bool next) override;
 
-#if EXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED
+#if SHARED_TEXTURE_SUPPORT_ENABLED
 	virtual void OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,
 					PaintElementType type,
 					const RectList &dirtyRects,

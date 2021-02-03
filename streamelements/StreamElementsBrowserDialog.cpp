@@ -16,6 +16,7 @@ public:
 	StreamElementsDialogApiMessageHandler(StreamElementsBrowserDialog* dialog) :
 		m_dialog(dialog)
 	{
+		RegisterIncomingApiCallHandlers();
 	}
 
 private:
@@ -26,8 +27,6 @@ protected:
 
 	virtual void RegisterIncomingApiCallHandlers() override
 	{
-		StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers();
-
 		API_HANDLER_BEGIN("endModalDialog");
 		{
 			result->SetBool(false);
