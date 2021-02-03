@@ -38,11 +38,15 @@ class BrowserClient : public CefClient,
 #endif
 		      public CefLoadHandler {
 
-#if EXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef SHARED_TEXTURE_SUPPORT_ENABLED
 #if USE_TEXTURE_COPY
 	gs_texture_t *texture = nullptr;
 #endif
+#ifdef _WIN32
 	void *last_handle = INVALID_HANDLE_VALUE;
+#elif defined(__APPLE__)
+	void *last_handle = nullptr;
+#endif
 #endif
 	bool sharing_available = false;
 	bool reroute_audio = true;
@@ -60,11 +64,17 @@ public:
 	int frames_per_buffer;
 #endif
 
+#if CHROME_VERSION_BUILD >= 4103
+	int sample_rate;
+	int channels;
+	ChannelLayout channel_layout;
+	int frames_per_buffer;
+#endif
 	inline BrowserClient(BrowserSource *bs_, bool sharing_avail,
 			     bool reroute_audio_)
-		: bs(bs_),
-		  sharing_available(sharing_avail),
-		  reroute_audio(reroute_audio_)
+		: sharing_available(sharing_avail),
+		  reroute_audio(reroute_audio_),
+		  bs(bs_)
 	{
 	}
 
@@ -143,7 +153,7 @@ public:
 			     PaintElementType type, const RectList &dirtyRects,
 			     const void *buffer, int width,
 			     int height) override;
-#if EXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef SHARED_TEXTURE_SUPPORT_ENABLED
 	virtual void OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,
 					PaintElementType type,
 					const RectList &dirtyRects,
@@ -154,7 +164,8 @@ public:
 					 const float **data, int frames,
 					 int64_t pts) override;
 
-	virtual void OnAudioStreamStopped(CefRefPtr<CefBrowser> browser);
+	virtual void
+	OnAudioStreamStopped(CefRefPtr<CefBrowser> browser) override;
 
 	virtual void OnAudioStreamStarted(CefRefPtr<CefBrowser> browser,
 					  const CefAudioParameters &params,
@@ -163,7 +174,7 @@ public:
 					const CefString &message) override;
 	const int kFramesPerBuffer = 1024;
 	virtual bool GetAudioParameters(CefRefPtr<CefBrowser> browser,
-					CefAudioParameters &params);
+					CefAudioParameters &params) override;
 #elif CHROME_VERSION_BUILD >= 3683
 	virtual void OnAudioStreamPacket(CefRefPtr<CefBrowser> browser,
 					 int audio_stream_id,

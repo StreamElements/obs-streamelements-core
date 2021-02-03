@@ -48,6 +48,10 @@
 #define ENABLE_DECRYPT_COOKIES 0
 #endif
 
+#if defined(__APPLE__) && !defined(BROWSER_LEGACY)
+#include "include/wrapper/cef_library_loader.h"
+#endif
+
 #if CHROME_VERSION_BUILD < 3507 || CHROME_VERSION_BUILD >= 4183
 #define ENABLE_WASHIDDEN 1
 #else

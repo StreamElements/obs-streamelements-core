@@ -64,12 +64,12 @@ static thread manager_thread;
 static bool manager_initialized = false;
 os_event_t *cef_started_event = nullptr;
 
+#if defined(_WIN32) || defined(__APPLE__)
 static int adapterCount = 0;
+#endif
 static std::wstring deviceId;
 
-#if EXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED
 bool hwaccel = false;
-#endif
 
 /* ========================================================================= */
 
@@ -301,7 +301,7 @@ static void browser_source_get_defaults(obs_data_t *settings)
 	obs_data_set_default_int(settings, "width", 800);
 	obs_data_set_default_int(settings, "height", 600);
 	obs_data_set_default_int(settings, "fps", 30);
-#if EXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef SHARED_TEXTURE_SUPPORT_ENABLED
 	obs_data_set_default_bool(settings, "fps_custom", false);
 #else
 	obs_data_set_default_bool(settings, "fps_custom", true);
@@ -389,7 +389,7 @@ static obs_properties_t *browser_source_get_properties(void *data)
 		props, "fps_custom", obs_module_text("CustomFrameRate"));
 	obs_property_set_modified_callback(fps_set, is_fps_custom);
 
-#if !EXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED
+#ifndef SHARED_TEXTURE_SUPPORT_ENABLED
 	obs_property_set_enabled(fps_set, false);
 #endif
 
@@ -445,10 +445,6 @@ static void BrowserInit(void)
 	settings.multi_threaded_message_loop = false;
 #endif
 
-#if defined(__APPLE__) && !defined(BROWSER_DEPLOY)
-	CefString(&settings.framework_dir_path) = CEF_LIBRARY;
-#endif
-
 	std::string obs_locale = obs_get_locale();
 	std::string accepted_languages;
 	if (obs_locale != "en-US") {
@@ -470,13 +466,15 @@ static void BrowserInit(void)
 	CefString(&settings.locale) = obs_get_locale();
 	CefString(&settings.accept_language_list) = accepted_languages;
 	CefString(&settings.cache_path) = conf_path_abs;
+#if !defined(__APPLE__) || defined(BROWSER_LEGACY)
 	char *abs_path = os_get_abs_path_ptr(path.c_str());
 	CefString(&settings.browser_subprocess_path) = abs_path;
 	bfree(abs_path);
+#endif
 
 	bool tex_sharing_avail = false;
 
-#if EXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef SHARED_TEXTURE_SUPPORT_ENABLED
 	if (hwaccel) {
 		obs_enter_graphics();
 		hwaccel = tex_sharing_avail = gs_shared_texture_available();
@@ -485,8 +483,9 @@ static void BrowserInit(void)
 #endif
 
 	app = new BrowserApp(tex_sharing_avail);
-	CefExecuteProcess(args, app, nullptr);
+
 #ifdef _WIN32
+	CefExecuteProcess(args, app, nullptr);
 	/* Massive (but amazing) hack to prevent chromium from modifying our
 	 * process tokens and permissions, which caused us problems with winrt,
 	 * used with window capture.  Note, the structure internally is just
@@ -509,10 +508,6 @@ static void BrowserInit(void)
 
 	os_event_signal(cef_started_event);
 }
-
-#ifdef USE_QT_LOOP
-extern MessageObject messageObject;
-#endif
 
 static void BrowserShutdown(void)
 {
@@ -699,6 +694,12 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *)
 	case OBS_FRONTEND_EVENT_REPLAY_BUFFER_STOPPED:
 		DispatchJSEvent("obsReplaybufferStopped", "");
 		break;
+	case OBS_FRONTEND_EVENT_VIRTUALCAM_STARTED:
+		DispatchJSEvent("obsVirtualcamStarted", "");
+		break;
+	case OBS_FRONTEND_EVENT_VIRTUALCAM_STOPPED:
+		DispatchJSEvent("obsVirtualcamStopped", "");
+		break;
 	case OBS_FRONTEND_EVENT_SCENE_CHANGED: {
 		OBSSource source = obs_frontend_get_current_scene();
 
@@ -758,17 +759,16 @@ static inline void EnumAdapterCount()
 }
 #endif
 
-#if EXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef _WIN32
 static const wchar_t *blacklisted_devices[] = {
 	L"Intel", L"Microsoft", L"Radeon HD 8850M", L"Radeon HD 7660", nullptr};
-#endif
 
 static inline bool is_intel(const std::wstring &str)
 {
 	return wstrstri(str.c_str(), L"Intel") != 0;
 }
 
-#if EXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED
 static void check_hwaccel_support(void)
 {
 	/* do not use hardware acceleration if a blacklisted device is the
@@ -791,6 +791,24 @@ static void check_hwaccel_support(void)
 		}
 	}
 }
+#elif defined(__APPLE__)
+extern bool atLeast10_15(void);
+
+static void check_hwaccel_support(void)
+{
+	if (!atLeast10_15()) {
+		blog(LOG_INFO,
+		     "[obs-browser]: OS version older than 10.15 Disabling hwaccel");
+		hwaccel = false;
+	}
+	return;
+}
+#else
+static void check_hwaccel_support(void)
+{
+	return;
+}
+#endif
 #endif
 
 bool obs_module_load(void)
@@ -803,15 +821,23 @@ bool obs_module_load(void)
 
 	os_event_init(&cef_started_event, OS_EVENT_TYPE_MANUAL);
 
-	CefEnableHighDPISupport();
-
 #ifdef _WIN32
+	/* CefEnableHighDPISupport doesn't do anything on OS other than Windows. Would also crash macOS at this point as CEF is not directly linked */
+	CefEnableHighDPISupport();
 	EnumAdapterCount();
+#else
+#if defined(__APPLE__) && !defined(BROWSER_LEGACY)
+	/* Load CEF at runtime as required on macOS */
+	CefScopedLibraryLoader library_loader;
+	if (!library_loader.LoadInMain())
+		return false;
+#endif
 #endif
 
-#if EXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef SHARED_TEXTURE_SUPPORT_ENABLED
 	obs_data_t *private_data = obs_get_private_data();
 	hwaccel = obs_data_get_bool(private_data, "BrowserHWAccel");
+
 	if (hwaccel) {
 		check_hwaccel_support();
 	}

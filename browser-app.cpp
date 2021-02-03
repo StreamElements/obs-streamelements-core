@@ -40,6 +40,11 @@
 #include <QTimer>
 #endif
 
+#define UNUSED_PARAMETER(x) \
+	{                   \
+		(void)x;    \
+	}
+
 using namespace json11;
 
 static std::string StringReplaceAll(std::string str, const std::string& from, const std::string& to) {
@@ -103,25 +108,20 @@ void BrowserApp::OnBeforeCommandLineProcessing(
 		// Don't override existing, as this can break OSR
 		std::string disableFeatures =
 			command_line->GetSwitchValue("disable-features");
-		disableFeatures += ",HardwareMediaKeyHandling"
-#ifdef __APPLE__
-				   ",NetworkService"
-#endif
-			;
+		disableFeatures += ",HardwareMediaKeyHandling";
 		command_line->AppendSwitchWithValue("disable-features",
 						    disableFeatures);
 	} else {
 		command_line->AppendSwitchWithValue("disable-features",
-						    "HardwareMediaKeyHandling"
-#ifdef __APPLE__
-						    ",NetworkService"
-#endif
-		);
+						    "HardwareMediaKeyHandling");
 	}
 
 	command_line->AppendSwitchWithValue("autoplay-policy",
 			"no-user-gesture-required");
 	command_line->AppendSwitchWithValue("plugin-policy", "allow");
+#ifdef __APPLE__
+	command_line->AppendSwitch("use-mock-keychain");
+#endif
 }
 
 void BrowserApp::OnContextCreated(CefRefPtr<CefBrowser> browser,
@@ -192,6 +192,8 @@ void BrowserApp::SetFrameDocumentVisibility(CefRefPtr<CefBrowser> browser,
 					    CefRefPtr<CefFrame> frame,
 					    bool isVisible)
 {
+	UNUSED_PARAMETER(browser);
+
 	CefRefPtr<CefV8Context> context = frame->GetV8Context();
 
 	context->Enter();
@@ -278,6 +280,7 @@ bool BrowserApp::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
 					  CefProcessId source_process,
 					  CefRefPtr<CefProcessMessage> message)
 {
+	UNUSED_PARAMETER(frame);
 	DCHECK(source_process == PID_BROWSER);
 
 	CefRefPtr<CefListValue> args = message->GetArgumentList();
