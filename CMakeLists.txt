@@ -526,12 +526,12 @@ if(APPLE AND NOT BROWSER_DEPLOY)
 		COMMAND "install_name_tool" -change
 		"@rpath/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework"
 		"${CEF_LIBRARY}/Chromium Embedded Framework"
-		"${CMAKE_BUILD_TYPE}/obs-browser.so")
+		"obs-browser.so")
 	add_custom_command(TARGET obs-browser-page POST_BUILD
 		COMMAND "install_name_tool" -change
 		"@rpath/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework"
 		"${CEF_LIBRARY}/Chromium Embedded Framework"
-		"${CMAKE_BUILD_TYPE}/obs-browser-page")
+		"obs-browser-page")
 
 	add_custom_command(TARGET obs-browser POST_BUILD
 		COMMAND "/bin/mkdir" -p
