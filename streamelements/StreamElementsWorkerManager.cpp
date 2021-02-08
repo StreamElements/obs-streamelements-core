@@ -58,10 +58,13 @@ public:
 			cefBrowserSettings.web_security = STATE_ENABLED;
 			cefBrowserSettings.webgl = STATE_ENABLED;
 
+			StreamElementsApiMessageHandler *apiMessageHandler =
+				new StreamElementsApiMessageHandler();
+
 			CefRefPtr<StreamElementsCefClient> cefClient =
 				new StreamElementsCefClient(
 					m_executeJavascriptOnLoad,
-					new StreamElementsApiMessageHandler(),
+					apiMessageHandler,
 					nullptr,
 					StreamElementsMessageBus::DEST_WORKER);
 
@@ -72,7 +75,14 @@ public:
 				windowInfo, cefClient, "about:blank",
 				cefBrowserSettings,
 #if CHROME_VERSION_BUILD >= 3770
+#if ENABLE_CREATE_BROWSER_API
+				apiMessageHandler
+					? apiMessageHandler
+						  ->CreateBrowserArgsDictionary()
+					: CefRefPtr<CefDictionaryValue>(),
+#else
 				CefRefPtr<CefDictionaryValue>(),
+#endif
 #endif
 				StreamElementsGlobalStateManager::GetInstance()
 					->GetCookieManager()

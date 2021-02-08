@@ -29,7 +29,7 @@ using namespace json11;
 
 BrowserClient::~BrowserClient()
 {
-#if EXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED && USE_TEXTURE_COPY
+#if defined(SHARED_TEXTURE_SUPPORT_ENABLED) && USE_TEXTURE_COPY
 	if (sharing_available) {
 		obs_enter_graphics();
 		gs_texture_destroy(texture);
@@ -130,7 +130,8 @@ bool BrowserClient::OnProcessMessageReceived(
 			{"recording", obs_frontend_recording_active()},
 			{"streaming", obs_frontend_streaming_active()},
 			{"recordingPaused", obs_frontend_recording_paused()},
-			{"replaybuffer", obs_frontend_replay_buffer_active()}};
+			{"replaybuffer", obs_frontend_replay_buffer_active()},
+			{"virtualcam", obs_frontend_virtualcam_active()}};
 
 	} else if (name == "saveReplayBuffer") {
 		obs_frontend_replay_buffer_save();
@@ -192,7 +193,7 @@ void BrowserClient::OnPaint(CefRefPtr<CefBrowser>, PaintElementType type,
 		return;
 	}
 
-#if EXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef SHARED_TEXTURE_SUPPORT_ENABLED
 	if (sharing_available) {
 		return;
 	}
@@ -239,7 +240,7 @@ void BrowserClient::OnBeforeClose(CefRefPtr<CefBrowser> browser)
 				browser);
 }
 
-#if EXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef SHARED_TEXTURE_SUPPORT_ENABLED
 void BrowserClient::OnAcceleratedPaint(CefRefPtr<CefBrowser>, PaintElementType,
 				       const RectList &, void *shared_handle)
 {
@@ -309,8 +310,9 @@ static speaker_layout GetSpeakerLayout(CefAudioHandler::ChannelLayout cefLayout)
 	case CEF_CHANNEL_LAYOUT_7_1_WIDE_BACK:
 	case CEF_CHANNEL_LAYOUT_7_1_WIDE:
 		return SPEAKERS_7POINT1; /**< Channels: FL, FR, FC, LFE, RL, RR, SL, SR */
+	default:
+		return SPEAKERS_UNKNOWN;
 	}
-	return SPEAKERS_UNKNOWN;
 }
 #endif
 
@@ -356,6 +358,9 @@ void BrowserClient::OnAudioStreamStopped(CefRefPtr<CefBrowser> browser)
 void BrowserClient::OnAudioStreamError(CefRefPtr<CefBrowser> browser,
 				       const CefString &message)
 {
+	UNUSED_PARAMETER(browser);
+	UNUSED_PARAMETER(message);
+
 	if (!bs) {
 		return;
 	}
@@ -386,6 +391,7 @@ static CefAudioHandler::ChannelLayout Convert2CEFSpeakerLayout(int channels)
 bool BrowserClient::GetAudioParameters(CefRefPtr<CefBrowser> browser,
 				       CefAudioParameters &params)
 {
+	UNUSED_PARAMETER(browser);
 	int channels = (int)audio_output_get_channels(obs_get_audio());
 	params.channel_layout = Convert2CEFSpeakerLayout(channels);
 	params.sample_rate = (int)audio_output_get_sample_rate(obs_get_audio());
@@ -397,6 +403,7 @@ void BrowserClient::OnAudioStreamStarted(CefRefPtr<CefBrowser> browser, int id,
 					 int, ChannelLayout channel_layout,
 					 int sample_rate, int)
 {
+	UNUSED_PARAMETER(browser);
 	if (!bs) {
 		return;
 	}
@@ -422,6 +429,7 @@ void BrowserClient::OnAudioStreamPacket(CefRefPtr<CefBrowser> browser, int id,
 					const float **data, int frames,
 					int64_t pts)
 {
+	UNUSED_PARAMETER(browser);
 	if (!bs) {
 		return;
 	}
@@ -444,6 +452,7 @@ void BrowserClient::OnAudioStreamPacket(CefRefPtr<CefBrowser> browser, int id,
 
 void BrowserClient::OnAudioStreamStopped(CefRefPtr<CefBrowser> browser, int id)
 {
+	UNUSED_PARAMETER(browser);
 	if (!bs) {
 		return;
 	}
@@ -499,12 +508,21 @@ bool BrowserClient::OnConsoleMessage(CefRefPtr<CefBrowser>,
 				     const CefString &message,
 				     const CefString &source, int line)
 {
+	int errorLevel = LOG_INFO;
+	switch (level) {
+	case LOGSEVERITY_ERROR:
+		errorLevel = LOG_WARNING;
+		break;
+	case LOGSEVERITY_FATAL:
+		errorLevel = LOG_ERROR;
+		break;
+	}
 #if CHROME_VERSION_BUILD >= 3282
 	if (level < LOGSEVERITY_ERROR)
 		return false;
 #endif
 
-	blog(LOG_INFO, "obs-browser: %s (source: %s:%d)",
+	blog(errorLevel, "obs-browser: %s (source: %s:%d)",
 	     message.ToString().c_str(), source.ToString().c_str(), line);
 	return false;
 }

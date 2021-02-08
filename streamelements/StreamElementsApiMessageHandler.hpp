@@ -8,7 +8,7 @@
 class StreamElementsApiMessageHandler
 	: public StreamElementsBrowserMessageHandler {
 public:
-	StreamElementsApiMessageHandler() {}
+	StreamElementsApiMessageHandler() { RegisterIncomingApiCallHandlers(); }
 	virtual ~StreamElementsApiMessageHandler() {}
 
 public:
@@ -46,9 +46,20 @@ protected:
 		const long cefClientId,
 		const bool enable_logging = false);
 
+#if ENABLE_CREATE_BROWSER_API
+public:
+	CefRefPtr<CefDictionaryValue> CreateBrowserArgsDictionary();
+
+private:
+	CefRefPtr<CefDictionaryValue> CreateApiSpecDictionaryInternal();
+#endif
+
 private:
 	std::map<std::string, incoming_call_handler_t> m_apiCallHandlers;
 	bool m_initialHiddenState = false;
+
+	CefRefPtr<CefDictionaryValue> CreateApiCallHandlersDictionaryInternal();
+	CefRefPtr<CefDictionaryValue> CreateApiPropsDictionaryInternal();
 
 	void
 	RegisterIncomingApiCallHandlersInternal(CefRefPtr<CefBrowser> browser);

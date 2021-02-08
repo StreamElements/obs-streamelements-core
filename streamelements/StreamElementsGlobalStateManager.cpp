@@ -1257,12 +1257,15 @@ bool StreamElementsGlobalStateManager::DeserializePopupWindow(
 				STATE_ENABLED;
 			cefBrowserSettings.local_storage = STATE_ENABLED;
 
+			StreamElementsApiMessageHandler *apiMessageHandler =
+				enableHostApi
+					? new StreamElementsApiMessageHandler()
+					: nullptr;
+
 			CefRefPtr<StreamElementsCefClient> cefClient =
 				new StreamElementsCefClient(
 					executeJavaScriptOnLoad,
-					enableHostApi
-						? new StreamElementsApiMessageHandler()
-						: nullptr,
+					apiMessageHandler,
 					nullptr,
 					StreamElementsMessageBus::DEST_UI);
 
@@ -1271,9 +1274,16 @@ bool StreamElementsGlobalStateManager::DeserializePopupWindow(
 					windowInfo, cefClient, url.c_str(),
 					cefBrowserSettings,
 #if CHROME_VERSION_BUILD >= 3770
-					CefRefPtr<CefDictionaryValue>(),
+#if ENABLE_CREATE_BROWSER_API
+				apiMessageHandler
+					? apiMessageHandler
+						  ->CreateBrowserArgsDictionary()
+					: CefRefPtr<CefDictionaryValue>(),
+#else
+				CefRefPtr<CefDictionaryValue>(),
 #endif
-					GetCookieManager()
+#endif
+				GetCookieManager()
 						->GetCefRequestContext());
 		});
 	}

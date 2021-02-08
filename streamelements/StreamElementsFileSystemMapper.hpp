@@ -1,9 +1,7 @@
 #pragma once
 
 #include "deps/cpptoml/cpptoml.h"
-#include <experimental/filesystem>
 #include <filesystem>
-#include <experimental/filesystem>
 #include <regex>
 #include <vector>
 #include <map>
@@ -45,11 +43,11 @@ public:
 		m_rootFolderPath(rootFolderPath)
 	{
 		for (auto &p :
-		     std::experimental::filesystem::directory_iterator(
+		     std::filesystem::directory_iterator(
 			     rootFolderPath)) {
 			std::wstring path = p.path().wstring();
 
-			if (!std::experimental::filesystem::is_regular_file(
+			if (!std::filesystem::is_regular_file(
 				    path)) {
 				continue;
 			}
@@ -128,16 +126,16 @@ public:
 
 		std::string path = m_rootFolderPath + result;
 
-		if (std::experimental::filesystem::is_regular_file(path)) {
+		if (std::filesystem::is_regular_file(path)) {
 			absolute_path = path;
 
 			return true;
-		} else if (std::experimental::filesystem::is_regular_file(
+		} else if (std::filesystem::is_regular_file(
 				   path + ".html")) {
 			absolute_path = path + ".html";
 
 			return true;
-		} else if (std::experimental::filesystem::is_regular_file(
+		} else if (std::filesystem::is_regular_file(
 				   path + "/index.html")) {
 			absolute_path = path + "/index.html";
 

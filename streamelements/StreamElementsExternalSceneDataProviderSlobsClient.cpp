@@ -1,5 +1,4 @@
 #include "StreamElementsExternalSceneDataProviderSlobsClient.hpp"
-#include <experimental/filesystem>
 #include <filesystem>
 
 bool StreamElementsExternalSceneDataProviderSlobsClient::GetSceneCollections(
@@ -108,7 +107,7 @@ static void dumpPaths(CefRefPtr<CefValue> parent, std::vector<std::wstring>& pat
 		std::wstring candidate =
 			parent->GetString().ToWString();
 
-		if (std::experimental::filesystem::is_regular_file(candidate)) {
+		if (std::filesystem::is_regular_file(candidate)) {
 			paths.push_back(candidate);
 		}
 		else {

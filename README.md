@@ -56,6 +56,8 @@ Descriptions for these events can be [found here](https://obsproject.com/docs/re
 * obsReplaybufferSaved
 * obsReplaybufferStopping
 * obsReplaybufferStopped
+* obsVirtualcamStarted
+* obsVirtualcamStopped
 * obsExit
 
 ### Get the current scene
@@ -86,6 +88,7 @@ window.obsstudio.getCurrentScene(function(scene) {
  * @property {boolean} recordingPaused
  * @property {boolean} streaming
  * @property {boolean} replaybuffer
+ * @property {boolean} virtualcam
  */
 
 /**
@@ -140,17 +143,17 @@ window.obsstudio.onActiveChange = function(active) {
 };
 ```
 
-## Building on OSX
+## Building
 
-### Building CEF
+OBS Browser cannot be built standalone. It is built as part of OBS Studio.
 
-#### Getting
+By following the instructions, this will enable Browser Source & Custom Browser Docks on all three platforms. Both `BUILD_BROWSER` and `CEF_ROOT_DIR` are required.
 
-*  Download CEF Mac 64 from [https://cef-builds.spotifycdn.com/index.html](https://cef-builds.spotifycdn.com/index.html)
-    *  Use CEF branch 3770
-*  Extract and cd into the folder
+### On Windows
 
-#### Setting Up Project
+Follow the [build instructions](https://obsproject.com/wiki/Install-Instructions#windows-build-directions) and be sure to download the **CEF Wrapper** and set `CEF_ROOT_DIR` in CMake to point to the extracted wrapper.
+
+### On MacOS
 
 ```shell
 mkdir build
@@ -220,11 +223,10 @@ Visual Studio 12 2013 Win64, Visual Studio 14 2015 Win64 or Visual Studio 15 201
 [https://github.com/jp9000/obs-studio/wiki/Install-Instructions#windows](https://github.com/jp9000/obs-studio/wiki/Install-Instructions#windows)
 
 #### Setting Up Project
+### On macOS
 
-* Enable BUILD_BROWSER and set the CEF_ROOT_DIR path in cmake-gui for obs-studio (example: C:/Users/User/Desktop/cef_binary_3.2743.1445.gdad7c0a_windows64)
-* * Press 'Generate' to generate Visual Studio project files in the 'build' subdirectory.
-* Open obs-studio.sln from the 'build' subdirectory
+Use the [macOS Full Build Script](https://obsproject.com/wiki/Install-Instructions#macos-build-directions). This will automatically download & enable OBS Browser.
 
-#### Building
+### On Linux
 
-Build in Visual Studio
+Follow the [build instructions](https://obsproject.com/wiki/Install-Instructions#linux-build-directions) and choose the "If building with browser source" option. This includes steps to download/extract the CEF Wrapper, and set the required CMake variables.

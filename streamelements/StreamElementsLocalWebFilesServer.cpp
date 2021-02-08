@@ -2,7 +2,6 @@
 #include "StreamElementsGlobalStateManager.hpp"
 #include "StreamElementsUtils.hpp"
 #include <filesystem>
-#include <experimental/filesystem>
 #include <codecvt>
 #include <algorithm>
 #include <obs.h>
@@ -265,7 +264,7 @@ StreamElementsLocalWebFilesServer::StreamElementsLocalWebFilesServer(
 	: m_rootFolder(rootFolder)
 {
 
-	if (!std::experimental::filesystem::is_directory(m_rootFolder)) {
+	if (!std::filesystem::is_directory(m_rootFolder)) {
 		blog(LOG_WARNING,
 		     "obs-browser: StreamElementsLocalWebFilesServer: folder does not exist: %s",
 		     m_rootFolder.c_str());
@@ -276,10 +275,10 @@ StreamElementsLocalWebFilesServer::StreamElementsLocalWebFilesServer(
 	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
 
 	for (auto &p :
-	     std::experimental::filesystem::directory_iterator(m_rootFolder)) {
+	     std::filesystem::directory_iterator(m_rootFolder)) {
 		std::string path = p.path().string();
 
-		if (std::experimental::filesystem::is_directory(path)) {
+		if (std::filesystem::is_directory(path)) {
 			std::string host = path;
 
 			// extract hostname part of the path

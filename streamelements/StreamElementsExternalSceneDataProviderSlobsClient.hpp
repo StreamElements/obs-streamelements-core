@@ -5,7 +5,6 @@
 #include <string>
 #include <codecvt>
 #include <filesystem>
-#include <experimental/filesystem>
 
 #ifndef WIN32
 #include <stdio.h>
@@ -26,7 +25,7 @@ public:
 
 			std::replace(m_basePath.begin(), m_basePath.end(), '\\', '/');
 
-			if (!std::experimental::filesystem::is_directory(
+			if (!std::filesystem::is_directory(
 				    m_basePath)) {
 				blog(LOG_INFO,
 					"obs-browser: StreamElementsExternalSceneDataProviderSlobsClient: path does not exist: %s",
