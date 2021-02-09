@@ -12,6 +12,8 @@ jobs:
 
             export TERM=xterm-256color
 
+            export CEF_BUILD_VERSION=4183
+
             brew install awscli zip
             
             cd ..
