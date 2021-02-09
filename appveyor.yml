@@ -48,6 +48,8 @@ install:
 
     git submodule update --init --recursive
 
+    git checkout 26.1.1
+
     rd /s /q c:\local\obs-studio\plugins\obs-browser
 
     cd /d c:\local
