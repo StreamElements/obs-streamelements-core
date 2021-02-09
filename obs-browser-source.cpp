@@ -587,10 +587,14 @@ void BrowserSource::Render()
 			obs_get_base_effect(OBS_EFFECT_PREMULTIPLIED_ALPHA);
 #endif
 
+#if LIBOBS_API_VER > MAKE_SEMANTIC_VERSION(26, 1, 2)
 		const bool previous = gs_set_linear_srgb(true);
+#endif
 		while (gs_effect_loop(effect, "Draw"))
 			obs_source_draw(texture, 0, 0, 0, 0, flip);
+#if LIBOBS_API_VER > MAKE_SEMANTIC_VERSION(26, 1, 2)
 		gs_set_linear_srgb(previous);
+#endif
 	}
 
 #if defined(_WIN32) && defined(SHARED_TEXTURE_SUPPORT_ENABLED)
