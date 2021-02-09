@@ -693,7 +693,7 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *)
 	case OBS_FRONTEND_EVENT_REPLAY_BUFFER_STOPPED:
 		DispatchJSEvent("obsReplaybufferStopped", "");
 		break;
-#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(26, 1, 1)
+#if LIBOBS_API_VER > MAKE_SEMANTIC_VERSION(26, 1, 2)
 	case OBS_FRONTEND_EVENT_VIRTUALCAM_STARTED:
 		DispatchJSEvent("obsVirtualcamStarted", "");
 		break;

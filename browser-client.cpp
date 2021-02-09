@@ -130,8 +130,11 @@ bool BrowserClient::OnProcessMessageReceived(
 			{"recording", obs_frontend_recording_active()},
 			{"streaming", obs_frontend_streaming_active()},
 			{"recordingPaused", obs_frontend_recording_paused()},
-			{"replaybuffer", obs_frontend_replay_buffer_active()},
-			{"virtualcam", obs_frontend_virtualcam_active()}};
+			{"replaybuffer", obs_frontend_replay_buffer_active()}
+#if LIBOBS_API_VER > MAKE_SEMANTIC_VERSION(26, 1, 2)			
+			,{"virtualcam", obs_frontend_virtualcam_active()}
+#endif
+		};
 
 	} else if (name == "saveReplayBuffer") {
 		obs_frontend_replay_buffer_save();
