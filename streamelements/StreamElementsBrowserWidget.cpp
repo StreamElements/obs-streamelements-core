@@ -144,11 +144,11 @@ void StreamElementsBrowserWidget::InitBrowserAsyncInternal()
 			cefBrowserSettings.databases = STATE_ENABLED;
 			cefBrowserSettings.web_security = STATE_ENABLED;
 			cefBrowserSettings.webgl = STATE_ENABLED;
-			const int DEFAULT_FONT_SIZE = 12;
+			const int DEFAULT_FONT_SIZE = 16;
 			cefBrowserSettings.default_font_size = DEFAULT_FONT_SIZE;
 			cefBrowserSettings.default_fixed_font_size = DEFAULT_FONT_SIZE;
-			cefBrowserSettings.minimum_font_size = DEFAULT_FONT_SIZE;
-			cefBrowserSettings.minimum_logical_font_size = DEFAULT_FONT_SIZE;
+			//cefBrowserSettings.minimum_font_size = DEFAULT_FONT_SIZE;
+			//cefBrowserSettings.minimum_logical_font_size = DEFAULT_FONT_SIZE;
 
 			if (m_requestedApiMessageHandler == nullptr) {
 				m_requestedApiMessageHandler =

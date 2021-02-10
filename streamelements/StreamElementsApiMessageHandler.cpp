@@ -125,6 +125,8 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 						context->browser, PID_RENDERER,
 						msg);
 				}
+
+				delete context;
 			};
 
 			{
@@ -158,8 +160,6 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 							context->browser,
 							context->cefClientId,
 							context->complete);
-
-					delete context;
 				});
 		}
 
@@ -390,20 +390,37 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 					CefListValue::Create();
 				std::function<void()> process;
 				std::function<void()> done;
+
+				StreamElementsApiMessageHandler *self;
+				CefRefPtr<CefProcessMessage> message;
+				CefRefPtr<CefListValue> args;
+				CefRefPtr<CefValue> result;
+				CefRefPtr<CefBrowser> browser;
+				long cefClientId;
+				std::function<void()> complete_callback;
 			};
 
 			local_context *context = new local_context();
+
+			context->self = self;
+			context->message = message;
+			context->args = args;
+			context->result = result;
+			context->browser = browser;
+			context->cefClientId = context->cefClientId;
+			context->complete_callback = complete_callback;
+
 			context->queueIndex->SetInt(0);
 			context->queue = args->GetList(0);
-			context->done = [=]() {
+			context->done = [context]() {
 				obs_frontend_defer_save_end();
 
-				result->SetList(context->results);
-				complete_callback();
+				context->result->SetList(context->results);
+				context->complete_callback();
 				delete context;
 			};
 
-			context->process = [=]() {
+			context->process = [context]() {
 				size_t index = context->queueIndex->GetInt();
 
 				if (index >= context->queue->GetSize()) {
@@ -437,8 +454,11 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				CefRefPtr<CefListValue> invokeArgs =
 					d->GetList("invokeArgs");
 
-				self->InvokeApiCallHandlerAsync(
-					message, browser, invokeId, invokeArgs,
+				context->self->InvokeApiCallHandlerAsync(
+					context->message,
+					context->browser,
+					invokeId,
+					invokeArgs,
 					[=](CefRefPtr<CefValue> callResult) {
 						context->results->SetValue(
 							context->results
@@ -452,7 +472,8 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 						context->process();
 					},
-					cefClientId);
+					context->cefClientId,
+					false /* enable_logging */);
 			};
 
 			obs_frontend_defer_save_begin();
