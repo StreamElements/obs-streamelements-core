@@ -865,7 +865,11 @@ static void deserializeAuxSceneItemsControls(
 	StreamElementsSceneItemsMonitor *monitor, obs_sceneitem_t *scene_item,
 	QWidget *auxWidget, QWidget *parentWidget, QLabel *nativeIconLabel)
 {
-	auxWidget->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Maximum);
+	auxWidget->setSizePolicy(QSizePolicy::MinimumExpanding,
+				 QSizePolicy::MinimumExpanding);
+
+	auxWidget->setStyleSheet("background: none");
+	auxWidget->setAutoFillBackground(false);
 
 	QHBoxLayout *auxLayout =
 		static_cast<QHBoxLayout *>(auxWidget->layout());
@@ -933,19 +937,27 @@ static void deserializeSceneItemIcon(StreamElementsSceneItemsMonitor *monitor,
 	QWidget *itemIcon = DeserializeRemoteIconWidget(
 		monitor->GetSceneItemIcon(scene_item), defaultPixmap);
 
+	itemIcon->setAutoFillBackground(false);
+	itemIcon->setStyleSheet("background: none");
+
 	iconLayout->addWidget(itemIcon);
 	if (!nativeIconLabel) {
 		iconLayout->addSpacing(2);
+	} else {
+		nativeIconLabel->setAutoFillBackground(false);
+		nativeIconLabel->setStyleSheet("background: none");
 	}
 }
 
 static void
 deserializeSceneItemUISettings(StreamElementsSceneItemsMonitor *monitor,
 			       obs_scene_t *scene, obs_sceneitem_t *scene_item,
-			       QWidget *widget, bool isSignedIn)
+			       QWidget *widget,
+			       QLabel *nativeTextLabel, bool isSignedIn)
 {
 	double opacity = 1.0;
 	bool enabled = true;
+	QPalette textPallette = qApp->palette("QLabel");
 
 	if (isSignedIn) {
 		CefRefPtr<CefValue> settings =
@@ -965,6 +977,17 @@ deserializeSceneItemUISettings(StreamElementsSceneItemsMonitor *monitor,
 			    d->GetType("enabled") == VTYPE_BOOL) {
 				enabled = d->GetBool("enabled");
 			}
+
+			if (nativeTextLabel) {
+				if (d->HasKey("color") &&
+				    d->GetType("color") == VTYPE_STRING) {
+					textPallette.setColor(
+						nativeTextLabel
+							->foregroundRole(),
+						QColor(d->GetString("color")
+							       .c_str()));
+				}
+			}
 		}
 	}
 
@@ -977,6 +1000,18 @@ deserializeSceneItemUISettings(StreamElementsSceneItemsMonitor *monitor,
 	}
 
 	widget->setEnabled(enabled);
+
+	if (nativeTextLabel) {
+		std::string color = textPallette.color(nativeTextLabel->foregroundRole())
+			.name()
+			.toStdString();
+
+		std::string css = "QLabel { color: ";
+		css += color;
+		css += "; }";
+
+		nativeTextLabel->setStyleSheet(css.c_str());
+	}
 }
 
 void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
@@ -1041,9 +1076,6 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 
 		if (!layout)
 			continue;
-
-		deserializeSceneItemUISettings(this, scene, scene_item, widget,
-					       isSignedIn);
 
 		{
 			QList<QWidget *> list = widget->findChildren<QWidget *>(
@@ -1137,6 +1169,10 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 			deserializeAuxSceneItemsControls(this, scene_item,
 							 auxWidget, widget,
 							 nativeIconLabel);
+
+			deserializeSceneItemUISettings(this, scene, scene_item,
+						       widget, nativeTextLabel,
+						       isSignedIn);
 
 			{
 				QVariant value(QString(
@@ -1300,4 +1336,17 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsToolbar()
 	widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
 
 	m_sceneItemsToolBar->addWidget(widget);
+
+	QMainWindow *mainWindow = (QMainWindow *)obs_frontend_get_main_window();
+
+	QDockWidget *sceneItemsDock =
+		(QDockWidget *)mainWindow->findChild<QDockWidget *>(
+			"sourcesDock");
+
+	if (list->GetSize()) {
+		sceneItemsDock->setMinimumWidth(
+			m_sceneItemsToolBar->sizeHint().width());
+	} else {
+		sceneItemsDock->setMinimumWidth(0);
+	}
 }

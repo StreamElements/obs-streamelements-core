@@ -681,6 +681,19 @@ void StreamElementsScenesListWidgetManager::UpdateScenesToolbar()
 				QSizePolicy::Minimum);
 
 	m_scenesToolBar->addWidget(widget);
+
+	QMainWindow *mainWindow = (QMainWindow *)obs_frontend_get_main_window();
+
+	QDockWidget *scenesDock =
+		(QDockWidget *)mainWindow->findChild<QDockWidget *>(
+			"scenesDock");
+
+	if (list->GetSize()) {
+		scenesDock->setMinimumWidth(
+			m_scenesToolBar->sizeHint().width());
+	} else {
+		scenesDock->setMinimumWidth(0);
+	}
 }
 
 void StreamElementsScenesListWidgetManager::UpdateWidgets()

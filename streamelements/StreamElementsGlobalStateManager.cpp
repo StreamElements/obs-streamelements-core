@@ -675,19 +675,13 @@ void StreamElementsGlobalStateManager::StartOnBoardingUI(UiModifier uiModifier)
 	StreamElementsConfig::GetInstance()->SetStartupFlags(
 		StreamElementsConfig::STARTUP_FLAGS_ONBOARDING_MODE);
 
-	QtPostTask(
-		[](void *) -> void {
-			StreamElementsGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
-				->Reset();
+	QtPostTask([this]() -> void {
+		GetObsSceneManager()->Reset();
 
-			StreamElementsGlobalStateManager::GetInstance()
-				->GetMenuManager()
-				->Update();
-			StreamElementsGlobalStateManager::GetInstance()
-				->PersistState();
-		},
-		nullptr);
+		GetMenuManager()->Update();
+
+		PersistState();
+	});
 }
 
 void StreamElementsGlobalStateManager::StopOnBoardingUI()
@@ -696,6 +690,8 @@ void StreamElementsGlobalStateManager::StopOnBoardingUI()
 	GetWidgetManager()->HideNotificationBar();
 	GetWidgetManager()->RemoveAllDockWidgets();
 	GetWidgetManager()->DestroyCurrentCentralBrowserWidget();
+
+	GetNativeOBSControlsManager()->Reset();
 }
 
 void StreamElementsGlobalStateManager::SwitchToOBSStudio()
@@ -1033,18 +1029,28 @@ void StreamElementsGlobalStateManager::PersistState(bool sendEventToGuest)
 	CefRefPtr<CefValue> workersState = CefValue::Create();
 	CefRefPtr<CefValue> hotkeysState = CefValue::Create();
 	CefRefPtr<CefValue> userInterfaceState = CefValue::Create();
+	CefRefPtr<CefValue> outputPreviewTitleBarState = CefValue::Create();
+	CefRefPtr<CefValue> outputPreviewFrameState = CefValue::Create();
 
 	GetWidgetManager()->SerializeDockingWidgets(dockingWidgetsState);
 	GetWidgetManager()->SerializeNotificationBar(notificationBarState);
 	GetWorkerManager()->Serialize(workersState);
 	GetHotkeyManager()->SerializeHotkeyBindings(hotkeysState, true);
 	SerializeUserInterfaceState(userInterfaceState);
+	GetNativeOBSControlsManager()->SerializePreviewTitleBar(
+		outputPreviewTitleBarState);
+	GetNativeOBSControlsManager()->SerializePreviewFrame(
+		outputPreviewFrameState);
 
 	rootDictionary->SetValue("dockingBrowserWidgets", dockingWidgetsState);
 	rootDictionary->SetValue("notificationBar", notificationBarState);
 	rootDictionary->SetValue("workers", workersState);
 	rootDictionary->SetValue("hotkeyBindings", hotkeysState);
 	rootDictionary->SetValue("userInterfaceState", userInterfaceState);
+	rootDictionary->SetValue("outputPreviewTitleBarState",
+				 outputPreviewTitleBarState);
+	rootDictionary->SetValue("outputPreviewFrameState",
+				 outputPreviewFrameState);
 
 	root->SetDictionary(rootDictionary);
 
@@ -1095,6 +1101,11 @@ void StreamElementsGlobalStateManager::RestoreState()
 	auto hotkeysState = rootDictionary->GetValue("hotkeyBindings");
 	auto userInterfaceState =
 		rootDictionary->GetValue("userInterfaceState");
+	auto outputPreviewTitleBarState =
+		rootDictionary->GetValue("outputPreviewTitleBarState");
+	auto outputPreviewFrameState =
+		rootDictionary->GetValue("outputPreviewFrameState");
+
 
 	if (workersState.get()) {
 		blog(LOG_INFO, "obs-browser: state: restoring workers: %s",
@@ -1135,6 +1146,16 @@ void StreamElementsGlobalStateManager::RestoreState()
 
 	if (userInterfaceState.get()) {
 		DeserializeUserInterfaceState(userInterfaceState);
+	}
+
+	if (outputPreviewTitleBarState.get()) {
+		GetNativeOBSControlsManager()->DeserializePreviewTitleBar(
+			outputPreviewTitleBarState);
+	}
+
+	if (outputPreviewFrameState.get()) {
+		GetNativeOBSControlsManager()->DeserializePreviewFrame(
+			outputPreviewFrameState);
 	}
 }
 

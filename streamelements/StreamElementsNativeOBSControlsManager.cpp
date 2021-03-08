@@ -6,6 +6,8 @@
 #include <QPushButton>
 #include <QMetaObject>
 #include <QMessageBox>
+#include <QPalette>
+#include <QColor>
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 
@@ -53,6 +55,55 @@ StreamElementsNativeOBSControlsManager::StreamElementsNativeOBSControlsManager(Q
 	}
 
 	obs_frontend_add_event_callback(handle_obs_frontend_event, this);
+
+	m_nativeCentralWidget = mainWindow->centralWidget();
+
+	m_nativePreviewLayout =
+		m_nativeCentralWidget->findChild<QLayout *>("previewLayout");
+
+	m_nativePreviewLayoutParent =
+		m_nativeCentralWidget->findChild<QLayout *>(
+			"horizontalLayout_2");
+
+	m_nativePreviewWidget =
+		m_nativeCentralWidget->findChild<QWidget *>("preview");
+
+	if (m_nativePreviewLayout && m_nativePreviewLayoutParent &&
+	    m_nativePreviewWidget) {
+		m_previewTitleContainer = new QWidget();
+		m_previewTitleContainer->setContentsMargins(0, 0, 0, 0);
+		m_previewTitleContainer->setObjectName(
+			"streamelements_preview_title_container");
+
+		m_previewTitleLayout = new QHBoxLayout();
+		m_previewTitleLayout->setContentsMargins(0, 0, 0, 0);
+
+		m_previewTitleContainer->setLayout(m_previewTitleLayout);
+
+		m_previewFrame = new QFrame();
+		m_previewFrameLayout = new QVBoxLayout();
+
+		m_previewFrame->setObjectName(
+			"streamelements_central_widget_frame");
+		m_previewFrame->setLayout(m_previewFrameLayout);
+
+		m_nativePreviewLayoutParent->removeItem(
+			m_nativePreviewLayout); // ownership remains the same as when added
+		m_nativePreviewLayoutParent->addWidget(m_previewFrame);
+
+		m_previewFrameLayout->addWidget(m_previewTitleContainer);
+		m_previewFrameLayout->addLayout(m_nativePreviewLayout);
+
+		m_previewFrameLayout->setContentsMargins(0, 0, 0, 0);
+		m_previewFrameLayout->setSpacing(0);
+
+		m_previewFrame->setFrameStyle(QFrame::Panel);
+		m_previewFrame->setFrameShadow(QFrame::Plain);
+		m_previewFrame->setContentsMargins(0, 0, 0, 0);
+
+		HidePreviewTitleBar();
+		HidePreviewFrame();
+	}
 }
 
 StreamElementsNativeOBSControlsManager::~StreamElementsNativeOBSControlsManager()
@@ -77,6 +128,173 @@ StreamElementsNativeOBSControlsManager::~StreamElementsNativeOBSControlsManager(
 
 		m_nativeStartStopStreamingButton = nullptr;
 	}
+
+	HidePreviewTitleBar();
+	HidePreviewFrame();
+
+	if (m_nativePreviewLayout && m_nativePreviewLayoutParent &&
+	    m_nativePreviewWidget) {
+		m_nativePreviewLayoutParent->removeWidget(m_previewFrame); // ownership remains the same as when added
+
+		m_nativePreviewLayoutParent->addItem(
+			m_nativePreviewLayout);
+
+		m_previewFrame->disconnect();
+
+		m_previewFrame->deleteLater();
+
+		m_previewFrame = nullptr;
+		m_nativePreviewLayout = nullptr;
+
+		m_previewTitleLayout = nullptr;
+		m_previewTitleContainer = nullptr;
+	}
+
+	m_nativeCentralWidget = nullptr;
+}
+
+bool StreamElementsNativeOBSControlsManager::DeserializePreviewFrame(
+	CefRefPtr<CefValue> input)
+{
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return false;
+
+	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
+
+	int width = 6;
+	std::string color = "#F98215";
+	std::string style = "solid";
+
+	if (d->HasKey("width") && d->GetType("width") == VTYPE_INT) {
+		width = d->GetInt("width");
+	}
+
+	if (d->HasKey("color") && d->GetType("color") == VTYPE_STRING) {
+		color = d->GetString("color").ToString();
+	}
+
+	if (d->HasKey("style") && d->GetType("style") == VTYPE_STRING) {
+		style = d->GetString("style").ToString();
+	}
+
+	char widthStr[24];
+	sprintf(widthStr, "%d", width);
+
+	m_previewFrame->setStyleSheet(
+		(std::string(
+			 "QFrame#streamelements_central_widget_frame { border: ") +
+		 std::string(widthStr) + std::string("px ") +
+		 style + std::string(" ") + color +
+		 std::string(
+			 "; padding: 0; margin: 0; background-color: transparent; }"))
+			.c_str());
+
+	m_previewFrameSettings = d->Copy(true);
+
+	m_previewFrameVisible = true;
+
+	return true;
+}
+
+void StreamElementsNativeOBSControlsManager::SerializePreviewFrame(
+	CefRefPtr<CefValue> &output)
+{
+	if (m_previewFrameVisible) {
+		output->SetDictionary(m_previewFrameSettings->Copy(true));
+	} else {
+		output->SetNull();
+	}
+}
+
+void StreamElementsNativeOBSControlsManager::HidePreviewFrame()
+{
+	m_previewFrameVisible = false;
+
+	m_previewFrame->setStyleSheet(
+		"QFrame#streamelements_central_widget_frame { border: none; padding: 0; margin: 0; background-color: transparent;");
+
+	m_previewFrameSettings = CefDictionaryValue::Create();
+}
+
+bool StreamElementsNativeOBSControlsManager::DeserializePreviewTitleBar(
+	CefRefPtr<CefValue> input)
+{
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return false;
+
+	HidePreviewTitleBar();
+
+	CefRefPtr<CefDictionaryValue> rootDictionary =
+		input->GetDictionary();
+
+	int height = 100;
+	std::string url = "about:blank";
+	std::string executeJavaScriptOnLoad = "";
+
+	if (rootDictionary->HasKey("height")) {
+		height = rootDictionary->GetInt("height");
+	}
+
+	if (rootDictionary->HasKey("url")) {
+		url = rootDictionary->GetString("url").ToString();
+	}
+
+	if (rootDictionary->HasKey("executeJavaScriptOnLoad")) {
+		executeJavaScriptOnLoad =
+			rootDictionary
+				->GetString("executeJavaScriptOnLoad")
+				.ToString();
+	}
+
+	m_previewTitleBrowser = new StreamElementsBrowserWidget(
+		nullptr, url.c_str(), executeJavaScriptOnLoad.c_str(),
+		"reload", "obsPreviewAreaTitleBar", "");
+
+	m_previewTitleBrowser->setSizePolicy(QSizePolicy(
+		QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding));
+
+	m_previewTitleContainer->setFixedHeight(height);
+
+	m_previewTitleLayout->addWidget(m_previewTitleBrowser);
+
+	m_previewTitleContainer->show();
+
+	m_previewTitleSettings = rootDictionary->Copy(true);
+
+	return true;
+}
+
+void StreamElementsNativeOBSControlsManager::SerializePreviewTitleBar(
+	CefRefPtr<CefValue> &output)
+{
+	if (m_previewTitleContainer->isVisible()) {
+		output->SetDictionary(m_previewTitleSettings->Copy(true));
+	} else {
+		output->SetNull();
+	}
+}
+
+void StreamElementsNativeOBSControlsManager::HidePreviewTitleBar()
+{
+	m_previewTitleContainer->hide();
+
+	QApplication::sendPostedEvents();
+
+	if (m_previewTitleBrowser) {
+		m_previewTitleLayout->removeWidget(m_previewTitleBrowser);
+
+		m_previewTitleBrowser->deleteLater();
+
+		m_previewTitleBrowser = nullptr;
+	}
+
+	m_previewTitleSettings = CefDictionaryValue::Create();
+}
+
+void StreamElementsNativeOBSControlsManager::Reset()
+{
+	HidePreviewTitleBar();
+	HidePreviewFrame();
 }
 
 void StreamElementsNativeOBSControlsManager::SetStreamingInitialState()

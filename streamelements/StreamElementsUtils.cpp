@@ -2304,7 +2304,7 @@ public:
 
 		setStyleSheet("background: none; padding: 0;");
 
-		setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Minimum);
+		setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
 
 		CefRefPtr<StreamElementsRemoteIconLoader> loaderCopy = loader;
 
@@ -2315,11 +2315,21 @@ public:
 		});
 	}
 
-	virtual QSize minimumSizeHint() const override { return QSize(16, 16); }
+	virtual QSize minimumSizeHint() const override { return sizeHint(); }
 	virtual QSize sizeHint() const override
 	{
 		if (text().size()) {
-			return QPushButton::sizeHint();
+			QSize textSize = fontMetrics().size(
+				Qt::TextShowMnemonic, text());
+
+			QStyleOptionButton opt;
+			opt.initFrom(this);
+			opt.rect.setSize(textSize);
+
+			QSize size = style()->sizeFromContents(
+				QStyle::CT_PushButton, &opt, textSize, this);
+
+			return size;
 		} else {
 			return QSize(16, 16);
 		}
@@ -2600,8 +2610,10 @@ DeserializeAuxiliaryControlWidget(CefRefPtr<CefValue> input,
 	if (d->HasKey("color") && d->GetType("color") == VTYPE_STRING) {
 		styleSheet += "QPushButton { color: ";
 		styleSheet += d->GetString("color").ToString() + ";";
-		styleSheet += " }";
+		styleSheet += " } ";
 	}
+
+	styleSheet += "QPushButton { padding: 0; } ";
 
 	if (type == "container") {
 		if (!d->HasKey("items") || d->GetType("items") != VTYPE_LIST)
@@ -2662,12 +2674,15 @@ DeserializeAuxiliaryControlWidget(CefRefPtr<CefValue> input,
 			new QRemoteIconPushButton(iconUrl.c_str());
 
 		//control->setContentsMargins(0, 0, 0, 0);
-		control->setMinimumSize(16, 16);
-		control->setSizePolicy(QSizePolicy::Minimum,
-				       QSizePolicy::Minimum);
+		//control->setMinimumSize(16, 16);
+		//control->setSizePolicy(QSizePolicy::Minimum,
+		//		       QSizePolicy::Minimum);
 
 		if (d->HasKey("title") && d->GetType("title") == VTYPE_STRING) {
 			control->setText(
+				d->GetString("title").ToString().c_str());
+
+			control->setWindowIconText(
 				d->GetString("title").ToString().c_str());
 		}
 

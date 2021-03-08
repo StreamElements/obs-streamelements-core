@@ -350,8 +350,24 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandler(
 
 static std::recursive_mutex s_sync_api_call_mutex;
 
-#define API_HANDLER_BEGIN(name) RegisterIncomingApiCallHandler(name, [](StreamElementsApiMessageHandler*, CefRefPtr<CefProcessMessage> message, CefRefPtr<CefListValue> args, CefRefPtr<CefValue>& result, CefRefPtr<CefBrowser> browser, const long cefClientId, std::function<void()> complete_callback) { std::lock_guard<std::recursive_mutex> _api_sync_guard(s_sync_api_call_mutex);
-#define API_HANDLER_END()                    \
+#define API_HANDLER_BEGIN(name) \
+	RegisterIncomingApiCallHandler(name, []( \
+		StreamElementsApiMessageHandler*, \
+		CefRefPtr<CefProcessMessage> message, \
+		CefRefPtr<CefListValue> args, \
+		CefRefPtr<CefValue>& result, \
+		CefRefPtr<CefBrowser> browser, \
+		const long cefClientId, \
+		std::function<void()> complete_callback) \
+		{ \
+			(void)message; \
+			(void)args; \
+			(void)result; \
+			(void)browser; \
+			(void)cefClientId; \
+			(void)complete_callback; \
+			std::lock_guard<std::recursive_mutex> _api_sync_guard(s_sync_api_call_mutex);
+#define API_HANDLER_END() \
 	complete_callback(); \
 	});
 
@@ -2220,6 +2236,60 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		result->SetBool(StreamElementsGlobalStateManager::GetInstance()
 					->GetMenuManager()
 					->GetShowBuiltInMenuItems());
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("showOutputPreviewTitleBar");
+	{
+		if (args->GetSize()) {
+			result->SetBool(
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetNativeOBSControlsManager()
+					->DeserializePreviewTitleBar(
+						args->GetValue(0)));
+
+			StreamElementsGlobalStateManager::GetInstance()
+				->PersistState();
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("hideOutputPreviewTitleBar");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetNativeOBSControlsManager()
+			->HidePreviewTitleBar();
+
+		result->SetBool(true);
+
+		StreamElementsGlobalStateManager::GetInstance()->PersistState();
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("showOutputPreviewFrame");
+	{
+		if (args->GetSize()) {
+			result->SetBool(
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetNativeOBSControlsManager()
+					->DeserializePreviewFrame(
+						args->GetValue(0)));
+
+			StreamElementsGlobalStateManager::GetInstance()
+				->PersistState();
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("hideOutputPreviewFrame");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetNativeOBSControlsManager()
+			->HidePreviewFrame();
+
+		result->SetBool(true);
+
+		StreamElementsGlobalStateManager::GetInstance()->PersistState();
 	}
 	API_HANDLER_END();
 

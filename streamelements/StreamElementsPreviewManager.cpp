@@ -29,8 +29,6 @@ public:
 	{
 		QWidget *centralWidget = m_mainWindow->centralWidget();
 
-		std::string objectName = o->objectName().toStdString();
-
 		switch (e->type()) {
 		case QEvent::MouseButtonDblClick:
 			if (QApplication::keyboardModifiers() ==
