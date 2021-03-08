@@ -865,7 +865,7 @@ static void deserializeAuxSceneItemsControls(
 	StreamElementsSceneItemsMonitor *monitor, obs_sceneitem_t *scene_item,
 	QWidget *auxWidget, QWidget *parentWidget, QLabel *nativeIconLabel)
 {
-	auxWidget->setSizePolicy(QSizePolicy::MinimumExpanding,
+	auxWidget->setSizePolicy(QSizePolicy::Preferred,
 				 QSizePolicy::MinimumExpanding);
 
 	auxWidget->setStyleSheet("background: none");
@@ -945,7 +945,7 @@ static void deserializeSceneItemIcon(StreamElementsSceneItemsMonitor *monitor,
 		iconLayout->addSpacing(2);
 	} else {
 		nativeIconLabel->setAutoFillBackground(false);
-		nativeIconLabel->setStyleSheet("background: none");
+		nativeIconLabel->setStyleSheet("background: none;");
 	}
 }
 
@@ -1011,6 +1011,8 @@ deserializeSceneItemUISettings(StreamElementsSceneItemsMonitor *monitor,
 		css += "; }";
 
 		nativeTextLabel->setStyleSheet(css.c_str());
+
+		nativeTextLabel->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
 	}
 }
 
@@ -1155,11 +1157,7 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 						  : layout->count() -
 							    2; // OBS 24- has no icon
 
-#ifndef __APPLE__
 			layout->insertWidget(auxWidgetPos, auxWidget);
-#else
-			layout->insertWidget(auxWidgetPos - 1, auxWidget);
-#endif
 
 			deserializeSceneItemIcon(this, scene, scene_item,
 						 iconWidget, widget,
