@@ -1342,8 +1342,15 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsToolbar()
 			"sourcesDock");
 
 	if (list->GetSize()) {
-		sceneItemsDock->setMinimumWidth(
+		sceneItemsDock->setFixedWidth(
 			m_sceneItemsToolBar->sizeHint().width());
+		
+		QtPostTask([sceneItemsDock, this]() {
+			sceneItemsDock->setMinimumWidth(
+				m_sceneItemsToolBar->sizeHint().width());
+
+			sceneItemsDock->setMaximumWidth(16777215); // default according to Qt docs
+		});
 	} else {
 		sceneItemsDock->setMinimumWidth(0);
 	}

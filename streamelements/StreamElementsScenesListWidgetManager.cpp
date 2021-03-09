@@ -689,8 +689,16 @@ void StreamElementsScenesListWidgetManager::UpdateScenesToolbar()
 			"scenesDock");
 
 	if (list->GetSize()) {
-		scenesDock->setMinimumWidth(
+		scenesDock->setFixedWidth(
 			m_scenesToolBar->sizeHint().width());
+		
+		QtPostTask([scenesDock, this]() {
+			scenesDock->setMinimumWidth(
+				m_scenesToolBar->sizeHint().width());
+
+			scenesDock->setMaximumWidth(16777215); // default according to Qt docs
+		});
+
 	} else {
 		scenesDock->setMinimumWidth(0);
 	}
