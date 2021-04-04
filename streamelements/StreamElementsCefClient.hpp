@@ -30,6 +30,12 @@ public:
 	virtual void OnGotFocus(CefRefPtr<CefBrowser>) {
 	}
 
+	virtual void OnFocusedDOMNodeChanged(CefRefPtr<CefBrowser>,
+					     bool isEditable)
+	{
+		UNREFERENCED_PARAMETER(isEditable);
+	}
+
 public:
 	IMPLEMENT_REFCOUNTING(StreamElementsCefClientEventHandler);
 };

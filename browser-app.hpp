@@ -108,6 +108,9 @@ public:
 	virtual void OnContextCreated(CefRefPtr<CefBrowser> browser,
 				      CefRefPtr<CefFrame> frame,
 				      CefRefPtr<CefV8Context> context) override;
+	virtual void OnFocusedNodeChanged(CefRefPtr<CefBrowser> browser,
+					  CefRefPtr<CefFrame> frame,
+					  CefRefPtr<CefDOMNode> node) override;
 	virtual bool
 	OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
 #if CHROME_VERSION_BUILD >= 3770

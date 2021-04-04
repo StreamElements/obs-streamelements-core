@@ -20,15 +20,241 @@ StreamElementsMenuManager::StreamElementsMenuManager(QMainWindow *parent)
 
 	m_menu = new QMenu("St&reamElements");
 
+	mainWindow()->menuBar()->setFocusPolicy(Qt::NoFocus);
+
 	mainWindow()->menuBar()->addMenu(m_menu);
+	m_editMenu = mainWindow()->menuBar()->findChild<QMenu *>(
+		"menuBasic_MainMenu_Edit");
+
+	m_nativeOBSEditMenuCopySourceAction = m_editMenu->findChild<QAction *>("actionCopySource");
+
+	//
+	// Watch for clipboard content changes.
+	//
+	// This is necessary to enable/disable our CEF Paste action based
+	// on the contents of the clipboard.
+	//
+	QObject::connect(
+		qApp->clipboard(), &QClipboard::dataChanged, this,
+		&StreamElementsMenuManager::HandleClipboardDataChanged);
+
+	UpdateOBSEditMenuInternal();
 
 	LoadConfig();
 }
 
 StreamElementsMenuManager::~StreamElementsMenuManager()
 {
+	RemoveOBSEditMenuActions();
+
+	QObject::disconnect(
+		qApp->clipboard(), &QClipboard::dataChanged, this,
+		&StreamElementsMenuManager::HandleClipboardDataChanged);
+
+	//mainWindow()->menuBar()->removeAction((QAction *)m_menu->menuAction()); // -> crash
 	m_menu->menuAction()->setVisible(false);
 	m_menu = nullptr;
+}
+
+//
+// Add our own OBS-native Edit menu items.
+//
+// Items will be enabled based on whether an editable DOM
+// node is currently selected in the browser.
+//
+void StreamElementsMenuManager::AddOBSEditMenuActions()
+{
+	RemoveOBSEditMenuActions();
+
+	m_cefOBSEditMenuActionCopy =
+		new QAction(obs_module_text("StreamElements.Action.Copy"));
+	m_cefOBSEditMenuActionCut =
+		new QAction(obs_module_text("StreamElements.Action.Cut"));
+	m_cefOBSEditMenuActionPaste =
+		new QAction(obs_module_text("StreamElements.Action.Paste"));
+	m_cefOBSEditMenuActionSelectAll =
+		new QAction(obs_module_text("StreamElements.Action.SelectAll"));
+
+	m_cefOBSEditMenuActionCopy->setShortcut(QKeySequence::Copy);
+	m_cefOBSEditMenuActionCut->setShortcut(QKeySequence::Cut);
+	m_cefOBSEditMenuActionPaste->setShortcut(QKeySequence::Paste);
+	m_cefOBSEditMenuActionSelectAll->setShortcut(QKeySequence::SelectAll);
+
+	const bool isEditable =
+		m_focusedBrowserWidget->isBrowserFocusedDOMNodeEditable();
+
+	m_cefOBSEditMenuActionCopy->setEnabled(isEditable);
+	m_cefOBSEditMenuActionCut->setEnabled(isEditable);
+	m_cefOBSEditMenuActionSelectAll->setEnabled(isEditable);
+
+	auto mimeData = qApp->clipboard()->mimeData();
+
+	const bool hasTextToPaste = mimeData && mimeData->hasText();
+
+	m_cefOBSEditMenuActionPaste->setEnabled(isEditable && hasTextToPaste);
+
+	m_cefOBSEditMenuActions.push_back(m_cefOBSEditMenuActionCopy);
+	m_cefOBSEditMenuActions.push_back(m_cefOBSEditMenuActionCut);
+	m_cefOBSEditMenuActions.push_back(m_cefOBSEditMenuActionPaste);
+	m_cefOBSEditMenuActions.push_back(m_cefOBSEditMenuActionSelectAll);
+
+	m_cefOBSEditMenuActions.push_back(
+		m_editMenu->insertSeparator(m_editMenu->actions().at(0)));
+	m_editMenu->insertAction(m_editMenu->actions().at(0),
+				 m_cefOBSEditMenuActionSelectAll);
+	m_cefOBSEditMenuActions.push_back(
+		m_editMenu->insertSeparator(m_editMenu->actions().at(0)));
+	m_editMenu->insertAction(m_editMenu->actions().at(0),
+				 m_cefOBSEditMenuActionPaste);
+	m_editMenu->insertAction(m_editMenu->actions().at(0),
+				 m_cefOBSEditMenuActionCopy);
+	m_editMenu->insertAction(m_editMenu->actions().at(0),
+				 m_cefOBSEditMenuActionCut);
+
+	QObject::connect(m_cefOBSEditMenuActionCopy, &QAction::triggered, this,
+			 &StreamElementsMenuManager::HandleCefCopy);
+	QObject::connect(m_cefOBSEditMenuActionCut, &QAction::triggered, this,
+			 &StreamElementsMenuManager::HandleCefCut);
+	QObject::connect(m_cefOBSEditMenuActionPaste, &QAction::triggered, this,
+			 &StreamElementsMenuManager::HandleCefPaste);
+	QObject::connect(m_cefOBSEditMenuActionSelectAll, &QAction::triggered,
+			 this,
+			 &StreamElementsMenuManager::HandleCefSelectAll);
+}
+
+//
+// Remove our own OBS-native Edit menu items.
+//
+void StreamElementsMenuManager::RemoveOBSEditMenuActions()
+{
+	if (!m_cefOBSEditMenuActions.size())
+		return;
+
+	QObject::disconnect(m_cefOBSEditMenuActionCopy, &QAction::triggered, this,
+			    &StreamElementsMenuManager::HandleCefCopy);
+	QObject::disconnect(m_cefOBSEditMenuActionCut, &QAction::triggered, this,
+			    &StreamElementsMenuManager::HandleCefCut);
+	QObject::disconnect(m_cefOBSEditMenuActionPaste, &QAction::triggered, this,
+			    &StreamElementsMenuManager::HandleCefPaste);
+	QObject::disconnect(m_cefOBSEditMenuActionSelectAll, &QAction::triggered,
+			    this,
+			    &StreamElementsMenuManager::HandleCefSelectAll);
+
+	for (auto i : m_cefOBSEditMenuActions) {
+		m_editMenu->removeAction(i);
+	}
+	m_cefOBSEditMenuActions.clear();
+}
+
+//
+// Called by StreamElementsBrowserWidget to indicate which browser
+// widget is currently in focus.
+//
+// Setting <widget> = <nullptr> indicates that no browser widget
+// is in focus at the moment.
+//
+void StreamElementsMenuManager::SetFocusedBrowserWidget(
+	StreamElementsBrowserWidget *widget)
+{
+	// Must be called on QT app thread
+
+	if (m_focusedBrowserWidget == widget)
+		return;
+
+	if (!widget && !!m_focusedBrowserWidget) {
+		//
+		// We are signalled that there is no focused widget:
+		// stop tracking focused DOM node on the currently focused widget.
+		//
+		QObject::disconnect(
+			m_focusedBrowserWidget,
+			&StreamElementsBrowserWidget::
+				browserFocusedDOMNodeEditableChanged,
+			this,
+			&StreamElementsMenuManager::
+				HandleFocusedBrowserWidgetDOMNodeEditableChanged);
+	}
+
+	m_focusedBrowserWidget = widget;
+
+	if (!!m_focusedBrowserWidget) {
+		//
+		// We have a focused widget: begin tracking focused DOM node on the
+		// currently focused widget.
+		//
+		// This is necessary to enable Cut/Copy/Paste/Select All operations
+		// only when an editable field is selected.
+		//
+		QObject::connect(m_focusedBrowserWidget,
+				 &StreamElementsBrowserWidget::
+					 browserFocusedDOMNodeEditableChanged,
+				 this,
+				 &StreamElementsMenuManager::
+					 HandleFocusedBrowserWidgetDOMNodeEditableChanged);
+	}
+
+	UpdateOBSEditMenuInternal();
+}
+
+void StreamElementsMenuManager::HandleCefCopy()
+{
+	// Must be called on QT app thread
+
+	if (!m_focusedBrowserWidget)
+		return;
+
+	m_focusedBrowserWidget->BrowserCopy();
+}
+
+void StreamElementsMenuManager::HandleCefCut()
+{
+	// Must be called on QT app thread
+
+	if (!m_focusedBrowserWidget)
+		return;
+
+	m_focusedBrowserWidget->BrowserCut();
+}
+
+void StreamElementsMenuManager::HandleCefPaste()
+{
+	// Must be called on QT app thread
+
+	if (!m_focusedBrowserWidget)
+		return;
+
+	m_focusedBrowserWidget->BrowserPaste();
+}
+
+void StreamElementsMenuManager::HandleCefSelectAll()
+{
+	// Must be called on QT app thread
+
+	if (!m_focusedBrowserWidget)
+		return;
+
+	m_focusedBrowserWidget->BrowserSelectAll();
+}
+
+//
+// Invoked when focused browser widget editable state changes
+//
+void StreamElementsMenuManager::HandleFocusedBrowserWidgetDOMNodeEditableChanged(
+	bool isEditable)
+{
+	// Must be called on QT app thread
+
+	UpdateOBSEditMenuInternal();
+}
+
+//
+// Invoked when data on clipboard changes
+//
+void StreamElementsMenuManager::HandleClipboardDataChanged()
+{
+	// Must be called on QT app thread
+
+	UpdateOBSEditMenuInternal();
 }
 
 void StreamElementsMenuManager::Update()
@@ -36,6 +262,44 @@ void StreamElementsMenuManager::Update()
 	SYNC_ACCESS();
 
 	UpdateInternal();
+}
+
+//
+// Recalculate OBS-native Edit menu items' availability & state.
+//
+void StreamElementsMenuManager::UpdateOBSEditMenuInternal()
+{
+	// Must be called on QT app thread
+
+	const bool editMenuVisible = !!m_focusedBrowserWidget;
+
+	m_nativeOBSEditMenuCopySourceAction->setVisible(!editMenuVisible);
+
+	//
+	// On macOS, having a shortcut assigned to two menu items will result in the
+	// second item's shortcut not being respected, even if the first menu item is disabled.
+	//
+	// We must remove the native menu item shortcut when our "Copy" menu item is active
+	// and restore the native menu item shortcut when our menu item is removed.
+	//
+	if (editMenuVisible) {
+		m_nativeOBSEditMenuCopySourceAction->setShortcut(QKeySequence());
+	} else {
+		m_nativeOBSEditMenuCopySourceAction->setShortcut(
+			QKeySequence::Copy);
+	}
+
+	//
+	// On macOS it is not enough to alter menu items' visibility and/or enabled
+	// state for the changes to take effect.
+	//
+	// We must remove our items and add them dynamically when changes are required.
+	//
+	RemoveOBSEditMenuActions();
+
+	if (editMenuVisible) {
+		AddOBSEditMenuActions();
+	}
 }
 
 void StreamElementsMenuManager::UpdateInternal()

@@ -211,19 +211,8 @@ protected:
 		}
 	}
 
-	virtual void focusInEvent(QFocusEvent* event) override
-	{
-		QWidget::focusInEvent(event);
-
-		blog(LOG_INFO, "QWidget::focusInEvent: reason %d: %s", event->reason(), m_url.c_str());
-	}
-
-	virtual void focusOutEvent(QFocusEvent* event) override
-	{
-		QWidget::focusOutEvent(event);
-
-		blog(LOG_INFO, "QWidget::focusOutEvent: %s", m_url.c_str());
-	}
+	virtual void focusInEvent(QFocusEvent *event) override;
+	virtual void focusOutEvent(QFocusEvent *event) override;
 
 private:
 	void UpdateBrowserSize()
@@ -367,14 +356,19 @@ protected:
 		}
 	}
 
-
-
-
 private:
 	std::mutex m_create_destroy_mutex;
 
 signals:
 	void browserStateChanged();
+
+	// Fired when focused DOM node changes in the browser,
+	// indicating whether it is editable.
+	void browserFocusedDOMNodeEditableChanged(bool isEditable);
+
+public:
+	// Is currently focused DOM node in the browser editable?
+	bool isBrowserFocusedDOMNodeEditable() { return m_isBrowserFocusedDOMNodeEditable; }
 
 private:
 	void emitBrowserStateChanged()
@@ -382,6 +376,30 @@ private:
 		emit browserStateChanged();
 	}
 
+	bool m_isBrowserFocusedDOMNodeEditable = false;
+	void setBrowserFocusedDOMNodeEditable(bool isEditable)
+	{
+		if (isEditable == m_isBrowserFocusedDOMNodeEditable)
+			return;
+
+		m_isBrowserFocusedDOMNodeEditable = isEditable;
+
+		emit browserFocusedDOMNodeEditableChanged(isEditable);
+	}
+
+public:
+	void BrowserCopy();
+	void BrowserCut();
+	void BrowserPaste();
+	void BrowserSelectAll();
+
+	//
+	// Receives events from StreamElementsCefClient and translates
+	// them to calls which StreamElementsBrowserWidget understands.
+	//
+	// Calls to StreamElementsBrowserWidget are made on the QT app
+	// thread.
+	//
 	class StreamElementsBrowserWidget_EventHandler :
 		public StreamElementsCefClientEventHandler
 	{
@@ -390,6 +408,7 @@ private:
 		{ }
 
 	public:
+		// CEF loading state was changed
 		virtual void OnLoadingStateChange(CefRefPtr<CefBrowser> browser,
 			bool isLoading,
 			bool canGoBack,
@@ -400,19 +419,26 @@ private:
 			UNREFERENCED_PARAMETER(canGoBack);
 			UNREFERENCED_PARAMETER(canGoForward);
 
-			QtPostTask([](void* data) {
-				StreamElementsBrowserWidget* widget = (StreamElementsBrowserWidget*)data;
-
-				widget->emitBrowserStateChanged();
-			}, m_widget);
+			QtPostTask([this]() {
+				m_widget->emitBrowserStateChanged();
+			});
 		}
 
+		// CEF got focus
 		virtual void OnGotFocus(CefRefPtr<CefBrowser>) override {
-			QtPostTask([](void* data) {
-				StreamElementsBrowserWidget* widget = (StreamElementsBrowserWidget*)data;
+			QtPostTask([this]() {
+				m_widget->setFocus();
+			});
+		}
 
-				widget->setFocus();
-			}, m_widget);
+		// Focused DOM node in CEF changed
+		virtual void OnFocusedDOMNodeChanged(CefRefPtr<CefBrowser>,
+						     bool isEditable) override
+		{
+			QtPostTask([this, isEditable]() {
+				m_widget->setBrowserFocusedDOMNodeEditable(
+					isEditable);
+			});
 		}
 
 	private:

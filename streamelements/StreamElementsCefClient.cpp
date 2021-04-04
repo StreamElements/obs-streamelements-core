@@ -291,6 +291,14 @@ bool StreamElementsCefClient::OnProcessMessageReceived(
 		return true;
 	}
 #endif
+	else if (name == "CefRenderProcessHandler::OnFocusedNodeChanged") {
+		bool isEditable = message->GetArgumentList()->GetBool(0);
+
+		if (!!m_eventHandler) {
+			m_eventHandler->OnFocusedDOMNodeChanged(browser,
+								isEditable);
+		}
+	}
 	else {
 
 		return false;

@@ -124,6 +124,24 @@ void BrowserApp::OnBeforeCommandLineProcessing(
 #endif
 }
 
+void BrowserApp::OnFocusedNodeChanged(CefRefPtr<CefBrowser> browser,
+				      CefRefPtr<CefFrame> frame,
+				      CefRefPtr<CefDOMNode> node)
+{
+	CefRefPtr<CefProcessMessage> msg = CefProcessMessage::Create(
+		"CefRenderProcessHandler::OnFocusedNodeChanged");
+
+	if (!!node.get() && node->IsEditable()) {
+		// Editable node
+		msg->GetArgumentList()->SetBool(0, true);
+	} else {
+		// Empty or non-editable node
+		msg->GetArgumentList()->SetBool(0, false);
+	}
+
+	SendBrowserProcessMessage(browser, PID_BROWSER, msg);
+}
+
 void BrowserApp::OnContextCreated(CefRefPtr<CefBrowser> browser,
 				  CefRefPtr<CefFrame>,
 				  CefRefPtr<CefV8Context> context)
