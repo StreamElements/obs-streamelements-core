@@ -32,6 +32,7 @@
 #include "StreamElementsCrashHandler.hpp"
 
 #include "StreamElementsGlobalStateManager.hpp"
+#include "StreamElementsUtils.hpp"
 #include "deps/StackWalker/StackWalker.h"
 #include <util/base.h>
 #include <util/platform.h>
@@ -55,18 +56,112 @@
 
 /* ================================================================= */
 
-static inline bool HasRandomMatch()
-{
-	return (os_gettime_ns() / 1000L) % 10 == 0; // 1:10 chance
-}
-
-/* ================================================================= */
-
 static class MyStackWalker : public StackWalker {
 public:
 	MyStackWalker(int options) : StackWalker(options)
 	{
 		output.reserve(1024 * 16);
+
+		//////////////////////////////////////////////////////
+		// Extract modules of interest from external JSON
+		//////////////////////////////////////////////////////
+		//
+		// JSON format:
+		//
+		//     {
+		//       "obs.live": {
+		//         "features": {
+		//           "diag": {
+		//             "modules" : ["obs-browser"]
+		//           }
+		//         }
+		//       }
+		//     }
+		//
+		//////////////////////////////////////////////////////
+
+		modulesOfInterest.push_back("obs-browser");
+
+		auto httpResponseReceivedCallback = [&](char *data,
+							void *userdata,
+							char *error_msg,
+							int http_code) {
+			if (!data)
+				return;
+
+			std::string json_string = data;
+
+			CefRefPtr<CefValue> root =
+				CefParseJSON(json_string.c_str(),
+					     JSON_PARSER_ALLOW_TRAILING_COMMAS);
+
+			if (!root.get() || root->GetType() != VTYPE_DICTIONARY)
+				return;
+
+			CefRefPtr<CefDictionaryValue> rootDict =
+				root->GetDictionary();
+
+			if (!rootDict->HasKey("obs.live") ||
+			    rootDict->GetType("obs.live") != VTYPE_DICTIONARY)
+				return;
+
+			CefRefPtr<CefDictionaryValue> obsliveDict =
+				rootDict->GetDictionary("obs.live");
+
+			if (!obsliveDict->HasKey("features") ||
+			    obsliveDict->GetType("features") !=
+				    VTYPE_DICTIONARY)
+				return;
+
+			CefRefPtr<CefDictionaryValue> featDict =
+				obsliveDict->GetDictionary("features");
+
+			if (!featDict->HasKey("diag") ||
+			    featDict->GetType("diag") != VTYPE_DICTIONARY)
+				return;
+
+			CefRefPtr<CefDictionaryValue> diagDict =
+				featDict->GetDictionary("diag");
+
+			if (!diagDict->HasKey("modules") ||
+			    diagDict->GetType("modules") != VTYPE_LIST)
+				return;
+
+			CefRefPtr<CefListValue> modulesList =
+				diagDict->GetList("modules");
+
+			modulesOfInterest.clear();
+
+			for (int index = 0; index < modulesList->GetSize();
+			     ++index) {
+				if (modulesList->GetType(index) != VTYPE_STRING)
+					continue;
+
+				std::string module =
+					modulesList->GetString(index).ToString();
+
+				blog(LOG_INFO,
+				     "StreamElementsCrashHandler: added module of interest: %s",
+				     module.c_str());
+
+				modulesOfInterest.push_back(module);
+			}
+		};
+
+		time_t tv;
+		time(&tv);
+		time_t gmtv = mktime(gmtime(&tv));
+
+		char url[128];
+
+		sprintf(url,
+			"https://obslive-external-assets.streamelements.com/settings.json?_nc=%lu",
+			gmtv - (gmtv % (time_t)60));
+
+		http_client_headers_t request_headers;
+
+		HttpGetString(url, request_headers,
+			      httpResponseReceivedCallback, nullptr);
 	}
 
 protected:
@@ -103,7 +198,7 @@ protected:
 	}
 
 public:
-	bool hasMatchModuleOfInterest = HasRandomMatch();
+	bool hasMatchModuleOfInterest = false;
 	std::vector<std::string> modulesOfInterest;
 	std::string output;
 };
@@ -885,11 +980,6 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
 	s_stackWalker = new MyStackWalker(StackWalker::RetrieveSymbol |
 					  StackWalker::RetrieveLine |
 					  StackWalker::RetrieveModuleInfo);
-
-	s_stackWalker->modulesOfInterest.push_back("obs-browser");
-	s_stackWalker->modulesOfInterest.push_back("libobs");
-	s_stackWalker->modulesOfInterest.push_back("obs32");
-	s_stackWalker->modulesOfInterest.push_back("obs64");
 
 	s_mdSender = new MiniDmpSender(
 		L"OBS_Live", L"obs-browser", plugin_version.c_str(),
