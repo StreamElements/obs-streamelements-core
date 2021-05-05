@@ -534,6 +534,11 @@ void StreamElementsBrowserWidget::focusInEvent(QFocusEvent *event)
 	StreamElementsGlobalStateManager::GetInstance()
 		->GetMenuManager()
 		->SetFocusedBrowserWidget(this);
+
+	if (!!m_cef_browser.get() && m_cef_browser->GetHost()) {
+		// Notify CEF that it got focus
+		m_cef_browser->GetHost()->SetFocus(true);
+	}
 }
 
 void StreamElementsBrowserWidget::focusOutEvent(QFocusEvent *event)
@@ -553,6 +558,11 @@ void StreamElementsBrowserWidget::focusOutEvent(QFocusEvent *event)
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetMenuManager()
 			->SetFocusedBrowserWidget(nullptr);
+
+		if (!!m_cef_browser.get() && m_cef_browser->GetHost()) {
+			// Notify CEF that it lost focus
+			m_cef_browser->GetHost()->SetFocus(false);
+		}
 	}
 }
 
