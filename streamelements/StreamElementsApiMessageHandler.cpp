@@ -2032,6 +2032,17 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("queryUserEnvironmentBackupReferencedFiles");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetBackupManager()
+				->QueryLocalBackupPackageReferencedFiles(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("createUserEnvironmentBackupPackage");
 	{
 		if (args->GetSize()) {

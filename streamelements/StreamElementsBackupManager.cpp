@@ -35,6 +35,8 @@ typedef unsigned char BYTE;
 #define SH_DENYNO 0
 #endif
 
+#define MAX_BACKUP_FILE_SIZE 0x7FFFFFFF
+
 static bool GetLocalPathFromURL(std::string url, std::string &path)
 {
 	if (VerifySessionSignedAbsolutePathURL(url, path))
@@ -293,6 +295,49 @@ static bool ScanForFileReferencesMonikersToRestore(std::string srcBasePath,
 }
 
 static bool
+ScanForFileReferences(CefRefPtr<CefValue> &node, std::map<std::string, std::string> &filesMap)
+{
+	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
+
+	if (node->GetType() == VTYPE_STRING) {
+		std::string path = node->GetString().ToString();
+
+		if (!filesMap.count(path)) {
+			if (os_file_exists(path.c_str())) {
+				filesMap[path] =
+					CreateSessionSignedAbsolutePathURL(
+						myconv.from_bytes(path));
+			}
+		}
+	} else if (node->GetType() == VTYPE_LIST) {
+		CefRefPtr<CefListValue> list = node->GetList();
+
+		for (size_t index = 0; index < list->GetSize(); ++index) {
+			CefRefPtr<CefValue> value =
+				list->GetValue(index)->Copy();
+
+			if (!ScanForFileReferences(value, filesMap))
+				return false;
+		}
+	} else if (node->GetType() == VTYPE_DICTIONARY) {
+		CefRefPtr<CefDictionaryValue> d = node->GetDictionary();
+
+		CefDictionaryValue::KeyList keys;
+		if (d->GetKeys(keys)) {
+			for (auto key : keys) {
+				CefRefPtr<CefValue> value =
+					d->GetValue(key)->Copy();
+
+				if (!ScanForFileReferences(value, filesMap))
+					return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+static bool
 ScanForFileReferencesToBackup(zip_t *zip, CefRefPtr<CefValue> &node,
 			      std::map<std::string, std::string> &filesMap,
 			      std::string timestamp,
@@ -304,25 +349,34 @@ ScanForFileReferencesToBackup(zip_t *zip, CefRefPtr<CefValue> &node,
 		std::string path = node->GetString().ToString();
 
 		if (os_file_exists(path.c_str())) {
-			if (!filesMap.count(path)) {
-				std::string fileName =
-					GetUniqueFileNameFromPath(path, 48);
-				std::string zipPath =
-					"obslive_restored_files/" + timestamp +
-					"/" + fileName;
+			int64_t fileSize = os_get_file_size(path.c_str());
 
-				if (!AddFileToZip(zip, path, zipPath))
-					return false;
+			if (fileSize > MAX_BACKUP_FILE_SIZE) {
+				blog(LOG_WARNING,
+				     "obs-browser: backup: file skipped due to unsatisfied maximum file size constraint: %s",
+				     path.c_str());
+			} else {
+				if (!filesMap.count(path)) {
+					std::string fileName =
+						GetUniqueFileNameFromPath(path,
+									  48);
+					std::string zipPath =
+						"obslive_restored_files/" +
+						timestamp + "/" + fileName;
 
-				filesMap[path] = zipPath;
+					if (!AddFileToZip(zip, path, zipPath))
+						return false;
+
+					filesMap[path] = zipPath;
+				}
+
+				std::string zipPath = filesMap[path];
+
+				std::string moniker =
+					MONIKER_START + zipPath + MONIKER_END;
+
+				result->SetString(moniker);
 			}
-
-			std::string zipPath = filesMap[path];
-
-			std::string moniker =
-				MONIKER_START + zipPath + MONIKER_END;
-
-			result->SetString(moniker);
 		}
 	} else if (node->GetType() == VTYPE_LIST) {
 		CefRefPtr<CefListValue> list = node->GetList();
@@ -374,6 +428,29 @@ static bool AddReferencedFilesToZip(zip_t *zip, std::string timestamp,
 
 	return ScanForFileReferencesToBackup(zip, content, filesMap, timestamp,
 					     result);
+}
+
+static CefRefPtr<CefValue> ReadCollectionById(std::string basePath,
+					      std::string collection)
+{
+	CefRefPtr<CefValue> result = CefValue::Create();
+
+	result->SetNull();
+
+	std::string relPath = "basic/scenes/" + collection + ".json";
+	std::string absPath = basePath + "/" + relPath;
+
+	if (os_file_exists(absPath.c_str())) {
+		char *buffer = os_quick_read_utf8_file(absPath.c_str());
+		CefRefPtr<CefValue> content = CefParseJSON(
+			CefString(buffer), JSON_PARSER_ALLOW_TRAILING_COMMAS);
+		bfree(buffer);
+
+		if (content.get() && content->GetType() != VTYPE_NULL)
+			result = content;
+	}
+
+	return result;
 }
 
 static bool AddCollectionToZip(zip_t *zip, std::string basePath,
@@ -505,6 +582,85 @@ static void ReadListOfIdsFromCefValue(CefRefPtr<CefValue> input,
 StreamElementsBackupManager::StreamElementsBackupManager() {}
 
 StreamElementsBackupManager::~StreamElementsBackupManager() {}
+
+void StreamElementsBackupManager::QueryLocalBackupPackageReferencedFiles(
+	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
+{
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
+	output->SetNull();
+
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	CefRefPtr<CefDictionaryValue> in = input->GetDictionary();
+
+	std::vector<std::string> requestCollections;
+
+	CefRefPtr<CefListValue> addedCollections = CefListValue::Create();
+
+	if (in->HasKey("sceneCollections") &&
+	    in->GetType("sceneCollections") == VTYPE_LIST) {
+		ReadListOfIdsFromCefValue(in->GetValue("sceneCollections"),
+					  requestCollections);
+	} else {
+		ReadListOfSceneCollectionIds(requestCollections);
+	}
+
+	char *basePathPtr = os_get_config_path_ptr("obs-studio");
+	std::string basePath = basePathPtr;
+	bfree(basePathPtr);
+
+	for (auto collection : requestCollections) {
+		CefRefPtr<CefValue> collectionValue =
+			ReadCollectionById(basePath, collection);
+
+		if (!collectionValue.get() ||
+		    collectionValue->GetType() == VTYPE_NULL)
+			continue;
+
+		std::map<std::string, std::string> filesMap;
+
+		if (!ScanForFileReferences(collectionValue, filesMap))
+			continue;
+
+		CefRefPtr<CefListValue> list = CefListValue::Create();
+
+		for (auto kv : filesMap) {
+			auto path = kv.first;
+			auto url = kv.second;
+
+			CefRefPtr<CefDictionaryValue> fileDict =
+				CefDictionaryValue::Create();
+
+			int64_t fileSize = os_get_file_size(path.c_str());
+
+			fileDict->SetString("path", path.c_str());
+			fileDict->SetString("url", url.c_str());
+			fileDict->SetDouble("size", (double)fileSize); // We cast to double so it won't overflow
+			fileDict->SetBool("canBackup",
+					  fileSize <= MAX_BACKUP_FILE_SIZE);
+
+			list->SetDictionary(list->GetSize(), fileDict);
+		}
+
+		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+
+		d->SetString("id", collection);
+		d->SetString("name", collection);
+		d->SetList("referencedFiles", list);
+
+		addedCollections->SetDictionary(addedCollections->GetSize(), d);
+	}
+
+	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
+
+	CefRefPtr<CefDictionaryValue> out = CefDictionaryValue::Create();
+
+	out->SetList("sceneCollections", addedCollections);
+
+	output->SetDictionary(out);
+}
 
 void StreamElementsBackupManager::CreateLocalBackupPackage(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)

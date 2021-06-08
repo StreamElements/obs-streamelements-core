@@ -10,6 +10,10 @@ public:
 	~StreamElementsBackupManager();
 
 public:
+	void
+	QueryLocalBackupPackageReferencedFiles(CefRefPtr<CefValue> input,
+					       CefRefPtr<CefValue> &output);
+
 	void CreateLocalBackupPackage(CefRefPtr<CefValue> input,
 					 CefRefPtr<CefValue> &output);
 
