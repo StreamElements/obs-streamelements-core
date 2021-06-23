@@ -107,11 +107,22 @@ static void dumpPaths(CefRefPtr<CefValue> parent, std::vector<std::wstring>& pat
 		std::wstring candidate =
 			parent->GetString().ToWString();
 
-		if (std::filesystem::is_regular_file(candidate)) {
-			paths.push_back(candidate);
+		bool isValidPath = false;
+
+		try {
+			if (std::filesystem::is_regular_file(candidate)) {
+				paths.push_back(candidate);
+
+				isValidPath = true;
+			}
+		} catch (...) {
 		}
-		else {
+
+		if (!isValidPath) {
 			// Not a file or file does not exist
+			blog(LOG_WARNING,
+			     "StreamElementsExternalSceneDataProviderSlobsClient: referenced path is not a file or file does not exist: %s",
+			     parent->GetString().ToString().c_str());
 		}
 	}
 
