@@ -231,8 +231,10 @@ static bool ScanForFileReferencesMonikersToRestore(std::string srcBasePath,
 
 	os_dir_t *dir = os_opendir(srcScanPath.c_str());
 
-	if (!dir)
-		return false;
+	if (!dir) {
+		// No scenes to restore, so the result is empty but operation succeeds
+		return true;
+	}
 
 	struct os_dirent *entry;
 
