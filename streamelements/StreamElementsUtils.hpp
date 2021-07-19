@@ -57,10 +57,60 @@ template<typename... Args> std::string FormatString(const char *format, ...)
 	return ret;
 }
 
-void QtPostTask(void (*func)(void *), void *const data);
-void QtPostTask(std::function<void()> task);
-void QtExecSync(void (*func)(void *), void *const data);
-void QtExecSync(std::function<void()> task);
+class StreamElementsAsyncCallContextItem {
+public:
+	StreamElementsAsyncCallContextItem(std::string& file_, int line_)
+		: file(file_), line(line_)
+	{
+	}
+
+public:
+	std::string file;
+	int line;
+};
+
+class StreamElementsAsyncCallContextStack_t : public
+	std::vector<StreamElementsAsyncCallContextItem *> {
+public:
+	StreamElementsAsyncCallContextStack_t() {}
+	~StreamElementsAsyncCallContextStack_t()
+	{
+		for (auto ptr : *this) {
+			delete ptr;
+		}
+
+		clear();
+	}
+};
+
+const StreamElementsAsyncCallContextStack_t *GetAsyncCallContextStack();
+
+void __QtPostTask_Impl(std::function<void()> task, std::string file, int line);
+void __QtExecSync_Impl(std::function<void()> task, std::string file, int line);
+
+class QtAsyncCallFunctor {
+private:
+	typedef void (*call_t)(std::function<void()> /*task*/, std::string /*file*/, int /*line*/);
+
+	std::string file;
+	int line;
+	call_t impl;
+
+public:
+	QtAsyncCallFunctor(const char* file_, const int line_, const call_t impl_)
+		: file(file_), line(line_), impl(impl_)
+	{
+	}
+
+	void operator()(std::function<void()> task) const
+	{
+		impl(task, file, line);
+	}
+};
+
+#define QtPostTask QtAsyncCallFunctor(__FILE__, __LINE__, &__QtPostTask_Impl)
+#define QtExecSync QtAsyncCallFunctor(__FILE__, __LINE__, &__QtExecSync_Impl)
+
 std::string DockWidgetAreaToString(const Qt::DockWidgetArea area);
 std::string GetCommandLineOptionValue(const std::string key);
 std::string LoadResourceString(std::string path);

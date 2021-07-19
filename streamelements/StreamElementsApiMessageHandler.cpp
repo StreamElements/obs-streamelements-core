@@ -143,8 +143,8 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 					     .c_str());
 			}
 
-			QtPostTask(
-				[context]() {
+			QtPostTask (
+				[context]() -> void {
 					blog(LOG_INFO,
 					     "obs-browser[%lu]: API: performing call to '%s', callback id %d",
 					     context->cefClientId,
@@ -2306,8 +2306,10 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("crashProgram");
 	{
-		// Crash
-		*((int *)0x133713337) = 12345; // exception
+		QtPostTask([]() -> void {
+			// Crash
+			*((int *)0x133713337) = 12345; // exception
+		});
         
 		UNUSED_PARAMETER(result);
 	}

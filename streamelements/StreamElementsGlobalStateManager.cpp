@@ -334,84 +334,78 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		QMainWindow *obs_main_window;
 	};
 
-	local_context context;
-
-	context.self = this;
-	context.obs_main_window = obs_main_window;
-
-	QtExecSync([](void *data) -> void {
-			local_context *context = (local_context *)data;
-
+	QtExecSync(
+		[this, obs_main_window]() -> void {
 			// http://doc.qt.io/qt-5/qmainwindow.html#DockOption-enum
-			context->obs_main_window->setDockOptions(
+			obs_main_window->setDockOptions(
 				QMainWindow::AnimatedDocks |
 				QMainWindow::AllowNestedDocks |
 				QMainWindow::AllowTabbedDocks);
 
-			context->self->m_appStateListener =
+			m_appStateListener =
 				new ApplicationStateListener();
-			context->self->m_themeChangeListener =
+			m_themeChangeListener =
 				new ThemeChangeListener();
 #ifdef WIN32
-			context->self->mainWindow()->addDockWidget(
+			mainWindow()->addDockWidget(
 				Qt::NoDockWidgetArea,
-				context->self->m_themeChangeListener);
+				m_themeChangeListener);
 #else
-			context->self->mainWindow()->addDockWidget(
+			mainWindow()->addDockWidget(
 				Qt::BottomDockWidgetArea,
-				context->self->m_themeChangeListener);
+				m_themeChangeListener);
 #endif
 
 			std::string storagePath = GetCEFStoragePath();
 			int os_mkdirs_ret = os_mkdirs(storagePath.c_str());
 
 			char *webRootPath = obs_module_file("localwebroot");
-			context->self->m_localWebFilesServer =
+			m_localWebFilesServer =
 				new StreamElementsLocalWebFilesServer(
 					webRootPath ? webRootPath : "");
 			bfree(webRootPath);
-			context->self->m_cookieManager =
+			m_cookieManager =
 				new StreamElementsCookieManager(storagePath);
-			context->self->m_httpClient =
+			m_httpClient =
 				new StreamElementsHttpClient();
-			context->self->m_analyticsEventsManager =
+			m_analyticsEventsManager =
 				new StreamElementsAnalyticsEventsManager();
-			context->self->m_widgetManager =
+			m_widgetManager =
 				new StreamElementsBrowserWidgetManager(
-					context->obs_main_window);
-			context->self->m_obsSceneManager =
+					obs_main_window);
+			m_obsSceneManager =
 				new StreamElementsObsSceneManager(
-					context->obs_main_window);
-			context->self->m_menuManager =
+					obs_main_window);
+			m_menuManager =
 				new StreamElementsMenuManager(
-					context->obs_main_window);
-			context->self->m_bwTestManager =
+					obs_main_window);
+			m_bwTestManager =
 				new StreamElementsBandwidthTestManager();
-			context->self->m_outputSettingsManager =
+			m_outputSettingsManager =
 				new StreamElementsOutputSettingsManager();
-			context->self->m_workerManager =
+			m_workerManager =
 				new StreamElementsWorkerManager();
-			context->self->m_hotkeyManager =
+			m_hotkeyManager =
 				new StreamElementsHotkeyManager();
-			context->self->m_performanceHistoryTracker =
+			m_performanceHistoryTracker =
 				new StreamElementsPerformanceHistoryTracker();
-			context->self->m_externalSceneDataProviderManager =
+			m_externalSceneDataProviderManager =
 				new StreamElementsExternalSceneDataProviderManager();
-			context->self->m_nativeObsControlsManager =
+			m_nativeObsControlsManager =
 				StreamElementsNativeOBSControlsManager::
 					GetInstance();
-			context->self->m_profilesManager =
+			m_profilesManager =
 				new StreamElementsProfilesManager();
-			context->self->m_backupManager =
+			m_backupManager =
 				new StreamElementsBackupManager();
-			context->self->m_cleanupManager =
+			m_cleanupManager =
 				new StreamElementsCleanupManager();
-			context->self->m_previewManager =
+			m_previewManager =
 				new StreamElementsPreviewManager(
-					context->self->mainWindow());
-			context->self->m_windowStateEventFilter =
+					mainWindow());
+			m_windowStateEventFilter =
 				new WindowStateChangeEventFilter(
-					context->self->mainWindow());
+					mainWindow());
 
 			{
 				// Set up "Live Support" button
@@ -429,7 +423,7 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 					"QPushButton:pressed { background-color: #808dc0; border: 1px solid #546ac8; color: #ffffff; } "));
 
 				QDockWidget *controlsDock =
-					(QDockWidget *)context->obs_main_window
+					(QDockWidget *)obs_main_window
 						->findChild<QDockWidget *>(
 							"controlsDock");
 				QVBoxLayout *buttonsVLayout =
@@ -477,7 +471,7 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 				container->layout()->addWidget(
 					new QLabel(version_buf, container));
 
-				context->obs_main_window->statusBar()
+				obs_main_window->statusBar()
 					->addPermanentWidget(container);
 			}
 
@@ -525,16 +519,16 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 				// On-boarding
 
 				// Reset state but don't erase all cookies
-				context->self->Reset(false);
+				Reset(false);
 			} else {
 				// Regular
 
-				context->self->RestoreState();
+				RestoreState();
 			}
 
 			QApplication::sendPostedEvents();
 
-			context->self->m_menuManager->Update();
+			m_menuManager->Update();
 
 			{
 				json11::Json::object eventProps = {
@@ -545,20 +539,17 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 						onBoardingReason.c_str();
 				}
 
-				context->self->GetAnalyticsEventsManager()
+				GetAnalyticsEventsManager()
 					->trackEvent("Initialized", eventProps);
 			}
-		},
-		&context);
+		});
 
-	QtPostTask(
-		[](void * /*data*/) {
-			// Update visible state
-			StreamElementsGlobalStateManager::GetInstance()
-				->GetMenuManager()
-				->Update();
-		},
-		this);
+	QtPostTask([]() {
+		// Update visible state
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetMenuManager()
+			->Update();
+	});
 
 	register_cookie_manager(CefCookieManager::GetGlobalManager(nullptr));
 
@@ -588,34 +579,30 @@ void StreamElementsGlobalStateManager::Shutdown()
     delete m_crashHandler;
 
     QtExecSync(
-		[](void *data) -> void {
-			StreamElementsGlobalStateManager *self =
-				(StreamElementsGlobalStateManager *)data;
+		[this]() -> void {
+			//mainWindow()->removeDockWidget(m_themeChangeListener);
+			m_themeChangeListener->deleteLater();
+			m_appStateListener->deleteLater();
 
-			//self->mainWindow()->removeDockWidget(self->m_themeChangeListener);
-			self->m_themeChangeListener->deleteLater();
-			self->m_appStateListener->deleteLater();
-
-			delete self->m_analyticsEventsManager;
-			delete self->m_performanceHistoryTracker;
-			delete self->m_outputSettingsManager;
-			delete self->m_bwTestManager;
-			delete self->m_widgetManager;
-			delete self->m_menuManager;
-			delete self->m_hotkeyManager;
-			delete self->m_obsSceneManager;
-			delete self->m_localWebFilesServer;
-			delete self->m_externalSceneDataProviderManager;
-			delete self->m_httpClient;
-			// delete self->m_nativeObsControlsManager; // Singleton
-			delete self->m_profilesManager;
-			delete self->m_backupManager;
-			delete self->m_cleanupManager;
-			delete self->m_previewManager;
-			delete self->m_windowStateEventFilter;
-			delete self->m_cookieManager;
-		},
-		this);
+			delete m_analyticsEventsManager;
+			delete m_performanceHistoryTracker;
+			delete m_outputSettingsManager;
+			delete m_bwTestManager;
+			delete m_widgetManager;
+			delete m_menuManager;
+			delete m_hotkeyManager;
+			delete m_obsSceneManager;
+			delete m_localWebFilesServer;
+			delete m_externalSceneDataProviderManager;
+			delete m_httpClient;
+			// delete m_nativeObsControlsManager; // Singleton
+			delete m_profilesManager;
+			delete m_backupManager;
+			delete m_cleanupManager;
+			delete m_previewManager;
+			delete m_windowStateEventFilter;
+			delete m_cookieManager;
+		});
 #endif
 
 	m_initialized = false;

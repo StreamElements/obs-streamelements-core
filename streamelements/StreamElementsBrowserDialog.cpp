@@ -66,12 +66,10 @@ protected:
 					}
 				}
 
-				QtPostTask([](void* data) {
-					StreamElementsDialogApiMessageHandler* msgHandler =
-						(StreamElementsDialogApiMessageHandler*)data;
-
-					msgHandler->dialog()->accept();
-				}, msgHandler);
+				QMetaObject::invokeMethod(
+					msgHandler->dialog(),
+							  "accept",
+							  Qt::QueuedConnection);
 			}
 		}
 		API_HANDLER_END();

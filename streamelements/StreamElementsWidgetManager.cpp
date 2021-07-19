@@ -222,27 +222,22 @@ bool StreamElementsWidgetManager::AddDockWidget(
 
 			m_dockWidgetAreas[savedId] = area;
 
-			QtPostTask(
-				[](void *) -> void {
-					StreamElementsGlobalStateManager::
-						GetInstance()
-							->PersistState();
-				},
-				nullptr);
+			QtPostTask([]() -> void {
+				StreamElementsGlobalStateManager::GetInstance()
+					->PersistState();
+			});
 		});
 
 	QObject::connect(dock, &QDockWidget::visibilityChanged, [this]() {
 		std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
-		QtPostTask(
-			[](void *) -> void {
-				StreamElementsGlobalStateManager::GetInstance()
-					->GetMenuManager()
-					->Update();
-				StreamElementsGlobalStateManager::GetInstance()
-					->PersistState();
-			},
-			nullptr);
+		QtPostTask([]() -> void {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetMenuManager()
+				->Update();
+			StreamElementsGlobalStateManager::GetInstance()
+				->PersistState();
+		});
 	});
 
 	return true;

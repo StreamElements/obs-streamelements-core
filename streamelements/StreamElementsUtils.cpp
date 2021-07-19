@@ -103,64 +103,51 @@ static std::vector<std::string> tokenizeString(const std::string &str,
 
 /* ========================================================= */
 
-void QtPostTask(std::function<void()> task)
+static StreamElementsAsyncCallContextStack_t s_asyncCallContextStack;
+
+const StreamElementsAsyncCallContextStack_t* GetAsyncCallContextStack()
 {
-	struct local_context {
-		std::function<void()> task;
-	};
-
-	local_context *context = new local_context();
-	context->task = task;
-
-	QtPostTask(
-		[](void *const data) {
-			local_context *context = (local_context *)data;
-
-			context->task();
-
-			delete context;
-		},
-		context);
+	return &s_asyncCallContextStack;
 }
 
-void QtPostTask(void (*func)(void *), void *const data)
+static void AsyncCallContextPush(std::string file, int line)
+{
+	s_asyncCallContextStack.push_back(
+		new StreamElementsAsyncCallContextItem(file, line));
+}
+
+static void AsyncCallContextPop()
+{
+	StreamElementsAsyncCallContextItem *last =
+		s_asyncCallContextStack.back();
+
+	s_asyncCallContextStack.pop_back();
+
+	delete last;
+}
+
+void __QtPostTask_Impl(std::function<void()> task, std::string file, int line)
 {
 	QTimer *t = new QTimer();
 	t->moveToThread(qApp->thread());
 	t->setSingleShot(true);
 	QObject::connect(t, &QTimer::timeout, [=]() {
+		AsyncCallContextPush(file, line);
+
 		t->deleteLater();
 
-		func(data);
+		task();
+
+		AsyncCallContextPop();
 	});
 	QMetaObject::invokeMethod(t, "start", Qt::QueuedConnection,
 				  Q_ARG(int, 0));
 }
 
-void QtExecSync(std::function<void()> task)
-{
-	struct local_context {
-		std::function<void()> task;
-	};
-
-	local_context *context = new local_context();
-	context->task = task;
-
-	QtExecSync(
-		[](void *data) {
-			local_context *context = (local_context *)data;
-
-			context->task();
-
-			delete context;
-		},
-		context);
-}
-
-void QtExecSync(void (*func)(void *), void *const data)
+void __QtExecSync_Impl(std::function<void()> task, std::string file, int line)
 {
 	if (QThread::currentThread() == qApp->thread()) {
-		func(data);
+		task();
 	} else {
 		os_event_t *completeEvent;
 
@@ -170,11 +157,15 @@ void QtExecSync(void (*func)(void *), void *const data)
 		t->moveToThread(qApp->thread());
 		t->setSingleShot(true);
 		QObject::connect(t, &QTimer::timeout, [=]() {
+			AsyncCallContextPush(file, line);
+
 			t->deleteLater();
 
-			func(data);
+			task();
 
 			os_event_signal(completeEvent);
+
+			AsyncCallContextPop();
 		});
 		QMetaObject::invokeMethod(t, "start", Qt::QueuedConnection,
 					  Q_ARG(int, 0));

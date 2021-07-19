@@ -342,6 +342,25 @@ static void main_crash_handler(const char *format, va_list args, void *param)
 
 	s_crashDumpFromObs = text;
 
+	auto asyncCallContextStack = GetAsyncCallContextStack();
+
+	if (asyncCallContextStack->size()) {
+		s_crashDumpFromStackWalker +=
+			"\n======================================================================\n";
+		"\n======================================================================\n";
+		s_crashDumpFromStackWalker += "Asynchronous call context:\n";
+		s_crashDumpFromStackWalker +=
+			"======================================================================\n\n";
+
+		for (auto item : *asyncCallContextStack) {
+			s_crashDumpFromStackWalker += item->file.c_str();
+			s_crashDumpFromStackWalker += " (";
+			char buf[32];
+			s_crashDumpFromStackWalker += itoa(item->line, buf, 10);
+			s_crashDumpFromStackWalker += ")\n";
+		}
+	}
+
 	s_crashDumpFromStackWalker +=
 		"\n======================================================================\n";
 	"\n======================================================================\n";
