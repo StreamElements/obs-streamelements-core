@@ -18,6 +18,7 @@
 #include <vector>
 #include <regex>
 #include <unordered_map>
+#include <filesystem>
 
 #include <curl/curl.h>
 
@@ -69,10 +70,16 @@ static const char *ENV_PRODUCT_NAME = "OBS.Live";
 /* ========================================================= */
 
 // convert wstring to UTF-8 string
-static std::string wstring_to_utf8(const std::wstring &str)
+static std::string wstring_to_utf8(const std::wstring str)
 {
 	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
 	return myconv.to_bytes(str);
+}
+
+static std::wstring utf8_to_wstring(const std::string str)
+{
+	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
+	return myconv.from_bytes(str);
 }
 
 std::string clean_guid_string(std::string input)
@@ -2013,20 +2020,26 @@ bool GetTemporaryFilePath(std::string prefixString, std::string &result)
 #endif
 }
 
-std::string GetUniqueFileNameFromPath(std::string path, size_t maxLength)
+std::string GetUniqueFileNameFromPath(std::string fullPath, size_t maxLength)
 {
-	std::string guid = clean_guid_string(CreateGloballyUniqueIdString());
-	const char *ext_cstr = os_get_path_extension(path.c_str());
-	std::string ext = ext_cstr ? ext_cstr : "";
-	std::string result = std::regex_replace(
-		path.substr(0, path.size() - ext.size()) + "_" + guid + ext,
-		std::regex("[\\/: ]"), "_");
+	std::filesystem::path path = std::filesystem::path(utf8_to_wstring(fullPath).c_str());
+
+	auto stem = std::regex_replace(path.stem().wstring(),
+				       std::wregex(L"[ ]"), L"_");
+
+	auto ext = std::regex_replace(path.extension().wstring(),
+				      std::wregex(L"[ ]"), L"_");
+
+	std::wstring guid = utf8_to_wstring(
+		clean_guid_string(CreateGloballyUniqueIdString()));
+
+	std::wstring result = stem + std::wstring(L"_") + guid + ext;
 
 	if (maxLength > 0 && maxLength < result.size()) {
-		return result.substr(result.size() - maxLength);
-	} else {
-		return result;
+		result = result.substr(result.size() - maxLength);
 	}
+
+	return wstring_to_utf8(result);
 }
 
 std::string GetFolderPathFromFilePath(std::string filePath)
