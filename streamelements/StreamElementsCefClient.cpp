@@ -604,48 +604,55 @@ bool StreamElementsCefClient::OnJSDialog(
 		origin_url.empty() ? "OBS.Live"
 				   : CefFormatUrlForSecurityDisplay(origin_url).ToString().c_str();
 
-	CefString resultBuffer = "";
-
-	//QMainWindow* mainWindow = (QMainWindow *)obs_frontend_get_main_window();
-	//QWidget *parentWidget = (QWidget *)mainWindow;
-
-	switch (dialog_type) {
-	case JSDIALOGTYPE_ALERT:
-        {
-            QMessageBox msgBox;
-            msgBox.setParent(parentWidget);
-            msgBox.setIcon(QMessageBox::Information);
-            msgBox.setText(message_text.ToString().c_str());
-            msgBox.setWindowTitle(dialogTitle);
-            
-            SetAlwaysOnTop(&msgBox, true);
-            
-            msgBox.exec();
-
-            callback->Continue(true, resultBuffer);
-        }
-		return true;
-
-	case JSDIALOGTYPE_CONFIRM:
-        {
-            QMessageBox msgBox;
-            msgBox.setParent(parentWidget);
-            msgBox.setIcon(QMessageBox::Information);
-            msgBox.setText(message_text.ToString().c_str());
-            msgBox.setWindowTitle(dialogTitle);
-            msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-
-            SetAlwaysOnTop(&msgBox, true);
-
-            bool ok = msgBox.exec() == QMessageBox::Yes;
-
-            callback->Continue(ok, resultBuffer);
-        }
-		return true;
-
-	default:
+	if (dialog_type != JSDIALOGTYPE_ALERT &&
+	    dialog_type != JSDIALOGTYPE_CONFIRM && dialog_type != JSDIALOGTYPE_PROMPT) {
 		suppress_message = false;
 		return false;
+	} else if (dialog_type == JSDIALOGTYPE_PROMPT) {
+		QtPostTask([=]() -> void {
+			bool ok = false;
+
+			auto result =
+				QInputDialog::getText(
+					parentWidget, dialogTitle,
+					message_text.ToString().c_str(),
+					QLineEdit::Normal,
+					default_prompt_text.ToString().c_str(),
+					&ok)
+					.toStdString();
+
+			callback->Continue(ok, CefString(result.c_str()));
+		});
+
+		return true;
+	} else {
+		QtPostTask([=]() -> void {
+			QMessageBox msgBox(parentWidget);
+			msgBox.setText(message_text.ToString().c_str());
+			msgBox.setWindowTitle(dialogTitle);
+			SetAlwaysOnTop(&msgBox, true);
+
+			msgBox.setIcon(QMessageBox::Information);
+
+			msgBox.setAttribute(Qt::WA_DeleteOnClose, false);
+
+			if (dialog_type == JSDIALOGTYPE_CONFIRM) {
+				msgBox.setStandardButtons(QMessageBox::Yes |
+							   QMessageBox::No);
+			}
+
+			int result = msgBox.exec();
+
+			bool ok = true;
+
+			if (dialog_type == JSDIALOGTYPE_CONFIRM) {
+				ok = result == QMessageBox::Yes;
+			}
+
+			callback->Continue(ok, CefString(""));
+		});
+
+		return true;
 	}
 }
 
