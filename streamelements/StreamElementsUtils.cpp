@@ -133,8 +133,12 @@ static void AsyncCallContextPop()
 	delete last;
 }
 
-void __QtPostTask_Impl(std::function<void()> task, std::string file, int line)
+std::future<void> __QtPostTask_Impl(std::function<void()> task,
+				    std::string file, int line)
 {
+	std::shared_ptr<std::promise<void>> promise =
+		std::make_shared<std::promise<void>>();
+
 	QTimer *t = new QTimer();
 	t->moveToThread(qApp->thread());
 	t->setSingleShot(true);
@@ -146,41 +150,30 @@ void __QtPostTask_Impl(std::function<void()> task, std::string file, int line)
 		task();
 
 		AsyncCallContextPop();
+
+		promise->set_value();
 	});
 	QMetaObject::invokeMethod(t, "start", Qt::QueuedConnection,
 				  Q_ARG(int, 0));
+
+	return promise->get_future();
 }
 
-void __QtExecSync_Impl(std::function<void()> task, std::string file, int line)
+std::future<void> __QtExecSync_Impl(std::function<void()> task,
+				    std::string file, int line)
 {
 	if (QThread::currentThread() == qApp->thread()) {
 		task();
+
+		std::promise<void> promise;
+		promise.set_value();
+		return promise.get_future();
 	} else {
-		os_event_t *completeEvent;
+		std::future<void> result = __QtPostTask_Impl(task, file, line);
 
-		os_event_init(&completeEvent, OS_EVENT_TYPE_AUTO);
+		result.wait();
 
-		QTimer *t = new QTimer();
-		t->moveToThread(qApp->thread());
-		t->setSingleShot(true);
-		QObject::connect(t, &QTimer::timeout, [=]() {
-			AsyncCallContextPush(file, line);
-
-			t->deleteLater();
-
-			task();
-
-			os_event_signal(completeEvent);
-
-			AsyncCallContextPop();
-		});
-		QMetaObject::invokeMethod(t, "start", Qt::QueuedConnection,
-					  Q_ARG(int, 0));
-
-		QApplication::sendPostedEvents();
-
-		os_event_wait(completeEvent);
-		os_event_destroy(completeEvent);
+		return result;
 	}
 }
 

@@ -14,6 +14,7 @@
 #include <map>
 
 #include <functional>
+#include <future>
 
 #include <util/threading.h>
 #include <util/platform.h>
@@ -85,12 +86,15 @@ public:
 
 const StreamElementsAsyncCallContextStack_t *GetAsyncCallContextStack();
 
-void __QtPostTask_Impl(std::function<void()> task, std::string file, int line);
-void __QtExecSync_Impl(std::function<void()> task, std::string file, int line);
+std::future<void> __QtPostTask_Impl(std::function<void()> task,
+				    std::string file, int line);
+std::future<void> __QtExecSync_Impl(std::function<void()> task,
+				    std::string file, int line);
 
 class QtAsyncCallFunctor {
 private:
-	typedef void (*call_t)(std::function<void()> /*task*/, std::string /*file*/, int /*line*/);
+	typedef std::future<void> (*call_t)(std::function<void()> /*task*/,
+					    std::string /*file*/, int /*line*/);
 
 	std::string file;
 	int line;
@@ -102,9 +106,9 @@ public:
 	{
 	}
 
-	void operator()(std::function<void()> task) const
+	std::future<void> operator()(std::function<void()> task) const
 	{
-		impl(task, file, line);
+		return impl(task, file, line);
 	}
 };
 

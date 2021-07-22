@@ -47,7 +47,7 @@ static bool GetLocalPathFromURL(std::string url, std::string &path)
 
 	bool result = false;
 
-	QtExecSync([path,url,&result]() {
+	QtExecSync([path,url,&result]() -> void {
 		obs_frontend_push_ui_translation(obs_module_get_string);
 
 		StreamElementsNetworkDialog netDialog(
