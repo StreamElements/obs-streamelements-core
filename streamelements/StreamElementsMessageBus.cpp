@@ -42,7 +42,7 @@ void StreamElementsMessageBus::AddBrowserListener(CefRefPtr<CefBrowser> browser,
 {
 	std::lock_guard<std::recursive_mutex> guard(m_browser_list_mutex);
 
-	m_browser_list.emplace(browser, type);
+	m_browser_list[browser->GetIdentifier()] = std::make_shared<BrowserListItem>(browser, type);
 
 	auto httpRequestHandler = [this, browser](const HttpServer::request_t &req,
 					 HttpServer::response_t &res) -> void {
@@ -123,7 +123,7 @@ void StreamElementsMessageBus::RemoveBrowserListener(CefRefPtr<CefBrowser> brows
 {
 	std::lock_guard<std::recursive_mutex> guard(m_browser_list_mutex);
 
-	m_browser_list.erase(browser);
+	m_browser_list.erase(browser->GetIdentifier());
 
 	m_browser_http_servers.erase(browser->GetIdentifier());
 }
@@ -301,7 +301,7 @@ void StreamElementsMessageBus::NotifyAllLocalEventListeners(
 	for (auto kv : m_browser_list) {
 		auto browser = kv.first;
 
-		if (kv.second & types) {
+		if (kv.second->flags & types) {
 			CefRefPtr<CefProcessMessage> msg =
 				CefProcessMessage::Create("DispatchJSEvent");
 			CefRefPtr<CefListValue> args = msg->GetArgumentList();
@@ -309,7 +309,7 @@ void StreamElementsMessageBus::NotifyAllLocalEventListeners(
 			args->SetString(0, event);
 			args->SetString(1, payloadJson);
 
-			SendBrowserProcessMessage(browser, PID_RENDERER, msg);
+			SendBrowserProcessMessage(kv.second->browser, PID_RENDERER, msg);
 		}
 	}
 }

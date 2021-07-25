@@ -236,6 +236,8 @@ StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 	UnregisterAppActiveTrackerWidget(this);
 
 	DestroyBrowser();
+
+	m_requestedApiMessageHandler = nullptr;
 }
 
 void StreamElementsBrowserWidget::InitBrowserAsync()

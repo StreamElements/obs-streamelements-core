@@ -12,6 +12,7 @@
 #include <regex>
 #include <sstream>
 #include <algorithm>
+#include <set>
 
 #include <QMainWindow>
 #include <QWindow>
@@ -25,7 +26,7 @@
 #include <QCursor>
 
 static std::recursive_mutex s_browsers_mutex;
-static std::vector<CefRefPtr<CefBrowser>> s_browsers;
+static std::map<int, CefRefPtr<CefBrowser>> s_browsers;
 
 /* ========================================================================= */
 
@@ -369,7 +370,7 @@ void StreamElementsCefClient::OnAfterCreated(CefRefPtr<CefBrowser> browser)
 	{
 		std::lock_guard<std::recursive_mutex> guard(s_browsers_mutex);
 
-		s_browsers.push_back(browser);
+		s_browsers[browser->GetIdentifier()] = browser;
 
 		StreamElementsMessageBus::GetInstance()->AddBrowserListener(
 			browser, m_msgDestType);
@@ -382,12 +383,7 @@ void StreamElementsCefClient::OnBeforeClose(CefRefPtr<CefBrowser> browser)
 
 	StreamElementsMessageBus::GetInstance()->RemoveBrowserListener(browser);
 
-	auto index =
-		std::find(s_browsers.begin(), s_browsers.end(), browser.get());
-
-	if (index != s_browsers.end()) {
-		s_browsers.erase(index);
-	}
+	s_browsers.erase(browser->GetIdentifier());
 }
 
 void StreamElementsCefClient::DispatchJSEvent(std::string event,
@@ -395,7 +391,9 @@ void StreamElementsCefClient::DispatchJSEvent(std::string event,
 {
 	std::lock_guard<std::recursive_mutex> guard(s_browsers_mutex);
 
-	for (CefRefPtr<CefBrowser> browser : s_browsers) {
+	for (auto item : s_browsers) {
+		CefRefPtr<CefBrowser> browser = item.second;
+
 		CefRefPtr<CefProcessMessage> msg =
 			CefProcessMessage::Create("DispatchJSEvent");
 		CefRefPtr<CefListValue> args = msg->GetArgumentList();

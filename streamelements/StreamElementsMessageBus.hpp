@@ -164,8 +164,21 @@ public:
 					    CefRefPtr<CefValue> &output);
 
 private:
+	class BrowserListItem {
+	public:
+		BrowserListItem(CefRefPtr<CefBrowser> browser_,
+				message_destination_filter_flags_t flags_)
+			: browser(browser_), flags(flags_)
+		{
+		}
+
+	public:
+		CefRefPtr<CefBrowser> browser;
+		message_destination_filter_flags_t flags;
+	};
+
 	std::recursive_mutex m_browser_list_mutex;
-	std::map<CefRefPtr<CefBrowser>, message_destination_filter_flags_t> m_browser_list;
+	std::map<int, std::shared_ptr<BrowserListItem>> m_browser_list;
 	std::map<int,
 		 std::shared_ptr<StreamElementsHttpServerManager>>
 		m_browser_http_servers;

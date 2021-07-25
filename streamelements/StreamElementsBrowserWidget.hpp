@@ -49,7 +49,7 @@ private:
 	std::string m_reloadPolicy;
 	std::string m_pendingLocationArea;
 	std::string m_pendingId;
-	StreamElementsApiMessageHandler* m_requestedApiMessageHandler;
+	CefRefPtr<StreamElementsApiMessageHandler> m_requestedApiMessageHandler;
 
 	QSize m_sizeHint;
 
@@ -407,26 +407,40 @@ public:
 		StreamElementsBrowserWidget_EventHandler(StreamElementsBrowserWidget* widget) : m_widget(widget)
 		{ }
 
+		~StreamElementsBrowserWidget_EventHandler()
+		{
+			if (m_last_pending_future.valid()) {
+				m_last_pending_future.wait();
+			}
+
+			m_widget = nullptr;
+		}
+
 	public:
 		// CEF loading state was changed
-		virtual void OnLoadingStateChange(CefRefPtr<CefBrowser> browser,
-			bool isLoading,
-			bool canGoBack,
-			bool canGoForward) override
+		virtual void OnLoadingStateChange(CefRefPtr<CefBrowser> /*browser*/,
+			bool /*isLoading*/,
+			bool /*canGoBack*/,
+			bool /*canGoForward*/) override
 		{
-			UNREFERENCED_PARAMETER(browser);
-			UNREFERENCED_PARAMETER(isLoading);
-			UNREFERENCED_PARAMETER(canGoBack);
-			UNREFERENCED_PARAMETER(canGoForward);
+			std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
-			QtPostTask([this]() {
+			m_last_pending_future = QtPostTask([this]() {
+				if (!m_widget)
+					return;
+
 				m_widget->emitBrowserStateChanged();
 			});
 		}
 
 		// CEF got focus
 		virtual void OnGotFocus(CefRefPtr<CefBrowser>) override {
-			QtPostTask([this]() {
+			std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
+			m_last_pending_future = QtPostTask([this]() {
+				if (!m_widget)
+					return;
+
 				m_widget->setFocus();
 			});
 		}
@@ -435,7 +449,12 @@ public:
 		virtual void OnFocusedDOMNodeChanged(CefRefPtr<CefBrowser>,
 						     bool isEditable) override
 		{
-			QtPostTask([this, isEditable]() {
+			std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
+			m_last_pending_future = QtPostTask([this, isEditable]() {
+				if (!m_widget)
+					return;
+
 				m_widget->setBrowserFocusedDOMNodeEditable(
 					isEditable);
 			});
@@ -443,6 +462,8 @@ public:
 
 	private:
 		StreamElementsBrowserWidget* m_widget;
+		std::mutex m_mutex;
+		std::future<void> m_last_pending_future;
 	};
 
 };
