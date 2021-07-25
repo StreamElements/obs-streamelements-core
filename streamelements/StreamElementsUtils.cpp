@@ -139,22 +139,17 @@ std::future<void> __QtPostTask_Impl(std::function<void()> task,
 	std::shared_ptr<std::promise<void>> promise =
 		std::make_shared<std::promise<void>>();
 
-	QTimer *t = new QTimer();
-	t->moveToThread(qApp->thread());
-	t->setSingleShot(true);
-	QObject::connect(t, &QTimer::timeout, [=]() {
+	auto executor = [=]() {
 		AsyncCallContextPush(file, line);
-
-		t->deleteLater();
 
 		task();
 
 		AsyncCallContextPop();
 
 		promise->set_value();
-	});
-	QMetaObject::invokeMethod(t, "start", Qt::QueuedConnection,
-				  Q_ARG(int, 0));
+	};
+
+	QMetaObject::invokeMethod(qApp, executor, Qt::QueuedConnection);
 
 	return promise->get_future();
 }
