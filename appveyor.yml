@@ -48,7 +48,7 @@ install:
 
     git submodule update --init --recursive
 
-    git checkout 26.1.1
+    git checkout 27.0.1
 
     rd /s /q c:\local\obs-studio\plugins\obs-browser
 
@@ -65,12 +65,12 @@ install:
 
     if exist BugSplat.zip (curl -kL -o BugSplat.zip https://cdn.streamelements.com/obs/dist/third-party/bugsplat/BugSplatNative.zip -f --retry 5 -z BugSplat.zip) else (curl -kL -o BugSplat.zip https://cdn.streamelements.com/obs/dist/third-party/bugsplat/BugSplatNative.zip -f --retry 5 -C -) 2>&1 >nul:
 
-    if exist dependencies2017.zip (curl -kLO https://obsproject.com/downloads/dependencies2017.zip -f --retry 5 -z dependencies2017.zip) else (curl -kLO https://obsproject.com/downloads/dependencies2017.zip -f --retry 5 -C -) 2>&1 >nul:
+    if exist dependencies2019.zip (curl -kLO https://obsproject.com/downloads/dependencies2019.zip -f --retry 5 -z dependencies2019.zip) else (curl -kLO https://obsproject.com/downloads/dependencies2019.zip -f --retry 5 -C -) 2>&1 >nul:
 
     if exist vlc.zip (curl -kLO https://obsproject.com/downloads/vlc.zip -f --retry 5 -z vlc.zip) else (curl -kLO https://obsproject.com/downloads/vlc.zip -f --retry 5 -C -) 2>&1 >nul:
 
 
-    7z x -y dependencies2017.zip -odependencies2017
+    7z x -y dependencies2019.zip -odependencies2019
 
     7z x -y vlc.zip -ovlc
 
@@ -84,9 +84,9 @@ install:
     7z x -y c:\local\cef64.zip
 
 
-    set DepsPath32=c:\local\dependencies2017\win32
+    set DepsPath32=c:\local\dependencies2019\win32
 
-    set DepsPath64=c:\local\dependencies2017\win64
+    set DepsPath64=c:\local\dependencies2019\win64
 
     set VLCPath=c:\local\vlc
 
@@ -97,7 +97,7 @@ install:
     set build_config=RelWithDebInfo
 cache:
 - c:\local\BugSplat.zip
-- c:\local\dependencies2017.zip
+- c:\local\dependencies2019.zip
 - c:\local\vlc.zip
 build_script:
 - cmd: >-

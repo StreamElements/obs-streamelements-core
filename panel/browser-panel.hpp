@@ -11,6 +11,10 @@
 #include <dlfcn.h>
 #endif
 
+#ifdef ENABLE_WAYLAND
+#include <obs-nix-platform.h>
+#endif
+
 struct QCefCookieManager {
 	virtual ~QCefCookieManager() {}
 

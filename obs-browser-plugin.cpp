@@ -26,6 +26,7 @@
 #include <obs.hpp>
 #include <obs-config.h>
 #include <functional>
+#include <sstream>
 #include <thread>
 #include <mutex>
 
@@ -416,8 +417,52 @@ static obs_properties_t *browser_source_get_properties(void *data)
 	return props;
 }
 
-static os_event_t *s_BrowserManagerThreadInitializedEvent = nullptr;
+static void missing_file_callback(void *src, const char *new_path, void *data)
+{
+	BrowserSource *bs = static_cast<BrowserSource *>(src);
 
+	if (bs) {
+		obs_source_t *source = bs->source;
+		obs_data_t *settings = obs_source_get_settings(source);
+		obs_data_set_string(settings, "local_file", new_path);
+		obs_source_update(source, settings);
+		obs_data_release(settings);
+	}
+
+	UNUSED_PARAMETER(data);
+}
+
+static obs_missing_files_t *browser_source_missingfiles(void *data)
+{
+	BrowserSource *bs = static_cast<BrowserSource *>(data);
+	obs_missing_files_t *files = obs_missing_files_create();
+
+	if (bs) {
+		obs_source_t *source = bs->source;
+		obs_data_t *settings = obs_source_get_settings(source);
+
+		bool enabled = obs_data_get_bool(settings, "is_local_file");
+		const char *path = obs_data_get_string(settings, "local_file");
+
+		if (enabled && strcmp(path, "") != 0) {
+			if (!os_file_exists(path)) {
+				obs_missing_file_t *file =
+					obs_missing_file_create(
+						path, missing_file_callback,
+						OBS_MISSING_FILE_SOURCE,
+						bs->source, NULL);
+
+				obs_missing_files_add_file(files, file);
+			}
+		}
+
+		obs_data_release(settings);
+	}
+
+	return files;
+}
+
+static os_event_t *s_BrowserManagerThreadInitializedEvent = nullptr;
 static CefRefPtr<BrowserApp> app;
 
 static void BrowserInit(void)
@@ -440,9 +485,37 @@ static void BrowserInit(void)
 	settings.windowless_rendering_enabled = true;
 	settings.no_sandbox = true;
 
+	uint32_t obs_ver = obs_get_version();
+	uint32_t obs_maj = obs_ver >> 24;
+	uint32_t obs_min = (obs_ver >> 16) & 0xFF;
+	uint32_t obs_pat = obs_ver & 0xFFFF;
+
+	/* This allows servers the ability to determine that browser panels and
+	 * browser sources are coming from OBS. */
+	std::stringstream prod_ver;
+	prod_ver << "Chrome/";
+	prod_ver << std::to_string(CHROME_VERSION_MAJOR) << "."
+		 << std::to_string(CHROME_VERSION_MINOR) << "."
+		 << std::to_string(CHROME_VERSION_BUILD) << "."
+		 << std::to_string(CHROME_VERSION_PATCH);
+	prod_ver << " OBS/";
+	prod_ver << std::to_string(obs_maj) << "." << std::to_string(obs_min)
+		 << "." << std::to_string(obs_pat);
+
+	CefString(&settings.product_version) = prod_ver.str();
+
 #ifdef USE_QT_LOOP
 	settings.external_message_pump = true;
 	settings.multi_threaded_message_loop = false;
+#endif
+
+#if !defined(_WIN32) && !defined(__APPLE__)
+	// Override locale path from OBS binary path to plugin binary path
+	string locales = obs_get_module_binary_path(obs_current_module());
+	locales = locales.substr(0, locales.find_last_of('/') + 1);
+	locales += "locales";
+	BPtr<char> abs_locales = os_get_abs_path_ptr(locales.c_str());
+	CefString(&settings.locales_dir_path) = abs_locales;
 #endif
 
 	std::string obs_locale = obs_get_locale();
@@ -550,7 +623,7 @@ void RegisterBrowserSource()
 			    OBS_SOURCE_AUDIO |
 #endif
 			    OBS_SOURCE_CUSTOM_DRAW | OBS_SOURCE_INTERACTION |
-			    OBS_SOURCE_DO_NOT_DUPLICATE;
+			    OBS_SOURCE_DO_NOT_DUPLICATE | OBS_SOURCE_SRGB;
 	info.get_properties = browser_source_get_properties;
 	info.get_defaults = browser_source_get_defaults;
 #if LIBOBS_API_MAJOR_VER >= 25
@@ -569,6 +642,7 @@ void RegisterBrowserSource()
 	info.destroy = [](void *data) {
 		delete static_cast<BrowserSource *>(data);
 	};
+	info.missing_files = browser_source_missingfiles;
 	info.update = [](void *data, obs_data_t *settings) {
 		static_cast<BrowserSource *>(data)->Update(settings);
 	};

@@ -326,7 +326,9 @@ void BrowserSource::SendKeyClick(const struct obs_key_event *event, bool key_up)
 	uint32_t native_vkey = event->native_vkey;
 	uint32_t modifiers = event->modifiers;
 #else
+	uint32_t native_vkey = event->native_vkey;
 	uint32_t native_scancode = event->native_scancode;
+	uint32_t modifiers = event->native_modifiers;
 #endif
 
 	ExecuteOnBrowser(
@@ -588,10 +590,14 @@ void BrowserSource::Render()
 #endif
 
 #if LIBOBS_API_VER > MAKE_SEMANTIC_VERSION(26, 1, 2)
-		const bool previous = gs_set_linear_srgb(true);
+		const bool current =
+			gs_is_srgb_format(gs_texture_get_color_format(texture));
+		const bool previous = gs_set_linear_srgb(current);
 #endif
+
 		while (gs_effect_loop(effect, "Draw"))
 			obs_source_draw(texture, 0, 0, 0, 0, flip);
+
 #if LIBOBS_API_VER > MAKE_SEMANTIC_VERSION(26, 1, 2)
 		gs_set_linear_srgb(previous);
 #endif
