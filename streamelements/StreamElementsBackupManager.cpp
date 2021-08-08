@@ -20,7 +20,6 @@
 
 #include <vector>
 #include <map>
-#include <codecvt>
 #include <regex>
 
 #ifndef BYTE
@@ -74,10 +73,8 @@ static bool GetLocalPathFromURL(std::string url, std::string &path)
 
 static bool AddFileToZip(zip_t *zip, std::string localPath, std::string zipPath)
 {
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
-
 #ifdef WIN32
-	int fd = _wsopen(myconv.from_bytes(localPath).c_str(),
+	int fd = _wsopen(utf8_to_wstring(localPath).c_str(),
 			 O_RDONLY | O_BINARY, SH_DENYNO,
 			 0 /*S_IREAD | S_IWRITE*/);
 #else
@@ -299,8 +296,6 @@ static bool ScanForFileReferencesMonikersToRestore(std::string srcBasePath,
 static bool
 ScanForFileReferences(CefRefPtr<CefValue> &node, std::map<std::string, std::string> &filesMap)
 {
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
-
 	if (node->GetType() == VTYPE_STRING) {
 		std::string path = node->GetString().ToString();
 
@@ -308,7 +303,7 @@ ScanForFileReferences(CefRefPtr<CefValue> &node, std::map<std::string, std::stri
 			if (os_file_exists(path.c_str())) {
 				filesMap[path] =
 					CreateSessionSignedAbsolutePathURL(
-						myconv.from_bytes(path));
+						utf8_to_wstring(path));
 			}
 		}
 	} else if (node->GetType() == VTYPE_LIST) {
@@ -655,8 +650,6 @@ void StreamElementsBackupManager::QueryLocalBackupPackageReferencedFiles(
 		addedCollections->SetDictionary(addedCollections->GetSize(), d);
 	}
 
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
-
 	CefRefPtr<CefDictionaryValue> out = CefDictionaryValue::Create();
 
 	out->SetList("sceneCollections", addedCollections);
@@ -755,14 +748,12 @@ void StreamElementsBackupManager::CreateLocalBackupPackage(
 
 	zip_close(zip);
 
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
-
 	CefRefPtr<CefDictionaryValue> out = CefDictionaryValue::Create();
 
 	out->SetList("profiles", addedProfiles);
 	out->SetList("sceneCollections", addedCollections);
 	out->SetString("url", CreateSessionSignedAbsolutePathURL(
-				      myconv.from_bytes(backupPackagePath)));
+				      utf8_to_wstring(backupPackagePath)));
 
 	output->SetDictionary(out);
 }
@@ -848,10 +839,8 @@ void StreamElementsBackupManager::QueryBackupPackageContent(
 
 	CefRefPtr<CefDictionaryValue> result = CefDictionaryValue::Create();
 
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
-
 	result->SetString("url", CreateSessionSignedAbsolutePathURL(
-					 myconv.from_bytes(localPath)));
+					 utf8_to_wstring(localPath)));
 	result->SetList("profiles", profilesList);
 	result->SetList("sceneCollections", collectionsList);
 
@@ -1013,10 +1002,6 @@ void StreamElementsBackupManager::RestoreBackupPackageContent(
 					/* Mkdir failed*/
 					success = false;
 				} else {
-					std::wstring_convert<
-						std::codecvt_utf8<wchar_t>>
-						myconv;
-
 					zip_extract_context_t context;
 
 #ifdef WIN32
@@ -1032,7 +1017,7 @@ void StreamElementsBackupManager::RestoreBackupPackageContent(
                         });
 
                     context.handle = _wopen(
-						myconv.from_bytes(destFilePath)
+						utf8_to_wstring(destFilePath)
 							.c_str(),
 						O_WRONLY | O_CREAT |
 							O_BINARY,
@@ -1109,8 +1094,6 @@ void StreamElementsBackupManager::RestoreBackupPackageContent(
         wchar_t obs_path_utf16[MAX_PATH];
         GetModuleFileNameW(NULL, obs_path_utf16, MAX_PATH);
 
-        std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
-
         std::string obsArgs = "";
 
         {
@@ -1119,7 +1102,7 @@ void StreamElementsBackupManager::RestoreBackupPackageContent(
                 CommandLineToArgvW(GetCommandLineW(), &argc);
 
             for (int i = 1; i < argc; ++i) {
-                std::string arg = myconv.to_bytes(wArgv[i]);
+                std::string arg = wstring_to_utf8(wArgv[i]);
 
                 if (arg.size() && arg.find_first_of(' ') >= 0) {
                     if (arg.substr(0, 1) != "\"")
@@ -1147,7 +1130,7 @@ void StreamElementsBackupManager::RestoreBackupPackageContent(
             "StreamElements.BackupRestore.MoveRestoredFilesAbortConfirmation.Text");
         vars["CONFIRM_STOP_MOVE_TITLE"] = obs_module_text(
             "StreamElements.BackupRestore.MoveRestoredFilesAbortConfirmation.Title");
-        vars["OBS_EXE_PATH"] = myconv.to_bytes(obs_path_utf16);
+        vars["OBS_EXE_PATH"] = wstring_to_utf8(obs_path_utf16);
         vars["OBS_ARGS"] = obsArgs;
         vars["OBS_EXE_FOLDER"] =
             os_getcwd((char *)cwd.data(), cwd.size());

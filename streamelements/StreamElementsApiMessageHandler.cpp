@@ -15,8 +15,6 @@
 #include <QDesktopServices>
 #include <QUrl>
 
-#include <codecvt>
-
 std::shared_ptr<StreamElementsApiMessageHandler::InvokeHandler>
 	StreamElementsApiMessageHandler::InvokeHandler::s_singleton = nullptr;
 

@@ -147,12 +147,6 @@ void StreamElementsReportIssueDialog::update()
 
 void StreamElementsReportIssueDialog::accept()
 {
-	auto wstring_to_utf8 = [](const std::wstring& str) -> std::string
-	{
-		std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
-		return myconv.to_bytes(str);
-	};
-
 	std::string tempBufPath;
 
 	ui->txtIssue->setEnabled(false);
@@ -273,9 +267,7 @@ void StreamElementsReportIssueDialog::accept()
 				SH_DENYNO,
 				0 /*_S_IREAD | _S_IWRITE*/);
 #else
-			std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
-
-			int fd = ::open(myconv.to_bytes(localPath).c_str(),
+			int fd = ::open(wstring_to_utf8(localPath).c_str(),
 					 O_RDONLY);
 #endif
 			if (-1 != fd) {
@@ -424,10 +416,7 @@ void StreamElementsReportIssueDialog::accept()
 				get_newest_file("obs-studio/crashes");
 
 			if (lastCrashLog.size()) {
-				std::wstring_convert<std::codecvt_utf8<wchar_t>>
-					myconv;
-
-				local_to_zip_files_map[myconv.from_bytes(lastCrashLog)] =
+				local_to_zip_files_map[utf8_to_wstring(lastCrashLog)] =
 					std::wstring(L"obs-studio\\crashes\\crash.log");
 			}
 		}
@@ -476,10 +465,7 @@ void StreamElementsReportIssueDialog::accept()
                         if (delta < MAX_SECONDS_OLD) {
                             std::string zipFilePath = "crashes/" + fileName;
                             
-                            std::wstring_convert<std::codecvt_utf8<wchar_t>>
-                                myconv;
-
-                            local_to_zip_files_map[myconv.from_bytes(filePath)] = myconv.from_bytes(zipFilePath);
+                            local_to_zip_files_map[utf8_to_wstring(filePath)] = utf8_to_wstring(zipFilePath);
                         }
                     }
                 }

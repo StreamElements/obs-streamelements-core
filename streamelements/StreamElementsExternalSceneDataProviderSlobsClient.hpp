@@ -3,7 +3,6 @@
 #include "StreamElementsExternalSceneDataProvider.hpp"
 #include <util/platform.h>
 #include <string>
-#include <codecvt>
 #include <filesystem>
 
 #ifndef WIN32

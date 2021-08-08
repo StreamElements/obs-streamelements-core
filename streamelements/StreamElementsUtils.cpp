@@ -6,6 +6,7 @@
 #include "StreamElementsPleaseWaitWindow.hpp"
 #include "Version.hpp"
 #include "wide-string.hpp"
+#include "deps/utf8.h"
 
 #define GLOBAL_ENV_CONFIG_FILE_NAME "obs-studio/streamelements-env.ini"
 
@@ -14,7 +15,6 @@
 #endif
 
 #include <cstdint>
-#include <codecvt>
 #include <vector>
 #include <regex>
 #include <unordered_map>
@@ -70,16 +70,34 @@ static const char *ENV_PRODUCT_NAME = "OBS.Live";
 /* ========================================================= */
 
 // convert wstring to UTF-8 string
-static std::string wstring_to_utf8(const std::wstring str)
+std::string wstring_to_utf8(const std::wstring wstr)
 {
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
-	return myconv.to_bytes(str);
+	std::string utf8line;
+
+	if (wstr.empty())
+		return utf8line;
+
+#ifdef _MSC_VER
+	utf8::utf16to8(wstr.begin(), wstr.end(), std::back_inserter(utf8line));
+#else
+	utf8::utf32to8(wstr.begin(), wstr.end(), std::back_inserter(utf8line));
+#endif
+	return utf8line;
 }
 
-static std::wstring utf8_to_wstring(const std::string str)
+std::wstring utf8_to_wstring(const std::string str)
 {
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
-	return myconv.from_bytes(str);
+	std::wstring wide_line;
+
+	if (str.empty())
+		return wide_line;
+
+#ifdef _MSC_VER
+	utf8::utf8to16(str.begin(), str.end(), std::back_inserter(wide_line));
+#else
+	utf8::utf8to32(str.begin(), str.end(), std::back_inserter(wide_line));
+#endif
+	return wide_line;
 }
 
 std::string clean_guid_string(std::string input)
@@ -1221,11 +1239,9 @@ bool WriteEnvironmentConfigStrings(streamelements_env_update_requests requests)
 	PROCESS_INFORMATION procInf;
 	memset(&procInf, 0, sizeof procInf);
 
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
-
 	std::wstring wArgs;
 	for (auto arg : args) {
-		wArgs += L"\"" + myconv.from_bytes(arg) + L"\" ";
+		wArgs += L"\"" + utf8_to_wstring(arg) + L"\" ";
 	}
 	if (!wArgs.empty()) {
 		// Remove trailing space
@@ -1971,10 +1987,8 @@ bool GetTemporaryFilePath(std::string prefixString, std::string &result)
 
 	std::wstring wtempBufPath(pathBuffer);
 
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
-
 	if (0 == ::GetTempFileNameW(wtempBufPath.c_str(),
-				    myconv.from_bytes(prefixString).c_str(), 0,
+				    utf8_to_wstring(prefixString).c_str(), 0,
 				    pathBuffer)) {
 		delete[] pathBuffer;
 
@@ -1983,7 +1997,7 @@ bool GetTemporaryFilePath(std::string prefixString, std::string &result)
 
 	wtempBufPath = pathBuffer;
 
-	result = myconv.to_bytes(wtempBufPath);
+	result = wstring_to_utf8(wtempBufPath);
 
 	delete[] pathBuffer;
 

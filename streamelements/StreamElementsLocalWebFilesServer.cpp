@@ -2,7 +2,6 @@
 #include "StreamElementsGlobalStateManager.hpp"
 #include "StreamElementsUtils.hpp"
 #include <filesystem>
-#include <codecvt>
 #include <algorithm>
 #include <obs.h>
 #include "wide-string.hpp"
@@ -271,8 +270,6 @@ StreamElementsLocalWebFilesServer::StreamElementsLocalWebFilesServer(
 
 		return;
 	}
-
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
 
 	for (auto &p :
 	     std::filesystem::directory_iterator(m_rootFolder)) {

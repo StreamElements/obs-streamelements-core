@@ -13,14 +13,12 @@ bool StreamElementsExternalSceneDataProviderSlobsClient::GetSceneCollections(
 	char* manifestContent =
 		os_quick_read_utf8_file((m_basePath + "/manifest.json").c_str());
 
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
-
 	CefRefPtr<CefValue> manifestValue = nullptr;
 
 	try {
 		manifestValue =
 			CefParseJSON(
-				manifestContent ? myconv.from_bytes(manifestContent) : L"{}",
+				manifestContent ? utf8_to_wstring(manifestContent) : L"{}",
 				JSON_PARSER_ALLOW_TRAILING_COMMAS);
 	}
 	catch (...) {
@@ -83,7 +81,7 @@ bool StreamElementsExternalSceneDataProviderSlobsClient::GetSceneCollections(
 			item.collectionId = collection->GetString("id");
 
 			if (!collection->HasKey("name") || collection->GetType("name") != VTYPE_STRING) {
-				item.name = myconv.from_bytes(item.collectionId);
+				item.name = utf8_to_wstring(item.collectionId);
 			}
 			else {
 				item.name = collection->GetString("name");
@@ -183,16 +181,14 @@ bool StreamElementsExternalSceneDataProviderSlobsClient::GetSceneCollection(
 	result.collectionId = collection->collectionId;
 	result.name = collection->name;
 
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
-
 	char* manifest_content =
 		os_quick_read_utf8_file((m_basePath + "/manifest.json").c_str());
 
 	if (manifest_content) {
 		scene_collection_file_content_t meta_manifest;
 
-		meta_manifest.path = myconv.from_bytes(m_basePath + "/manifest.json");
-		meta_manifest.content = myconv.from_bytes(manifest_content);
+		meta_manifest.path = utf8_to_wstring(m_basePath + "/manifest.json");
+		meta_manifest.content = utf8_to_wstring(manifest_content);
 		result.metadataFiles.push_back(meta_manifest);
 
 		bfree(manifest_content);
@@ -211,10 +207,10 @@ bool StreamElementsExternalSceneDataProviderSlobsClient::GetSceneCollection(
 	if (scene_collection_content) {
 		scene_collection_file_content_t meta_scene_collection;
 
-		meta_scene_collection.path = myconv.from_bytes(m_basePath + "/" + result.collectionId + ".json");
+		meta_scene_collection.path = utf8_to_wstring(m_basePath + "/" + result.collectionId + ".json");
 
 		try {
-			meta_scene_collection.content = myconv.from_bytes(scene_collection_content);
+			meta_scene_collection.content = utf8_to_wstring(scene_collection_content);
 		}
 		catch (...) {
 			// UTF-8 decoding failed

@@ -43,7 +43,6 @@
 #include <string>
 #include <ios>
 #include <fstream>
-#include <codecvt>
 #include <windows.h>
 #include <winuser.h>
 #include "bugsplat.h"
@@ -299,8 +298,7 @@ static void write_file_content(std::string &path, const char *content)
 	std::fstream file;
 
 #ifdef _WIN32
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
-	std::wstring wpath = myconv.from_bytes(path);
+	std::wstring wpath = utf8_to_wstring(path);
 
 	file.open(wpath, std::ios_base::in | std::ios_base::out |
 				 std::ios_base::trunc | std::ios_base::binary);
@@ -473,8 +471,7 @@ static inline void AddObsConfigurationFiles()
 	wtempBufPath = pathBuffer;
 	wtempBufPath += L".zip";
 
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
-	std::string tempBufPath = myconv.to_bytes(wtempBufPath);
+	std::string tempBufPath = wstring_to_utf8(wtempBufPath);
 
 	char programDataPathBuf[BUF_LEN];
 	int ret = os_get_config_path(programDataPathBuf, BUF_LEN, "obs-studio");
@@ -497,7 +494,7 @@ static inline void AddObsConfigurationFiles()
 
 	auto addBufferToZip = [&](BYTE *buf, size_t bufLen,
 				  std::wstring zipPath) {
-		zip_entry_open(zip, myconv.to_bytes(zipPath).c_str());
+		zip_entry_open(zip, wstring_to_utf8(zipPath).c_str());
 
 		zip_entry_write(zip, buf, bufLen);
 
@@ -506,7 +503,7 @@ static inline void AddObsConfigurationFiles()
 
 	auto addLinesBufferToZip = [&](std::vector<std::string> &lines,
 				       std::wstring zipPath) {
-		zip_entry_open(zip, myconv.to_bytes(zipPath).c_str());
+		zip_entry_open(zip, wstring_to_utf8(zipPath).c_str());
 
 		for (auto line : lines) {
 			zip_entry_write(zip, line.c_str(), line.size());
@@ -518,11 +515,11 @@ static inline void AddObsConfigurationFiles()
 
 	auto addCefValueToZip = [&](CefRefPtr<CefValue> &input,
 				    std::wstring zipPath) {
-		std::string buf = myconv.to_bytes(
+		std::string buf = wstring_to_utf8(
 			CefWriteJSON(input, JSON_WRITER_PRETTY_PRINT)
 				.ToWString());
 
-		zip_entry_open(zip, myconv.to_bytes(zipPath).c_str());
+		zip_entry_open(zip, wstring_to_utf8(zipPath).c_str());
 
 		zip_entry_write(zip, buf.c_str(), buf.size());
 
@@ -538,7 +535,7 @@ static inline void AddObsConfigurationFiles()
 
 			BYTE *buf = new BYTE[BUF_LEN];
 
-			zip_entry_open(zip, myconv.to_bytes(zipPath).c_str());
+			zip_entry_open(zip, wstring_to_utf8(zipPath).c_str());
 
 			int read = _read(fd, buf, BUF_LEN);
 			while (read > 0) {
@@ -655,7 +652,7 @@ static inline void AddObsConfigurationFiles()
 				 sizeof(BITMAPINFOHEADER) +
 				 sizeof(RGBQUAD) * nColorTableEntries;
 
-		zip_entry_open(zip, myconv.to_bytes(zipPath).c_str());
+		zip_entry_open(zip, wstring_to_utf8(zipPath).c_str());
 
 		DWORD nColorTableSize = 0;
 		if (nBitCount != 24) {
@@ -905,9 +902,8 @@ static bool BugSplatExceptionCallback(UINT nCode, LPVOID lpVal1, LPVOID lpVal2)
 		//DWORD code = p ? p->ExceptionCode : 0;
 
 		/*
-		std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
 		s_mdSender->setDefaultUserDescription(
-			myconv.from_bytes(std::regex_replace(
+			utf8_to_wstring(std::regex_replace(
 						  s_crashDumpFromStackWalker,
 						  std::regex("\n"), "\\n"))
 				.c_str());
@@ -984,10 +980,9 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
 	s_crashDumpFromObs.reserve(1024 * 16);
 	s_crashDumpFromStackWalker.reserve(1024 * 16);
 
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
 	std::wstring plugin_version =
-		myconv.from_bytes(GetStreamElementsPluginVersionString());
-	std::wstring obs_version = myconv.from_bytes(obs_get_version_string());
+		utf8_to_wstring(GetStreamElementsPluginVersionString());
+	std::wstring obs_version = utf8_to_wstring(obs_get_version_string());
 
 	std::wstring app_id = std::wstring(L"OBS ") + obs_version;
 #ifdef _WIN64

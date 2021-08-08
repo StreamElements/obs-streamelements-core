@@ -278,6 +278,12 @@ set(obs-browser_HEADERS
 	deps/base64/base64.hpp
 	deps/wide-string.hpp
 	cef-headers.hpp
+	streamelements/deps/utf8.h
+	streamelements/deps/utf8/checked.h
+	streamelements/deps/utf8/unchecked.h
+	streamelements/deps/utf8/core.h
+	streamelements/deps/utf8/cpp11.h
+	streamelements/deps/utf8/cpp17.h
 	streamelements/Version.hpp
 	streamelements/Version.generated.hpp
 	streamelements/StreamElementsUtils.hpp

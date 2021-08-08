@@ -14,8 +14,6 @@
 #include <obs.h>
 #include <util/platform.h>
 
-#include <codecvt>
-
 #include <QCloseEvent>
 
 #ifndef S_IWRITE
@@ -300,10 +298,9 @@ void StreamElementsNetworkDialog::DownloadFileAsync(
 	const char *localFilePath, const char *url, bool large_file,
 	void (*callback)(bool, void *), void *param, const char *message)
 {
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
 	std::string localPath(localFilePath);
 #ifdef WIN32
-	int fd = _wopen(myconv.from_bytes(localPath).c_str(),
+	int fd = _wopen(utf8_to_wstring(localPath).c_str(),
 			O_WRONLY | O_BINARY,
 			S_IWRITE /*_S_IREAD | _S_IWRITE*/);
 #else

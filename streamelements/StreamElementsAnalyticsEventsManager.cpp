@@ -5,7 +5,6 @@
 #include <obs.h>
 #include <util/platform.h>
 #include <string>
-#include <codecvt>
 
 StreamElementsAnalyticsEventsManager::StreamElementsAnalyticsEventsManager(size_t numWorkers)
 {

@@ -1,7 +1,6 @@
 #include "StreamElementsHttpClient.hpp"
 #include "StreamElementsUtils.hpp"
 
-#include <codecvt>
 #include <string>
 
 void StreamElementsHttpClient::DeserializeHttpRequestText(
@@ -62,8 +61,6 @@ void StreamElementsHttpClient::DeserializeHttpRequestText(
 
 		}
 
-		std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
-
 		auto cb = [&](char* data, void* userdata, char* error_msg, int http_code)
 		{
 			if (http_code != 0) {
@@ -76,7 +73,7 @@ void StreamElementsHttpClient::DeserializeHttpRequestText(
 
 			if (data) {
 				try {
-					result_string = myconv.from_bytes(data);
+					result_string = utf8_to_wstring(data);
 				}
 				catch(...) {
 					result_string = L"Invalid UTF-8 input";
@@ -96,7 +93,7 @@ void StreamElementsHttpClient::DeserializeHttpRequestText(
 			std::string post_data;
 
 			if (d->HasKey("body") && d->GetType("body") == VTYPE_STRING) {
-				post_data = myconv.to_bytes(
+				post_data = wstring_to_utf8(
 					d->GetString("body").ToWString());
 			}
 
