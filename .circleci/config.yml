@@ -14,6 +14,8 @@ jobs:
 
             export CEF_BUILD_VERSION=4183
 
+            rm -rf /usr/local/lib/python3.9/site-packages/six.py
+
             brew install awscli zip
             
             cd ..
