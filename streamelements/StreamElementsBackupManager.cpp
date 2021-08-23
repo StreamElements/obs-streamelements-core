@@ -352,6 +352,10 @@ ScanForFileReferencesToBackup(zip_t *zip, CefRefPtr<CefValue> &node,
 				blog(LOG_WARNING,
 				     "obs-browser: backup: file skipped due to unsatisfied maximum file size constraint: %s",
 				     path.c_str());
+			} else if (!IsSafeFileExtension(path)) {
+				blog(LOG_WARNING,
+				     "obs-browser: backup: file skipped due to unsafe file type: %s",
+				     path.c_str());
 			} else {
 				if (!filesMap.count(path)) {
 					std::string fileName =
@@ -988,8 +992,17 @@ void StreamElementsBackupManager::RestoreBackupPackageContent(
 		if (namePtr) {
 			std::string name = namePtr;
 
-			if (IsQualifiedFileForRestore(name, requestProfiles,
-						      requestCollections)) {
+			if (!IsSafeFileExtension(name)) {
+				blog(LOG_WARNING,
+				     "obs-browser: restore: file skipped due to unsafe file type: %s",
+				     name.c_str());
+			} else if (!IsQualifiedFileForRestore(
+					   name, requestProfiles,
+					   requestCollections)) {
+				blog(LOG_WARNING,
+				     "obs-browser: restore: file skipped due to user selection: %s",
+				     name.c_str());
+			} else {
 				std::string destFilePath =
 					extractPath + "/" + name;
 

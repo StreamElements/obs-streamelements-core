@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsConfig.hpp"
 #include "StreamElementsCefClient.hpp"
@@ -3230,3 +3232,19 @@ void RestartCurrentApplication()
 	}
 }
 #endif
+
+bool IsSafeFileExtension(std::string path)
+{
+	const char *fileExtension = os_get_path_extension(path.c_str());
+
+	const char *extensions[] = {".dll",   ".exe", ".vst", ".ax",  ".so",
+				    ".dylib", ".com", ".msi", ".bat", ".vbs",
+				    ".vb",    ".vbe", NULL};
+
+	for (size_t i = 0; extensions[i]; ++i) {
+		if (strcasecmp(fileExtension, extensions[i]) == 0)
+			return false;
+	}
+
+	return true;
+}

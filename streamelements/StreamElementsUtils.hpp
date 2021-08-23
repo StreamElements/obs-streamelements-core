@@ -405,3 +405,5 @@ bool DeserializeCefMouseWheelEventArgs(CefRefPtr<CefValue> input,
 				       CefMouseWheelEventArgs &output);
 
 void RestartCurrentApplication();
+
+bool IsSafeFileExtension(std::string path);
