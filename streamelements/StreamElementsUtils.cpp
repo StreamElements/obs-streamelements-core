@@ -3237,6 +3237,11 @@ bool IsSafeFileExtension(std::string path)
 {
 	const char *fileExtension = os_get_path_extension(path.c_str());
 
+	if (!fileExtension) {
+		// No file extension, file is safe.
+		return true;
+	}
+
 	const char *extensions[] = {".dll",   ".exe", ".vst", ".ax",  ".so",
 				    ".dylib", ".com", ".msi", ".bat", ".vbs",
 				    ".vb",    ".vbe", NULL};
