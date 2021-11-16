@@ -7,6 +7,7 @@
 #include <QFrame>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QEvent>
 
 #include "obs.h"
 #include "obs-hotkey.h"
@@ -22,6 +23,53 @@
 class StreamElementsNativeOBSControlsManager : public QObject
 {
 	Q_OBJECT
+
+private:
+	class WidgetVisibilityChangeTracker : public QObject {
+	public:
+		typedef std::function<void(bool)> callback_t;
+
+	private:
+		QObject *m_target;
+		callback_t m_callback;
+
+	public:
+		WidgetVisibilityChangeTracker(QObject *target,
+					      callback_t callback)
+			: m_target(target), m_callback(callback)
+		{
+			m_target->installEventFilter(this);
+		}
+
+		~WidgetVisibilityChangeTracker()
+		{
+			if (!m_target) {
+				m_target->removeEventFilter(this);
+			}
+		}
+
+		virtual bool eventFilter(QObject *o, QEvent *e) override
+		{
+			if (o == m_target) {
+				switch (e->type()) {
+				case QEvent::Hide:
+					m_callback(false);
+					break;
+
+				case QEvent::Show:
+					m_callback(true);
+					break;
+
+				case QEvent::Destroy:
+					m_target->removeEventFilter(this);
+					m_target = nullptr;
+					break;
+				}
+			}
+
+			return QObject::eventFilter(o, e);
+		}
+	};
 
 public:
 	enum start_streaming_mode_t {
@@ -41,6 +89,14 @@ public:
 
 	void SetStartStreamingMode(start_streaming_mode_t mode) { m_start_streaming_mode = mode; }
 	start_streaming_mode_t GetStartStreamingMode() { return m_start_streaming_mode; }
+
+	bool GetNativeManageBroadcastButtonVisibility()
+	{
+		if (!m_nativeManageBroadcastButton)
+			return false;
+
+		return m_nativeManageBroadcastButton->isVisible();
+	}
 
 	void SetStartStreamingAckTimeoutSeconds(int seconds) { m_startStreamingRequestAcknowledgeTimeoutSeconds = std::max<int>(seconds, 1); }
 	int GetStartStreamingAckTimeoutSeconds() { return m_startStreamingRequestAcknowledgeTimeoutSeconds; }
@@ -95,6 +151,9 @@ private:
 	QMainWindow* m_mainWindow = nullptr;
 	QPushButton* m_startStopStreamingButton = nullptr;
 	QPushButton* m_nativeStartStopStreamingButton = nullptr;
+	std::shared_ptr<WidgetVisibilityChangeTracker>
+		m_nativeManageBroadcastButtonVisibilityChangeTracker = nullptr;
+	QPushButton* m_nativeManageBroadcastButton = nullptr;
 	obs_hotkey_id m_startStopStreamingHotkeyId = OBS_INVALID_HOTKEY_ID;
 	start_streaming_mode_t m_start_streaming_mode = start;
 	int m_startStreamingRequestAcknowledgeTimeoutSeconds = 5;

@@ -2302,6 +2302,22 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("getNativeStreamingServiceIntegrationStatus");
+	{
+		bool manageBroadcastButtonVisible =
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetNativeOBSControlsManager()
+				->GetNativeManageBroadcastButtonVisibility();
+
+		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+		d->SetBool("manageBroadcastButton",
+			   manageBroadcastButtonVisible);
+
+		result->SetDictionary(d);
+
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("crashProgram");
 	{
 		QtPostTask([]() -> void {

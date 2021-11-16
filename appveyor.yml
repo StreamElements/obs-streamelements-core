@@ -48,7 +48,7 @@ install:
 
     git submodule update --init --recursive
 
-    git checkout 27.0.1
+    git checkout 27.1.3
 
     rd /s /q c:\local\obs-studio\plugins\obs-browser
 
@@ -157,7 +157,7 @@ build_script:
 
     cd /d c:\local\obs-studio\build64
 
-    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 16 2019" -A x64 -DSHARED_TEXTURE_SUPPORT_ENABLED=true -DBROWSER_PANEL_SUPPORT_ENABLED=true -DENABLE_SCRIPTING=false -DCOPIED_DEPENDENCIES=false -DCOPY_DEPENDENCIES=true -DBUILD_CAPTIONS=true -DCOMPILE_D3D12_HOOK=true -DCEF_ROOT_DIR=c:\local\cef_binary_%PREBUILT_CEF_VERSION%_windows64_minimal -DBUGSPLAT_ROOT_DIR=c:\local\BugSplat -DANGELSCRIPT_ROOT_DIR=c:\local\angelscript -DQTDIR=%QTDIR64% -DQt5Widgets_DIR=%QTDIR64%\lib\cmake\Qt5Widgets -DQt5Xml_DIR=%QTDIR64%\lib\cmake\Qt5Xml -DQt5Svg_DIR=%QTDIR64%\lib\cmake\Qt5Svg -DENABLE_UI=true -DVULKAN_INCLUDE_DIR=C:\local\Vulkan-Hpp -DCMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION=10.0.19041.0 -DCMAKE_SYSTEM_VERSION=10.0.19041.0 ..
+    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 16 2019" -A x64 -DSHARED_TEXTURE_SUPPORT_ENABLED=true -DBROWSER_PANEL_SUPPORT_ENABLED=true -DENABLE_SCRIPTING=false -DCOPIED_DEPENDENCIES=false -DCOPY_DEPENDENCIES=true -DBUILD_CAPTIONS=true -DCOMPILE_D3D12_HOOK=true -DCEF_ROOT_DIR=c:\local\cef_binary_%PREBUILT_CEF_VERSION%_windows64_minimal -DBUGSPLAT_ROOT_DIR=c:\local\BugSplat -DANGELSCRIPT_ROOT_DIR=c:\local\angelscript -DQTDIR=%QTDIR64% -DQt5Widgets_DIR=%QTDIR64%\lib\cmake\Qt5Widgets -DQt5Xml_DIR=%QTDIR64%\lib\cmake\Qt5Xml -DQt5Svg_DIR=%QTDIR64%\lib\cmake\Qt5Svg -DENABLE_UI=true -DVULKAN_INCLUDE_DIR=C:\local\Vulkan-Hpp -DCMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION=10.0.22000.0 -DCMAKE_SYSTEM_VERSION=10.0.22000.0 ..
 
     cd /d c:\local\obs-studio\build64
 
@@ -202,7 +202,7 @@ build_script:
 
     cd /d c:\local\obs-studio\build32
 
-    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 16 2019" -A Win32 -DSHARED_TEXTURE_SUPPORT_ENABLED=true -DBROWSER_PANEL_SUPPORT_ENABLED=true -DENABLE_SCRIPTING=false -DCOPIED_DEPENDENCIES=false -DCOPY_DEPENDENCIES=true -DBUILD_CAPTIONS=true -DCOMPILE_D3D12_HOOK=true -DCEF_ROOT_DIR=c:\local\cef_binary_%PREBUILT_CEF_VERSION%_windows32_minimal -DBUGSPLAT_ROOT_DIR=c:\local\BugSplat -DANGELSCRIPT_ROOT_DIR=c:\local\angelscript -DQTDIR=%QTDIR32% -DQt5Widgets_DIR=%QTDIR32%\lib\cmake\Qt5Widgets -DQt5Xml_DIR=%QTDIR32%\lib\cmake\Qt5Xml -DQt5Svg_DIR=%QTDIR32%\lib\cmake\Qt5Svg -DENABLE_UI=true -DVULKAN_INCLUDE_DIR=C:\local\Vulkan-Hpp -DCMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION=10.0.19041.0 -DCMAKE_SYSTEM_VERSION=10.0.19041.0 ..
+    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 16 2019" -A Win32 -DSHARED_TEXTURE_SUPPORT_ENABLED=true -DBROWSER_PANEL_SUPPORT_ENABLED=true -DENABLE_SCRIPTING=false -DCOPIED_DEPENDENCIES=false -DCOPY_DEPENDENCIES=true -DBUILD_CAPTIONS=true -DCOMPILE_D3D12_HOOK=true -DCEF_ROOT_DIR=c:\local\cef_binary_%PREBUILT_CEF_VERSION%_windows32_minimal -DBUGSPLAT_ROOT_DIR=c:\local\BugSplat -DANGELSCRIPT_ROOT_DIR=c:\local\angelscript -DQTDIR=%QTDIR32% -DQt5Widgets_DIR=%QTDIR32%\lib\cmake\Qt5Widgets -DQt5Xml_DIR=%QTDIR32%\lib\cmake\Qt5Xml -DQt5Svg_DIR=%QTDIR32%\lib\cmake\Qt5Svg -DENABLE_UI=true -DVULKAN_INCLUDE_DIR=C:\local\Vulkan-Hpp -DCMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION=10.0.22000.0 -DCMAKE_SYSTEM_VERSION=10.0.22000.0 ..
 
     cd /d c:\local\obs-studio\build32
 

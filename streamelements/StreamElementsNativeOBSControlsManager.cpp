@@ -30,6 +30,27 @@ StreamElementsNativeOBSControlsManager::StreamElementsNativeOBSControlsManager(Q
 {
 	QDockWidget* controlsDock = (QDockWidget*)m_mainWindow->findChild<QDockWidget*>("controlsDock");
 
+	m_nativeManageBroadcastButton =
+		(QPushButton *)controlsDock->findChild<QPushButton *>(
+			"broadcastButton");
+
+	if (m_nativeManageBroadcastButton) {
+		auto manageBroadcastVisibilityCallback =
+			[this](bool isVisible) -> void {
+				if (isVisible) {
+					StreamElementsCefClient::DispatchJSEvent(
+						"hostNativeManageBroadcastButtonVisible", "null");
+				} else {
+					StreamElementsCefClient::DispatchJSEvent(
+						"hostNativeManageBroadcastButtonHidden", "null");
+			}};
+
+		m_nativeManageBroadcastButtonVisibilityChangeTracker =
+			std::make_shared<WidgetVisibilityChangeTracker>(
+				m_nativeManageBroadcastButton,
+				manageBroadcastVisibilityCallback);
+	}
+
 	m_nativeStartStopStreamingButton = (QPushButton*)controlsDock->findChild<QPushButton*>("streamButton");
 
 	if (m_nativeStartStopStreamingButton) {
@@ -127,6 +148,10 @@ StreamElementsNativeOBSControlsManager::~StreamElementsNativeOBSControlsManager(
 		// m_nativeStartStopStreamingButton->setVisible(true);
 
 		m_nativeStartStopStreamingButton = nullptr;
+	}
+
+	if (m_nativeManageBroadcastButton) {
+		m_nativeManageBroadcastButton = nullptr;
 	}
 
 	HidePreviewTitleBar();
