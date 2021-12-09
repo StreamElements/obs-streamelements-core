@@ -461,9 +461,9 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 				char version_buf[512];
 				sprintf(version_buf,
 #ifdef __APPLE__
-                    "OBS.Live for Mac version %s powered by StreamElements",
+                    "SE.Live for Mac version %s powered by StreamElements",
 #else
-					"OBS.Live version %s powered by StreamElements",
+					"SE.Live version %s powered by StreamElements",
 #endif
 					GetStreamElementsPluginVersionString()
 						.c_str());

@@ -141,7 +141,7 @@ static bool on_streamelements_edit_overlay_click(obs_properties_t *props,
 		std::string editor_url =
 			GetStreamElementsOverlayEditorURL(overlayId, accountId);
 
-		/* create data structure required by popup window OBS.Live API */
+		/* create data structure required by popup window SE.Live API */
 		CefRefPtr<CefValue> root = CefValue::Create();
 		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
 
@@ -151,7 +151,7 @@ static bool on_streamelements_edit_overlay_click(obs_properties_t *props,
 
 		root->SetDictionary(d);
 
-		/* invoke popup window OBS.Live API to create a pop-up window
+		/* invoke popup window SE.Live API to create a pop-up window
 		 * with the overlay editor */
 		StreamElementsGlobalStateManager::GetInstance()
 			->DeserializePopupWindow(root);

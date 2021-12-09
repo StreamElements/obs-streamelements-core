@@ -599,7 +599,7 @@ bool StreamElementsCefClient::OnJSDialog(
 	QWidget *parentWidget = QWidget::find(windowHandle);
     
 	QString dialogTitle =
-		origin_url.empty() ? "OBS.Live"
+		origin_url.empty() ? "SE.Live"
 				   : CefFormatUrlForSecurityDisplay(origin_url).ToString().c_str();
 
 	if (dialog_type != JSDIALOGTYPE_ALERT &&
