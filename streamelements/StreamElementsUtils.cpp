@@ -1814,7 +1814,10 @@ void StreamElementsDecryptCefCookiesFile(const char *path_utf8)
 		return;
 	}
 
-	std::vector<std::string> update_statements;
+	int done_count = 0;
+	int error_count = 0;
+
+	std::vector<std::string> apply_statements;
 
 	const char *sql =
 		"select * from cookies where value = '' and encrypted_value is NOT NULL";
@@ -1886,8 +1889,13 @@ void StreamElementsDecryptCefCookiesFile(const char *path_utf8)
 				DATA_BLOB out;
 
 				if (!CryptUnprotectData(&in, NULL, NULL, NULL,
-							NULL, 0, &out))
+							NULL, 0, &out)) {
+					blog(LOG_ERROR,
+					     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': failed decrypting value for cookie '%s' for host '%s' path '%s'. The cookie will be deleted.",
+					     path_utf8, name.c_str(), host_key.c_str(), path.c_str());
+
 					continue;
+				}
 
 				std::string decrypted_value(
 					(const char *)out.pbData,
@@ -1895,12 +1903,12 @@ void StreamElementsDecryptCefCookiesFile(const char *path_utf8)
 				::LocalFree(out.pbData);
 
 				char *update_stmt = sqlite3_mprintf(
-					"update cookies set value = %Q, encrypted_value = NULL where value = '' and host_key = %Q and name = %Q and priority = %d",
+					"update cookies set value = %Q, encrypted_value = NULL where value = '' and host_key = %Q and name = %Q and path = %Q and priority = %d",
 					decrypted_value.c_str(),
 					host_key.c_str(), name.c_str(),
-					priority);
+					path.c_str(), priority);
 
-				update_statements.push_back(update_stmt);
+				apply_statements.push_back(update_stmt);
 
 				sqlite3_free(update_stmt);
 			}
@@ -1917,10 +1925,24 @@ void StreamElementsDecryptCefCookiesFile(const char *path_utf8)
 		     path_utf8, sqlite3_errmsg(db));
 	}
 
-	int done_count = 0;
-	int error_count = 0;
+	//
+	// In case we failed to decrypt some cookie rows (there is an issue with this
+	// in recent versions of CEF), delete cookie rows with encrypted values.
+	//
+	// We must do this, since the version of CEF we bundle with the product at this
+	// time differs from the version bundled with OBS Studio 27.2.
+	//
+	// The version which comes bundled with OBS Studio 27.2 no longer supports
+	// decryption with DPAPI.
+	//
+	char *delete_stmt = sqlite3_mprintf(
+		"delete from cookies where length(encrypted_value) > 0");
 
-	for (auto item : update_statements) {
+	apply_statements.push_back(delete_stmt);
+
+	sqlite3_free(delete_stmt);
+
+	for (auto item : apply_statements) {
 		char *zErrMsg;
 
 		if (SQLITE_OK != sqlite3_exec(db, item.c_str(), nullptr,
