@@ -1816,6 +1816,7 @@ void StreamElementsDecryptCefCookiesFile(const char *path_utf8)
 
 	int done_count = 0;
 	int error_count = 0;
+	int decrypt_error_count = 0;
 
 	std::vector<std::string> apply_statements;
 
@@ -1891,10 +1892,17 @@ void StreamElementsDecryptCefCookiesFile(const char *path_utf8)
 				if (!CryptUnprotectData(&in, NULL, NULL, NULL,
 							NULL, 0, &out)) {
 					blog(LOG_ERROR,
-					     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': failed decrypting value for cookie '%s' for host '%s' path '%s'. The cookie will be deleted.",
+					     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': failed decrypting value for cookie '%s' for host '%s' path '%s'. All Cookies will be deleted.",
 					     path_utf8, name.c_str(), host_key.c_str(), path.c_str());
 
+					++decrypt_error_count;
+
 					continue;
+				} else {
+					blog(LOG_INFO,
+					     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': decrypted value for cookie '%s' for host '%s' path '%s'.",
+					     path_utf8, name.c_str(),
+					     host_key.c_str(), path.c_str());
 				}
 
 				std::string decrypted_value(
@@ -1927,43 +1935,59 @@ void StreamElementsDecryptCefCookiesFile(const char *path_utf8)
 
 	//
 	// In case we failed to decrypt some cookie rows (there is an issue with this
-	// in recent versions of CEF), delete cookie rows with encrypted values.
+	// in recent versions of CEF), delete All cookies.
 	//
 	// We must do this, since the version of CEF we bundle with the product at this
-	// time differs from the version bundled with OBS Studio 27.2.
+	// time differs from the version bundled with OBS Studio 27.2.x.
 	//
-	// The version which comes bundled with OBS Studio 27.2 no longer supports
-	// decryption with DPAPI.
+	// The version which comes bundled with OBS Studio 27.2.x no longer supports
+	// decryption with DPAPI. Older versions of CEF treat Cookies files created
+	// with OBS Studio 27.2.x as incompatible and refuse to load cookies from
+	// those files.
 	//
-	char *delete_stmt = sqlite3_mprintf(
-		"delete from cookies where length(encrypted_value) > 0");
 
-	apply_statements.push_back(delete_stmt);
+	if (decrypt_error_count > 0) {
+		apply_statements.clear();
 
-	sqlite3_free(delete_stmt);
+		// We will just delete the Cookies file later on
+	} else {
+		for (auto item : apply_statements) {
+			char *zErrMsg;
 
-	for (auto item : apply_statements) {
-		char *zErrMsg;
+			if (SQLITE_OK != sqlite3_exec(db, item.c_str(), nullptr,
+						      nullptr, &zErrMsg)) {
+				blog(LOG_INFO,
+				     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': sqlite3_exec(): %s: %s",
+				     path_utf8, zErrMsg, item.c_str());
 
-		if (SQLITE_OK != sqlite3_exec(db, item.c_str(), nullptr,
-					      nullptr, &zErrMsg)) {
-			blog(LOG_INFO,
-			     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': sqlite3_exec(): %s: %s",
-			     path_utf8, zErrMsg, item.c_str());
+				sqlite3_free(zErrMsg);
 
-			sqlite3_free(zErrMsg);
-
-			++error_count;
-		} else {
-			++done_count;
+				++error_count;
+			} else {
+				++done_count;
+			}
 		}
 	}
 
 	sqlite3_close_v2(db);
 
-	blog(LOG_INFO,
-	     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': %d succeeded, %d failed",
-	     path_utf8, done_count, error_count);
+	if (decrypt_error_count > 0) {
+		// We must delete the Cookies file completely. See comment above for details.
+
+		if (0 == os_unlink(path_utf8)) {
+			blog(LOG_WARNING,
+			     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': we failed to decrypt %d cookies. The Cookies file was deleted to prevent incompatibility between CEF versions.",
+			     path_utf8, decrypt_error_count);
+		} else {
+			blog(LOG_ERROR,
+			     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': we failed to decrypt %d cookies and failed to delete the Cookies file to prevent incompatibility between CEF versions. You should delete this file manually.",
+			     path_utf8, decrypt_error_count);
+		}
+	} else {
+		blog(LOG_INFO,
+		     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': %d succeeded, %d failed",
+		     path_utf8, done_count, error_count);
+	}
 #endif
 }
 
@@ -1971,7 +1995,12 @@ void StreamElementsDecryptCefCookiesStoragePath(const char *path_utf8)
 {
 	std::string file_path = path_utf8;
 
-	file_path += "/Cookies";
+	char ch = file_path[file_path.size() - 1];
+
+	if (ch != '\\' && ch != '/')
+		file_path += "/Cookies";
+	else
+		file_path += "Cookies";
 
 	StreamElementsDecryptCefCookiesFile(file_path.c_str());
 }
