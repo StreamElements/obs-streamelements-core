@@ -297,13 +297,18 @@ void StreamElementsBrowserWidget::InitBrowserAsyncInternal()
 
 			// Client area rectangle
 			//RECT clientRect = {0, 0, size.width(), size.height()};
-			CefRect clientRect(0, 0, size.width(), size.height());
-
 			windowInfo.SetAsChild(self->m_window_handle,
-					      clientRect);
+					      CefRect(0, 0, size.width(),
+						      size.height()));
 #else
+#if CHROME_VERSION_BUILD < 4430
 			windowInfo.SetAsChild(self->m_window_handle, 0, 0,
 					      size.width(), size.height());
+#else
+			windowInfo.SetAsChild(self->m_window_handle,
+					      CefRect(0, 0, size.width(),
+						      size.height()));
+#endif
 #endif
 			CefBrowserSettings cefBrowserSettings;
 

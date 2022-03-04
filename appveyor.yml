@@ -13,11 +13,13 @@ environment:
     secure: 9c6LeJtXAXvISt7o1o5lnw==
 install:
 - cmd: >-
-    set PREBUILT_CEF_VERSION=74.0.0-texture_patch.1946+g7d5cd74+chromium-74.0.3729.157
+    set PREBUILT_CEF_VERSION_64=cef_binary_4638_windows_x64
 
-    set PREBUILT_CEF_URL_64=s3://obs-builds/cef/streamelements/cef_binary_74.0.0-texture_patch.1946+g7d5cd74+chromium-74.0.3729.157_windows64_minimal.zip
+    set PREBUILT_CEF_VERSION_32=cef_binary_4638_windows_x86
+
+    set PREBUILT_CEF_URL_64=s3://obs-builds/cef/cef_binary_4638_windows_x64.zip
     
-    set PREBUILT_CEF_URL_32=s3://obs-builds/cef/streamelements/cef_binary_74.0.0-texture_patch.1946+g7d5cd74+chromium-74.0.3729.157_windows32_minimal.zip
+    set PREBUILT_CEF_URL_32=s3://obs-builds/cef/cef_binary_4638_windows_x86.zip
 
 
 
@@ -48,7 +50,7 @@ install:
 
     git submodule update --init --recursive
 
-    git checkout 27.1.3
+    git checkout 27.2.3
 
     rd /s /q c:\local\obs-studio\plugins\obs-browser
 
@@ -138,26 +140,12 @@ build_script:
 
 
 
-    echo.===================== BUILD 64 BIT - CEF - OBS-STUDIO =====================
-
-    cd /d c:\local\cef_binary_%PREBUILT_CEF_VERSION%_windows64_minimal
-
-    mkdir build
-
-    cd build
-
-    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 16 2019" -A x64 -DUSE_SANDBOX=true -DUSE_ATL=true -DCEF_RUNTIME_LIBRARY_FLAG=/MT -DCEF_DEBUG_INFO_FLAG=/Zi ..
-
-    msbuild cef.sln /p:Configuration=Release /t:Build
-
-
-
 
     echo.===================== BUILD 64 BIT - OBS-STUDIO =====================
 
     cd /d c:\local\obs-studio\build64
 
-    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 16 2019" -A x64 -DSHARED_TEXTURE_SUPPORT_ENABLED=true -DBROWSER_PANEL_SUPPORT_ENABLED=true -DENABLE_SCRIPTING=false -DCOPIED_DEPENDENCIES=false -DCOPY_DEPENDENCIES=true -DBUILD_CAPTIONS=true -DCOMPILE_D3D12_HOOK=true -DCEF_ROOT_DIR=c:\local\cef_binary_%PREBUILT_CEF_VERSION%_windows64_minimal -DBUGSPLAT_ROOT_DIR=c:\local\BugSplat -DANGELSCRIPT_ROOT_DIR=c:\local\angelscript -DQTDIR=%QTDIR64% -DQt5Widgets_DIR=%QTDIR64%\lib\cmake\Qt5Widgets -DQt5Xml_DIR=%QTDIR64%\lib\cmake\Qt5Xml -DQt5Svg_DIR=%QTDIR64%\lib\cmake\Qt5Svg -DENABLE_UI=true -DVULKAN_INCLUDE_DIR=C:\local\Vulkan-Hpp -DCMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION=10.0.22000.0 -DCMAKE_SYSTEM_VERSION=10.0.22000.0 ..
+    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 16 2019" -A x64 -DSHARED_TEXTURE_SUPPORT_ENABLED=true -DBROWSER_PANEL_SUPPORT_ENABLED=true -DENABLE_SCRIPTING=false -DCOPIED_DEPENDENCIES=false -DCOPY_DEPENDENCIES=true -DBUILD_CAPTIONS=true -DCOMPILE_D3D12_HOOK=true -DCEF_ROOT_DIR=c:\local\%PREBUILT_CEF_VERSION_64% -DBUGSPLAT_ROOT_DIR=c:\local\BugSplat -DANGELSCRIPT_ROOT_DIR=c:\local\angelscript -DQTDIR=%QTDIR64% -DQt5Widgets_DIR=%QTDIR64%\lib\cmake\Qt5Widgets -DQt5Xml_DIR=%QTDIR64%\lib\cmake\Qt5Xml -DQt5Svg_DIR=%QTDIR64%\lib\cmake\Qt5Svg -DENABLE_UI=true -DVULKAN_INCLUDE_DIR=C:\local\Vulkan-Hpp -DCMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION=10.0.22000.0 -DCMAKE_SYSTEM_VERSION=10.0.22000.0 ..
 
     cd /d c:\local\obs-studio\build64
 
@@ -183,26 +171,13 @@ build_script:
 
     
 
-    echo.===================== BUILD 32 BIT - CEF - OBS-STUDIO =====================
-
-    cd /d c:\local\cef_binary_%PREBUILT_CEF_VERSION%_windows32_minimal
-
-    mkdir build
-
-    cd build
-
-    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 16 2019" -A Win32 -DUSE_SANDBOX=true -DUSE_ATL=true -DCEF_RUNTIME_LIBRARY_FLAG=/MT -DCEF_DEBUG_INFO_FLAG=/Zi ..
-
-    msbuild cef.sln /p:Configuration=Release /t:Build
-
-
 
 
     echo.===================== BUILD 32 BIT - OBS-STUDIO =====================
 
     cd /d c:\local\obs-studio\build32
 
-    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 16 2019" -A Win32 -DSHARED_TEXTURE_SUPPORT_ENABLED=true -DBROWSER_PANEL_SUPPORT_ENABLED=true -DENABLE_SCRIPTING=false -DCOPIED_DEPENDENCIES=false -DCOPY_DEPENDENCIES=true -DBUILD_CAPTIONS=true -DCOMPILE_D3D12_HOOK=true -DCEF_ROOT_DIR=c:\local\cef_binary_%PREBUILT_CEF_VERSION%_windows32_minimal -DBUGSPLAT_ROOT_DIR=c:\local\BugSplat -DANGELSCRIPT_ROOT_DIR=c:\local\angelscript -DQTDIR=%QTDIR32% -DQt5Widgets_DIR=%QTDIR32%\lib\cmake\Qt5Widgets -DQt5Xml_DIR=%QTDIR32%\lib\cmake\Qt5Xml -DQt5Svg_DIR=%QTDIR32%\lib\cmake\Qt5Svg -DENABLE_UI=true -DVULKAN_INCLUDE_DIR=C:\local\Vulkan-Hpp -DCMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION=10.0.22000.0 -DCMAKE_SYSTEM_VERSION=10.0.22000.0 ..
+    "C:\Program Files\CMake\bin\cmake.exe" -G "Visual Studio 16 2019" -A Win32 -DSHARED_TEXTURE_SUPPORT_ENABLED=true -DBROWSER_PANEL_SUPPORT_ENABLED=true -DENABLE_SCRIPTING=false -DCOPIED_DEPENDENCIES=false -DCOPY_DEPENDENCIES=true -DBUILD_CAPTIONS=true -DCOMPILE_D3D12_HOOK=true -DCEF_ROOT_DIR=c:\local\%PREBUILT_CEF_VERSION_32% -DBUGSPLAT_ROOT_DIR=c:\local\BugSplat -DANGELSCRIPT_ROOT_DIR=c:\local\angelscript -DQTDIR=%QTDIR32% -DQt5Widgets_DIR=%QTDIR32%\lib\cmake\Qt5Widgets -DQt5Xml_DIR=%QTDIR32%\lib\cmake\Qt5Xml -DQt5Svg_DIR=%QTDIR32%\lib\cmake\Qt5Svg -DENABLE_UI=true -DVULKAN_INCLUDE_DIR=C:\local\Vulkan-Hpp -DCMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION=10.0.22000.0 -DCMAKE_SYSTEM_VERSION=10.0.22000.0 ..
 
     cd /d c:\local\obs-studio\build32
 
