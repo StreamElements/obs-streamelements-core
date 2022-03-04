@@ -24,24 +24,6 @@ extern std::vector<PopupWhitelistInfo> forced_popups;
 
 /* ------------------------------------------------------------------------- */
 
-#if CHROME_VERSION_BUILD < 3770
-class QCefRequestContextHandler : public CefRequestContextHandler {
-	CefRefPtr<CefCookieManager> cm;
-
-public:
-	inline QCefRequestContextHandler(CefRefPtr<CefCookieManager> cm_)
-		: cm(cm_)
-	{
-	}
-
-	virtual CefRefPtr<CefCookieManager> GetCookieManager() override;
-
-	IMPLEMENT_REFCOUNTING(QCefRequestContextHandler);
-};
-#endif
-
-/* ------------------------------------------------------------------------- */
-
 class QCefWidgetInternal : public QCefWidget {
 	Q_OBJECT
 
@@ -72,6 +54,12 @@ public:
 	virtual void reloadPage() override;
 
 	void Resize();
+
+#ifdef __linux__
+private:
+	bool needsDeleteXdndProxy = true;
+	void unsetToplevelXdndProxy();
+#endif
 
 public slots:
 	void Init();

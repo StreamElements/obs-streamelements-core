@@ -44,9 +44,10 @@ public:
 
 			// CEF window attributes
 			CefWindowInfo windowInfo;
-			windowInfo.width = 1920;
-			windowInfo.height = 1080;
+			windowInfo.bounds.width = 1920;
+			windowInfo.bounds.height = 1080;
 			windowInfo.windowless_rendering_enabled = true;
+			windowInfo.shared_texture_enabled = true;
 
 			CefBrowserSettings cefBrowserSettings;
 
@@ -55,7 +56,7 @@ public:
 				STATE_DISABLED;
 			cefBrowserSettings.local_storage = STATE_ENABLED;
 			cefBrowserSettings.databases = STATE_ENABLED;
-			cefBrowserSettings.web_security = STATE_ENABLED;
+			//cefBrowserSettings.web_security = STATE_ENABLED;
 			cefBrowserSettings.webgl = STATE_ENABLED;
 
 			StreamElementsApiMessageHandler *apiMessageHandler =
@@ -103,7 +104,7 @@ public:
 #endif
 
 			m_cef_browser->GetHost()->CloseBrowser(true);
-			m_cef_browser = NULL;
+			m_cef_browser = nullptr;
 		}
 	}
 

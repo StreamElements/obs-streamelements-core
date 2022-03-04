@@ -90,6 +90,11 @@ if(UNIX AND NOT APPLE)
 	include_directories("${X11_INCLUDE_DIR}")
 endif()
 
+file(READ "${CEF_ROOT_DIR}/include/cef_version.h" ver)
+string(REGEX MATCH "CHROME_VERSION_BUILD ([0-9][0-9][0-9][0-9]+)" _ ${ver})
+set(CHROME_VERSION_BUILD ${CMAKE_MATCH_1})
+message(STATUS "Chromium cef version: ${CHROME_VERSION_BUILD}")
+
 
 configure_file(
 	"${CMAKE_CURRENT_SOURCE_DIR}/browser-config.h.in"
@@ -276,6 +281,7 @@ set(obs-browser_HEADERS
 	browser-version.h
 	deps/json11/json11.hpp
 	deps/base64/base64.hpp
+	deps/obs-websocket-api/obs-websocket-api.h
 	deps/wide-string.hpp
 	cef-headers.hpp
 	streamelements/deps/utf8.h

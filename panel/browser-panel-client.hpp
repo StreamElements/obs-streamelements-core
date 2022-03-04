@@ -11,7 +11,8 @@ class QCefBrowserClient : public CefClient,
 			  public CefLifeSpanHandler,
 			  public CefContextMenuHandler,
 			  public CefLoadHandler,
-			  public CefKeyboardHandler {
+			  public CefKeyboardHandler,
+			  public CefJSDialogHandler {
 
 public:
 	inline QCefBrowserClient(QCefWidgetInternal *widget_,
@@ -31,6 +32,7 @@ public:
 	virtual CefRefPtr<CefKeyboardHandler> GetKeyboardHandler() override;
 	virtual CefRefPtr<CefContextMenuHandler>
 	GetContextMenuHandler() override;
+	virtual CefRefPtr<CefJSDialogHandler> GetJSDialogHandler() override;
 
 	/* CefDisplayHandler */
 	virtual void OnTitleChange(CefRefPtr<CefBrowser> browser,
@@ -63,9 +65,7 @@ public:
 		bool user_gesture, const CefPopupFeatures &popupFeatures,
 		CefWindowInfo &windowInfo, CefRefPtr<CefClient> &client,
 		CefBrowserSettings &settings,
-#if CHROME_VERSION_BUILD >= 3770
 		CefRefPtr<CefDictionaryValue> &extra_info,
-#endif
 		bool *no_javascript_access) override;
 
 	/* CefContextMenuHandler */
@@ -93,6 +93,15 @@ public:
 				   const CefKeyEvent &event,
 				   CefEventHandle os_event,
 				   bool *is_keyboard_shortcut) override;
+
+	/* CefJSDialogHandler */
+	virtual bool OnJSDialog(CefRefPtr<CefBrowser> browser,
+				const CefString &origin_url,
+				CefJSDialogHandler::JSDialogType dialog_type,
+				const CefString &message_text,
+				const CefString &default_prompt_text,
+				CefRefPtr<CefJSDialogCallback> callback,
+				bool &suppress_message) override;
 
 	QCefWidgetInternal *widget = nullptr;
 	std::string script;

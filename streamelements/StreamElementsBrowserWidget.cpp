@@ -296,7 +296,8 @@ void StreamElementsBrowserWidget::InitBrowserAsyncInternal()
 #endif
 
 			// Client area rectangle
-			RECT clientRect = {0, 0, size.width(), size.height()};
+			//RECT clientRect = {0, 0, size.width(), size.height()};
+			CefRect clientRect(0, 0, size.width(), size.height());
 
 			windowInfo.SetAsChild(self->m_window_handle,
 					      clientRect);
@@ -311,7 +312,7 @@ void StreamElementsBrowserWidget::InitBrowserAsyncInternal()
 				STATE_DISABLED;
 			cefBrowserSettings.local_storage = STATE_ENABLED;
 			cefBrowserSettings.databases = STATE_ENABLED;
-			cefBrowserSettings.web_security = STATE_ENABLED;
+			//cefBrowserSettings.web_security = STATE_ENABLED;
 			cefBrowserSettings.webgl = STATE_ENABLED;
 			const int DEFAULT_FONT_SIZE = 16;
 			cefBrowserSettings.default_font_size = DEFAULT_FONT_SIZE;
