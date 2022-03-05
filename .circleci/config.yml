@@ -12,11 +12,11 @@ jobs:
 
             export TERM=xterm-256color
 
-            export CEF_BUILD_VERSION=4183
+            export CEF_BUILD_VERSION=4638
 
             rm -rf /usr/local/lib/python3.9/site-packages/six.py
 
-            brew install awscli zip
+            brew install awscli zip swig
             
             cd ..
 
@@ -28,7 +28,7 @@ jobs:
 
             cd obs-studio
 
-            git checkout 27.1.3
+            git checkout 27.2.3
 
             printf "#define STREAMELEMENTS_PLUGIN_VERSION %s%06dL\n" `date +%Y%m%d` ${CIRCLE_BUILD_NUM} >plugins/obs-browser/streamelements/Version.generated.hpp
 

@@ -347,12 +347,13 @@ protected:
 				m_cef_browser->GetHost()->GetWindowHandle(),
 				0L);
 
+			m_cef_browser->GetHost()->WasHidden(true);
 			// Calling this on MacOS causes quit signal to propagate to the main window
 			// and quit the app
 			m_cef_browser->GetHost()->CloseBrowser(true);
 #endif
 			
-			m_cef_browser = NULL;
+			m_cef_browser = nullptr;
 		}
 	}
 
@@ -410,7 +411,7 @@ public:
 		~StreamElementsBrowserWidget_EventHandler()
 		{
 			if (m_last_pending_future.valid()) {
-				m_last_pending_future.wait();
+				m_last_pending_future.wait_for(std::chrono::milliseconds(1000));
 			}
 
 			m_widget = nullptr;

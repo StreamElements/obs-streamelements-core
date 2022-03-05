@@ -20,7 +20,6 @@
 #include <util/base.h>
 #include <thread>
 
-#include "streamelements/StreamElementsUtils.hpp"
 #if !defined(_WIN32) && !defined(__APPLE__)
 #include <X11/Xlib.h>
 #endif
@@ -29,26 +28,11 @@ extern bool QueueCEFTask(std::function<void()> task);
 extern "C" void obs_browser_initialize(void);
 extern os_event_t *cef_started_event;
 
-void flush_cookie_manager(CefRefPtr<CefCookieManager> cm);
-void register_cookie_manager(CefRefPtr<CefCookieManager> cm);
-void unregister_cookie_manager(CefRefPtr<CefCookieManager> cm);
-
-std::mutex                      popup_whitelist_mutex;
+std::mutex popup_whitelist_mutex;
 std::vector<PopupWhitelistInfo> popup_whitelist;
 std::vector<PopupWhitelistInfo> forced_popups;
 
 /* ------------------------------------------------------------------------- */
-
-#if CHROME_VERSION_BUILD < 3770
-CefRefPtr<CefCookieManager> QCefRequestContextHandler::GetCookieManager()
-{
-	return cm;
-}
-#endif
-
-#if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
-#define SUPPORTS_FRACTIONAL_SCALING
-#endif
 
 class CookieCheck : public CefCookieVisitor {
 public:
@@ -81,9 +65,6 @@ public:
 
 struct QCefCookieManagerInternal : QCefCookieManager {
 	CefRefPtr<CefCookieManager> cm;
-#if CHROME_VERSION_BUILD < 3770
-	CefRefPtr<CefRequestContextHandler> rch;
-#endif
 	CefRefPtr<CefRequestContext> rc;
 
 	QCefCookieManagerInternal(const std::string &storage_path,
@@ -98,23 +79,6 @@ struct QCefCookieManagerInternal : QCefCookieManager {
 
 		BPtr<char> path = os_get_abs_path_ptr(rpath.Get());
 
-#if ENABLE_DECRYPT_COOKIES
-		StreamElementsDecryptCefCookiesStoragePath(path.Get());
-#endif
-
-#if CHROME_VERSION_BUILD < 3770
-		cm = CefCookieManager::CreateManager(
-			path.Get(), persist_session_cookies, nullptr);
-		if (!cm)
-			throw "Failed to create cookie manager";
-#endif
-
-#if CHROME_VERSION_BUILD < 3770
-		rch = new QCefRequestContextHandler(cm);
-
-		rc = CefRequestContext::CreateContext(
-			CefRequestContext::GetGlobalContext(), rch);
-#else
 		CefRequestContextSettings settings;
 		CefString(&settings.cache_path) = path.Get();
 		rc = CefRequestContext::CreateContext(
@@ -123,14 +87,6 @@ struct QCefCookieManagerInternal : QCefCookieManager {
 			cm = rc->GetCookieManager(nullptr);
 
 		UNUSED_PARAMETER(persist_session_cookies);
-#endif
-
-		register_cookie_manager(cm);
-	}
-
-	virtual ~QCefCookieManagerInternal()
-	{
-		unregister_cookie_manager(cm);
 	}
 
 	virtual bool DeleteCookies(const std::string &url,
@@ -145,37 +101,20 @@ struct QCefCookieManagerInternal : QCefCookieManager {
 		BPtr<char> rpath = obs_module_config_path(storage_path.c_str());
 		BPtr<char> path = os_get_abs_path_ptr(rpath.Get());
 
-#if ENABLE_DECRYPT_COOKIES
-		StreamElementsDecryptCefCookiesStoragePath(path.Get());
-#endif
-
-#if CHROME_VERSION_BUILD < 3770
-		return cm->SetStoragePath(path.Get(), persist_session_cookies,
-					  nullptr);
-#else
 		CefRequestContextSettings settings;
 		CefString(&settings.cache_path) = storage_path;
 		rc = CefRequestContext::CreateContext(
 			settings, CefRefPtr<CefRequestContextHandler>());
-		if (rc) {
-			unregister_cookie_manager(cm);
+		if (rc)
 			cm = rc->GetCookieManager(nullptr);
-			register_cookie_manager(cm);
-		}
 
 		UNUSED_PARAMETER(persist_session_cookies);
 		return true;
-#endif
 	}
 
 	virtual bool FlushStore() override
 	{
-		if (!cm)
-			return false;
-
-		flush_cookie_manager(cm);
-
-		return true;
+		return !!cm ? cm->FlushStore(nullptr) : false;
 	}
 
 	virtual void CheckForCookie(const std::string &site,
@@ -227,10 +166,11 @@ void QCefWidgetInternal::closeBrowser()
 				reinterpret_cast<QCefBrowserClient *>(
 					client.get());
 
-			cefBrowser->GetHost()->WasHidden(true);
-			cefBrowser->GetHost()->CloseBrowser(true);
+			if (bc) {
+				bc->widget = nullptr;
+			}
 
-			bc->widget = nullptr;
+			cefBrowser->GetHost()->CloseBrowser(true);
 		};
 
 		/* So you're probably wondering what's going on here.  If you
@@ -263,20 +203,92 @@ void QCefWidgetInternal::closeBrowser()
 #endif
 
 		destroyBrowser(browser);
+		browser = nullptr;
 		cefBrowser = nullptr;
 	}
 }
+
+#ifdef __linux__
+static bool XWindowHasAtom(Display *display, Window w, Atom a)
+{
+	Atom type;
+	int format;
+	unsigned long nItems;
+	unsigned long bytesAfter;
+	unsigned char *data = NULL;
+
+	if (XGetWindowProperty(display, w, a, 0, LONG_MAX, False,
+			       AnyPropertyType, &type, &format, &nItems,
+			       &bytesAfter, &data) != Success)
+		return false;
+
+	if (data)
+		XFree(data);
+
+	return type != None;
+}
+
+/* On Linux / X11, CEF sets the XdndProxy of the toplevel window
+ * it's attached to, so that it can read drag events. When this
+ * toplevel happens to be OBS Studio's main window (e.g. when a
+ * browser panel is docked into to the main window), setting the
+ * XdndProxy atom ends up breaking DnD of sources and scenes. Thus,
+ * we have to manually unset this atom.
+ */
+void QCefWidgetInternal::unsetToplevelXdndProxy()
+{
+	if (!cefBrowser)
+		return;
+
+	CefWindowHandle browserHandle =
+		cefBrowser->GetHost()->GetWindowHandle();
+	Display *xDisplay = cef_get_xdisplay();
+	Window toplevel, root, parent, *children;
+	unsigned int nChildren;
+	bool found = false;
+
+	toplevel = browserHandle;
+
+	// Find the toplevel
+	Atom netWmPidAtom = XInternAtom(xDisplay, "_NET_WM_PID", False);
+	do {
+		if (XQueryTree(xDisplay, toplevel, &root, &parent, &children,
+			       &nChildren) == 0)
+			return;
+
+		if (children)
+			XFree(children);
+
+		if (root == parent ||
+		    !XWindowHasAtom(xDisplay, parent, netWmPidAtom)) {
+			found = true;
+			break;
+		}
+		toplevel = parent;
+	} while (true);
+
+	if (!found)
+		return;
+
+	// Check if the XdndProxy property is set
+	Atom xDndProxyAtom = XInternAtom(xDisplay, "XdndProxy", False);
+	if (needsDeleteXdndProxy &&
+	    !XWindowHasAtom(xDisplay, toplevel, xDndProxyAtom)) {
+		QueueCEFTask([this]() { unsetToplevelXdndProxy(); });
+		return;
+	}
+
+	XDeleteProperty(xDisplay, toplevel, xDndProxyAtom);
+	needsDeleteXdndProxy = false;
+}
+#endif
 
 void QCefWidgetInternal::Init()
 {
 #ifndef __APPLE__
 	WId handle = window->winId();
 	QSize size = this->size();
-#ifdef SUPPORTS_FRACTIONAL_SCALING
 	size *= devicePixelRatioF();
-#else
-	size *= devicePixelRatio();
-#endif
 	bool success = QueueCEFTask(
 		[this, handle, size]()
 #else
@@ -293,7 +305,10 @@ void QCefWidgetInternal::Init()
 
 #ifdef __APPLE__
 			QSize size = this->size();
+#endif
 
+#if CHROME_VERSION_BUILD < 4430
+#ifdef __APPLE__
 			windowInfo.SetAsChild((CefWindowHandle)handle, 0, 0,
 					      size.width(), size.height());
 #else
@@ -304,6 +319,11 @@ void QCefWidgetInternal::Init()
 #endif
 			windowInfo.SetAsChild((CefWindowHandle)handle, rc);
 #endif
+#else
+			windowInfo.SetAsChild((CefWindowHandle)handle,
+					      CefRect(0, 0, size.width(),
+						      size.height()));
+#endif
 
 			CefRefPtr<QCefBrowserClient> browserClient =
 				new QCefBrowserClient(this, script,
@@ -313,10 +333,11 @@ void QCefWidgetInternal::Init()
 			cefBrowser = CefBrowserHost::CreateBrowserSync(
 				windowInfo, browserClient, url,
 				cefBrowserSettings,
-#if CHROME_VERSION_BUILD >= 3770
-				CefRefPtr<CefDictionaryValue>(),
+				CefRefPtr<CefDictionaryValue>(), rqc);
+
+#ifdef __linux__
+			QueueCEFTask([this]() { unsetToplevelXdndProxy(); });
 #endif
-				rqc);
 		});
 
 	if (success) {
@@ -342,11 +363,7 @@ void QCefWidgetInternal::resizeEvent(QResizeEvent *event)
 
 void QCefWidgetInternal::Resize()
 {
-#ifdef SUPPORTS_FRACTIONAL_SCALING
 	QSize size = this->size() * devicePixelRatioF();
-#else
-	QSize size = this->size() * devicePixelRatio();
-#endif
 
 	bool success = QueueCEFTask([this, size]() {
 		if (!cefBrowser)
@@ -377,6 +394,9 @@ void QCefWidgetInternal::Resize()
 		changes.height = size.height();
 		XConfigureWindow(xDisplay, (Window)handle,
 				 CWX | CWY | CWHeight | CWWidth, &changes);
+#if CHROME_VERSION_BUILD >= 4638
+		XSync(xDisplay, false);
+#endif
 #endif
 	});
 

@@ -25,14 +25,6 @@
 #include <windows.h>
 #endif
 
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
 #ifdef USE_QT_LOOP
 #include <util/base.h>
 #include <util/platform.h>
@@ -68,16 +60,9 @@ CefRefPtr<CefBrowserProcessHandler> BrowserApp::GetBrowserProcessHandler()
 
 void BrowserApp::OnRegisterCustomSchemes(CefRawPtr<CefSchemeRegistrar> registrar)
 {
-#if CHROME_VERSION_BUILD >= 3683
 	registrar->AddCustomScheme("http",
 				   CEF_SCHEME_OPTION_STANDARD |
 					   CEF_SCHEME_OPTION_CORS_ENABLED);
-#elif CHROME_VERSION_BUILD >= 3029
-	registrar->AddCustomScheme("http", true, false, false, false, true,
-				   false);
-#else
-	registrar->AddCustomScheme("http", true, false, false, false, true);
-#endif
 }
 
 void BrowserApp::OnBeforeChildProcessLaunch(
@@ -116,8 +101,7 @@ void BrowserApp::OnBeforeCommandLineProcessing(
 	}
 
 	command_line->AppendSwitchWithValue("autoplay-policy",
-			"no-user-gesture-required");
-	command_line->AppendSwitchWithValue("plugin-policy", "allow");
+					    "no-user-gesture-required");
 #ifdef __APPLE__
 	command_line->AppendSwitch("use-mock-keychain");
 #endif
@@ -141,13 +125,23 @@ void BrowserApp::OnFocusedNodeChanged(CefRefPtr<CefBrowser> browser,
 	SendBrowserProcessMessage(browser, PID_BROWSER, msg);
 }
 
+std::vector<std::string> exposedFunctions = {
+	"getControlLevel",     "getCurrentScene",  "getStatus",
+	"startRecording",      "stopRecording",    "startStreaming",
+	"stopStreaming",       "pauseRecording",   "unpauseRecording",
+	"startReplayBuffer",   "stopReplayBuffer", "saveReplayBuffer",
+	"startVirtualcam",     "stopVirtualcam",   "getScenes",
+	"setCurrentScene",     "getTransitions",   "getCurrentTransition",
+	"setCurrentTransition"};
+
 void BrowserApp::OnContextCreated(CefRefPtr<CefBrowser> browser,
 				  CefRefPtr<CefFrame>,
 				  CefRefPtr<CefV8Context> context)
 {
 	CefRefPtr<CefV8Value> globalObj = context->GetGlobal();
 
-	CefRefPtr<CefV8Value> obsStudioObj = CefV8Value::CreateObject(0, 0);
+	CefRefPtr<CefV8Value> obsStudioObj =
+		CefV8Value::CreateObject(nullptr, nullptr);
 	globalObj->SetValue("obsstudio", obsStudioObj,
 			    V8_PROPERTY_ATTRIBUTE_NONE);
 
@@ -156,26 +150,19 @@ void BrowserApp::OnContextCreated(CefRefPtr<CefBrowser> browser,
 	obsStudioObj->SetValue("pluginVersion", pluginVersion,
 			       V8_PROPERTY_ATTRIBUTE_NONE);
 
-	CefRefPtr<CefV8Value> getCurrentScene =
-		CefV8Value::CreateFunction("getCurrentScene", this);
-	obsStudioObj->SetValue("getCurrentScene", getCurrentScene,
-			       V8_PROPERTY_ATTRIBUTE_NONE);
-
-	CefRefPtr<CefV8Value> getStatus =
-		CefV8Value::CreateFunction("getStatus", this);
-	obsStudioObj->SetValue("getStatus", getStatus,
-			       V8_PROPERTY_ATTRIBUTE_NONE);
-
-	CefRefPtr<CefV8Value> saveReplayBuffer =
-		CefV8Value::CreateFunction("saveReplayBuffer", this);
-	obsStudioObj->SetValue("saveReplayBuffer", saveReplayBuffer,
-			       V8_PROPERTY_ATTRIBUTE_NONE);
+	for (std::string name : exposedFunctions) {
+		CefRefPtr<CefV8Value> func =
+			CefV8Value::CreateFunction(name, this);
+		obsStudioObj->SetValue(name, func, V8_PROPERTY_ATTRIBUTE_NONE);
+	}
 
 #if !ENABLE_WASHIDDEN
 	int id = browser->GetIdentifier();
 	if (browserVis.find(id) != browserVis.end()) {
 		SetDocumentVisibility(browser, browserVis[id]);
 	}
+#else
+	UNUSED_PARAMETER(browser);
 #endif
 
 #if ENABLE_CREATE_BROWSER_API
@@ -253,7 +240,7 @@ void BrowserApp::ExecuteJSFunction(CefRefPtr<CefBrowser> browser,
 	CefRefPtr<CefV8Value> jsFunction = obsStudioObj->GetValue(functionName);
 
 	if (jsFunction && jsFunction->IsFunction())
-		jsFunction->ExecuteFunction(NULL, arguments);
+		jsFunction->ExecuteFunction(nullptr, arguments);
 
 	context->Exit();
 }
@@ -345,9 +332,7 @@ void BrowserApp::SetDocumentVisibility(CefRefPtr<CefBrowser> browser,
 #endif
 
 bool BrowserApp::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
-#if CHROME_VERSION_BUILD >= 3770
 					  CefRefPtr<CefFrame> frame,
-#endif
 					  CefProcessId source_process,
 					  CefRefPtr<CefProcessMessage> message)
 {
@@ -413,7 +398,7 @@ bool BrowserApp::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
 
 		CefRefPtr<CefV8Value> dispatchEvent =
 			globalObj->GetValue("dispatchEvent");
-		dispatchEvent->ExecuteFunction(NULL, arguments);
+		dispatchEvent->ExecuteFunction(nullptr, arguments);
 
 		context->Exit();
 
@@ -450,7 +435,7 @@ bool BrowserApp::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
 			}
 
 		if (callback)
-			callback->ExecuteFunction(NULL, args);
+			callback->ExecuteFunction(nullptr, args);
 
 			callbackMap.erase(callbackID);
 		}
@@ -497,13 +482,20 @@ bool BrowserApp::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
 	return true;
 }
 
+bool IsValidFunction(std::string function)
+{
+	std::vector<std::string>::iterator iterator;
+	iterator = std::find(exposedFunctions.begin(), exposedFunctions.end(),
+			     function);
+	return iterator != exposedFunctions.end();
+}
+
 bool BrowserApp::Execute(const CefString &name, CefRefPtr<CefV8Value>,
 			 const CefV8ValueList &arguments,
 			 CefRefPtr<CefV8Value> &, CefString &)
 {
-	if (name == "getCurrentScene" || name == "getStatus" ||
-	    name == "saveReplayBuffer") {
-		if (arguments.size() == 1 && arguments[0]->IsFunction()) {
+	if (IsValidFunction(name.ToString())) {
+		if (arguments.size() >= 1 && arguments[0]->IsFunction()) {
 			callbackId++;
 			callbackMap[callbackId] = arguments[0];
 		}
@@ -512,6 +504,27 @@ bool BrowserApp::Execute(const CefString &name, CefRefPtr<CefV8Value>,
 			CefProcessMessage::Create(name);
 		CefRefPtr<CefListValue> args = msg->GetArgumentList();
 		args->SetInt(0, callbackId);
+
+		/* Pass on arguments */
+		for (u_long l = 0; l < arguments.size(); l++) {
+			u_long pos;
+			if (arguments[0]->IsFunction())
+				pos = l;
+			else
+				pos = l + 1;
+
+			if (arguments[l]->IsString())
+				args->SetString(pos,
+						arguments[l]->GetStringValue());
+			else if (arguments[l]->IsInt())
+				args->SetInt(pos, arguments[l]->GetIntValue());
+			else if (arguments[l]->IsBool())
+				args->SetBool(pos,
+					      arguments[l]->GetBoolValue());
+			else if (arguments[l]->IsDouble())
+				args->SetDouble(pos,
+						arguments[l]->GetDoubleValue());
+		}
 
 		CefRefPtr<CefBrowser> browser =
 			CefV8Context::GetCurrentContext()->GetBrowser();
@@ -545,7 +558,11 @@ bool BrowserApp::Execute(const CefString &name, CefRefPtr<CefV8Value>,
 
 			// Call global JSON.stringify JS function to stringify JSON value
 			CefRefPtr<CefV8Value> JSON_string_value =
-				context->GetGlobal()->GetValue("JSON")->GetValue("stringify")->ExecuteFunction(NULL, JSON_value_list);
+				context->GetGlobal()
+					->GetValue("JSON")
+					->GetValue("stringify")
+					->ExecuteFunction(nullptr,
+							  JSON_value_list);
 
 			args->SetString(args->GetSize(), JSON_string_value->GetStringValue());
 		}
@@ -662,7 +679,8 @@ void BrowserApp::SEBindJavaScriptProperties(CefRefPtr<CefV8Value> globalObj,
 		CefRefPtr<CefV8Value> containerObj = nullptr;
 
 		if (!globalObj->HasValue(containerName)) {
-			containerObj = CefV8Value::CreateObject(0, 0);
+			containerObj =
+				CefV8Value::CreateObject(nullptr, nullptr);
 
 			globalObj->SetValue(containerName, containerObj,
 						V8_PROPERTY_ATTRIBUTE_NONE);
@@ -732,7 +750,8 @@ void BrowserApp::SEBindJavaScriptFunctions(CefRefPtr<CefV8Value> globalObj,
 			CefRefPtr<CefV8Value> containerObj = nullptr;
 
 			if (!globalObj->HasValue(containerName)) {
-				containerObj = CefV8Value::CreateObject(0, 0);
+				containerObj = CefV8Value::CreateObject(
+					nullptr, nullptr);
 
 				globalObj->SetValue(containerName, containerObj,
 						    V8_PROPERTY_ATTRIBUTE_NONE);
@@ -770,8 +789,11 @@ void BrowserApp::OnBrowserCreated(CefRefPtr<CefBrowser> browser,
 	std::lock_guard<decltype(m_createBrowserArgsMutex)> guard(
 		m_createBrowserArgsMutex);
 
-	// Store info to be later used by OnContextCreated()
-	m_createBrowserArgs[browser->GetIdentifier()] = extra_info->Copy(false);
+	if (extra_info.get()) {
+		// Store info to be later used by OnContextCreated()
+		m_createBrowserArgs[browser->GetIdentifier()] =
+			extra_info->Copy(false);
+	}
 }
 
 void BrowserApp::OnBrowserDestroyed(CefRefPtr<CefBrowser> browser)
@@ -780,6 +802,8 @@ void BrowserApp::OnBrowserDestroyed(CefRefPtr<CefBrowser> browser)
 		m_createBrowserArgsMutex);
 
 	// Clear info stored for usage by OnContextCreated()
-	m_createBrowserArgs.erase(browser->GetIdentifier());
+	if (m_createBrowserArgs.count(browser->GetIdentifier())) {
+		m_createBrowserArgs.erase(browser->GetIdentifier());
+	}
 }
 #endif

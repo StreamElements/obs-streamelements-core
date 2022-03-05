@@ -10,24 +10,40 @@ On Windows, this also adds support for Service Integration (linking third party 
 
 obs-browser provides a global object that allows access to some OBS-specific functionality from JavaScript. This can be used to create an overlay that adapts dynamically to changes in OBS.
 
+### TypeScript Type Definitions
+
+If you're using TypeScript, type definitions for the obs-browser bindings are available through npm and yarn.
+
+```sh
+# npm
+npm install --save-dev @types/obs-studio
+
+# yarn
+yarn add --dev @types/obs-studio
+```
+
 ### Get Browser Plugin Version
 
 ```js
 /**
- * @returns {number} OBS Browser plugin version
+ * @returns {string} OBS Browser plugin version
  */
 window.obsstudio.pluginVersion
-// => 1.24.0
+// => 2.17.0
 ```
 
 ### Register for event callbacks
 
 ```js
 /**
- * @typedef {Object} OBSEvent
- * @property {object} detail - data from event
+ * @callback EventListener
+ * @param {CustomEvent} event
  */
 
+/**
+ * @param {string} type
+ * @param {EventListener} listener
+ */
 window.addEventListener('obsSceneChanged', function(event) {
 	var t = document.createTextNode(event.detail.name)
 	document.body.appendChild(t)
@@ -59,28 +75,32 @@ Descriptions for these events can be [found here](https://obsproject.com/docs/re
 * obsVirtualcamStarted
 * obsVirtualcamStopped
 * obsExit
+* [Any custom event emitted via obs-websocket vendor requests]
 
-### Get the current scene
 
+### Control OBS
+#### Get webpage control permissions
+Permissions required: NONE
 ```js
 /**
- * @typedef {Object} Scene
- * @property {string} name - name of the scene
- * @property {number} width - width of the scene
- * @property {number} height - height of the scene
+ * @typedef {number} Level - The level of permissions. 0 for NONE, 1 for READ_OBS (OBS data), 2 for READ_USER (User data), 3 for BASIC, 4 for ADVANCED and 5 for ALL
  */
 
 /**
- * @param {function} callback
- * @returns {Scene}
+ * @callback LevelCallback
+ * @param {Level} level
  */
-window.obsstudio.getCurrentScene(function(scene) {
-	console.log(scene)
+
+/**
+ * @param {LevelCallback} cb - The callback that receives the current control level.
+ */
+window.obsstudio.getControlLevel(function (level) {
+    console.log(level)
 })
 ```
 
-### Get OBS output status
-
+#### Get OBS output status
+Permissions required: READ_OBS
 ```js
 /**
  * @typedef {Object} Status
@@ -92,22 +112,206 @@ window.obsstudio.getCurrentScene(function(scene) {
  */
 
 /**
- * @param {function} callback
- * @returns {Status}
+ * @callback StatusCallback
+ * @param {Status} status
+ */
+
+/**
+ * @param {StatusCallback} cb - The callback that receives the current output status of OBS.
  */
 window.obsstudio.getStatus(function (status) {
 	console.log(status)
 })
 ```
 
-### Save OBS Replay Buffer
+#### Get the current scene
+Permissions required: READ_USER
+```js
+/**
+ * @typedef {Object} Scene
+ * @property {string} name - name of the scene
+ * @property {number} width - width of the scene
+ * @property {number} height - height of the scene
+ */
 
+/**
+ * @callback SceneCallback
+ * @param {Scene} scene
+ */
+
+/**
+ * @param {SceneCallback} cb - The callback that receives the current scene in OBS.
+ */
+window.obsstudio.getCurrentScene(function(scene) {
+    console.log(scene)
+})
+```
+
+#### Get scenes
+Permissions required: READ_USER
+```js
+/**
+ * @callback ScenesCallback
+ * @param {string[]} scenes
+ */
+
+/**
+ * @param {ScenesCallback} cb - The callback that receives the scenes.
+ */
+window.obsstudio.getScenes(function (scenes) {
+    console.log(scenes)
+})
+```
+
+#### Get transitions
+Permissions required: READ_USER
+```js
+/**
+ * @callback TransitionsCallback
+ * @param {string[]} transitions
+ */
+
+/**
+ * @param {TransitionsCallback} cb - The callback that receives the transitions.
+ */
+window.obsstudio.getTransitions(function (transitions) {
+    console.log(transitions)
+})
+```
+
+#### Get current transition
+Permissions required: READ_USER
+```js
+/**
+ * @callback TransitionCallback
+ * @param {string} transition
+ */
+
+/**
+ * @param {TransitionCallback} cb - The callback that receives the transition currently set.
+ */
+window.obsstudio.getCurrentTransition(function (transition) {
+    console.log(transition)
+})
+```
+
+#### Save the Replay Buffer
+Permissions required: BASIC
 ```js
 /**
  * Does not accept any parameters and does not return anything
  */
 window.obsstudio.saveReplayBuffer()
 ```
+
+#### Start the Replay Buffer
+Permissions required: ADVANCED
+```js
+/**
+ * Does not accept any parameters and does not return anything
+ */
+window.obsstudio.startReplayBuffer()
+```
+
+#### Stop the Replay Buffer
+Permissions required: ADVANCED
+```js
+/**
+ * Does not accept any parameters and does not return anything
+ */
+window.obsstudio.stopReplayBuffer()
+```
+
+#### Change scene
+Permissions required: ADVANCED
+```js
+/**
+ * @param {string} name - Name of the scene
+ */
+window.obsstudio.setCurrentScene(name)
+```
+
+#### Set the current transition
+Permissions required: ADVANCED
+```js
+/**
+ * @param {string} name - Name of the transition
+ */
+window.obsstudio.setCurrentTransition(name)
+```
+
+#### Start streaming
+Permissions required: ALL
+```js
+/**
+ * Does not accept any parameters and does not return anything
+ */
+window.obsstudio.startStreaming()
+```
+
+#### Stop streaming
+Permissions required: ALL
+```js
+/**
+ * Does not accept any parameters and does not return anything
+ */
+window.obsstudio.stopStreaming()
+```
+
+#### Start recording
+Permissions required: ALL
+```js
+/**
+ * Does not accept any parameters and does not return anything
+ */
+window.obsstudio.startRecording()
+```
+
+#### Stop recording
+Permissions required: ALL
+```js
+/**
+ * Does not accept any parameters and does not return anything
+ */
+window.obsstudio.stopRecording()
+```
+
+#### Pause recording
+Permissions required: ALL
+```js
+/**
+ * Does not accept any parameters and does not return anything
+ */
+window.obsstudio.pauseRecording()
+```
+
+#### Unpause recording
+Permissions required: ALL
+```js
+/**
+ * Does not accept any parameters and does not return anything
+ */
+window.obsstudio.unpauseRecording()
+```
+
+#### Start the Virtual Camera
+Permissions required: ALL
+```js
+/**
+ * Does not accept any parameters and does not return anything
+ */
+window.obsstudio.startVirtualcam()
+```
+
+#### Stop the Virtual Camera
+Permissions required: ALL
+```js
+/**
+ * Does not accept any parameters and does not return anything
+ */
+window.obsstudio.stopVirtualcam()
+```
+
 
 ### Register for visibility callbacks
 
@@ -122,7 +326,7 @@ window.obsstudio.saveReplayBuffer()
  * @param {boolean} visibility - True -> visible, False -> hidden
  */
 window.obsstudio.onVisibilityChange = function(visibility) {
-	
+
 };
 ```
 
@@ -139,9 +343,17 @@ window.obsstudio.onVisibilityChange = function(visibility) {
  * @param {bool} True -> active, False -> inactive
  */
 window.obsstudio.onActiveChange = function(active) {
-	
+
 };
 ```
+
+### obs-websocket Vendor
+obs-browser includes integration with obs-websocket's Vendor requests. The vendor name to use is `obs-browser`, and available requests are:
+
+- `emit_event` - Takes `event_name` and ?`event_data` parameters. Emits a custom event to all browser sources. To subscribe to events, see [here](#register-for-event-callbacks)
+  - See [#340](https://github.com/obsproject/obs-browser/pull/340) for example usage.
+
+There are no available vendor events at this time.
 
 ## Building
 

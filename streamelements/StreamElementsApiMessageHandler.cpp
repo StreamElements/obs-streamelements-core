@@ -1286,7 +1286,9 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			if (d->HasKey("name") &&
 			    d->GetType("name") == VTYPE_STRING) {
 				std::string sourceUrl =
-					browser ? browser->GetMainFrame()
+					(!!browser.get() &&
+					 !!browser->GetMainFrame())
+						? browser->GetMainFrame()
 							  ->GetURL()
 							  .ToString()
 						: "urn:streamelements:internal";

@@ -37,6 +37,7 @@
 #include "browser-config.h"
 
 #include "json11/json11.hpp"
+#include "obs-websocket-api/obs-websocket-api.h"
 #include "cef-headers.hpp"
 
 #ifdef _WIN32
@@ -65,7 +66,7 @@ static thread manager_thread;
 static bool manager_initialized = false;
 os_event_t *cef_started_event = nullptr;
 
-#if defined(_WIN32) || defined(__APPLE__)
+#if defined(_WIN32)
 static int adapterCount = 0;
 #endif
 static std::wstring deviceId;
@@ -309,6 +310,8 @@ static void browser_source_get_defaults(obs_data_t *settings)
 #endif
 	obs_data_set_default_bool(settings, "shutdown", false);
 	obs_data_set_default_bool(settings, "restart_when_active", false);
+	obs_data_set_default_int(settings, "webpage_control_level",
+				 (int)DEFAULT_CONTROL_LEVEL);
 	obs_data_set_default_string(settings, "css", default_css);
 	obs_data_set_default_bool(settings, "reroute_audio", false);
 }
@@ -408,6 +411,34 @@ static obs_properties_t *browser_source_get_properties(void *data)
 	obs_properties_add_bool(props, "restart_when_active",
 				obs_module_text("RefreshBrowserActive"));
 
+	obs_property_t *controlLevel = obs_properties_add_list(
+		props, "webpage_control_level",
+		obs_module_text("WebpageControlLevel"), OBS_COMBO_TYPE_LIST,
+		OBS_COMBO_FORMAT_INT);
+
+	obs_property_list_add_int(
+		controlLevel, obs_module_text("WebpageControlLevel.Level.None"),
+		(int)ControlLevel::None);
+	obs_property_list_add_int(
+		controlLevel,
+		obs_module_text("WebpageControlLevel.Level.ReadObs"),
+		(int)ControlLevel::ReadObs);
+	obs_property_list_add_int(
+		controlLevel,
+		obs_module_text("WebpageControlLevel.Level.ReadUser"),
+		(int)ControlLevel::ReadUser);
+	obs_property_list_add_int(
+		controlLevel,
+		obs_module_text("WebpageControlLevel.Level.Basic"),
+		(int)ControlLevel::Basic);
+	obs_property_list_add_int(
+		controlLevel,
+		obs_module_text("WebpageControlLevel.Level.Advanced"),
+		(int)ControlLevel::Advanced);
+	obs_property_list_add_int(
+		controlLevel, obs_module_text("WebpageControlLevel.Level.All"),
+		(int)ControlLevel::All);
+
 	obs_properties_add_button(
 		props, "refreshnocache", obs_module_text("RefreshNoCache"),
 		[](obs_properties_t *, obs_property_t *, void *data) {
@@ -494,15 +525,19 @@ static void BrowserInit(void)
 	 * browser sources are coming from OBS. */
 	std::stringstream prod_ver;
 	prod_ver << "Chrome/";
-	prod_ver << std::to_string(CHROME_VERSION_MAJOR) << "."
-		 << std::to_string(CHROME_VERSION_MINOR) << "."
-		 << std::to_string(CHROME_VERSION_BUILD) << "."
-		 << std::to_string(CHROME_VERSION_PATCH);
+	prod_ver << std::to_string(cef_version_info(4)) << "."
+		 << std::to_string(cef_version_info(5)) << "."
+		 << std::to_string(cef_version_info(6)) << "."
+		 << std::to_string(cef_version_info(7));
 	prod_ver << " OBS/";
 	prod_ver << std::to_string(obs_maj) << "." << std::to_string(obs_min)
 		 << "." << std::to_string(obs_pat);
 
+#if CHROME_VERSION_BUILD >= 4472
+	CefString(&settings.user_agent_product) = prod_ver.str();
+#else
 	CefString(&settings.product_version) = prod_ver.str();
+#endif
 
 #ifdef USE_QT_LOOP
 	settings.external_message_pump = true;
@@ -518,6 +553,10 @@ static void BrowserInit(void)
 	CefString(&settings.locales_dir_path) = abs_locales;
 #endif
 
+#if ENABLE_DECRYPT_COOKIES
+	StreamElementsDecryptCefCookiesStoragePath(conf_path_abs.Get());
+#endif
+
 	std::string obs_locale = obs_get_locale();
 	std::string accepted_languages;
 	if (obs_locale != "en-US") {
@@ -531,11 +570,6 @@ static void BrowserInit(void)
 	BPtr<char> conf_path = obs_module_config_path("");
 	os_mkdir(conf_path);
 	BPtr<char> conf_path_abs = os_get_abs_path_ptr(conf_path);
-
-#if ENABLE_DECRYPT_COOKIES
-	StreamElementsDecryptCefCookiesStoragePath(conf_path_abs.Get());
-#endif
-
 	CefString(&settings.locale) = obs_get_locale();
 	CefString(&settings.accept_language_list) = accepted_languages;
 	CefString(&settings.cache_path) = conf_path_abs;
@@ -576,7 +610,6 @@ static void BrowserInit(void)
 	CefRegisterSchemeHandlerFactory("http", "absolute",
 					new BrowserSchemeHandlerFactory());
 #endif
-
 	os_event_signal(s_BrowserManagerThreadInitializedEvent);
 
 	os_event_signal(cef_started_event);
@@ -618,29 +651,20 @@ void RegisterBrowserSource()
 	struct obs_source_info info = {};
 	info.id = "browser_source";
 	info.type = OBS_SOURCE_TYPE_INPUT;
-	info.output_flags = OBS_SOURCE_VIDEO |
-#if CHROME_VERSION_BUILD >= 3683
-			    OBS_SOURCE_AUDIO |
-#endif
+	info.output_flags = OBS_SOURCE_VIDEO | OBS_SOURCE_AUDIO |
 			    OBS_SOURCE_CUSTOM_DRAW | OBS_SOURCE_INTERACTION |
 			    OBS_SOURCE_DO_NOT_DUPLICATE | OBS_SOURCE_SRGB;
 	info.get_properties = browser_source_get_properties;
 	info.get_defaults = browser_source_get_defaults;
-#if LIBOBS_API_MAJOR_VER >= 25
 	info.icon_type = OBS_ICON_TYPE_BROWSER;
-#endif
 
 	info.get_name = [](void *) { return obs_module_text("BrowserSource"); };
 	info.create = [](obs_data_t *settings, obs_source_t *source) -> void * {
-		if (source == nullptr) {
-			return nullptr;
-		}
-
 		obs_browser_initialize();
 		return new BrowserSource(settings, source);
 	};
 	info.destroy = [](void *data) {
-		delete static_cast<BrowserSource *>(data);
+		static_cast<BrowserSource *>(data)->Destroy();
 	};
 	info.missing_files = browser_source_missingfiles;
 	info.update = [](void *data, obs_data_t *settings) {
@@ -658,7 +682,7 @@ void RegisterBrowserSource()
 	info.video_render = [](void *data, gs_effect_t *) {
 		static_cast<BrowserSource *>(data)->Render();
 	};
-#if CHROME_VERSION_BUILD >= 3683 && CHROME_VERSION_BUILD < 4103
+#if CHROME_VERSION_BUILD < 4103
 	info.audio_mix = [](void *data, uint64_t *ts_out,
 			    struct audio_output_data *audio_output,
 			    size_t channels, size_t sample_rate) {
@@ -756,35 +780,29 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *)
 	case OBS_FRONTEND_EVENT_REPLAY_BUFFER_STARTED:
 		DispatchJSEvent("obsReplaybufferStarted", "");
 		break;
-#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(26, 1, 0)
 	case OBS_FRONTEND_EVENT_REPLAY_BUFFER_SAVED:
 		DispatchJSEvent("obsReplaybufferSaved", "");
 		break;
-#endif
 	case OBS_FRONTEND_EVENT_REPLAY_BUFFER_STOPPING:
 		DispatchJSEvent("obsReplaybufferStopping", "");
 		break;
 	case OBS_FRONTEND_EVENT_REPLAY_BUFFER_STOPPED:
 		DispatchJSEvent("obsReplaybufferStopped", "");
 		break;
-#if LIBOBS_API_VER > MAKE_SEMANTIC_VERSION(26, 1, 2)
 	case OBS_FRONTEND_EVENT_VIRTUALCAM_STARTED:
 		DispatchJSEvent("obsVirtualcamStarted", "");
 		break;
 	case OBS_FRONTEND_EVENT_VIRTUALCAM_STOPPED:
 		DispatchJSEvent("obsVirtualcamStopped", "");
 		break;
-#endif
 	case OBS_FRONTEND_EVENT_SCENE_CHANGED: {
 		OBSSource source = obs_frontend_get_current_scene();
+		obs_source_release(source);
 
 		if (!source)
 			break;
 
 		const char *name = obs_source_get_name(source);
-
-		obs_source_release(source);
-
 		if (!name)
 			break;
 
@@ -888,9 +906,6 @@ static void check_hwaccel_support(void)
 
 bool obs_module_load(void)
 {
-	blog(LOG_INFO, "[obs-browser]: Version %s", OBS_BROWSER_VERSION_STRING);
-	blog(LOG_INFO, "[obs-browser]: CEF Version %s", CEF_VERSION);
-	blog(LOG_INFO, "[obs-browser]: sizeof(obs_source_info): %d", sizeof(obs_source_info));
 #ifdef USE_QT_LOOP
 	qRegisterMetaType<MessageTask>("MessageTask");
 #endif
@@ -909,6 +924,14 @@ bool obs_module_load(void)
 		return false;
 #endif
 #endif
+	blog(LOG_INFO, "[obs-browser]: Version %s", OBS_BROWSER_VERSION_STRING);
+	blog(LOG_INFO,
+	     "[obs-browser]: CEF Version %i.%i.%i.%i (runtime), %s (compiled)",
+	     cef_version_info(4), cef_version_info(5), cef_version_info(6),
+	     cef_version_info(7), CEF_VERSION);
+
+	RegisterBrowserSource();
+	obs_frontend_add_event_callback(handle_obs_frontend_event, nullptr);
 
 #ifdef SHARED_TEXTURE_SUPPORT_ENABLED
 	obs_data_t *private_data = obs_get_private_data();
@@ -927,14 +950,38 @@ bool obs_module_load(void)
 	os_event_destroy(s_BrowserManagerThreadInitializedEvent);
 	s_BrowserManagerThreadInitializedEvent = nullptr;
 
-	RegisterBrowserSource();
-	obs_frontend_add_event_callback(handle_obs_frontend_event, nullptr);
-
 	// Initialize StreamElements plug-in
 	StreamElementsGlobalStateManager::GetInstance()->Initialize(
 		(QMainWindow *)obs_frontend_get_main_window());
 
 	return true;
+}
+
+void obs_module_post_load(void)
+{
+	auto vendor = obs_websocket_register_vendor("obs-browser");
+	if (!vendor)
+		return;
+
+	auto emit_event_request_cb = [](obs_data_t *request_data, obs_data_t *,
+					void *) {
+		const char *event_name =
+			obs_data_get_string(request_data, "event_name");
+		if (!event_name)
+			return;
+
+		OBSDataAutoRelease event_data =
+			obs_data_get_obj(request_data, "event_data");
+		const char *event_data_string =
+			event_data ? obs_data_get_json(event_data) : "{}";
+
+		DispatchJSEvent(event_name, event_data_string, nullptr);
+	};
+
+	if (!obs_websocket_vendor_register_request(
+		    vendor, "emit_event", emit_event_request_cb, nullptr))
+		blog(LOG_WARNING,
+		     "[obs-browser]: Failed to register obs-websocket request emit_event");
 }
 
 void obs_module_unload(void)

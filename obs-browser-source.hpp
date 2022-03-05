@@ -23,14 +23,15 @@
 #include "cef-headers.hpp"
 #include "browser-config.h"
 #include "browser-app.hpp"
+#include <atomic>
 #include <functional>
 #include <string>
+#include <mutex>
 
-#if CHROME_VERSION_BUILD < 4103 && CHROME_VERSION_BUILD >= 3683
+#if CHROME_VERSION_BUILD < 4103
 #include <obs.hpp>
 #include <unordered_map>
 #include <vector>
-#include <mutex>
 
 struct AudioStream {
 	OBSSource source;
@@ -39,6 +40,16 @@ struct AudioStream {
 	int sample_rate;
 };
 #endif
+
+enum class ControlLevel : int {
+	None,
+	ReadObs,
+	ReadUser,
+	Basic,
+	Advanced,
+	All,
+};
+inline constexpr ControlLevel DEFAULT_CONTROL_LEVEL = ControlLevel::ReadObs;
 
 extern bool hwaccel;
 
@@ -50,39 +61,64 @@ struct BrowserSource {
 
 	bool tex_sharing_avail = false;
 	bool create_browser = false;
+	std::recursive_mutex lockBrowser;
 	CefRefPtr<CefBrowser> cefBrowser;
 
 	std::string url;
 	std::string css;
 	gs_texture_t *texture = nullptr;
+	gs_texture_t *extra_texture = nullptr;
+	uint32_t last_cx = 0;
+	uint32_t last_cy = 0;
+	gs_color_format last_format = GS_UNKNOWN;
+
+#ifdef SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef _WIN32
+	void *last_handle = INVALID_HANDLE_VALUE;
+#elif defined(__APPLE__)
+	void *last_handle = nullptr;
+#endif
+#endif
+
 	int width = 0;
 	int height = 0;
 	bool fps_custom = false;
 	int fps = 0;
+	double canvas_fps = 0;
 	bool restart = false;
 	bool shutdown_on_invisible = false;
 	bool is_local = false;
 	bool first_update = true;
 	bool reroute_audio = true;
-#if defined(_WIN32) && defined(SHARED_TEXTURE_SUPPORT_ENABLED)
+	std::atomic<bool> destroying = false;
+	ControlLevel webpage_control_level = DEFAULT_CONTROL_LEVEL;
+#if defined(BROWSER_EXTERNAL_BEGIN_FRAME_ENABLED) && \
+	defined(SHARED_TEXTURE_SUPPORT_ENABLED)
 	bool reset_frame = false;
 #endif
 	bool is_showing = false;
 
 	inline void DestroyTextures()
 	{
+		obs_enter_graphics();
+		if (extra_texture) {
+			gs_texture_destroy(extra_texture);
+			extra_texture = nullptr;
+			last_cx = 0;
+			last_cy = 0;
+			last_format = GS_UNKNOWN;
+		}
 		if (texture) {
-			obs_enter_graphics();
 			gs_texture_destroy(texture);
 			texture = nullptr;
-			obs_leave_graphics();
 		}
+		obs_leave_graphics();
 	}
 
 	/* ---------------------------- */
 
 	bool CreateBrowser();
-	void DestroyBrowser(bool async = false);
+	void DestroyBrowser();
 	void ExecuteOnBrowser(BrowserFunc func, bool async = false);
 
 	/* ---------------------------- */
@@ -90,10 +126,12 @@ struct BrowserSource {
 	BrowserSource(obs_data_t *settings, obs_source_t *source);
 	~BrowserSource();
 
+	void Destroy();
+
 	void Update(obs_data_t *settings = nullptr);
 	void Tick();
 	void Render();
-#if CHROME_VERSION_BUILD < 4103 && CHROME_VERSION_BUILD >= 3683
+#if CHROME_VERSION_BUILD < 4103
 	void ClearAudioStreams();
 	void EnumAudioStreams(obs_source_enum_proc_t cb, void *param);
 	bool AudioMix(uint64_t *ts_out, struct audio_output_data *audio_output,
@@ -114,7 +152,11 @@ struct BrowserSource {
 	void SetActive(bool active);
 	void Refresh();
 
-#if defined(_WIN32) && defined(SHARED_TEXTURE_SUPPORT_ENABLED)
+#if defined(BROWSER_EXTERNAL_BEGIN_FRAME_ENABLED) && \
+	defined(SHARED_TEXTURE_SUPPORT_ENABLED)
 	inline void SignalBeginFrame();
 #endif
+
+	void SetBrowser(CefRefPtr<CefBrowser> b);
+	CefRefPtr<CefBrowser> GetBrowser();
 };
