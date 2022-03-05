@@ -622,7 +622,9 @@ static void BrowserShutdown(void)
 		;
 	CefDoMessageLoopWork();
 #endif
+#ifndef __APPLE__
 	CefShutdown();
+#endif
 	//app = nullptr;
 }
 
