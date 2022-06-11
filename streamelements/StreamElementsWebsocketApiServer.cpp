@@ -9,16 +9,28 @@ StreamElementsWebsocketApiServer::StreamElementsWebsocketApiServer()
 
 	m_endpoint.init_asio();
 
-	m_endpoint.set_message_handler([this](websocketpp::connection_hdl con_hdl,
-					      std::shared_ptr<message_t> msg) {
-		auto connection = m_endpoint.get_con_from_hdl(con_hdl);
+	m_endpoint.set_open_handler(
+		[this](websocketpp::connection_hdl con_hdl) {
+			// Connect
+			auto connection = m_endpoint.get_con_from_hdl(con_hdl);
 
-		std::string data = msg->get_payload();
+			connection->send("test on open");
+		});
 
-		::MessageBoxA(0, data.c_str(), "Payload", 0);
+	m_endpoint.set_close_handler(
+		[this](websocketpp::connection_hdl con_hdl) {
+			// Disconnect
+		});
 
-		connection->send("test");
-	});
+	m_endpoint.set_message_handler(
+		[this](websocketpp::connection_hdl con_hdl,
+		       std::shared_ptr<message_t> msg) {
+			auto connection = m_endpoint.get_con_from_hdl(con_hdl);
+
+			std::string data = msg->get_payload();
+
+			connection->send(data + " - test");
+		});
 
 	websocketpp::lib::error_code ec;
 
