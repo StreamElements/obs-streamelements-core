@@ -21,6 +21,7 @@
 #include "StreamElementsBackupManager.hpp"
 #include "StreamElementsCleanupManager.hpp"
 #include "StreamElementsPreviewManager.hpp"
+#include "StreamElementsWebsocketApiServer.hpp"
 
 class StreamElementsGlobalStateManager : public StreamElementsObsAppMonitor {
 private:
@@ -147,6 +148,9 @@ public:
 	{
 		return m_previewManager;
 	}
+	StreamElementsWebsocketApiServer* GetWebsocketApiServer() {
+		return m_websocketApiServer;
+	}
 	QMainWindow *mainWindow() { return m_mainWindow; }
 
 public:
@@ -196,6 +200,7 @@ private:
 	StreamElementsBackupManager *m_backupManager = nullptr;
 	StreamElementsCleanupManager *m_cleanupManager = nullptr;
 	StreamElementsPreviewManager *m_previewManager = nullptr;
+	StreamElementsWebsocketApiServer *m_websocketApiServer = nullptr;
 	WindowStateChangeEventFilter *m_windowStateEventFilter = nullptr;
 
 private:

@@ -6,45 +6,21 @@
 #include <websocketpp/config/asio_no_tls.hpp>
 
 #include <functional>
+#include <thread>
 
 class StreamElementsWebsocketApiServer {
 public:
 	typedef websocketpp::server<websocketpp::config::asio>
 		server_t;
 
+	typedef websocketpp::config::core::message_type message_t;
+
 public:
-	StreamElementsWebsocketApiServer() {
-		// Set logging settings
-		m_endpoint.set_error_channels(websocketpp::log::elevel::all);
-		m_endpoint.set_access_channels(
-			websocketpp::log::alevel::all ^
-			websocketpp::log::alevel::frame_payload);
-
-		m_endpoint.init_asio();
-
-		//m_endpoint.set_message_handler();
-
-		websocketpp::lib::error_code ec;
-
-		// Find first available port
-		do {
-			ec.clear();
-
-			m_endpoint.listen(m_port, ec);
-
-			if (ec.value()) {
-				++m_port;
-			}
-		} while (ec.value() && m_port < 65535);
-
-		m_endpoint.start_accept();
-
-		// m_endpoint.run();
-	}
-
-	~StreamElementsWebsocketApiServer() { m_endpoint.stop(); }
+	StreamElementsWebsocketApiServer();
+	~StreamElementsWebsocketApiServer();
 
 private:
 	uint16_t m_port = 27952;
 	server_t m_endpoint;
+	std::thread m_thread;
 };

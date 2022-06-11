@@ -403,6 +403,8 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			m_previewManager =
 				new StreamElementsPreviewManager(
 					mainWindow());
+			m_websocketApiServer =
+				new StreamElementsWebsocketApiServer();
 			m_windowStateEventFilter =
 				new WindowStateChangeEventFilter(
 					mainWindow());
@@ -600,6 +602,7 @@ void StreamElementsGlobalStateManager::Shutdown()
 			delete m_backupManager;
 			delete m_cleanupManager;
 			delete m_previewManager;
+			delete m_websocketApiServer;
 			delete m_windowStateEventFilter;
 			delete m_cookieManager;
 		});
