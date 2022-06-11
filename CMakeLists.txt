@@ -18,6 +18,7 @@ set(CMAKE_AUTOUIC ON)
 include_directories(SYSTEM "${CMAKE_SOURCE_DIR}/UI/obs-frontend-api")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/streamelements/deps")
 
 option(BROWSER_LEGACY "Use legacy CEF version 3770" OFF)
 
@@ -252,6 +253,7 @@ set(obs-browser_SOURCES
 	streamelements/StreamElementsScenesListWidgetManager.cpp
 	streamelements/StreamElementsPleaseWaitWindow.cpp
 	streamelements/StreamElementsHttpServerManager.cpp
+	streamelements/StreamElementsWebsocketApiServer.cpp
 	streamelements/deps/StackWalker/StackWalker.cpp
 	streamelements/deps/zip/zip.c
 	streamelements/deps/server/NamedPipesServer.cpp
@@ -339,6 +341,7 @@ set(obs-browser_HEADERS
 	streamelements/StreamElementsScenesListWidgetManager.hpp
 	streamelements/StreamElementsPleaseWaitWindow.hpp
 	streamelements/StreamElementsHttpServerManager.hpp
+	streamelements/StreamElementsWebsocketApiServer.hpp
 	streamelements/deps/StackWalker/StackWalker.h
 	streamelements/deps/zip/zip.h
 	streamelements/deps/zip/miniz.h
