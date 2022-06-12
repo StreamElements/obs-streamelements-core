@@ -21,6 +21,11 @@ public:
 				 CefRefPtr<CefProcessMessage> message,
 				 const long cefClientId) override;
 
+	virtual bool
+	OnProcessMessageReceived(std::string source,
+				 CefRefPtr<CefProcessMessage> message,
+				 const long cefClientId);
+
 	void setInitialHiddenState(bool isHidden)
 	{
 		m_initialHiddenState = isHidden;
@@ -62,10 +67,10 @@ private:
 	CefRefPtr<CefDictionaryValue> CreateApiPropsDictionaryInternal();
 
 	void
-	RegisterIncomingApiCallHandlersInternal(CefRefPtr<CefBrowser> browser);
-	void RegisterApiPropsInternal(CefRefPtr<CefBrowser> browser);
-	void DispatchHostReadyEventInternal(CefRefPtr<CefBrowser> browser);
-	void DispatchEventInternal(CefRefPtr<CefBrowser> browser,
+	RegisterIncomingApiCallHandlersInternal(std::string target);
+	void RegisterApiPropsInternal(std::string target);
+	void DispatchHostReadyEventInternal(std::string target);
+	void DispatchEventInternal(std::string target,
 				   std::string event,
 				   std::string eventArgsJson);
 

@@ -8,10 +8,8 @@
 
 #include <util/platform.h>
 #include <util/threading.h>
-#include <include/cef_base.h>
+#include "cef-headers.hpp"
 #include <include/cef_version.h>
-#include <include/cef_app.h>
-#include <include/cef_task.h>
 #include <include/base/cef_bind.h>
 #include <include/wrapper/cef_closure_task.h>
 #include <include/base/cef_lock.h>
@@ -36,6 +34,8 @@
 #if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
 #define SUPPORTS_FRACTIONAL_SCALING
 #endif
+
+class QCefWidget;
 
 class StreamElementsBrowserWidget:
 	public QWidget
@@ -110,6 +110,8 @@ private:
 	StreamElementsAsyncTaskQueue m_task_queue;
 	cef_window_handle_t m_window_handle;
 	CefRefPtr<CefBrowser> m_cef_browser;
+
+	QCefWidget *m_cefWidget = nullptr;
 
 private:
 	bool m_isWidgetInitialized = false;

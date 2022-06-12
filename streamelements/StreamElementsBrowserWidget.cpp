@@ -4,6 +4,11 @@
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
 
+#include "../panel/browser-panel.hpp"
+
+struct QCef;
+static QCef *cefMgr;
+
 #ifdef USE_QT_LOOP
 #include "browser-app.hpp"
 #endif
@@ -247,7 +252,94 @@ void StreamElementsBrowserWidget::InitBrowserAsync()
 	}
 
 	// Make sure InitBrowserAsyncInternal() runs in Qt UI thread
-	QMetaObject::invokeMethod(this, "InitBrowserAsyncInternal");
+	//QMetaObject::invokeMethod(this, "InitBrowserAsyncInternal");
+
+	if (!!m_cefWidget)
+		return;
+
+	std::string clientId = CreateGloballyUniqueIdString();
+
+	if (m_requestedApiMessageHandler == nullptr) {
+		m_requestedApiMessageHandler =
+			new StreamElementsApiMessageHandler();
+	}
+
+	uint16_t port = StreamElementsGlobalStateManager::GetInstance()
+				->GetWebsocketApiServer()
+				->GetPort();
+
+	StreamElementsGlobalStateManager::GetInstance()
+		->GetWebsocketApiServer()
+		->RegisterMessageHandler(
+			clientId, [this](std::string source,
+					 CefRefPtr<CefProcessMessage> msg) {
+				m_requestedApiMessageHandler
+					->OnProcessMessageReceived(source, msg,
+								   0);
+			});
+
+	if (!cefMgr) {
+		cefMgr = obs_browser_init_panel();
+	}
+
+	if (!cefMgr->initialized()) {
+		cefMgr->init_browser();
+		cefMgr->wait_for_browser_init();
+	}
+
+	m_cefWidget = cefMgr->create_widget(nullptr, m_url);
+
+	char portBuffer[8];
+
+	std::string script =
+		"window.host = window.host || {}; window.host.endpoint = { source: '" +
+		clientId + "', port: '" + itoa(port, portBuffer, 10) +
+		"', ws: new WebSocket(`ws://localhost:" +
+		itoa(port, portBuffer, 10) + "`) };\n" +
+		"window.host.endpoint.ws.onopen = () => {" +
+		"console.log('ws.onopen');" +
+		"window.host.endpoint.ws.send(JSON.stringify({ type: 'register', payload: { id: window.host.endpoint.source }}));" +
+		"};" + "window.host.endpoint.ws.onmessage = (event) => {" +
+		"	const json = JSON.parse(event.data);\n" +
+		"	console.log('ws.onmessage: ', json);"
+		"	if (json.type === 'register:response') {" +
+		"		window.host.endpoint.callbacks = {};\n" +
+		"		window.host.endpoint.callbackIdSequence = 0;\n" +
+		"		window.host.endpoint.ws.send(JSON.stringify({ type: 'dispatch', source: window.host.endpoint.source, payload: { name: 'CefRenderProcessHandler::OnContextCreated', args: [] } }));\n" +
+		"	} else if (json.type === 'dispatch') {\n" +
+		"		if (json.payload.name === 'CefRenderProcessHandler::BindJavaScriptProperties') {\n" +
+		"			const defs = JSON.parse(json.payload.args[1]);\n" +
+		"			window[json.payload.args[0]] = window[json.payload.args[0]] || {};\n" +
+		"			for (const key of Object.keys(defs)) {\n" +
+		"				window[json.payload.args[0]][key] = defs[key];\n" +
+		"			}\n" +
+		"		} else if (json.payload.name === 'CefRenderProcessHandler::BindJavaScriptFunctions') {\n" +
+		"			const defs = JSON.parse(json.payload.args[1]);\n" +
+		"			for (const key of Object.keys(defs)) {\n" +
+		"				const fullName = `window.${json.payload.args[0]}.${key}`;\n" +
+		"				window[json.payload.args[0]][key] = (...args) => {\n" +
+		"					const callback = args.pop();\n" +
+		"					const callbackId = ++window.host.endpoint.callbackIdSequence;\n" +
+		"					window.host.endpoint.callbacks[callbackId] = callback;\n" +
+		"					window.host.endpoint.ws.send(JSON.stringify({\n" +
+		"						type: 'dispatch', payload: {\n" +
+		"							name: defs[key].message,\n" +
+		"							args: [ 4, defs[key].message, fullName, key, ...(args.map(arg => JSON.stringify(arg))), callbackId ]\n" +
+		"						}\n" +
+		"					}));\n" +
+		"				};\n" +
+		"			}\n" +
+		"		} else if (json.payload.name === 'executeCallback') {\n" +
+		"			const [ callbackId, ...args ] = json.payload.args;\n" +
+		"			window.host.endpoint.callbacks[callbackId](...args);\n" +
+		"			delete window.host.endpoint.callbacks[callbackId];\n" +
+		"		}\n" +
+		"	}\n" +
+		"};";
+
+	m_cefWidget->setStartupScript(script + m_executeJavaScriptCodeOnLoad);
+
+	this->layout()->addWidget(m_cefWidget);
 }
 
 std::string StreamElementsBrowserWidget::GetInitialPageURLInternal()
@@ -265,6 +357,7 @@ std::string StreamElementsBrowserWidget::GetInitialPageURLInternal()
 
 void StreamElementsBrowserWidget::InitBrowserAsyncInternal()
 {
+	/*
 	if (!!m_cef_browser.get()) {
 		return;
 	}
@@ -325,10 +418,6 @@ void StreamElementsBrowserWidget::InitBrowserAsyncInternal()
 			//cefBrowserSettings.minimum_font_size = DEFAULT_FONT_SIZE;
 			//cefBrowserSettings.minimum_logical_font_size = DEFAULT_FONT_SIZE;
 
-			if (m_requestedApiMessageHandler == nullptr) {
-				m_requestedApiMessageHandler =
-					new StreamElementsApiMessageHandler();
-			}
 
 			CefRefPtr<StreamElementsCefClient> cefClient =
 				new StreamElementsCefClient(
@@ -387,7 +476,7 @@ void StreamElementsBrowserWidget::InitBrowserAsyncInternal()
 
 			UpdateBrowserSize();
 		},
-		true);
+		true);*/
 }
 
 void StreamElementsBrowserWidget::CefUIThreadExecute(std::function<void()> func,

@@ -2,18 +2,6 @@
 
 StreamElementsWebsocketApiServer::StreamElementsWebsocketApiServer()
 {
-	// TODO: Remove
-	RegisterMessageHandler(
-		"node-client",
-		[this](std::string source, CefRefPtr<CefProcessMessage> msg) {
-			auto val = CefValue::Create();
-			auto d = CefDictionaryValue::Create();
-			d->SetString("hello", "there");
-			val->SetDictionary(d);
-
-			DispatchClientMessage("system", source, "test", val);
-		});
-
 	// Set logging settings
 	m_endpoint.set_error_channels(websocketpp::log::elevel::all);
 	m_endpoint.set_access_channels(websocketpp::log::alevel::all ^

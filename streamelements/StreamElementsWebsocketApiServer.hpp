@@ -29,6 +29,8 @@ public:
 	StreamElementsWebsocketApiServer();
 	~StreamElementsWebsocketApiServer();
 
+	uint16_t GetPort() const { return m_port; }
+
 	bool DispatchClientMessage(std::string source, std::string target,
 			     CefRefPtr<CefProcessMessage> msg);
 	bool DispatchClientMessage(std::string source, std::string target,
