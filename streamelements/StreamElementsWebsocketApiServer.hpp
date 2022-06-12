@@ -7,6 +7,12 @@
 
 #include <functional>
 #include <thread>
+#include <string>
+#include <map>
+#include <vector>
+#include <mutex>
+
+#include "cef-headers.hpp"
 
 class StreamElementsWebsocketApiServer {
 public:
@@ -15,12 +21,40 @@ public:
 
 	typedef websocketpp::config::core::message_type message_t;
 
+	typedef websocketpp::connection_hdl connection_hdl_t;
+
+	typedef std::function<void(std::string source, CefRefPtr<CefProcessMessage> msg)> message_handler_t;
+
 public:
 	StreamElementsWebsocketApiServer();
 	~StreamElementsWebsocketApiServer();
 
+	bool DispatchClientMessage(std::string source, std::string target,
+			     CefRefPtr<CefProcessMessage> msg);
+	bool DispatchClientMessage(std::string source, std::string target,
+			     std::string type, CefRefPtr<CefValue> payload);
+
+	bool RegisterMessageHandler(std::string target,
+				    message_handler_t handler);
+	bool UnregisterMessageHandler(std::string target,
+				    message_handler_t handler);
+
 private:
+	void ParseIncomingMessage(connection_hdl_t con_hdl, std::string payload);
+	void ParseIncomingRegisterMessage(connection_hdl_t con_hdl,
+					  CefRefPtr<CefDictionaryValue> root);
+	void ParseIncomingDispatchMessage(connection_hdl_t con_hdl,
+					  CefRefPtr<CefDictionaryValue> root);
+
+private:
+	std::recursive_mutex m_mutex;
+
 	uint16_t m_port = 27952;
 	server_t m_endpoint;
 	std::thread m_thread;
+
+	std::map<std::string, connection_hdl_t> m_client_connection_map;
+	std::map<connection_hdl_t, std::string, std::owner_less<connection_hdl_t>>
+		m_connection_map;
+	std::map<std::string, message_handler_t> m_dispatch_handlers_map;
 };
