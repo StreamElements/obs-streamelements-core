@@ -43,6 +43,9 @@ StreamElementsWebsocketApiServer::StreamElementsWebsocketApiServer()
 			m_connection_map.erase(con_hdl);
 
 			m_client_connection_map.erase(id);
+
+			if (m_client_connection_map.count(id))
+				m_client_connection_map.erase(id);
 		});
 
 	m_endpoint.set_message_handler(
