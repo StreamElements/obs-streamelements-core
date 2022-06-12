@@ -333,6 +333,9 @@ void StreamElementsBrowserWidget::InitBrowserAsync()
 		"			const [ callbackId, ...args ] = json.payload.args;\n" +
 		"			window.host.endpoint.callbacks[callbackId](...args);\n" +
 		"			delete window.host.endpoint.callbacks[callbackId];\n" +
+		"		} else if (json.payload.name === 'DispatchJSEvent') {\n" +
+		"			const event = new CustomEvent(json.payload.args[0], JSON.parse(json.payload.args[1]));\n" +
+		"			window.dispatchEvent(event);\n" +
 		"		}\n" +
 		"	}\n" +
 		"};";
