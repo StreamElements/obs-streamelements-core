@@ -46,12 +46,18 @@ public:
 			StreamElementsGlobalStateManager::GetInstance()
 				->mainWindow();
 
-		// TODO: Calculate impossible coordinates
+		//
+		// HACK: QCefWidget will only create the browser if visible
+		//	 Since we do not want to show it, we create a QDockWidget and
+		//	 position it out of bounds of the current desktop.
+		//
+
+		QRect rec = QApplication::desktop()->screenGeometry();
 
 		m_dockWidget = new QDockWidget();
 		m_dockWidget->setVisible(true);
 		m_dockWidget->layout()->addWidget(browserWidget);
-		m_dockWidget->setGeometry(QRect(16384, 16384, 4, 4));
+		m_dockWidget->setGeometry(QRect(rec.width() * 2, rec.height() * 2, 1920, 1080));
 
 		mainWindow->addDockWidget(Qt::NoDockWidgetArea, m_dockWidget);
 

@@ -359,15 +359,10 @@ void BrowserClient::OnPaint(CefRefPtr<CefBrowser>, PaintElementType type,
 
 void BrowserClient::OnAfterCreated(CefRefPtr<CefBrowser> browser)
 {
-	StreamElementsMessageBus::GetInstance()->AddBrowserListener(
-				browser,
-				StreamElementsMessageBus::DEST_BROWSER_SOURCE);
 }
 
 void BrowserClient::OnBeforeClose(CefRefPtr<CefBrowser> browser)
 {
-	StreamElementsMessageBus::GetInstance()->RemoveBrowserListener(
-				browser);
 }
 
 #ifdef SHARED_TEXTURE_SUPPORT_ENABLED
