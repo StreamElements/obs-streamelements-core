@@ -2130,8 +2130,10 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	/*
 	API_HANDLER_BEGIN("getAllCookies");
 	{
+		// TODO: Check if this can be implemented at all
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->SerializeCookies(args->GetValue(0), result);
@@ -2141,6 +2143,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		}
 	}
 	API_HANDLER_END();
+	*/
 
 	API_HANDLER_BEGIN("dispatchKeyboardEvent");
 	{

@@ -53,23 +53,6 @@ static QString GetLastErrorMsg()
 
 /* ========================================================================= */
 
-static std::string GetCEFStoragePath()
-{
-	std::string version = GetCefVersionString();
-
-	BPtr<char> rpath = obs_module_config_path(version.c_str());
-
-#ifdef WIN32
-	BPtr<char> path = os_get_abs_path_ptr(rpath.Get());
-
-	return path.Get();
-#else
-	return rpath.Get();
-#endif
-}
-
-/* ========================================================================= */
-
 StreamElementsGlobalStateManager::ApplicationStateListener::
 	ApplicationStateListener()
 	: m_timer(this)
@@ -347,7 +330,7 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 				QMainWindow::AllowNestedDocks |
 				QMainWindow::AllowTabbedDocks);
 
-			std::string storagePath = GetCEFStoragePath();
+			std::string storagePath = GetCefVersionString();
 			int os_mkdirs_ret = os_mkdirs(storagePath.c_str());
 
 			char *webRootPath = obs_module_file("localwebroot");
@@ -355,8 +338,15 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 				new StreamElementsLocalWebFilesServer(
 					webRootPath ? webRootPath : "");
 			bfree(webRootPath);
-			m_cookieManager =
-				new StreamElementsCookieManager(storagePath);
+
+			m_cef = obs_browser_init_panel();
+			if (!m_cef->initialized()) {
+				m_cef->init_browser();
+				m_cef->wait_for_browser_init();
+			}
+
+			m_cefCookieManager = m_cef->create_cookie_manager(storagePath, true);
+
 			m_httpClient =
 				new StreamElementsHttpClient();
 			m_analyticsEventsManager =
@@ -605,7 +595,7 @@ void StreamElementsGlobalStateManager::Shutdown()
 			delete m_previewManager;
 			delete m_websocketApiServer;
 			delete m_windowStateEventFilter;
-			delete m_cookieManager;
+			delete m_cefCookieManager;
 		});
 #endif
 
@@ -745,148 +735,8 @@ void StreamElementsGlobalStateManager::SwitchToOBSStudio()
 
 void StreamElementsGlobalStateManager::DeleteCookies()
 {
-	class CookieVisitor : public CefCookieVisitor {
-	public:
-		CookieVisitor() {}
-		~CookieVisitor() {}
-
-		virtual bool Visit(const CefCookie &cookie, int count,
-				   int total, bool &deleteCookie) override
-		{
-			UNUSED_PARAMETER(count);
-			UNUSED_PARAMETER(total);
-
-			deleteCookie = true;
-
-			CefString domain(&cookie.domain);
-			CefString name(&cookie.name);
-
-			// Process cookie whitelist. This is used for
-			// preserving two-factor-authentication (2FA)
-			// "remember this computer" state.
-			//
-			if (domain == ".twitch.tv" && name == "authy_id") {
-				deleteCookie = false;
-			}
-
-			return true;
-		}
-
-	public:
-		IMPLEMENT_REFCOUNTING(CookieVisitor);
-	};
-
-	if (!m_cookieManager->GetCefCookieManager()->VisitAllCookies(
-		    new CookieVisitor())) {
-		blog(LOG_ERROR,
-		     "m_cookieManager->GetCefCookieManager()->VisitAllCookies() failed.");
-	}
-}
-
-void StreamElementsGlobalStateManager::SerializeCookies(
-	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
-{
-	output->SetNull();
-
-	class CookieVisitor : public CefCookieVisitor {
-	public:
-		std::string domainFilter;
-		std::string nameFilter;
-
-		CefRefPtr<CefListValue> result;
-		os_event_t *event;
-
-	public:
-		CookieVisitor(os_event_t *completionEvent)
-			: result(CefListValue::Create()), event(completionEvent)
-		{
-		}
-
-		~CookieVisitor() {
-			os_event_signal(event);
-		}
-
-		virtual bool Visit(const CefCookie &cookie, int count,
-				   int total, bool &deleteCookie) override
-		{
-			UNUSED_PARAMETER(count);
-			UNUSED_PARAMETER(total);
-
-			CefString value(&cookie.value);
-			CefString domain(&cookie.domain);
-			CefString name(&cookie.name);
-
-			if (domainFilter.size() && domain != domainFilter)
-				return true;
-
-			if (nameFilter.size() && name != nameFilter)
-				return true;
-
-			CefRefPtr<CefDictionaryValue> d =
-					CefDictionaryValue::Create();
-
-			d->SetString("name", name);
-			d->SetString("value", value);
-			d->SetString("domain", domain);
-			d->SetString("path", CefString(&cookie.path));
-			d->SetBool("httponly", cookie.httponly);
-			d->SetBool("secure", cookie.secure);
-
-			result->SetDictionary(result->GetSize(), d);
-
-			return true;
-		}
-
-	public:
-		IMPLEMENT_REFCOUNTING(CookieVisitor);
-	};
-
-	os_event_t *event;
-	os_event_init(&event, OS_EVENT_TYPE_AUTO);
-
-	bool success = false;
-	CefRefPtr<CefListValue> list = CefListValue::Create();
-
-	CefRefPtr<CookieVisitor> visitor = new CookieVisitor(event);
-
-	visitor->result = list;
-
-	if (input && input->GetType() == VTYPE_DICTIONARY) {
-		CefRefPtr<CefDictionaryValue> d =
-			input->GetDictionary();
-
-		if (d->HasKey("domain") &&
-			d->GetType("domain") == VTYPE_STRING) {
-			visitor->domainFilter = d->GetString("domain");
-		}
-
-		if (d->HasKey("name") &&
-		    d->GetType("name") == VTYPE_STRING) {
-			visitor->nameFilter = d->GetString("name");
-		}
-	}
-
-	success =
-		m_cookieManager->GetCefCookieManager()->VisitAllCookies(
-			visitor);
-
-	// VisitAllCookies() is executed on an async thread.
-	//
-	// Visitor destructor will be called onse VisitAllCookies() is done,
-	// and will indicate completion by raising event.
-	//
-	visitor = nullptr;
-
-	if (!success) {
-		blog(LOG_ERROR,
-		     "m_cookieManager->GetCefCookieManager()->VisitAllCookies() failed.");
-	} else {
-		os_event_wait(event);
-
-		output->SetList(list);
-	}
-
-	os_event_destroy(event);
+	// TODO: Specify specific cookies to delete, or, work with OBS community to provide a delete filter
+	m_cefCookieManager->DeleteCookies("", "");
 }
 
 static void DispatchJSEventAllBrowsers(const char *eventName,

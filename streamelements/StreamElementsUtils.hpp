@@ -162,6 +162,9 @@ typedef std::function<bool(void *data, size_t datalen, void *userdata,
 typedef std::function<void(char *data, void *userdata, char *error_msg,
 			   int http_code)>
 	http_client_string_callback_t;
+typedef std::function<void(void *data, size_t datalen, void *userdata, char *error_msg,
+			   int http_code)>
+	http_client_buffer_callback_t;
 typedef std::multimap<std::string, std::string> http_client_headers_t;
 
 bool HttpGet(const char *url, http_client_headers_t request_headers,
@@ -173,6 +176,9 @@ bool HttpPost(const char *url, http_client_headers_t request_headers,
 
 bool HttpGetString(const char *url, http_client_headers_t request_headers,
 		   http_client_string_callback_t callback, void *userdata);
+
+bool HttpGetBuffer(const char *url, http_client_headers_t request_headers,
+		   http_client_buffer_callback_t callback, void *userdata);
 
 bool HttpPostString(const char *url, http_client_headers_t request_headers,
 		    const char *postData,
@@ -287,54 +293,50 @@ bool ReadListOfObsProfiles(std::map<std::string, std::string> &output);
 
 /* ========================================================= */
 
-class CefCancelableTask : public CefTask {
+class CancelableTask {
 private:
 	bool cancelled = false;
 	std::recursive_mutex mutex;
 
 public:
-	std::function<void()> task;
+	static std::shared_ptr<CancelableTask> Execute(std::function<void(std::shared_ptr<CancelableTask>)> task) {
+		auto handle = std::make_shared<CancelableTask>();
 
-	inline CefCancelableTask(std::function<void()> task_)
-		: task(task_), cancelled(false)
+		std::thread thread([handle, task]() {
+			task(handle);
+		});
+
+		thread.detach();
+
+		return handle;
+	}
+
+public:
+	CancelableTask()
+		: cancelled(false)
 	{
 	}
 
+public:
 	void Cancel()
 	{
-		std::lock_guard <decltype(mutex)> guard(mutex);
-
 		cancelled = true;
 	}
 
-	virtual void Execute() override
+	bool IsCancelled()
 	{
-		std::lock_guard<decltype(mutex)> guard(mutex);
-
-		if (cancelled)
-			return;
-
-#ifdef USE_QT_LOOP
-		QtPostTask([this]() { task(); });
-#else
-		task();
-#endif
+		return cancelled;
 	}
-
-	IMPLEMENT_REFCOUNTING(CefCancelableTask);
 };
-
-CefRefPtr<CefCancelableTask> QueueCefCancelableTask(std::function<void()> task);
 
 /* ========================================================= */
 
 typedef std::function<void(bool success, void *, size_t)>
-	cef_http_request_callback_t;
+	async_http_request_callback_t;
 
-CefRefPtr<CefCancelableTask>
-CefHttpGetAsync(const char *url,
-		std::function<void(CefRefPtr<CefURLRequest>)> init_callback,
-		cef_http_request_callback_t callback);
+std::shared_ptr<CancelableTask>
+HttpGetAsync(std::string url,
+		async_http_request_callback_t callback);
 
 /* ========================================================= */
 

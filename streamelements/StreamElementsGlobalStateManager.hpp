@@ -1,5 +1,10 @@
 #pragma once
 
+#include "../panel/browser-panel.hpp"
+
+struct QCef;
+struct QCefCookieManager;
+
 #include "StreamElementsBrowserWidgetManager.hpp"
 #include "StreamElementsMenuManager.hpp"
 #include "StreamElementsConfig.hpp"
@@ -24,6 +29,10 @@
 #include "StreamElementsWebsocketApiServer.hpp"
 
 class StreamElementsGlobalStateManager : public StreamElementsObsAppMonitor {
+private:
+	QCef* m_cef;
+	QCefCookieManager* m_cefCookieManager;
+
 private:
 	class WindowStateChangeEventFilter : public QObject {
 	private:
@@ -72,14 +81,14 @@ public:
 	void Reset(bool deleteAllCookies = true,
 		   UiModifier uiModifier = Default);
 	void DeleteCookies();
-	void SerializeCookies(CefRefPtr<CefValue> input,
-			      CefRefPtr<CefValue> &output);
 	void StartOnBoardingUI(UiModifier uiModifier);
 	void StopOnBoardingUI();
 	void SwitchToOBSStudio();
 
 	void PersistState(bool sendEventToGuest = true);
 	void RestoreState();
+
+	QCef *GetCef() { return m_cef; }
 
 	StreamElementsBrowserWidgetManager *GetWidgetManager()
 	{
@@ -128,9 +137,9 @@ public:
 	{
 		return m_nativeObsControlsManager;
 	}
-	StreamElementsCookieManager *GetCookieManager()
+	QCefCookieManager *GetCookieManager()
 	{
-		return m_cookieManager;
+		return m_cefCookieManager;
 	}
 	StreamElementsProfilesManager *GetProfilesManager()
 	{
@@ -195,7 +204,6 @@ private:
 	StreamElementsHttpClient *m_httpClient = nullptr;
 	StreamElementsNativeOBSControlsManager *m_nativeObsControlsManager =
 		nullptr;
-	StreamElementsCookieManager *m_cookieManager = nullptr;
 	StreamElementsProfilesManager *m_profilesManager = nullptr;
 	StreamElementsBackupManager *m_backupManager = nullptr;
 	StreamElementsCleanupManager *m_cleanupManager = nullptr;

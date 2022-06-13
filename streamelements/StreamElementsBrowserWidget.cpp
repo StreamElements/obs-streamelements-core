@@ -6,9 +6,6 @@
 
 #include "../panel/browser-panel.hpp"
 
-struct QCef;
-static QCef *cefMgr;
-
 #ifdef USE_QT_LOOP
 #include "browser-app.hpp"
 #endif
@@ -257,17 +254,11 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 								   0);
 			});
 
-	if (!cefMgr) {
-		cefMgr = obs_browser_init_panel();
-	}
-
-	if (!cefMgr->initialized()) {
-		cefMgr->init_browser();
-		cefMgr->wait_for_browser_init();
-	}
-
-	m_cefWidget =
-		cefMgr->create_widget(nullptr, GetInitialPageURLInternal());
+	m_cefWidget = StreamElementsGlobalStateManager::GetInstance()
+		->GetCef()->create_widget(
+			nullptr,
+			GetInitialPageURLInternal(),
+			StreamElementsGlobalStateManager::GetInstance()->GetCookieManager());
 
 	char portBuffer[8];
 

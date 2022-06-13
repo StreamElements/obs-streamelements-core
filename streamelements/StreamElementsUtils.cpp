@@ -1049,6 +1049,44 @@ bool HttpGetString(const char *url, http_client_headers_t request_headers,
 	return success;
 }
 
+bool HttpGetBuffer(
+	const char *url, http_client_headers_t request_headers,
+	http_client_buffer_callback_t callback, void *userdata)
+{
+	std::vector<char> buffer;
+	std::string error = "";
+	int http_status_code = 0;
+
+	auto cb = [&](void *data, size_t datalen, void *userdata,
+		      char *error_msg, int http_code) -> bool {
+		if (http_code != 0) {
+			http_status_code = http_code;
+		}
+
+		if (error_msg) {
+			error = error_msg;
+
+			return false;
+		}
+
+		char *in = (char *)data;
+
+		std::copy(in, in + datalen, std::back_inserter(buffer));
+
+		return buffer.size() < MAX_HTTP_STRING_RESPONSE_LENGTH;
+	};
+
+	bool success = HttpGet(url, request_headers, cb, nullptr);
+
+	buffer.push_back(0);
+
+	callback((void *)&buffer[0], buffer.size(), userdata,
+		 error.size() ? (char *)error.c_str() : nullptr,
+		 http_status_code);
+
+	return success;
+}
+
 bool HttpPostString(const char *url, http_client_headers_t request_headers,
 		    const char *postData,
 		    http_client_string_callback_t callback, void *userdata)
@@ -2216,105 +2254,23 @@ bool ReadListOfObsProfiles(std::map<std::string, std::string> &output)
 	return true;
 }
 
-static class LocalCefURLRequestClient : public CefURLRequestClient {
-public:
-	LocalCefURLRequestClient(cef_http_request_callback_t callback)
-		: m_callback(callback)
-	{
-	}
-
-	virtual ~LocalCefURLRequestClient() {}
-
-public:
-	virtual bool
-	GetAuthCredentials(bool isProxy, const CefString &host, int port,
-			   const CefString &realm, const CefString &scheme,
-			   CefRefPtr<CefAuthCallback> callback) override
-	{
-		return false;
-	}
-
-	virtual void OnDownloadData(CefRefPtr<CefURLRequest> request,
-				    const void *data,
-				    size_t data_length) override;
-
-	virtual void OnUploadProgress(CefRefPtr<CefURLRequest> request,
-				      int64 current, int64 total) override
-	{
-	}
-
-	virtual void OnDownloadProgress(CefRefPtr<CefURLRequest> request,
-					int64 current, int64 total)
-	{
-	}
-
-	virtual void
-	OnRequestComplete(CefRefPtr<CefURLRequest> request) override;
-
-private:
-	std::vector<char> m_buffer;
-	cef_http_request_callback_t m_callback;
-
-public:
-	IMPLEMENT_REFCOUNTING(LocalCefURLRequestClient);
-};
-
-void LocalCefURLRequestClient::OnDownloadData(CefRefPtr<CefURLRequest> request,
-					      const void *data,
-					      size_t data_length)
+std::shared_ptr<CancelableTask>
+HttpGetAsync(std::string url,
+		async_http_request_callback_t callback)
 {
-	m_buffer.insert(m_buffer.end(), (char *)data,
-			(char *)data + data_length);
-}
+	return CancelableTask::Execute([=](std::shared_ptr<CancelableTask> task) {
+		http_client_headers_t headers;
 
-void LocalCefURLRequestClient::OnRequestComplete(
-	CefRefPtr<CefURLRequest> request)
-{
-	if (request->GetRequestStatus() == UR_CANCELED)
-		return;
+		auto cb = [=](void* data, size_t datalen, void* userdata, char* error_msg,
+			int http_code) {
+				if (!task->IsCancelled()) {
+					bool success = http_code >= 200 && http_code < 400;
 
-	if (request->GetRequestStatus() == UR_SUCCESS) {
-		// Success
+					callback(success, data, datalen);
+				}
+		};
 
-		m_callback(true, m_buffer.data(), m_buffer.size());
-	} else {
-		// Failure
-		m_callback(false, nullptr, 0);
-	}
-}
-
-CefRefPtr<CefCancelableTask> QueueCefCancelableTask(std::function<void()> task)
-{
-	CefRefPtr<CefCancelableTask> result = new CefCancelableTask(task);
-
-	CefPostTask(TID_UI, result);
-
-	return result;
-}
-
-CefRefPtr<CefCancelableTask>
-CefHttpGetAsync(const char *url,
-		std::function<void(CefRefPtr<CefURLRequest>)> init_callback,
-		cef_http_request_callback_t callback)
-{
-	CefRefPtr<CefRequest> request = CefRequest::Create();
-
-	request->SetURL(url);
-	request->SetMethod("GET");
-
-	CefRefPtr<LocalCefURLRequestClient> client =
-		new LocalCefURLRequestClient(callback);
-
-	extern bool QueueCEFTask(std::function<void()> task);
-
-	return QueueCefCancelableTask([=]() -> void {
-		CefRefPtr<CefURLRequest> cefRequest = CefURLRequest::Create(
-			request, client,
-			StreamElementsGlobalStateManager::GetInstance()
-				->GetCookieManager()
-				->GetCefRequestContext());
-
-		init_callback(cefRequest);
+		HttpGetBuffer(url.c_str(), headers, cb, nullptr);
 	});
 }
 

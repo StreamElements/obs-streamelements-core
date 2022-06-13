@@ -5,6 +5,7 @@
 #include <QPixmap>
 
 #include <functional>
+#include <memory>
 
 static class StreamElementsRemoteIconLoader : public CefBaseRefCounted {
 public:
@@ -29,8 +30,7 @@ public:
 
 private:
 	std::recursive_mutex m_mutex;
-	CefRefPtr<CefURLRequest> m_request = nullptr;
-	CefRefPtr<CefCancelableTask> m_task = nullptr;
+	std::shared_ptr<CancelableTask> m_task = nullptr;
 	setIcon_callback_t m_setIcon;
 	bool m_cancelled = false;
 

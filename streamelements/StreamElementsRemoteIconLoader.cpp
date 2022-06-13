@@ -110,15 +110,9 @@ void StreamElementsRemoteIconLoader::Cancel()
 	m_cancelled = true;
 
 	if (m_task) {
-		// m_task->Cancel();
+		m_task->Cancel();
 
 		m_task = nullptr;
-	}
-
-	if (m_request) {
-		m_request->Cancel();
-
-		m_request = nullptr;
 	}
 }
 
@@ -167,19 +161,12 @@ void StreamElementsRemoteIconLoader::LoadUrlInternal(
 
 	this->AddRef();
 
-	m_task = CefHttpGetAsync(
+	m_task = HttpGetAsync(
 		url,
-		[&](CefRefPtr<CefURLRequest> request) { m_request = request; },
 		[this, cacheKey](bool success, void *data, size_t len) {
 			std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
-			if (m_request) {
-				m_request = nullptr;
-			}
-
-			m_task = nullptr;
-
-			if (success && !m_cancelled) {
+			if (success && !m_task->IsCancelled()) {
 				QByteArray buffer = QByteArray::fromRawData(
 					(char *)data, len);
 				QPixmap pixmap;
