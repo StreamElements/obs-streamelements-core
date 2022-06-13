@@ -212,7 +212,6 @@ set(obs-browser_SOURCES
 	deps/wide-string.cpp
 	streamelements/Version.cpp
 	streamelements/StreamElementsAsyncTaskQueue.cpp
-	streamelements/StreamElementsCefClient.cpp
 	streamelements/StreamElementsBrowserWidget.cpp
 	streamelements/StreamElementsBrowserWidgetManager.cpp
 	streamelements/StreamElementsBandwidthTestClient.cpp
@@ -238,7 +237,6 @@ set(obs-browser_SOURCES
 	streamelements/StreamElementsBrowserSourceApiMessageHandler.cpp
 	streamelements/StreamElementsControllerServer.cpp
 	streamelements/StreamElementsObsSceneManager.cpp
-	streamelements/StreamElementsLocalWebFilesServer.cpp
 	streamelements/StreamElementsExternalSceneDataProviderSlobsClient.cpp
 	streamelements/StreamElementsHttpClient.cpp
 	streamelements/StreamElementsNativeOBSControlsManager.cpp
@@ -296,7 +294,6 @@ set(obs-browser_HEADERS
 	streamelements/Version.generated.hpp
 	streamelements/StreamElementsUtils.hpp
 	streamelements/StreamElementsAsyncTaskQueue.hpp
-	streamelements/StreamElementsCefClient.hpp
 	streamelements/StreamElementsBrowserWidget.hpp
 	streamelements/StreamElementsBrowserWidgetManager.hpp
 	streamelements/StreamElementsBandwidthTestClient.hpp
@@ -324,7 +321,6 @@ set(obs-browser_HEADERS
 	streamelements/StreamElementsControllerServer.hpp
 	streamelements/StreamElementsObsSceneManager.hpp
 	streamelements/StreamElementsFileSystemMapper.hpp
-	streamelements/StreamElementsLocalWebFilesServer.hpp
 	streamelements/StreamElementsExternalSceneDataProviderManager.hpp
 	streamelements/StreamElementsExternalSceneDataProviderSlobsClient.hpp
 	streamelements/StreamElementsExternalSceneDataProvider.hpp

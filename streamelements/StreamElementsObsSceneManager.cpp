@@ -1,6 +1,5 @@
 #include "StreamElementsObsSceneManager.hpp"
 #include "StreamElementsUtils.hpp"
-#include "StreamElementsCefClient.hpp"
 #include "StreamElementsConfig.hpp"
 
 #include <util/platform.h>

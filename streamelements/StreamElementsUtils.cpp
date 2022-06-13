@@ -2,7 +2,6 @@
 
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsConfig.hpp"
-#include "StreamElementsCefClient.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
 #include "StreamElementsRemoteIconLoader.hpp"
 #include "StreamElementsPleaseWaitWindow.hpp"

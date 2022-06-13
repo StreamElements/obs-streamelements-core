@@ -1,6 +1,5 @@
 #include "StreamElementsBrowserWidgetManager.hpp"
 #include "StreamElementsUtils.hpp"
-#include "StreamElementsCefClient.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
 
 #include "cef-headers.hpp"

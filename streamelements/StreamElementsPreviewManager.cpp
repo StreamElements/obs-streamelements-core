@@ -6,7 +6,6 @@
 #include <QApplication>
 #include <QEvent>
 
-#include "StreamElementsCefClient.hpp"
 #include "StreamElementsObsAppMonitor.hpp"
 #include "StreamElementsUtils.hpp"
 

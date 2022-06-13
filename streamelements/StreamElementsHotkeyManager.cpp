@@ -1,5 +1,4 @@
 #include "StreamElementsHotkeyManager.hpp"
-#include "StreamElementsCefClient.hpp"
 #include "StreamElementsUtils.hpp"
 
 #include <util/dstr.h>

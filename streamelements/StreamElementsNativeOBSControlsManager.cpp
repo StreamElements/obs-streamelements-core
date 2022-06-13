@@ -1,6 +1,5 @@
 #include "StreamElementsNativeOBSControlsManager.hpp"
 #include "StreamElementsUtils.hpp"
-#include "StreamElementsCefClient.hpp"
 #include <QDockWidget>
 #include <QVBoxLayout>
 #include <QPushButton>

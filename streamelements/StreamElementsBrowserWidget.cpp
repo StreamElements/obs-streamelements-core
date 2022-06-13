@@ -1,5 +1,4 @@
 #include "StreamElementsBrowserWidget.hpp"
-#include "StreamElementsCefClient.hpp"
 #include "StreamElementsApiMessageHandler.hpp"
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsGlobalStateManager.hpp"

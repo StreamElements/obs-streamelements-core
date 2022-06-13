@@ -8,7 +8,6 @@
 #include "StreamElementsConfig.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
 #include "StreamElementsUtils.hpp"
-#include "StreamElementsCefClient.hpp"
 #include "StreamElementsMessageBus.hpp"
 #include "StreamElementsPleaseWaitWindow.hpp"
 

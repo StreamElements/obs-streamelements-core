@@ -17,7 +17,6 @@ struct QCefCookieManager;
 #include "StreamElementsAnalyticsEventsManager.hpp"
 #include "StreamElementsCrashHandler.hpp"
 #include "StreamElementsObsSceneManager.hpp"
-#include "StreamElementsLocalWebFilesServer.hpp"
 #include "StreamElementsExternalSceneDataProviderManager.hpp"
 #include "StreamElementsHttpClient.hpp"
 #include "StreamElementsNativeOBSControlsManager.hpp"
