@@ -1259,7 +1259,8 @@ bool StreamElementsGlobalStateManager::DeserializePopupWindow(
 		QMainWindow *window = new QMainWindow();
 
 		auto browserWidget = new StreamElementsBrowserWidget(
-			nullptr, url.c_str(), executeJavaScriptOnLoad.c_str(),
+			nullptr, StreamElementsMessageBus::DEST_UI, url.c_str(),
+			executeJavaScriptOnLoad.c_str(),
 			"default", "popupWindow",
 			CreateGloballyUniqueIdString().c_str(),
 			apiMessageHandler, false);

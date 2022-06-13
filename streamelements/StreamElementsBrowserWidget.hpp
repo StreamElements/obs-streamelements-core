@@ -2,6 +2,7 @@
 
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsBrowserWidget.hpp"
+#include "StreamElementsMessageBus.hpp"
 
 #include <QWidget>
 #include <QHideEvent>
@@ -44,12 +45,16 @@ private:
 	std::string m_pendingLocationArea;
 	std::string m_pendingId;
 	CefRefPtr<StreamElementsApiMessageHandler> m_requestedApiMessageHandler;
+	StreamElementsMessageBus::message_destination_filter_flags_t
+		m_messageDestinationFlags;
 
 	bool m_isIncognito = false;
 
 public:
 	StreamElementsBrowserWidget(
 		QWidget* parent,
+		StreamElementsMessageBus::
+			message_destination_filter_flags_t messageDestinationFlags,
 		const char* const url,
 		const char* const executeJavaScriptCodeOnLoad,
 		const char* const reloadPolicy,

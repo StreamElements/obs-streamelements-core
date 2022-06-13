@@ -198,12 +198,15 @@ static bool QueueCEFTask(std::function<void()> task)
 #include <QVBoxLayout>
 
 StreamElementsBrowserWidget::StreamElementsBrowserWidget(
-	QWidget *parent, const char *const url,
+	QWidget *parent,
+	StreamElementsMessageBus::message_destination_filter_flags_t
+		messageDestinationFlags, const char *const url,
 	const char *const executeJavaScriptCodeOnLoad,
 	const char *const reloadPolicy, const char *const locationArea,
 	const char *const id,
 	StreamElementsApiMessageHandler *apiMessageHandler, bool isIncognito)
 	: QWidget(parent),
+	  m_messageDestinationFlags(messageDestinationFlags),
 	  m_url(url),
 	  m_executeJavaScriptCodeOnLoad(executeJavaScriptCodeOnLoad == nullptr
 						? ""
@@ -320,7 +323,7 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 
 	// TODO: Add argument to change message bus destination flags
 	StreamElementsMessageBus::GetInstance()->AddListener(
-		m_clientId, StreamElementsMessageBus::DEST_UI);
+		m_clientId, m_messageDestinationFlags);
 }
 
 StreamElementsBrowserWidget::~StreamElementsBrowserWidget()

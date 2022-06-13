@@ -37,7 +37,8 @@ public:
 			new StreamElementsApiMessageHandler();
 
 		auto browserWidget = new StreamElementsBrowserWidget(
-			nullptr, m_url.c_str(), m_executeJavascriptOnLoad.c_str(),
+			nullptr, StreamElementsMessageBus::DEST_WORKER,
+			m_url.c_str(), m_executeJavascriptOnLoad.c_str(),
 			"default", "popupWindow",
 			CreateGloballyUniqueIdString().c_str(),
 			apiMessageHandler, false);

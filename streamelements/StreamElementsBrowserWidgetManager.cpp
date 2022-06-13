@@ -314,8 +314,8 @@ void StreamElementsBrowserWidgetManager::PushCentralBrowserWidget(
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
 	StreamElementsBrowserWidget *widget = new StreamElementsBrowserWidget(
-		nullptr, url, executeJavaScriptCodeOnLoad, "reload", "center",
-		"");
+		nullptr, StreamElementsMessageBus::DEST_UI, url, executeJavaScriptCodeOnLoad,
+		"reload", "center", "");
 
 	PushCentralWidget(widget);
 }
@@ -528,8 +528,8 @@ bool StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 	forwardAction->setEnabled(false);
 
 	StreamElementsBrowserWidget *widget = new StreamElementsBrowserWidget(
-		nullptr, url, executeJavaScriptCodeOnLoad, reloadPolicy,
-		DockWidgetAreaToString(area).c_str(), id);
+		nullptr, StreamElementsMessageBus::DEST_UI, url, executeJavaScriptCodeOnLoad,
+		reloadPolicy, DockWidgetAreaToString(area).c_str(), id);
 
 	widget->connect(widget,
 			&StreamElementsBrowserWidget::browserStateChanged,
@@ -964,8 +964,8 @@ void StreamElementsBrowserWidgetManager::ShowNotificationBar(
 	HideNotificationBar();
 
 	m_notificationBarBrowserWidget = new StreamElementsBrowserWidget(
-		nullptr, url, executeJavaScriptCodeOnLoad, "reload",
-		"notification", "");
+		nullptr, StreamElementsMessageBus::DEST_UI, url, executeJavaScriptCodeOnLoad,
+		"reload", "notification", "");
 
 	const Qt::ToolBarArea NOTIFICATION_BAR_AREA = Qt::TopToolBarArea;
 

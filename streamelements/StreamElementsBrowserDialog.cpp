@@ -99,6 +99,7 @@ int StreamElementsBrowserDialog::exec()
 {
 	m_browser = new StreamElementsBrowserWidget(
 		nullptr,
+		StreamElementsMessageBus::DEST_UI,
 		m_url.c_str(),
 		m_executeJavaScriptOnLoad.c_str(),
 		"reload",

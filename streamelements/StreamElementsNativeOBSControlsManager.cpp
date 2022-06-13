@@ -272,7 +272,8 @@ bool StreamElementsNativeOBSControlsManager::DeserializePreviewTitleBar(
 	}
 
 	m_previewTitleBrowser = new StreamElementsBrowserWidget(
-		nullptr, url.c_str(), executeJavaScriptOnLoad.c_str(),
+		nullptr, StreamElementsMessageBus::DEST_UI, url.c_str(),
+		executeJavaScriptOnLoad.c_str(),
 		"reload", "obsPreviewAreaTitleBar", "");
 
 	m_previewTitleBrowser->setSizePolicy(QSizePolicy(
