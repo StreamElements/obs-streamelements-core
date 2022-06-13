@@ -1729,7 +1729,7 @@ void AdviseHostUserInterfaceStateChanged()
 			t = nullptr;
 
 			// Advise guest code of user interface state changes
-			StreamElementsCefClient::DispatchJSEvent(
+			DispatchClientJSEvent(
 				"hostUserInterfaceStateChanged", "null");
 		});
 	}
@@ -1759,7 +1759,7 @@ void AdviseHostHotkeyBindingsChanged()
 			t = nullptr;
 
 			// Advise guest code of user interface state changes
-			StreamElementsCefClient::DispatchJSEvent(
+			DispatchClientJSEvent(
 				"hostHotkeyBindingsChanged", "null");
 		});
 	}
@@ -3303,4 +3303,25 @@ bool IsSafeFileExtension(std::string path)
 	}
 
 	return true;
+}
+
+void DispatchClientMessage(std::string target, CefRefPtr<CefProcessMessage> msg)
+{
+	StreamElementsGlobalStateManager::GetInstance()
+		->GetWebsocketApiServer()
+		->DispatchClientMessage("system", target, msg);
+}
+
+void DispatchClientJSEvent(std::string event, std::string eventArgsJson)
+{
+	StreamElementsGlobalStateManager::GetInstance()
+		->GetWebsocketApiServer()
+		->DispatchJSEvent("system", event, eventArgsJson);
+}
+
+void DispatchClientJSEvent(std::string target, std::string event, std::string eventArgsJson)
+{
+	StreamElementsGlobalStateManager::GetInstance()
+		->GetWebsocketApiServer()
+		->DispatchJSEvent("system", target, event, eventArgsJson);
 }

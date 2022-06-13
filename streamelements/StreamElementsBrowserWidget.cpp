@@ -205,8 +205,6 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 	StreamElementsApiMessageHandler *apiMessageHandler, bool isIncognito)
 	: QWidget(parent),
 	  m_url(url),
-	  m_window_handle(0),
-	  m_task_queue("StreamElementsBrowserWidget task queue"),
 	  m_executeJavaScriptCodeOnLoad(executeJavaScriptCodeOnLoad == nullptr
 						? ""
 						: executeJavaScriptCodeOnLoad),
@@ -234,30 +232,8 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 	setSizePolicy(policy);
 
 	RegisterAppActiveTrackerWidget(this);
-}
 
-StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
-{
-	UnregisterAppActiveTrackerWidget(this);
-
-	DestroyBrowser();
-
-	m_requestedApiMessageHandler = nullptr;
-}
-
-void StreamElementsBrowserWidget::InitBrowserAsync()
-{
-	if (!!m_cef_browser.get()) {
-		return;
-	}
-
-	// Make sure InitBrowserAsyncInternal() runs in Qt UI thread
-	//QMetaObject::invokeMethod(this, "InitBrowserAsyncInternal");
-
-	if (!!m_cefWidget)
-		return;
-
-	std::string clientId = CreateGloballyUniqueIdString();
+	m_clientId = CreateGloballyUniqueIdString();
 
 	if (m_requestedApiMessageHandler == nullptr) {
 		m_requestedApiMessageHandler =
@@ -271,7 +247,7 @@ void StreamElementsBrowserWidget::InitBrowserAsync()
 	StreamElementsGlobalStateManager::GetInstance()
 		->GetWebsocketApiServer()
 		->RegisterMessageHandler(
-			clientId, [this](std::string source,
+			m_clientId, [this](std::string source,
 					 CefRefPtr<CefProcessMessage> msg) {
 				m_requestedApiMessageHandler
 					->OnProcessMessageReceived(source, msg,
@@ -287,13 +263,14 @@ void StreamElementsBrowserWidget::InitBrowserAsync()
 		cefMgr->wait_for_browser_init();
 	}
 
-	m_cefWidget = cefMgr->create_widget(nullptr, m_url);
+	m_cefWidget =
+		cefMgr->create_widget(nullptr, GetInitialPageURLInternal());
 
 	char portBuffer[8];
 
 	std::string script =
 		"window.host = window.host || {}; window.host.endpoint = { source: '" +
-		clientId + "', port: '" + itoa(port, portBuffer, 10) +
+		m_clientId + "', port: '" + itoa(port, portBuffer, 10) +
 		"', ws: new WebSocket(`ws://localhost:" +
 		itoa(port, portBuffer, 10) + "`) };\n" +
 		"window.host.endpoint.ws.onopen = () => {" +
@@ -334,15 +311,23 @@ void StreamElementsBrowserWidget::InitBrowserAsync()
 		"			window.host.endpoint.callbacks[callbackId](...args);\n" +
 		"			delete window.host.endpoint.callbacks[callbackId];\n" +
 		"		} else if (json.payload.name === 'DispatchJSEvent') {\n" +
-		"			const event = new CustomEvent(json.payload.args[0], JSON.parse(json.payload.args[1]));\n" +
-		"			window.dispatchEvent(event);\n" +
-		"		}\n" +
-		"	}\n" +
-		"};";
+		"			window.dispatchEvent(new CustomEvent(json.payload.args[0], { detail: JSON.parse(json.payload.args[1]) }));\n" +
+		"		}\n" + "	}\n" + "};";
 
 	m_cefWidget->setStartupScript(script + m_executeJavaScriptCodeOnLoad);
 
 	this->layout()->addWidget(m_cefWidget);
+
+	// TODO: Add argument to change message bus destination flags
+	StreamElementsMessageBus::GetInstance()->AddListener(
+		m_clientId, StreamElementsMessageBus::DEST_UI);
+}
+
+StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
+{
+	UnregisterAppActiveTrackerWidget(this);
+
+	m_requestedApiMessageHandler = nullptr;
 }
 
 std::string StreamElementsBrowserWidget::GetInitialPageURLInternal()
@@ -358,164 +343,6 @@ std::string StreamElementsBrowserWidget::GetInitialPageURLInternal()
 	return base64uri;
 }
 
-void StreamElementsBrowserWidget::InitBrowserAsyncInternal()
-{
-	/*
-	if (!!m_cef_browser.get()) {
-		return;
-	}
-
-	m_window_handle = (cef_window_handle_t)winId();
-
-	CefUIThreadExecute(
-		[this]() {
-			std::lock_guard<std::mutex> guard(
-				m_create_destroy_mutex);
-
-			if (!!m_cef_browser.get()) {
-				return;
-			}
-
-			StreamElementsBrowserWidget *self = this;
-
-			// CEF window attributes
-			CefWindowInfo windowInfo;
-			windowInfo.windowless_rendering_enabled = false;
-
-			QSize size = self->size();
-
-#ifdef WIN32
-#ifdef SUPPORTS_FRACTIONAL_SCALING
-			size *= devicePixelRatioF();
-#else
-			size *= devicePixelRatio();
-#endif
-
-			// Client area rectangle
-			//RECT clientRect = {0, 0, size.width(), size.height()};
-			windowInfo.SetAsChild(self->m_window_handle,
-					      CefRect(0, 0, size.width(),
-						      size.height()));
-#else
-#if CHROME_VERSION_BUILD < 4430
-			windowInfo.SetAsChild(self->m_window_handle, 0, 0,
-					      size.width(), size.height());
-#else
-			windowInfo.SetAsChild(self->m_window_handle,
-					      CefRect(0, 0, size.width(),
-						      size.height()));
-#endif
-#endif
-			CefBrowserSettings cefBrowserSettings;
-
-			cefBrowserSettings.Reset();
-			cefBrowserSettings.javascript_close_windows =
-				STATE_DISABLED;
-			cefBrowserSettings.local_storage = STATE_ENABLED;
-			cefBrowserSettings.databases = STATE_ENABLED;
-			//cefBrowserSettings.web_security = STATE_ENABLED;
-			cefBrowserSettings.webgl = STATE_ENABLED;
-			const int DEFAULT_FONT_SIZE = 16;
-			cefBrowserSettings.default_font_size = DEFAULT_FONT_SIZE;
-			cefBrowserSettings.default_fixed_font_size = DEFAULT_FONT_SIZE;
-			//cefBrowserSettings.minimum_font_size = DEFAULT_FONT_SIZE;
-			//cefBrowserSettings.minimum_logical_font_size = DEFAULT_FONT_SIZE;
-
-
-			CefRefPtr<StreamElementsCefClient> cefClient =
-				new StreamElementsCefClient(
-					m_executeJavaScriptCodeOnLoad,
-					m_requestedApiMessageHandler,
-					new StreamElementsBrowserWidget_EventHandler(
-						this),
-					StreamElementsMessageBus::DEST_UI);
-
-			cefClient->SetLocationArea(m_pendingLocationArea);
-			cefClient->SetContainerId(m_pendingId);
-
-			CefRefPtr<CefRequestContext> cefRequestContext =
-				StreamElementsGlobalStateManager::GetInstance()
-					->GetCookieManager()
-					->GetCefRequestContext();
-
-				if (m_isIncognito)
-			{
-				CefRequestContextSettings
-					cefRequestContextSettings;
-
-				cefRequestContextSettings.Reset();
-
-				///
-				// CefRequestContext with empty cache path = incognito mode
-				//
-				// Docs:
-				// https://magpcss.org/ceforum/viewtopic.php?f=6&t=10508
-				// https://magpcss.org/ceforum/apidocs3/projects/(default)/CefRequestContext.html#GetCachePath()
-				//
-				CefString(
-					&cefRequestContextSettings.cache_path) =
-					"";
-
-				cefRequestContext =
-					CefRequestContext::CreateContext(
-						cefRequestContextSettings,
-						nullptr);
-			}
-
-			m_cef_browser = CefBrowserHost::CreateBrowserSync(
-				windowInfo, cefClient,
-				GetInitialPageURLInternal(), cefBrowserSettings,
-#if CHROME_VERSION_BUILD >= 3770
-#if ENABLE_CREATE_BROWSER_API
-				m_requestedApiMessageHandler
-					? m_requestedApiMessageHandler
-						  ->CreateBrowserArgsDictionary()
-					: CefRefPtr<CefDictionaryValue>(),
-#else
-				CefRefPtr<CefDictionaryValue>(),
-#endif
-#endif
-				cefRequestContext);
-
-			UpdateBrowserSize();
-		},
-		true);*/
-}
-
-void StreamElementsBrowserWidget::CefUIThreadExecute(std::function<void()> func,
-						     bool async)
-{
-	if (!async) {
-#ifdef USE_QT_LOOP
-		if (QThread::currentThread() == qApp->thread()) {
-			func();
-			return;
-		}
-#endif
-		os_event_t *finishedEvent;
-		os_event_init(&finishedEvent, OS_EVENT_TYPE_AUTO);
-		bool success = QueueCEFTask([&]() {
-			func();
-
-			os_event_signal(finishedEvent);
-		});
-		if (success) {
-			os_event_wait(finishedEvent);
-		}
-
-		os_event_destroy(finishedEvent);
-	} else {
-#ifdef USE_QT_LOOP
-		QueueBrowserTask(m_cef_browser,
-				 [this, func](CefRefPtr<CefBrowser>) {
-					 func();
-				 });
-#else
-		QueueCEFTask([this, func]() { func(); });
-#endif
-	}
-}
-
 std::string StreamElementsBrowserWidget::GetStartUrl()
 {
 	return m_url;
@@ -525,26 +352,7 @@ std::string StreamElementsBrowserWidget::GetCurrentUrl()
 {
 	SYNC_ACCESS();
 
-	if (!m_cef_browser.get()) {
-		return m_url;
-	}
-
-	CefRefPtr<CefFrame> mainFrame = m_cef_browser->GetMainFrame();
-
-	if (!mainFrame.get()) {
-		return m_url;
-	}
-
-	std::string url = mainFrame->GetURL().ToString();
-
-	if (url.substr(0, 5) == "data:") {
-		// "data:" scheme means we're still at the loading page URL.
-		//
-		// Use the initially specified URL in that case.
-		url = m_url;
-	}
-
-	return url;
+	return m_url;
 }
 
 std::string StreamElementsBrowserWidget::GetExecuteJavaScriptCodeOnLoad()
@@ -559,69 +367,35 @@ std::string StreamElementsBrowserWidget::GetReloadPolicy()
 
 bool StreamElementsBrowserWidget::BrowserHistoryCanGoBack()
 {
-	if (!m_cef_browser.get()) {
-		return false;
-	}
-
-	return m_cef_browser->CanGoBack();
+	return false;
 }
 
 bool StreamElementsBrowserWidget::BrowserHistoryCanGoForward()
 {
-	if (!m_cef_browser.get()) {
-		return false;
-	}
-
-	return m_cef_browser->CanGoForward();
+	return false;
 }
 
 void StreamElementsBrowserWidget::BrowserHistoryGoBack()
 {
-	if (!BrowserHistoryCanGoBack()) {
-		return;
-	}
-
-	m_cef_browser->GoBack();
 }
 
 void StreamElementsBrowserWidget::BrowserHistoryGoForward()
 {
-	if (!m_cef_browser.get()) {
-		return;
-	}
-
-	m_cef_browser->GoForward();
 }
 
 void StreamElementsBrowserWidget::BrowserReload(bool ignoreCache)
 {
-	if (!m_cef_browser.get()) {
-		return;
-	}
-
-	if (ignoreCache) {
-		m_cef_browser->ReloadIgnoreCache();
-	} else {
-		m_cef_browser->Reload();
-	}
+	m_cefWidget->reloadPage();
 }
 
 void StreamElementsBrowserWidget::BrowserLoadInitialPage(const char *const url)
 {
-	if (!m_cef_browser.get()) {
-		return;
-	}
-
 	if (url) {
 		m_url = url;
 	}
 
-	if (m_cef_browser->GetMainFrame()->GetURL() == m_url) {
-		m_cef_browser->ReloadIgnoreCache();
-	} else {
-		m_cef_browser->GetMainFrame()->LoadURL(
-			GetInitialPageURLInternal());
-	}
+	m_cefWidget->setURL(m_url);
+	m_cefWidget->reloadPage();
 }
 
 void StreamElementsBrowserWidget::focusInEvent(QFocusEvent *event)
@@ -635,10 +409,7 @@ void StreamElementsBrowserWidget::focusInEvent(QFocusEvent *event)
 		->GetMenuManager()
 		->SetFocusedBrowserWidget(this);
 
-	if (!!m_cef_browser.get() && m_cef_browser->GetHost()) {
-		// Notify CEF that it got focus
-		m_cef_browser->GetHost()->SetFocus(true);
-	}
+	m_cefWidget->setFocus();
 }
 
 void StreamElementsBrowserWidget::focusOutEvent(QFocusEvent *event)
@@ -659,61 +430,22 @@ void StreamElementsBrowserWidget::focusOutEvent(QFocusEvent *event)
 			->GetMenuManager()
 			->SetFocusedBrowserWidget(nullptr);
 
-		if (!!m_cef_browser.get() && m_cef_browser->GetHost()) {
-			// Notify CEF that it lost focus
-			m_cef_browser->GetHost()->SetFocus(false);
-		}
+		m_cefWidget->clearFocus();
 	}
 }
 
 void StreamElementsBrowserWidget::BrowserCopy()
 {
-	if (!m_cef_browser.get())
-		return;
-
-	CefRefPtr<CefFrame> frame = m_cef_browser->GetFocusedFrame();
-
-	if (!frame.get())
-		return;
-
-	frame->Copy();
 }
 
 void StreamElementsBrowserWidget::BrowserCut()
 {
-	if (!m_cef_browser.get())
-		return;
-
-	CefRefPtr<CefFrame> frame = m_cef_browser->GetFocusedFrame();
-
-	if (!frame.get())
-		return;
-
-	frame->Cut();
 }
 
 void StreamElementsBrowserWidget::BrowserPaste()
 {
-	if (!m_cef_browser.get())
-		return;
-
-	CefRefPtr<CefFrame> frame = m_cef_browser->GetFocusedFrame();
-
-	if (!frame.get())
-		return;
-
-	frame->Paste();
 }
 
 void StreamElementsBrowserWidget::BrowserSelectAll()
 {
-	if (!m_cef_browser.get())
-		return;
-
-	CefRefPtr<CefFrame> frame = m_cef_browser->GetFocusedFrame();
-
-	if (!frame.get())
-		return;
-
-	frame->SelectAll();
 }

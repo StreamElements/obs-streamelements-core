@@ -237,3 +237,37 @@ void StreamElementsWebsocketApiServer::ParseIncomingDispatchMessage(
 
 	m_dispatch_handlers_map[source](source, msg);
 }
+
+bool StreamElementsWebsocketApiServer::DispatchJSEvent(std::string source,
+						       std::string target,
+						       std::string event,
+						       std::string json)
+{
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
+	auto msg = CefProcessMessage::Create("DispatchJSEvent");
+	CefRefPtr<CefListValue> args = msg->GetArgumentList();
+
+	args->SetString(0, event);
+	args->SetString(1, json);
+
+	DispatchClientMessage(source, target, msg);
+}
+
+bool StreamElementsWebsocketApiServer::DispatchJSEvent(std::string source, std::string event,
+						       std::string json)
+{
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
+	auto msg = CefProcessMessage::Create("DispatchJSEvent");
+	CefRefPtr<CefListValue> args = msg->GetArgumentList();
+
+	args->SetString(0, event);
+	args->SetString(1, json);
+
+	for (auto it : m_client_connection_map) {
+		DispatchClientMessage(source, it.first, msg);
+	}
+
+	return true;
+}

@@ -23,7 +23,7 @@ StreamElementsBandwidthTestManager::~StreamElementsBandwidthTestManager()
 	delete m_client;
 }
 
-bool StreamElementsBandwidthTestManager::BeginBandwidthTest(CefRefPtr<CefValue> settingsValue, CefRefPtr<CefValue> serversValue, CefRefPtr<CefBrowser> browser)
+bool StreamElementsBandwidthTestManager::BeginBandwidthTest(CefRefPtr<CefValue> settingsValue, CefRefPtr<CefValue> serversValue, std::string target)
 {
 	std::lock_guard<std::mutex> guard(m_mutex);
 
@@ -73,17 +73,17 @@ bool StreamElementsBandwidthTestManager::BeginBandwidthTest(CefRefPtr<CefValue> 
 				m_isTestInProgress = true;
 
 				// Signal test started
-				DispatchJSEvent(browser, "hostBandwidthTestStarted", nullptr);
+				DispatchClientJSEvent(target, "hostBandwidthTestStarted", nullptr);
 
 				struct local_context {
 					StreamElementsBandwidthTestManager* self;
-					CefRefPtr<CefBrowser> browser;
+					std::string target;
 				};
 
 				local_context* context = new local_context();
 
 				context->self = this;
-				context->browser = browser;
+				context->target = target;
 
 				m_client->TestMultipleServersBitsPerSecondAsync(
 					m_last_test_servers,
@@ -99,7 +99,7 @@ bool StreamElementsBandwidthTestManager::BeginBandwidthTest(CefRefPtr<CefValue> 
 						context->self->m_last_test_results = *results;
 
 						// Signal test progress
-						DispatchJSEvent(context->browser, "hostBandwidthTestProgress", nullptr);
+						DispatchClientJSEvent(context->target, "hostBandwidthTestProgress", nullptr);
 					},
 					[](std::vector<StreamElementsBandwidthTestClient::Result>* results, void* data) {
 						local_context* context = (local_context*)data;
@@ -112,7 +112,7 @@ bool StreamElementsBandwidthTestManager::BeginBandwidthTest(CefRefPtr<CefValue> 
 						context->self->m_isTestInProgress = false;
 
 						// Signal test completed
-						DispatchJSEvent(context->browser, "hostBandwidthTestCompleted", nullptr);
+						DispatchClientJSEvent(context->target, "hostBandwidthTestCompleted", nullptr);
 
 						delete context;
 					},

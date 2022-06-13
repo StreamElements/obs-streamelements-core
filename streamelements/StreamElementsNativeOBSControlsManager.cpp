@@ -38,10 +38,10 @@ StreamElementsNativeOBSControlsManager::StreamElementsNativeOBSControlsManager(Q
 		auto manageBroadcastVisibilityCallback =
 			[this](bool isVisible) -> void {
 				if (isVisible) {
-					StreamElementsCefClient::DispatchJSEvent(
+					DispatchClientJSEvent(
 						"hostNativeManageBroadcastButtonVisible", "null");
 				} else {
-					StreamElementsCefClient::DispatchJSEvent(
+					DispatchClientJSEvent(
 						"hostNativeManageBroadcastButtonHidden", "null");
 			}};
 
@@ -578,7 +578,7 @@ void StreamElementsNativeOBSControlsManager::BeginStartStreaming()
 	case request:
 		SetStreamingRequestedState();
 
-		StreamElementsCefClient::DispatchJSEvent("hostStreamingStartRequested", "null");
+		DispatchClientJSEvent("hostStreamingStartRequested", "null");
 		break;
 	}
 }

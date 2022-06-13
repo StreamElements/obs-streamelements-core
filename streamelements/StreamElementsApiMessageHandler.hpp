@@ -38,14 +38,14 @@ protected:
 		StreamElementsApiMessageHandler *,
 		CefRefPtr<CefProcessMessage> message,
 		CefRefPtr<CefListValue> args, CefRefPtr<CefValue> &result,
-		CefRefPtr<CefBrowser> browser, const long cefClientId, std::function<void()> complete_callback);
+		std::string target, const long cefClientId, std::function<void()> complete_callback);
 
 	void RegisterIncomingApiCallHandler(std::string id,
 					    incoming_call_handler_t handler);
 
 	void InvokeApiCallHandlerAsync(
 		CefRefPtr<CefProcessMessage> message,
-		CefRefPtr<CefBrowser> browser, std::string invokeId,
+		std::string target, std::string invokeId,
 		CefRefPtr<CefListValue> invokeArgs,
 		std::function<void(CefRefPtr<CefValue>)> result_callback,
 		const long cefClientId,

@@ -5,6 +5,7 @@
 #include "../cef-headers.hpp"
 
 #include <mutex>
+#include <string>
 
 class StreamElementsBandwidthTestManager
 {
@@ -12,7 +13,7 @@ public:
 	StreamElementsBandwidthTestManager();
 	virtual ~StreamElementsBandwidthTestManager();
 
-	bool BeginBandwidthTest(CefRefPtr<CefValue> settingsValue, CefRefPtr<CefValue> serversValue, CefRefPtr<CefBrowser> browser);
+	bool BeginBandwidthTest(CefRefPtr<CefValue> settingsValue, CefRefPtr<CefValue> serversValue, std::string target);
 	CefRefPtr<CefDictionaryValue> EndBandwidthTest(CefRefPtr<CefValue> options);
 	CefRefPtr<CefDictionaryValue> GetBandwidthTestStatus();
 

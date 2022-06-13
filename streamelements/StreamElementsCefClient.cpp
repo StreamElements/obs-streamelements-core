@@ -371,17 +371,12 @@ void StreamElementsCefClient::OnAfterCreated(CefRefPtr<CefBrowser> browser)
 		std::lock_guard<std::recursive_mutex> guard(s_browsers_mutex);
 
 		s_browsers[browser->GetIdentifier()] = browser;
-
-		StreamElementsMessageBus::GetInstance()->AddBrowserListener(
-			browser, m_msgDestType);
 	}
 }
 
 void StreamElementsCefClient::OnBeforeClose(CefRefPtr<CefBrowser> browser)
 {
 	std::lock_guard<std::recursive_mutex> guard(s_browsers_mutex);
-
-	StreamElementsMessageBus::GetInstance()->RemoveBrowserListener(browser);
 
 	s_browsers.erase(browser->GetIdentifier());
 }

@@ -11,14 +11,14 @@ static std::recursive_mutex s_sync_api_call_mutex;
 		CefRefPtr<CefProcessMessage> message, \
 		CefRefPtr<CefListValue> args, \
 		CefRefPtr<CefValue>& result, \
-		CefRefPtr<CefBrowser> browser, \
+		std::string target, \
 		const long cefClientId, \
 		std::function<void()> complete_callback) \
 		{ \
 			(void)message; \
 			(void)args; \
 			(void)result; \
-			(void)browser; \
+			(void)target; \
 			(void)cefClientId; \
 			(void)complete_callback; \
 			std::lock_guard<std::recursive_mutex> _api_sync_guard(s_sync_api_call_mutex);
@@ -43,7 +43,7 @@ void StreamElementsBrowserSourceApiMessageHandler::RegisterIncomingApiCallHandle
 			StreamElementsMessageBus::GetInstance()->NotifyAllMessageListeners(
 				StreamElementsMessageBus::DEST_ALL_LOCAL,
 				StreamElementsMessageBus::SOURCE_WEB,
-				browser->GetMainFrame()->GetURL().ToString(),
+				"urn:streamelements:internal:" + target,
 				args->GetValue(0));
 
 			result->SetBool(true);

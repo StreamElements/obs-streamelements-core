@@ -152,8 +152,11 @@ void StreamElementsGlobalStateManager::ThemeChangeListener::changeEvent(
 				{"name", newTheme},
 			};
 
-			StreamElementsCefClient::DispatchJSEvent(
-				"hostUIThemeChanged", json.dump());
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetWebsocketApiServer()
+				->DispatchJSEvent("system",
+						  "hostUIThemeChanged",
+						  json.dump());
 
 			StreamElementsMessageBus::GetInstance()
 				->NotifyAllExternalEventListeners(
@@ -262,7 +265,9 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 	}
 
 	if (name.size()) {
-		StreamElementsCefClient::DispatchJSEvent(name, args);
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetWebsocketApiServer()
+			->DispatchJSEvent("system", name, args);
 
 		std::string externalEventName =
 			name.c_str() + 4; /* remove 'host' prefix */
@@ -342,20 +347,6 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 				QMainWindow::AllowNestedDocks |
 				QMainWindow::AllowTabbedDocks);
 
-			m_appStateListener =
-				new ApplicationStateListener();
-			m_themeChangeListener =
-				new ThemeChangeListener();
-#ifdef WIN32
-			mainWindow()->addDockWidget(
-				Qt::NoDockWidgetArea,
-				m_themeChangeListener);
-#else
-			mainWindow()->addDockWidget(
-				Qt::BottomDockWidgetArea,
-				m_themeChangeListener);
-#endif
-
 			std::string storagePath = GetCEFStoragePath();
 			int os_mkdirs_ret = os_mkdirs(storagePath.c_str());
 
@@ -408,6 +399,16 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			m_windowStateEventFilter =
 				new WindowStateChangeEventFilter(
 					mainWindow());
+
+						m_appStateListener = new ApplicationStateListener();
+			m_themeChangeListener = new ThemeChangeListener();
+#ifdef WIN32
+			mainWindow()->addDockWidget(Qt::NoDockWidgetArea,
+						    m_themeChangeListener);
+#else
+			mainWindow()->addDockWidget(Qt::BottomDockWidgetArea,
+						    m_themeChangeListener);
+#endif
 
 			{
 				// Set up "Live Support" button
@@ -888,13 +889,12 @@ void StreamElementsGlobalStateManager::SerializeCookies(
 	os_event_destroy(event);
 }
 
-extern void DispatchJSEvent(std::string eventName, std::string jsonString, BrowserSource* browser);
-
 static void DispatchJSEventAllBrowsers(const char *eventName,
 				       const char *jsonString)
 {
-	StreamElementsCefClient::DispatchJSEvent(eventName, jsonString);
-	DispatchJSEvent(eventName, jsonString, nullptr);
+	StreamElementsGlobalStateManager::GetInstance()
+		->GetWebsocketApiServer()
+		->DispatchJSEvent("system", eventName, jsonString);
 }
 
 void StreamElementsGlobalStateManager::Reset(bool deleteAllCookies,
@@ -1252,51 +1252,23 @@ bool StreamElementsGlobalStateManager::DeserializePopupWindow(
 				d->GetString("executeJavaScriptOnLoad");
 		}
 
-		QueueCEFTask([this, url, executeJavaScriptOnLoad,
-			      enableHostApi]() {
-			CefWindowInfo windowInfo;
-#ifdef WIN32
-			windowInfo.SetAsPopup(0, ""); // Initial title
-#else
-			// TODO: TBD: Check if special handling is required for MacOS
-#endif
+		StreamElementsApiMessageHandler *apiMessageHandler =
+			enableHostApi ? new StreamElementsApiMessageHandler()
+				      : nullptr;
 
-			CefBrowserSettings cefBrowserSettings;
+		QMainWindow *window = new QMainWindow();
 
-			cefBrowserSettings.Reset();
-			cefBrowserSettings.javascript_close_windows =
-				STATE_ENABLED;
-			cefBrowserSettings.local_storage = STATE_ENABLED;
+		auto browserWidget = new StreamElementsBrowserWidget(
+			nullptr, url.c_str(), executeJavaScriptOnLoad.c_str(),
+			"default", "popupWindow",
+			CreateGloballyUniqueIdString().c_str(),
+			apiMessageHandler, false);
 
-			StreamElementsApiMessageHandler *apiMessageHandler =
-				enableHostApi
-					? new StreamElementsApiMessageHandler()
-					: nullptr;
+		window->setCentralWidget(browserWidget);
 
-			CefRefPtr<StreamElementsCefClient> cefClient =
-				new StreamElementsCefClient(
-					executeJavaScriptOnLoad,
-					apiMessageHandler,
-					nullptr,
-					StreamElementsMessageBus::DEST_UI);
+		window->show();
 
-			CefRefPtr<CefBrowser> browser =
-				CefBrowserHost::CreateBrowserSync(
-					windowInfo, cefClient, url.c_str(),
-					cefBrowserSettings,
-#if CHROME_VERSION_BUILD >= 3770
-#if ENABLE_CREATE_BROWSER_API
-				apiMessageHandler
-					? apiMessageHandler
-						  ->CreateBrowserArgsDictionary()
-					: CefRefPtr<CefDictionaryValue>(),
-#else
-				CefRefPtr<CefDictionaryValue>(),
-#endif
-#endif
-				GetCookieManager()
-						->GetCefRequestContext());
-		});
+		return true;
 	}
 
 	return false;

@@ -81,7 +81,7 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 			struct local_context {
 				StreamElementsApiMessageHandler *self;
 				std::string id;
-				CefRefPtr<CefBrowser> browser;
+				std::string target;
 				CefRefPtr<CefProcessMessage> message;
 				CefRefPtr<CefListValue> callArgs;
 				CefRefPtr<CefValue> result;
@@ -95,8 +95,7 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 
 			context->self = this;
 			context->id = id;
-			context->browser = nullptr;
-			 //browser;
+			context->target = source;
 			context->message = message;
 			context->callArgs = callArgs;
 			context->result = result;
@@ -173,7 +172,7 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 							context->message,
 							context->callArgs,
 							context->result,
-							context->browser,
+							context->target,
 							context->cefClientId,
 							context->complete);
 				});
@@ -186,7 +185,7 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 }
 
 void StreamElementsApiMessageHandler::InvokeApiCallHandlerAsync(
-	CefRefPtr<CefProcessMessage> message, CefRefPtr<CefBrowser> browser,
+	CefRefPtr<CefProcessMessage> message, std::string target,
 	std::string invokeId, CefRefPtr<CefListValue> invokeArgs,
 	std::function<void(CefRefPtr<CefValue>)> result_callback,
 	const long cefClientId,
@@ -211,7 +210,7 @@ void StreamElementsApiMessageHandler::InvokeApiCallHandlerAsync(
 
 	auto handler = m_apiCallHandlers[invokeId];
 
-	handler(this, message, invokeArgs, result, browser, cefClientId, [=]() {
+	handler(this, message, invokeArgs, result, target, cefClientId, [=]() {
 		if (enable_logging) {
 			blog(LOG_INFO,
 			     "obs-browser[%lu]: API: completed call to '%s'",
@@ -384,14 +383,14 @@ static std::recursive_mutex s_sync_api_call_mutex;
 		CefRefPtr<CefProcessMessage> message, \
 		CefRefPtr<CefListValue> args, \
 		CefRefPtr<CefValue>& result, \
-		CefRefPtr<CefBrowser> browser, \
+		std::string target, \
 		const long cefClientId, \
 		std::function<void()> complete_callback) \
 		{ \
 			(void)message; \
 			(void)args; \
 			(void)result; \
-			(void)browser; \
+			(void)target; \
 			(void)cefClientId; \
 			(void)complete_callback; \
 			std::lock_guard<std::recursive_mutex> _api_sync_guard(s_sync_api_call_mutex);
@@ -410,7 +409,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		[](StreamElementsApiMessageHandler *self,
 		   CefRefPtr<CefProcessMessage> message,
 		   CefRefPtr<CefListValue> args, CefRefPtr<CefValue> &result,
-		   CefRefPtr<CefBrowser> browser,
+		   std::string target,
 		   const long cefClientId,
 		   std::function<void()> complete_callback) {
 			result->SetNull();
@@ -439,7 +438,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				CefRefPtr<CefProcessMessage> message;
 				CefRefPtr<CefListValue> args;
 				CefRefPtr<CefValue> result;
-				CefRefPtr<CefBrowser> browser;
+				std::string target;
 				long cefClientId;
 				std::function<void()> complete_callback;
 			};
@@ -450,7 +449,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			context->message = message;
 			context->args = args;
 			context->result = result;
-			context->browser = browser;
+			context->target = target;
 			context->cefClientId = context->cefClientId;
 			context->complete_callback = complete_callback;
 
@@ -500,7 +499,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 				context->self->InvokeApiCallHandlerAsync(
 					context->message,
-					context->browser,
+					context->target,
 					invokeId,
 					invokeArgs,
 					[=](CefRefPtr<CefValue> callResult) {
@@ -949,7 +948,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 					->GetBandwidthTestManager()
 					->BeginBandwidthTest(args->GetValue(0),
 							     args->GetValue(1),
-							     browser));
+							     target));
 		}
 	}
 	API_HANDLER_END();
@@ -1039,6 +1038,8 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getCurrentContainerProperties");
 	{
+		// TODO: Implement
+		/*
 		CefRefPtr<StreamElementsCefClient> client =
 			static_cast<StreamElementsCefClient *>(
 				browser->GetHost()->GetClient().get());
@@ -1069,6 +1070,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		d->SetString("url",
 			     browser->GetMainFrame()->GetURL().ToString());
 		d->SetString("theme", GetCurrentThemeName());
+		*/
 	}
 	API_HANDLER_END();
 
@@ -1296,10 +1298,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				->NotifyAllMessageListeners(
 					StreamElementsMessageBus::DEST_ALL_LOCAL,
 					StreamElementsMessageBus::SOURCE_WEB,
-					browser ? browser->GetMainFrame()
-							  ->GetURL()
-							  .ToString()
-						: "urn:streamelements:internal",
+					"urn:streamelements:internal:" + target,
 					message);
 
 			result->SetBool(true);
@@ -1316,12 +1315,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			if (d->HasKey("name") &&
 			    d->GetType("name") == VTYPE_STRING) {
 				std::string sourceUrl =
-					(!!browser.get() &&
-					 !!browser->GetMainFrame())
-						? browser->GetMainFrame()
-							  ->GetURL()
-							  .ToString()
-						: "urn:streamelements:internal";
+					"urn:streamelements:internal:" + target;
 
 				StreamElementsMessageBus::GetInstance()
 					->NotifyAllLocalEventListeners(
@@ -1758,6 +1752,8 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("setContainerForeignPopupWindowsProperties");
 	{
+		// TODO: Implement
+		/*
 		if (args->GetSize()) {
 			CefRefPtr<StreamElementsCefClient> client =
 				static_cast<StreamElementsCefClient *>(
@@ -1768,12 +1764,14 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 					client->DeserializeForeignPopupWindowsSettings(
 						args->GetValue(0)));
 			}
-		}
+		}*/
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getContainerForeignPopupWindowsProperties");
 	{
+		// TODO: Implement
+		/*
 		CefRefPtr<StreamElementsCefClient> client =
 			static_cast<StreamElementsCefClient *>(
 				browser->GetHost()->GetClient().get());
@@ -1782,7 +1780,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			client->SerializeForeignPopupWindowsSettings(result);
 		} else {
 			result->SetNull();
-		}
+		}*/
 	}
 	API_HANDLER_END();
 
@@ -2146,6 +2144,8 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("dispatchKeyboardEvent");
 	{
+		// TODO: Implement
+		/*
 		if (args->GetSize()) {
 			CefKeyEvent keyEvent;
 			if (DeserializeCefKeyEvent(args->GetValue(0),
@@ -2155,11 +2155,14 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				result->SetBool(true);
 			}
 		}
+		*/
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("dispatchMouseEvent");
 	{
+		// TODO: Implement
+		/*
 		if (args->GetSize()) {
 			CefMouseEvent mouseEvent;
 			CefMouseEventType mouseEventType;
@@ -2219,6 +2222,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				}
 			}
 		}
+		*/
 	}
 	API_HANDLER_END();
 
@@ -2227,7 +2231,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsMessageBus::GetInstance()
 				->DeserializeBrowserHttpServer(
-					browser, args->GetValue(0), result);
+					target, args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
@@ -2235,7 +2239,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getAllBrowserScopedHttpServers");
 	{
 		StreamElementsMessageBus::GetInstance()
-			->SerializeBrowserHttpServers(browser, result);
+			->SerializeBrowserHttpServers(target, result);
 	}
 	API_HANDLER_END();
 
@@ -2244,7 +2248,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsMessageBus::GetInstance()
 				->RemoveBrowserHttpServersByIds(
-					browser, args->GetValue(0), result);
+					target, args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();

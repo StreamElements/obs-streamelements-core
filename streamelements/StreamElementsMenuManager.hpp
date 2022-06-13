@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 
+class StreamElementsBrowserWidget;
+
 class StreamElementsMenuManager :
 	public QObject
 {
