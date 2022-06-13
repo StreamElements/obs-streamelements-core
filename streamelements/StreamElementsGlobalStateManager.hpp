@@ -123,10 +123,6 @@ public:
 	{
 		return m_analyticsEventsManager;
 	}
-	StreamElementsLocalWebFilesServer *GetLocalWebFilesServer()
-	{
-		return m_localWebFilesServer;
-	}
 	StreamElementsExternalSceneDataProviderManager *
 	GetExternalSceneDataProviderManager()
 	{
@@ -198,7 +194,6 @@ private:
 	StreamElementsAnalyticsEventsManager *m_analyticsEventsManager =
 		nullptr;
 	StreamElementsCrashHandler *m_crashHandler = nullptr;
-	StreamElementsLocalWebFilesServer *m_localWebFilesServer = nullptr;
 	StreamElementsExternalSceneDataProviderManager
 		*m_externalSceneDataProviderManager = nullptr;
 	StreamElementsHttpClient *m_httpClient = nullptr;

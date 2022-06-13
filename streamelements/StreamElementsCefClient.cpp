@@ -563,19 +563,6 @@ public:
 	IMPLEMENT_REFCOUNTING(BrowserSchemeHandler);
 };
 
-CefRefPtr<CefResourceHandler>
-StreamElementsCefClient::GetResourceHandler(CefRefPtr<CefBrowser> browser,
-					    CefRefPtr<CefFrame> frame,
-					    CefRefPtr<CefRequest> request)
-{
-	///
-	// Intercept requests to //absolute/ and locally mapped hosts
-	//
-	return StreamElementsGlobalStateManager::GetInstance()
-		->GetLocalWebFilesServer()
-		->GetCefResourceHandler(browser, frame, request);
-}
-
 bool StreamElementsCefClient::OnJSDialog(
 	CefRefPtr<CefBrowser> browser, const CefString &origin_url,
 	   CefJSDialogHandler::JSDialogType dialog_type,

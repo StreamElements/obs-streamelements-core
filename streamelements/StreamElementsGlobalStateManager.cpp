@@ -333,12 +333,6 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			std::string storagePath = GetCefVersionString();
 			int os_mkdirs_ret = os_mkdirs(storagePath.c_str());
 
-			char *webRootPath = obs_module_file("localwebroot");
-			m_localWebFilesServer =
-				new StreamElementsLocalWebFilesServer(
-					webRootPath ? webRootPath : "");
-			bfree(webRootPath);
-
 			m_cef = obs_browser_init_panel();
 			if (!m_cef->initialized()) {
 				m_cef->init_browser();
@@ -585,7 +579,6 @@ void StreamElementsGlobalStateManager::Shutdown()
 			delete m_menuManager;
 			delete m_hotkeyManager;
 			delete m_obsSceneManager;
-			delete m_localWebFilesServer;
 			delete m_externalSceneDataProviderManager;
 			delete m_httpClient;
 			// delete m_nativeObsControlsManager; // Singleton
@@ -736,7 +729,9 @@ void StreamElementsGlobalStateManager::SwitchToOBSStudio()
 void StreamElementsGlobalStateManager::DeleteCookies()
 {
 	// TODO: Specify specific cookies to delete, or, work with OBS community to provide a delete filter
-	m_cefCookieManager->DeleteCookies("", "");
+	if (m_cefCookieManager) {
+		m_cefCookieManager->DeleteCookies("", "");
+	}
 }
 
 static void DispatchJSEventAllBrowsers(const char *eventName,
