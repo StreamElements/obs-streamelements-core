@@ -65,10 +65,6 @@ public:
 	std::string GetReloadPolicy();
 	std::string GetCurrentUrl();
 
-	bool BrowserHistoryCanGoBack();
-	bool BrowserHistoryCanGoForward();
-	void BrowserHistoryGoBack();
-	void BrowserHistoryGoForward();
 	void BrowserReload(bool ignoreCache);
 	void BrowserLoadInitialPage(const char* const url = nullptr);
 
@@ -189,35 +185,10 @@ protected:
 signals:
 	void browserStateChanged();
 
-	// Fired when focused DOM node changes in the browser,
-	// indicating whether it is editable.
-	void browserFocusedDOMNodeEditableChanged(bool isEditable);
-
-public:
-	// Is currently focused DOM node in the browser editable?
-	bool isBrowserFocusedDOMNodeEditable() { return m_isBrowserFocusedDOMNodeEditable; }
-
 private:
 	void emitBrowserStateChanged()
 	{
 		emit browserStateChanged();
 	}
-
-	bool m_isBrowserFocusedDOMNodeEditable = false;
-	void setBrowserFocusedDOMNodeEditable(bool isEditable)
-	{
-		if (isEditable == m_isBrowserFocusedDOMNodeEditable)
-			return;
-
-		m_isBrowserFocusedDOMNodeEditable = isEditable;
-
-		emit browserFocusedDOMNodeEditableChanged(isEditable);
-	}
-
-public:
-	void BrowserCopy();
-	void BrowserCut();
-	void BrowserPaste();
-	void BrowserSelectAll();
 };
 

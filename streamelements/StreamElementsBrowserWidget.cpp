@@ -413,24 +413,6 @@ std::string StreamElementsBrowserWidget::GetReloadPolicy()
 	return m_reloadPolicy;
 }
 
-bool StreamElementsBrowserWidget::BrowserHistoryCanGoBack()
-{
-	return false;
-}
-
-bool StreamElementsBrowserWidget::BrowserHistoryCanGoForward()
-{
-	return false;
-}
-
-void StreamElementsBrowserWidget::BrowserHistoryGoBack()
-{
-}
-
-void StreamElementsBrowserWidget::BrowserHistoryGoForward()
-{
-}
-
 void StreamElementsBrowserWidget::BrowserReload(bool ignoreCache)
 {
 	m_cefWidget->reloadPage();
@@ -453,10 +435,6 @@ void StreamElementsBrowserWidget::focusInEvent(QFocusEvent *event)
 	blog(LOG_INFO, "QWidget::focusInEvent: reason %d: %s", event->reason(),
 	     m_url.c_str());
 
-	StreamElementsGlobalStateManager::GetInstance()
-		->GetMenuManager()
-		->SetFocusedBrowserWidget(this);
-
 	m_cefWidget->setFocus();
 }
 
@@ -467,33 +445,6 @@ void StreamElementsBrowserWidget::focusOutEvent(QFocusEvent *event)
 	blog(LOG_INFO, "QWidget::focusOutEvent: %s", m_url.c_str());
 
 	if (event->reason() != Qt::MenuBarFocusReason && event->reason() != Qt::PopupFocusReason) {
-		// QMenuBar & QMenu grab input focus when open.
-		//
-		// Since we want the Edit menu to respect the currently focused browser
-		// widget, we must make certain that focus grabbed due to QMenuBar or
-		// QMenu (popup) grabbing the focus, does not reset currently focused
-		// widget state.
-		//
-		StreamElementsGlobalStateManager::GetInstance()
-			->GetMenuManager()
-			->SetFocusedBrowserWidget(nullptr);
-
 		m_cefWidget->clearFocus();
 	}
-}
-
-void StreamElementsBrowserWidget::BrowserCopy()
-{
-}
-
-void StreamElementsBrowserWidget::BrowserCut()
-{
-}
-
-void StreamElementsBrowserWidget::BrowserPaste()
-{
-}
-
-void StreamElementsBrowserWidget::BrowserSelectAll()
-{
 }

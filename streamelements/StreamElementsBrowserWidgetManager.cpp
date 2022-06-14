@@ -491,21 +491,8 @@ bool StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
-	const bool enableBackForwardNavigation = false;
-
 	QMainWindow *main = new QMainWindow(nullptr);
 
-	//QAction* floatAction = new QAction("🗗");
-	//QAction* closeAction = new QAction("×");
-	//QAction* backAction = new QAction("❮");
-	//QAction* forwardAction = new QAction("❯");
-	//QAction* reloadAction = new QAction("☀");
-
-	QAction *backAction = new QAction(
-		qApp->style()->standardIcon(QStyle::SP_ArrowLeft), "");
-	QAction *forwardAction = new QAction(
-		qApp->style()->standardIcon(QStyle::SP_ArrowRight), "");
-	//QAction* reloadAction = new QAction(qApp->style()->standardIcon(QStyle::SP_BrowserReload), "");
 	QAction *reloadAction =
 		new QAction(QIcon(QPixmap(":/images/toolbar/reload.png")), "");
 	QAction *floatAction =
@@ -516,27 +503,13 @@ bool StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 	QFont font;
 	font.setStyleStrategy(QFont::PreferAntialias);
 
-	backAction->setFont(font);
-	forwardAction->setFont(font);
 	reloadAction->setFont(font);
 	floatAction->setFont(font);
 	closeAction->setFont(font);
 
-	backAction->setEnabled(false);
-	forwardAction->setEnabled(false);
-
 	StreamElementsBrowserWidget *widget = new StreamElementsBrowserWidget(
 		nullptr, StreamElementsMessageBus::DEST_UI, url, executeJavaScriptCodeOnLoad,
 		reloadPolicy, DockWidgetAreaToString(area).c_str(), id);
-
-	widget->connect(widget,
-			&StreamElementsBrowserWidget::browserStateChanged,
-			[this, widget, backAction, forwardAction]() {
-				backAction->setEnabled(
-					widget->BrowserHistoryCanGoBack());
-				forwardAction->setEnabled(
-					widget->BrowserHistoryCanGoForward());
-			});
 
 	main->setCentralWidget(widget);
 
@@ -550,12 +523,6 @@ bool StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 					      widget->BrowserReload(true);
 				      }
 			      });
-
-	backAction->connect(backAction, &QAction::triggered,
-			    [widget] { widget->BrowserHistoryGoBack(); });
-
-	forwardAction->connect(backAction, &QAction::triggered,
-			       [widget] { widget->BrowserHistoryGoForward(); });
 
 	if (AddDockWidget(id, title, main, area, allowedAreas, features)) {
 		m_browserWidgets[id] = widget;
@@ -579,9 +546,6 @@ bool StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 
 			dock->setTitleBarWidget(titleWidget);
 
-			//QString buttonStyle = "QToolButton { border: none; padding: 4px; font-weight: bold; } QToolButton:!hover { background-color: transparent; }";
-			//QString labelStyle = "QLabel { background-color: transparent; padding: 2px; }";
-
 			auto createButton = [&](QAction *action,
 						const char *toolTipText) {
 				auto result = new LocalToolButton();
@@ -594,14 +558,6 @@ bool StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 				return result;
 			};
 
-			auto backButton = createButton(
-				backAction,
-				obs_module_text(
-					"StreamElements.Action.BrowserBack.Tooltip"));
-			auto forwardButton = createButton(
-				forwardAction,
-				obs_module_text(
-					"StreamElements.Action.BrowserForward.Tooltip"));
 			auto reloadButton = createButton(
 				reloadAction,
 				obs_module_text(
@@ -634,30 +590,11 @@ bool StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 
 			auto windowTitle = new LocalTitleLabel(title);
 			windowTitle->setAlignment(Qt::AlignCenter);
-			//windowTitle->setStyleSheet(labelStyle);
-			//windowTitle->setFont(font);
-
-			if (enableBackForwardNavigation) {
-				titleWidget->layout()->addWidget(backButton);
-				titleWidget->layout()->addWidget(forwardButton);
-			}
 
 			titleWidget->layout()->addWidget(reloadButton);
 			titleWidget->layout()->addWidget(windowTitle);
 			titleWidget->layout()->addWidget(floatButton);
 			titleWidget->layout()->addWidget(closeButton);
-
-			backButton->connect(
-				backButton, &QToolButton::click,
-				[this, widget] {
-					widget->BrowserHistoryGoBack();
-				});
-
-			forwardButton->connect(
-				forwardButton, &QToolButton::click,
-				[this, widget] {
-					widget->BrowserHistoryGoForward();
-				});
 
 			reloadButton->connect(reloadButton, &QToolButton::click,
 					      [this, widget] {
