@@ -239,7 +239,6 @@ set(obs-browser_SOURCES
 	streamelements/StreamElementsExternalSceneDataProviderSlobsClient.cpp
 	streamelements/StreamElementsHttpClient.cpp
 	streamelements/StreamElementsNativeOBSControlsManager.cpp
-	streamelements/StreamElementsCookieManager.cpp
 	streamelements/StreamElementsProfilesManager.cpp
 	streamelements/StreamElementsBackupManager.cpp
 	streamelements/StreamElementsCleanupManager.cpp
@@ -323,7 +322,6 @@ set(obs-browser_HEADERS
 	streamelements/StreamElementsExternalSceneDataProvider.hpp
 	streamelements/StreamElementsHttpClient.hpp
 	streamelements/StreamElementsNativeOBSControlsManager.hpp
-	streamelements/StreamElementsCookieManager.hpp
 	streamelements/StreamElementsProfilesManager.hpp
 	streamelements/StreamElementsBackupManager.hpp
 	streamelements/StreamElementsCleanupManager.hpp
