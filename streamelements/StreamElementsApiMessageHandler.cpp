@@ -67,7 +67,7 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 			}
 
 			struct local_context {
-				StreamElementsApiMessageHandler *self;
+				std::shared_ptr<StreamElementsApiMessageHandler> self;
 				std::string id;
 				std::string target;
 				CefRefPtr<CefProcessMessage> message;
@@ -81,7 +81,7 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 
 			local_context *context = new local_context();
 
-			context->self = this;
+			context->self = this->Clone();
 			context->id = id;
 			context->target = source;
 			context->message = message;
@@ -115,10 +115,6 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 						CefWriteJSON(
 							context->result,
 							JSON_WRITER_DEFAULT));
-
-					//SendBrowserProcessMessage(
-					//	context->browser, PID_RENDERER,
-					//	msg);
 
 					StreamElementsGlobalStateManager::
 						GetInstance()
@@ -198,7 +194,7 @@ void StreamElementsApiMessageHandler::InvokeApiCallHandlerAsync(
 
 	auto handler = m_apiCallHandlers[invokeId];
 
-	handler(this, message, invokeArgs, result, target, cefClientId, [=]() {
+	handler(this->Clone(), message, invokeArgs, result, target, cefClientId, [=]() {
 		if (enable_logging) {
 			blog(LOG_INFO,
 			     "obs-browser[%lu]: API: completed call to '%s'",
@@ -289,7 +285,6 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlersInternal(
 		CefProcessMessage::Create(MSG_BIND_JAVASCRIPT_FUNCTIONS);
 	msg->GetArgumentList()->SetString(0, "host");
 	msg->GetArgumentList()->SetString(1, jsonString);
-	//SendBrowserProcessMessage(browser, PID_RENDERER, msg);
 
 	StreamElementsGlobalStateManager::GetInstance()
 		->GetWebsocketApiServer()
@@ -327,7 +322,6 @@ void StreamElementsApiMessageHandler::RegisterApiPropsInternal(
 		CefProcessMessage::Create(MSG_BIND_JAVASCRIPT_PROPS);
 	msg->GetArgumentList()->SetString(0, "host");
 	msg->GetArgumentList()->SetString(1, jsonString);
-	//SendBrowserProcessMessage(browser, PID_RENDERER, msg);
 
 	StreamElementsGlobalStateManager::GetInstance()
 		->GetWebsocketApiServer()
@@ -350,7 +344,6 @@ void StreamElementsApiMessageHandler::DispatchEventInternal(
 
 	args->SetString(0, event);
 	args->SetString(1, eventArgsJson);
-	//SendBrowserProcessMessage(browser, PID_RENDERER, msg);
 
 	StreamElementsGlobalStateManager::GetInstance()
 		->GetWebsocketApiServer()
@@ -367,7 +360,7 @@ static std::recursive_mutex s_sync_api_call_mutex;
 
 #define API_HANDLER_BEGIN(name) \
 	RegisterIncomingApiCallHandler(name, []( \
-		StreamElementsApiMessageHandler*, \
+		std::shared_ptr<StreamElementsApiMessageHandler>, \
 		CefRefPtr<CefProcessMessage> message, \
 		CefRefPtr<CefListValue> args, \
 		CefRefPtr<CefValue>& result, \
@@ -388,13 +381,9 @@ static std::recursive_mutex s_sync_api_call_mutex;
 
 void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 {
-	//RegisterIncomingApiCallHandler("getWidgets", [](StreamElementsApiMessageHandler*, CefRefPtr<CefProcessMessage> message, CefRefPtr<CefListValue> args, CefRefPtr<CefValue>& result) {
-	//	result->SetBool(true);
-	//});
-
 	RegisterIncomingApiCallHandler(
 		"batchInvokeSeries",
-		[](StreamElementsApiMessageHandler *self,
+		[](std::shared_ptr<StreamElementsApiMessageHandler> self,
 		   CefRefPtr<CefProcessMessage> message,
 		   CefRefPtr<CefListValue> args, CefRefPtr<CefValue> &result,
 		   std::string target,
@@ -422,7 +411,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				std::function<void()> process;
 				std::function<void()> done;
 
-				StreamElementsApiMessageHandler *self;
+				std::shared_ptr<StreamElementsApiMessageHandler> self;
 				CefRefPtr<CefProcessMessage> message;
 				CefRefPtr<CefListValue> args;
 				CefRefPtr<CefValue> result;
@@ -2381,7 +2370,7 @@ bool StreamElementsApiMessageHandler::InvokeHandler::InvokeApiCallAsync(
 	context->result->SetBool(false);
 	context->callback = callback;
 
-	handler(this, nullptr, args, context->result, nullptr, -1, [context]() {
+	handler(this->Clone(), nullptr, args, context->result, "", -1, [context]() {
 		context->callback(context->result);
 
 		delete context;

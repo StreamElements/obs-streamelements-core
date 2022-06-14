@@ -18,8 +18,6 @@
 
 #pragma once
 
-#include "streamelements/StreamElementsBrowserSourceApiMessageHandler.hpp"
-
 #include <graphics/graphics.h>
 #include <util/threading.h>
 #include "cef-headers.hpp"

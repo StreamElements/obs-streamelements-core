@@ -9,7 +9,7 @@ static std::recursive_mutex s_sync_api_call_mutex;
 
 #define API_HANDLER_BEGIN(name)                          \
 	RegisterIncomingApiCallHandler(name, []( \
-		StreamElementsApiMessageHandler* self, \
+		std::shared_ptr<StreamElementsApiMessageHandler> self, \
 		CefRefPtr<CefProcessMessage> message, \
 		CefRefPtr<CefListValue> args, \
 		CefRefPtr<CefValue>& result, \
@@ -38,6 +38,11 @@ public:
 		RegisterIncomingApiCallHandlers();
 	}
 
+	virtual std::shared_ptr<StreamElementsApiMessageHandler> Clone() override
+	{
+		return std::make_shared<StreamElementsDialogApiMessageHandler>(m_dialog);
+	}
+
 private:
 	StreamElementsBrowserDialog* m_dialog;
 
@@ -51,8 +56,8 @@ protected:
 			result->SetBool(false);
 
 			if (args->GetSize()) {
-				StreamElementsDialogApiMessageHandler* msgHandler =
-					static_cast<StreamElementsDialogApiMessageHandler*>(self);
+				std::shared_ptr<StreamElementsDialogApiMessageHandler> msgHandler =
+					std::static_pointer_cast<StreamElementsDialogApiMessageHandler>(self);
 
 				CefRefPtr<CefValue> arg = args->GetValue(0);
 

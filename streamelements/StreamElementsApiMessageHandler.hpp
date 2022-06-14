@@ -21,11 +21,16 @@ public:
 		m_initialHiddenState = isHidden;
 	}
 
+public:
+	virtual std::shared_ptr<StreamElementsApiMessageHandler> Clone() {
+		return std::make_shared<StreamElementsApiMessageHandler>();
+	}
+
 protected:
 	virtual void RegisterIncomingApiCallHandlers();
 
 	typedef void (*incoming_call_handler_t)(
-		StreamElementsApiMessageHandler *,
+		std::shared_ptr<StreamElementsApiMessageHandler>,
 		CefRefPtr<CefProcessMessage> message,
 		CefRefPtr<CefListValue> args, CefRefPtr<CefValue> &result,
 		std::string target, const long cefClientId, std::function<void()> complete_callback);

@@ -234,7 +234,6 @@ set(obs-browser_SOURCES
 	streamelements/StreamElementsNetworkDialog.cpp
 	streamelements/StreamElementsAnalyticsEventsManager.cpp
 	streamelements/StreamElementsMessageBus.cpp
-	streamelements/StreamElementsBrowserSourceApiMessageHandler.cpp
 	streamelements/StreamElementsControllerServer.cpp
 	streamelements/StreamElementsObsSceneManager.cpp
 	streamelements/StreamElementsExternalSceneDataProviderSlobsClient.cpp
@@ -317,7 +316,6 @@ set(obs-browser_HEADERS
 	streamelements/StreamElementsAnalyticsEventsManager.hpp
 	streamelements/StreamElementsCrashHandler.hpp
 	streamelements/StreamElementsMessageBus.hpp
-	streamelements/StreamElementsBrowserSourceApiMessageHandler.hpp
 	streamelements/StreamElementsControllerServer.hpp
 	streamelements/StreamElementsObsSceneManager.hpp
 	streamelements/StreamElementsExternalSceneDataProviderManager.hpp
