@@ -338,16 +338,9 @@ void StreamElementsApiMessageHandler::DispatchEventInternal(
 	std::string target, std::string event,
 	std::string eventArgsJson)
 {
-	CefRefPtr<CefProcessMessage> msg =
-		CefProcessMessage::Create("DispatchJSEvent");
-	CefRefPtr<CefListValue> args = msg->GetArgumentList();
-
-	args->SetString(0, event);
-	args->SetString(1, eventArgsJson);
-
 	StreamElementsGlobalStateManager::GetInstance()
 		->GetWebsocketApiServer()
-		->DispatchClientMessage("system", target, msg);
+		->DispatchJSEvent("system", target, event, eventArgsJson);
 }
 
 void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandler(

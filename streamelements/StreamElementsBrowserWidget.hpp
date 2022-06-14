@@ -186,14 +186,9 @@ protected:
 
 		// Dispatch hostVisibilityChanged event
 		{
-			CefRefPtr<CefProcessMessage> msg =
-				CefProcessMessage::Create("DispatchJSEvent");
-			CefRefPtr<CefListValue> args = msg->GetArgumentList();
-
-			args->SetString(0, "hostContainerVisibilityChanged");
-			args->SetString(1, "null");
-
-			DispatchClientMessage(m_clientId, msg);
+			DispatchClientJSEvent(m_clientId,
+					      "hostContainerVisibilityChanged",
+					      "null");
 		}
 	}
 
