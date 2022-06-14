@@ -739,23 +739,78 @@ std::string GetCurrentThemeName()
 
 std::string GetCefVersionString()
 {
-	char buf[64];
+	char buf[64] = "unknown";
 
-	sprintf(buf, "cef.%d.%d.chrome.%d.%d.%d.%d", cef_version_info(0),
-		cef_version_info(1), cef_version_info(2), cef_version_info(3),
-		cef_version_info(4), cef_version_info(5));
+	void* libcef = os_dlopen("libcef");
+	if (libcef) {
+		typedef int (*cef_version_info_func_ptr_t)(int entry);
+
+		cef_version_info_func_ptr_t cef_version_info_func_ptr =
+			(cef_version_info_func_ptr_t)os_dlsym(
+				libcef, "cef_version_info");
+
+		if (cef_version_info_func_ptr) {
+			sprintf(buf, "cef.%d.%d.chrome.%d.%d.%d.%d",
+				cef_version_info_func_ptr(0),
+				cef_version_info_func_ptr(1),
+				cef_version_info_func_ptr(2),
+				cef_version_info_func_ptr(3),
+				cef_version_info_func_ptr(4),
+				cef_version_info_func_ptr(5));
+		}
+
+		os_dlclose(libcef);
+	}
 
 	return std::string(buf);
 }
 
 std::string GetCefPlatformApiHash()
 {
-	return cef_api_hash(0);
+	char buf[128] = "unknown";
+
+	void *libcef = os_dlopen("libcef");
+	if (libcef) {
+		typedef const char *(*cef_api_hash_func_ptr_t)(int entry);
+
+		cef_api_hash_func_ptr_t cef_api_hash_func_ptr =
+			(cef_api_hash_func_ptr_t)os_dlsym(
+				libcef, "cef_api_hash");
+
+		if (cef_api_hash_func_ptr) {
+			sprintf(buf, "%s", cef_api_hash_func_ptr(0));
+
+			return std::string(buf);
+		}
+
+		os_dlclose(libcef);
+	}
+
+	return std::string(buf);
 }
 
 std::string GetCefUniversalApiHash()
 {
-	return cef_api_hash(1);
+	char buf[128] = "unknown";
+
+	void *libcef = os_dlopen("libcef");
+	if (libcef) {
+		typedef const char *(*cef_api_hash_func_ptr_t)(int entry);
+
+		cef_api_hash_func_ptr_t cef_api_hash_func_ptr =
+			(cef_api_hash_func_ptr_t)os_dlsym(libcef,
+							  "cef_api_hash");
+
+		if (cef_api_hash_func_ptr) {
+			sprintf(buf, "%s", cef_api_hash_func_ptr(1));
+
+			return std::string(buf);
+		}
+
+		os_dlclose(libcef);
+	}
+
+	return std::string(buf);
 }
 
 std::string GetStreamElementsPluginVersionString()
