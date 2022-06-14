@@ -1,5 +1,7 @@
 #pragma once
 
+#include "StreamElementsLocalFilesystemHttpServer.hpp"
+
 #include "../panel/browser-panel.hpp"
 
 struct QCef;
@@ -128,6 +130,11 @@ public:
 		return m_externalSceneDataProviderManager;
 	}
 	StreamElementsHttpClient *GetHttpClient() { return m_httpClient; }
+	StreamElementsLocalFilesystemHttpServer *GetLocalFilesystemHttpServer()
+	{
+		return m_localFilesystemHttpServer;
+	}
+
 	StreamElementsNativeOBSControlsManager *GetNativeOBSControlsManager()
 	{
 		return m_nativeObsControlsManager;
@@ -196,6 +203,7 @@ private:
 	StreamElementsExternalSceneDataProviderManager
 		*m_externalSceneDataProviderManager = nullptr;
 	StreamElementsHttpClient *m_httpClient = nullptr;
+	StreamElementsLocalFilesystemHttpServer *m_localFilesystemHttpServer;
 	StreamElementsNativeOBSControlsManager *m_nativeObsControlsManager =
 		nullptr;
 	StreamElementsProfilesManager *m_profilesManager = nullptr;

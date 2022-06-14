@@ -252,6 +252,7 @@ set(obs-browser_SOURCES
 	streamelements/StreamElementsPleaseWaitWindow.cpp
 	streamelements/StreamElementsHttpServerManager.cpp
 	streamelements/StreamElementsWebsocketApiServer.cpp
+	streamelements/StreamElementsLocalFilesystemHttpServer.cpp
 	streamelements/deps/StackWalker/StackWalker.cpp
 	streamelements/deps/zip/zip.c
 	streamelements/deps/server/NamedPipesServer.cpp
@@ -337,6 +338,7 @@ set(obs-browser_HEADERS
 	streamelements/StreamElementsPleaseWaitWindow.hpp
 	streamelements/StreamElementsHttpServerManager.hpp
 	streamelements/StreamElementsWebsocketApiServer.hpp
+	streamelements/StreamElementsLocalFilesystemHttpServer.hpp
 	streamelements/deps/StackWalker/StackWalker.h
 	streamelements/deps/zip/zip.h
 	streamelements/deps/zip/miniz.h

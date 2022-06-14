@@ -1,5 +1,6 @@
 #include <string.h>
 
+#include "StreamElementsLocalFilesystemHttpServer.hpp"
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsConfig.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
@@ -28,6 +29,7 @@
 #include <util/config-file.h>
 
 #include <QUrl>
+#include <QUrlQuery>
 #include <QFile>
 #include <QDir>
 #include <QUrl>
@@ -1620,72 +1622,51 @@ bool VerifySessionMessageSignature(std::string &message, std::string &signature)
 
 std::string CreateSessionSignedAbsolutePathURL(std::wstring path)
 {
-	CefURLParts parts;
-
 	path = std::regex_replace(path, std::wregex(L"#"), L"%23");
 	path = std::regex_replace(path, std::wregex(L"&"), L"%26");
 
-	CefString(&parts.scheme) = "https";
-	CefString(&parts.host) = "absolute";
-	CefString(&parts.path) = std::wstring(L"/") + path;
+	QUrl parts(StreamElementsGlobalStateManager::GetInstance()
+			 ->GetLocalFilesystemHttpServer()
+			 ->GetBaseUrl()
+			 .c_str());
 
-	CefString url;
-	CefCreateURL(parts, url);
-	CefParseURL(url, parts);
+	parts.setPath(QString::fromStdWString((std::wstring(L"/") + path).c_str()));
 
-	std::string message = CefString(&parts.path).ToString();
-
-	message =
-		CefURIDecode(message, true, cef_uri_unescape_rule_t::UU_SPACES);
-	message = CefURIDecode(
-		message, true,
-		cef_uri_unescape_rule_t::
-			UU_URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS);
+	std::string message = parts.path().toStdString();
 
 	message = message.erase(0, 1);
 
 	//message = std::regex_replace(message, std::regex("#"), "%23");
 	//message = std::regex_replace(message, std::regex("&"), "%26");
 
-	return url.ToString() + std::string("?digest=") +
+	return parts.url().toStdString() + std::string("?digest=") +
 	       CreateSessionMessageSignature(message);
 }
 
 bool VerifySessionSignedAbsolutePathURL(std::string url, std::string &path)
 {
-	CefURLParts parts;
+	QUrl parts(url.c_str());
 
-	if (!CefParseURL(CefString(url), parts)) {
+	path = parts.path().toStdString();
+
+	path = path.erase(0, 1);
+
+	if (!parts.hasQuery())
 		return false;
-	} else {
-		path = CefString(&parts.path).ToString();
 
-		path = CefURIDecode(path, true,
-				    cef_uri_unescape_rule_t::UU_SPACES);
-		path = CefURIDecode(
-			path, true,
-			cef_uri_unescape_rule_t::
-				UU_URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS);
+	QUrlQuery query(parts.query());
 
-		path = path.erase(0, 1);
+	if (!query.hasQueryItem("digest"))
+		return false;
 
-		std::map<std::string, std::string> queryArgs;
-		ParseQueryString(CefString(&parts.query), queryArgs);
+	std::string signature = query.queryItemValue("digest").toStdString();
 
-		if (!queryArgs.count("digest")) {
-			return false;
-		} else {
-			std::string signature = queryArgs["digest"];
+	std::string message = path;
 
-			std::string message = path;
+	//message = std::regex_replace(message, std::regex("#"), "%23");
+	//message = std::regex_replace(message, std::regex("&"), "%26");
 
-			//message = std::regex_replace(message, std::regex("#"), "%23");
-			//message = std::regex_replace(message, std::regex("&"), "%26");
-
-			return VerifySessionMessageSignature(message,
-							     signature);
-		}
-	}
+	return VerifySessionMessageSignature(message, signature);
 }
 
 /* ========================================================= */

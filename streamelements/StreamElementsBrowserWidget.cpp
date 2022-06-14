@@ -301,7 +301,7 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 		"			}\n" +
 		"		} else if (json.payload.name === 'executeCallback') {\n" +
 		"			const [ callbackId, ...args ] = json.payload.args;\n" +
-		"			window.host.endpoint.callbacks[callbackId](...args);\n" +
+		"			window.host.endpoint.callbacks[callbackId](...(args.map(arg => JSON.parse(arg))));\n" +
 		"			delete window.host.endpoint.callbacks[callbackId];\n" +
 		"		} else if (json.payload.name === 'DispatchJSEvent') {\n" +
 		"			window.dispatchEvent(new CustomEvent(json.payload.args[0], { detail: JSON.parse(json.payload.args[1]) }));\n" +

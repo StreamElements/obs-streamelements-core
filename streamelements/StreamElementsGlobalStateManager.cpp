@@ -343,6 +343,8 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 			m_httpClient =
 				new StreamElementsHttpClient();
+			m_localFilesystemHttpServer =
+				new StreamElementsLocalFilesystemHttpServer();
 			m_analyticsEventsManager =
 				new StreamElementsAnalyticsEventsManager();
 			m_widgetManager =
@@ -581,6 +583,7 @@ void StreamElementsGlobalStateManager::Shutdown()
 			delete m_obsSceneManager;
 			delete m_externalSceneDataProviderManager;
 			delete m_httpClient;
+			delete m_localFilesystemHttpServer;
 			// delete m_nativeObsControlsManager; // Singleton
 			delete m_profilesManager;
 			delete m_backupManager;
