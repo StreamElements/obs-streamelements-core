@@ -30,17 +30,6 @@ const char *MSG_BIND_JAVASCRIPT_PROPS =
 	"CefRenderProcessHandler::BindJavaScriptProperties";
 
 bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
-	CefRefPtr<CefBrowser> browser,
-#if CHROME_VERSION_BUILD >= 3770
-	CefRefPtr<CefFrame> /*frame*/,
-#endif
-	CefProcessId /*source_process*/, CefRefPtr<CefProcessMessage> message,
-	const long cefClientId)
-{
-	return false;
-}
-
-bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 	std::string source, CefRefPtr<CefProcessMessage> message,
 	const long cefClientId)
 {

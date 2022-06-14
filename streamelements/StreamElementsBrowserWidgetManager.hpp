@@ -6,8 +6,6 @@
 #include <map>
 #include <string>
 
-class StreamElementsBrowserWidget;
-
 class StreamElementsBrowserWidgetManager
 	:
 	protected StreamElementsWidgetManager

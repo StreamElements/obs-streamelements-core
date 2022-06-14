@@ -44,7 +44,7 @@ private:
 	std::string m_reloadPolicy;
 	std::string m_pendingLocationArea;
 	std::string m_pendingId;
-	CefRefPtr<StreamElementsApiMessageHandler> m_requestedApiMessageHandler;
+	std::shared_ptr<StreamElementsApiMessageHandler> m_requestedApiMessageHandler;
 	StreamElementsMessageBus::message_destination_filter_flags_t
 		m_messageDestinationFlags;
 
@@ -60,7 +60,7 @@ public:
 		const char* const reloadPolicy,
 		const char* const locationArea,
 		const char* const id,
-		StreamElementsApiMessageHandler* apiMessageHandler = nullptr,
+		std::shared_ptr<StreamElementsApiMessageHandler> apiMessageHandler = nullptr,
 		bool isIncognito = false);
 
 	~StreamElementsBrowserWidget();

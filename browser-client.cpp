@@ -117,11 +117,6 @@ bool BrowserClient::OnProcessMessageReceived(
 	CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefProcessId source_process,
 	CefRefPtr<CefProcessMessage> message)
 {
-	if (streamelementsMessageHandler.OnProcessMessageReceived(
-		    browser, frame, source_process, message, 0)) {
-		return true;
-	}
-
 	const std::string &name = message->GetName();
 	CefRefPtr<CefListValue> input_args = message->GetArgumentList();
 	Json json;

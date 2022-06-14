@@ -52,7 +52,6 @@ public:
 	BrowserSource *bs = nullptr;
 	CefRect popupRect;
 	CefRect originalPopupRect;
-	StreamElementsBrowserSourceApiMessageHandler streamelementsMessageHandler;
 #if CHROME_VERSION_BUILD >= 4103
 	int sample_rate;
 	int channels;

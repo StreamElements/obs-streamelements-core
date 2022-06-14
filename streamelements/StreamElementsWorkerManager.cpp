@@ -33,15 +33,13 @@ public:
 		: m_url(url),
 		  m_executeJavascriptOnLoad(executeJavascriptOnLoad)
 	{
-		StreamElementsApiMessageHandler *apiMessageHandler =
-			new StreamElementsApiMessageHandler();
-
 		auto browserWidget = new StreamElementsBrowserWidget(
 			nullptr, StreamElementsMessageBus::DEST_WORKER,
 			m_url.c_str(), m_executeJavascriptOnLoad.c_str(),
-			"default", "popupWindow",
+			"default", "popup",
 			CreateGloballyUniqueIdString().c_str(),
-			apiMessageHandler, false);
+			std::make_shared<StreamElementsApiMessageHandler>(),
+			false);
 
 		auto mainWindow =
 			StreamElementsGlobalStateManager::GetInstance()

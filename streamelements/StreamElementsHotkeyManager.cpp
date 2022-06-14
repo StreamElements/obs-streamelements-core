@@ -514,21 +514,3 @@ void StreamElementsHotkeyManager::RemoveAllManagedHotkeyBindings()
 	m_registeredHotkeySerializedValues.clear();
 	m_registeredHotkeyDataString.clear();
 }
-
-void StreamElementsHotkeyManager::keyCombinationTriggered(CefRefPtr<CefBrowser> browser, obs_key_combination_t combination, bool pressed)
-{
-	std::lock_guard<std::recursive_mutex> guard(m_mutex);
-
-	CefRefPtr<CefValue> serialized = CefValue::Create();
-	serialized->SetDictionary(SerializeKeyCombination(combination));
-	std::string json = CefWriteJSON(serialized, JSON_WRITER_DEFAULT);
-
-	if (pressed) {
-		DispatchClientJSEvent("hostContainerKeyCombinationPressed",
-				      json);
-	}
-	else {
-		DispatchClientJSEvent("hostContainerKeyCombinationReleased",
-				      json);
-	}
-}

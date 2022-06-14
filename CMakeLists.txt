@@ -301,7 +301,6 @@ set(obs-browser_HEADERS
 	streamelements/StreamElementsObsBandwidthTestClient.hpp
 	streamelements/StreamElementsWidgetManager.hpp
 	streamelements/StreamElementsObsAppMonitor.hpp
-	streamelements/StreamElementsBrowserMessageHandler.hpp
 	streamelements/StreamElementsApiMessageHandler.hpp
 	streamelements/StreamElementsConfig.hpp
 	streamelements/StreamElementsGlobalStateManager.hpp

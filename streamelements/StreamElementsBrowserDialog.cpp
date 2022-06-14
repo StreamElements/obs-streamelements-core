@@ -105,7 +105,7 @@ int StreamElementsBrowserDialog::exec()
 		"reload",
 		"dialog",
 		"",
-		new StreamElementsDialogApiMessageHandler(this),
+		std::make_shared<StreamElementsDialogApiMessageHandler>(this),
 		m_isIncognito);
 
 	layout()->addWidget(m_browser);

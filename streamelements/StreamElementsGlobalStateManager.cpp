@@ -1100,9 +1100,11 @@ bool StreamElementsGlobalStateManager::DeserializePopupWindow(
 				d->GetString("executeJavaScriptOnLoad");
 		}
 
-		StreamElementsApiMessageHandler *apiMessageHandler =
-			enableHostApi ? new StreamElementsApiMessageHandler()
-				      : nullptr;
+		std::shared_ptr<StreamElementsApiMessageHandler>
+			apiMessageHandler = nullptr;
+
+		apiMessageHandler =
+			std::make_shared<StreamElementsApiMessageHandler>();
 
 		QMainWindow *window = new QMainWindow();
 

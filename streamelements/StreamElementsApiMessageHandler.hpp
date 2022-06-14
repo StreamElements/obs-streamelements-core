@@ -1,26 +1,16 @@
 #pragma once
 
-#include "StreamElementsBrowserMessageHandler.hpp"
+#include "cef-headers.hpp"
 
 #include <mutex>
 #include <functional>
 
-class StreamElementsApiMessageHandler
-	: public StreamElementsBrowserMessageHandler {
+class StreamElementsApiMessageHandler {
 public:
 	StreamElementsApiMessageHandler() { RegisterIncomingApiCallHandlers(); }
 	virtual ~StreamElementsApiMessageHandler() {}
 
 public:
-	virtual bool
-	OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
-#if CHROME_VERSION_BUILD >= 3770
-				 CefRefPtr<CefFrame> frame,
-#endif
-				 CefProcessId source_process,
-				 CefRefPtr<CefProcessMessage> message,
-				 const long cefClientId) override;
-
 	virtual bool
 	OnProcessMessageReceived(std::string source,
 				 CefRefPtr<CefProcessMessage> message,
@@ -76,9 +66,6 @@ private:
 
 public:
 	class InvokeHandler;
-
-public:
-	IMPLEMENT_REFCOUNTING(StreamElementsApiMessageHandler);
 };
 
 class StreamElementsApiMessageHandler::InvokeHandler

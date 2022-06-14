@@ -22,8 +22,8 @@ QT_BEGIN_MOC_NAMESPACE
 QT_WARNING_PUSH
 QT_WARNING_DISABLE_DEPRECATED
 struct qt_meta_stringdata_StreamElementsBrowserWidget_t {
-    QByteArrayData data[6];
-    char stringdata0[122];
+    QByteArrayData data[5];
+    char stringdata0[97];
 };
 #define QT_MOC_LITERAL(idx, ofs, len) \
     Q_STATIC_BYTE_ARRAY_DATA_HEADER_INITIALIZER_WITH_OFFSET(len, \
@@ -36,14 +36,13 @@ QT_MOC_LITERAL(0, 0, 27), // "StreamElementsBrowserWidget"
 QT_MOC_LITERAL(1, 28, 19), // "browserStateChanged"
 QT_MOC_LITERAL(2, 48, 0), // ""
 QT_MOC_LITERAL(3, 49, 36), // "browserFocusedDOMNodeEditable..."
-QT_MOC_LITERAL(4, 86, 10), // "isEditable"
-QT_MOC_LITERAL(5, 97, 24) // "InitBrowserAsyncInternal"
+QT_MOC_LITERAL(4, 86, 10) // "isEditable"
 
     },
     "StreamElementsBrowserWidget\0"
     "browserStateChanged\0\0"
     "browserFocusedDOMNodeEditableChanged\0"
-    "isEditable\0InitBrowserAsyncInternal"
+    "isEditable"
 };
 #undef QT_MOC_LITERAL
 
@@ -53,7 +52,7 @@ static const uint qt_meta_data_StreamElementsBrowserWidget[] = {
        8,       // revision
        0,       // classname
        0,    0, // classinfo
-       3,   14, // methods
+       2,   14, // methods
        0,    0, // properties
        0,    0, // enums/sets
        0,    0, // constructors
@@ -61,18 +60,12 @@ static const uint qt_meta_data_StreamElementsBrowserWidget[] = {
        2,       // signalCount
 
  // signals: name, argc, parameters, tag, flags
-       1,    0,   29,    2, 0x06 /* Public */,
-       3,    1,   30,    2, 0x06 /* Public */,
-
- // slots: name, argc, parameters, tag, flags
-       5,    0,   33,    2, 0x08 /* Private */,
+       1,    0,   24,    2, 0x06 /* Public */,
+       3,    1,   25,    2, 0x06 /* Public */,
 
  // signals: parameters
     QMetaType::Void,
     QMetaType::Void, QMetaType::Bool,    4,
-
- // slots: parameters
-    QMetaType::Void,
 
        0        // eod
 };
@@ -85,7 +78,6 @@ void StreamElementsBrowserWidget::qt_static_metacall(QObject *_o, QMetaObject::C
         switch (_id) {
         case 0: _t->browserStateChanged(); break;
         case 1: _t->browserFocusedDOMNodeEditableChanged((*reinterpret_cast< bool(*)>(_a[1]))); break;
-        case 2: _t->InitBrowserAsyncInternal(); break;
         default: ;
         }
     } else if (_c == QMetaObject::IndexOfMethod) {
@@ -136,13 +128,13 @@ int StreamElementsBrowserWidget::qt_metacall(QMetaObject::Call _c, int _id, void
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 3)
+        if (_id < 2)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 3;
+        _id -= 2;
     } else if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 3)
+        if (_id < 2)
             *reinterpret_cast<int*>(_a[0]) = -1;
-        _id -= 3;
+        _id -= 2;
     }
     return _id;
 }

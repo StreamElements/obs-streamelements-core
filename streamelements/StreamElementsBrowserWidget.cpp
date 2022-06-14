@@ -200,7 +200,7 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 	const char *const executeJavaScriptCodeOnLoad,
 	const char *const reloadPolicy, const char *const locationArea,
 	const char *const id,
-	StreamElementsApiMessageHandler *apiMessageHandler, bool isIncognito)
+	std::shared_ptr<StreamElementsApiMessageHandler> apiMessageHandler, bool isIncognito)
 	: QWidget(parent),
 	  m_messageDestinationFlags(messageDestinationFlags),
 	  m_url(url),
@@ -236,7 +236,7 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 
 	if (m_requestedApiMessageHandler == nullptr) {
 		m_requestedApiMessageHandler =
-			new StreamElementsApiMessageHandler();
+			std::make_shared<StreamElementsApiMessageHandler>();
 	}
 
 	uint16_t port = StreamElementsGlobalStateManager::GetInstance()
@@ -248,6 +248,9 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 		->RegisterMessageHandler(
 			m_clientId, [this](std::string source,
 					 CefRefPtr<CefProcessMessage> msg) {
+				if (!m_requestedApiMessageHandler.get())
+					return;
+
 				m_requestedApiMessageHandler
 					->OnProcessMessageReceived(source, msg,
 								   0);
@@ -306,6 +309,58 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 		"		} else if (json.payload.name === 'DispatchJSEvent') {\n" +
 		"			window.dispatchEvent(new CustomEvent(json.payload.args[0], { detail: JSON.parse(json.payload.args[1]) }));\n" +
 		"		}\n" + "	}\n" + "};";
+
+	script += "(function() {\n";
+	script += "	let pressed = '';\n";
+	script += "\n";
+	script += "	function parseKeyEvent(e) {\n";
+	script += "		const combo = [];\n";
+	script += "		if (e.ctrlKey) combo.push('Ctrl');\n";
+	script += "		if (e.altKey) combo.push('Alt');\n";
+	script += "		if (e.shiftKey) combo.push('Shift');\n";
+	script +=
+		"		if (e.key && e.key.length == 1) combo.push(e.key.toUpperCase());\n";
+	script += "\n";
+	script += "		return {\n";
+	script +=
+		"			description: combo.join(' + '),\n";
+	script += "			keyCode: e.keyCode,\n";
+	script += "			keyName: e.key,\n";
+	script += "			keySymbol: e.key,\n";
+	script += "			virtualKeyCode: e.keyCode,\n";
+	script += "			left: /Left$/.test(e.code),\n";
+	script +=
+		"			right: /Right$/.test(e.code),\n";
+	script += "			altKey: e.altKey,\n";
+	script += "			ctrlKey: e.ctrlKey,\n";
+	script += "			commandKey: e.metaKey,\n";
+	script += "			shiftKey: e.shiftKey,\n";
+	script += "			capsLock: false,\n";
+	script += "			numLock: false,\n";
+	script += "			mouseLeftButton: false,\n";
+	script += "			mouseMidButton: false,\n";
+	script += "			mouseRightButton: false,\n";
+	script += "		};\n";
+	script += "	}\n";
+	script += "\n";
+	script += "	window.addEventListener('keydown', e => {\n";
+	script += "		if (e.repeat) return;\n";
+	script += "		const key = parseKeyEvent(e);\n";
+	script +=
+		"		if (key.description == pressed) return;\n";
+	script += "		pressed = key.description;\n";
+	script +=
+		"		window.dispatchEvent(new CustomEvent('hostContainerKeyCombinationPressed', { detail: key }));\n";
+	script += "	});\n";
+	script += "\n";
+	script += "	window.addEventListener('keyup', e => {\n";
+	script += "		if (e.repeat) return;\n";
+	script += "		const key = parseKeyEvent(e);\n";
+	script += "		pressed = '';\n";
+	script +=
+		"		window.dispatchEvent(new CustomEvent('hostContainerKeyCombinationReleased', { detail: key }));\n";
+	script += "	});\n";
+	script += "})();\n";
 
 	m_cefWidget->setStartupScript(script + m_executeJavaScriptCodeOnLoad);
 

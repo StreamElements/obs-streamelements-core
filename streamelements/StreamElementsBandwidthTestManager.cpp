@@ -1,17 +1,6 @@
 #include "StreamElementsBandwidthTestManager.hpp"
 #include "StreamElementsUtils.hpp"
 
-static void DispatchJSEvent(CefRefPtr<CefBrowser> browser, const char *eventName, const char *jsonString)
-{
-	CefRefPtr<CefProcessMessage> msg =
-		CefProcessMessage::Create("DispatchJSEvent");
-	CefRefPtr<CefListValue> args = msg->GetArgumentList();
-
-	args->SetString(0, eventName);
-	args->SetString(1, jsonString ? jsonString : "null");
-	SendBrowserProcessMessage(browser, PID_RENDERER, msg);
-}
-
 StreamElementsBandwidthTestManager::StreamElementsBandwidthTestManager()
 {
 	m_isTestInProgress = false;
