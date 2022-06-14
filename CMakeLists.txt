@@ -320,7 +320,6 @@ set(obs-browser_HEADERS
 	streamelements/StreamElementsBrowserSourceApiMessageHandler.hpp
 	streamelements/StreamElementsControllerServer.hpp
 	streamelements/StreamElementsObsSceneManager.hpp
-	streamelements/StreamElementsFileSystemMapper.hpp
 	streamelements/StreamElementsExternalSceneDataProviderManager.hpp
 	streamelements/StreamElementsExternalSceneDataProviderSlobsClient.hpp
 	streamelements/StreamElementsExternalSceneDataProvider.hpp
