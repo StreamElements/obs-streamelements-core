@@ -1009,8 +1009,6 @@ bool StreamElementsGlobalStateManager::DeserializeStatusBarTemporaryMessage(
 	return false;
 }
 
-#include <include/cef_parser.h> // CefParseJSON, CefWriteJSON
-
 bool StreamElementsGlobalStateManager::DeserializeModalDialog(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {

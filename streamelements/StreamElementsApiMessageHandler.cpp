@@ -1,8 +1,6 @@
 #include "StreamElementsApiMessageHandler.hpp"
 
-#include "../cef-headers.hpp"
-
-#include <include/cef_parser.h> // CefParseJSON, CefWriteJSON
+#include "cef-headers.hpp"
 
 #include "Version.hpp"
 #include "StreamElementsConfig.hpp"

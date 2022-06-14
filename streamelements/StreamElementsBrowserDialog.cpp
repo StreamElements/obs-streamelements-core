@@ -3,7 +3,7 @@
 
 #include <QVBoxLayout>
 
-#include <include/cef_parser.h>		// CefParseJSON, CefWriteJSON
+#include "cef-headers.hpp"
 
 static std::recursive_mutex s_sync_api_call_mutex;
 

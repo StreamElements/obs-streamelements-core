@@ -10,16 +10,10 @@
 #include <util/platform.h>
 #include <util/threading.h>
 #include "cef-headers.hpp"
-#include <include/cef_version.h>
-#include <include/base/cef_bind.h>
-#include <include/wrapper/cef_closure_task.h>
-#include <include/base/cef_lock.h>
 
 #include <pthread.h>
 #include <functional>
 #include <mutex>
-
-#include "../browser-client.hpp"
 
 #include "StreamElementsApiMessageHandler.hpp"
 

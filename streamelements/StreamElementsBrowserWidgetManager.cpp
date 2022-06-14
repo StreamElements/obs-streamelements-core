@@ -3,7 +3,6 @@
 #include "StreamElementsGlobalStateManager.hpp"
 
 #include "cef-headers.hpp"
-#include <include/cef_parser.h> // CefParseJSON, CefWriteJSON
 
 #include <QUuid>
 #include <QMainWindow>

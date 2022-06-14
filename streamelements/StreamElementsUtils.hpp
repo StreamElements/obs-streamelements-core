@@ -20,8 +20,6 @@
 #include <util/platform.h>
 #include <curl/curl.h>
 
-#include <include/cef_urlrequest.h>
-
 #include <QMenu>
 #include <QWidget>
 

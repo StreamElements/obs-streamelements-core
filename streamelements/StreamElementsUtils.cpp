@@ -12,10 +12,6 @@
 
 #define GLOBAL_ENV_CONFIG_FILE_NAME "obs-studio/streamelements-env.ini"
 
-#if CHROME_VERSION_BUILD >= 3729
-#include <include/cef_api_hash.h>
-#endif
-
 #include <cstdint>
 #include <vector>
 #include <regex>

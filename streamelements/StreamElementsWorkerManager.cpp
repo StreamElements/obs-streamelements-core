@@ -5,7 +5,7 @@
 #include <QUuid>
 #include <QWidget>
 
-#include <include/cef_parser.h> // CefParseJSON, CefWriteJSON
+#include "cef-headers.hpp"
 
 class BrowserTask : public CefTask {
 public:
