@@ -23,13 +23,6 @@
 
 /* ========================================================================= */
 
-void register_cookie_manager(CefRefPtr<CefCookieManager> cm);
-void unregister_cookie_manager(CefRefPtr<CefCookieManager> cm);
-void flush_cookie_manager(CefRefPtr<CefCookieManager> cm);
-void flush_cookie_managers();
-
-/* ========================================================================= */
-
 static QString GetLastErrorMsg()
 {
 #ifdef WIN32
@@ -540,8 +533,6 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			->Update();
 	});
 
-	register_cookie_manager(CefCookieManager::GetGlobalManager(nullptr));
-
 	m_initialized = true;
 	m_persistStateEnabled = true;
 
@@ -556,12 +547,7 @@ void StreamElementsGlobalStateManager::Shutdown()
 		return;
 	}
 
-	unregister_cookie_manager(CefCookieManager::GetGlobalManager(nullptr));
-
 	obs_frontend_remove_event_callback(handle_obs_frontend_event, nullptr);
-
-	//flush_cookie_manager(GetCookieManager()->GetCefCookieManager());
-	//flush_cookie_managers();
 
 #ifdef WIN32
     // Shutdown on the main thread
@@ -854,9 +840,6 @@ void StreamElementsGlobalStateManager::PersistState(bool sendEventToGuest)
 	if (!m_persistStateEnabled) {
 		return;
 	}
-
-	//flush_cookie_manager(GetCookieManager()->GetCefCookieManager());
-	//flush_cookie_managers();
 
 	CefRefPtr<CefValue> root = CefValue::Create();
 	CefRefPtr<CefDictionaryValue> rootDictionary =

@@ -198,97 +198,6 @@ bool QueueCEFTask(std::function<void()> task)
 
 /* ========================================================================= */
 
-static std::mutex cookie_managers_mutex;
-static std::vector<CefRefPtr<CefCookieManager>> cookie_managers;
-
-void flush_cookie_manager(CefRefPtr<CefCookieManager> cm)
-{
-	if (!cm)
-		return;
-
-	cm->FlushStore(nullptr);
-	return;
-
-	os_event_t *complete_event;
-
-	os_event_init(&complete_event, OS_EVENT_TYPE_AUTO);
-
-	class CompletionCallback : public CefCompletionCallback {
-	public:
-		CompletionCallback(os_event_t *complete_event)
-			: m_complete_event(complete_event)
-		{
-		}
-
-		virtual void OnComplete() override
-		{
-			os_event_signal(m_complete_event);
-		}
-
-		IMPLEMENT_REFCOUNTING(CompletionCallback);
-
-	private:
-		os_event_t *m_complete_event;
-	};
-
-	CefRefPtr<CefCompletionCallback> callback =
-		new CompletionCallback(complete_event);
-
-	auto task = [&]() {
-		if (!cm->FlushStore(callback)) {
-			blog(LOG_WARNING, "Failed flushing cookie store");
-
-			os_event_signal(complete_event);
-		} else {
-			blog(LOG_INFO, "Flushed cookie store");
-		}
-	};
-
-	CefPostTask(TID_IO, CefRefPtr<BrowserTask>(new BrowserTask(task)));
-
-	os_event_wait(complete_event);
-	os_event_destroy(complete_event);
-}
-
-void flush_cookie_managers()
-{
-	std::lock_guard<std::mutex> guard(cookie_managers_mutex);
-
-	for (auto cm : cookie_managers) {
-		flush_cookie_manager(cm);
-	}
-}
-
-void register_cookie_manager(CefRefPtr<CefCookieManager> cm)
-{
-	if (!cm)
-		return;
-
-	std::lock_guard<std::mutex> guard(cookie_managers_mutex);
-
-	cookie_managers.emplace_back(cm);
-}
-
-void unregister_cookie_manager(CefRefPtr<CefCookieManager> cm)
-{
-	if (!cm)
-		return;
-
-	std::lock_guard<std::mutex> guard(cookie_managers_mutex);
-
-	flush_cookie_manager(cm);
-
-	for (auto it = cookie_managers.begin(); it != cookie_managers.end();
-	     ++it) {
-		if (it->get() == cm) {
-			cookie_managers.erase(it);
-			return;
-		}
-	}
-}
-
-/* ========================================================================= */
-
 static const char *default_css = "\
 body { \
 background-color: rgba(0, 0, 0, 0); \
@@ -988,8 +897,6 @@ void obs_module_post_load(void)
 
 void obs_module_unload(void)
 {
-	flush_cookie_managers();
-
 	obs_frontend_remove_event_callback(handle_obs_frontend_event, nullptr);
 
 	// Shutdown StreamElements plug-in
