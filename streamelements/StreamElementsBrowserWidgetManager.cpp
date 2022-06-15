@@ -312,8 +312,9 @@ void StreamElementsBrowserWidgetManager::PushCentralBrowserWidget(
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
 	StreamElementsBrowserWidget *widget = new StreamElementsBrowserWidget(
-		nullptr, StreamElementsMessageBus::DEST_UI, url, executeJavaScriptCodeOnLoad,
-		"reload", "center", "");
+		nullptr, StreamElementsMessageBus::DEST_UI, url,
+		executeJavaScriptCodeOnLoad, "reload", "center",
+		CreateGloballyUniqueIdString().c_str());
 
 	PushCentralWidget(widget);
 }
@@ -330,7 +331,7 @@ std::string StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
-	std::string id = QUuid::createUuid().toString().toStdString();
+	std::string id = CreateGloballyUniqueIdString();
 
 	CefRefPtr<CefDictionaryValue> widgetDictionary = input->GetDictionary();
 
@@ -900,7 +901,7 @@ void StreamElementsBrowserWidgetManager::ShowNotificationBar(
 
 	m_notificationBarBrowserWidget = new StreamElementsBrowserWidget(
 		nullptr, StreamElementsMessageBus::DEST_UI, url, executeJavaScriptCodeOnLoad,
-		"reload", "notification", "");
+		"reload", "notification", CreateGloballyUniqueIdString().c_str());
 
 	const Qt::ToolBarArea NOTIFICATION_BAR_AREA = Qt::TopToolBarArea;
 

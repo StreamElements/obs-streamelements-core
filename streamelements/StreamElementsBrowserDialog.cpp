@@ -109,7 +109,7 @@ int StreamElementsBrowserDialog::exec()
 		m_executeJavaScriptOnLoad.c_str(),
 		"reload",
 		"dialog",
-		"",
+		CreateGloballyUniqueIdString().c_str(),
 		std::make_shared<StreamElementsDialogApiMessageHandler>(this),
 		m_isIncognito);
 

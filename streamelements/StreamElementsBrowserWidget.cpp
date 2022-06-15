@@ -15,6 +15,12 @@
 
 /* ========================================================================= */
 
+std::recursive_mutex StreamElementsBrowserWidget::s_mutex;
+std::map<std::string, StreamElementsBrowserWidget *>
+	StreamElementsBrowserWidget::s_widgets;
+
+/* ========================================================================= */
+
 //
 // This block deals with a Win32-specific bug inherent to Qt 5.15.2:
 // when OBS loses input focus (app is deactivated), the currently
@@ -209,10 +215,13 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 						: executeJavaScriptCodeOnLoad),
 	  m_reloadPolicy(reloadPolicy),
 	  m_pendingLocationArea(locationArea == nullptr ? "" : locationArea),
-	  m_pendingId(id == nullptr ? "" : id),
+	  m_clientId(id == nullptr ? CreateGloballyUniqueIdString()
+				    : id),
 	  m_requestedApiMessageHandler(apiMessageHandler),
 	  m_isIncognito(isIncognito)
 {
+	std::lock_guard<decltype(s_mutex)> guard(s_mutex);
+
 	// Create native window
 	setAttribute(Qt::WA_NativeWindow);
 
@@ -231,8 +240,6 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 	setSizePolicy(policy);
 
 	RegisterAppActiveTrackerWidget(this);
-
-	m_clientId = CreateGloballyUniqueIdString();
 
 	if (m_requestedApiMessageHandler == nullptr) {
 		m_requestedApiMessageHandler =
@@ -366,13 +373,30 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 
 	this->layout()->addWidget(m_cefWidget);
 
-	// TODO: Add argument to change message bus destination flags
 	StreamElementsMessageBus::GetInstance()->AddListener(
 		m_clientId, m_messageDestinationFlags);
+
+	s_widgets[m_clientId] = this;
+}
+
+StreamElementsBrowserWidget*
+StreamElementsBrowserWidget::GetWidgetByMessageTargetId(std::string target)
+{
+	std::lock_guard<decltype(s_mutex)> guard(s_mutex);
+
+	if (s_widgets.count(target)) {
+		return s_widgets[target];
+	}
 }
 
 StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 {
+	std::lock_guard<decltype(s_mutex)> guard(s_mutex);
+
+	if (s_widgets.count(m_clientId)) {
+		s_widgets.erase(m_clientId);
+	}
+
 	UnregisterAppActiveTrackerWidget(this);
 
 	m_requestedApiMessageHandler = nullptr;

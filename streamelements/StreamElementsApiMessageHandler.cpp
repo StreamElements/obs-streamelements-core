@@ -1006,39 +1006,28 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getCurrentContainerProperties");
 	{
-		// TODO: Implement
-		/*
-		CefRefPtr<StreamElementsCefClient> client =
-			static_cast<StreamElementsCefClient *>(
-				browser->GetHost()->GetClient().get());
-
 		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
-		result->SetDictionary(d);
 
 		std::string dockingArea = "none";
-		std::string id = client->GetContainerId();
 
-		if (id.size()) {
-			StreamElementsBrowserWidgetManager::DockBrowserWidgetInfo
-				*info = StreamElementsGlobalStateManager::
-						GetInstance()
-							->GetWidgetManager()
-							->GetDockBrowserWidgetInfo(
-								id.c_str());
+		StreamElementsBrowserWidgetManager::DockBrowserWidgetInfo *info =
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetWidgetManager()
+				->GetDockBrowserWidgetInfo(target.c_str());
 
-			if (info) {
-				dockingArea = info->m_dockingArea;
+		if (info) {
+			dockingArea = info->m_dockingArea;
 
-				delete info;
-			}
+			d->SetString("url", info->m_url);
+
+			delete info;
 		}
 
-		d->SetString("id", id.c_str());
-		d->SetString("dockingArea", dockingArea.c_str());
-		d->SetString("url",
-			     browser->GetMainFrame()->GetURL().ToString());
+		d->SetString("id", target);
+		d->SetString("dockingArea", dockingArea);
 		d->SetString("theme", GetCurrentThemeName());
-		*/
+
+		result->SetDictionary(d);
 	}
 	API_HANDLER_END();
 
@@ -1718,40 +1707,6 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("setContainerForeignPopupWindowsProperties");
-	{
-		// TODO: Implement
-		/*
-		if (args->GetSize()) {
-			CefRefPtr<StreamElementsCefClient> client =
-				static_cast<StreamElementsCefClient *>(
-					browser->GetHost()->GetClient().get());
-
-			if (!!client.get()) {
-				result->SetBool(
-					client->DeserializeForeignPopupWindowsSettings(
-						args->GetValue(0)));
-			}
-		}*/
-	}
-	API_HANDLER_END();
-
-	API_HANDLER_BEGIN("getContainerForeignPopupWindowsProperties");
-	{
-		// TODO: Implement
-		/*
-		CefRefPtr<StreamElementsCefClient> client =
-			static_cast<StreamElementsCefClient *>(
-				browser->GetHost()->GetClient().get());
-
-		if (!!client.get()) {
-			client->SerializeForeignPopupWindowsSettings(result);
-		} else {
-			result->SetNull();
-		}*/
-	}
-	API_HANDLER_END();
-
 	API_HANDLER_BEGIN("getExternalSceneDataProviders");
 	{
 		StreamElementsGlobalStateManager::GetInstance()
@@ -2095,105 +2050,6 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 			result->SetBool(true);
 		}
-	}
-	API_HANDLER_END();
-
-	/*
-	API_HANDLER_BEGIN("getAllCookies");
-	{
-		// TODO: Check if this can be implemented at all
-		if (args->GetSize()) {
-			StreamElementsGlobalStateManager::GetInstance()
-				->SerializeCookies(args->GetValue(0), result);
-		} else {
-			StreamElementsGlobalStateManager::GetInstance()
-				->SerializeCookies(CefValue::Create(), result);
-		}
-	}
-	API_HANDLER_END();
-	*/
-
-	API_HANDLER_BEGIN("dispatchKeyboardEvent");
-	{
-		// TODO: Implement
-		/*
-		if (args->GetSize()) {
-			CefKeyEvent keyEvent;
-			if (DeserializeCefKeyEvent(args->GetValue(0),
-						   keyEvent)) {
-				browser->GetHost()->SendKeyEvent(keyEvent);
-
-				result->SetBool(true);
-			}
-		}
-		*/
-	}
-	API_HANDLER_END();
-
-	API_HANDLER_BEGIN("dispatchMouseEvent");
-	{
-		// TODO: Implement
-		/*
-		if (args->GetSize()) {
-			CefMouseEvent mouseEvent;
-			CefMouseEventType mouseEventType;
-
-			bool deserializeResult = true;
-
-			deserializeResult &= DeserializeCefMouseEventType(
-				args->GetValue(0), mouseEventType);
-
-			deserializeResult &= DeserializeCefMouseEvent(
-				args->GetValue(0), mouseEvent);
-
-			if (deserializeResult) {
-				switch (mouseEventType) {
-				case Down:
-				case Up:
-					CefBrowserHost::MouseButtonType mouseButton;
-
-					if (DeserializeCefMouseButtonType(
-						    args->GetValue(0), mouseButton)) {
-						int mouseEventCount =
-							DeserializeCefMouseEventCount(
-								args->GetValue(0),
-								mouseEventCount);
-
-						browser->GetHost()->SendMouseClickEvent(
-							mouseEvent, mouseButton,
-							mouseEventType == Up,
-							mouseEventCount);
-
-						result->SetBool(true);
-					}
-					break;
-				case Move:
-					browser->GetHost()->SendMouseMoveEvent(
-						mouseEvent, false);
-
-					result->SetBool(true);
-					break;
-				case Wheel:
-					CefMouseWheelEventArgs
-						mouseWheelEventArgs;
-					if (DeserializeCefMouseWheelEventArgs(
-						    args->GetValue(0),
-						    mouseWheelEventArgs)) {
-						browser->GetHost()
-							->SendMouseWheelEvent(
-								mouseEvent,
-								mouseWheelEventArgs
-									.deltaX,
-								mouseWheelEventArgs
-									.deltaY);
-
-						result->SetBool(true);
-					}
-					break;
-				}
-			}
-		}
-		*/
 	}
 	API_HANDLER_END();
 

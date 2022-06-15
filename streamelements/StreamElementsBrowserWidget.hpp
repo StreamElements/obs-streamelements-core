@@ -37,7 +37,6 @@ private:
 	std::string m_executeJavaScriptCodeOnLoad;
 	std::string m_reloadPolicy;
 	std::string m_pendingLocationArea;
-	std::string m_pendingId;
 	std::shared_ptr<StreamElementsApiMessageHandler> m_requestedApiMessageHandler;
 	StreamElementsMessageBus::message_destination_filter_flags_t
 		m_messageDestinationFlags;
@@ -190,5 +189,13 @@ private:
 	{
 		emit browserStateChanged();
 	}
+
+private:
+	static std::recursive_mutex s_mutex;
+	static std::map<std::string, StreamElementsBrowserWidget *> s_widgets;
+
+public:
+	static StreamElementsBrowserWidget *
+	GetWidgetByMessageTargetId(std::string target);
 };
 

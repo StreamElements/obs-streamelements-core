@@ -1092,7 +1092,7 @@ bool StreamElementsGlobalStateManager::DeserializePopupWindow(
 		auto browserWidget = new StreamElementsBrowserWidget(
 			nullptr, StreamElementsMessageBus::DEST_UI, url.c_str(),
 			executeJavaScriptOnLoad.c_str(),
-			"default", "popupWindow",
+			"reload", "popupWindow",
 			CreateGloballyUniqueIdString().c_str(),
 			apiMessageHandler, false);
 
