@@ -140,7 +140,7 @@ bool StreamElementsWebsocketApiServer::DispatchClientMessage(
 	auto val = CefValue::Create();
 	val->SetDictionary(payload);
 
-	DispatchClientMessage(source, target, "dispatch", val);
+	return DispatchClientMessage(source, target, "dispatch", val);
 }
 
 bool StreamElementsWebsocketApiServer::DispatchClientMessage(
@@ -251,7 +251,7 @@ bool StreamElementsWebsocketApiServer::DispatchJSEvent(std::string source,
 	args->SetString(0, event);
 	args->SetString(1, json);
 
-	DispatchClientMessage(source, target, msg);
+	return DispatchClientMessage(source, target, msg);
 }
 
 bool StreamElementsWebsocketApiServer::DispatchJSEvent(std::string source, std::string event,

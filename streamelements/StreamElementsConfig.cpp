@@ -18,6 +18,11 @@ StreamElementsConfig::~StreamElementsConfig()
 config_t* StreamElementsConfig::GetConfig()
 {
 	if (!m_config) {
+		char *configDir = obs_module_config_path("");
+		configDir[strlen(configDir) - 1] = 0; // remove last char
+		os_mkdirs(configDir);
+		bfree(configDir);
+
 		char *configPath = obs_module_config_path(CONFIG_FILE_NAME);
 		config_open(
 			&m_config, configPath,

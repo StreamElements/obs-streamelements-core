@@ -309,6 +309,11 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			int os_mkdirs_ret = os_mkdirs(storagePath.c_str());
 
 			m_cef = obs_browser_init_panel();
+			if (!m_cef) {
+				blog(LOG_ERROR,
+				     "obs-streamelements-core: obs_browser_init_panel() failed");
+				return;
+			}
 			if (!m_cef->initialized()) {
 				m_cef->init_browser();
 				m_cef->wait_for_browser_init();
