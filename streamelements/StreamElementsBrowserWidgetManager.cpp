@@ -577,16 +577,21 @@ bool StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 					dock->setFloating(!dock->isFloating());
 				});
 
-			closeAction->connect(closeAction, &QAction::triggered, [dock] {
+			closeAction->connect(closeAction, &QAction::triggered, [dock, widget] {
 				dock->setVisible(false);
 
 				StreamElementsGlobalStateManager::GetInstance()
 					->GetAnalyticsEventsManager()
-					->trackDockWidgetEvent(
-						dock, "Hide",
+					->trackEvent(
+						"se_live_dock_hide_click",
 						json11::Json::object{
-							{"actionSource",
-							 "Docking widget title bar"}});
+							{"type",
+							 "button_click"},
+							{"placement",
+							 "dock_widget_title"}},
+						json11::Json::array{json11::Json::array{
+							"dock_widget_title",
+							dock->windowTitle().toStdString()}});
 			});
 
 			auto windowTitle = new LocalTitleLabel(title);

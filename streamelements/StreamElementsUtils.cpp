@@ -2441,20 +2441,32 @@ bool DeserializeDocksMenu(QMenu& menu)
 					// Hide
 					StreamElementsGlobalStateManager::GetInstance()
 						->GetAnalyticsEventsManager()
-						->trackDockWidgetEvent(
-							dock, "Hide",
+						->trackEvent(
+							"se_live_dock_hide_click",
 							json11::Json::object{
-								{"actionSource",
-								 "Menu"}});
+								{"type",
+								 "button_click"},
+								{"placement",
+								 "menu"}
+							},
+							json11::Json::array{json11::Json::array{
+								"dock_widget_title",
+								dock->windowTitle().toStdString()}});
 				} else {
 					// Show
 					StreamElementsGlobalStateManager::GetInstance()
 						->GetAnalyticsEventsManager()
-						->trackDockWidgetEvent(
-							dock, "Show",
+						->trackEvent(
+							"se_live_dock_show_click",
 							json11::Json::object{
-								{"actionSource",
-								 "Menu"}});
+								{"type",
+								 "button_click"},
+								{"placement",
+								 "menu"}
+							},
+							json11::Json::array{json11::Json::array{
+								"dock_widget_title",
+								dock->windowTitle().toStdString()}});
 				}
 
 				dock->setVisible(!isVisible);

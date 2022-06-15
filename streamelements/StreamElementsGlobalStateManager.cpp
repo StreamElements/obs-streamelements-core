@@ -420,7 +420,12 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 						StreamElementsGlobalStateManager::GetInstance()
 							->GetAnalyticsEventsManager()
 							->trackEvent(
-								"Live Support Clicked");
+								"live_support_click",
+								json11::Json::object{
+									{"type",
+									 "button_click"},
+									{"placement",
+									 "live_support_button"}});
 
 						QUrl navigate_url = QUrl(
 							obs_module_text(
@@ -513,16 +518,20 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			m_menuManager->Update();
 
 			{
-				json11::Json::object eventProps = {
-					{"isOnBoarding", isOnBoarding},
-				};
+				json11::Json::object eventProps;
+				json11::Json::array fields =
+					json11::Json::array{};
+				fields.push_back(json11::Json::array{
+					"is_onboarding",
+					isOnBoarding ? "true" : "false"});
 				if (isOnBoarding) {
-					eventProps["onBoardingReason"] =
-						onBoardingReason.c_str();
+					fields.push_back(json11::Json::array{
+						"onboarding_reason",
+						onBoardingReason});
 				}
 
 				GetAnalyticsEventsManager()
-					->trackEvent("Initialized", eventProps);
+					->trackEvent("se_live_initialized", eventProps, fields);
 			}
 		});
 

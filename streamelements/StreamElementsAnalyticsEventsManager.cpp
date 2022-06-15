@@ -48,43 +48,65 @@ void StreamElementsAnalyticsEventsManager::Enqueue(task_queue_item_t task)
 	m_taskQueue.enqueue(task);
 }
 
-void StreamElementsAnalyticsEventsManager::AddRawEvent(const char* eventName, json11::Json::object propertiesJson, bool synchronous)
+void StreamElementsAnalyticsEventsManager::AddRawEvent(
+	const char *eventName, json11::Json::object propertiesJson,
+	json11::Json::array fieldsJson,
+	bool synchronous)
 {
 	if (!eventName) {
 		return;
 	}
 
-	json11::Json::object props = propertiesJson;
+	json11::Json::object props; //	= propertiesJson;
 
 	uint64_t now = os_gettime_ns();
 	uint64_t secondsSinceStart = (now - m_startTime) / (uint64_t)1000000000L;
 	uint64_t secondsSincePrevEvent = (now - m_prevEventTime) / (uint64_t)1000000000L;
 	m_prevEventTime = now;
 
-	props["appSessionId"] = m_sessionId;
-	props["eventReportedBy"] = "obsPlugin";
-	props["secondsSinceStart"] = (int)secondsSinceStart;
-	props["secondsSincePreviousEvent"] = (int)secondsSincePrevEvent;
-	props["cefVersion"] = GetCefVersionString();
-	props["pluginVersion"] = GetStreamElementsPluginVersionString();
-	props["obsVersion"] = obs_get_version_string();
+	char atoi_buf[32];
 
+	json11::Json::array fields = json11::Json::array{
+		json11::Json::array{"plugin_version",
+				    GetStreamElementsPluginVersionString()},
+		json11::Json::array{"obs_version", obs_get_version_string()},
+		json11::Json::array{"seconds_since_start",
+				    itoa(secondsSinceStart, atoi_buf, 10)},
+		json11::Json::array{"seconds_since_previous_event",
+				    itoa(secondsSincePrevEvent, atoi_buf, 10)}};
+
+	props["feature"] = "obs_primary_plugin";
+	props["name"] = eventName;
+	props["source"] = "obs_plugin";
+	props["placement"] = "obs";
+	props["sessionId"] = m_sessionId;
+	props["hostMachineId"] = m_identity;
+	props["_meta"] = json11::Json::object{{"mobile", false},
+					      {"platform", "desktop"},
 #ifdef WIN32
-    props["platform"] = "windows";
+					      {"os", "Windows"}
 #elif defined(__APPLE__)
-    props["platform"] = "macos";
+					      {"os", "macOS"}
 #elif defined(__linux__)
-    props["platform"] = "linux";
+					      {"os", "linux"}
+#else
+					      {"os", "unknown"}
 #endif
-
-	json11::Json json = json11::Json::object{
-		{ "app_id", m_appId },
-		{ "event", eventName },
-		{ "identity", m_identity.c_str() },
-		{ "properties", props }
 	};
 
-	std::string httpRequestBody = json.dump();
+	for (auto kv : propertiesJson) {
+		props[kv.first] = kv.second;
+	}
+
+	for (auto item : fieldsJson) {
+		fields.push_back(item);
+	}
+
+	props["fields"] = fields;
+
+	json11::Json json = props;
+
+	std::string httpRequestBody = "[" + json.dump() + "]";
 
 	if (!synchronous) {
 		Enqueue([=]() {
@@ -95,7 +117,7 @@ void StreamElementsAnalyticsEventsManager::AddRawEvent(const char* eventName, js
 					"Content-Type", "application/json"));
 
 			HttpPost(
-				"https://heapanalytics.com/api/track",
+				"https://api.streamelements.com/science/insert/obslive",
 				headers,
 				(void*)httpRequestBody.c_str(),
 				httpRequestBody.size(),
@@ -111,7 +133,7 @@ void StreamElementsAnalyticsEventsManager::AddRawEvent(const char* eventName, js
 				"Content-Type", "application/json"));
 
 		HttpPost(
-			"https://heapanalytics.com/api/track",
+			"https://api.streamelements.com/science/insert/obslive",
 			headers,
 			(void*)httpRequestBody.c_str(),
 			httpRequestBody.size(),

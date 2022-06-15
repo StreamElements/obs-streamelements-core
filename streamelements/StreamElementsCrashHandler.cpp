@@ -419,9 +419,9 @@ static void main_crash_handler(const char *format, va_list args, void *param)
 	StreamElementsGlobalStateManager::GetInstance()
 		->GetAnalyticsEventsManager()
 		->trackSynchronousEvent(
-			"OBS Studio Crashed",
-			json11::Json::object{{"crashReportText",
-					      s_crashDumpFromObs.c_str()}});
+			"obs_crashed",
+			json11::Json::object{{"message", s_crashDumpFromObs},
+					     {"placement", "obs"}});
 
 	if (s_insideExceptionFilter == 0) {
 		int ret = MessageBoxA(NULL, CRASH_MESSAGE, "OBS has crashed!",
