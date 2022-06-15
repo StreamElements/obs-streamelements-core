@@ -17,17 +17,16 @@ void StreamElementsCleanupManager::AddPath(std::string path)
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
-	m_paths.push_back(path);
+	m_paths[path] = true;
 }
 
 void StreamElementsCleanupManager::Clean()
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
-	if (m_paths.empty())
-		return;
+	for (auto kv : m_paths) {
+		std::string path = kv.first;
 
-	for (auto path : m_paths) {
 		if (!os_file_exists(path.c_str()))
 			continue;
 

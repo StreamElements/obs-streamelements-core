@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include <vector>
+#include <map>
 #include <mutex>
 
 class StreamElementsCleanupManager {
@@ -16,7 +16,7 @@ public:
 	void Clean();
 
 private:
-	std::vector<std::string> m_paths;
+	std::map<std::string,bool> m_paths;
 
 	std::mutex m_mutex;
 };

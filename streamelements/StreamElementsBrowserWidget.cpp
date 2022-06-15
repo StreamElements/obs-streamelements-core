@@ -5,6 +5,8 @@
 
 #include "../panel/browser-panel.hpp"
 
+extern "C" int getpid(void);
+
 #ifdef USE_QT_LOOP
 #include "browser-app.hpp"
 #endif
@@ -263,11 +265,33 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 								   0);
 			});
 
-	m_cefWidget = StreamElementsGlobalStateManager::GetInstance()
-		->GetCef()->create_widget(
-			nullptr,
-			GetInitialPageURLInternal(),
-			StreamElementsGlobalStateManager::GetInstance()->GetCookieManager());
+	if (m_isIncognito) {
+		char cookie_store_name[128];
+
+		sprintf(cookie_store_name, "anonymous_%d.tmp", getpid());
+
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetCleanupManager()
+			->AddPath(obs_module_config_path(cookie_store_name));
+
+		m_separateCookieManager =
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetCef()
+				->create_cookie_manager(cookie_store_name, false);
+
+		m_separateCookieManager->DeleteCookies("", "");
+	}
+
+	m_cefWidget =
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetCef()
+			->create_widget(
+				nullptr, GetInitialPageURLInternal(),
+				m_separateCookieManager
+					? m_separateCookieManager
+					: StreamElementsGlobalStateManager::
+						  GetInstance()
+							  ->GetCookieManager());
 
 	char portBuffer[8];
 
@@ -400,6 +424,14 @@ StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 	UnregisterAppActiveTrackerWidget(this);
 
 	m_requestedApiMessageHandler = nullptr;
+
+	m_cefWidget->closeBrowser();
+
+	if (m_separateCookieManager) {
+		m_separateCookieManager->DeleteCookies("", "");
+
+		delete m_separateCookieManager;
+	}
 }
 
 std::string StreamElementsBrowserWidget::GetInitialPageURLInternal()

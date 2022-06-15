@@ -25,8 +25,9 @@
 #endif
 
 class QCefWidget;
+class QCefCookieManager;
 
-class StreamElementsBrowserWidget:
+class StreamElementsBrowserWidget :
 	public QWidget
 
 {
@@ -71,6 +72,7 @@ private:
 	std::string GetInitialPageURLInternal();
 
 private:
+	QCefCookieManager *m_separateCookieManager = nullptr;
 	QCefWidget *m_cefWidget = nullptr;
 	std::string m_clientId;
 
