@@ -2,7 +2,7 @@
 
 #include "StreamElementsLocalFilesystemHttpServer.hpp"
 
-#include "../panel/browser-panel.hpp"
+#include "../../obs-browser/panel/browser-panel.hpp"
 
 struct QCef;
 struct QCefCookieManager;

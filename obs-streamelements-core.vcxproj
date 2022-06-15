@@ -1,0 +1,1028 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="16.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+  </PropertyGroup>
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="MinSizeRel|x64">
+      <Configuration>MinSizeRel</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="RelWithDebInfo|x64">
+      <Configuration>RelWithDebInfo</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{8EB800CC-48ED-3246-9F0B-5A6F078705D0}</ProjectGuid>
+    <WindowsTargetPlatformVersion>10.0.22000.0</WindowsTargetPlatformVersion>
+    <Keyword>Win32Proj</Keyword>
+    <Platform>x64</Platform>
+    <ProjectName>obs-streamelements-core</ProjectName>
+    <VCProjectUpgraderObjectName>NoUpgrade</VCProjectUpgraderObjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v142</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v142</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v142</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v142</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.20506.1</_ProjectFileVersion>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\Debug\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">obs-streamelements-core.dir\Debug\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">obs-streamelements-core</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.dll</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\Release\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">obs-streamelements-core.dir\Release\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">obs-streamelements-core</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.dll</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\MinSizeRel\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">obs-streamelements-core.dir\MinSizeRel\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">obs-streamelements-core</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">.dll</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\RelWithDebInfo\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">obs-streamelements-core.dir\RelWithDebInfo\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">obs-streamelements-core</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">.dll</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">false</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</GenerateManifest>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\obs-streamelements-core_autogen\include_Debug;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps;C:\Shared\StreamElements\Dev\obs-studio\libobs;C:\Shared\StreamElements\Dev\obs-studio\config;C:\Shared\StreamElements\Dev\obs-studio\deps\w32-pthreads;C:\Shared\StreamElements\Dev\obs-studio\UI\obs-frontend-api;C:\Shared\StreamElements\Dev\obs-studio-deps\win64\include;C:\Shared\StreamElements\Dev\BugSplat\inc;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\angelscript\include;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\add_on;C:\Qt\5.15.2\msvc2019_64\include;C:\Qt\5.15.2\msvc2019_64\include\QtCore;C:\Qt\5.15.2\msvc2019_64\.\mkspecs\win32-msvc;C:\Qt\5.15.2\msvc2019_64\include\QtWidgets;C:\Qt\5.15.2\msvc2019_64\include\QtGui;C:\Qt\5.15.2\msvc2019_64\include\QtANGLE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DisableSpecificWarnings>4127;4201;4456;4457;4458;4459;4595</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>Disabled</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level4</WarningLevel>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;DEBUG=1;_DEBUG=1;UNICODE;_UNICODE;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;HAVE_OBSCONFIG_H;QT_CORE_LIB;QT_WIDGETS_LIB;QT_GUI_LIB;CMAKE_INTDIR="Debug";obs_streamelements_core_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;DEBUG=1;_DEBUG=1;UNICODE;_UNICODE;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;HAVE_OBSCONFIG_H;QT_CORE_LIB;QT_WIDGETS_LIB;QT_GUI_LIB;CMAKE_INTDIR=\"Debug\";obs_streamelements_core_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\obs-streamelements-core_autogen\include_Debug;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps;C:\Shared\StreamElements\Dev\obs-studio\libobs;C:\Shared\StreamElements\Dev\obs-studio\config;C:\Shared\StreamElements\Dev\obs-studio\deps\w32-pthreads;C:\Shared\StreamElements\Dev\obs-studio\UI\obs-frontend-api;C:\Shared\StreamElements\Dev\obs-studio-deps\win64\include;C:\Shared\StreamElements\Dev\BugSplat\inc;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\angelscript\include;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\add_on;C:\Qt\5.15.2\msvc2019_64\include;C:\Qt\5.15.2\msvc2019_64\include\QtCore;C:\Qt\5.15.2\msvc2019_64\.\mkspecs\win32-msvc;C:\Qt\5.15.2\msvc2019_64\include\QtWidgets;C:\Qt\5.15.2\msvc2019_64\include\QtGui;C:\Qt\5.15.2\msvc2019_64\include\QtANGLE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\obs-streamelements-core_autogen\include_Debug;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps;C:\Shared\StreamElements\Dev\obs-studio\libobs;C:\Shared\StreamElements\Dev\obs-studio\config;C:\Shared\StreamElements\Dev\obs-studio\deps\w32-pthreads;C:\Shared\StreamElements\Dev\obs-studio\UI\obs-frontend-api;C:\Shared\StreamElements\Dev\obs-studio-deps\win64\include;C:\Shared\StreamElements\Dev\BugSplat\inc;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\angelscript\include;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\add_on;C:\Qt\5.15.2\msvc2019_64\include;C:\Qt\5.15.2\msvc2019_64\include\QtCore;C:\Qt\5.15.2\msvc2019_64\.\mkspecs\win32-msvc;C:\Qt\5.15.2\msvc2019_64\include\QtWidgets;C:\Qt\5.15.2\msvc2019_64\include\QtGui;C:\Qt\5.15.2\msvc2019_64\include\QtANGLE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PreBuildEvent>
+      <Message>Automatic MOC and UIC for target obs-streamelements-core</Message>
+      <Command>setlocal
+cd C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E cmake_autogen C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeFiles/obs-streamelements-core_autogen.dir/AutogenInfo.json Debug
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PreBuildEvent>
+    <PostBuildEvent>
+      <Message>										</Message>
+      <Command>setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/streamelements/qt.conf C:/Shared/StreamElements/Dev/obs-studio/rundir/Debug/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BsSndRpt64.exe C:/Shared/StreamElements/Dev/obs-studio/rundir/Debug/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BugSplat64.dll C:/Shared/StreamElements/Dev/obs-studio/rundir/Debug/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BugSplat64.pdb C:/Shared/StreamElements/Dev/obs-studio/rundir/Debug/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BugSplatHD64.exe C:/Shared/StreamElements/Dev/obs-studio/rundir/Debug/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/bugsplathd64.pdb C:/Shared/StreamElements/Dev/obs-studio/rundir/Debug/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BugSplatRc64.dll C:/Shared/StreamElements/Dev/obs-studio/rundir/Debug/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/Debug/obs-streamelements-core.dll C:/Shared/StreamElements/Dev/obs-studio/rundir/Debug/obs-plugins/64bit/obs-streamelements-core.dll
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -DCONFIG=Debug -DFNAME=obs-streamelements-core.dll -DINPUT=C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/Debug -DOUTPUT=C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/pdbs -P C:/Shared/StreamElements/Dev/obs-studio/cmake/copy_on_debug_helper.cmake
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -DCONFIG=Debug -DFNAME=obs-streamelements-core.dll -DINPUT=C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/Debug -DOUTPUT=C:/Shared/StreamElements/Dev/obs-studio/rundir/Debug/obs-plugins/64bit -P C:/Shared/StreamElements/Dev/obs-studio/cmake/copy_on_debug_helper.cmake
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/data C:/Shared/StreamElements/Dev/obs-studio/rundir/Debug/data/obs-plugins/obs-streamelements-core
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PostBuildEvent>
+    <Link>
+      <AdditionalDependencies>..\..\UI\obs-frontend-api\Debug\obs-frontend-api.lib;C:\Shared\StreamElements\Dev\obs-studio-deps\win64\include\..\bin\libcurl.lib;C:\Qt\5.15.2\msvc2019_64\lib\Qt5Widgetsd.lib;..\..\libobs\Debug\obs.lib;..\..\deps\w32-pthreads\Debug\w32-pthreads.lib;C:\Qt\5.15.2\msvc2019_64\lib\Qt5Guid.lib;C:\Qt\5.15.2\msvc2019_64\lib\Qt5Cored.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64 /IGNORE:4099</AdditionalOptions>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImportLibrary>C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/Debug/obs-streamelements-core.lib</ImportLibrary>
+      <OptimizeReferences>true</OptimizeReferences>
+      <ProgramDataBaseFile>C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/Debug/obs-streamelements-core.pdb</ProgramDataBaseFile>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\obs-streamelements-core_autogen\include_Release;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps;C:\Shared\StreamElements\Dev\obs-studio\libobs;C:\Shared\StreamElements\Dev\obs-studio\config;C:\Shared\StreamElements\Dev\obs-studio\deps\w32-pthreads;C:\Shared\StreamElements\Dev\obs-studio\UI\obs-frontend-api;C:\Shared\StreamElements\Dev\obs-studio-deps\win64\include;C:\Shared\StreamElements\Dev\BugSplat\inc;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\angelscript\include;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\add_on;C:\Qt\5.15.2\msvc2019_64\include;C:\Qt\5.15.2\msvc2019_64\include\QtCore;C:\Qt\5.15.2\msvc2019_64\.\mkspecs\win32-msvc;C:\Qt\5.15.2\msvc2019_64\include\QtWidgets;C:\Qt\5.15.2\msvc2019_64\include\QtGui;C:\Qt\5.15.2\msvc2019_64\include\QtANGLE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <DisableSpecificWarnings>4127;4201;4456;4457;4458;4459;4595</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level4</WarningLevel>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;NDEBUG;UNICODE;_UNICODE;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;HAVE_OBSCONFIG_H;QT_CORE_LIB;QT_NO_DEBUG;QT_WIDGETS_LIB;QT_GUI_LIB;CMAKE_INTDIR="Release";obs_streamelements_core_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;NDEBUG;UNICODE;_UNICODE;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;HAVE_OBSCONFIG_H;QT_CORE_LIB;QT_NO_DEBUG;QT_WIDGETS_LIB;QT_GUI_LIB;CMAKE_INTDIR=\"Release\";obs_streamelements_core_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\obs-streamelements-core_autogen\include_Release;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps;C:\Shared\StreamElements\Dev\obs-studio\libobs;C:\Shared\StreamElements\Dev\obs-studio\config;C:\Shared\StreamElements\Dev\obs-studio\deps\w32-pthreads;C:\Shared\StreamElements\Dev\obs-studio\UI\obs-frontend-api;C:\Shared\StreamElements\Dev\obs-studio-deps\win64\include;C:\Shared\StreamElements\Dev\BugSplat\inc;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\angelscript\include;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\add_on;C:\Qt\5.15.2\msvc2019_64\include;C:\Qt\5.15.2\msvc2019_64\include\QtCore;C:\Qt\5.15.2\msvc2019_64\.\mkspecs\win32-msvc;C:\Qt\5.15.2\msvc2019_64\include\QtWidgets;C:\Qt\5.15.2\msvc2019_64\include\QtGui;C:\Qt\5.15.2\msvc2019_64\include\QtANGLE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\obs-streamelements-core_autogen\include_Release;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps;C:\Shared\StreamElements\Dev\obs-studio\libobs;C:\Shared\StreamElements\Dev\obs-studio\config;C:\Shared\StreamElements\Dev\obs-studio\deps\w32-pthreads;C:\Shared\StreamElements\Dev\obs-studio\UI\obs-frontend-api;C:\Shared\StreamElements\Dev\obs-studio-deps\win64\include;C:\Shared\StreamElements\Dev\BugSplat\inc;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\angelscript\include;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\add_on;C:\Qt\5.15.2\msvc2019_64\include;C:\Qt\5.15.2\msvc2019_64\include\QtCore;C:\Qt\5.15.2\msvc2019_64\.\mkspecs\win32-msvc;C:\Qt\5.15.2\msvc2019_64\include\QtWidgets;C:\Qt\5.15.2\msvc2019_64\include\QtGui;C:\Qt\5.15.2\msvc2019_64\include\QtANGLE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PreBuildEvent>
+      <Message>Automatic MOC and UIC for target obs-streamelements-core</Message>
+      <Command>setlocal
+cd C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E cmake_autogen C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeFiles/obs-streamelements-core_autogen.dir/AutogenInfo.json Release
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PreBuildEvent>
+    <PostBuildEvent>
+      <Message>										</Message>
+      <Command>setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/streamelements/qt.conf C:/Shared/StreamElements/Dev/obs-studio/rundir/Release/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BsSndRpt64.exe C:/Shared/StreamElements/Dev/obs-studio/rundir/Release/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BugSplat64.dll C:/Shared/StreamElements/Dev/obs-studio/rundir/Release/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BugSplat64.pdb C:/Shared/StreamElements/Dev/obs-studio/rundir/Release/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BugSplatHD64.exe C:/Shared/StreamElements/Dev/obs-studio/rundir/Release/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/bugsplathd64.pdb C:/Shared/StreamElements/Dev/obs-studio/rundir/Release/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BugSplatRc64.dll C:/Shared/StreamElements/Dev/obs-studio/rundir/Release/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/Release/obs-streamelements-core.dll C:/Shared/StreamElements/Dev/obs-studio/rundir/Release/obs-plugins/64bit/obs-streamelements-core.dll
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -DCONFIG=Release -DFNAME=obs-streamelements-core.dll -DINPUT=C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/Release -DOUTPUT=C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/pdbs -P C:/Shared/StreamElements/Dev/obs-studio/cmake/copy_on_debug_helper.cmake
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -DCONFIG=Release -DFNAME=obs-streamelements-core.dll -DINPUT=C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/Release -DOUTPUT=C:/Shared/StreamElements/Dev/obs-studio/rundir/Release/obs-plugins/64bit -P C:/Shared/StreamElements/Dev/obs-studio/cmake/copy_on_debug_helper.cmake
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/data C:/Shared/StreamElements/Dev/obs-studio/rundir/Release/data/obs-plugins/obs-streamelements-core
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PostBuildEvent>
+    <Link>
+      <AdditionalDependencies>..\..\UI\obs-frontend-api\Release\obs-frontend-api.lib;C:\Shared\StreamElements\Dev\obs-studio-deps\win64\include\..\bin\libcurl.lib;C:\Shared\StreamElements\Dev\BugSplat\lib64\BugSplat64.lib;C:\Qt\5.15.2\msvc2019_64\lib\Qt5Widgets.lib;..\..\libobs\Release\obs.lib;..\..\deps\w32-pthreads\Release\w32-pthreads.lib;C:\Qt\5.15.2\msvc2019_64\lib\Qt5Gui.lib;C:\Qt\5.15.2\msvc2019_64\lib\Qt5Core.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64 /IGNORE:4099</AdditionalOptions>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImportLibrary>C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/Release/obs-streamelements-core.lib</ImportLibrary>
+      <OptimizeReferences>true</OptimizeReferences>
+      <ProgramDataBaseFile>C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/Release/obs-streamelements-core.pdb</ProgramDataBaseFile>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\obs-streamelements-core_autogen\include_MinSizeRel;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps;C:\Shared\StreamElements\Dev\obs-studio\libobs;C:\Shared\StreamElements\Dev\obs-studio\config;C:\Shared\StreamElements\Dev\obs-studio\deps\w32-pthreads;C:\Shared\StreamElements\Dev\obs-studio\UI\obs-frontend-api;C:\Shared\StreamElements\Dev\obs-studio-deps\win64\include;C:\Shared\StreamElements\Dev\BugSplat\inc;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\angelscript\include;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\add_on;C:\Qt\5.15.2\msvc2019_64\include;C:\Qt\5.15.2\msvc2019_64\include\QtCore;C:\Qt\5.15.2\msvc2019_64\.\mkspecs\win32-msvc;C:\Qt\5.15.2\msvc2019_64\include\QtWidgets;C:\Qt\5.15.2\msvc2019_64\include\QtGui;C:\Qt\5.15.2\msvc2019_64\include\QtANGLE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <DisableSpecificWarnings>4127;4201;4456;4457;4458;4459;4595</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>MinSpace</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level4</WarningLevel>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;NDEBUG;UNICODE;_UNICODE;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;HAVE_OBSCONFIG_H;QT_CORE_LIB;QT_NO_DEBUG;QT_WIDGETS_LIB;QT_GUI_LIB;CMAKE_INTDIR="MinSizeRel";obs_streamelements_core_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;NDEBUG;UNICODE;_UNICODE;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;HAVE_OBSCONFIG_H;QT_CORE_LIB;QT_NO_DEBUG;QT_WIDGETS_LIB;QT_GUI_LIB;CMAKE_INTDIR=\"MinSizeRel\";obs_streamelements_core_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\obs-streamelements-core_autogen\include_MinSizeRel;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps;C:\Shared\StreamElements\Dev\obs-studio\libobs;C:\Shared\StreamElements\Dev\obs-studio\config;C:\Shared\StreamElements\Dev\obs-studio\deps\w32-pthreads;C:\Shared\StreamElements\Dev\obs-studio\UI\obs-frontend-api;C:\Shared\StreamElements\Dev\obs-studio-deps\win64\include;C:\Shared\StreamElements\Dev\BugSplat\inc;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\angelscript\include;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\add_on;C:\Qt\5.15.2\msvc2019_64\include;C:\Qt\5.15.2\msvc2019_64\include\QtCore;C:\Qt\5.15.2\msvc2019_64\.\mkspecs\win32-msvc;C:\Qt\5.15.2\msvc2019_64\include\QtWidgets;C:\Qt\5.15.2\msvc2019_64\include\QtGui;C:\Qt\5.15.2\msvc2019_64\include\QtANGLE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\obs-streamelements-core_autogen\include_MinSizeRel;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps;C:\Shared\StreamElements\Dev\obs-studio\libobs;C:\Shared\StreamElements\Dev\obs-studio\config;C:\Shared\StreamElements\Dev\obs-studio\deps\w32-pthreads;C:\Shared\StreamElements\Dev\obs-studio\UI\obs-frontend-api;C:\Shared\StreamElements\Dev\obs-studio-deps\win64\include;C:\Shared\StreamElements\Dev\BugSplat\inc;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\angelscript\include;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\add_on;C:\Qt\5.15.2\msvc2019_64\include;C:\Qt\5.15.2\msvc2019_64\include\QtCore;C:\Qt\5.15.2\msvc2019_64\.\mkspecs\win32-msvc;C:\Qt\5.15.2\msvc2019_64\include\QtWidgets;C:\Qt\5.15.2\msvc2019_64\include\QtGui;C:\Qt\5.15.2\msvc2019_64\include\QtANGLE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PreBuildEvent>
+      <Message>Automatic MOC and UIC for target obs-streamelements-core</Message>
+      <Command>setlocal
+cd C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E cmake_autogen C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeFiles/obs-streamelements-core_autogen.dir/AutogenInfo.json MinSizeRel
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PreBuildEvent>
+    <PostBuildEvent>
+      <Message>										</Message>
+      <Command>setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/streamelements/qt.conf C:/Shared/StreamElements/Dev/obs-studio/rundir/MinSizeRel/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BsSndRpt64.exe C:/Shared/StreamElements/Dev/obs-studio/rundir/MinSizeRel/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BugSplat64.dll C:/Shared/StreamElements/Dev/obs-studio/rundir/MinSizeRel/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BugSplat64.pdb C:/Shared/StreamElements/Dev/obs-studio/rundir/MinSizeRel/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BugSplatHD64.exe C:/Shared/StreamElements/Dev/obs-studio/rundir/MinSizeRel/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/bugsplathd64.pdb C:/Shared/StreamElements/Dev/obs-studio/rundir/MinSizeRel/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BugSplatRc64.dll C:/Shared/StreamElements/Dev/obs-studio/rundir/MinSizeRel/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/MinSizeRel/obs-streamelements-core.dll C:/Shared/StreamElements/Dev/obs-studio/rundir/MinSizeRel/obs-plugins/64bit/obs-streamelements-core.dll
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -DCONFIG=MinSizeRel -DFNAME=obs-streamelements-core.dll -DINPUT=C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/MinSizeRel -DOUTPUT=C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/pdbs -P C:/Shared/StreamElements/Dev/obs-studio/cmake/copy_on_debug_helper.cmake
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -DCONFIG=MinSizeRel -DFNAME=obs-streamelements-core.dll -DINPUT=C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/MinSizeRel -DOUTPUT=C:/Shared/StreamElements/Dev/obs-studio/rundir/MinSizeRel/obs-plugins/64bit -P C:/Shared/StreamElements/Dev/obs-studio/cmake/copy_on_debug_helper.cmake
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/data C:/Shared/StreamElements/Dev/obs-studio/rundir/MinSizeRel/data/obs-plugins/obs-streamelements-core
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PostBuildEvent>
+    <Link>
+      <AdditionalDependencies>..\..\UI\obs-frontend-api\MinSizeRel\obs-frontend-api.lib;C:\Shared\StreamElements\Dev\obs-studio-deps\win64\include\..\bin\libcurl.lib;C:\Shared\StreamElements\Dev\BugSplat\lib64\BugSplat64.lib;C:\Qt\5.15.2\msvc2019_64\lib\Qt5Widgets.lib;..\..\libobs\MinSizeRel\obs.lib;..\..\deps\w32-pthreads\MinSizeRel\w32-pthreads.lib;C:\Qt\5.15.2\msvc2019_64\lib\Qt5Gui.lib;C:\Qt\5.15.2\msvc2019_64\lib\Qt5Core.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64 /IGNORE:4099</AdditionalOptions>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImportLibrary>C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/MinSizeRel/obs-streamelements-core.lib</ImportLibrary>
+      <OptimizeReferences>true</OptimizeReferences>
+      <ProgramDataBaseFile>C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/MinSizeRel/obs-streamelements-core.pdb</ProgramDataBaseFile>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\obs-streamelements-core_autogen\include_RelWithDebInfo;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps;C:\Shared\StreamElements\Dev\obs-studio\libobs;C:\Shared\StreamElements\Dev\obs-studio\config;C:\Shared\StreamElements\Dev\obs-studio\deps\w32-pthreads;C:\Shared\StreamElements\Dev\obs-studio\UI\obs-frontend-api;C:\Shared\StreamElements\Dev\obs-studio-deps\win64\include;C:\Shared\StreamElements\Dev\BugSplat\inc;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\angelscript\include;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\add_on;C:\Qt\5.15.2\msvc2019_64\include;C:\Qt\5.15.2\msvc2019_64\include\QtCore;C:\Qt\5.15.2\msvc2019_64\.\mkspecs\win32-msvc;C:\Qt\5.15.2\msvc2019_64\include\QtWidgets;C:\Qt\5.15.2\msvc2019_64\include\QtGui;C:\Qt\5.15.2\msvc2019_64\include\QtANGLE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DisableSpecificWarnings>4127;4201;4456;4457;4458;4459;4595</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level4</WarningLevel>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;NDEBUG;UNICODE;_UNICODE;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;HAVE_OBSCONFIG_H;QT_CORE_LIB;QT_NO_DEBUG;QT_WIDGETS_LIB;QT_GUI_LIB;CMAKE_INTDIR="RelWithDebInfo";obs_streamelements_core_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;NDEBUG;UNICODE;_UNICODE;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;HAVE_OBSCONFIG_H;QT_CORE_LIB;QT_NO_DEBUG;QT_WIDGETS_LIB;QT_GUI_LIB;CMAKE_INTDIR=\"RelWithDebInfo\";obs_streamelements_core_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\obs-streamelements-core_autogen\include_RelWithDebInfo;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps;C:\Shared\StreamElements\Dev\obs-studio\libobs;C:\Shared\StreamElements\Dev\obs-studio\config;C:\Shared\StreamElements\Dev\obs-studio\deps\w32-pthreads;C:\Shared\StreamElements\Dev\obs-studio\UI\obs-frontend-api;C:\Shared\StreamElements\Dev\obs-studio-deps\win64\include;C:\Shared\StreamElements\Dev\BugSplat\inc;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\angelscript\include;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\add_on;C:\Qt\5.15.2\msvc2019_64\include;C:\Qt\5.15.2\msvc2019_64\include\QtCore;C:\Qt\5.15.2\msvc2019_64\.\mkspecs\win32-msvc;C:\Qt\5.15.2\msvc2019_64\include\QtWidgets;C:\Qt\5.15.2\msvc2019_64\include\QtGui;C:\Qt\5.15.2\msvc2019_64\include\QtANGLE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\obs-streamelements-core_autogen\include_RelWithDebInfo;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps;C:\Shared\StreamElements\Dev\obs-studio\libobs;C:\Shared\StreamElements\Dev\obs-studio\config;C:\Shared\StreamElements\Dev\obs-studio\deps\w32-pthreads;C:\Shared\StreamElements\Dev\obs-studio\UI\obs-frontend-api;C:\Shared\StreamElements\Dev\obs-studio-deps\win64\include;C:\Shared\StreamElements\Dev\BugSplat\inc;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\angelscript\include;C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\add_on;C:\Qt\5.15.2\msvc2019_64\include;C:\Qt\5.15.2\msvc2019_64\include\QtCore;C:\Qt\5.15.2\msvc2019_64\.\mkspecs\win32-msvc;C:\Qt\5.15.2\msvc2019_64\include\QtWidgets;C:\Qt\5.15.2\msvc2019_64\include\QtGui;C:\Qt\5.15.2\msvc2019_64\include\QtANGLE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PreBuildEvent>
+      <Message>Automatic MOC and UIC for target obs-streamelements-core</Message>
+      <Command>setlocal
+cd C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+"C:\Program Files\CMake\bin\cmake.exe" -E cmake_autogen C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeFiles/obs-streamelements-core_autogen.dir/AutogenInfo.json RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PreBuildEvent>
+    <PostBuildEvent>
+      <Message>										</Message>
+      <Command>setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/streamelements/qt.conf C:/Shared/StreamElements/Dev/obs-studio/rundir/RelWithDebInfo/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BsSndRpt64.exe C:/Shared/StreamElements/Dev/obs-studio/rundir/RelWithDebInfo/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BugSplat64.dll C:/Shared/StreamElements/Dev/obs-studio/rundir/RelWithDebInfo/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BugSplat64.pdb C:/Shared/StreamElements/Dev/obs-studio/rundir/RelWithDebInfo/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BugSplatHD64.exe C:/Shared/StreamElements/Dev/obs-studio/rundir/RelWithDebInfo/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/bugsplathd64.pdb C:/Shared/StreamElements/Dev/obs-studio/rundir/RelWithDebInfo/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/BugSplat/bin64/BugSplatRc64.dll C:/Shared/StreamElements/Dev/obs-studio/rundir/RelWithDebInfo/bin/64bit/
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/RelWithDebInfo/obs-streamelements-core.dll C:/Shared/StreamElements/Dev/obs-studio/rundir/RelWithDebInfo/obs-plugins/64bit/obs-streamelements-core.dll
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -DCONFIG=RelWithDebInfo -DFNAME=obs-streamelements-core.dll -DINPUT=C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/RelWithDebInfo -DOUTPUT=C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/pdbs -P C:/Shared/StreamElements/Dev/obs-studio/cmake/copy_on_debug_helper.cmake
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -DCONFIG=RelWithDebInfo -DFNAME=obs-streamelements-core.dll -DINPUT=C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/RelWithDebInfo -DOUTPUT=C:/Shared/StreamElements/Dev/obs-studio/rundir/RelWithDebInfo/obs-plugins/64bit -P C:/Shared/StreamElements/Dev/obs-studio/cmake/copy_on_debug_helper.cmake
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -E copy_directory C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/data C:/Shared/StreamElements/Dev/obs-studio/rundir/RelWithDebInfo/data/obs-plugins/obs-streamelements-core
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PostBuildEvent>
+    <Link>
+      <AdditionalDependencies>..\..\UI\obs-frontend-api\RelWithDebInfo\obs-frontend-api.lib;C:\Shared\StreamElements\Dev\obs-studio-deps\win64\include\..\bin\libcurl.lib;C:\Shared\StreamElements\Dev\BugSplat\lib64\BugSplat64.lib;C:\Qt\5.15.2\msvc2019_64\lib\Qt5Widgets.lib;..\..\libobs\RelWithDebInfo\obs.lib;..\..\deps\w32-pthreads\RelWithDebInfo\w32-pthreads.lib;C:\Qt\5.15.2\msvc2019_64\lib\Qt5Gui.lib;C:\Qt\5.15.2\msvc2019_64\lib\Qt5Core.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64 /IGNORE:4099</AdditionalOptions>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImportLibrary>C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/RelWithDebInfo/obs-streamelements-core.lib</ImportLibrary>
+      <OptimizeReferences>true</OptimizeReferences>
+      <ProgramDataBaseFile>C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/RelWithDebInfo/obs-streamelements-core.pdb</ProgramDataBaseFile>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\streamelements.qrc">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Generating qrc_streamelements.cpp</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+C:\Qt\5.15.2\msvc2019_64\bin\rcc.exe --name streamelements --output C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/qrc_streamelements.cpp C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/streamelements/streamelements.qrc
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\logo.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\icon.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\icon.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\logo_137x30.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\logo_100x30.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\back.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\forward.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\home.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\reload.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\reload.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\close.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\dockToggle.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\html\error.html;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\html\loading.html;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\streamelements.qrc.depends;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\qrc_streamelements.cpp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Generating qrc_streamelements.cpp</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">setlocal
+C:\Qt\5.15.2\msvc2019_64\bin\rcc.exe --name streamelements --output C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/qrc_streamelements.cpp C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/streamelements/streamelements.qrc
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\logo.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\icon.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\icon.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\logo_137x30.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\logo_100x30.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\back.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\forward.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\home.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\reload.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\reload.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\close.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\dockToggle.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\html\error.html;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\html\loading.html;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\streamelements.qrc.depends;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\qrc_streamelements.cpp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Generating qrc_streamelements.cpp</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">setlocal
+C:\Qt\5.15.2\msvc2019_64\bin\rcc.exe --name streamelements --output C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/qrc_streamelements.cpp C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/streamelements/streamelements.qrc
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\logo.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\icon.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\icon.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\logo_137x30.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\logo_100x30.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\back.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\forward.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\home.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\reload.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\reload.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\close.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\dockToggle.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\html\error.html;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\html\loading.html;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\streamelements.qrc.depends;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\qrc_streamelements.cpp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Generating qrc_streamelements.cpp</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">setlocal
+C:\Qt\5.15.2\msvc2019_64\bin\rcc.exe --name streamelements --output C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/qrc_streamelements.cpp C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/streamelements/streamelements.qrc
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\logo.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\icon.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\icon.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\logo_137x30.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\logo_100x30.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\back.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\forward.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\home.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\reload.ico;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\reload.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\close.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\images\toolbar\dockToggle.png;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\html\error.html;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\html\loading.html;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\streamelements.qrc.depends;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\qrc_streamelements.cpp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\CMakeLists.txt">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Building Custom Rule C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Shared/StreamElements/Dev/obs-studio -BC:/Shared/StreamElements/Dev/obs-studio --check-stamp-file C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\Program Files\CMake\share\cmake-3.16\Modules\FindPackageHandleStandardArgs.cmake;C:\Program Files\CMake\share\cmake-3.16\Modules\FindPackageMessage.cmake;C:\Program Files\CMake\share\cmake-3.16\Modules\FindPkgConfig.cmake;C:\Qt\5.15.2\msvc2019_64\lib\cmake\Qt5Core\Qt5CoreConfig.cmake;C:\Qt\5.15.2\msvc2019_64\lib\cmake\Qt5Core\Qt5CoreConfigVersion.cmake;C:\Qt\5.15.2\msvc2019_64\lib\cmake\Qt5Widgets\Qt5WidgetsConfig.cmake;C:\Qt\5.15.2\msvc2019_64\lib\cmake\Qt5Widgets\Qt5WidgetsConfigVersion.cmake;C:\Shared\StreamElements\Dev\obs-studio\cmake\Modules\FindLibcurl.cmake;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\FindAngelScript.cmake;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\FindBugSplat.cmake;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\streamelements.qrc;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Building Custom Rule C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Shared/StreamElements/Dev/obs-studio -BC:/Shared/StreamElements/Dev/obs-studio --check-stamp-file C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Program Files\CMake\share\cmake-3.16\Modules\FindPackageHandleStandardArgs.cmake;C:\Program Files\CMake\share\cmake-3.16\Modules\FindPackageMessage.cmake;C:\Program Files\CMake\share\cmake-3.16\Modules\FindPkgConfig.cmake;C:\Qt\5.15.2\msvc2019_64\lib\cmake\Qt5Core\Qt5CoreConfig.cmake;C:\Qt\5.15.2\msvc2019_64\lib\cmake\Qt5Core\Qt5CoreConfigVersion.cmake;C:\Qt\5.15.2\msvc2019_64\lib\cmake\Qt5Widgets\Qt5WidgetsConfig.cmake;C:\Qt\5.15.2\msvc2019_64\lib\cmake\Qt5Widgets\Qt5WidgetsConfigVersion.cmake;C:\Shared\StreamElements\Dev\obs-studio\cmake\Modules\FindLibcurl.cmake;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\FindAngelScript.cmake;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\FindBugSplat.cmake;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\streamelements.qrc;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Building Custom Rule C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Shared/StreamElements/Dev/obs-studio -BC:/Shared/StreamElements/Dev/obs-studio --check-stamp-file C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\Program Files\CMake\share\cmake-3.16\Modules\FindPackageHandleStandardArgs.cmake;C:\Program Files\CMake\share\cmake-3.16\Modules\FindPackageMessage.cmake;C:\Program Files\CMake\share\cmake-3.16\Modules\FindPkgConfig.cmake;C:\Qt\5.15.2\msvc2019_64\lib\cmake\Qt5Core\Qt5CoreConfig.cmake;C:\Qt\5.15.2\msvc2019_64\lib\cmake\Qt5Core\Qt5CoreConfigVersion.cmake;C:\Qt\5.15.2\msvc2019_64\lib\cmake\Qt5Widgets\Qt5WidgetsConfig.cmake;C:\Qt\5.15.2\msvc2019_64\lib\cmake\Qt5Widgets\Qt5WidgetsConfigVersion.cmake;C:\Shared\StreamElements\Dev\obs-studio\cmake\Modules\FindLibcurl.cmake;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\FindAngelScript.cmake;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\FindBugSplat.cmake;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\streamelements.qrc;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Building Custom Rule C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Shared/StreamElements/Dev/obs-studio -BC:/Shared/StreamElements/Dev/obs-studio --check-stamp-file C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\Program Files\CMake\share\cmake-3.16\Modules\FindPackageHandleStandardArgs.cmake;C:\Program Files\CMake\share\cmake-3.16\Modules\FindPackageMessage.cmake;C:\Program Files\CMake\share\cmake-3.16\Modules\FindPkgConfig.cmake;C:\Qt\5.15.2\msvc2019_64\lib\cmake\Qt5Core\Qt5CoreConfig.cmake;C:\Qt\5.15.2\msvc2019_64\lib\cmake\Qt5Core\Qt5CoreConfigVersion.cmake;C:\Qt\5.15.2\msvc2019_64\lib\cmake\Qt5Widgets\Qt5WidgetsConfig.cmake;C:\Qt\5.15.2\msvc2019_64\lib\cmake\Qt5Widgets\Qt5WidgetsConfigVersion.cmake;C:\Shared\StreamElements\Dev\obs-studio\cmake\Modules\FindLibcurl.cmake;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\FindAngelScript.cmake;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\FindBugSplat.cmake;C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\streamelements.qrc;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\obs-streamelements-core_autogen\mocs_compilation.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\obs-streamelements-core-plugin.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\json11\json11.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\base64\base64.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\wide-string.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_process_message.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_string.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_value.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_value_binary.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_value_dictionary.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_value_json.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_value_list.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\Version.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsAsyncTaskQueue.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBrowserWidget.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBrowserWidgetManager.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBandwidthTestClient.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsObsBandwidthTestClient.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsWidgetManager.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsObsAppMonitor.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsApiMessageHandler.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsConfig.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsGlobalStateManager.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsMenuManager.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBandwidthTestManager.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsOutputSettingsManager.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsWorkerManager.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBrowserDialog.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsUtils.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsHotkeyManager.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsReportIssueDialog.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsProgressDialog.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsPerformanceHistoryTracker.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsNetworkDialog.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsAnalyticsEventsManager.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsMessageBus.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsControllerServer.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsObsSceneManager.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsExternalSceneDataProviderSlobsClient.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsHttpClient.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsNativeOBSControlsManager.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsProfilesManager.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBackupManager.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsCleanupManager.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsPreviewManager.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsSceneItemsMonitor.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsDeferredExecutive.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsRemoteIconLoader.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsScenesListWidgetManager.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsPleaseWaitWindow.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsHttpServerManager.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsWebsocketApiServer.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsLocalFilesystemHttpServer.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\StackWalker\StackWalker.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\zip\zip.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\server\NamedPipesServer.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\server\NamedPipesServerClientHandler.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\server\HttpServer.cpp" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\sqlite\sqlite3.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsCrashHandler.cpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\json11\json11.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\base64\base64.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\obs-websocket-api\obs-websocket-api.h" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\wide-string.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_process_message.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_string.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_value.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\cef-headers.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\utf8.h" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\utf8\checked.h" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\utf8\unchecked.h" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\utf8\core.h" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\utf8\cpp11.h" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\utf8\cpp17.h" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\Version.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\Version.generated.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsUtils.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsAsyncTaskQueue.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBrowserWidget.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBrowserWidgetManager.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBandwidthTestClient.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsObsBandwidthTestClient.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsWidgetManager.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsObsAppMonitor.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsApiMessageHandler.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsConfig.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsGlobalStateManager.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsMenuManager.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBandwidthTestManager.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsOutputSettingsManager.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBrowserDialog.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsHotkeyManager.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsReportIssueDialog.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsProgressDialog.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsPerformanceHistoryTracker.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsNetworkDialog.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsAnalyticsEventsManager.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsCrashHandler.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsMessageBus.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsControllerServer.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsObsSceneManager.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsExternalSceneDataProviderManager.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsExternalSceneDataProviderSlobsClient.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsExternalSceneDataProvider.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsHttpClient.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsNativeOBSControlsManager.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsProfilesManager.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBackupManager.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsCleanupManager.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsPreviewManager.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsSceneItemsMonitor.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsDeferredExecutive.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsRemoteIconLoader.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsScenesListWidgetManager.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsPleaseWaitWindow.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsHttpServerManager.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsWebsocketApiServer.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsLocalFilesystemHttpServer.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\StackWalker\StackWalker.h" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\zip\zip.h" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\zip\miniz.h" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\moodycamel\concurrentqueue.h" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\moodycamel\blockingconcurrentqueue.h" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\server\NamedPipesServer.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\server\NamedPipesServerClientHandler.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\server\HttpServer.hpp" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\sqlite\sqlite3.h" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\sqlite\sqlite3ext.h" />
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\cpp-httplib\httplib.h" />
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\qrc_streamelements.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="C:\Shared\StreamElements\Dev\obs-studio\ZERO_CHECK.vcxproj">
+      <Project>{7A0A2571-67A6-3D5B-AED6-5FA901A9B7AF}</Project>
+      <Name>ZERO_CHECK</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </ProjectReference>
+    <ProjectReference Include="C:\Shared\StreamElements\Dev\obs-studio\libobs\libobs.vcxproj">
+      <Project>{B6CB357B-D882-3D9B-A83B-D66086B7252F}</Project>
+      <Name>libobs</Name>
+    </ProjectReference>
+    <ProjectReference Include="C:\Shared\StreamElements\Dev\obs-studio\UI\obs-frontend-api\obs-frontend-api.vcxproj">
+      <Project>{8E0B5094-EF7F-3FAB-8FA1-096B2321D623}</Project>
+      <Name>obs-frontend-api</Name>
+    </ProjectReference>
+    <ProjectReference Include="C:\Shared\StreamElements\Dev\obs-studio\deps\w32-pthreads\w32-pthreads.vcxproj">
+      <Project>{CFC1912B-D113-31A3-BFEE-82EF1CEB1B4B}</Project>
+      <Name>w32-pthreads</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

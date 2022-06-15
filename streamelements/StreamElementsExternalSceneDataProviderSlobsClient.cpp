@@ -24,7 +24,7 @@ bool StreamElementsExternalSceneDataProviderSlobsClient::GetSceneCollections(
 	catch (...) {
 		// UTF-8 decoding failed
 		blog(LOG_WARNING,
-			"obs-browser: StreamElementsExternalSceneDataProviderSlobsClient: failed decoding UTF-8 file content: %s",
+			"obs-streamelements-core: StreamElementsExternalSceneDataProviderSlobsClient: failed decoding UTF-8 file content: %s",
 			(m_basePath + "/manifest.json").c_str());
 
 		manifestValue = nullptr;
@@ -35,13 +35,13 @@ bool StreamElementsExternalSceneDataProviderSlobsClient::GetSceneCollections(
 	}
 	else {
 		blog(LOG_WARNING,
-			"obs-browser: StreamElementsExternalSceneDataProviderSlobsClient: failed loading file: %s",
+			"obs-streamelements-core: StreamElementsExternalSceneDataProviderSlobsClient: failed loading file: %s",
 			(m_basePath + "/manifest.json").c_str());
 	}
 
 	if (!manifestValue.get() || manifestValue->GetType() != VTYPE_DICTIONARY) {
 		blog(LOG_WARNING,
-			"obs-browser: StreamElementsExternalSceneDataProviderSlobsClient: invalid file format (expected JSON object): %s",
+			"obs-streamelements-core: StreamElementsExternalSceneDataProviderSlobsClient: invalid file format (expected JSON object): %s",
 			(m_basePath + "/manifest.json").c_str());
 
 		return false;
@@ -70,7 +70,7 @@ bool StreamElementsExternalSceneDataProviderSlobsClient::GetSceneCollections(
 
 			if (!collection->HasKey("id") || collection->GetType("id") != VTYPE_STRING) {
 				blog(LOG_WARNING,
-					"obs-browser: StreamElementsExternalSceneDataProviderSlobsClient: invalid collection object format (expected 'id' string): %s",
+					"obs-streamelements-core: StreamElementsExternalSceneDataProviderSlobsClient: invalid collection object format (expected 'id' string): %s",
 					(m_basePath + "/manifest.json").c_str());
 
 				continue;
@@ -92,7 +92,7 @@ bool StreamElementsExternalSceneDataProviderSlobsClient::GetSceneCollections(
 	}
 	else {
 		blog(LOG_WARNING,
-			"obs-browser: StreamElementsExternalSceneDataProviderSlobsClient: invalid file format (expected 'collections' array): %s",
+			"obs-streamelements-core: StreamElementsExternalSceneDataProviderSlobsClient: invalid file format (expected 'collections' array): %s",
 			(m_basePath + "/manifest.json").c_str());
 	}
 
@@ -169,7 +169,7 @@ bool StreamElementsExternalSceneDataProviderSlobsClient::GetSceneCollection(
 
 	if (!collection) {
 		blog(LOG_WARNING,
-			"obs-browser: StreamElementsExternalSceneDataProviderSlobsClient: collection id '%s' does not exist in '%s'",
+			"obs-streamelements-core: StreamElementsExternalSceneDataProviderSlobsClient: collection id '%s' does not exist in '%s'",
 			collectionId.c_str(),
 			(m_basePath + "/manifest.json").c_str());
 
@@ -195,7 +195,7 @@ bool StreamElementsExternalSceneDataProviderSlobsClient::GetSceneCollection(
 	}
 	else {
 		blog(LOG_WARNING,
-			"obs-browser: StreamElementsExternalSceneDataProviderSlobsClient: failed loading file: %s",
+			"obs-streamelements-core: StreamElementsExternalSceneDataProviderSlobsClient: failed loading file: %s",
 			(m_basePath + "/manifest.json").c_str());
 
 		return false;
@@ -215,7 +215,7 @@ bool StreamElementsExternalSceneDataProviderSlobsClient::GetSceneCollection(
 		catch (...) {
 			// UTF-8 decoding failed
 			blog(LOG_WARNING,
-				"obs-browser: StreamElementsExternalSceneDataProviderSlobsClient: failed decoding UTF-8 file content: %s",
+				"obs-streamelements-core: StreamElementsExternalSceneDataProviderSlobsClient: failed decoding UTF-8 file content: %s",
 				(m_basePath + "/" + result.collectionId + ".json").c_str());
 
 			meta_scene_collection.content = L"";
@@ -243,13 +243,13 @@ bool StreamElementsExternalSceneDataProviderSlobsClient::GetSceneCollection(
 		}
 		else {
 			blog(LOG_WARNING,
-				"obs-browser: StreamElementsExternalSceneDataProviderSlobsClient: invalid scene collection definition file (expected JSON): %s",
+				"obs-streamelements-core: StreamElementsExternalSceneDataProviderSlobsClient: invalid scene collection definition file (expected JSON): %s",
 				(m_basePath + "/" + collectionId + ".json").c_str());
 		}
 	}
 	else {
 		blog(LOG_WARNING,
-			"obs-browser: StreamElementsExternalSceneDataProviderSlobsClient: failed loading scene collection definition file: %s",
+			"obs-streamelements-core: StreamElementsExternalSceneDataProviderSlobsClient: failed loading scene collection definition file: %s",
 			(m_basePath + "/" + collectionId + ".json").c_str());
 	}
 

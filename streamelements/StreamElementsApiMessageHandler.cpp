@@ -93,8 +93,8 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 			context->source = source;
 			context->complete = [context]() {
 				blog(LOG_INFO,
-				     "obs-browser[%lu]: API: completed call to '%s', callback id %d",
-				     context->cefClientId, context->id.c_str(),
+				     "obs-streamelements-core[%s]: API: completed call to '%s', callback id %d",
+				     context->target.c_str(), context->id.c_str(),
 				     context->cef_app_callback_id);
 
 				if (context->cef_app_callback_id != -1) {
@@ -131,8 +131,8 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 					CefValue::Create();
 				callArgsValue->SetList(context->callArgs);
 				blog(LOG_INFO,
-				     "obs-browser[%lu]: API: posting call to '%s', callback id %d, args: %s",
-				     context->cefClientId, context->id.c_str(),
+				     "obs-streamelements-core[%s]: API: posting call to '%s', callback id %d, args: %s",
+				     context->target.c_str(), context->id.c_str(),
 				     context->cef_app_callback_id,
 				     CefWriteJSON(callArgsValue,
 						  JSON_WRITER_DEFAULT)
@@ -143,8 +143,8 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 			QtPostTask (
 				[context]() -> void {
 					blog(LOG_INFO,
-					     "obs-browser[%lu]: API: performing call to '%s', callback id %d",
-					     context->cefClientId,
+					     "obs-streamelements-core[%s]: API: performing call to '%s', callback id %d",
+					     context->target.c_str(),
 					     context->id.c_str(),
 					     context->cef_app_callback_id);
 
@@ -177,8 +177,8 @@ void StreamElementsApiMessageHandler::InvokeApiCallHandlerAsync(
 	result->SetNull();
 
 	if (!m_apiCallHandlers.count(invokeId)) {
-		blog(LOG_ERROR, "obs-browser[%lu]: API: invalid API call to '%s'",
-		     cefClientId, invokeId.c_str());
+		blog(LOG_ERROR, "obs-streamelements-core[%s]: API: invalid API call to '%s'",
+		     target.c_str(), invokeId.c_str());
 
 		result_callback(result);
 
@@ -186,8 +186,8 @@ void StreamElementsApiMessageHandler::InvokeApiCallHandlerAsync(
 	}
 
 	if (enable_logging) {
-		blog(LOG_INFO, "obs-browser[%lu]: API: performing call to '%s'",
-		     cefClientId, invokeId.c_str());
+		blog(LOG_INFO, "obs-streamelements-core[%s]: API: performing call to '%s'",
+		     target.c_str(), invokeId.c_str());
 	}
 
 	auto handler = m_apiCallHandlers[invokeId];
@@ -195,8 +195,8 @@ void StreamElementsApiMessageHandler::InvokeApiCallHandlerAsync(
 	handler(this->Clone(), message, invokeArgs, result, target, cefClientId, [=]() {
 		if (enable_logging) {
 			blog(LOG_INFO,
-			     "obs-browser[%lu]: API: completed call to '%s'",
-			     cefClientId, invokeId.c_str());
+			     "obs-streamelements-core[%s]: API: completed call to '%s'",
+			     target.c_str(), invokeId.c_str());
 		}
 
 		result_callback(result);
@@ -2027,16 +2027,6 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("reloadAllBrowserSources");
-	{
-		extern void ReloadAllBrowserSources();
-
-		ReloadAllBrowserSources();
-
-		result->SetBool(true);
-	}
-	API_HANDLER_END();
-
 	API_HANDLER_BEGIN("beginDeferSaveTransaction");
 	{
 		result->SetString(CreateTimedObsApiTransaction());
@@ -2201,7 +2191,7 @@ bool StreamElementsApiMessageHandler::InvokeHandler::InvokeApiCallAsync(
 		return false;
 
 	blog(LOG_INFO,
-	     "obs-browser: StreamElementsApiMessageHandler::InvokeHandler::InvokeApiCallAsync: '%s', [%d]",
+	     "obs-streamelements-core: StreamElementsApiMessageHandler::InvokeHandler::InvokeApiCallAsync: '%s', [%d]",
 	     invoke.c_str(), args->GetSize());
 
 	incoming_call_handler_t handler = m_apiCallHandlers[invoke];

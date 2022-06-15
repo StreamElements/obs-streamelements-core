@@ -426,13 +426,13 @@ void StreamElementsNativeOBSControlsManager::SetStreamingTransitionStoppingState
 void StreamElementsNativeOBSControlsManager::OnStartStopStreamingButtonClicked()
 {
 	if (obs_frontend_streaming_active()) {
-		blog(LOG_INFO, "obs-browser: streaming stop requested by UI control");
+		blog(LOG_INFO, "obs-streamelements-core: streaming stop requested by UI control");
 
 		// obs_frontend_streaming_stop();
 		m_nativeStartStopStreamingButton->click();
 	}
 	else {
-		blog(LOG_INFO, "obs-browser: streaming start requested by UI control");
+		blog(LOG_INFO, "obs-streamelements-core: streaming start requested by UI control");
 
 		BeginStartStreaming();
 	}
@@ -517,7 +517,7 @@ void StreamElementsNativeOBSControlsManager::hotkey_routing_func(void* data, obs
 		if (pressed &&
 			!obs_frontend_streaming_active() &&
 			self->m_startStopStreamingButton->isEnabled()) {
-			blog(LOG_INFO, "obs-browser: streaming start requested by hotkey");
+			blog(LOG_INFO, "obs-streamelements-core: streaming start requested by hotkey");
 
 			self->BeginStartStreaming();
 		}

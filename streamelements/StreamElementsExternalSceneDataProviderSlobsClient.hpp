@@ -27,7 +27,7 @@ public:
 			if (!std::filesystem::is_directory(
 				    m_basePath)) {
 				blog(LOG_INFO,
-					"obs-browser: StreamElementsExternalSceneDataProviderSlobsClient: path does not exist: %s",
+					"obs-streamelements-core: StreamElementsExternalSceneDataProviderSlobsClient: path does not exist: %s",
 					m_basePath.c_str());
 
 				m_basePath = "";

@@ -294,7 +294,7 @@ void StreamElementsReportIssueDialog::accept()
 			}
 			else {
 				blog(LOG_ERROR,
-					"obs-browser: report issue: failed opening file for reading: %s",
+					"obs-streamelements-core: report issue: failed opening file for reading: %s",
 					wstring_to_utf8(zipPath).c_str());
 			}
 		};
@@ -370,7 +370,7 @@ void StreamElementsReportIssueDialog::accept()
 				L"plugin_config/obs-browser/indexeddb/",
 				L"plugin_config/obs-browser/file system/",
 				L"plugin_config/obs-browser/databases/",
-				L"plugin_config/obs-browser/obs-browser-streamelements.ini.bak",
+				L"plugin_config/obs-browser/obs-streamelements-core.ini.bak",
 				L"plugin_config/obs-browser/cef.",
 				L"plugin_config/obs-browser/obs_profile_cookies/",
 				L"updates/",
@@ -423,7 +423,7 @@ void StreamElementsReportIssueDialog::accept()
 		else {
 			// Collect only own files
 			local_to_zip_files_map[obsDataPath + L"\\plugin_config\\obs-streamelements\\obs-streamelements.ini"] = L"obs-studio\\plugin_config\\obs-streamelements\\obs-streamelements.ini";
-			local_to_zip_files_map[obsDataPath + L"\\plugin_config\\obs-browser\\obs-browser-streamelements.ini"] = L"obs-studio\\plugin_config\\obs-browser\\obs-browser-streamelements.ini";
+			local_to_zip_files_map[obsDataPath + L"\\plugin_config\\obs-streamelements-core\\obs-streamelements-core.ini"] = L"obs-studio\\plugin_config\\obs-browser\\obs-streamelements-core.ini";
 			local_to_zip_files_map[obsDataPath + L"\\global.ini"] = L"obs-studio\\global.ini";
 		}
         

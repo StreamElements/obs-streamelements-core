@@ -3,7 +3,8 @@
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
 
-#include "../panel/browser-panel.hpp"
+#include "../../obs-browser/panel/browser-panel.hpp"
+#include "../deps/base64/base64.hpp"
 
 extern "C" int getpid(void);
 
@@ -177,24 +178,6 @@ static void UnregisterAppActiveTrackerWidget(QWidget *widget)
 	if (g_AppActiveTrackerWidgets.size() == 0) {
 		ShutdownAppActiveTracker();
 	}
-}
-
-/* ========================================================================= */
-
-class BrowserTask : public CefTask {
-public:
-	std::function<void()> task;
-
-	inline BrowserTask(std::function<void()> task_) : task(task_) {}
-	virtual void Execute() override { task(); }
-
-	IMPLEMENT_REFCOUNTING(BrowserTask);
-};
-
-static bool QueueCEFTask(std::function<void()> task)
-{
-	return CefPostTask(TID_UI,
-			   CefRefPtr<BrowserTask>(new BrowserTask(task)));
 }
 
 /* ========================================================================= */
@@ -440,9 +423,8 @@ std::string StreamElementsBrowserWidget::GetInitialPageURLInternal()
 	htmlString = std::regex_replace(htmlString, std::regex("\\$\\{URL\\}"),
 					m_url);
 	std::string base64uri =
-		"data:text/html;base64," +	
-		CefBase64Encode(htmlString.c_str(), htmlString.size())
-			.ToString();
+		"data:text/html;base64," +
+		base64_encode(htmlString.c_str(), htmlString.size());
 
 	return base64uri;
 }

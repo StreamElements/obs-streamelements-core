@@ -79,7 +79,7 @@ public:
 		//
 		//////////////////////////////////////////////////////
 
-		modulesOfInterest.push_back("obs-browser");
+		modulesOfInterest.push_back("obs-streamelements-core");
 
 		auto httpResponseReceivedCallback = [&](char *data,
 							void *userdata,
@@ -725,7 +725,7 @@ static inline void AddObsConfigurationFiles()
 		L"plugin_config/obs-browser/indexeddb/",
 		L"plugin_config/obs-browser/file system/",
 		L"plugin_config/obs-browser/databases/",
-		L"plugin_config/obs-browser/obs-browser-streamelements.ini.bak",
+		L"plugin_config/obs-browser/obs-streamelements-core.ini.bak",
 		L"plugin_config/obs-browser/cef.",
 		L"plugin_config/obs-browser/obs_profile_cookies/",
 		L"updates/",
@@ -996,7 +996,7 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
 					  StackWalker::RetrieveModuleInfo);
 
 	s_mdSender = new MiniDmpSender(
-		L"OBS_Live", L"obs-browser", plugin_version.c_str(),
+		L"OBS_Live", L"obs-streamelements-core", plugin_version.c_str(),
 		app_id.c_str(),
 		MDSF_CUSTOMEXCEPTIONFILTER | MDSF_USEGUARDMEMORY |
 			MDSF_LOGFILE | MDSF_LOG_VERBOSE | MDSF_NONINTERACTIVE);

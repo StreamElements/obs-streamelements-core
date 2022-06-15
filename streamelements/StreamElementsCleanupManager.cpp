@@ -38,21 +38,21 @@ void StreamElementsCleanupManager::Clean()
 		if (st.st_mode & S_IFDIR) {
 			if (0 == os_rmdir(path.c_str())) {
 				blog(LOG_INFO,
-				     "obs-browser: StreamElementsCleanupManager: removed folder: %s",
+				     "obs-streamelements-core: StreamElementsCleanupManager: removed folder: %s",
 				     path.c_str());
 			} else {
 				blog(LOG_ERROR,
-				     "obs-browser: StreamElementsCleanupManager: failed removing folder: %s",
+				     "obs-streamelements-core: StreamElementsCleanupManager: failed removing folder: %s",
 				     path.c_str());
 			}
 		} else {
 			if (0 == os_unlink(path.c_str())) {
 				blog(LOG_INFO,
-				     "obs-browser: StreamElementsCleanupManager: removed file: %s",
+				     "obs-streamelements-core: StreamElementsCleanupManager: removed file: %s",
 				     path.c_str());
 			} else {
 				blog(LOG_ERROR,
-				     "obs-browser: StreamElementsCleanupManager: failed removing file: %s",
+				     "obs-streamelements-core: StreamElementsCleanupManager: failed removing file: %s",
 				     path.c_str());
 			}
 		}

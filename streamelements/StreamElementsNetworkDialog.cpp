@@ -470,7 +470,7 @@ bool StreamElementsNetworkDialog::UploadFile(const char *localFilePath,
 					result = true;
 				} else {
 					blog(LOG_WARNING,
-					     "obs-browser: StreamElementsNetworkDialog: failed uploading file '%s' to '%s': %s",
+					     "obs-streamelements-core: StreamElementsNetworkDialog: failed uploading file '%s' to '%s': %s",
 					     task_context->user_localFilePath,
 					     task_context->user_url,
 					     errorBuffer);

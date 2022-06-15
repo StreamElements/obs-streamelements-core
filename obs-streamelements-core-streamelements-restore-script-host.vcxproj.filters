@@ -1,0 +1,44 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="16.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\obs-streamelements-core-streamelements-restore-script-host_autogen\mocs_compilation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\restore-script-host\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\restore-script-host\ScriptEngine.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\add_on\scriptstdstring\scriptstdstring.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\angelscript_2.34.0\sdk\add_on\scriptbuilder\scriptbuilder.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\restore-script-host\main.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\restore-script-host\ScriptEngine.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\restore-script-host\main.rc">
+      <Filter>Source Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{27BDC132-C6B2-30BB-9E60-F8A90A7C34BB}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{A9C272BC-D510-34BE-BF82-38C1EE4F2D69}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

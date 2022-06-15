@@ -350,11 +350,11 @@ ScanForFileReferencesToBackup(zip_t *zip, CefRefPtr<CefValue> &node,
 
 			if (fileSize > MAX_BACKUP_FILE_SIZE) {
 				blog(LOG_WARNING,
-				     "obs-browser: backup: file skipped due to unsatisfied maximum file size constraint: %s",
+				     "obs-streamelements-core: backup: file skipped due to unsatisfied maximum file size constraint: %s",
 				     path.c_str());
 			} else if (!IsSafeFileExtension(path)) {
 				blog(LOG_WARNING,
-				     "obs-browser: backup: file skipped due to unsafe file type: %s",
+				     "obs-streamelements-core: backup: file skipped due to unsafe file type: %s",
 				     path.c_str());
 			} else {
 				if (!filesMap.count(path)) {
@@ -994,13 +994,13 @@ void StreamElementsBackupManager::RestoreBackupPackageContent(
 
 			if (!IsSafeFileExtension(name)) {
 				blog(LOG_WARNING,
-				     "obs-browser: restore: file skipped due to unsafe file type: %s",
+				     "obs-streamelements-core: restore: file skipped due to unsafe file type: %s",
 				     name.c_str());
 			} else if (!IsQualifiedFileForRestore(
 					   name, requestProfiles,
 					   requestCollections)) {
 				blog(LOG_WARNING,
-				     "obs-browser: restore: file skipped due to user selection: %s",
+				     "obs-streamelements-core: restore: file skipped due to user selection: %s",
 				     name.c_str());
 			} else {
 				std::string destFilePath =
@@ -1192,7 +1192,7 @@ void StreamElementsBackupManager::RestoreBackupPackageContent(
             0, scriptHostExePath.find_last_of('/') + 1);
 
         scriptHostExePath +=
-            "obs-browser-streamelements-restore-script-host.exe";
+            "obs-streamelements-core-streamelements-restore-script-host.exe";
 
         std::transform(scriptHostExePath.begin(),
                    scriptHostExePath.end(),

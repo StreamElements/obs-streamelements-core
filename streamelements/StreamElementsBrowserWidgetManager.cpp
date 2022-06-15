@@ -307,7 +307,7 @@ void StreamElementsBrowserWidgetManager::PushCentralBrowserWidget(
 		return;
 	}
 
-	blog(LOG_INFO, "obs-browser: central widget: loading url: %s", url);
+	blog(LOG_INFO, "obs-streamelements-core: central widget: loading url: %s", url);
 
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 

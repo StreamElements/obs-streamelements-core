@@ -262,24 +262,6 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 
 /* ========================================================================= */
 
-class BrowserTask : public CefTask {
-public:
-	std::function<void()> task;
-
-	inline BrowserTask(std::function<void()> task_) : task(task_) {}
-	virtual void Execute() override { task(); }
-
-	IMPLEMENT_REFCOUNTING(BrowserTask);
-};
-
-static bool QueueCEFTask(std::function<void()> task)
-{
-	return CefPostTask(TID_UI,
-			   CefRefPtr<BrowserTask>(new BrowserTask(task)));
-}
-
-/* ========================================================================= */
-
 StreamElementsGlobalStateManager *StreamElementsGlobalStateManager::s_instance =
 	nullptr;
 
@@ -468,7 +450,7 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 			if (MKDIR_ERROR == os_mkdirs_ret) {
 				blog(LOG_WARNING,
-				     "obs-browser: init: set on-boarding mode due to error creating new cookie storage path: %s",
+				     "obs-streamelements-core: init: set on-boarding mode due to error creating new cookie storage path: %s",
 				     storagePath.c_str());
 
 				isOnBoarding = true;
@@ -476,7 +458,7 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 					"Failed creating new cookie storage folder";
 			} else if (MKDIR_SUCCESS == os_mkdirs_ret) {
 				blog(LOG_INFO,
-				     "obs-browser: init: set on-boarding mode due to new cookie storage path: %s",
+				     "obs-streamelements-core: init: set on-boarding mode due to new cookie storage path: %s",
 				     storagePath.c_str());
 
 				isOnBoarding = true;
@@ -485,7 +467,7 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 					   ->GetStreamElementsPluginVersion() !=
 				   STREAMELEMENTS_PLUGIN_VERSION) {
 				blog(LOG_INFO,
-				     "obs-browser: init: set on-boarding mode due to configuration version mismatch");
+				     "obs-streamelements-core: init: set on-boarding mode due to configuration version mismatch");
 
 				isOnBoarding = true;
 				onBoardingReason =
@@ -495,7 +477,7 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 				   StreamElementsConfig::
 					   STARTUP_FLAGS_ONBOARDING_MODE) {
 				blog(LOG_INFO,
-				     "obs-browser: init: set on-boarding mode due to start-up flags");
+				     "obs-streamelements-core: init: set on-boarding mode due to start-up flags");
 
 				isOnBoarding = true;
 				onBoardingReason =
@@ -792,7 +774,7 @@ bool StreamElementsGlobalStateManager::DeserializeUserInterfaceState(
 
 		if (geometry.get() && geometry->GetType() == VTYPE_STRING) {
 			blog(LOG_INFO,
-			     "obs-browser: state: restoring geometry: %s",
+			     "obs-streamelements-core: state: restoring geometry: %s",
 			     geometry->GetString().ToString().c_str());
 
 			if (mainWindow()->restoreGeometry(
@@ -809,7 +791,7 @@ bool StreamElementsGlobalStateManager::DeserializeUserInterfaceState(
 				result = true;
 			} else {
 				blog(LOG_ERROR,
-				     "obs-browser: state: failed restoring geometry: %s",
+				     "obs-streamelements-core: state: failed restoring geometry: %s",
 				     geometry->GetString().ToString().c_str());
 			}
 		}
@@ -822,7 +804,7 @@ bool StreamElementsGlobalStateManager::DeserializeUserInterfaceState(
 		if (windowState.get() &&
 		    windowState->GetType() == VTYPE_STRING) {
 			blog(LOG_INFO,
-			     "obs-browser: state: restoring windowState: %s",
+			     "obs-streamelements-core: state: restoring windowState: %s",
 			     windowState->GetString().ToString().c_str());
 
 			if (mainWindow()->restoreState(QByteArray::fromStdString(
@@ -831,7 +813,7 @@ bool StreamElementsGlobalStateManager::DeserializeUserInterfaceState(
 				result = true;
 			} else {
 				blog(LOG_ERROR,
-				     "obs-browser: state: failed restoring windowState: %s",
+				     "obs-streamelements-core: state: failed restoring windowState: %s",
 				     windowState->GetString()
 					     .ToString()
 					     .c_str());
@@ -904,7 +886,7 @@ void StreamElementsGlobalStateManager::RestoreState()
 		return;
 	}
 
-	blog(LOG_INFO, "obs-browser: state: restoring state from base64: %s",
+	blog(LOG_INFO, "obs-streamelements-core: state: restoring state from base64: %s",
 	     base64EncodedJSON.c_str());
 
 	CefString json = base64_decode(base64EncodedJSON);
@@ -913,7 +895,7 @@ void StreamElementsGlobalStateManager::RestoreState()
 		return;
 	}
 
-	blog(LOG_INFO, "obs-browser: state: restoring state from json: %s",
+	blog(LOG_INFO, "obs-streamelements-core: state: restoring state from json: %s",
 	     json.ToString().c_str());
 
 	CefRefPtr<CefValue> root =
@@ -938,7 +920,7 @@ void StreamElementsGlobalStateManager::RestoreState()
 
 
 	if (workersState.get()) {
-		blog(LOG_INFO, "obs-browser: state: restoring workers: %s",
+		blog(LOG_INFO, "obs-streamelements-core: state: restoring workers: %s",
 		     CefWriteJSON(workersState, JSON_WRITER_DEFAULT)
 			     .ToString()
 			     .c_str());
@@ -947,7 +929,7 @@ void StreamElementsGlobalStateManager::RestoreState()
 
 	if (dockingWidgetsState.get()) {
 		blog(LOG_INFO,
-		     "obs-browser: state: restoring docking widgets: %s",
+		     "obs-streamelements-core: state: restoring docking widgets: %s",
 		     CefWriteJSON(dockingWidgetsState, JSON_WRITER_DEFAULT)
 			     .ToString()
 			     .c_str());
@@ -957,7 +939,7 @@ void StreamElementsGlobalStateManager::RestoreState()
 
 	if (notificationBarState.get()) {
 		blog(LOG_INFO,
-		     "obs-browser: state: restoring notification bar: %s",
+		     "obs-streamelements-core: state: restoring notification bar: %s",
 		     CefWriteJSON(notificationBarState, JSON_WRITER_DEFAULT)
 			     .ToString()
 			     .c_str());
@@ -967,7 +949,7 @@ void StreamElementsGlobalStateManager::RestoreState()
 
 	if (hotkeysState.get()) {
 		blog(LOG_INFO,
-		     "obs-browser: state: restoring hotkey bindings: %s",
+		     "obs-streamelements-core: state: restoring hotkey bindings: %s",
 		     CefWriteJSON(hotkeysState, JSON_WRITER_DEFAULT)
 			     .ToString()
 			     .c_str());

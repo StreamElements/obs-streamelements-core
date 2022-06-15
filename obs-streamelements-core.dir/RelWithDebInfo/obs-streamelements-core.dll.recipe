@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ProjectOutputs>
+    <ProjectOutput>
+      <FullPath>C:\shared\StreamElements\Dev\obs-studio\x64\RelWithDebInfo\ZERO_CHECK</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Shared\StreamElements\Dev\obs-studio\deps\w32-pthreads\RelWithDebInfo\w32-pthreads.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Shared\StreamElements\Dev\obs-studio\libobs\RelWithDebInfo\obs.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Shared\StreamElements\Dev\obs-studio\UI\obs-frontend-api\RelWithDebInfo\obs-frontend-api.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\RelWithDebInfo\obs-streamelements-core.dll</FullPath>
+    </ProjectOutput>
+  </ProjectOutputs>
+  <ContentFiles />
+  <SatelliteDlls />
+  <NonRecipeFileRefs />
+</Project>
