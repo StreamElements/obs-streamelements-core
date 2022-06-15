@@ -60,7 +60,7 @@ static void TrackCrash(const char* caller_reference)
 {
     if (!initialized) return;
 
-    blog(LOG_ERROR, "obs-browser: StreamElements: Crash Handler: TrackCrash: %s", caller_reference);
+    blog(LOG_ERROR, "obs-streamelements-core: StreamElements: Crash Handler: TrackCrash: %s", caller_reference);
 
     // This will also report the platform and a bunch of other props
     StreamElementsGlobalStateManager::GetInstance()
@@ -121,7 +121,7 @@ extern "C" {
         //
         while(initialized) {
             if ((kr = mach_msg_server_once(mach_exc_server, 4096, exc_port, 0)) != KERN_SUCCESS) {
-                blog(LOG_ERROR, "obs-browser: StreamElements: Crash Handler: mach_msg_server_once: error %#x\n", kr);
+                blog(LOG_ERROR, "obs-streamelements-core: StreamElements: Crash Handler: mach_msg_server_once: error %#x\n", kr);
                 break;
             }
         }
@@ -144,25 +144,25 @@ extern "C" {
 
         // Obtain Mach port which will receive exception messages
         if ((kr = mach_port_allocate(task, MACH_PORT_RIGHT_RECEIVE, &exc_port)) != KERN_SUCCESS) {
-            blog(LOG_ERROR, "obs-browser: StreamElements: Crash Handler: mach_port_allocate: %#x\n", kr);
+            blog(LOG_ERROR, "obs-streamelements-core: StreamElements: Crash Handler: mach_port_allocate: %#x\n", kr);
             return;
         }
 
         // Add send right to the exeption Mach port
         if ((kr = mach_port_insert_right(task, exc_port, exc_port, MACH_MSG_TYPE_MAKE_SEND)) != KERN_SUCCESS) {
-            blog(LOG_ERROR, "obs-browser: StreamElements: Crash Handler: mach_port_allocate: %#x\n", kr);
+            blog(LOG_ERROR, "obs-streamelements-core: StreamElements: Crash Handler: mach_port_allocate: %#x\n", kr);
             return;
         }
 
         // Get current Mach exception port settings
         if ((kr = task_get_exception_ports(task, EXC_MASK_ALL, &mask, &maskCount, &handler, &behavior, &flavor)) != KERN_SUCCESS) {
-            blog(LOG_ERROR, "obs-browser: StreamElements: Crash Handler: task_get_exception_ports: %#x\n", kr);
+            blog(LOG_ERROR, "obs-streamelements-core: StreamElements: Crash Handler: task_get_exception_ports: %#x\n", kr);
             return;
         }
 
         // Start exception message pump thread
         if ((err = pthread_create(&exception_thread, NULL, server_thread, &exc_port)) != 0) {
-            blog(LOG_ERROR, "obs-browser: StreamElements: Crash Handler: pthread_create server_thread: %s\n", strerror(err));
+            blog(LOG_ERROR, "obs-streamelements-core: StreamElements: Crash Handler: pthread_create server_thread: %s\n", strerror(err));
             return;
         }
       
@@ -170,12 +170,12 @@ extern "C" {
 
         // Set exception port settings to receive all exceptions with exception codes
         if ((kr = task_set_exception_ports(task, EXC_MASK_ALL, exc_port, EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES, flavor)) != KERN_SUCCESS) {
-            blog(LOG_ERROR, "obs-browser: StreamElements: Crash Handler: task_set_exception_ports: %#x\n", kr);
+            blog(LOG_ERROR, "obs-streamelements-core: StreamElements: Crash Handler: task_set_exception_ports: %#x\n", kr);
             return;
         }
 
         // We're done
-        blog(LOG_INFO, "obs-browser: StreamElements: Crash Handler: Initialized");
+        blog(LOG_INFO, "obs-streamelements-core: StreamElements: Crash Handler: Initialized");
     }
 }
 
