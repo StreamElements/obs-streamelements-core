@@ -22,7 +22,6 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}/streamelements/deps")
 
 find_package(Qt5Core REQUIRED)
 find_package(Qt5Widgets REQUIRED)
-find_package(Libcurl REQUIRED)
 if (ENABLE_BUGSPLAT)
 	find_package(BugSplat REQUIRED)
 endif()
@@ -33,7 +32,6 @@ endif()
 include_directories(SYSTEM
 	${Qt5Core_INCLUDES}
 	${Qt5Widgets_INCLUDES}
-	${LIBCURL_INCLUDE_DIRS}
 )
 
 if (ENABLE_BUGSPLAT)
@@ -85,7 +83,7 @@ if (ENABLE_BUGSPLAT)
 		Qt5::Core
 		Qt5::Widgets
 		w32-pthreads
-		${LIBCURL_LIBRARIES}
+		CURL::libcurl
 		${BUGSPLAT_LIBRARIES}
 		)
 else()
@@ -95,7 +93,7 @@ else()
 		Qt5::Core
 		Qt5::Widgets
 		#w32-pthreads
-		${LIBCURL_LIBRARIES}
+		CURL::libcurl
 		)
 endif()
 
@@ -357,7 +355,7 @@ if(ENABLE_ANGELSCRIPT)
 		#Qt5::Core
 		#Qt5::Widgets
 		#w32-pthreads
-		#${LIBCURL_LIBRARIES}
+		#CURL::libcurl
 		)
 
 	add_executable(obs-streamelements-core-streamelements-restore-script-host
