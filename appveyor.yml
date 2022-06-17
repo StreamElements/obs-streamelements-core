@@ -45,9 +45,9 @@ build_script:
     cd /d c:\local\obs-studio
 
 - ps: >-
-    .\CI\build-windows.ps1\01_install_dependencies.ps1 -Verbose -BuildArch x64
+    .\CI\windows\01_install_dependencies.ps1 -Verbose -BuildArch x64
 
-    .\CI\build-windows.ps1\01_install_dependencies.ps1 -Verbose -BuildArch x86
+    .\CI\windows\01_install_dependencies.ps1 -Verbose -BuildArch x86
 
 - ps: >-
     $CmakeCommand = @(
