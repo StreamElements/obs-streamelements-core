@@ -45,9 +45,7 @@ build_script:
     cd /d c:\local\obs-studio
 
 - ps: >-
-    CI\windows\01_install_dependencies.ps1 -Verbose -BuildArch x64
-
-    CI\windows\02_build_obs.ps1 -Verbose -BuildArch x64 -BuildConfiguration RelWithDebInfo
+    CI\build-windows.ps1 -Verbose -BuildArch x64 -BuildConfiguration RelWithDebInfo
 
 - cmd: >-
     echo.Upload PDBs to BugSplat in case this is a commit to master branch.
