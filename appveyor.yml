@@ -17,9 +17,9 @@ install:
 
     cinst -y git
 
-    cinst -y cmake
+    #cinst -y cmake
 
-    cinst -y curl
+    #cinst -y curl
 
     git clone --recursive https://github.com/jp9000/obs-studio.git c:\local\obs-studio
 
