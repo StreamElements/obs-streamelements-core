@@ -23,13 +23,6 @@
 
 /* ========================================================================= */
 
-void register_cookie_manager(CefRefPtr<CefCookieManager> cm);
-void unregister_cookie_manager(CefRefPtr<CefCookieManager> cm);
-void flush_cookie_manager(CefRefPtr<CefCookieManager> cm);
-void flush_cookie_managers();
-
-/* ========================================================================= */
-
 static QString GetLastErrorMsg()
 {
 #ifdef WIN32
@@ -48,23 +41,6 @@ static QString GetLastErrorMsg()
 	QString result = strerror(errno);
 
 	return result;
-#endif
-}
-
-/* ========================================================================= */
-
-static std::string GetCEFStoragePath()
-{
-	std::string version = GetCefVersionString();
-
-	BPtr<char> rpath = obs_module_config_path(version.c_str());
-
-#ifdef WIN32
-	BPtr<char> path = os_get_abs_path_ptr(rpath.Get());
-
-	return path.Get();
-#else
-	return rpath.Get();
 #endif
 }
 
@@ -152,8 +128,11 @@ void StreamElementsGlobalStateManager::ThemeChangeListener::changeEvent(
 				{"name", newTheme},
 			};
 
-			StreamElementsCefClient::DispatchJSEvent(
-				"hostUIThemeChanged", json.dump());
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetWebsocketApiServer()
+				->DispatchJSEvent("system",
+						  "hostUIThemeChanged",
+						  json.dump());
 
 			StreamElementsMessageBus::GetInstance()
 				->NotifyAllExternalEventListeners(
@@ -262,7 +241,9 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 	}
 
 	if (name.size()) {
-		StreamElementsCefClient::DispatchJSEvent(name, args);
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetWebsocketApiServer()
+			->DispatchJSEvent("system", name, args);
 
 		std::string externalEventName =
 			name.c_str() + 4; /* remove 'host' prefix */
@@ -277,24 +258,6 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 				CefParseJSON(args,
 					     JSON_PARSER_ALLOW_TRAILING_COMMAS));
 	}
-}
-
-/* ========================================================================= */
-
-class BrowserTask : public CefTask {
-public:
-	std::function<void()> task;
-
-	inline BrowserTask(std::function<void()> task_) : task(task_) {}
-	virtual void Execute() override { task(); }
-
-	IMPLEMENT_REFCOUNTING(BrowserTask);
-};
-
-static bool QueueCEFTask(std::function<void()> task)
-{
-	return CefPostTask(TID_UI,
-			   CefRefPtr<BrowserTask>(new BrowserTask(task)));
 }
 
 /* ========================================================================= */
@@ -342,32 +305,26 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 				QMainWindow::AllowNestedDocks |
 				QMainWindow::AllowTabbedDocks);
 
-			m_appStateListener =
-				new ApplicationStateListener();
-			m_themeChangeListener =
-				new ThemeChangeListener();
-#ifdef WIN32
-			mainWindow()->addDockWidget(
-				Qt::NoDockWidgetArea,
-				m_themeChangeListener);
-#else
-			mainWindow()->addDockWidget(
-				Qt::BottomDockWidgetArea,
-				m_themeChangeListener);
-#endif
-
-			std::string storagePath = GetCEFStoragePath();
+			std::string storagePath = GetCefVersionString();
 			int os_mkdirs_ret = os_mkdirs(storagePath.c_str());
 
-			char *webRootPath = obs_module_file("localwebroot");
-			m_localWebFilesServer =
-				new StreamElementsLocalWebFilesServer(
-					webRootPath ? webRootPath : "");
-			bfree(webRootPath);
-			m_cookieManager =
-				new StreamElementsCookieManager(storagePath);
+			m_cef = obs_browser_init_panel();
+			if (!m_cef) {
+				blog(LOG_ERROR,
+				     "obs-streamelements-core: obs_browser_init_panel() failed");
+				return;
+			}
+			if (!m_cef->initialized()) {
+				m_cef->init_browser();
+				m_cef->wait_for_browser_init();
+			}
+
+			m_cefCookieManager = m_cef->create_cookie_manager(storagePath, true);
+
 			m_httpClient =
 				new StreamElementsHttpClient();
+			m_localFilesystemHttpServer =
+				new StreamElementsLocalFilesystemHttpServer();
 			m_analyticsEventsManager =
 				new StreamElementsAnalyticsEventsManager();
 			m_widgetManager =
@@ -403,9 +360,21 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			m_previewManager =
 				new StreamElementsPreviewManager(
 					mainWindow());
+			m_websocketApiServer =
+				new StreamElementsWebsocketApiServer();
 			m_windowStateEventFilter =
 				new WindowStateChangeEventFilter(
 					mainWindow());
+
+						m_appStateListener = new ApplicationStateListener();
+			m_themeChangeListener = new ThemeChangeListener();
+#ifdef WIN32
+			mainWindow()->addDockWidget(Qt::NoDockWidgetArea,
+						    m_themeChangeListener);
+#else
+			mainWindow()->addDockWidget(Qt::BottomDockWidgetArea,
+						    m_themeChangeListener);
+#endif
 
 			{
 				// Set up "Live Support" button
@@ -438,7 +407,12 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 						StreamElementsGlobalStateManager::GetInstance()
 							->GetAnalyticsEventsManager()
 							->trackEvent(
-								"Live Support Clicked");
+								"live_support_click",
+								json11::Json::object{
+									{"type",
+									 "button_click"},
+									{"placement",
+									 "live_support_button"}});
 
 						QUrl navigate_url = QUrl(
 							obs_module_text(
@@ -481,7 +455,7 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 			if (MKDIR_ERROR == os_mkdirs_ret) {
 				blog(LOG_WARNING,
-				     "obs-browser: init: set on-boarding mode due to error creating new cookie storage path: %s",
+				     "obs-streamelements-core: init: set on-boarding mode due to error creating new cookie storage path: %s",
 				     storagePath.c_str());
 
 				isOnBoarding = true;
@@ -489,7 +463,7 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 					"Failed creating new cookie storage folder";
 			} else if (MKDIR_SUCCESS == os_mkdirs_ret) {
 				blog(LOG_INFO,
-				     "obs-browser: init: set on-boarding mode due to new cookie storage path: %s",
+				     "obs-streamelements-core: init: set on-boarding mode due to new cookie storage path: %s",
 				     storagePath.c_str());
 
 				isOnBoarding = true;
@@ -498,7 +472,7 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 					   ->GetStreamElementsPluginVersion() !=
 				   STREAMELEMENTS_PLUGIN_VERSION) {
 				blog(LOG_INFO,
-				     "obs-browser: init: set on-boarding mode due to configuration version mismatch");
+				     "obs-streamelements-core: init: set on-boarding mode due to configuration version mismatch");
 
 				isOnBoarding = true;
 				onBoardingReason =
@@ -508,7 +482,7 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 				   StreamElementsConfig::
 					   STARTUP_FLAGS_ONBOARDING_MODE) {
 				blog(LOG_INFO,
-				     "obs-browser: init: set on-boarding mode due to start-up flags");
+				     "obs-streamelements-core: init: set on-boarding mode due to start-up flags");
 
 				isOnBoarding = true;
 				onBoardingReason =
@@ -531,16 +505,20 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			m_menuManager->Update();
 
 			{
-				json11::Json::object eventProps = {
-					{"isOnBoarding", isOnBoarding},
-				};
+				json11::Json::object eventProps;
+				json11::Json::array fields =
+					json11::Json::array{};
+				fields.push_back(json11::Json::array{
+					"is_onboarding",
+					isOnBoarding ? "true" : "false"});
 				if (isOnBoarding) {
-					eventProps["onBoardingReason"] =
-						onBoardingReason.c_str();
+					fields.push_back(json11::Json::array{
+						"onboarding_reason",
+						onBoardingReason});
 				}
 
 				GetAnalyticsEventsManager()
-					->trackEvent("Initialized", eventProps);
+					->trackEvent("se_live_initialized", eventProps, fields);
 			}
 		});
 
@@ -550,8 +528,6 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			->GetMenuManager()
 			->Update();
 	});
-
-	register_cookie_manager(CefCookieManager::GetGlobalManager(nullptr));
 
 	m_initialized = true;
 	m_persistStateEnabled = true;
@@ -567,12 +543,7 @@ void StreamElementsGlobalStateManager::Shutdown()
 		return;
 	}
 
-	unregister_cookie_manager(CefCookieManager::GetGlobalManager(nullptr));
-
 	obs_frontend_remove_event_callback(handle_obs_frontend_event, nullptr);
-
-	//flush_cookie_manager(GetCookieManager()->GetCefCookieManager());
-	//flush_cookie_managers();
 
 #ifdef WIN32
     // Shutdown on the main thread
@@ -592,16 +563,17 @@ void StreamElementsGlobalStateManager::Shutdown()
 			delete m_menuManager;
 			delete m_hotkeyManager;
 			delete m_obsSceneManager;
-			delete m_localWebFilesServer;
 			delete m_externalSceneDataProviderManager;
 			delete m_httpClient;
+			delete m_localFilesystemHttpServer;
 			// delete m_nativeObsControlsManager; // Singleton
 			delete m_profilesManager;
 			delete m_backupManager;
 			delete m_cleanupManager;
 			delete m_previewManager;
+			delete m_websocketApiServer;
 			delete m_windowStateEventFilter;
-			delete m_cookieManager;
+			delete m_cefCookieManager;
 		});
 #endif
 
@@ -741,157 +713,18 @@ void StreamElementsGlobalStateManager::SwitchToOBSStudio()
 
 void StreamElementsGlobalStateManager::DeleteCookies()
 {
-	class CookieVisitor : public CefCookieVisitor {
-	public:
-		CookieVisitor() {}
-		~CookieVisitor() {}
-
-		virtual bool Visit(const CefCookie &cookie, int count,
-				   int total, bool &deleteCookie) override
-		{
-			UNUSED_PARAMETER(count);
-			UNUSED_PARAMETER(total);
-
-			deleteCookie = true;
-
-			CefString domain(&cookie.domain);
-			CefString name(&cookie.name);
-
-			// Process cookie whitelist. This is used for
-			// preserving two-factor-authentication (2FA)
-			// "remember this computer" state.
-			//
-			if (domain == ".twitch.tv" && name == "authy_id") {
-				deleteCookie = false;
-			}
-
-			return true;
-		}
-
-	public:
-		IMPLEMENT_REFCOUNTING(CookieVisitor);
-	};
-
-	if (!m_cookieManager->GetCefCookieManager()->VisitAllCookies(
-		    new CookieVisitor())) {
-		blog(LOG_ERROR,
-		     "m_cookieManager->GetCefCookieManager()->VisitAllCookies() failed.");
+	// TODO: Specify specific cookies to delete, or, work with OBS community to provide a delete filter
+	if (m_cefCookieManager) {
+		m_cefCookieManager->DeleteCookies("", "");
 	}
 }
-
-void StreamElementsGlobalStateManager::SerializeCookies(
-	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
-{
-	output->SetNull();
-
-	class CookieVisitor : public CefCookieVisitor {
-	public:
-		std::string domainFilter;
-		std::string nameFilter;
-
-		CefRefPtr<CefListValue> result;
-		os_event_t *event;
-
-	public:
-		CookieVisitor(os_event_t *completionEvent)
-			: result(CefListValue::Create()), event(completionEvent)
-		{
-		}
-
-		~CookieVisitor() {
-			os_event_signal(event);
-		}
-
-		virtual bool Visit(const CefCookie &cookie, int count,
-				   int total, bool &deleteCookie) override
-		{
-			UNUSED_PARAMETER(count);
-			UNUSED_PARAMETER(total);
-
-			CefString value(&cookie.value);
-			CefString domain(&cookie.domain);
-			CefString name(&cookie.name);
-
-			if (domainFilter.size() && domain != domainFilter)
-				return true;
-
-			if (nameFilter.size() && name != nameFilter)
-				return true;
-
-			CefRefPtr<CefDictionaryValue> d =
-					CefDictionaryValue::Create();
-
-			d->SetString("name", name);
-			d->SetString("value", value);
-			d->SetString("domain", domain);
-			d->SetString("path", CefString(&cookie.path));
-			d->SetBool("httponly", cookie.httponly);
-			d->SetBool("secure", cookie.secure);
-
-			result->SetDictionary(result->GetSize(), d);
-
-			return true;
-		}
-
-	public:
-		IMPLEMENT_REFCOUNTING(CookieVisitor);
-	};
-
-	os_event_t *event;
-	os_event_init(&event, OS_EVENT_TYPE_AUTO);
-
-	bool success = false;
-	CefRefPtr<CefListValue> list = CefListValue::Create();
-
-	CefRefPtr<CookieVisitor> visitor = new CookieVisitor(event);
-
-	visitor->result = list;
-
-	if (input && input->GetType() == VTYPE_DICTIONARY) {
-		CefRefPtr<CefDictionaryValue> d =
-			input->GetDictionary();
-
-		if (d->HasKey("domain") &&
-			d->GetType("domain") == VTYPE_STRING) {
-			visitor->domainFilter = d->GetString("domain");
-		}
-
-		if (d->HasKey("name") &&
-		    d->GetType("name") == VTYPE_STRING) {
-			visitor->nameFilter = d->GetString("name");
-		}
-	}
-
-	success =
-		m_cookieManager->GetCefCookieManager()->VisitAllCookies(
-			visitor);
-
-	// VisitAllCookies() is executed on an async thread.
-	//
-	// Visitor destructor will be called onse VisitAllCookies() is done,
-	// and will indicate completion by raising event.
-	//
-	visitor = nullptr;
-
-	if (!success) {
-		blog(LOG_ERROR,
-		     "m_cookieManager->GetCefCookieManager()->VisitAllCookies() failed.");
-	} else {
-		os_event_wait(event);
-
-		output->SetList(list);
-	}
-
-	os_event_destroy(event);
-}
-
-extern void DispatchJSEvent(std::string eventName, std::string jsonString, BrowserSource* browser);
 
 static void DispatchJSEventAllBrowsers(const char *eventName,
 				       const char *jsonString)
 {
-	StreamElementsCefClient::DispatchJSEvent(eventName, jsonString);
-	DispatchJSEvent(eventName, jsonString, nullptr);
+	StreamElementsGlobalStateManager::GetInstance()
+		->GetWebsocketApiServer()
+		->DispatchJSEvent("system", eventName, jsonString);
 }
 
 void StreamElementsGlobalStateManager::Reset(bool deleteAllCookies,
@@ -946,7 +779,7 @@ bool StreamElementsGlobalStateManager::DeserializeUserInterfaceState(
 
 		if (geometry.get() && geometry->GetType() == VTYPE_STRING) {
 			blog(LOG_INFO,
-			     "obs-browser: state: restoring geometry: %s",
+			     "obs-streamelements-core: state: restoring geometry: %s",
 			     geometry->GetString().ToString().c_str());
 
 			if (mainWindow()->restoreGeometry(
@@ -963,7 +796,7 @@ bool StreamElementsGlobalStateManager::DeserializeUserInterfaceState(
 				result = true;
 			} else {
 				blog(LOG_ERROR,
-				     "obs-browser: state: failed restoring geometry: %s",
+				     "obs-streamelements-core: state: failed restoring geometry: %s",
 				     geometry->GetString().ToString().c_str());
 			}
 		}
@@ -976,7 +809,7 @@ bool StreamElementsGlobalStateManager::DeserializeUserInterfaceState(
 		if (windowState.get() &&
 		    windowState->GetType() == VTYPE_STRING) {
 			blog(LOG_INFO,
-			     "obs-browser: state: restoring windowState: %s",
+			     "obs-streamelements-core: state: restoring windowState: %s",
 			     windowState->GetString().ToString().c_str());
 
 			if (mainWindow()->restoreState(QByteArray::fromStdString(
@@ -985,7 +818,7 @@ bool StreamElementsGlobalStateManager::DeserializeUserInterfaceState(
 				result = true;
 			} else {
 				blog(LOG_ERROR,
-				     "obs-browser: state: failed restoring windowState: %s",
+				     "obs-streamelements-core: state: failed restoring windowState: %s",
 				     windowState->GetString()
 					     .ToString()
 					     .c_str());
@@ -1003,9 +836,6 @@ void StreamElementsGlobalStateManager::PersistState(bool sendEventToGuest)
 	if (!m_persistStateEnabled) {
 		return;
 	}
-
-	//flush_cookie_manager(GetCookieManager()->GetCefCookieManager());
-	//flush_cookie_managers();
 
 	CefRefPtr<CefValue> root = CefValue::Create();
 	CefRefPtr<CefDictionaryValue> rootDictionary =
@@ -1061,7 +891,7 @@ void StreamElementsGlobalStateManager::RestoreState()
 		return;
 	}
 
-	blog(LOG_INFO, "obs-browser: state: restoring state from base64: %s",
+	blog(LOG_INFO, "obs-streamelements-core: state: restoring state from base64: %s",
 	     base64EncodedJSON.c_str());
 
 	CefString json = base64_decode(base64EncodedJSON);
@@ -1070,7 +900,7 @@ void StreamElementsGlobalStateManager::RestoreState()
 		return;
 	}
 
-	blog(LOG_INFO, "obs-browser: state: restoring state from json: %s",
+	blog(LOG_INFO, "obs-streamelements-core: state: restoring state from json: %s",
 	     json.ToString().c_str());
 
 	CefRefPtr<CefValue> root =
@@ -1095,7 +925,7 @@ void StreamElementsGlobalStateManager::RestoreState()
 
 
 	if (workersState.get()) {
-		blog(LOG_INFO, "obs-browser: state: restoring workers: %s",
+		blog(LOG_INFO, "obs-streamelements-core: state: restoring workers: %s",
 		     CefWriteJSON(workersState, JSON_WRITER_DEFAULT)
 			     .ToString()
 			     .c_str());
@@ -1104,7 +934,7 @@ void StreamElementsGlobalStateManager::RestoreState()
 
 	if (dockingWidgetsState.get()) {
 		blog(LOG_INFO,
-		     "obs-browser: state: restoring docking widgets: %s",
+		     "obs-streamelements-core: state: restoring docking widgets: %s",
 		     CefWriteJSON(dockingWidgetsState, JSON_WRITER_DEFAULT)
 			     .ToString()
 			     .c_str());
@@ -1114,7 +944,7 @@ void StreamElementsGlobalStateManager::RestoreState()
 
 	if (notificationBarState.get()) {
 		blog(LOG_INFO,
-		     "obs-browser: state: restoring notification bar: %s",
+		     "obs-streamelements-core: state: restoring notification bar: %s",
 		     CefWriteJSON(notificationBarState, JSON_WRITER_DEFAULT)
 			     .ToString()
 			     .c_str());
@@ -1124,7 +954,7 @@ void StreamElementsGlobalStateManager::RestoreState()
 
 	if (hotkeysState.get()) {
 		blog(LOG_INFO,
-		     "obs-browser: state: restoring hotkey bindings: %s",
+		     "obs-streamelements-core: state: restoring hotkey bindings: %s",
 		     CefWriteJSON(hotkeysState, JSON_WRITER_DEFAULT)
 			     .ToString()
 			     .c_str());
@@ -1174,8 +1004,6 @@ bool StreamElementsGlobalStateManager::DeserializeStatusBarTemporaryMessage(
 
 	return false;
 }
-
-#include <include/cef_parser.h> // CefParseJSON, CefWriteJSON
 
 bool StreamElementsGlobalStateManager::DeserializeModalDialog(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
@@ -1249,51 +1077,26 @@ bool StreamElementsGlobalStateManager::DeserializePopupWindow(
 				d->GetString("executeJavaScriptOnLoad");
 		}
 
-		QueueCEFTask([this, url, executeJavaScriptOnLoad,
-			      enableHostApi]() {
-			CefWindowInfo windowInfo;
-#ifdef WIN32
-			windowInfo.SetAsPopup(0, ""); // Initial title
-#else
-			// TODO: TBD: Check if special handling is required for MacOS
-#endif
+		std::shared_ptr<StreamElementsApiMessageHandler>
+			apiMessageHandler = nullptr;
 
-			CefBrowserSettings cefBrowserSettings;
+		apiMessageHandler =
+			std::make_shared<StreamElementsApiMessageHandler>();
 
-			cefBrowserSettings.Reset();
-			cefBrowserSettings.javascript_close_windows =
-				STATE_ENABLED;
-			cefBrowserSettings.local_storage = STATE_ENABLED;
+		QMainWindow *window = new QMainWindow();
 
-			StreamElementsApiMessageHandler *apiMessageHandler =
-				enableHostApi
-					? new StreamElementsApiMessageHandler()
-					: nullptr;
+		auto browserWidget = new StreamElementsBrowserWidget(
+			nullptr, StreamElementsMessageBus::DEST_UI, url.c_str(),
+			executeJavaScriptOnLoad.c_str(),
+			"reload", "popupWindow",
+			CreateGloballyUniqueIdString().c_str(),
+			apiMessageHandler, false);
 
-			CefRefPtr<StreamElementsCefClient> cefClient =
-				new StreamElementsCefClient(
-					executeJavaScriptOnLoad,
-					apiMessageHandler,
-					nullptr,
-					StreamElementsMessageBus::DEST_UI);
+		window->setCentralWidget(browserWidget);
 
-			CefRefPtr<CefBrowser> browser =
-				CefBrowserHost::CreateBrowserSync(
-					windowInfo, cefClient, url.c_str(),
-					cefBrowserSettings,
-#if CHROME_VERSION_BUILD >= 3770
-#if ENABLE_CREATE_BROWSER_API
-				apiMessageHandler
-					? apiMessageHandler
-						  ->CreateBrowserArgsDictionary()
-					: CefRefPtr<CefDictionaryValue>(),
-#else
-				CefRefPtr<CefDictionaryValue>(),
-#endif
-#endif
-				GetCookieManager()
-						->GetCefRequestContext());
-		});
+		window->show();
+
+		return true;
 	}
 
 	return false;

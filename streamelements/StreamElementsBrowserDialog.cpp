@@ -3,17 +3,17 @@
 
 #include <QVBoxLayout>
 
-#include <include/cef_parser.h>		// CefParseJSON, CefWriteJSON
+#include "cef-headers.hpp"
 
 static std::recursive_mutex s_sync_api_call_mutex;
 
 #define API_HANDLER_BEGIN(name)                          \
 	RegisterIncomingApiCallHandler(name, []( \
-		StreamElementsApiMessageHandler* self, \
+		std::shared_ptr<StreamElementsApiMessageHandler> self, \
 		CefRefPtr<CefProcessMessage> message, \
 		CefRefPtr<CefListValue> args, \
 		CefRefPtr<CefValue>& result, \
-		CefRefPtr<CefBrowser> browser, \
+		std::string target, \
 		const long cefClientId, \
 		std::function<void()> complete_callback) \
 		{ \
@@ -21,7 +21,7 @@ static std::recursive_mutex s_sync_api_call_mutex;
 			(void)message; \
 			(void)args; \
 			(void)result; \
-			(void)browser; \
+			(void)target; \
 			(void)cefClientId; \
 			(void)complete_callback; \
 			std::lock_guard<std::recursive_mutex> _api_sync_guard(s_sync_api_call_mutex);
@@ -38,6 +38,11 @@ public:
 		RegisterIncomingApiCallHandlers();
 	}
 
+	virtual std::shared_ptr<StreamElementsApiMessageHandler> Clone() override
+	{
+		return std::make_shared<StreamElementsDialogApiMessageHandler>(m_dialog);
+	}
+
 private:
 	StreamElementsBrowserDialog* m_dialog;
 
@@ -51,8 +56,8 @@ protected:
 			result->SetBool(false);
 
 			if (args->GetSize()) {
-				StreamElementsDialogApiMessageHandler* msgHandler =
-					static_cast<StreamElementsDialogApiMessageHandler*>(self);
+				std::shared_ptr<StreamElementsDialogApiMessageHandler> msgHandler =
+					std::static_pointer_cast<StreamElementsDialogApiMessageHandler>(self);
 
 				CefRefPtr<CefValue> arg = args->GetValue(0);
 
@@ -99,12 +104,13 @@ int StreamElementsBrowserDialog::exec()
 {
 	m_browser = new StreamElementsBrowserWidget(
 		nullptr,
+		StreamElementsMessageBus::DEST_UI,
 		m_url.c_str(),
 		m_executeJavaScriptOnLoad.c_str(),
 		"reload",
 		"dialog",
-		"",
-		new StreamElementsDialogApiMessageHandler(this),
+		CreateGloballyUniqueIdString().c_str(),
+		std::make_shared<StreamElementsDialogApiMessageHandler>(this),
 		m_isIncognito);
 
 	layout()->addWidget(m_browser);

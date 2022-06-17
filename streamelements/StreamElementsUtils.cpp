@@ -1,8 +1,8 @@
 #include <string.h>
 
+#include "StreamElementsLocalFilesystemHttpServer.hpp"
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsConfig.hpp"
-#include "StreamElementsCefClient.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
 #include "StreamElementsRemoteIconLoader.hpp"
 #include "StreamElementsPleaseWaitWindow.hpp"
@@ -11,10 +11,6 @@
 #include "deps/utf8.h"
 
 #define GLOBAL_ENV_CONFIG_FILE_NAME "obs-studio/streamelements-env.ini"
-
-#if CHROME_VERSION_BUILD >= 3729
-#include <include/cef_api_hash.h>
-#endif
 
 #include <cstdint>
 #include <vector>
@@ -29,6 +25,7 @@
 #include <util/config-file.h>
 
 #include <QUrl>
+#include <QUrlQuery>
 #include <QFile>
 #include <QDir>
 #include <QUrl>
@@ -738,23 +735,78 @@ std::string GetCurrentThemeName()
 
 std::string GetCefVersionString()
 {
-	char buf[64];
+	char buf[64] = "unknown";
 
-	sprintf(buf, "cef.%d.%d.chrome.%d.%d.%d.%d", cef_version_info(0),
-		cef_version_info(1), cef_version_info(2), cef_version_info(3),
-		cef_version_info(4), cef_version_info(5));
+	void* libcef = os_dlopen("libcef");
+	if (libcef) {
+		typedef int (*cef_version_info_func_ptr_t)(int entry);
+
+		cef_version_info_func_ptr_t cef_version_info_func_ptr =
+			(cef_version_info_func_ptr_t)os_dlsym(
+				libcef, "cef_version_info");
+
+		if (cef_version_info_func_ptr) {
+			sprintf(buf, "cef.%d.%d.chrome.%d.%d.%d.%d",
+				cef_version_info_func_ptr(0),
+				cef_version_info_func_ptr(1),
+				cef_version_info_func_ptr(2),
+				cef_version_info_func_ptr(3),
+				cef_version_info_func_ptr(4),
+				cef_version_info_func_ptr(5));
+		}
+
+		os_dlclose(libcef);
+	}
 
 	return std::string(buf);
 }
 
 std::string GetCefPlatformApiHash()
 {
-	return cef_api_hash(0);
+	char buf[128] = "unknown";
+
+	void *libcef = os_dlopen("libcef");
+	if (libcef) {
+		typedef const char *(*cef_api_hash_func_ptr_t)(int entry);
+
+		cef_api_hash_func_ptr_t cef_api_hash_func_ptr =
+			(cef_api_hash_func_ptr_t)os_dlsym(
+				libcef, "cef_api_hash");
+
+		if (cef_api_hash_func_ptr) {
+			sprintf(buf, "%s", cef_api_hash_func_ptr(0));
+
+			return std::string(buf);
+		}
+
+		os_dlclose(libcef);
+	}
+
+	return std::string(buf);
 }
 
 std::string GetCefUniversalApiHash()
 {
-	return cef_api_hash(1);
+	char buf[128] = "unknown";
+
+	void *libcef = os_dlopen("libcef");
+	if (libcef) {
+		typedef const char *(*cef_api_hash_func_ptr_t)(int entry);
+
+		cef_api_hash_func_ptr_t cef_api_hash_func_ptr =
+			(cef_api_hash_func_ptr_t)os_dlsym(libcef,
+							  "cef_api_hash");
+
+		if (cef_api_hash_func_ptr) {
+			sprintf(buf, "%s", cef_api_hash_func_ptr(1));
+
+			return std::string(buf);
+		}
+
+		os_dlclose(libcef);
+	}
+
+	return std::string(buf);
 }
 
 std::string GetStreamElementsPluginVersionString()
@@ -1043,6 +1095,44 @@ bool HttpGetString(const char *url, http_client_headers_t request_headers,
 	buffer.push_back(0);
 
 	callback((char *)&buffer[0], userdata,
+		 error.size() ? (char *)error.c_str() : nullptr,
+		 http_status_code);
+
+	return success;
+}
+
+bool HttpGetBuffer(
+	const char *url, http_client_headers_t request_headers,
+	http_client_buffer_callback_t callback, void *userdata)
+{
+	std::vector<char> buffer;
+	std::string error = "";
+	int http_status_code = 0;
+
+	auto cb = [&](void *data, size_t datalen, void *userdata,
+		      char *error_msg, int http_code) -> bool {
+		if (http_code != 0) {
+			http_status_code = http_code;
+		}
+
+		if (error_msg) {
+			error = error_msg;
+
+			return false;
+		}
+
+		char *in = (char *)data;
+
+		std::copy(in, in + datalen, std::back_inserter(buffer));
+
+		return buffer.size() < MAX_HTTP_STRING_RESPONSE_LENGTH;
+	};
+
+	bool success = HttpGet(url, request_headers, cb, nullptr);
+
+	buffer.push_back(0);
+
+	callback((void *)&buffer[0], buffer.size(), userdata,
 		 error.size() ? (char *)error.c_str() : nullptr,
 		 http_status_code);
 
@@ -1583,72 +1673,51 @@ bool VerifySessionMessageSignature(std::string &message, std::string &signature)
 
 std::string CreateSessionSignedAbsolutePathURL(std::wstring path)
 {
-	CefURLParts parts;
-
 	path = std::regex_replace(path, std::wregex(L"#"), L"%23");
 	path = std::regex_replace(path, std::wregex(L"&"), L"%26");
 
-	CefString(&parts.scheme) = "https";
-	CefString(&parts.host) = "absolute";
-	CefString(&parts.path) = std::wstring(L"/") + path;
+	QUrl parts(StreamElementsGlobalStateManager::GetInstance()
+			 ->GetLocalFilesystemHttpServer()
+			 ->GetBaseUrl()
+			 .c_str());
 
-	CefString url;
-	CefCreateURL(parts, url);
-	CefParseURL(url, parts);
+	parts.setPath(QString::fromStdWString((std::wstring(L"/") + path).c_str()));
 
-	std::string message = CefString(&parts.path).ToString();
-
-	message =
-		CefURIDecode(message, true, cef_uri_unescape_rule_t::UU_SPACES);
-	message = CefURIDecode(
-		message, true,
-		cef_uri_unescape_rule_t::
-			UU_URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS);
+	std::string message = parts.path().toStdString();
 
 	message = message.erase(0, 1);
 
 	//message = std::regex_replace(message, std::regex("#"), "%23");
 	//message = std::regex_replace(message, std::regex("&"), "%26");
 
-	return url.ToString() + std::string("?digest=") +
+	return parts.url().toStdString() + std::string("?digest=") +
 	       CreateSessionMessageSignature(message);
 }
 
 bool VerifySessionSignedAbsolutePathURL(std::string url, std::string &path)
 {
-	CefURLParts parts;
+	QUrl parts(url.c_str());
 
-	if (!CefParseURL(CefString(url), parts)) {
+	path = parts.path().toStdString();
+
+	path = path.erase(0, 1);
+
+	if (!parts.hasQuery())
 		return false;
-	} else {
-		path = CefString(&parts.path).ToString();
 
-		path = CefURIDecode(path, true,
-				    cef_uri_unescape_rule_t::UU_SPACES);
-		path = CefURIDecode(
-			path, true,
-			cef_uri_unescape_rule_t::
-				UU_URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS);
+	QUrlQuery query(parts.query());
 
-		path = path.erase(0, 1);
+	if (!query.hasQueryItem("digest"))
+		return false;
 
-		std::map<std::string, std::string> queryArgs;
-		ParseQueryString(CefString(&parts.query), queryArgs);
+	std::string signature = query.queryItemValue("digest").toStdString();
 
-		if (!queryArgs.count("digest")) {
-			return false;
-		} else {
-			std::string signature = queryArgs["digest"];
+	std::string message = path;
 
-			std::string message = path;
+	//message = std::regex_replace(message, std::regex("#"), "%23");
+	//message = std::regex_replace(message, std::regex("&"), "%26");
 
-			//message = std::regex_replace(message, std::regex("#"), "%23");
-			//message = std::regex_replace(message, std::regex("&"), "%26");
-
-			return VerifySessionMessageSignature(message,
-							     signature);
-		}
-	}
+	return VerifySessionMessageSignature(message, signature);
 }
 
 /* ========================================================= */
@@ -1729,7 +1798,7 @@ void AdviseHostUserInterfaceStateChanged()
 			t = nullptr;
 
 			// Advise guest code of user interface state changes
-			StreamElementsCefClient::DispatchJSEvent(
+			DispatchClientJSEvent(
 				"hostUserInterfaceStateChanged", "null");
 		});
 	}
@@ -1759,7 +1828,7 @@ void AdviseHostHotkeyBindingsChanged()
 			t = nullptr;
 
 			// Advise guest code of user interface state changes
-			StreamElementsCefClient::DispatchJSEvent(
+			DispatchClientJSEvent(
 				"hostHotkeyBindingsChanged", "null");
 		});
 	}
@@ -1791,220 +1860,6 @@ std::string GetStreamElementsOverlayEditorURL(std::string overlayId,
 	return std::string("https://streamelements.com/overlay/") + overlayId +
 	       std::string("/editor");
 }
-
-#if ENABLE_DECRYPT_COOKIES
-#include "deps/sqlite/sqlite3.h"
-#include <windows.h>
-#include <wincrypt.h>
-#include <dpapi.h>
-#pragma comment(lib, "crypt32.lib")
-void StreamElementsDecryptCefCookiesFile(const char *path_utf8)
-{
-#ifdef _WIN32
-	sqlite3 *db;
-
-	if (SQLITE_OK !=
-	    sqlite3_open_v2(path_utf8, &db, SQLITE_OPEN_READWRITE, nullptr)) {
-		blog(LOG_ERROR,
-		     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': %s",
-		     path_utf8, sqlite3_errmsg(db));
-
-		sqlite3_close_v2(db);
-
-		return;
-	}
-
-	int done_count = 0;
-	int error_count = 0;
-	int decrypt_error_count = 0;
-
-	std::vector<std::string> apply_statements;
-
-	const char *sql =
-		"select * from cookies where value = '' and encrypted_value is NOT NULL";
-
-	sqlite3_stmt *stmt;
-
-	if (SQLITE_OK == sqlite3_prepare(db, sql, -1, &stmt, nullptr)) {
-		std::unordered_map<std::string, int> columnNameMap;
-
-		/* Map column names to their indexes */
-		for (int colIndex = 0;; ++colIndex) {
-			const char *col_name =
-				sqlite3_column_name(stmt, colIndex);
-			if (!col_name)
-				break;
-
-			columnNameMap[col_name] = colIndex;
-		}
-
-		auto getStringValue = [&](const char *colName) -> std::string {
-			const int col_index = columnNameMap[colName];
-			const unsigned char *val =
-				sqlite3_column_text(stmt, col_index);
-
-			if (!!val) {
-				const int size =
-					sqlite3_column_bytes(stmt, col_index);
-
-				return std::string((const char *)val,
-						   (size_t)size);
-			}
-
-			return std::string();
-		};
-
-		auto getIntValue = [&](const char *colName) -> int {
-			const int col_index = columnNameMap[colName];
-			return sqlite3_column_int(stmt, col_index);
-		};
-
-		if (columnNameMap.count("name") &&
-		    columnNameMap.count("encrypted_value") &&
-		    columnNameMap.count("host_key") &&
-		    columnNameMap.count("path") &&
-		    columnNameMap.count("priority")) {
-			while (SQLITE_ROW == sqlite3_step(stmt)) {
-				const int encrypted_value_index =
-					columnNameMap["encrypted_value"];
-
-				const void *encrypted_blob =
-					sqlite3_column_blob(
-						stmt, encrypted_value_index);
-				const int encrypted_size = sqlite3_column_bytes(
-					stmt, encrypted_value_index);
-
-				if (!encrypted_size)
-					continue;
-
-				std::string host_key =
-					getStringValue("host_key");
-				std::string path = getStringValue("path");
-				std::string name = getStringValue("name");
-				int priority = getIntValue("priority");
-
-				DATA_BLOB in;
-				in.cbData = encrypted_size;
-				in.pbData = (BYTE *)encrypted_blob;
-
-				DATA_BLOB out;
-
-				if (!CryptUnprotectData(&in, NULL, NULL, NULL,
-							NULL, 0, &out)) {
-					blog(LOG_ERROR,
-					     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': failed decrypting value for cookie '%s' for host '%s' path '%s'. All Cookies will be deleted.",
-					     path_utf8, name.c_str(), host_key.c_str(), path.c_str());
-
-					++decrypt_error_count;
-
-					continue;
-				} else {
-					blog(LOG_INFO,
-					     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': decrypted value for cookie '%s' for host '%s' path '%s'.",
-					     path_utf8, name.c_str(),
-					     host_key.c_str(), path.c_str());
-				}
-
-				std::string decrypted_value(
-					(const char *)out.pbData,
-					(size_t)out.cbData);
-				::LocalFree(out.pbData);
-
-				char *update_stmt = sqlite3_mprintf(
-					"update cookies set value = %Q, encrypted_value = NULL where value = '' and host_key = %Q and name = %Q and path = %Q and priority = %d",
-					decrypted_value.c_str(),
-					host_key.c_str(), name.c_str(),
-					path.c_str(), priority);
-
-				apply_statements.push_back(update_stmt);
-
-				sqlite3_free(update_stmt);
-			}
-		} else {
-			blog(LOG_ERROR,
-			     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s' cookies table is missing required columns",
-			     path_utf8);
-		}
-
-		sqlite3_finalize(stmt);
-	} else {
-		blog(LOG_ERROR,
-		     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': %s",
-		     path_utf8, sqlite3_errmsg(db));
-	}
-
-	//
-	// In case we failed to decrypt some cookie rows (there is an issue with this
-	// in recent versions of CEF), delete All cookies.
-	//
-	// We must do this, since the version of CEF we bundle with the product at this
-	// time differs from the version bundled with OBS Studio 27.2.x.
-	//
-	// The version which comes bundled with OBS Studio 27.2.x no longer supports
-	// decryption with DPAPI. Older versions of CEF treat Cookies files created
-	// with OBS Studio 27.2.x as incompatible and refuse to load cookies from
-	// those files.
-	//
-
-	if (decrypt_error_count > 0) {
-		apply_statements.clear();
-
-		// We will just delete the Cookies file later on
-	} else {
-		for (auto item : apply_statements) {
-			char *zErrMsg;
-
-			if (SQLITE_OK != sqlite3_exec(db, item.c_str(), nullptr,
-						      nullptr, &zErrMsg)) {
-				blog(LOG_INFO,
-				     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': sqlite3_exec(): %s: %s",
-				     path_utf8, zErrMsg, item.c_str());
-
-				sqlite3_free(zErrMsg);
-
-				++error_count;
-			} else {
-				++done_count;
-			}
-		}
-	}
-
-	sqlite3_close_v2(db);
-
-	if (decrypt_error_count > 0) {
-		// We must delete the Cookies file completely. See comment above for details.
-
-		if (0 == os_unlink(path_utf8)) {
-			blog(LOG_WARNING,
-			     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': we failed to decrypt %d cookies. The Cookies file was deleted to prevent incompatibility between CEF versions.",
-			     path_utf8, decrypt_error_count);
-		} else {
-			blog(LOG_ERROR,
-			     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': we failed to decrypt %d cookies and failed to delete the Cookies file to prevent incompatibility between CEF versions. You should delete this file manually.",
-			     path_utf8, decrypt_error_count);
-		}
-	} else {
-		blog(LOG_INFO,
-		     "obs-browser: StreamElementsDecryptCefCookiesFile: '%s': %d succeeded, %d failed",
-		     path_utf8, done_count, error_count);
-	}
-#endif
-}
-
-void StreamElementsDecryptCefCookiesStoragePath(const char *path_utf8)
-{
-	std::string file_path = path_utf8;
-
-	char ch = file_path[file_path.size() - 1];
-
-	if (ch != '\\' && ch != '/')
-		file_path += "/Cookies";
-	else
-		file_path += "Cookies";
-
-	StreamElementsDecryptCefCookiesFile(file_path.c_str());
-}
-#endif /* ENABLE_DECRYPT_COOKIES */
 
 std::string GetIdFromPointer(const void *ptr)
 {
@@ -2216,105 +2071,23 @@ bool ReadListOfObsProfiles(std::map<std::string, std::string> &output)
 	return true;
 }
 
-static class LocalCefURLRequestClient : public CefURLRequestClient {
-public:
-	LocalCefURLRequestClient(cef_http_request_callback_t callback)
-		: m_callback(callback)
-	{
-	}
-
-	virtual ~LocalCefURLRequestClient() {}
-
-public:
-	virtual bool
-	GetAuthCredentials(bool isProxy, const CefString &host, int port,
-			   const CefString &realm, const CefString &scheme,
-			   CefRefPtr<CefAuthCallback> callback) override
-	{
-		return false;
-	}
-
-	virtual void OnDownloadData(CefRefPtr<CefURLRequest> request,
-				    const void *data,
-				    size_t data_length) override;
-
-	virtual void OnUploadProgress(CefRefPtr<CefURLRequest> request,
-				      int64 current, int64 total) override
-	{
-	}
-
-	virtual void OnDownloadProgress(CefRefPtr<CefURLRequest> request,
-					int64 current, int64 total)
-	{
-	}
-
-	virtual void
-	OnRequestComplete(CefRefPtr<CefURLRequest> request) override;
-
-private:
-	std::vector<char> m_buffer;
-	cef_http_request_callback_t m_callback;
-
-public:
-	IMPLEMENT_REFCOUNTING(LocalCefURLRequestClient);
-};
-
-void LocalCefURLRequestClient::OnDownloadData(CefRefPtr<CefURLRequest> request,
-					      const void *data,
-					      size_t data_length)
+std::shared_ptr<CancelableTask>
+HttpGetAsync(std::string url,
+		async_http_request_callback_t callback)
 {
-	m_buffer.insert(m_buffer.end(), (char *)data,
-			(char *)data + data_length);
-}
+	return CancelableTask::Execute([=](std::shared_ptr<CancelableTask> task) {
+		http_client_headers_t headers;
 
-void LocalCefURLRequestClient::OnRequestComplete(
-	CefRefPtr<CefURLRequest> request)
-{
-	if (request->GetRequestStatus() == UR_CANCELED)
-		return;
+		auto cb = [=](void* data, size_t datalen, void* userdata, char* error_msg,
+			int http_code) {
+				if (!task->IsCancelled()) {
+					bool success = http_code >= 200 && http_code < 400;
 
-	if (request->GetRequestStatus() == UR_SUCCESS) {
-		// Success
+					callback(success, data, datalen);
+				}
+		};
 
-		m_callback(true, m_buffer.data(), m_buffer.size());
-	} else {
-		// Failure
-		m_callback(false, nullptr, 0);
-	}
-}
-
-CefRefPtr<CefCancelableTask> QueueCefCancelableTask(std::function<void()> task)
-{
-	CefRefPtr<CefCancelableTask> result = new CefCancelableTask(task);
-
-	CefPostTask(TID_UI, result);
-
-	return result;
-}
-
-CefRefPtr<CefCancelableTask>
-CefHttpGetAsync(const char *url,
-		std::function<void(CefRefPtr<CefURLRequest>)> init_callback,
-		cef_http_request_callback_t callback)
-{
-	CefRefPtr<CefRequest> request = CefRequest::Create();
-
-	request->SetURL(url);
-	request->SetMethod("GET");
-
-	CefRefPtr<LocalCefURLRequestClient> client =
-		new LocalCefURLRequestClient(callback);
-
-	extern bool QueueCEFTask(std::function<void()> task);
-
-	return QueueCefCancelableTask([=]() -> void {
-		CefRefPtr<CefURLRequest> cefRequest = CefURLRequest::Create(
-			request, client,
-			StreamElementsGlobalStateManager::GetInstance()
-				->GetCookieManager()
-				->GetCefRequestContext());
-
-		init_callback(cefRequest);
+		HttpGetBuffer(url.c_str(), headers, cb, nullptr);
 	});
 }
 
@@ -2367,10 +2140,8 @@ public:
 
 		CefRefPtr<StreamElementsRemoteIconLoader> loaderCopy = loader;
 
-		loaderCopy->AddRef();
 		QObject::connect(this, &QObject::destroyed, [loaderCopy]() {
 			loaderCopy->Cancel();
-			loaderCopy->Release();
 		});
 	}
 
@@ -2454,20 +2225,32 @@ bool DeserializeDocksMenu(QMenu& menu)
 					// Hide
 					StreamElementsGlobalStateManager::GetInstance()
 						->GetAnalyticsEventsManager()
-						->trackDockWidgetEvent(
-							dock, "Hide",
+						->trackEvent(
+							"se_live_dock_hide_click",
 							json11::Json::object{
-								{"actionSource",
-								 "Menu"}});
+								{"type",
+								 "button_click"},
+								{"placement",
+								 "menu"}
+							},
+							json11::Json::array{json11::Json::array{
+								"dock_widget_title",
+								dock->windowTitle().toStdString()}});
 				} else {
 					// Show
 					StreamElementsGlobalStateManager::GetInstance()
 						->GetAnalyticsEventsManager()
-						->trackDockWidgetEvent(
-							dock, "Show",
+						->trackEvent(
+							"se_live_dock_show_click",
 							json11::Json::object{
-								{"actionSource",
-								 "Menu"}});
+								{"type",
+								 "button_click"},
+								{"placement",
+								 "menu"}
+							},
+							json11::Json::array{json11::Json::array{
+								"dock_widget_title",
+								dock->windowTitle().toStdString()}});
 				}
 
 				dock->setVisible(!isVisible);
@@ -3068,192 +2851,6 @@ static std::wstring GetWString(CefRefPtr<CefDictionaryValue> input,
 	return input->GetString(key).ToWString();
 }
 
-static cef_event_flags_t DeserializeCefEventModifiers(CefRefPtr<CefValue> input) {
-	if (input->GetType() != VTYPE_DICTIONARY)
-		return EVENTFLAG_NONE;
-
-	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
-
-	uint32 result = EVENTFLAG_NONE;
-
-	if (GetBool(d, "altKey"))
-		result |= EVENTFLAG_ALT_DOWN;
-	if (GetBool(d, "ctrlKey"))
-		result |= EVENTFLAG_CONTROL_DOWN;
-	if (GetBool(d, "metaKey"))
-		result |= EVENTFLAG_COMMAND_DOWN;
-	if (GetBool(d, "shiftKey"))
-		result |= EVENTFLAG_SHIFT_DOWN;
-	if (GetBool(d, "capsLock"))
-		result |= EVENTFLAG_CAPS_LOCK_ON;
-	if (GetBool(d, "numLock"))
-		result |= EVENTFLAG_NUM_LOCK_ON;
-	if (GetBool(d, "primaryMouseButton"))
-		result |= EVENTFLAG_LEFT_MOUSE_BUTTON;
-	if (GetBool(d, "secondaryMouseButton"))
-		result |= EVENTFLAG_RIGHT_MOUSE_BUTTON;
-	if (GetBool(d, "auxiliaryMouseButton"))
-		result |= EVENTFLAG_MIDDLE_MOUSE_BUTTON;
-
-	switch (GetInt(d, "location", -1)) {
-	case 0x00: // DOM_KEY_LOCATION_STANDARD
-		// No special mod
-		break;
-	case 0x01: // DOM_KEY_LOCATION_LEFT
-		result |= EVENTFLAG_IS_LEFT;
-		break;
-	case 0x02: // DOM_KEY_LOCATION_RIGHT
-		result |= EVENTFLAG_IS_RIGHT;
-		break;
-	case 0x03: // DOM_KEY_LOCATION_NUMPAD
-		result |= EVENTFLAG_IS_KEY_PAD;
-		break;
-	default:
-		std::string location = GetString(d, "location");
-
-		if (location == "left") {
-			result |= EVENTFLAG_IS_LEFT;
-		} else if (location == "right") {
-			result |= EVENTFLAG_IS_RIGHT;
-		} else if (location == "numPad" || location == "keyPad") {
-			result |= EVENTFLAG_IS_KEY_PAD;
-		}
-		break;
-	}
-
-	return (cef_event_flags_t)result;
-}
-
-bool DeserializeCefMouseEvent(CefRefPtr<CefValue> input, CefMouseEvent &output)
-{
-	if (input->GetType() != VTYPE_DICTIONARY)
-		return false;
-
-	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
-
-	output.Reset();
-	output.modifiers = DeserializeCefEventModifiers(input);
-	output.x = GetInt(d, "x");
-	output.y = GetInt(d, "y");
-
-	return true;
-}
-
-bool DeserializeCefKeyEvent(CefRefPtr<CefValue> input, CefKeyEvent& output)
-{
-	if (input->GetType() != VTYPE_DICTIONARY)
-		return false;
-
-	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
-
-	int native_vkey_code = GetInt(d, "code", -1);
-	std::wstring key = GetWString(d, "key");
-	int charCode = GetInt(d, "charCode", -1);
-	if (charCode < 0 && !key.empty())
-		charCode = key[0];
-
-	output.Reset();
-	output.modifiers = DeserializeCefEventModifiers(input);
-	output.native_key_code = 0;
-	output.windows_key_code = native_vkey_code >= 0 ? native_vkey_code : charCode;
-	output.character = charCode;
-
-	std::string type = GetString(d, "type");
-	if (type == "rawkeydown") {
-		output.type = KEYEVENT_RAWKEYDOWN;
-	} else if (type == "keydown") {
-		output.type = KEYEVENT_KEYDOWN;
-	} else if (type == "keyup") {
-		output.type = KEYEVENT_KEYUP;
-	} else if (type == "keypress") {
-		output.type = KEYEVENT_CHAR;
-	} else {
-		return false;
-	}
-
-	return true;
-}
-
-bool DeserializeCefMouseButtonType(CefRefPtr<CefValue> input,
-				   CefBrowserHost::MouseButtonType &output)
-{
-	if (input->GetType() != VTYPE_DICTIONARY)
-		return false;
-
-	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
-
-	std::string button = GetString(d, "button");
-
-	if (button == "left") {
-		output = MBT_LEFT;
-	} else if (button == "right") {
-		output = MBT_RIGHT;
-	} else if (button == "auxiliary" || button == "middle") {
-		output = MBT_MIDDLE;
-	} else {
-		return false;
-	}
-
-	return true;
-}
-
-bool DeserializeCefMouseEventCount(CefRefPtr<CefValue> input, int& output) {
-	if (input->GetType() != VTYPE_DICTIONARY)
-		return false;
-
-	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
-
-	output = GetInt(d, "eventCount", 1);
-
-	if (output < 1)
-		output = 1;
-
-	return true;
-}
-
-bool DeserializeCefMouseEventType(CefRefPtr<CefValue> input,
-				  CefMouseEventType &output)
-{
-	if (input->GetType() != VTYPE_DICTIONARY)
-		return false;
-
-	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
-
-	std::string type = GetString(d, "type");
-
-	if (type == "mousedown") {
-		output = Down;
-	} else if (type == "mouseup") {
-		output = Up;
-	} else if (type == "mousemove") {
-		output = Move;
-	} else if (type == "wheel") {
-		output = Wheel;
-	}
-
-	return true;
-}
-
-bool DeserializeCefMouseWheelEventArgs(CefRefPtr<CefValue> input,
-				       CefMouseWheelEventArgs &output)
-{
-	if (input->GetType() != VTYPE_DICTIONARY)
-		return false;
-
-	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
-
-	output.deltaX = GetInt(d, "deltaX", 0);
-	output.deltaY = GetInt(d, "deltaY", 0);
-
-	if (output.deltaX < 0)
-		output.deltaX = 0;
-
-	if (output.deltaY < 0)
-		output.deltaY = 0;
-
-	return output.deltaX > 0 || output.deltaY > 0;
-}
-
 #ifdef WIN32
 void RestartCurrentApplication()
 {
@@ -3303,4 +2900,25 @@ bool IsSafeFileExtension(std::string path)
 	}
 
 	return true;
+}
+
+void DispatchClientMessage(std::string target, CefRefPtr<CefProcessMessage> msg)
+{
+	StreamElementsGlobalStateManager::GetInstance()
+		->GetWebsocketApiServer()
+		->DispatchClientMessage("system", target, msg);
+}
+
+void DispatchClientJSEvent(std::string event, std::string eventArgsJson)
+{
+	StreamElementsGlobalStateManager::GetInstance()
+		->GetWebsocketApiServer()
+		->DispatchJSEvent("system", event, eventArgsJson);
+}
+
+void DispatchClientJSEvent(std::string target, std::string event, std::string eventArgsJson)
+{
+	StreamElementsGlobalStateManager::GetInstance()
+		->GetWebsocketApiServer()
+		->DispatchJSEvent("system", target, event, eventArgsJson);
 }

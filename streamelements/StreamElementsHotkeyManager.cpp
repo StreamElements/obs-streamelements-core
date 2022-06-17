@@ -1,5 +1,4 @@
 #include "StreamElementsHotkeyManager.hpp"
-#include "StreamElementsCefClient.hpp"
 #include "StreamElementsUtils.hpp"
 
 #include <util/dstr.h>
@@ -337,10 +336,10 @@ void StreamElementsHotkeyManager::hotkeyTriggered(obs_hotkey_id id, obs_hotkey_t
 		std::string dataString = m_registeredHotkeyDataString[id];
 
 		if (pressed) {
-			StreamElementsCefClient::DispatchJSEvent("hostHotkeyPressed", dataString);
+			DispatchClientJSEvent("hostHotkeyPressed", dataString);
 		}
 		else {
-			StreamElementsCefClient::DispatchJSEvent("hostHotkeyReleased", dataString);
+			DispatchClientJSEvent("hostHotkeyReleased", dataString);
 		}
 	}
 }
@@ -514,20 +513,4 @@ void StreamElementsHotkeyManager::RemoveAllManagedHotkeyBindings()
 	m_registeredHotkeyNamesToHotkeyIds.clear();
 	m_registeredHotkeySerializedValues.clear();
 	m_registeredHotkeyDataString.clear();
-}
-
-void StreamElementsHotkeyManager::keyCombinationTriggered(CefRefPtr<CefBrowser> browser, obs_key_combination_t combination, bool pressed)
-{
-	std::lock_guard<std::recursive_mutex> guard(m_mutex);
-
-	CefRefPtr<CefValue> serialized = CefValue::Create();
-	serialized->SetDictionary(SerializeKeyCombination(combination));
-	std::string json = CefWriteJSON(serialized, JSON_WRITER_DEFAULT);
-
-	if (pressed) {
-		StreamElementsCefClient::DispatchJSEvent(browser, "hostContainerKeyCombinationPressed", json);
-	}
-	else {
-		StreamElementsCefClient::DispatchJSEvent(browser, "hostContainerKeyCombinationReleased", json);
-	}
 }

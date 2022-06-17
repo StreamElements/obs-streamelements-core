@@ -1,5 +1,12 @@
 #pragma once
 
+#include "StreamElementsLocalFilesystemHttpServer.hpp"
+
+#include "../../obs-browser/panel/browser-panel.hpp"
+
+struct QCef;
+struct QCefCookieManager;
+
 #include "StreamElementsBrowserWidgetManager.hpp"
 #include "StreamElementsMenuManager.hpp"
 #include "StreamElementsConfig.hpp"
@@ -12,17 +19,20 @@
 #include "StreamElementsAnalyticsEventsManager.hpp"
 #include "StreamElementsCrashHandler.hpp"
 #include "StreamElementsObsSceneManager.hpp"
-#include "StreamElementsLocalWebFilesServer.hpp"
 #include "StreamElementsExternalSceneDataProviderManager.hpp"
 #include "StreamElementsHttpClient.hpp"
 #include "StreamElementsNativeOBSControlsManager.hpp"
-#include "StreamElementsCookieManager.hpp"
 #include "StreamElementsProfilesManager.hpp"
 #include "StreamElementsBackupManager.hpp"
 #include "StreamElementsCleanupManager.hpp"
 #include "StreamElementsPreviewManager.hpp"
+#include "StreamElementsWebsocketApiServer.hpp"
 
 class StreamElementsGlobalStateManager : public StreamElementsObsAppMonitor {
+private:
+	QCef* m_cef;
+	QCefCookieManager* m_cefCookieManager;
+
 private:
 	class WindowStateChangeEventFilter : public QObject {
 	private:
@@ -71,14 +81,14 @@ public:
 	void Reset(bool deleteAllCookies = true,
 		   UiModifier uiModifier = Default);
 	void DeleteCookies();
-	void SerializeCookies(CefRefPtr<CefValue> input,
-			      CefRefPtr<CefValue> &output);
 	void StartOnBoardingUI(UiModifier uiModifier);
 	void StopOnBoardingUI();
 	void SwitchToOBSStudio();
 
 	void PersistState(bool sendEventToGuest = true);
 	void RestoreState();
+
+	QCef *GetCef() { return m_cef; }
 
 	StreamElementsBrowserWidgetManager *GetWidgetManager()
 	{
@@ -113,23 +123,24 @@ public:
 	{
 		return m_analyticsEventsManager;
 	}
-	StreamElementsLocalWebFilesServer *GetLocalWebFilesServer()
-	{
-		return m_localWebFilesServer;
-	}
 	StreamElementsExternalSceneDataProviderManager *
 	GetExternalSceneDataProviderManager()
 	{
 		return m_externalSceneDataProviderManager;
 	}
 	StreamElementsHttpClient *GetHttpClient() { return m_httpClient; }
+	StreamElementsLocalFilesystemHttpServer *GetLocalFilesystemHttpServer()
+	{
+		return m_localFilesystemHttpServer;
+	}
+
 	StreamElementsNativeOBSControlsManager *GetNativeOBSControlsManager()
 	{
 		return m_nativeObsControlsManager;
 	}
-	StreamElementsCookieManager *GetCookieManager()
+	QCefCookieManager *GetCookieManager()
 	{
-		return m_cookieManager;
+		return m_cefCookieManager;
 	}
 	StreamElementsProfilesManager *GetProfilesManager()
 	{
@@ -146,6 +157,9 @@ public:
 	StreamElementsPreviewManager* GetPreviewManager()
 	{
 		return m_previewManager;
+	}
+	StreamElementsWebsocketApiServer* GetWebsocketApiServer() {
+		return m_websocketApiServer;
 	}
 	QMainWindow *mainWindow() { return m_mainWindow; }
 
@@ -185,17 +199,17 @@ private:
 	StreamElementsAnalyticsEventsManager *m_analyticsEventsManager =
 		nullptr;
 	StreamElementsCrashHandler *m_crashHandler = nullptr;
-	StreamElementsLocalWebFilesServer *m_localWebFilesServer = nullptr;
 	StreamElementsExternalSceneDataProviderManager
 		*m_externalSceneDataProviderManager = nullptr;
 	StreamElementsHttpClient *m_httpClient = nullptr;
+	StreamElementsLocalFilesystemHttpServer *m_localFilesystemHttpServer;
 	StreamElementsNativeOBSControlsManager *m_nativeObsControlsManager =
 		nullptr;
-	StreamElementsCookieManager *m_cookieManager = nullptr;
 	StreamElementsProfilesManager *m_profilesManager = nullptr;
 	StreamElementsBackupManager *m_backupManager = nullptr;
 	StreamElementsCleanupManager *m_cleanupManager = nullptr;
 	StreamElementsPreviewManager *m_previewManager = nullptr;
+	StreamElementsWebsocketApiServer *m_websocketApiServer = nullptr;
 	WindowStateChangeEventFilter *m_windowStateEventFilter = nullptr;
 
 private:

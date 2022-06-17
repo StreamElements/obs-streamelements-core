@@ -5,107 +5,67 @@
 #include <QUuid>
 #include <QWidget>
 
-#include <include/cef_parser.h> // CefParseJSON, CefWriteJSON
-
-class BrowserTask : public CefTask {
-public:
-	std::function<void()> task;
-
-	inline BrowserTask(std::function<void()> task_) : task(task_) {}
-	virtual void Execute() override { task(); }
-
-	IMPLEMENT_REFCOUNTING(BrowserTask);
-};
-
-static bool QueueCEFTask(std::function<void()> task)
-{
-	return CefPostTask(TID_UI,
-			   CefRefPtr<BrowserTask>(new BrowserTask(task)));
-}
+#include "cef-headers.hpp"
 
 /* ========================================================================= */
 
-class StreamElementsWorkerManager::StreamElementsWorker : public QWidget {
+class StreamElementsWorkerManager::StreamElementsWorker {
 public:
 	StreamElementsWorker(std::string id,
 			     std::string url,
 			     std::string executeJavascriptOnLoad)
-		: QWidget(),
-		  m_url(url),
-		  m_executeJavascriptOnLoad(executeJavascriptOnLoad),
-		  m_cef_browser(nullptr)
+		: m_url(url),
+		  m_executeJavascriptOnLoad(executeJavascriptOnLoad)
 	{
-		cef_window_handle_t windowHandle = (cef_window_handle_t)winId();
+		auto browserWidget = new StreamElementsBrowserWidget(
+			nullptr, StreamElementsMessageBus::DEST_WORKER,
+			m_url.c_str(), m_executeJavascriptOnLoad.c_str(),
+			"default", "popup",
+			CreateGloballyUniqueIdString().c_str(),
+			std::make_shared<StreamElementsApiMessageHandler>(),
+			false);
 
-		QueueCEFTask([this, windowHandle, id, url]() {
-			if (!!m_cef_browser.get()) {
-				return;
-			}
+		auto mainWindow =
+			StreamElementsGlobalStateManager::GetInstance()
+				->mainWindow();
 
-			// CEF window attributes
-			CefWindowInfo windowInfo;
-			windowInfo.bounds.width = 1920;
-			windowInfo.bounds.height = 1080;
-			windowInfo.windowless_rendering_enabled = true;
-			windowInfo.shared_texture_enabled = true;
+		//
+		// HACK: QCefWidget will only create the browser if visible
+		//	 Since we do not want to show it, we create a QDockWidget and
+		//	 position it out of bounds of the current desktop.
+		//
 
-			CefBrowserSettings cefBrowserSettings;
+		QRect rec = QApplication::desktop()->screenGeometry();
 
-			cefBrowserSettings.Reset();
-			cefBrowserSettings.javascript_close_windows =
-				STATE_DISABLED;
-			cefBrowserSettings.local_storage = STATE_ENABLED;
-			cefBrowserSettings.databases = STATE_ENABLED;
-			//cefBrowserSettings.web_security = STATE_ENABLED;
-			cefBrowserSettings.webgl = STATE_ENABLED;
+		m_dockWidget = new QDockWidget();
+		m_dockWidget->setVisible(true);
+		m_dockWidget->layout()->addWidget(browserWidget);
+		m_dockWidget->setGeometry(QRect(rec.width() * 2, rec.height() * 2, 1920, 1080));
 
-			StreamElementsApiMessageHandler *apiMessageHandler =
-				new StreamElementsApiMessageHandler();
+		mainWindow->addDockWidget(Qt::NoDockWidgetArea, m_dockWidget);
 
-			CefRefPtr<StreamElementsCefClient> cefClient =
-				new StreamElementsCefClient(
-					m_executeJavascriptOnLoad,
-					apiMessageHandler,
-					nullptr,
-					StreamElementsMessageBus::DEST_WORKER);
+		auto timer = new QTimer();
+		timer->moveToThread(qApp->thread());
+		timer->setSingleShot(true);
+		timer->setInterval(3000);
 
-			cefClient->SetContainerId(id);
-			cefClient->SetLocationArea("worker");
+		QObject::connect(timer, &QTimer::timeout, [timer, this]() {
+			timer->deleteLater();
 
-			m_cef_browser = CefBrowserHost::CreateBrowserSync(
-				windowInfo, cefClient, "about:blank",
-				cefBrowserSettings,
-#if CHROME_VERSION_BUILD >= 3770
-#if ENABLE_CREATE_BROWSER_API
-				apiMessageHandler
-					? apiMessageHandler
-						  ->CreateBrowserArgsDictionary()
-					: CefRefPtr<CefDictionaryValue>(),
-#else
-				CefRefPtr<CefDictionaryValue>(),
-#endif
-#endif
-				StreamElementsGlobalStateManager::GetInstance()
-					->GetCookieManager()
-					->GetCefRequestContext());
-
-			m_cef_browser->GetMainFrame()->LoadURL(url);
+			m_dockWidget->hide();
 		});
+
+		QMetaObject::invokeMethod(timer, "start",
+					  Qt::QueuedConnection, Q_ARG(int, 0));
 	}
 
-	~StreamElementsWorker()
-	{
-		if (m_cef_browser.get()) {
-#ifdef WIN32
-			// Detach browser to prevent WM_CLOSE event from being sent
-			// from CEF to the parent window.
-			::SetParent(m_cef_browser->GetHost()->GetWindowHandle(),
-				    0L);
-#endif
+	~StreamElementsWorker() {
+		auto mainWindow =
+			StreamElementsGlobalStateManager::GetInstance()
+				->mainWindow();
 
-			m_cef_browser->GetHost()->CloseBrowser(true);
-			m_cef_browser = nullptr;
-		}
+		mainWindow->removeDockWidget(m_dockWidget);
+		m_dockWidget->deleteLater();
 	}
 
 	std::string GetUrl() { return m_url; }
@@ -114,7 +74,7 @@ public:
 private:
 	std::string m_url;
 	std::string m_executeJavascriptOnLoad;
-	CefRefPtr<CefBrowser> m_cef_browser;
+	QDockWidget *m_dockWidget = nullptr;
 };
 
 StreamElementsWorkerManager::StreamElementsWorkerManager() {}

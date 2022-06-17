@@ -1,6 +1,5 @@
 #include "StreamElementsNativeOBSControlsManager.hpp"
 #include "StreamElementsUtils.hpp"
-#include "StreamElementsCefClient.hpp"
 #include <QDockWidget>
 #include <QVBoxLayout>
 #include <QPushButton>
@@ -38,10 +37,10 @@ StreamElementsNativeOBSControlsManager::StreamElementsNativeOBSControlsManager(Q
 		auto manageBroadcastVisibilityCallback =
 			[this](bool isVisible) -> void {
 				if (isVisible) {
-					StreamElementsCefClient::DispatchJSEvent(
+					DispatchClientJSEvent(
 						"hostNativeManageBroadcastButtonVisible", "null");
 				} else {
-					StreamElementsCefClient::DispatchJSEvent(
+					DispatchClientJSEvent(
 						"hostNativeManageBroadcastButtonHidden", "null");
 			}};
 
@@ -272,8 +271,10 @@ bool StreamElementsNativeOBSControlsManager::DeserializePreviewTitleBar(
 	}
 
 	m_previewTitleBrowser = new StreamElementsBrowserWidget(
-		nullptr, url.c_str(), executeJavaScriptOnLoad.c_str(),
-		"reload", "obsPreviewAreaTitleBar", "");
+		nullptr, StreamElementsMessageBus::DEST_UI, url.c_str(),
+		executeJavaScriptOnLoad.c_str(), "reload",
+		"obsPreviewAreaTitleBar",
+		CreateGloballyUniqueIdString().c_str());
 
 	m_previewTitleBrowser->setSizePolicy(QSizePolicy(
 		QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding));
@@ -425,13 +426,13 @@ void StreamElementsNativeOBSControlsManager::SetStreamingTransitionStoppingState
 void StreamElementsNativeOBSControlsManager::OnStartStopStreamingButtonClicked()
 {
 	if (obs_frontend_streaming_active()) {
-		blog(LOG_INFO, "obs-browser: streaming stop requested by UI control");
+		blog(LOG_INFO, "obs-streamelements-core: streaming stop requested by UI control");
 
 		// obs_frontend_streaming_stop();
 		m_nativeStartStopStreamingButton->click();
 	}
 	else {
-		blog(LOG_INFO, "obs-browser: streaming start requested by UI control");
+		blog(LOG_INFO, "obs-streamelements-core: streaming start requested by UI control");
 
 		BeginStartStreaming();
 	}
@@ -516,7 +517,7 @@ void StreamElementsNativeOBSControlsManager::hotkey_routing_func(void* data, obs
 		if (pressed &&
 			!obs_frontend_streaming_active() &&
 			self->m_startStopStreamingButton->isEnabled()) {
-			blog(LOG_INFO, "obs-browser: streaming start requested by hotkey");
+			blog(LOG_INFO, "obs-streamelements-core: streaming start requested by hotkey");
 
 			self->BeginStartStreaming();
 		}
@@ -578,7 +579,7 @@ void StreamElementsNativeOBSControlsManager::BeginStartStreaming()
 	case request:
 		SetStreamingRequestedState();
 
-		StreamElementsCefClient::DispatchJSEvent("hostStreamingStartRequested", "null");
+		DispatchClientJSEvent("hostStreamingStartRequested", "null");
 		break;
 	}
 }

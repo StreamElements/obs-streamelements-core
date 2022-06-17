@@ -54,8 +54,6 @@ StreamElementsRemoteIconLoader::StreamElementsRemoteIconLoader(
 		LoadUrlInternal(url, requireQtPostTaskOnCached);
 	} else {
 		if (defaultPixmap) {
-			this->AddRef();
-
 			QPixmap pixmap(16, 16);
 
 			if (defaultPixmap) {
@@ -72,8 +70,6 @@ StreamElementsRemoteIconLoader::StreamElementsRemoteIconLoader(
 					m_setIcon(QIcon(pixmap));
 				}
 			} else {
-				this->AddRef();
-
 				QtPostTask([=]() {
 					std::lock_guard<std::recursive_mutex>
 						guard(m_mutex);
@@ -81,8 +77,6 @@ StreamElementsRemoteIconLoader::StreamElementsRemoteIconLoader(
 					if (!m_cancelled) {
 						m_setIcon(QIcon(pixmap));
 					}
-
-					this->Release();
 				});
 			}
 		}
@@ -99,7 +93,7 @@ StreamElementsRemoteIconLoader::Create(setIcon_callback_t setIcon,
 				       const char *url, QPixmap *defaultPixmap,
 				       bool requireQtPostTaskOnCached)
 {
-	return new StreamElementsRemoteIconLoader(setIcon, url, defaultPixmap,
+	return std::make_shared<StreamElementsRemoteIconLoader>(setIcon, url, defaultPixmap,
 						  requireQtPostTaskOnCached);
 }
 
@@ -110,15 +104,9 @@ void StreamElementsRemoteIconLoader::Cancel()
 	m_cancelled = true;
 
 	if (m_task) {
-		// m_task->Cancel();
+		m_task->Cancel();
 
 		m_task = nullptr;
-	}
-
-	if (m_request) {
-		m_request->Cancel();
-
-		m_request = nullptr;
 	}
 }
 
@@ -148,8 +136,6 @@ void StreamElementsRemoteIconLoader::LoadUrlInternal(
 				m_setIcon(cached);
 			}
 		} else {
-			this->AddRef();
-
 			QtPostTask([this, cached]() {
 				std::lock_guard<std::recursive_mutex> guard(
 					m_mutex);
@@ -157,29 +143,18 @@ void StreamElementsRemoteIconLoader::LoadUrlInternal(
 				if (!m_cancelled) {
 					m_setIcon(cached);
 				}
-
-				this->Release();
 			});
 		}
 
 		return;
 	}
 
-	this->AddRef();
-
-	m_task = CefHttpGetAsync(
+	m_task = HttpGetAsync(
 		url,
-		[&](CefRefPtr<CefURLRequest> request) { m_request = request; },
 		[this, cacheKey](bool success, void *data, size_t len) {
 			std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
-			if (m_request) {
-				m_request = nullptr;
-			}
-
-			m_task = nullptr;
-
-			if (success && !m_cancelled) {
+			if (success && !m_task->IsCancelled()) {
 				QByteArray buffer = QByteArray::fromRawData(
 					(char *)data, len);
 				QPixmap pixmap;
@@ -187,8 +162,6 @@ void StreamElementsRemoteIconLoader::LoadUrlInternal(
 					QIcon icon(pixmap);
 
 					SetCached(cacheKey, icon);
-
-					this->AddRef();
 
 					QtPostTask([this, icon]() {
 						std::lock_guard<
@@ -198,12 +171,8 @@ void StreamElementsRemoteIconLoader::LoadUrlInternal(
 						if (!m_cancelled) {
 							m_setIcon(icon);
 						}
-
-						this->Release();
 					});
 				}
 			}
-
-			this->Release();
 		});
 }

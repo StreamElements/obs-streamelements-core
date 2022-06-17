@@ -38,13 +38,13 @@ StreamElementsMessageBus* StreamElementsMessageBus::GetInstance()
 	return s_instance;
 }
 
-void StreamElementsMessageBus::AddBrowserListener(CefRefPtr<CefBrowser> browser, message_destination_filter_flags_t type)
+void StreamElementsMessageBus::AddListener(std::string target, message_destination_filter_flags_t type)
 {
-	std::lock_guard<std::recursive_mutex> guard(m_browser_list_mutex);
+	std::lock_guard<std::recursive_mutex> guard(m_listener_list_mutex);
 
-	m_browser_list[browser->GetIdentifier()] = std::make_shared<BrowserListItem>(browser, type);
+	m_listener_list[target] = std::make_shared<ListenerItem>(target, type);
 
-	auto httpRequestHandler = [this, browser](const HttpServer::request_t &req,
+	auto httpRequestHandler = [this, target](const HttpServer::request_t &req,
 					 HttpServer::response_t &res) -> void {
 
 		CefRefPtr<CefValue> root = CefValue::Create();
@@ -94,9 +94,9 @@ void StreamElementsMessageBus::AddBrowserListener(CefRefPtr<CefBrowser> browser,
 									  &res);
 		}
 
-		NotifyBrowserEventListener(browser, "browser", "http",
-					   "urn:http:server:browser",
-					   "hostMessageReceived", root);
+		NotifyEventListener(target, "browser", "http",
+				    "urn:http:server:browser",
+				    "hostMessageReceived", root);
 
 		if (0 !=
 		    os_event_timedwait(
@@ -114,25 +114,25 @@ void StreamElementsMessageBus::AddBrowserListener(CefRefPtr<CefBrowser> browser,
 		}
 	};
 
-	m_browser_http_servers[browser->GetIdentifier()] =
+	m_listener_http_servers[target] =
 		std::make_shared<StreamElementsHttpServerManager>(
 			httpRequestHandler);
 }
 
-void StreamElementsMessageBus::RemoveBrowserListener(CefRefPtr<CefBrowser> browser)
+void StreamElementsMessageBus::RemoveListener(std::string target)
 {
-	std::lock_guard<std::recursive_mutex> guard(m_browser_list_mutex);
+	std::lock_guard<std::recursive_mutex> guard(m_listener_list_mutex);
 
-	m_browser_list.erase(browser->GetIdentifier());
+	m_listener_list.erase(target);
 
-	m_browser_http_servers.erase(browser->GetIdentifier());
+	m_listener_http_servers.erase(target);
 }
 
 void StreamElementsMessageBus::DeserializeHttpRequestResponse(
 	CefRefPtr<CefValue> idInput, CefRefPtr<CefValue> responseInput,
 	CefRefPtr<CefValue> &output)
 {
-	std::lock_guard<std::recursive_mutex> browser_list_guard(m_browser_list_mutex);
+	std::lock_guard<std::recursive_mutex> browser_list_guard(m_listener_list_mutex);
 
 	std::lock_guard<decltype(m_waiting_http_requests_mutex)> waiting_http_requests_guard(
 		m_waiting_http_requests_mutex);
@@ -203,51 +203,52 @@ void StreamElementsMessageBus::DeserializeHttpRequestResponse(
 }
 
 void StreamElementsMessageBus::DeserializeBrowserHttpServer(
-	CefRefPtr<CefBrowser> browser, CefRefPtr<CefValue> input,
+	std::string target, CefRefPtr<CefValue> input,
 	CefRefPtr<CefValue> &output)
 {
-	std::lock_guard<std::recursive_mutex> guard(m_browser_list_mutex);
+	std::lock_guard<std::recursive_mutex> guard(m_listener_list_mutex);
 
 	output->SetNull();
 
-	if (!m_browser_http_servers.count(browser->GetIdentifier()))
+	if (!m_listener_http_servers.count(target))
 		return;
 
-	m_browser_http_servers[browser->GetIdentifier()]->DeserializeHttpServer(
+	m_listener_http_servers[target]->DeserializeHttpServer(
 		input, output);
 }
 
 void StreamElementsMessageBus::SerializeBrowserHttpServers(
-	CefRefPtr<CefBrowser> browser, CefRefPtr<CefValue> &output)
+	std::string target, CefRefPtr<CefValue> &output)
 {
-	std::lock_guard<std::recursive_mutex> guard(m_browser_list_mutex);
+	std::lock_guard<std::recursive_mutex> guard(m_listener_list_mutex);
 
 	output->SetNull();
 
-	if (!m_browser_http_servers.count(browser->GetIdentifier()))
+	if (!m_listener_http_servers.count(target))
 		return;
 
-	m_browser_http_servers[browser->GetIdentifier()]->SerializeHttpServers(
+	m_listener_http_servers[target]->SerializeHttpServers(
 		output);
 }
 
 void StreamElementsMessageBus::RemoveBrowserHttpServersByIds(
-	CefRefPtr<CefBrowser> browser, CefRefPtr<CefValue> input,
+	std::string target, CefRefPtr<CefValue> input,
 	CefRefPtr<CefValue> &output)
 {
-	std::lock_guard<std::recursive_mutex> guard(m_browser_list_mutex);
+	std::lock_guard<std::recursive_mutex> guard(m_listener_list_mutex);
 
 	output->SetNull();
 
-	if (!m_browser_http_servers.count(browser->GetIdentifier()))
+	if (!m_listener_http_servers.count(target))
 		return;
 
-	m_browser_http_servers[browser->GetIdentifier()]->RemoveHttpServersByIds(
+	m_listener_http_servers[target]->RemoveHttpServersByIds(
 		input, output);
 }
 
-void StreamElementsMessageBus::NotifyBrowserEventListener(
-	CefRefPtr<CefBrowser> browser, std::string scope, std::string source,
+void StreamElementsMessageBus::NotifyEventListener(std::string target,
+						   std::string scope,
+						   std::string source,
 	std::string sourceAddress, std::string event,
 	CefRefPtr<CefValue> payload)
 {
@@ -261,16 +262,9 @@ void StreamElementsMessageBus::NotifyBrowserEventListener(
 
 	root->SetDictionary(rootDict);
 
-	CefString payloadJson = CefWriteJSON(root, JSON_WRITER_DEFAULT);
+	std::string payloadJson = CefWriteJSON(root, JSON_WRITER_DEFAULT);
 
-	CefRefPtr<CefProcessMessage> msg =
-		CefProcessMessage::Create("DispatchJSEvent");
-	CefRefPtr<CefListValue> args = msg->GetArgumentList();
-
-	args->SetString(0, event);
-	args->SetString(1, payloadJson);
-
-	SendBrowserProcessMessage(browser, PID_RENDERER, msg);
+	DispatchClientJSEvent(target, event, payloadJson);
 }
 
 void StreamElementsMessageBus::NotifyAllLocalEventListeners(
@@ -280,9 +274,9 @@ void StreamElementsMessageBus::NotifyAllLocalEventListeners(
 	std::string event,
 	CefRefPtr<CefValue> payload)
 {
-	std::lock_guard<std::recursive_mutex> guard(m_browser_list_mutex);
+	std::lock_guard<std::recursive_mutex> guard(m_listener_list_mutex);
 
-	if (m_browser_list.empty()) {
+	if (m_listener_list.empty()) {
 		return;
 	}
 
@@ -296,20 +290,14 @@ void StreamElementsMessageBus::NotifyAllLocalEventListeners(
 
 	root->SetDictionary(rootDict);
 
-	CefString payloadJson = CefWriteJSON(root, JSON_WRITER_DEFAULT);
+	std::string payloadJson = CefWriteJSON(root, JSON_WRITER_DEFAULT);
 
-	for (auto kv : m_browser_list) {
+	for (auto kv : m_listener_list) {
 		auto browser = kv.first;
 
 		if (kv.second->flags & types) {
-			CefRefPtr<CefProcessMessage> msg =
-				CefProcessMessage::Create("DispatchJSEvent");
-			CefRefPtr<CefListValue> args = msg->GetArgumentList();
-
-			args->SetString(0, event);
-			args->SetString(1, payloadJson);
-
-			SendBrowserProcessMessage(kv.second->browser, PID_RENDERER, msg);
+			DispatchClientJSEvent(kv.second->target, event,
+					      payloadJson);
 		}
 	}
 }

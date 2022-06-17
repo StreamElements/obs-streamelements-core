@@ -3,7 +3,11 @@
 #include "StreamElementsWidgetManager.hpp"
 #include "StreamElementsBrowserWidget.hpp"
 
-class StreamElementsBrowserWidgetManager :
+#include <map>
+#include <string>
+
+class StreamElementsBrowserWidgetManager
+	:
 	protected StreamElementsWidgetManager
 {
 public:

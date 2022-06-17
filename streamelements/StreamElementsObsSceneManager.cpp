@@ -1,6 +1,5 @@
 #include "StreamElementsObsSceneManager.hpp"
 #include "StreamElementsUtils.hpp"
-#include "StreamElementsCefClient.hpp"
 #include "StreamElementsConfig.hpp"
 
 #include <util/platform.h>
@@ -942,7 +941,7 @@ static void dispatch_scene_event(obs_scene_t *scene,
 
 	//QtPostTask([scene, currentSceneEventName, otherSceneEventName]() {
 	if (is_active_scene(scene)) {
-		StreamElementsCefClient::DispatchJSEvent(currentSceneEventName,
+		DispatchClientJSEvent(currentSceneEventName,
 							 "null");
 	}
 
@@ -950,7 +949,7 @@ static void dispatch_scene_event(obs_scene_t *scene,
 
 	SerializeObsScene(scene, item);
 
-	StreamElementsCefClient::DispatchJSEvent(
+	DispatchClientJSEvent(
 		otherSceneEventName, CefWriteJSON(item, JSON_WRITER_DEFAULT));
 
 	//obs_scene_release(scene);
@@ -1024,12 +1023,12 @@ static void dispatch_sceneitem_event(obs_sceneitem_t *sceneitem,
 		std::string json =
 			CefWriteJSON(item, JSON_WRITER_DEFAULT).ToString();
 
-		StreamElementsCefClient::DispatchJSEvent(eventName, json);
+		DispatchClientJSEvent(eventName, json);
 
 		//obs_sceneitem_release(sceneitem);
 		//});
 	} else {
-		StreamElementsCefClient::DispatchJSEvent(eventName, "null");
+		DispatchClientJSEvent(eventName, "null");
 	}
 }
 

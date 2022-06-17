@@ -1,0 +1,13 @@
+# CMake generation dependency list for this directory.
+C:/Program Files/CMake/share/cmake-3.16/Modules/FindPackageHandleStandardArgs.cmake
+C:/Program Files/CMake/share/cmake-3.16/Modules/FindPackageMessage.cmake
+C:/Program Files/CMake/share/cmake-3.16/Modules/FindPkgConfig.cmake
+C:/Qt/5.15.2/msvc2019_64/lib/cmake/Qt5Core/Qt5CoreConfig.cmake
+C:/Qt/5.15.2/msvc2019_64/lib/cmake/Qt5Core/Qt5CoreConfigVersion.cmake
+C:/Qt/5.15.2/msvc2019_64/lib/cmake/Qt5Widgets/Qt5WidgetsConfig.cmake
+C:/Qt/5.15.2/msvc2019_64/lib/cmake/Qt5Widgets/Qt5WidgetsConfigVersion.cmake
+C:/Shared/StreamElements/Dev/obs-studio/cmake/Modules/FindLibcurl.cmake
+C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeLists.txt
+C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/FindAngelScript.cmake
+C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/FindBugSplat.cmake
+C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/streamelements/streamelements.qrc

@@ -1,6 +1,7 @@
 #include "main.hpp"
 
 #include <stdio.h>
+#include <windows.h>
 
 int main(int argc, char **argv)
 {
@@ -37,7 +38,7 @@ int main(int argc, char **argv)
 #include <windows.h>
 #include <codecvt>
 
-int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine,
+int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine,
 	    int nShowCmd)
 {
 	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;

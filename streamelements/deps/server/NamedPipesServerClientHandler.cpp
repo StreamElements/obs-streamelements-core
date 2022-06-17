@@ -98,7 +98,7 @@ void NamedPipesServerClientHandler::ThreadProc()
 				&bytesLeftThisMessage);
 
 			if (!fPeekSuccess) {
-				blog(LOG_WARNING, "obs-browser: NamedPipesServerClientHandler: PeekNamedPipe: client disconnected");
+				blog(LOG_WARNING, "obs-streamelements-core: NamedPipesServerClientHandler: PeekNamedPipe: client disconnected");
 
 				Disconnect();
 			}
@@ -118,10 +118,10 @@ void NamedPipesServerClientHandler::ThreadProc()
 
 					m_readQueue.enqueue(std::vector<char>(buffer, buffer + bytesLeftThisMessage));
 
-					blog(LOG_DEBUG, "obs-browser: NamedPipesServerClientHandler: incoming message: %s", buffer);
+					blog(LOG_DEBUG, "obs-streamelements-core: NamedPipesServerClientHandler: incoming message: %s", buffer);
 				}
 				else {
-					blog(LOG_WARNING, "obs-browser: NamedPipesServerClientHandler: ReadFile: client disconnected");
+					blog(LOG_WARNING, "obs-streamelements-core: NamedPipesServerClientHandler: ReadFile: client disconnected");
 
 					Disconnect();
 				}

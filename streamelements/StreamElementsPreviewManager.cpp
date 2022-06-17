@@ -6,8 +6,8 @@
 #include <QApplication>
 #include <QEvent>
 
-#include "StreamElementsCefClient.hpp"
 #include "StreamElementsObsAppMonitor.hpp"
+#include "StreamElementsUtils.hpp"
 
 static class PreviewMouseEventFilter : public QObject {
 private:
@@ -35,12 +35,12 @@ public:
 			    Qt::NoModifier) {
 				if (o->objectName() ==
 				    QString("previewWindow")) {
-					StreamElementsCefClient::DispatchJSEvent(
+					DispatchClientJSEvent(
 						"hostVideoPreviewMouseDoubleClicked",
 						"null");
 				} else if (o->objectName() ==
 						   QString("sourcesDockWindow")) {
-					StreamElementsCefClient::DispatchJSEvent(
+					DispatchClientJSEvent(
 						"hostCurrentSceneItemsListMouseDoubleClicked",
 						"null");
 				}
@@ -49,7 +49,7 @@ public:
 
 		case QEvent::FocusAboutToChange:
 			if (o->objectName() == "OBSBasicWindow") {
-				StreamElementsCefClient::DispatchJSEvent(
+				DispatchClientJSEvent(
 					"hostBeforeFocusChange", "null");
 			}
 			break;

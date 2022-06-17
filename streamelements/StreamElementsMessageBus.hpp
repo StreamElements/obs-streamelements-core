@@ -47,30 +47,28 @@ public:
 	static StreamElementsMessageBus* GetInstance();
 
 public:
-	void AddBrowserListener(CefRefPtr<CefBrowser> browser, message_destination_filter_flags_t type);
-	void RemoveBrowserListener(CefRefPtr<CefBrowser> browser);
+	void AddListener(std::string target, message_destination_filter_flags_t type);
+	void RemoveListener(std::string target);
 
 public:
-	void DeserializeBrowserHttpServer(CefRefPtr<CefBrowser> browser,
+	void DeserializeBrowserHttpServer(std::string target,
 					  CefRefPtr<CefValue> input,
 					  CefRefPtr<CefValue> &output);
 
-	void SerializeBrowserHttpServers(CefRefPtr<CefBrowser> browser,
-					  CefRefPtr<CefValue> &output);
+	void SerializeBrowserHttpServers(std::string target,
+					 CefRefPtr<CefValue> &output);
 
-	void RemoveBrowserHttpServersByIds(CefRefPtr<CefBrowser> browser,
+	void RemoveBrowserHttpServersByIds(std::string target,
 					   CefRefPtr<CefValue> input,
 					   CefRefPtr<CefValue> &output);
 
 public:
 	// Deliver event message to specific browser
 	//
-	void NotifyBrowserEventListener(CefRefPtr<CefBrowser> browser,
-					std::string scope,
-					std::string source,
-					std::string sourceAddress,
-					std::string event,
-					CefRefPtr<CefValue> payload);
+	void NotifyEventListener(std::string target, std::string scope,
+				 std::string source, std::string sourceAddress,
+				 std::string event,
+				 CefRefPtr<CefValue> payload);
 
 	// Deliver event message to all local listeners (CEF UI, CEF Dialog, Background Worker)
 	// except Browser Sources.
@@ -164,24 +162,24 @@ public:
 					    CefRefPtr<CefValue> &output);
 
 private:
-	class BrowserListItem {
+	class ListenerItem {
 	public:
-		BrowserListItem(CefRefPtr<CefBrowser> browser_,
-				message_destination_filter_flags_t flags_)
-			: browser(browser_), flags(flags_)
+		ListenerItem(std::string target_,
+			     message_destination_filter_flags_t flags_)
+			: target(target_), flags(flags_)
 		{
 		}
 
 	public:
-		CefRefPtr<CefBrowser> browser;
+		std::string target;
 		message_destination_filter_flags_t flags;
 	};
 
-	std::recursive_mutex m_browser_list_mutex;
-	std::map<int, std::shared_ptr<BrowserListItem>> m_browser_list;
-	std::map<int,
+	std::recursive_mutex m_listener_list_mutex;
+	std::map<std::string, std::shared_ptr<ListenerItem>> m_listener_list;
+	std::map<std::string,
 		 std::shared_ptr<StreamElementsHttpServerManager>>
-		m_browser_http_servers;
+		m_listener_http_servers;
 	std::recursive_mutex m_waiting_http_requests_mutex;
 	std::map<std::string, std::shared_ptr<WaitingHttpRequestState>>
 		m_waiting_http_requests;

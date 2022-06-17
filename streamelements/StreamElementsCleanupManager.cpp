@@ -17,17 +17,16 @@ void StreamElementsCleanupManager::AddPath(std::string path)
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
-	m_paths.push_back(path);
+	m_paths[path] = true;
 }
 
 void StreamElementsCleanupManager::Clean()
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
-	if (m_paths.empty())
-		return;
+	for (auto kv : m_paths) {
+		std::string path = kv.first;
 
-	for (auto path : m_paths) {
 		if (!os_file_exists(path.c_str()))
 			continue;
 
@@ -39,21 +38,21 @@ void StreamElementsCleanupManager::Clean()
 		if (st.st_mode & S_IFDIR) {
 			if (0 == os_rmdir(path.c_str())) {
 				blog(LOG_INFO,
-				     "obs-browser: StreamElementsCleanupManager: removed folder: %s",
+				     "obs-streamelements-core: StreamElementsCleanupManager: removed folder: %s",
 				     path.c_str());
 			} else {
 				blog(LOG_ERROR,
-				     "obs-browser: StreamElementsCleanupManager: failed removing folder: %s",
+				     "obs-streamelements-core: StreamElementsCleanupManager: failed removing folder: %s",
 				     path.c_str());
 			}
 		} else {
 			if (0 == os_unlink(path.c_str())) {
 				blog(LOG_INFO,
-				     "obs-browser: StreamElementsCleanupManager: removed file: %s",
+				     "obs-streamelements-core: StreamElementsCleanupManager: removed file: %s",
 				     path.c_str());
 			} else {
 				blog(LOG_ERROR,
-				     "obs-browser: StreamElementsCleanupManager: failed removing file: %s",
+				     "obs-streamelements-core: StreamElementsCleanupManager: failed removing file: %s",
 				     path.c_str());
 			}
 		}

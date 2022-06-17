@@ -184,7 +184,7 @@ void NamedPipesServer::ThreadProc()
 			}
 
 			if (hPipe == INVALID_HANDLE_VALUE) {
-				blog(LOG_ERROR, "obs-browser: NamedPipesServer: CreateNamedPipe failed: %d", GetLastError());
+				blog(LOG_ERROR, "obs-streamelements-core: NamedPipesServer: CreateNamedPipe failed: %d", GetLastError());
 
 				Sleep(CLIENT_TIMEOUT_MS);
 			}
@@ -194,7 +194,7 @@ void NamedPipesServer::ThreadProc()
 				TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
 
 			if (isConnected) {
-				blog(LOG_INFO, "obs-browser: NamedPipesServer: ConnectNamedPipe: client connected");
+				blog(LOG_INFO, "obs-streamelements-core: NamedPipesServer: ConnectNamedPipe: client connected");
 
 				m_clients.push_back(new NamedPipesServerClientHandler(hPipe, m_msgHandler));
 			}

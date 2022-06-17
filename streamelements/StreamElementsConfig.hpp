@@ -11,7 +11,7 @@
 class StreamElementsConfig
 {
 private:
-	const char* CONFIG_FILE_NAME = "obs-browser-streamelements.ini";
+	const char* CONFIG_FILE_NAME = "obs-streamelements-core.ini";
 
 public:
 	static const uint64_t STARTUP_FLAGS_ONBOARDING_MODE = 0x0000000000000001ULL;

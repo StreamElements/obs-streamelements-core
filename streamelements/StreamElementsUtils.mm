@@ -323,7 +323,7 @@ void RestartCurrentApplication()
         success = proc.startDetached("/usr/bin/open", args);
         //success = [NSWorkspace.sharedWorkspace launchApplication:app.bundleURL.path];
 
-        blog(LOG_INFO, "obs-browser: RestartCurrentApplication: restart with /usr/bin/open %s: %s",
+        blog(LOG_INFO, "obs-streamelements-core: RestartCurrentApplication: restart with /usr/bin/open %s: %s",
             args[0].toStdString().c_str(),
             success ? "success" : "error");
     }
@@ -335,7 +335,7 @@ void RestartCurrentApplication()
 		    QCoreApplication::instance()->arguments()
 	    );
 
-        blog(LOG_INFO, "obs-browser: RestartCurrentApplication: restart with QProcess: %s", success ? "success" : "error");
+        blog(LOG_INFO, "obs-streamelements-core: RestartCurrentApplication: restart with QProcess: %s", success ? "success" : "error");
     }
 
     /* Exit OBS */

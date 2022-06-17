@@ -21,9 +21,6 @@ public:
 	bool RemoveHotkeyBindingById(obs_hotkey_id id);
 	void RemoveAllManagedHotkeyBindings();
 
-public:
-	virtual void keyCombinationTriggered(CefRefPtr<CefBrowser> browser, obs_key_combination_t combination, bool pressed);
-
 protected:
 	virtual void hotkeyTriggered(obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed);
 

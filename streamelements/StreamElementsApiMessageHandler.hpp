@@ -1,46 +1,46 @@
 #pragma once
 
-#include "StreamElementsBrowserMessageHandler.hpp"
+#include "cef-headers.hpp"
 
 #include <mutex>
 #include <functional>
 
-class StreamElementsApiMessageHandler
-	: public StreamElementsBrowserMessageHandler {
+class StreamElementsApiMessageHandler {
 public:
 	StreamElementsApiMessageHandler() { RegisterIncomingApiCallHandlers(); }
 	virtual ~StreamElementsApiMessageHandler() {}
 
 public:
 	virtual bool
-	OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
-#if CHROME_VERSION_BUILD >= 3770
-				 CefRefPtr<CefFrame> frame,
-#endif
-				 CefProcessId source_process,
+	OnProcessMessageReceived(std::string source,
 				 CefRefPtr<CefProcessMessage> message,
-				 const long cefClientId) override;
+				 const long cefClientId);
 
 	void setInitialHiddenState(bool isHidden)
 	{
 		m_initialHiddenState = isHidden;
 	}
 
+public:
+	virtual std::shared_ptr<StreamElementsApiMessageHandler> Clone() {
+		return std::make_shared<StreamElementsApiMessageHandler>();
+	}
+
 protected:
 	virtual void RegisterIncomingApiCallHandlers();
 
 	typedef void (*incoming_call_handler_t)(
-		StreamElementsApiMessageHandler *,
+		std::shared_ptr<StreamElementsApiMessageHandler>,
 		CefRefPtr<CefProcessMessage> message,
 		CefRefPtr<CefListValue> args, CefRefPtr<CefValue> &result,
-		CefRefPtr<CefBrowser> browser, const long cefClientId, std::function<void()> complete_callback);
+		std::string target, const long cefClientId, std::function<void()> complete_callback);
 
 	void RegisterIncomingApiCallHandler(std::string id,
 					    incoming_call_handler_t handler);
 
 	void InvokeApiCallHandlerAsync(
 		CefRefPtr<CefProcessMessage> message,
-		CefRefPtr<CefBrowser> browser, std::string invokeId,
+		std::string target, std::string invokeId,
 		CefRefPtr<CefListValue> invokeArgs,
 		std::function<void(CefRefPtr<CefValue>)> result_callback,
 		const long cefClientId,
@@ -62,18 +62,15 @@ private:
 	CefRefPtr<CefDictionaryValue> CreateApiPropsDictionaryInternal();
 
 	void
-	RegisterIncomingApiCallHandlersInternal(CefRefPtr<CefBrowser> browser);
-	void RegisterApiPropsInternal(CefRefPtr<CefBrowser> browser);
-	void DispatchHostReadyEventInternal(CefRefPtr<CefBrowser> browser);
-	void DispatchEventInternal(CefRefPtr<CefBrowser> browser,
+	RegisterIncomingApiCallHandlersInternal(std::string target);
+	void RegisterApiPropsInternal(std::string target);
+	void DispatchHostReadyEventInternal(std::string target);
+	void DispatchEventInternal(std::string target,
 				   std::string event,
 				   std::string eventArgsJson);
 
 public:
 	class InvokeHandler;
-
-public:
-	IMPLEMENT_REFCOUNTING(StreamElementsApiMessageHandler);
 };
 
 class StreamElementsApiMessageHandler::InvokeHandler

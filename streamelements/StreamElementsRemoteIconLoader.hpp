@@ -5,8 +5,9 @@
 #include <QPixmap>
 
 #include <functional>
+#include <memory>
 
-static class StreamElementsRemoteIconLoader : public CefBaseRefCounted {
+static class StreamElementsRemoteIconLoader {
 public:
 	typedef std::function<void(const QIcon)> setIcon_callback_t;
 
@@ -15,7 +16,7 @@ public:
 	Create(setIcon_callback_t setIcon, const char *url = nullptr,
 	       QPixmap *defaultPixmap = nullptr, bool requireQtPostTaskOnCached = true);
 
-private:
+public:
 	StreamElementsRemoteIconLoader(setIcon_callback_t setIcon,
 				       const char *url, QPixmap *defaultPixmap,
 				       bool requireQtPostTaskOnCached);
@@ -29,10 +30,7 @@ public:
 
 private:
 	std::recursive_mutex m_mutex;
-	CefRefPtr<CefURLRequest> m_request = nullptr;
-	CefRefPtr<CefCancelableTask> m_task = nullptr;
+	std::shared_ptr<CancelableTask> m_task = nullptr;
 	setIcon_callback_t m_setIcon;
 	bool m_cancelled = false;
-
-	IMPLEMENT_REFCOUNTING(StreamElementsRemoteIconLoader);
 };
