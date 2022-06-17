@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 2.8.12)
 project(obs-streamelements-core)
 
-set(BUGSPLAT_ROOT_DIR "C:/Shared/StreamElements/Dev/BugSplat")
-
 if (WIN32)
 	set(ENABLE_BUGSPLAT TRUE)
 	set(ENABLE_ANGELSCRIPT TRUE)
@@ -25,20 +23,11 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}/streamelements/deps")
 find_package(CURL REQUIRED)
 find_package(Qt5Core REQUIRED)
 find_package(Qt5Widgets REQUIRED)
-if (ENABLE_BUGSPLAT)
-	find_package(BugSplat REQUIRED)
-endif()
 
 include_directories(SYSTEM
 	${Qt5Core_INCLUDES}
 	${Qt5Widgets_INCLUDES}
 )
-
-if (ENABLE_BUGSPLAT)
-	include_directories(SYSTEM
-		${BUGSPLAT_INCLUDE_DIR}
-	)
-endif()
 
 if (ENABLE_ANGELSCRIPT)
 	include_directories(SYSTEM
@@ -49,11 +38,6 @@ endif()
 
 #qt5_wrap_ui(NetworkDialog "networkdialog.ui")
 qt5_add_resources(obs-streamelements-core-streamelements_QRC_SOURCES "streamelements/streamelements.qrc")
-
-if (NOT BUGSPLAT_FOUND AND ENABLE_BUGSPLAT)
-	message(STATUS "BugSplat Not found -- obs-streamelements-core plugin disabled.")
-	return()
-endif()
 
 include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 
@@ -72,6 +56,42 @@ endif(APPLE)
 # ----------------------------------------------------------------------------
 
 if (ENABLE_BUGSPLAT)
+	set(BUGSPLAT_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/BugSplat")
+	set(BUGSPLAT_INCLUDE_DIR "${BUGSPLAT_ROOT_DIR}/inc")
+
+	include_directories(SYSTEM ${BUGSPLAT_INCLUDE_DIR})
+
+	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+		find_library(BUGSPLAT_LIBRARY
+			NAMES BugSplat64.lib "BugSplat"
+			PATHS ${BUGSPLAT_ROOT_DIR} ${BUGSPLAT_ROOT_DIR}/lib64)
+
+		set(BUGSPLAT_BIN_DIR "${BUGSPLAT_ROOT_DIR}/bin64")
+		set(BUGSPLAT_BIN_FILES
+			${BUGSPLAT_BIN_DIR}/BsSndRpt64.exe
+			${BUGSPLAT_BIN_DIR}/BugSplat64.dll
+			${BUGSPLAT_BIN_DIR}/BugSplatHD64.exe
+			${BUGSPLAT_BIN_DIR}/BugSplatRc64.dll
+		)
+	elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
+		find_library(BUGSPLAT_LIBRARY
+			NAMES BugSplat64.lib "BugSplat"
+			PATHS ${BUGSPLAT_ROOT_DIR} ${BUGSPLAT_ROOT_DIR}/lib)
+
+		set(BUGSPLAT_BIN_DIR "${BUGSPLAT_ROOT_DIR}/bin")
+		set(BUGSPLAT_BIN_FILES
+			${BUGSPLAT_BIN_DIR}/BsSndRpt.exe
+			${BUGSPLAT_BIN_DIR}/BugSplat.dll
+			${BUGSPLAT_BIN_DIR}/BugSplatHD.exe
+			${BUGSPLAT_BIN_DIR}/BugSplatRc.dll
+		)
+	else()
+		message(ERROR_FATAL "BugSplat: could not detect CPU architecture")
+	endif()
+
+	set(BUGSPLAT_LIBRARIES
+			optimized ${BUGSPLAT_LIBRARY})
+
 	set(obs-streamelements-core_LIBRARIES
 		libobs
 		obs-frontend-api
@@ -79,7 +99,7 @@ if (ENABLE_BUGSPLAT)
 		Qt5::Widgets
 		w32-pthreads
 		${BUGSPLAT_LIBRARIES}
-		)
+	)
 else()
 	set(obs-streamelements-core_LIBRARIES
 		libobs
