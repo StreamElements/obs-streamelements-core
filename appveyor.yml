@@ -57,15 +57,15 @@ build_script:
         "-DCMAKE_SYSTEM_VERSION=`"10.0.22000.0`"",
         "-DCMAKE_PREFIX_PATH=`"build64`"",
         "-DCEF_ROOT_DIR=`"c:/local/obs-build-dependencies/cef_binary_4638_windows_x64`"",
-        "-DENABLE_BROWSER=ON",
+        "-DENABLE_BROWSER=OFF",
         "-DVLC_PATH=`"c:/local/obs-build-dependencies/vlc-3.0.0-git`"",
-        "-DENABLE_VLC=ON",
+        "-DENABLE_VLC=OFF",
         "-DCMAKE_INSTALL_PREFIX=`"build64/install`"",
         "-DCOPIED_DEPENDENCIES=OFF",
         "-DCOPY_DEPENDENCIES=ON",
         "-DBUILD_FOR_DISTRIBUTION=`"OFF`"",
         "-DDepsPath64=c:/local/obs-build-dependencies/windows-deps-2022-05-23-x64",
-        "-Wno-dev"
+        "-Wno-error=dev -Wno-dev -Wno-deprecated"
     )
 
     Invoke-Expression "cmake ${CmakeCommand}"
