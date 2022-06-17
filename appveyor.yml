@@ -31,8 +31,6 @@ install:
 
     echo add_subdirectory(obs-streamelements-core) >c:\local\obs-studio\plugins\CMakeLists.txt
 
-    set build_config=RelWithDebInfo
-
 cache:
 - c:\local\obs-build-dependencies
 
@@ -53,14 +51,14 @@ build_script:
     cd /d c:\local\obs-studio
 
 - ps: >-
-    CI\build-windows.ps1 -CombinedArchs -BuildConfiguration %build_config%
+    CI\build-windows.ps1 -CombinedArchs -BuildConfiguration RelWithDebInfo
 
 - cmd: >-
     echo.Upload PDBs to BugSplat in case this is a commit to master branch.
 
-    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\bin\SendPdbs.exe /u "%BUGSPLAT_USERNAME%" /p "%BUGSPLAT_PASSWORD%" /a obs-streamelements-core /v "%STREAMELEMENTS_PLUGIN_VERSION%" /b OBS_Live /d "c:\local\obs-studio\build64\rundir\%build_config%\obs-plugins\64bit" /f obs-streamelements-core.pdb
+    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\bin\SendPdbs.exe /u "%BUGSPLAT_USERNAME%" /p "%BUGSPLAT_PASSWORD%" /a obs-streamelements-core /v "%STREAMELEMENTS_PLUGIN_VERSION%" /b OBS_Live /d "c:\local\obs-studio\build64\rundir\RelWithDebInfo\obs-plugins\64bit" /f obs-streamelements-core.pdb
 
-    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\bin\SendPdbs.exe /u "%BUGSPLAT_USERNAME%" /p "%BUGSPLAT_PASSWORD%" /a obs-streamelements-core /v "%STREAMELEMENTS_PLUGIN_VERSION%" /b OBS_Live /d "c:\local\obs-studio\build32\rundir\%build_config%\obs-plugins\64bit" /f obs-streamelements-core.pdb
+    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\bin\SendPdbs.exe /u "%BUGSPLAT_USERNAME%" /p "%BUGSPLAT_PASSWORD%" /a obs-streamelements-core /v "%STREAMELEMENTS_PLUGIN_VERSION%" /b OBS_Live /d "c:\local\obs-studio\build32\rundir\RelWithDebInfo\obs-plugins\64bit" /f obs-streamelements-core.pdb
 
 
 
@@ -68,7 +66,7 @@ build_script:
 
     echo.Pack 64bit artifacts...
 
-    cd /d c:\local\obs-studio\build64\rundir\%build_config%
+    cd /d c:\local\obs-studio\build64\rundir\RelWithDebInfo
 
     7z a c:\local\source\build64.zip .
 
@@ -76,7 +74,7 @@ build_script:
 
     echo.Pack 32bit artifacts...
 
-    cd /d c:\local\obs-studio\build32\rundir\%build_config%
+    cd /d c:\local\obs-studio\build32\rundir\RelWithDebInfo
 
     7z a c:\local\source\build32.zip .
 
