@@ -1,5 +1,49 @@
-cmake_minimum_required(VERSION 2.8.12)
 project(obs-streamelements-core)
+
+macro(find_qt)
+  set(oneValueArgs VERSION)
+  set(multiValueArgs COMPONENTS COMPONENTS_WIN COMPONENTS_MAC COMPONENTS_LINUX)
+  cmake_parse_arguments(FIND_QT "" "${oneValueArgs}" "${multiValueArgs}"
+                        ${ARGN})
+
+  if(OS_WINDOWS)
+    find_package(
+      Qt${FIND_QT_VERSION}
+      COMPONENTS ${FIND_QT_COMPONENTS} ${FIND_QT_COMPONENTS_WIN}
+      REQUIRED)
+  elseif(OS_MACOS)
+    find_package(
+      Qt${FIND_QT_VERSION}
+      COMPONENTS ${FIND_QT_COMPONENTS} ${FIND_QT_COMPONENTS_MAC}
+      REQUIRED)
+  else()
+    find_package(
+      Qt${FIND_QT_VERSION}
+      COMPONENTS ${FIND_QT_COMPONENTS} ${FIND_QT_COMPONENTS_LINUX}
+      REQUIRED)
+  endif()
+
+  foreach(_COMPONENT IN LISTS FIND_QT_COMPONENTS FIND_QT_COMPONENTS_WIN
+                              FIND_QT_COMPONENTS_MAC FIND_QT_COMPONENTS_LINUX)
+    if(NOT TARGET Qt::${_COMPONENT} AND TARGET
+                                        Qt${FIND_QT_VERSION}::${_COMPONENT})
+
+      add_library(Qt::${_COMPONENT} INTERFACE IMPORTED)
+      set_target_properties(
+        Qt::${_COMPONENT} PROPERTIES INTERFACE_LINK_LIBRARIES
+                                     "Qt${FIND_QT_VERSION}::${_COMPONENT}")
+    endif()
+  endforeach()
+endmacro()
+
+if(NOT QT_VERSION)
+  set(QT_VERSION
+      "5"
+      CACHE STRING "OBS Qt version [5, 6]" FORCE)
+  set_property(CACHE QT_VERSION PROPERTY STRINGS 5 6)
+endif()
+
+find_qt(VERSION ${QT_VERSION} COMPONENTS Core Widgets)
 
 if (WIN32)
 	set(ENABLE_BUGSPLAT TRUE)
@@ -21,8 +65,6 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/streamelements/deps")
 
 find_package(CURL REQUIRED)
-find_package(Qt5Core REQUIRED)
-find_package(Qt5Widgets REQUIRED)
 
 include_directories(SYSTEM
 	${Qt5Core_INCLUDES}
@@ -135,7 +177,6 @@ elseif(DEFINED ENV{QTDIR})
 endif()
 
 set(CMAKE_AUTOMOC TRUE)
-find_package(Qt5Widgets REQUIRED)
 list(APPEND obs-streamelements-core_LIBRARIES
 	Qt5::Widgets
 	)
