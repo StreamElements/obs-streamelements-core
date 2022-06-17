@@ -99,7 +99,7 @@ build_script:
     $CmakeCommand = @(
       "-S . -B `"build32`"",
       "-G `"Visual Studio 16 2019`"",
-      "-DCMAKE_GENERATOR_PLATFORM=`"Win32"",
+      "-DCMAKE_GENERATOR_PLATFORM=`"Win32`"",
       "-DCMAKE_SYSTEM_VERSION=`"10.0.22000.0`"",
       "-DCMAKE_PREFIX_PATH=`"build32`"",
       "-DCEF_ROOT_DIR=`"c:/local/obs-build-dependencies/cef_binary_4638_windows_x64`"",
