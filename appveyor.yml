@@ -63,7 +63,8 @@ build_script:
         "-DCMAKE_INSTALL_PREFIX=`"build64/install`"",
         "-DCOPIED_DEPENDENCIES=OFF",
         "-DCOPY_DEPENDENCIES=ON",
-        "-DBUILD_FOR_DISTRIBUTION=`"OFF`""
+        "-DBUILD_FOR_DISTRIBUTION=`"OFF`"",
+        "-DDepsPath64=c:/local/obs-build-dependencies/windows-deps-2022-05-23-x64"
     )
 
     Invoke-Expression "cmake ${CmakeCommand}"
