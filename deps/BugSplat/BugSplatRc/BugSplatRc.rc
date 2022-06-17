@@ -1,0 +1,294 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "resBugSplatRc.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "afxres.h"
+#include "resBugSplatRc.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (United States) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "resBugSplatRc.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""afxres.h""\r\n"
+    "#include ""resBugSplatRc.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "#define _AFX_NO_SPLITTER_RESOURCES\r\n"
+    "#define _AFX_NO_OLE_RESOURCES\r\n"
+    "#define _AFX_NO_TRACKER_RESOURCES\r\n"
+    "#define _AFX_NO_PROPERTY_RESOURCES\r\n"
+    "\r\n"
+    "#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)\r\n"
+    "#ifdef _WIN32\r\n"
+    "LANGUAGE 9, 1\r\n"
+    "#pragma code_page(1252)\r\n"
+    "#endif //_WIN32\r\n"
+    "#include ""afxres.rc""         // Standard components\r\n"
+    "#endif\r\n"
+    "#include ""EventLog.rc""   // EventLog message\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_CRASHREPORT DIALOGEX 0, 0, 293, 239
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION
+CAPTION "Crash Report"
+FONT 8, "MS Shell Dlg", 0, 0, 0x0
+BEGIN
+    EDITTEXT        IDC_EDIT_DESCRIPTION,4,90,279,48,ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN | WS_VSCROLL
+    EDITTEXT        IDC_EDIT_NAME,6,186,98,12,ES_AUTOHSCROLL
+    EDITTEXT        IDC_EDIT_EMAILADDRESS,117,186,165,12,ES_AUTOHSCROLL
+    CONTROL         "Allow BugSplat to store this information for a period of up to one year.",IDC_OPTIN,
+                    "Button",BS_AUTOCHECKBOX | BS_MULTILINE | NOT WS_VISIBLE | WS_DISABLED | WS_TABSTOP,11,204,276,15
+    DEFPUSHBUTTON   "&Send Error Report",IDOK,33,218,63,14
+    PUSHBUTTON      "&Don't Send",IDCANCEL,119,218,40,14
+    PUSHBUTTON      "&View Report Details",IDDETAILS,183,218,67,14
+    CONTROL         IDD_PROGRESS,IDC_STATIC,"Static",SS_BITMAP,0,0,293,30
+    CONTROL         "",IDC_STATIC,"Static",SS_ETCHEDHORZ,0,31,293,1
+    LTEXT           "A problem has caused your program to close.",IDC_STATIC,5,37,284,10
+    LTEXT           "Reporting this error will help us make our product more reliable.  Please send this error report using the button below.  All information is treated as confidential and is only used to improve future versions of this program.",IDC_STATIC,5,50,275,27
+    LTEXT           "Name: (optional)",IDC_STATIC,6,175,86,8
+    LTEXT           "Email Address: (optional)",IDC_STATIC,117,175,163,9
+    CONTROL         "",IDC_STATIC,"Static",SS_ETCHEDHORZ,0,203,291,1
+    LTEXT           "Please describe the events just before this dialog appeared:",IDC_STATIC,5,80,198,10
+    LTEXT           "Contact information below is optional. If you provide it, we will keep it confidential.  We will only contact you with  information relevant to this crash report.",IDC_STATIC,6,146,276,22
+END
+
+IDD_PROGRESS DIALOG 0, 0, 249, 102
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION
+CAPTION "Sending error report"
+FONT 8, "MS Sans Serif"
+BEGIN
+    CONTROL         "Contacting server.............................................",IDC_STATIC,
+                    "Static",SS_LEFTNOWORDWRAP | WS_GROUP,78,16,125,9
+    LTEXT           "done",IDC_TASK1,204,16,31,8,NOT WS_VISIBLE
+    CONTROL         "Generating error report...................................",IDC_STATIC,
+                    "Static",SS_LEFTNOWORDWRAP | WS_GROUP,78,30,125,9
+    LTEXT           "done",IDC_TASK2,204,30,31,8,NOT WS_VISIBLE
+    CONTROL         "Posting data................................................",IDC_STATIC,
+                    "Static",SS_LEFTNOWORDWRAP | WS_GROUP,78,44,125,9
+    LTEXT           "done",IDC_TASK3,204,44,31,8,NOT WS_VISIBLE
+    CONTROL         "",IDC_STATIC,"Static",SS_BLACKFRAME | SS_SUNKEN,7,63,235,1
+    CONTROL         "Progress1",IDC_SENDPROGRESS,"msctls_progress32",0x0,7,69,235,9
+    DEFPUSHBUTTON   "&Close",IDOK,184,81,58,14,WS_DISABLED
+    ICON            IDI_TICK,IDC_STATIC,16,14,20,20,SS_REALSIZEIMAGE
+    LTEXT           "Thank you for sending this error report. It has been received successfully.",IDC_COMPLETE,7,69,235,8,NOT WS_VISIBLE
+END
+
+IDD_REPORTDETAILS DIALOGEX 0, 0, 248, 181
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION
+CAPTION "Error Uploading Report"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    EDITTEXT        IDC_STATIC_MSG1,7,72,234,82,ES_MULTILINE | ES_AUTOHSCROLL | ES_READONLY | NOT WS_TABSTOP
+    DEFPUSHBUTTON   "OK",IDOK,98,160,50,14
+    LTEXT           "An error report has been generated and currently resides on your computer.",IDC_STATIC,7,7,234,18
+    LTEXT           "This report contains a debugging file that we can inspect to give us details about the application at the exact time that the crash occurred.\n\nIn addition it contains any information you entered into the crash report dialog.",IDC_STATIC,7,26,228,43
+END
+
+IDD_REPORTFILES DIALOGEX 0, 0, 262, 222
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION
+CAPTION "Report Details"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,205,201,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,150,201,50,14
+    LTEXT           "A crash report has been generated for you, containing the files listed below.\nThe report contains detailed information about the state of the application at the time that it crashed, as well as the information you provided us.",IDC_STATIC,7,7,248,34
+    CONTROL         "",IDC_LISTFILES,"SysListView32",LVS_REPORT | LVS_ALIGNLEFT | WS_BORDER | WS_TABSTOP,7,129,248,67
+    LTEXT           "In addition, we may have requested that additional files be sent in order to get more detailed information about the crash.",IDC_ADDITIONALFILEREQUEST,7,41,248,22
+    CONTROL         "I wish to allow sending of the additional files",IDC_SENDADDITIONALFILES,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,23,109,230,10
+    LTEXT           "If you wish to disable sending the additional files, please uncheck the following box.  Files appended with * will be sent with any report.",IDC_STATIC,7,65,248,39
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO
+BEGIN
+    IDD_CRASHREPORT, DIALOG
+    BEGIN
+        BOTTOMMARGIN, 232
+    END
+
+    IDD_PROGRESS, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 242
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 95
+    END
+
+    IDD_REPORTDETAILS, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 241
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 174
+    END
+
+    IDD_REPORTFILES, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 255
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 215
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Bitmap
+//
+
+IDC_CRASHDLGHEADER      BITMAP                  "res\\crashDlgHeader.bmp"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 1,0,0,1
+ PRODUCTVERSION 1,0,0,1
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x4L
+ FILETYPE 0x2L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName", "BugSplat, LLC"
+            VALUE "FileDescription", "Crash reporting module, BugSplatRc"
+            VALUE "FileVersion", "1, 0, 0, 1"
+            VALUE "InternalName", "BugSplatRc"
+            VALUE "LegalCopyright", "Copyright BugSplat, LLC (C) 2003"
+            VALUE "OriginalFilename", "BugSplatRc.DLL"
+            VALUE "ProductName", "BugSplatRc Dynamic Link Library"
+            VALUE "ProductVersion", "1, 0, 0, 1"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDI_TICK                ICON                    "res\\tick.ico"
+IDI_ERR                 ICON                    "res\\error.ico"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE
+BEGIN
+    IDS_FAILED              "failed"
+    IDS_UNKNOWNERR          "An unknown error has occurred. Please contact your software vendor."
+    IDS_CREATEREPORT_FAILED "Unable to create the error report.\r\n\r\nPlease verify that there is enough space in your TEMP folder."
+    IDS_FAILED_DMP_SAVE     "Failed to save dump file to '%1!s!' (error %2!d!)"
+    IDS_FAILED_DMP_CREATE   "Failed to create dump file : '%1!s!' (error %2!d!)"
+    IDS_OLD_DBGHELP         "The version of DBGHELP.DLL on your system is too old.\r\nPlease report this problem to your software vendor."
+    IDS_NOEXIST_DBGHELP     "DBGHELP.DLL cannot be located.\r\nPlease report this problem to your software vendor."
+    IDS_UNABLETOVALIDATESERVER 
+                            "Unable to validate with server.\r\nA zip file containing the crash report was generated in\r\n%1!s!\r\nYou can upload this report manually at\r\nwww.bugsplat.com/postcrashreport"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_UNABLETOCOLLECTDATA "We were unable to composite the report data."
+    IDS_UNABLETOREACHSERVER "A zip file containing the crash report was generated in\n%1!s!\n\nYou can upload this report manually at\nwww.bugsplat.com/postcrashreport\n"
+    IDS_INVALIDSERVERRESPONSE 
+                            "A zip file containing the crash report was generated in\n%1!s!\n\nYou can upload this report manually at\nwww.bugsplat.com/postcrashreport"
+    IDS_LISTHEADER_FILE     "Additional File"
+    IDS_LISTHEADER_FILEFOLDER "Path"
+    IDS_NEEDTODOWNLOADCOMPONENT 
+                            "The application has crashed, and a report is about to be prepared for\nsending to BugSplat.\n\nAdditional components, however, need to be downloaded in order to\ncomplete this process.\n\nWould you like to download them now and continue?"
+    IDS_NEEDTODOWNLOADNEWERCOMPONENT 
+                            "The application has crashed, and a report is about to be prepared for\nsending to BugSplat.\n\nSome updated components are available and we recommend these are\ndownloaded in order to complete this process\nsuccessfully.\n\nWould you like to download them now and continue?\nSelect No to use existing components."
+    IDS_HUNG_SHUTDOWN       "The application '%s' appears to have hung.\r\n\r\nDo you wish to terminate the application and submit an error report?"
+END
+
+#endif    // English (United States) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+#define _AFX_NO_SPLITTER_RESOURCES
+#define _AFX_NO_OLE_RESOURCES
+#define _AFX_NO_TRACKER_RESOURCES
+#define _AFX_NO_PROPERTY_RESOURCES
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+#ifdef _WIN32
+LANGUAGE 9, 1
+#pragma code_page(1252)
+#endif //_WIN32
+#include "afxres.rc"         // Standard components
+#endif
+#include "EventLog.rc"   // EventLog message
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+
