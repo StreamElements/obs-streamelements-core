@@ -45,7 +45,28 @@ build_script:
     cd /d c:\local\obs-studio
 
 - ps: >-
-    CI\build-windows.ps1 -Verbose -BuildArch x64 -BuildConfiguration RelWithDebInfo
+    CI\build-windows.ps1\01_install_dependencies.ps1 -Verbose -BuildArch x64
+
+    CI\build-windows.ps1\01_install_dependencies.ps1 -Verbose -BuildArch x86
+
+- ps: >-
+    $CmakeCommand = @(
+        "-S . -B `"build64`"",
+        "-G `"Visual Studio 16 2019`"",
+        "-DCMAKE_GENERATOR_PLATFORM=`"${x64}`"",
+        "-DCMAKE_SYSTEM_VERSION=`"10.0.22000.0`"",
+        "-DCMAKE_PREFIX_PATH:PATH=`"build64`"",
+        "-DCEF_ROOT_DIR:PATH=`"c:/local/obs-build-dependencies/cef_binary_4638_windows_x64`"",
+        "-DENABLE_BROWSER=ON",
+        "-DVLC_PATH:PATH=`"c:/local/obs-build-dependencies/vlc-3.0.0-git`"",
+        "-DENABLE_VLC=ON",
+        "-DCMAKE_INSTALL_PREFIX=`"build64/install`"",
+        "-DCOPIED_DEPENDENCIES=OFF",
+        "-DCOPY_DEPENDENCIES=ON",
+        "-DBUILD_FOR_DISTRIBUTION=`"OFF`""
+    )
+
+    Invoke-Expression "cmake ${CmakeCommand}"
 
 - cmd: >-
     echo.Upload PDBs to BugSplat in case this is a commit to master branch.
