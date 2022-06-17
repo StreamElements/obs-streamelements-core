@@ -1,5 +1,9 @@
 #include "StreamElementsWebsocketApiServer.hpp"
 
+#include <asio.hpp>
+#include <asio/ts/buffer.hpp>
+#include <asio/ts/internet.hpp>
+
 StreamElementsWebsocketApiServer::StreamElementsWebsocketApiServer()
 {
 	// Set logging settings
@@ -50,11 +54,17 @@ StreamElementsWebsocketApiServer::StreamElementsWebsocketApiServer()
 
 	websocketpp::lib::error_code ec;
 
+	auto localhost = asio::ip::make_address_v4("127.0.0.1");
+
 	// Find first available port
 	do {
 		ec.clear();
 
-		m_endpoint.listen(m_port, ec);
+		m_endpoint.listen(
+			asio::ip::tcp::endpoint(
+				localhost,
+				m_port
+			), ec);
 
 		if (ec.value()) {
 			++m_port;

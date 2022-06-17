@@ -384,6 +384,10 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 		m_clientId, m_messageDestinationFlags);
 
 	s_widgets[m_clientId] = this;
+
+	m_cefWidget->setContentsMargins(0, 0, 0, 0);
+
+	setContentsMargins(0, 0, 0, 0);
 }
 
 StreamElementsBrowserWidget*
