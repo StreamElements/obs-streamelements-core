@@ -64,7 +64,8 @@ build_script:
         "-DCOPIED_DEPENDENCIES=OFF",
         "-DCOPY_DEPENDENCIES=ON",
         "-DBUILD_FOR_DISTRIBUTION=`"OFF`"",
-        "-DDepsPath64=c:/local/obs-build-dependencies/windows-deps-2022-05-23-x64"
+        "-DDepsPath64=c:/local/obs-build-dependencies/windows-deps-2022-05-23-x64",
+        "-Wno-dev"
     )
 
     Invoke-Expression "cmake ${CmakeCommand}"
