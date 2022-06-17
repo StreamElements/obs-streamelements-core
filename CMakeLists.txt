@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8.12)
 project(obs-streamelements-core)
 
+set(BUGSPLAT_ROOT_DIR "C:/Shared/StreamElements/Dev/BugSplat")
+
 if (WIN32)
 	set(ENABLE_BUGSPLAT TRUE)
 	set(ENABLE_ANGELSCRIPT TRUE)
@@ -20,13 +22,11 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/streamelements/deps")
 
+find_package(CURL REQUIRED)
 find_package(Qt5Core REQUIRED)
 find_package(Qt5Widgets REQUIRED)
 if (ENABLE_BUGSPLAT)
 	find_package(BugSplat REQUIRED)
-endif()
-if (ENABLE_ANGELSCRIPT)
-	find_package(AngelScript REQUIRED)
 endif()
 
 include_directories(SYSTEM
@@ -42,8 +42,8 @@ endif()
 
 if (ENABLE_ANGELSCRIPT)
 	include_directories(SYSTEM
-		${ANGELSCRIPT_INCLUDE_DIR}
-		${ANGELSCRIPT_ADDON_INCLUDE_DIR}
+		deps/angelscript/include
+		deps/angelscript/add_on
 	)
 endif()
 
@@ -52,11 +52,6 @@ qt5_add_resources(obs-streamelements-core-streamelements_QRC_SOURCES "streamelem
 
 if (NOT BUGSPLAT_FOUND AND ENABLE_BUGSPLAT)
 	message(STATUS "BugSplat Not found -- obs-streamelements-core plugin disabled.")
-	return()
-endif()
-
-if (NOT ANGELSCRIPT_FOUND AND ENABLE_ANGELSCRIPT)
-	message(STATUS "AngelScript Not found -- obs-streamelements-core plugin disabled.")
 	return()
 endif()
 
@@ -83,7 +78,6 @@ if (ENABLE_BUGSPLAT)
 		Qt5::Core
 		Qt5::Widgets
 		w32-pthreads
-		CURL::libcurl
 		${BUGSPLAT_LIBRARIES}
 		)
 else()
@@ -93,7 +87,6 @@ else()
 		Qt5::Core
 		Qt5::Widgets
 		#w32-pthreads
-		CURL::libcurl
 		)
 endif()
 
@@ -314,6 +307,7 @@ add_library(obs-streamelements-core MODULE
 
 target_link_libraries(obs-streamelements-core
 	${obs-streamelements-core_LIBRARIES}
+	CURL::libcurl
 	)
 
 set_target_properties(obs-streamelements-core PROPERTIES FOLDER "plugins/obs-streamelements-core")
@@ -340,23 +334,85 @@ if(ENABLE_ANGELSCRIPT)
 		streamelements/restore-script-host/main.rc
 		streamelements/restore-script-host/main.cpp
 		streamelements/restore-script-host/ScriptEngine.cpp
-		${ANGELSCRIPT_ADDON_INCLUDE_DIR}/scriptstdstring/scriptstdstring.cpp
-		#${ANGELSCRIPT_ADDON_INCLUDE_DIR}/scriptstdstring/scriptstdstring_utils.cpp
-		${ANGELSCRIPT_ADDON_INCLUDE_DIR}/scriptbuilder/scriptbuilder.cpp
-		)
+		deps/angelscript/source/as_atomic.cpp
+		deps/angelscript/source/as_builder.cpp
+		deps/angelscript/source/as_bytecode.cpp
+		deps/angelscript/source/as_callfunc.cpp
+		deps/angelscript/source/as_callfunc_mips.cpp
+		deps/angelscript/source/as_callfunc_ppc.cpp
+		deps/angelscript/source/as_callfunc_ppc_64.cpp
+		deps/angelscript/source/as_callfunc_sh4.cpp
+		deps/angelscript/source/as_callfunc_x64_gcc.cpp
+		deps/angelscript/source/as_callfunc_x64_mingw.cpp
+		deps/angelscript/source/as_callfunc_x64_msvc.cpp
+		deps/angelscript/source/as_callfunc_x86.cpp
+		deps/angelscript/source/as_callfunc_xenon.cpp
+		deps/angelscript/source/as_compiler.cpp
+		deps/angelscript/source/as_configgroup.cpp
+		deps/angelscript/source/as_context.cpp
+		deps/angelscript/source/as_datatype.cpp
+		deps/angelscript/source/as_gc.cpp
+		deps/angelscript/source/as_generic.cpp
+		deps/angelscript/source/as_globalproperty.cpp
+		deps/angelscript/source/as_memory.cpp
+		deps/angelscript/source/as_module.cpp
+		deps/angelscript/source/as_objecttype.cpp
+		deps/angelscript/source/as_outputbuffer.cpp
+		deps/angelscript/source/as_parser.cpp
+		deps/angelscript/source/as_restore.cpp
+		deps/angelscript/source/as_scriptcode.cpp
+		deps/angelscript/source/as_scriptengine.cpp
+		deps/angelscript/source/as_scriptfunction.cpp
+		deps/angelscript/source/as_scriptnode.cpp
+		deps/angelscript/source/as_scriptobject.cpp
+		deps/angelscript/source/as_string.cpp
+		deps/angelscript/source/as_string_util.cpp
+		deps/angelscript/source/as_thread.cpp
+		deps/angelscript/source/as_tokenizer.cpp
+		deps/angelscript/source/as_typeinfo.cpp
+		deps/angelscript/source/as_variablescope.cpp
+		deps/angelscript/add_on/scriptstdstring/scriptstdstring.cpp
+		deps/angelscript/add_on/scriptbuilder/scriptbuilder.cpp
+	)
+
+	if(MSVC AND CMAKE_CL_64)
+			enable_language(ASM_MASM)
+			if(CMAKE_ASM_MASM_COMPILER_WORKS)
+					set(obs-streamelements-core-streamelements-restore-script-host_SOURCES
+						${obs-streamelements-core-streamelements-restore-script-host_SOURCES}
+						deps/angelscript/source/as_callfunc_x64_msvc_asm.asm
+					)
+			else()
+					message(FATAL ERROR "MSVC x86_64 target requires a working assembler")
+			endif()
+	endif()
+
+	if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "^arm")
+			enable_language(ASM)
+			if(CMAKE_ASM_COMPILER_WORKS)
+					set(obs-streamelements-core-streamelements-restore-script-host_SOURCES
+						${obs-streamelements-core-streamelements-restore-script-host_SOURCES}
+						deps/angelscript/source/as_callfunc_arm.cpp
+						deps/angelscript/source/as_callfunc_arm_gcc.S
+					)
+
+
+					set_property(SOURCE
+						deps/angelscript/source/as_callfunc_arm_gcc.S
+						APPEND PROPERTY COMPILE_FLAGS " -Wa,-mimplicit-it=always"
+					)
+			else()
+					message(FATAL ERROR "ARM target requires a working assembler")
+			endif()
+	endif()
+
 	set(obs-streamelements-core-streamelements-restore-script-host_HEADERS
 		streamelements/restore-script-host/main.hpp
 		streamelements/restore-script-host/ScriptEngine.hpp
 		)
 
-	set(obs-streamelements-core-streamelements-restore-script-host_LIBRARIES
-		${ANGELSCRIPT_LIBRARIES}
-		#libobs
-		#Qt5::Core
-		#Qt5::Widgets
-		#w32-pthreads
-		#CURL::libcurl
-		)
+	#if("${CMAKE_SIZEOF_VOID_P}" EQUAL "8")
+	#endif()
 
 	add_executable(obs-streamelements-core-streamelements-restore-script-host
 		${obs-streamelements-core-streamelements-restore-script-host_SOURCES}
@@ -373,6 +429,7 @@ if(ENABLE_ANGELSCRIPT)
 	endif(APPLE)
 
 	if (WIN32)
+		set_target_properties(obs-streamelements-core-streamelements-restore-script-host PROPERTIES COMPILE_FLAGS "/MP /MT")
 		set_target_properties(obs-streamelements-core-streamelements-restore-script-host PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS")
 	endif(WIN32)
 
