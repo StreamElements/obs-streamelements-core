@@ -75,7 +75,7 @@ void StreamElementsAnalyticsEventsManager::AddRawEvent(
 		json11::Json::array{"seconds_since_previous_event",
 				    itoa(secondsSincePrevEvent, atoi_buf, 10)}};
 
-	props["feature"] = "obs_primary_plugin";
+	props["feature"] = "obs_selive_core_plugin";
 	props["name"] = eventName;
 	props["source"] = "obs_plugin";
 	props["placement"] = "obs";
