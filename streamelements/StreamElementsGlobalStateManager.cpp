@@ -437,7 +437,7 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 #ifdef __APPLE__
                     "SE.Live for Mac version %s powered by StreamElements",
 #else
-					"SE.Live version %s powered by StreamElements",
+					"SE.Live Core ver. %s powered by StreamElements",
 #endif
 					GetStreamElementsPluginVersionString()
 						.c_str());
