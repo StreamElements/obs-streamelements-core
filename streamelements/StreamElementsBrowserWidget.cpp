@@ -284,11 +284,9 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 		"', ws: new WebSocket(`ws://localhost:" +
 		itoa(port, portBuffer, 10) + "`) };\n" +
 		"window.host.endpoint.ws.onopen = () => {" +
-		"console.log('ws.onopen');" +
 		"window.host.endpoint.ws.send(JSON.stringify({ type: 'register', payload: { id: window.host.endpoint.source }}));" +
 		"};" + "window.host.endpoint.ws.onmessage = (event) => {" +
 		"	const json = JSON.parse(event.data);\n" +
-		"	console.log('ws.onmessage: ', json);"
 		"	if (json.type === 'register:response') {" +
 		"		window.host.endpoint.callbacks = {};\n" +
 		"		window.host.endpoint.callbackIdSequence = 0;\n" +
