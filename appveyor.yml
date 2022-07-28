@@ -15,7 +15,7 @@ install:
 - cmd: >-
     if not exist c:\local md c:\local
 
-    git clone --recursive https://github.com/jp9000/obs-studio.git c:\local\obs-studio
+    git clone --branch 27.2.4 --recursive https://github.com/jp9000/obs-studio.git c:\local\obs-studio
 
     cd /d c:\local\obs-studio\plugins
 
