@@ -3,6 +3,7 @@
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsBrowserWidget.hpp"
 #include "StreamElementsMessageBus.hpp"
+#include "StreamElementsWebsocketApiServer.hpp"
 
 #include <QWidget>
 #include <QHideEvent>
@@ -195,6 +196,9 @@ private:
 private:
 	static std::recursive_mutex s_mutex;
 	static std::map<std::string, StreamElementsBrowserWidget *> s_widgets;
+
+	StreamElementsWebsocketApiServer::message_handler_t m_msgHandler =
+		nullptr;
 
 public:
 	static StreamElementsBrowserWidget *

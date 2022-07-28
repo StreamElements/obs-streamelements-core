@@ -235,18 +235,21 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 				->GetWebsocketApiServer()
 				->GetPort();
 
+	m_msgHandler = [this](std::string source,
+			      CefRefPtr<CefProcessMessage> msg) {
+		std::lock_guard<decltype(s_mutex)> guard(s_mutex);
+
+		if (!m_requestedApiMessageHandler.get())
+			return;
+
+		m_requestedApiMessageHandler->OnProcessMessageReceived(source,
+								       msg, 0);
+	};
+
 	StreamElementsGlobalStateManager::GetInstance()
 		->GetWebsocketApiServer()
 		->RegisterMessageHandler(
-			m_clientId, [this](std::string source,
-					 CefRefPtr<CefProcessMessage> msg) {
-				if (!m_requestedApiMessageHandler.get())
-					return;
-
-				m_requestedApiMessageHandler
-					->OnProcessMessageReceived(source, msg,
-								   0);
-			});
+			m_clientId, m_msgHandler);
 
 	if (m_isIncognito) {
 		char cookie_store_name[128];
@@ -401,6 +404,10 @@ StreamElementsBrowserWidget::GetWidgetByMessageTargetId(std::string target)
 StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 {
 	std::lock_guard<decltype(s_mutex)> guard(s_mutex);
+
+	StreamElementsGlobalStateManager::GetInstance()
+		->GetWebsocketApiServer()
+		->UnregisterMessageHandler(m_clientId, m_msgHandler);
 
 	if (s_widgets.count(m_clientId)) {
 		s_widgets.erase(m_clientId);
