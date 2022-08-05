@@ -24,6 +24,10 @@ install:
 
     xcopy c:\local\source\*.* c:\local\obs-studio\plugins\obs-streamelements-core /S /E /I /Y
 
+    cd /d c:\local\obs-studio
+
+    echo add_subdirectory(obs-streamelements-core) >c:\local\obs-studio\plugins\CMakeLists.txt
+
 cache:
 - c:\local\obs-build-dependencies
 
@@ -47,13 +51,6 @@ build_script:
     .\CI\windows\01_install_dependencies.ps1 -Verbose -BuildArch x64
 
     .\CI\windows\01_install_dependencies.ps1 -Verbose -BuildArch x86
-
-- cmd: >-
-    cd /d c:\local\obs-studio
-
-    git checkout 5fd4339c1d32f57e0e510881e1321cb8c3b5f1ba
-
-    echo add_subdirectory(obs-streamelements-core) >c:\local\obs-studio\plugins\CMakeLists.txt
 
 - ps: >-
     $CmakeCommand = @(
@@ -182,15 +179,6 @@ build_script:
     cd /d c:\local\obs-studio\build32_qt6\rundir\RelWithDebInfo
 
     7z a c:\local\source\build32_qt6.zip .
-
-- cmd: >-
-    cd /d c:\local\obs-studio
-
-    git stash
-
-    git checkout 5fd4339c1d32f57e0e510881e1321cb8c3b5f1ba
-
-    echo add_subdirectory(obs-streamelements-core) >c:\local\obs-studio\plugins\CMakeLists.txt
 
 - ps: >-
     $CmakeCommand = @(
