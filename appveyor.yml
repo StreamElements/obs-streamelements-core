@@ -154,7 +154,7 @@ build_script:
 
     Invoke-Expression "cmake --build build32_qt5 --config RelWithDebInfo"
 
-- cmd: >
+- cmd: >-
   cd /d c:\local\obs-studio
 
   git checkout 4a64b2aae65dcc40e1d86ec5067532cdf9adcd35
