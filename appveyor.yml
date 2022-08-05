@@ -75,13 +75,13 @@ build_script:
 
 - ps: >-
     $CmakeCommand = @(
-      "-S . -B `"build64_qt${QT_VERSION}`"",
-      "-G `"${GENERATOR}`"",
+      "-S . -B `"build64_qt${Env:QT_VERSION}`"",
+      "-G `"${Env:GENERATOR}`"",
       "-DCMAKE_GENERATOR_PLATFORM=`"x64`"",
       "-DCMAKE_SYSTEM_VERSION=`"10.0.22000.0`"",
       "-DCEF_ROOT_DIR=`"c:/local/obs-build-dependencies/cef_binary_4638_windows_x64`"",
       "-DVLC_PATH=`"c:/local/obs-build-dependencies/vlc-3.0.0-git`"",
-      "-DCMAKE_INSTALL_PREFIX=`"build64_qt${QT_VERSION}/install`"",
+      "-DCMAKE_INSTALL_PREFIX=`"build64_qt${Env:QT_VERSION}/install`"",
       "-DCOPIED_DEPENDENCIES=OFF",
       "-DCOPY_DEPENDENCIES=ON",
       "-DBUILD_FOR_DISTRIBUTION=`"OFF`"",
@@ -112,17 +112,17 @@ build_script:
       "-DENABLE_VIRTUALCAM=OFF",
       "-DENABLE_VLC=OFF",
       "-DENABLE_VST=OFF",
-      "-DQT_VERSION=${QT_VERSION}",
-      "-DQTDIR=${QTDIR}",
-      "-DQt5_DIR=${QT5_DIR}",
-      "-DQt6_DIR=${QT6_DIR}",
+      "-DQT_VERSION=${Env:QT_VERSION}",
+      "-DQTDIR=${Env:QTDIR}",
+      "-DQt5_DIR=`"${Env:QT5_DIR}`"",
+      "-DQt6_DIR=`"${Env:QT6_DIR}`"",
       "-DVIRTUALCAM_GUID=`"A3FCE0F5-3493-419F-958A-ABA1250EC20B`"",
       "-DTHREADS_HAVE_PTHREAD_ARG=OFF"
     )
 
     Invoke-Expression "cmake ${CmakeCommand}"
 
-    Invoke-Expression "cmake --build build64_qt${QT_VERSION} --config RelWithDebInfo"
+    Invoke-Expression "cmake --build build64_qt${Env:QT_VERSION} --config RelWithDebInfo"
 
 - cmd: >-
     echo.Upload PDBs to BugSplat in case this is a commit to master branch (64bit. QT%QT_VERSION%).
@@ -142,11 +142,11 @@ build_script:
 
 - ps: >-
     $CmakeCommand = @(
-      "-S . -B `"build32_qt${QT_VERSION}`"",
-      "-G `"${GENERATOR}`"",
+      "-S . -B `"build32_qt${Env:QT_VERSION}`"",
+      "-G `"${Env:GENERATOR}`"",
       "-DCMAKE_GENERATOR_PLATFORM=`"Win32`"",
       "-DCMAKE_SYSTEM_VERSION=`"10.0.22000.0`"",
-      "-DCMAKE_PREFIX_PATH=`"build32_qt${QT_VERSION}`"",
+      "-DCMAKE_PREFIX_PATH=`"build32_qt${Env:QT_VERSION}`"",
       "-DCEF_ROOT_DIR=`"c:/local/obs-build-dependencies/cef_binary_4638_windows_x86`"",
       "-DVLC_PATH=`"c:/local/obs-build-dependencies/vlc-3.0.0-git`"",
       "-DCMAKE_INSTALL_PREFIX=`"build32/install`"",
@@ -180,17 +180,17 @@ build_script:
       "-DENABLE_VIRTUALCAM=OFF",
       "-DENABLE_VLC=OFF",
       "-DENABLE_VST=OFF",
-      "-DQT_VERSION=${QT_VERSION}",
-      "-DQTDIR=${QTDIR}",
-      "-DQt5_DIR=${QT5_DIR}",
-      "-DQt6_DIR=${QT6_DIR}",
+      "-DQT_VERSION=${Env:QT_VERSION}",
+      "-DQTDIR=${Env:QTDIR}",
+      "-DQt5_DIR=`"${Env:QT5_DIR}`"",
+      "-DQt6_DIR=`"${Env:QT6_DIR}`"",
       "-DVIRTUALCAM_GUID=`"A3FCE0F5-3493-419F-958A-ABA1250EC20B`"",
       "-DTHREADS_HAVE_PTHREAD_ARG=OFF"
     )
 
     Invoke-Expression "cmake ${CmakeCommand}"
 
-    Invoke-Expression "cmake --build build32_qt${QT_VERSION} --config RelWithDebInfo"
+    Invoke-Expression "cmake --build build32_qt${Env:QT_VERSION} --config RelWithDebInfo"
 
 - cmd: >-
     cd /d c:\local\obs-studio
