@@ -2,7 +2,8 @@ version: '{build}'
 branches:
   only:
   - master
-image: Visual Studio 2019
+  - qt6
+image: Visual Studio 2022
 configuration: RelWithDebInfo
 clone_folder: c:\local\source
 init:
