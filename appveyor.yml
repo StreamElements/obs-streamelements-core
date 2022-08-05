@@ -200,7 +200,7 @@ build_script:
 - cmd: >-
     echo.Upload PDBs to BugSplat in case this is a commit to master branch (32bit. QT%QT_VERSION%).
 
-    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\bin\SendPdbs.exe /u "%BUGSPLAT_USERNAME%" /p "%BUGSPLAT_PASSWORD%" /a obs-streamelements-core /v "%STREAMELEMENTS_PLUGIN_VERSION%" /b OBS_Live /d "c:\local\obs-studio\build32_qt$%QT_VERSION%\rundir\RelWithDebInfo\obs-plugins\32bit" /f obs-streamelements-core.pdb
+    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\bin\SendPdbs.exe /u "%BUGSPLAT_USERNAME%" /p "%BUGSPLAT_PASSWORD%" /a obs-streamelements-core /v "%STREAMELEMENTS_PLUGIN_VERSION%" /b OBS_Live /d "c:\local\obs-studio\build32_qt%QT_VERSION%\rundir\RelWithDebInfo\obs-plugins\32bit" /f obs-streamelements-core.pdb
 
 
 
