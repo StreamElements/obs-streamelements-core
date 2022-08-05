@@ -112,11 +112,12 @@ build_script:
 
     echo.Pack 64bit, QT6 artifacts...
 
-    dir /s c:\local\obs-studio\build64_qt6
-
     cd /d c:\local\obs-studio\build64_qt6\rundir\RelWithDebInfo
 
     7z a c:\local\source\build64_qt6.zip .
+
+- cmd: >-
+    cd /d c:\local\obs-studio
 
 - ps: >-
     $CmakeCommand = @(
@@ -182,6 +183,9 @@ build_script:
 
     7z a c:\local\source\build32_qt6.zip .
 
+- cmd: >-
+    cd /d c:\local\obs-studio
+
 - ps: >-
     $CmakeCommand = @(
       "-S . -B `"build64_qt5`"",
@@ -244,6 +248,9 @@ build_script:
     cd /d c:\local\obs-studio\build64_qt5\rundir\RelWithDebInfo
 
     7z a c:\local\source\build64_qt5.zip .
+
+- cmd: >-
+    cd /d c:\local\obs-studio
 
 - ps: >-
     $CmakeCommand = @(
@@ -313,6 +320,7 @@ build_script:
     echo.Update generated version header...
 
     copy /Y c:\local\obs-studio\plugins\obs-streamelements-core\streamelements\Version.generated.hpp c:\local\source\streamelements\Version.generated.hpp
+
 test: off
 artifacts:
 - path: build32_qt5.zip
