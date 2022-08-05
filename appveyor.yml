@@ -19,6 +19,7 @@ environment:
       QT5_DIR: c:\Qt\5.15.2
       GENERATOR: Visual Studio 16 2019
       CHECKOUT: 5fd4339c1d32f57e0e510881e1321cb8c3b5f1ba
+      OBS_DEPS_VERSION: 2022-05-23
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
       QT_VERSION: 6
       QT_DIR: C:\Qt\6.3.1
@@ -26,6 +27,7 @@ environment:
       QT6_DIR: C:\Qt\6.3.1
       CHECKOUT: master
       GENERATOR: Visual Studio 17 2022
+      OBS_DEPS_VERSION: 2022-08-02
 install:
 - cmd: >-
     if not exist c:\local md c:\local
@@ -85,7 +87,7 @@ build_script:
       "-DCOPIED_DEPENDENCIES=OFF",
       "-DCOPY_DEPENDENCIES=ON",
       "-DBUILD_FOR_DISTRIBUTION=`"OFF`"",
-      "-DDepsPath64=c:/local/obs-build-dependencies/windows-deps-2022-08-02-x64",
+      "-DDepsPath64=c:/local/obs-build-dependencies/windows-deps-${Env:OBS_DEPS_VERSION}-x64",
       "-Wno-error=dev -Wno-dev -Wno-deprecated",
       "-DENABLE_AJA=OFF",
       "-DENABLE_BROWSER=OFF",
@@ -153,7 +155,7 @@ build_script:
       "-DCOPIED_DEPENDENCIES=OFF",
       "-DCOPY_DEPENDENCIES=ON",
       "-DBUILD_FOR_DISTRIBUTION=`"OFF`"",
-      "-DDepsPath32=c:/local/obs-build-dependencies/windows-deps-2022-08-02-x86",
+      "-DDepsPath32=c:/local/obs-build-dependencies/windows-deps-${Env:OBS_DEPS_VERSION}-x86",
       "-Wno-error=dev -Wno-dev -Wno-deprecated",
       "-DENABLE_AJA=OFF",
       "-DENABLE_BROWSER=OFF",
