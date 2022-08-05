@@ -13,22 +13,28 @@ environment:
   BUGSPLAT_PASSWORD:
     secure: 9c6LeJtXAXvISt7o1o5lnw==
   matrix:
-    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
-      QT_VERSION: 6
-      QT_DIR: C:\Qt\6.3.1
-      QT5_DIR:
-      QT6_DIR: C:\Qt\6.3.1
-      GENERATOR: Visual Studio 17 2022
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
       QT_VERSION: 5
       QT_DIR: c:\Qt\5.15.2
       QT5_DIR: c:\Qt\5.15.2
       GENERATOR: Visual Studio 16 2019
+      CHECKOUT: 5fd4339c1d32f57e0e510881e1321cb8c3b5f1ba
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
+      QT_VERSION: 6
+      QT_DIR: C:\Qt\6.3.1
+      QT5_DIR:
+      QT6_DIR: C:\Qt\6.3.1
+      CHECKOUT: master
+      GENERATOR: Visual Studio 17 2022
 install:
 - cmd: >-
     if not exist c:\local md c:\local
 
     git clone --recursive https://github.com/jp9000/obs-studio.git c:\local\obs-studio
+
+    cd /d c:\local\obs-studio
+
+    git checkout %CHECKOUT%
 
     cd /d c:\local\obs-studio\plugins
 
