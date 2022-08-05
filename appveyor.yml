@@ -112,7 +112,9 @@ build_script:
 
     echo.Pack 64bit, QT6 artifacts...
 
-    cd /d c:\local\obs-studio\build64_qt5\rundir\RelWithDebInfo
+    dir /s c:\local\obs-studio\build64_qt6
+
+    cd /d c:\local\obs-studio\build64_qt6\rundir\RelWithDebInfo
 
     7z a c:\local\source\build64_qt6.zip .
 
