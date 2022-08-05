@@ -22,6 +22,7 @@ if (WIN32)
 		/wd4996
 		/wd4091
 		/wd4273
+		/wd4018
 	)
 else()
 	set(ENABLE_BUGSPLAT FALSE)
