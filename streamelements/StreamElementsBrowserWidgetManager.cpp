@@ -87,7 +87,7 @@ std::string StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 			int left = -1;
 			int top = -1;
 
-#if QT_VERSION >= 6
+#if QT_VERSION_MAJOR >= 6
 			QRect rec = QApplication::primaryScreen()
 					    ->availableGeometry();
 #else

@@ -333,7 +333,7 @@ if (APPLE)
 	list(APPEND obs-streamelements-core_LIBRARIES objc)
 endif()
 
-if (${QT_VERSION} EQUAL "5")
+if (${_QT_VERSION} EQUAL "5")
 	qt5_add_resources(obs-streamelements-core-streamelements_QRC_SOURCES "streamelements/streamelements.qrc")
 endif()
 
@@ -343,7 +343,7 @@ add_library(obs-streamelements-core MODULE
 	${obs-streamelements-core-streamelements_QRC_SOURCES}
 )
 
-if (${QT_VERSION} EQUAL "6")
+if (${_QT_VERSION} EQUAL "6")
 	qt6_add_resources(obs-streamelements-core "streamelements/streamelements.qrc"
 		PREFIX "/"
 		BASE "streamelements"

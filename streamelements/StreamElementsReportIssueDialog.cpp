@@ -45,7 +45,7 @@
 #include <QMainWindow>
 #include <QByteArray>
 #include <QBuffer>
-#if QT_VERSION < 6
+#if QT_VERSION_MAJOR < 6
 #include <QDesktopWidget>
 #endif
 
