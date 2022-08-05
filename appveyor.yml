@@ -57,7 +57,7 @@ build_script:
 - ps: >-
     $CmakeCommand = @(
       "-S . -B `"build64`"",
-      "-G `"Visual Studio 16 2019`"",
+      "-G `"Visual Studio 17 2022`"",
       "-DCMAKE_GENERATOR_PLATFORM=`"x64`"",
       "-DCMAKE_SYSTEM_VERSION=`"10.0.22000.0`"",
       "-DCMAKE_PREFIX_PATH=`"build64`"",
@@ -93,7 +93,11 @@ build_script:
       "-DENABLE_UPDATER=OFF",
       "-DENABLE_VIRTUALCAM=OFF",
       "-DENABLE_VLC=OFF",
-      "-DENABLE_VST=OFF"
+      "-DENABLE_VST=OFF",
+      "-DQT_VERSION=5",
+      "-DQTDIR=C:\Qt\5.15.2",
+      "-DVIRTUALCAM_GUID=`"A3FCE0F5-3493-419F-958A-ABA1250EC20B`"",
+      "-DTHREADS_HAVE_PTHREAD_ARG=OFF"
     )
 
     Invoke-Expression "cmake ${CmakeCommand}"
@@ -103,7 +107,7 @@ build_script:
 - ps: >-
     $CmakeCommand = @(
       "-S . -B `"build32`"",
-      "-G `"Visual Studio 16 2019`"",
+      "-G `"Visual Studio 17 2022`"",
       "-DCMAKE_GENERATOR_PLATFORM=`"Win32`"",
       "-DCMAKE_SYSTEM_VERSION=`"10.0.22000.0`"",
       "-DCMAKE_PREFIX_PATH=`"build32`"",
@@ -139,7 +143,11 @@ build_script:
       "-DENABLE_UPDATER=OFF",
       "-DENABLE_VIRTUALCAM=OFF",
       "-DENABLE_VLC=OFF",
-      "-DENABLE_VST=OFF"
+      "-DENABLE_VST=OFF",
+      "-DQT_VERSION=5",
+      "-DQTDIR=C:\Qt\5.15.2",
+      "-DVIRTUALCAM_GUID=`"A3FCE0F5-3493-419F-958A-ABA1250EC20B`"",
+      "-DTHREADS_HAVE_PTHREAD_ARG=OFF"
     )
 
     Invoke-Expression "cmake ${CmakeCommand}"
