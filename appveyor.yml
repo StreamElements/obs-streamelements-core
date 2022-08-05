@@ -24,8 +24,6 @@ install:
 
     xcopy c:\local\source\*.* c:\local\obs-studio\plugins\obs-streamelements-core /S /E /I /Y
 
-    echo add_subdirectory(obs-streamelements-core) >c:\local\obs-studio\plugins\CMakeLists.txt
-
 cache:
 - c:\local\obs-build-dependencies
 
@@ -54,6 +52,8 @@ build_script:
     cd /d c:\local\obs-studio
 
     git checkout 5fd4339c1d32f57e0e510881e1321cb8c3b5f1ba
+
+    echo add_subdirectory(obs-streamelements-core) >c:\local\obs-studio\plugins\CMakeLists.txt
 
 - ps: >-
     $CmakeCommand = @(
@@ -186,7 +186,11 @@ build_script:
 - cmd: >-
     cd /d c:\local\obs-studio
 
+    git stash
+
     git checkout 5fd4339c1d32f57e0e510881e1321cb8c3b5f1ba
+
+    echo add_subdirectory(obs-streamelements-core) >c:\local\obs-studio\plugins\CMakeLists.txt
 
 - ps: >-
     $CmakeCommand = @(
