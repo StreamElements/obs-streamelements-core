@@ -227,6 +227,7 @@ build_script:
       "-DENABLE_VLC=OFF",
       "-DENABLE_VST=OFF",
       "-DQT_VERSION=5",
+      "-DQt5_DIR=C:\Qt\5.15.2",
       "-DQTDIR=C:\Qt\5.15.2",
       "-DVIRTUALCAM_GUID=`"A3FCE0F5-3493-419F-958A-ABA1250EC20B`"",
       "-DTHREADS_HAVE_PTHREAD_ARG=OFF"
@@ -293,6 +294,7 @@ build_script:
       "-DENABLE_VLC=OFF",
       "-DENABLE_VST=OFF",
       "-DQT_VERSION=5",
+      "-DQt5_DIR=C:\Qt\5.15.2",
       "-DQTDIR=C:\Qt\5.15.2",
       "-DVIRTUALCAM_GUID=`"A3FCE0F5-3493-419F-958A-ABA1250EC20B`"",
       "-DTHREADS_HAVE_PTHREAD_ARG=OFF"
