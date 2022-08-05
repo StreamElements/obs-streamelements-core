@@ -56,7 +56,7 @@ build_script:
 
 - ps: >-
     $CmakeCommand = @(
-      "-S . -B `"build64`"",
+      "-S . -B `"build64_qt5`"",
       "-G `"Visual Studio 17 2022`"",
       "-DCMAKE_GENERATOR_PLATFORM=`"x64`"",
       "-DCMAKE_SYSTEM_VERSION=`"10.0.22000.0`"",
@@ -102,11 +102,11 @@ build_script:
 
     Invoke-Expression "cmake ${CmakeCommand}"
 
-    Invoke-Expression "cmake --build build64 --config RelWithDebInfo"
+    Invoke-Expression "cmake --build build64_qt5 --config RelWithDebInfo"
 
 - ps: >-
     $CmakeCommand = @(
-      "-S . -B `"build32`"",
+      "-S . -B `"build32_qt5`"",
       "-G `"Visual Studio 17 2022`"",
       "-DCMAKE_GENERATOR_PLATFORM=`"Win32`"",
       "-DCMAKE_SYSTEM_VERSION=`"10.0.22000.0`"",
@@ -152,32 +152,147 @@ build_script:
 
     Invoke-Expression "cmake ${CmakeCommand}"
 
-    Invoke-Expression "cmake --build build32 --config RelWithDebInfo"
+    Invoke-Expression "cmake --build build32_qt5 --config RelWithDebInfo"
+
+- ps: >-
+    $CmakeCommand = @(
+      "-S . -B `"build64_qt6`"",
+      "-G `"Visual Studio 17 2022`"",
+      "-DCMAKE_GENERATOR_PLATFORM=`"x64`"",
+      "-DCMAKE_SYSTEM_VERSION=`"10.0.22000.0`"",
+      "-DCMAKE_PREFIX_PATH=`"build64`"",
+      "-DCEF_ROOT_DIR=`"c:/local/obs-build-dependencies/cef_binary_4638_windows_x64`"",
+      "-DVLC_PATH=`"c:/local/obs-build-dependencies/vlc-3.0.0-git`"",
+      "-DCMAKE_INSTALL_PREFIX=`"build64/install`"",
+      "-DCOPIED_DEPENDENCIES=OFF",
+      "-DCOPY_DEPENDENCIES=ON",
+      "-DBUILD_FOR_DISTRIBUTION=`"OFF`"",
+      "-DDepsPath64=c:/local/obs-build-dependencies/windows-deps-2022-05-23-x64",
+      "-Wno-error=dev -Wno-dev -Wno-deprecated",
+      "-DENABLE_AJA=OFF",
+      "-DENABLE_BROWSER=OFF",
+      "-DENABLE_COREAUDIO_ENCODER=OFF",
+      "-DENABLE_DECKLINK=OFF",
+      "-DENABLE_FFMPEG_LOGGING=OFF",
+      "-DENABLE_FFMPEG_MUX_DEBUG=OFF",
+      "-DENABLE_FREETYPE=OFF",
+      "-DENABLE_HEVC=OFF",
+      "-DENABLE_IVCAM=OFF",
+      "-DENABLE_LIBFDK=OFF",
+      "-DENABLE_NVAFX=OFF",
+      "-DENABLE_QSV11=OFF",
+      "-DENABLE_RNNOISE=OFF",
+      "-DENABLE_RTMPS=OFF",
+      "-DENABLE_SCRIPTING=OFF",
+      "-DENABLE_SCRIPTING_LUA=OFF",
+      "-DENABLE_SCRIPTING_PYTHON=OFF",
+      "-DENABLE_SERVICE_UPDATES=OFF",
+      "-DENABLE_SIMDE=OFF",
+      "-DENABLE_SPEEXDSP=OFF",
+      "-DENABLE_UI=OFF",
+      "-DENABLE_UPDATER=OFF",
+      "-DENABLE_VIRTUALCAM=OFF",
+      "-DENABLE_VLC=OFF",
+      "-DENABLE_VST=OFF",
+      "-DQT_VERSION=6",
+      "-DQTDIR=C:\Qt\6.3.1",
+      "-DVIRTUALCAM_GUID=`"A3FCE0F5-3493-419F-958A-ABA1250EC20B`"",
+      "-DTHREADS_HAVE_PTHREAD_ARG=OFF"
+    )
+
+    Invoke-Expression "cmake ${CmakeCommand}"
+
+    Invoke-Expression "cmake --build build64_qt6 --config RelWithDebInfo"
+
+- ps: >-
+    $CmakeCommand = @(
+      "-S . -B `"build32_qt6`"",
+      "-G `"Visual Studio 17 2022`"",
+      "-DCMAKE_GENERATOR_PLATFORM=`"Win32`"",
+      "-DCMAKE_SYSTEM_VERSION=`"10.0.22000.0`"",
+      "-DCMAKE_PREFIX_PATH=`"build32`"",
+      "-DCEF_ROOT_DIR=`"c:/local/obs-build-dependencies/cef_binary_4638_windows_x86`"",
+      "-DVLC_PATH=`"c:/local/obs-build-dependencies/vlc-3.0.0-git`"",
+      "-DCMAKE_INSTALL_PREFIX=`"build32/install`"",
+      "-DCOPIED_DEPENDENCIES=OFF",
+      "-DCOPY_DEPENDENCIES=ON",
+      "-DBUILD_FOR_DISTRIBUTION=`"OFF`"",
+      "-DDepsPath32=c:/local/obs-build-dependencies/windows-deps-2022-05-23-x86",
+      "-Wno-error=dev -Wno-dev -Wno-deprecated",
+      "-DENABLE_AJA=OFF",
+      "-DENABLE_BROWSER=OFF",
+      "-DENABLE_COREAUDIO_ENCODER=OFF",
+      "-DENABLE_DECKLINK=OFF",
+      "-DENABLE_FFMPEG_LOGGING=OFF",
+      "-DENABLE_FFMPEG_MUX_DEBUG=OFF",
+      "-DENABLE_FREETYPE=OFF",
+      "-DENABLE_HEVC=OFF",
+      "-DENABLE_IVCAM=OFF",
+      "-DENABLE_LIBFDK=OFF",
+      "-DENABLE_NVAFX=OFF",
+      "-DENABLE_QSV11=OFF",
+      "-DENABLE_RNNOISE=OFF",
+      "-DENABLE_RTMPS=OFF",
+      "-DENABLE_SCRIPTING=OFF",
+      "-DENABLE_SCRIPTING_LUA=OFF",
+      "-DENABLE_SCRIPTING_PYTHON=OFF",
+      "-DENABLE_SERVICE_UPDATES=OFF",
+      "-DENABLE_SIMDE=OFF",
+      "-DENABLE_SPEEXDSP=OFF",
+      "-DENABLE_UI=OFF",
+      "-DENABLE_UPDATER=OFF",
+      "-DENABLE_VIRTUALCAM=OFF",
+      "-DENABLE_VLC=OFF",
+      "-DENABLE_VST=OFF",
+      "-DQT_VERSION=6",
+      "-DQTDIR=C:\Qt\6.3.1",
+      "-DVIRTUALCAM_GUID=`"A3FCE0F5-3493-419F-958A-ABA1250EC20B`"",
+      "-DTHREADS_HAVE_PTHREAD_ARG=OFF"
+    )
+
+    Invoke-Expression "cmake ${CmakeCommand}"
+
+    Invoke-Expression "cmake --build build32_qt6 --config RelWithDebInfo"
 
 - cmd: >-
     echo.Upload PDBs to BugSplat in case this is a commit to master branch.
 
-    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\bin\SendPdbs.exe /u "%BUGSPLAT_USERNAME%" /p "%BUGSPLAT_PASSWORD%" /a obs-streamelements-core /v "%STREAMELEMENTS_PLUGIN_VERSION%" /b OBS_Live /d "c:\local\obs-studio\build64\rundir\RelWithDebInfo\obs-plugins\64bit" /f obs-streamelements-core.pdb
+    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\bin\SendPdbs.exe /u "%BUGSPLAT_USERNAME%" /p "%BUGSPLAT_PASSWORD%" /a obs-streamelements-core /v "%STREAMELEMENTS_PLUGIN_VERSION%" /b OBS_Live /d "c:\local\obs-studio\build64_qt5\rundir\RelWithDebInfo\obs-plugins\64bit" /f obs-streamelements-core.pdb
 
-    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\bin\SendPdbs.exe /u "%BUGSPLAT_USERNAME%" /p "%BUGSPLAT_PASSWORD%" /a obs-streamelements-core /v "%STREAMELEMENTS_PLUGIN_VERSION%" /b OBS_Live /d "c:\local\obs-studio\build32\rundir\RelWithDebInfo\obs-plugins\32bit" /f obs-streamelements-core.pdb
+    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\bin\SendPdbs.exe /u "%BUGSPLAT_USERNAME%" /p "%BUGSPLAT_PASSWORD%" /a obs-streamelements-core /v "%STREAMELEMENTS_PLUGIN_VERSION%" /b OBS_Live /d "c:\local\obs-studio\build32_qt5\rundir\RelWithDebInfo\obs-plugins\32bit" /f obs-streamelements-core.pdb
 
+    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\bin\SendPdbs.exe /u "%BUGSPLAT_USERNAME%" /p "%BUGSPLAT_PASSWORD%" /a obs-streamelements-core /v "%STREAMELEMENTS_PLUGIN_VERSION%" /b OBS_Live /d "c:\local\obs-studio\build64_qt6\rundir\RelWithDebInfo\obs-plugins\64bit" /f obs-streamelements-core.pdb
+
+    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\bin\SendPdbs.exe /u "%BUGSPLAT_USERNAME%" /p "%BUGSPLAT_PASSWORD%" /a obs-streamelements-core /v "%STREAMELEMENTS_PLUGIN_VERSION%" /b OBS_Live /d "c:\local\obs-studio\build32_qt6\rundir\RelWithDebInfo\obs-plugins\32bit" /f obs-streamelements-core.pdb
 
 
     echo.===================== PACK ARTIFACTS =====================
 
     echo.Pack 64bit artifacts...
 
-    cd /d c:\local\obs-studio\build64\rundir\RelWithDebInfo
+    cd /d c:\local\obs-studio\build64_qt5\rundir\RelWithDebInfo
 
-    7z a c:\local\source\build64.zip .
+    7z a c:\local\source\build64_qt5.zip .
+
+
+
+    cd /d c:\local\obs-studio\build64_qt5\rundir\RelWithDebInfo
+
+    7z a c:\local\source\build64_qt6.zip .
 
 
 
     echo.Pack 32bit artifacts...
 
-    cd /d c:\local\obs-studio\build32\rundir\RelWithDebInfo
+    cd /d c:\local\obs-studio\build32_qt5\rundir\RelWithDebInfo
 
-    7z a c:\local\source\build32.zip .
+    7z a c:\local\source\build32_qt5.zip .
+
+
+
+    cd /d c:\local\obs-studio\build32_qt6\rundir\RelWithDebInfo
+
+    7z a c:\local\source\build32_qt6.zip .
 
 
 
@@ -186,10 +301,14 @@ build_script:
     copy /Y c:\local\obs-studio\plugins\obs-streamelements-core\streamelements\Version.generated.hpp c:\local\source\streamelements\Version.generated.hpp
 test: off
 artifacts:
-- path: build32.zip
-  name: build32
-- path: build64.zip
-  name: build64
+- path: build32_qt5.zip
+  name: build32_qt5
+- path: build64_qt5.zip
+  name: build64_qt5
+- path: build32_qt6.zip
+  name: build32_qt6
+- path: build64_qt6.zip
+  name: build64_qt6
 - path: streamelements\Version.generated.hpp
   name: version.generated.hpp
 deploy:
@@ -199,7 +318,7 @@ deploy:
     secure: lhOyqT4/E0Oqv8BOQR81rx/SweOIbDELTYW7iJTqRz5shmkZ8eXMCgFzcIuXyvpB
   bucket: obs-builds
   folder: obs-streamelements-core/latest/windows
-  artifact: build32,build64,version.generated.hpp
+  artifact: build32_qt5,build64_qt5,build32_qt6,build64_qt6,version.generated.hpp
   max_error_retry: 5
   on:
     branch: master
