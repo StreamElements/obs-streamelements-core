@@ -1,3 +1,4 @@
+#define _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS
 #include "main.hpp"
 
 #include <stdio.h>

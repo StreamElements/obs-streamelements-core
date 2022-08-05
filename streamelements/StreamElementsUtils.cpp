@@ -1775,6 +1775,8 @@ double GetObsGlobalFramesPerSecond()
 		       (double)config_get_uint(basicConfig, "Video", "FPSDen");
 		break;
 	}
+
+	return 0;
 }
 
 void AdviseHostUserInterfaceStateChanged()

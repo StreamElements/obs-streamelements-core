@@ -788,9 +788,17 @@ bool StreamElementsGlobalStateManager::DeserializeUserInterfaceState(
 				// https://bugreports.qt.io/browse/QTBUG-46620
 				if (mainWindow()->isMaximized()) {
 					mainWindow()->setGeometry(
+#if QT_VERSION >= 6
+						QApplication::primaryScreen()
+#else
 						QApplication::desktop()
+#endif
 							->availableGeometry(
-								mainWindow()));
+#if QT_VERSION < 6
+								mainWindow()
+#endif
+							)
+					);
 				}
 
 				result = true;

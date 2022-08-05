@@ -70,6 +70,8 @@ bool CefValueImpl::IsEqual(CefRefPtr<CefValue> that) {
         case VTYPE_INVALID: return true;
         case VTYPE_INT: return GetInt() == that->GetInt();
     }
+
+    return false;
 }
 
 CefRefPtr<CefValue> CefValueImpl::Copy() {

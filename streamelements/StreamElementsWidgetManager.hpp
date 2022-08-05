@@ -65,7 +65,10 @@ public:
 		QWidget* const widget,
 		const Qt::DockWidgetArea area,
 		const Qt::DockWidgetAreas allowedAreas = Qt::AllDockWidgetAreas,
-		const QDockWidget::DockWidgetFeatures features = QDockWidget::AllDockWidgetFeatures);
+		const QDockWidget::DockWidgetFeatures features =
+			QDockWidget::DockWidgetClosable |
+			QDockWidget::DockWidgetMovable |
+			QDockWidget::DockWidgetFloatable);
 
 	virtual bool ShowWidgetById(const char *const id);
 	virtual bool HideWidgetById(const char *const id);
