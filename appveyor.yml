@@ -2,7 +2,6 @@ version: '{build}'
 branches:
   only:
   - master
-  - qt6
 image: Visual Studio 2022
 configuration: RelWithDebInfo
 clone_folder: c:\local\source
