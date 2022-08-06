@@ -2,7 +2,7 @@ version: '{build}'
 branches:
   only:
   - master
-image: Visual Studio 2019
+image: Visual Studio 2022
 configuration: RelWithDebInfo
 clone_folder: c:\local\source
 init:
@@ -11,6 +11,22 @@ environment:
   BUGSPLAT_USERNAME: ilya77@gmail.com
   BUGSPLAT_PASSWORD:
     secure: 9c6LeJtXAXvISt7o1o5lnw==
+  matrix:
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+      QT_VERSION: 5
+      QT_DIR: c:\Qt\5.15.2
+      QT5_DIR: c:\Qt\5.15.2
+      GENERATOR: Visual Studio 16 2019
+      CHECKOUT: 5fd4339c1d32f57e0e510881e1321cb8c3b5f1ba
+      OBS_DEPS_VERSION: 2022-05-23
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
+      QT_VERSION: 6
+      QT_DIR: C:\Qt\6.3.1
+      QT5_DIR:
+      QT6_DIR: C:\Qt\6.3.1
+      CHECKOUT: master
+      GENERATOR: Visual Studio 17 2022
+      OBS_DEPS_VERSION: 2022-08-02
 install:
 - cmd: >-
     if not exist c:\local md c:\local
@@ -19,13 +35,15 @@ install:
 
     cd /d c:\local\obs-studio
 
-    git checkout 5fd4339c1d32f57e0e510881e1321cb8c3b5f1ba
+    git checkout %CHECKOUT%
 
     cd /d c:\local\obs-studio\plugins
 
     md obs-streamelements-core
 
     xcopy c:\local\source\*.* c:\local\obs-studio\plugins\obs-streamelements-core /S /E /I /Y
+
+    cd /d c:\local\obs-studio
 
     echo add_subdirectory(obs-streamelements-core) >c:\local\obs-studio\plugins\CMakeLists.txt
 
@@ -53,20 +71,22 @@ build_script:
 
     .\CI\windows\01_install_dependencies.ps1 -Verbose -BuildArch x86
 
+- cmd: >-
+    cd /d c:\local\obs-studio
+
 - ps: >-
     $CmakeCommand = @(
-      "-S . -B `"build64`"",
-      "-G `"Visual Studio 16 2019`"",
+      "-S . -B `"build64_qt${Env:QT_VERSION}`"",
+      "-G `"${Env:GENERATOR}`"",
       "-DCMAKE_GENERATOR_PLATFORM=`"x64`"",
       "-DCMAKE_SYSTEM_VERSION=`"10.0.22000.0`"",
-      "-DCMAKE_PREFIX_PATH=`"build64`"",
       "-DCEF_ROOT_DIR=`"c:/local/obs-build-dependencies/cef_binary_4638_windows_x64`"",
       "-DVLC_PATH=`"c:/local/obs-build-dependencies/vlc-3.0.0-git`"",
-      "-DCMAKE_INSTALL_PREFIX=`"build64/install`"",
+      "-DCMAKE_INSTALL_PREFIX=`"build64_qt${Env:QT_VERSION}/install`"",
       "-DCOPIED_DEPENDENCIES=OFF",
       "-DCOPY_DEPENDENCIES=ON",
       "-DBUILD_FOR_DISTRIBUTION=`"OFF`"",
-      "-DDepsPath64=c:/local/obs-build-dependencies/windows-deps-2022-05-23-x64",
+      "-DDepsPath64=c:/local/obs-build-dependencies/windows-deps-${Env:OBS_DEPS_VERSION}-x64",
       "-Wno-error=dev -Wno-dev -Wno-deprecated",
       "-DENABLE_AJA=OFF",
       "-DENABLE_BROWSER=OFF",
@@ -92,27 +112,49 @@ build_script:
       "-DENABLE_UPDATER=OFF",
       "-DENABLE_VIRTUALCAM=OFF",
       "-DENABLE_VLC=OFF",
-      "-DENABLE_VST=OFF"
+      "-DENABLE_VST=OFF",
+      "-DQT_VERSION=${Env:QT_VERSION}",
+      "-DQTDIR=${Env:QTDIR}",
+      "-DQt5_DIR=`"${Env:QT5_DIR}`"",
+      "-DQt6_DIR=`"${Env:QT6_DIR}`"",
+      "-DVIRTUALCAM_GUID=`"A3FCE0F5-3493-419F-958A-ABA1250EC20B`"",
+      "-DTHREADS_HAVE_PTHREAD_ARG=OFF"
     )
 
     Invoke-Expression "cmake ${CmakeCommand}"
 
-    Invoke-Expression "cmake --build build64 --config RelWithDebInfo"
+    Invoke-Expression "cmake --build build64_qt${Env:QT_VERSION} --config RelWithDebInfo"
+
+- cmd: >-
+    echo.Upload PDBs to BugSplat in case this is a commit to master branch (64bit. QT%QT_VERSION%).
+
+    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\bin\SendPdbs.exe /u "%BUGSPLAT_USERNAME%" /p "%BUGSPLAT_PASSWORD%" /a obs-streamelements-core /v "%STREAMELEMENTS_PLUGIN_VERSION%" /b OBS_Live /d "c:\local\obs-studio\build64_qt%QT_VERSION%\rundir\RelWithDebInfo\obs-plugins\64bit" /f obs-streamelements-core.pdb
+
+
+
+    echo.Pack 64bit, QT%QT_VERSION% artifacts...
+
+    cd /d c:\local\obs-studio\build64_qt%QT_VERSION%\rundir\RelWithDebInfo
+
+    7z a c:\local\source\build64_qt%QT_VERSION%.zip .
+
+- cmd: >-
+    cd /d c:\local\obs-studio
 
 - ps: >-
     $CmakeCommand = @(
-      "-S . -B `"build32`"",
-      "-G `"Visual Studio 16 2019`"",
+      "-S . -B `"build32_qt${Env:QT_VERSION}`"",
+      "-G `"${Env:GENERATOR}`"",
       "-DCMAKE_GENERATOR_PLATFORM=`"Win32`"",
       "-DCMAKE_SYSTEM_VERSION=`"10.0.22000.0`"",
-      "-DCMAKE_PREFIX_PATH=`"build32`"",
+      "-DCMAKE_PREFIX_PATH=`"build32_qt${Env:QT_VERSION}`"",
       "-DCEF_ROOT_DIR=`"c:/local/obs-build-dependencies/cef_binary_4638_windows_x86`"",
       "-DVLC_PATH=`"c:/local/obs-build-dependencies/vlc-3.0.0-git`"",
       "-DCMAKE_INSTALL_PREFIX=`"build32/install`"",
       "-DCOPIED_DEPENDENCIES=OFF",
       "-DCOPY_DEPENDENCIES=ON",
       "-DBUILD_FOR_DISTRIBUTION=`"OFF`"",
-      "-DDepsPath32=c:/local/obs-build-dependencies/windows-deps-2022-05-23-x86",
+      "-DDepsPath32=c:/local/obs-build-dependencies/windows-deps-${Env:OBS_DEPS_VERSION}-x86",
       "-Wno-error=dev -Wno-dev -Wno-deprecated",
       "-DENABLE_AJA=OFF",
       "-DENABLE_BROWSER=OFF",
@@ -138,48 +180,46 @@ build_script:
       "-DENABLE_UPDATER=OFF",
       "-DENABLE_VIRTUALCAM=OFF",
       "-DENABLE_VLC=OFF",
-      "-DENABLE_VST=OFF"
+      "-DENABLE_VST=OFF",
+      "-DQT_VERSION=${Env:QT_VERSION}",
+      "-DQTDIR=${Env:QTDIR}",
+      "-DQt5_DIR=`"${Env:QT5_DIR}`"",
+      "-DQt6_DIR=`"${Env:QT6_DIR}`"",
+      "-DVIRTUALCAM_GUID=`"A3FCE0F5-3493-419F-958A-ABA1250EC20B`"",
+      "-DTHREADS_HAVE_PTHREAD_ARG=OFF"
     )
 
     Invoke-Expression "cmake ${CmakeCommand}"
 
-    Invoke-Expression "cmake --build build32 --config RelWithDebInfo"
+    Invoke-Expression "cmake --build build32_qt${Env:QT_VERSION} --config RelWithDebInfo"
 
 - cmd: >-
-    echo.Upload PDBs to BugSplat in case this is a commit to master branch.
+    cd /d c:\local\obs-studio
 
-    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\bin\SendPdbs.exe /u "%BUGSPLAT_USERNAME%" /p "%BUGSPLAT_PASSWORD%" /a obs-streamelements-core /v "%STREAMELEMENTS_PLUGIN_VERSION%" /b OBS_Live /d "c:\local\obs-studio\build64\rundir\RelWithDebInfo\obs-plugins\64bit" /f obs-streamelements-core.pdb
+- cmd: >-
+    echo.Upload PDBs to BugSplat in case this is a commit to master branch (32bit. QT%QT_VERSION%).
 
-    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\bin\SendPdbs.exe /u "%BUGSPLAT_USERNAME%" /p "%BUGSPLAT_PASSWORD%" /a obs-streamelements-core /v "%STREAMELEMENTS_PLUGIN_VERSION%" /b OBS_Live /d "c:\local\obs-studio\build32\rundir\RelWithDebInfo\obs-plugins\32bit" /f obs-streamelements-core.pdb
-
-
-
-    echo.===================== PACK ARTIFACTS =====================
-
-    echo.Pack 64bit artifacts...
-
-    cd /d c:\local\obs-studio\build64\rundir\RelWithDebInfo
-
-    7z a c:\local\source\build64.zip .
+    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\bin\SendPdbs.exe /u "%BUGSPLAT_USERNAME%" /p "%BUGSPLAT_PASSWORD%" /a obs-streamelements-core /v "%STREAMELEMENTS_PLUGIN_VERSION%" /b OBS_Live /d "c:\local\obs-studio\build32_qt%QT_VERSION%\rundir\RelWithDebInfo\obs-plugins\32bit" /f obs-streamelements-core.pdb
 
 
 
-    echo.Pack 32bit artifacts...
+    echo.Pack 32bit, QT%QT_VERSION% artifacts...
 
-    cd /d c:\local\obs-studio\build32\rundir\RelWithDebInfo
+    cd /d c:\local\obs-studio\build32_qt%QT_VERSION%\rundir\RelWithDebInfo
 
-    7z a c:\local\source\build32.zip .
+    7z a c:\local\source\build32_qt%QT_VERSION%.zip .
 
 
 
     echo.Update generated version header...
 
     copy /Y c:\local\obs-studio\plugins\obs-streamelements-core\streamelements\Version.generated.hpp c:\local\source\streamelements\Version.generated.hpp
+
 test: off
 artifacts:
-- path: build32.zip
+- path: build32_qt*.zip
   name: build32
-- path: build64.zip
+- path: build64_qt*.zip
   name: build64
 - path: streamelements\Version.generated.hpp
   name: version.generated.hpp

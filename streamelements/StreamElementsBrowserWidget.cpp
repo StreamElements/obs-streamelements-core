@@ -399,6 +399,8 @@ StreamElementsBrowserWidget::GetWidgetByMessageTargetId(std::string target)
 	if (s_widgets.count(target)) {
 		return s_widgets[target];
 	}
+
+	return nullptr;
 }
 
 StreamElementsBrowserWidget::~StreamElementsBrowserWidget()

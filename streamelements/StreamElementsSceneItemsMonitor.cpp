@@ -1112,7 +1112,11 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 				QString(), Qt::FindDirectChildrenOnly);
 
 			for (QLabel *label : list) {
+#if QT_VERSION_MAJOR >= 6
+				if (!label->pixmap().isNull()) {
+#else
 				if (label->pixmap()) {
+#endif
 					// Native icon
 					label->setVisible(!isSignedIn);
 
@@ -1122,7 +1126,11 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 
 					if (isSignedIn) {
 						defaultIconPixmap =
+#if QT_VERSION_MAJOR >= 6
+							label->pixmap();
+#else
 							*label->pixmap();
+#endif
 					}
 				} else {
 					nativeTextLabel = label;

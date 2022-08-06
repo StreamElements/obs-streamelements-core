@@ -35,7 +35,11 @@ public:
 		//	 position it out of bounds of the current desktop.
 		//
 
+#if QT_VERSION_MAJOR >= 6
+		QRect rec = QApplication::primaryScreen()->geometry();
+#else
 		QRect rec = QApplication::desktop()->screenGeometry();
+#endif
 
 		m_dockWidget = new QDockWidget();
 		m_dockWidget->setVisible(true);

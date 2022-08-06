@@ -134,7 +134,7 @@ void NamedPipesServer::ThreadProc()
 				SECURITY_WORLD_RID,
 				0, 0, 0, 0, 0, 0, 0,
 				&pEveryoneSID)) {
-				EXPLICIT_ACCESS ea[1];
+				EXPLICIT_ACCESS ea[2];
 
 				// Initialize an EXPLICIT_ACCESS structure for an ACE.
 				// The ACE will allow Everyone read access to the key.

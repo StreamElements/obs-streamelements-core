@@ -45,7 +45,9 @@
 #include <QMainWindow>
 #include <QByteArray>
 #include <QBuffer>
+#if QT_VERSION_MAJOR < 6
 #include <QDesktopWidget>
+#endif
 
 #include <string>
 #include <regex>

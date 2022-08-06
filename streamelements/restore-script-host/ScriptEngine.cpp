@@ -1,3 +1,5 @@
+#define _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS
+
 #include "ScriptEngine.hpp"
 
 #include <windows.h>
@@ -59,19 +61,19 @@ static bool shell_execute(std::string &path, std::string &args,
 	HINSTANCE retVal = ShellExecuteW(0, 0, wPath.c_str(), wArgs.c_str(),
 					 wFolder.c_str(), SW_SHOW);
 
-	return ((int)retVal > 32);
+	return (retVal > (HINSTANCE)32);
 }
 
 static bool wait_pid(uint64_t pid, uint64_t waitMilliseconds)
 {
-	HANDLE hProcess = OpenProcess(SYNCHRONIZE, FALSE, pid);
+	HANDLE hProcess = OpenProcess(SYNCHRONIZE, FALSE, (DWORD)pid);
 
 	if (NULL == hProcess)
 		return true;
 
 	bool result = (WAIT_OBJECT_0 ==
 		       WaitForSingleObject(hProcess, waitMilliseconds > 0
-							     ? waitMilliseconds
+							     ? (DWORD)waitMilliseconds
 							     : INFINITE));
 
 	CloseHandle(hProcess);

@@ -67,7 +67,10 @@ public:
 		const char* const reloadPolicy,
 		const Qt::DockWidgetArea area,
 		const Qt::DockWidgetAreas allowedAreas = Qt::AllDockWidgetAreas,
-		const QDockWidget::DockWidgetFeatures features = QDockWidget::AllDockWidgetFeatures);
+		const QDockWidget::DockWidgetFeatures features =
+			QDockWidget::DockWidgetClosable |
+			QDockWidget::DockWidgetMovable |
+			QDockWidget::DockWidgetFloatable);
 
 	virtual bool ToggleWidgetFloatingStateById(const char* const id) override;
 

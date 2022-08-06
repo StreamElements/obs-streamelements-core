@@ -155,7 +155,7 @@ public:
 
 		sprintf(url,
 			"https://obslive-external-assets.streamelements.com/settings.json?_nc=%lu",
-			gmtv - (gmtv % (time_t)60));
+			(unsigned long)(gmtv - (gmtv % (time_t)60)));
 
 		http_client_headers_t request_headers;
 

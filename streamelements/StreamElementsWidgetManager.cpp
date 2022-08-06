@@ -256,6 +256,8 @@ bool StreamElementsWidgetManager::ShowWidgetById(const char *const id)
 	QDockWidget *dock = m_dockWidgets[id];
 
 	dock->setVisible(true);
+
+	return true;
 }
 
 bool StreamElementsWidgetManager::HideWidgetById(const char *const id)
@@ -271,6 +273,8 @@ bool StreamElementsWidgetManager::HideWidgetById(const char *const id)
 	QDockWidget *dock = m_dockWidgets[id];
 
 	dock->setVisible(false);
+
+	return true;
 }
 
 bool StreamElementsWidgetManager::ToggleWidgetFloatingStateById(

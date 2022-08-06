@@ -1,41 +1,5 @@
 project(obs-streamelements-core)
 
-macro(find_qt)
-  set(oneValueArgs VERSION)
-  set(multiValueArgs COMPONENTS COMPONENTS_WIN COMPONENTS_MAC COMPONENTS_LINUX)
-  cmake_parse_arguments(FIND_QT "" "${oneValueArgs}" "${multiValueArgs}"
-                        ${ARGN})
-
-  if(OS_WINDOWS)
-    find_package(
-      Qt${FIND_QT_VERSION}
-      COMPONENTS ${FIND_QT_COMPONENTS} ${FIND_QT_COMPONENTS_WIN}
-      REQUIRED)
-  elseif(OS_MACOS)
-    find_package(
-      Qt${FIND_QT_VERSION}
-      COMPONENTS ${FIND_QT_COMPONENTS} ${FIND_QT_COMPONENTS_MAC}
-      REQUIRED)
-  else()
-    find_package(
-      Qt${FIND_QT_VERSION}
-      COMPONENTS ${FIND_QT_COMPONENTS} ${FIND_QT_COMPONENTS_LINUX}
-      REQUIRED)
-  endif()
-
-  foreach(_COMPONENT IN LISTS FIND_QT_COMPONENTS FIND_QT_COMPONENTS_WIN
-                              FIND_QT_COMPONENTS_MAC FIND_QT_COMPONENTS_LINUX)
-    if(NOT TARGET Qt::${_COMPONENT} AND TARGET
-                                        Qt${FIND_QT_VERSION}::${_COMPONENT})
-
-      add_library(Qt::${_COMPONENT} INTERFACE IMPORTED)
-      set_target_properties(
-        Qt::${_COMPONENT} PROPERTIES INTERFACE_LINK_LIBRARIES
-                                     "Qt${FIND_QT_VERSION}::${_COMPONENT}")
-    endif()
-  endforeach()
-endmacro()
-
 if(NOT QT_VERSION)
   set(QT_VERSION
       "5"
@@ -43,17 +7,28 @@ if(NOT QT_VERSION)
   set_property(CACHE QT_VERSION PROPERTY STRINGS 5 6)
 endif()
 
-find_qt(VERSION ${QT_VERSION} COMPONENTS Core Widgets)
+#find_qt(VERSION ${QT_VERSION} COMPONENTS Core Widgets)
+find_qt(VERSION ${QT_VERSION} COMPONENTS Widgets)
 
 if (WIN32)
 	set(ENABLE_BUGSPLAT TRUE)
 	set(ENABLE_ANGELSCRIPT TRUE)
+
+	add_compile_options(
+		/wd4267
+		/wd4091
+		/wd4554
+		/wd4099
+		/wd4996
+		/wd4091
+		/wd4273
+		/wd4018
+	)
 else()
 	set(ENABLE_BUGSPLAT FALSE)
 	set(ENABLE_ANGELSCRIPT FALSE)
 endif(WIN32)
 
-set(CMAKE_PREFIX_PATH "${QTDIR}")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}")
 set(CMAKE_INCLUDE_CURRENT_DIR TRUE)
 set(CMAKE_AUTOMOC ON)
@@ -66,20 +41,12 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}/streamelements/deps")
 
 find_package(CURL REQUIRED)
 
-include_directories(SYSTEM
-	${Qt5Core_INCLUDES}
-	${Qt5Widgets_INCLUDES}
-)
-
 if (ENABLE_ANGELSCRIPT)
 	include_directories(SYSTEM
 		deps/angelscript/include
 		deps/angelscript/add_on
 	)
 endif()
-
-#qt5_wrap_ui(NetworkDialog "networkdialog.ui")
-qt5_add_resources(obs-streamelements-core-streamelements_QRC_SOURCES "streamelements/streamelements.qrc")
 
 include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 
@@ -137,8 +104,8 @@ if (ENABLE_BUGSPLAT)
 	set(obs-streamelements-core_LIBRARIES
 		libobs
 		obs-frontend-api
-		Qt5::Core
-		Qt5::Widgets
+		#Qt::Core
+		Qt::Widgets
 		w32-pthreads
 		${BUGSPLAT_LIBRARIES}
 	)
@@ -146,8 +113,8 @@ else()
 	set(obs-streamelements-core_LIBRARIES
 		libobs
 		obs-frontend-api
-		Qt5::Core
-		Qt5::Widgets
+		#Qt::Core
+		Qt::Widgets
 		#w32-pthreads
 		)
 endif()
@@ -166,19 +133,9 @@ if (APPLE)
 			${COREFOUNDATION})
 endif()
 
-if(DEFINED QTDIR${_lib_suffix})
-	list(APPEND CMAKE_PREFIX_PATH "${QTDIR${_lib_suffix}}")
-elseif(DEFINED QTDIR)
-	list(APPEND CMAKE_PREFIX_PATH "${QTDIR}")
-elseif(DEFINED ENV{QTDIR${_lib_suffix}})
-	list(APPEND CMAKE_PREFIX_PATH "$ENV{QTDIR${_lib_suffix}}")
-elseif(DEFINED ENV{QTDIR})
-	list(APPEND CMAKE_PREFIX_PATH "$ENV{QTDIR}")
-endif()
-
 set(CMAKE_AUTOMOC TRUE)
 list(APPEND obs-streamelements-core_LIBRARIES
-	Qt5::Widgets
+	Qt::Widgets
 	)
 
 if(MSVC)
@@ -190,6 +147,14 @@ if(MSVC)
 		"CMAKE_CXX_FLAGS"
 		"${CMAKE_CXX_FLAGS}")
 
+	string(REPLACE "/WX" "/W1"
+		"CMAKE_C_FLAGS"
+		"${CMAKE_C_FLAGS}")
+
+	string(REPLACE "/WX" "/W1"
+		"CMAKE_CXX_FLAGS"
+		"${CMAKE_CXX_FLAGS}")
+
 	string(TOUPPER "${CMAKE_CONFIGURATION_TYPES}" UPPER_CONFIG_TYPES)
 	foreach(CONFIG_TYPE ${UPPER_CONFIG_TYPES})
 		string(REPLACE "/MD" "/MT"
@@ -197,6 +162,14 @@ if(MSVC)
 			"${CMAKE_C_FLAGS_${CONFIG_TYPE}}")
 
 		string(REPLACE "/MD" "/MT"
+			"CMAKE_CXX_FLAGS_${CONFIG_TYPE}"
+			"${CMAKE_CXX_FLAGS_${CONFIG_TYPE}}")
+
+		string(REPLACE "/WX" "/W1"
+			"CMAKE_C_FLAGS_${CONFIG_TYPE}"
+			"${CMAKE_C_FLAGS_${CONFIG_TYPE}}")
+
+		string(REPLACE "/WX" "/W1"
 			"CMAKE_CXX_FLAGS_${CONFIG_TYPE}"
 			"${CMAKE_CXX_FLAGS_${CONFIG_TYPE}}")
 	endforeach()
@@ -347,6 +320,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/deps/sqlite/sqlite3.h
 	streamelements/deps/sqlite/sqlite3ext.h
 	streamelements/deps/cpp-httplib/httplib.h
+	streamelements/streamelements.qrc
 	)
 
 if (APPLE)
@@ -360,11 +334,37 @@ if (APPLE)
 	list(APPEND obs-streamelements-core_LIBRARIES objc)
 endif()
 
+if (${QT_VERSION} EQUAL "5")
+	qt5_add_resources(obs-streamelements-core-streamelements_QRC_SOURCES "streamelements/streamelements.qrc")
+endif()
+
 add_library(obs-streamelements-core MODULE
 	${obs-streamelements-core_SOURCES}
 	${obs-streamelements-core_HEADERS}
 	${obs-streamelements-core-streamelements_QRC_SOURCES}
+)
+
+if (${QT_VERSION} EQUAL "6")
+	qt6_add_resources(obs-streamelements-core "streamelements/streamelements.qrc"
+		PREFIX "/"
+		BASE "streamelements"
+		FILES
+		"streamelements/images/logo.png"
+		"streamelements/images/icon.png"
+		"streamelements/images/icon.ico"
+		"streamelements/images/logo_137x30.png"
+		"streamelements/images/logo_100x30.png"
+		"streamelements/images/toolbar/back.ico"
+		"streamelements/images/toolbar/forward.ico"
+		"streamelements/images/toolbar/home.ico"
+		"streamelements/images/toolbar/reload.ico"
+		"streamelements/images/toolbar/reload.png"
+		"streamelements/images/toolbar/close.png"
+		"streamelements/images/toolbar/dockToggle.png"
+		"streamelements/html/error.html"
+		"streamelements/html/loading.html"
 	)
+endif()
 
 target_link_libraries(obs-streamelements-core
 	${obs-streamelements-core_LIBRARIES}
