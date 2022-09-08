@@ -1,0 +1,409 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="16.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\obs-streamelements-core_autogen\mocs_compilation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\obs-streamelements-core-plugin.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\json11\json11.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\base64\base64.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\wide-string.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_process_message.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_string.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_value.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_value_binary.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_value_dictionary.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_value_json.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_value_list.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\Version.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsAsyncTaskQueue.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBrowserWidget.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBrowserWidgetManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBandwidthTestClient.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsObsBandwidthTestClient.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsWidgetManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsObsAppMonitor.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsApiMessageHandler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsConfig.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsGlobalStateManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsMenuManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBandwidthTestManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsOutputSettingsManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsWorkerManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBrowserDialog.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsUtils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsHotkeyManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsReportIssueDialog.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsProgressDialog.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsPerformanceHistoryTracker.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsNetworkDialog.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsAnalyticsEventsManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsMessageBus.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsControllerServer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsObsSceneManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsExternalSceneDataProviderSlobsClient.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsHttpClient.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsNativeOBSControlsManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsProfilesManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBackupManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsCleanupManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsPreviewManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsSceneItemsMonitor.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsDeferredExecutive.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsRemoteIconLoader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsScenesListWidgetManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsPleaseWaitWindow.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsHttpServerManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsWebsocketApiServer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsLocalFilesystemHttpServer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\StackWalker\StackWalker.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\zip\zip.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\server\NamedPipesServer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\server\NamedPipesServerClientHandler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\server\HttpServer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\sqlite\sqlite3.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsCrashHandler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\qrc_streamelements.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\json11\json11.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\base64\base64.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\obs-websocket-api\obs-websocket-api.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\wide-string.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_process_message.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_string.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\deps\cef-stub\cef_value.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\cef-headers.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\utf8.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\utf8\checked.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\utf8\unchecked.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\utf8\core.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\utf8\cpp11.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\utf8\cpp17.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\Version.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\Version.generated.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsUtils.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsAsyncTaskQueue.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBrowserWidget.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBrowserWidgetManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBandwidthTestClient.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsObsBandwidthTestClient.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsWidgetManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsObsAppMonitor.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsApiMessageHandler.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsConfig.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsGlobalStateManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsMenuManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBandwidthTestManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsOutputSettingsManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBrowserDialog.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsHotkeyManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsReportIssueDialog.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsProgressDialog.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsPerformanceHistoryTracker.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsNetworkDialog.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsAnalyticsEventsManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsCrashHandler.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsMessageBus.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsControllerServer.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsObsSceneManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsExternalSceneDataProviderManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsExternalSceneDataProviderSlobsClient.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsExternalSceneDataProvider.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsHttpClient.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsNativeOBSControlsManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsProfilesManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsBackupManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsCleanupManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsPreviewManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsSceneItemsMonitor.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsDeferredExecutive.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsRemoteIconLoader.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsScenesListWidgetManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsPleaseWaitWindow.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsHttpServerManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsWebsocketApiServer.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\StreamElementsLocalFilesystemHttpServer.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\StackWalker\StackWalker.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\zip\zip.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\zip\miniz.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\moodycamel\concurrentqueue.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\moodycamel\blockingconcurrentqueue.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\server\NamedPipesServer.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\server\NamedPipesServerClientHandler.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\server\HttpServer.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\sqlite\sqlite3.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\sqlite\sqlite3ext.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\deps\cpp-httplib\httplib.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\streamelements\streamelements.qrc" />
+    <CustomBuild Include="C:\Shared\StreamElements\Dev\obs-studio\plugins\obs-streamelements-core\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{27BDC132-C6B2-30BB-9E60-F8A90A7C34BB}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{A9C272BC-D510-34BE-BF82-38C1EE4F2D69}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

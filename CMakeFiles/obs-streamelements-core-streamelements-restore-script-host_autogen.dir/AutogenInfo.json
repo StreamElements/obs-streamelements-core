@@ -1,0 +1,110 @@
+{
+	"BUILD_DIR" : "C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/obs-streamelements-core-streamelements-restore-script-host_autogen",
+	"CMAKE_BINARY_DIR" : "C:/Shared/StreamElements/Dev/obs-studio",
+	"CMAKE_CURRENT_BINARY_DIR" : "C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core",
+	"CMAKE_CURRENT_SOURCE_DIR" : "C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core",
+	"CMAKE_EXECUTABLE" : "C:/Program Files/CMake/bin/cmake.exe",
+	"CMAKE_SOURCE_DIR" : "C:/Shared/StreamElements/Dev/obs-studio",
+	"HEADERS" : 
+	[
+		[
+			"C:/Shared/StreamElements/Dev/angelscript_2.34.0/sdk/add_on/scriptbuilder/scriptbuilder.h",
+			"MU",
+			"A5YJQVNTVJ/moc_scriptbuilder.cpp"
+		],
+		[
+			"C:/Shared/StreamElements/Dev/angelscript_2.34.0/sdk/add_on/scriptstdstring/scriptstdstring.h",
+			"MU",
+			"F2AABJOCYY/moc_scriptstdstring.cpp"
+		],
+		[
+			"C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/streamelements/restore-script-host/ScriptEngine.hpp",
+			"MU",
+			"PJBT7YVEMD/moc_ScriptEngine.cpp"
+		],
+		[
+			"C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/streamelements/restore-script-host/main.hpp",
+			"MU",
+			"PJBT7YVEMD/moc_main.cpp"
+		]
+	],
+	"HEADER_EXTENSIONS" : [ "h", "hh", "h++", "hm", "hpp", "hxx", "in", "txx" ],
+	"INCLUDE_DIR" : "C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/obs-streamelements-core-streamelements-restore-script-host_autogen/include",
+	"INCLUDE_DIR_Debug" : "C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/obs-streamelements-core-streamelements-restore-script-host_autogen/include_Debug",
+	"INCLUDE_DIR_MinSizeRel" : "C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/obs-streamelements-core-streamelements-restore-script-host_autogen/include_MinSizeRel",
+	"INCLUDE_DIR_RelWithDebInfo" : "C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/obs-streamelements-core-streamelements-restore-script-host_autogen/include_RelWithDebInfo",
+	"INCLUDE_DIR_Release" : "C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/obs-streamelements-core-streamelements-restore-script-host_autogen/include_Release",
+	"MOC_COMPILATION_FILE" : "C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/obs-streamelements-core-streamelements-restore-script-host_autogen/mocs_compilation.cpp",
+	"MOC_DEFINITIONS" : 
+	[
+		"UNICODE",
+		"WIN32",
+		"_CRT_NONSTDC_NO_WARNINGS",
+		"_CRT_SECURE_NO_WARNINGS",
+		"_UNICODE"
+	],
+	"MOC_DEPEND_FILTERS" : 
+	[
+		[
+			"Q_PLUGIN_METADATA",
+			"[\n][ \t]*Q_PLUGIN_METADATA[ \t]*\\([^\\)]*FILE[ \t]*\"([^\"]+)\""
+		]
+	],
+	"MOC_INCLUDES" : 
+	[
+		"C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core",
+		"C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/deps",
+		"C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/streamelements/deps",
+		"C:/Shared/StreamElements/Dev/obs-studio/UI/obs-frontend-api",
+		"C:/Shared/StreamElements/Dev/obs-studio-deps/win64/include",
+		"C:/Shared/StreamElements/Dev/BugSplat/inc",
+		"C:/Shared/StreamElements/Dev/angelscript_2.34.0/sdk/angelscript/include",
+		"C:/Shared/StreamElements/Dev/angelscript_2.34.0/sdk/add_on"
+	],
+	"MOC_MACRO_NAMES" : [ "Q_OBJECT", "Q_GADGET", "Q_NAMESPACE", "Q_NAMESPACE_EXPORT" ],
+	"MOC_OPTIONS" : [],
+	"MOC_PATH_PREFIX" : true,
+	"MOC_PREDEFS_CMD" : [],
+	"MOC_PREDEFS_FILE" : "",
+	"MOC_RELAXED_MODE" : false,
+	"MOC_SKIP" : [],
+	"MULTI_CONFIG" : true,
+	"PARALLEL" : 4,
+	"PARSE_CACHE_FILE" : "C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeFiles/obs-streamelements-core-streamelements-restore-script-host_autogen.dir/ParseCache.txt",
+	"PARSE_CACHE_FILE_Debug" : "C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeFiles/obs-streamelements-core-streamelements-restore-script-host_autogen.dir/ParseCache_Debug.txt",
+	"PARSE_CACHE_FILE_MinSizeRel" : "C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeFiles/obs-streamelements-core-streamelements-restore-script-host_autogen.dir/ParseCache_MinSizeRel.txt",
+	"PARSE_CACHE_FILE_RelWithDebInfo" : "C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeFiles/obs-streamelements-core-streamelements-restore-script-host_autogen.dir/ParseCache_RelWithDebInfo.txt",
+	"PARSE_CACHE_FILE_Release" : "C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeFiles/obs-streamelements-core-streamelements-restore-script-host_autogen.dir/ParseCache_Release.txt",
+	"QT_MOC_EXECUTABLE" : "C:/Qt/5.15.2/msvc2019_64/bin/moc.exe",
+	"QT_UIC_EXECUTABLE" : "C:/Qt/5.15.2/msvc2019_64/bin/uic.exe",
+	"QT_VERSION_MAJOR" : 5,
+	"SETTINGS_FILE" : "C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeFiles/obs-streamelements-core-streamelements-restore-script-host_autogen.dir/AutogenUsed.txt",
+	"SETTINGS_FILE_Debug" : "C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeFiles/obs-streamelements-core-streamelements-restore-script-host_autogen.dir/AutogenUsed_Debug.txt",
+	"SETTINGS_FILE_MinSizeRel" : "C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeFiles/obs-streamelements-core-streamelements-restore-script-host_autogen.dir/AutogenUsed_MinSizeRel.txt",
+	"SETTINGS_FILE_RelWithDebInfo" : "C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeFiles/obs-streamelements-core-streamelements-restore-script-host_autogen.dir/AutogenUsed_RelWithDebInfo.txt",
+	"SETTINGS_FILE_Release" : "C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/CMakeFiles/obs-streamelements-core-streamelements-restore-script-host_autogen.dir/AutogenUsed_Release.txt",
+	"SOURCES" : 
+	[
+		[
+			"C:/Shared/StreamElements/Dev/angelscript_2.34.0/sdk/add_on/scriptbuilder/scriptbuilder.cpp",
+			"MU"
+		],
+		[
+			"C:/Shared/StreamElements/Dev/angelscript_2.34.0/sdk/add_on/scriptstdstring/scriptstdstring.cpp",
+			"MU"
+		],
+		[
+			"C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/streamelements/restore-script-host/ScriptEngine.cpp",
+			"MU"
+		],
+		[
+			"C:/Shared/StreamElements/Dev/obs-studio/plugins/obs-streamelements-core/streamelements/restore-script-host/main.cpp",
+			"MU"
+		]
+	],
+	"UIC_OPTIONS" : [],
+	"UIC_SEARCH_PATHS" : [],
+	"UIC_SKIP" : [],
+	"UIC_UI_FILES" : [],
+	"VERBOSITY" : 0
+}
