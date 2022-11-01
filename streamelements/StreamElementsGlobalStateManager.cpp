@@ -362,6 +362,8 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 					mainWindow());
 			m_websocketApiServer =
 				new StreamElementsWebsocketApiServer();
+			m_obsOutputManager =
+				new StreamElementsObsOutputManager();
 			m_windowStateEventFilter =
 				new WindowStateChangeEventFilter(
 					mainWindow());
@@ -572,6 +574,7 @@ void StreamElementsGlobalStateManager::Shutdown()
 			delete m_cleanupManager;
 			delete m_previewManager;
 			delete m_websocketApiServer;
+			delete m_obsOutputManager;
 			delete m_windowStateEventFilter;
 			delete m_cefCookieManager;
 		});

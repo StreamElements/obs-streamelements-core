@@ -27,6 +27,7 @@ struct QCefCookieManager;
 #include "StreamElementsCleanupManager.hpp"
 #include "StreamElementsPreviewManager.hpp"
 #include "StreamElementsWebsocketApiServer.hpp"
+#include "StreamElementsObsOutputManager.hpp"
 
 class StreamElementsGlobalStateManager : public StreamElementsObsAppMonitor {
 private:
@@ -161,6 +162,9 @@ public:
 	StreamElementsWebsocketApiServer* GetWebsocketApiServer() {
 		return m_websocketApiServer;
 	}
+	StreamElementsObsOutputManager* GetObsOutputManager() {
+		return m_obsOutputManager;
+	}
 	QMainWindow *mainWindow() { return m_mainWindow; }
 
 public:
@@ -210,6 +214,8 @@ private:
 	StreamElementsCleanupManager *m_cleanupManager = nullptr;
 	StreamElementsPreviewManager *m_previewManager = nullptr;
 	StreamElementsWebsocketApiServer *m_websocketApiServer = nullptr;
+	StreamElementsObsOutputManager *m_obsOutputManager =
+		nullptr;
 	WindowStateChangeEventFilter *m_windowStateEventFilter = nullptr;
 
 private:
