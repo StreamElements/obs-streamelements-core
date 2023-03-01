@@ -24,7 +24,7 @@ environment:
       QT_DIR: C:\Qt\6.3.1
       QT5_DIR:
       QT6_DIR: C:\Qt\6.3.1
-      CHECKOUT: master
+      CHECKOUT: 29.0.2
       GENERATOR: Visual Studio 17 2022
       OBS_DEPS_VERSION: 2022-08-02
 install:
