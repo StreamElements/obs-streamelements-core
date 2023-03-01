@@ -48,6 +48,24 @@ static const char *WIDGET_PROP_DEFAULT_ACTION_BYPASS_COUNT =
 
 static const char *WIDGET_PROP_SCENE_ITEM_ID = "streamelements_scene_item_id";
 
+static bool IsSupportedOBSVersion() {
+	// OBS 29 has breaking changes in functions related to updating
+	// toolbars' styles on Scenes and Scene Items.
+	//
+	// We have submitted a patch which will be included in OBS 30.
+	//
+	// For the moment, we'll disable related functionality in OBS 29 specifically.
+	//
+	auto obs_version = obs_get_version();
+
+	if (obs_version >= MAKE_SEMANTIC_VERSION(29, 0, 0) &&
+	    obs_version < MAKE_SEMANTIC_VERSION(30, 0, 0)) {
+		return false;
+	}
+
+	return true;
+}
+
 static obs_sceneitem_t *FindSceneItemByIdAddRef(std::string id)
 {
 	if (!id.size())
@@ -1304,6 +1322,9 @@ bool StreamElementsSceneItemsMonitor::InvokeCurrentSceneItemDefaultContextMenu(
 
 void StreamElementsSceneItemsMonitor::UpdateSceneItemsToolbar()
 {
+	if (!IsSupportedOBSVersion())
+		return;
+
 	QWidget *widget = m_sceneItemsToolBar->findChild<QWidget *>(
 		"streamelements_sources_toolbar_aux_actions");
 
