@@ -68,6 +68,32 @@ static const char *ENV_PRODUCT_NAME = "OBS.Live";
 
 /* ========================================================= */
 
+bool IsTraceLogLevel() {
+	static bool has_result = false;
+	static bool result = false;
+
+	if (!has_result) {
+		std::string search = "--setrace";
+
+		QStringList args = QCoreApplication::instance()->arguments();
+
+		for (int i = 0; i < args.size() && !has_result; ++i) {
+			std::string arg = args.at(i).toStdString();
+
+			if (arg.substr(0, search.size()) == search) {
+				result = true;
+				break;
+			}
+		}
+	}
+
+	has_result = true;
+
+	return result;
+}
+
+/* ========================================================= */
+
 // convert wstring to UTF-8 string
 std::string wstring_to_utf8(const std::wstring wstr)
 {

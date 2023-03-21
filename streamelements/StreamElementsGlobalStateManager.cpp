@@ -97,7 +97,9 @@ void StreamElementsGlobalStateManager::ApplicationStateListener::
 
 static void SetMainWindowStyle()
 {
-	blog(LOG_INFO, "SetMainWindowStyle");
+	if (IsTraceLogLevel()) {
+		blog(LOG_INFO, "SetMainWindowStyle");
+	}
 
 	QMainWindow* main = (QMainWindow*)obs_frontend_get_main_window();
 
@@ -778,9 +780,11 @@ bool StreamElementsGlobalStateManager::DeserializeUserInterfaceState(
 		auto geometry = d->GetValue("geometry");
 
 		if (geometry.get() && geometry->GetType() == VTYPE_STRING) {
-			blog(LOG_INFO,
-			     "obs-streamelements-core: state: restoring geometry: %s",
-			     geometry->GetString().ToString().c_str());
+			if (IsTraceLogLevel()) {
+				blog(LOG_INFO,
+				     "obs-streamelements-core: state: restoring geometry: %s",
+				     geometry->GetString().ToString().c_str());
+			}
 
 			if (mainWindow()->restoreGeometry(
 				    QByteArray::fromStdString(base64_decode(
@@ -816,9 +820,13 @@ bool StreamElementsGlobalStateManager::DeserializeUserInterfaceState(
 
 		if (windowState.get() &&
 		    windowState->GetType() == VTYPE_STRING) {
-			blog(LOG_INFO,
-			     "obs-streamelements-core: state: restoring windowState: %s",
-			     windowState->GetString().ToString().c_str());
+			if (IsTraceLogLevel()) {
+				blog(LOG_INFO,
+				     "obs-streamelements-core: state: restoring windowState: %s",
+				     windowState->GetString()
+					     .ToString()
+					     .c_str());
+			}
 
 			if (mainWindow()->restoreState(QByteArray::fromStdString(
 				    base64_decode(windowState->GetString()
@@ -899,8 +907,11 @@ void StreamElementsGlobalStateManager::RestoreState()
 		return;
 	}
 
-	blog(LOG_INFO, "obs-streamelements-core: state: restoring state from base64: %s",
-	     base64EncodedJSON.c_str());
+	if (IsTraceLogLevel()) {
+		blog(LOG_INFO,
+		     "obs-streamelements-core: state: restoring state from base64: %s",
+		     base64EncodedJSON.c_str());
+	}
 
 	CefString json = base64_decode(base64EncodedJSON);
 
@@ -908,8 +919,11 @@ void StreamElementsGlobalStateManager::RestoreState()
 		return;
 	}
 
-	blog(LOG_INFO, "obs-streamelements-core: state: restoring state from json: %s",
-	     json.ToString().c_str());
+	if (IsTraceLogLevel()) {
+		blog(LOG_INFO,
+		     "obs-streamelements-core: state: restoring state from json: %s",
+		     json.ToString().c_str());
+	}
 
 	CefRefPtr<CefValue> root =
 		CefParseJSON(json, JSON_PARSER_ALLOW_TRAILING_COMMAS);
@@ -933,39 +947,54 @@ void StreamElementsGlobalStateManager::RestoreState()
 
 
 	if (workersState.get()) {
-		blog(LOG_INFO, "obs-streamelements-core: state: restoring workers: %s",
-		     CefWriteJSON(workersState, JSON_WRITER_DEFAULT)
-			     .ToString()
-			     .c_str());
+		if (IsTraceLogLevel()) {
+			blog(LOG_INFO,
+			     "obs-streamelements-core: state: restoring workers: %s",
+			     CefWriteJSON(workersState, JSON_WRITER_DEFAULT)
+				     .ToString()
+				     .c_str());
+		}
+
 		GetWorkerManager()->Deserialize(workersState);
 	}
 
 	if (dockingWidgetsState.get()) {
-		blog(LOG_INFO,
-		     "obs-streamelements-core: state: restoring docking widgets: %s",
-		     CefWriteJSON(dockingWidgetsState, JSON_WRITER_DEFAULT)
-			     .ToString()
-			     .c_str());
+		if (IsTraceLogLevel()) {
+			blog(LOG_INFO,
+			     "obs-streamelements-core: state: restoring docking widgets: %s",
+			     CefWriteJSON(dockingWidgetsState,
+					  JSON_WRITER_DEFAULT)
+				     .ToString()
+				     .c_str());
+		}
+
 		GetWidgetManager()->DeserializeDockingWidgets(
 			dockingWidgetsState);
 	}
 
 	if (notificationBarState.get()) {
-		blog(LOG_INFO,
-		     "obs-streamelements-core: state: restoring notification bar: %s",
-		     CefWriteJSON(notificationBarState, JSON_WRITER_DEFAULT)
-			     .ToString()
-			     .c_str());
+		if (IsTraceLogLevel()) {
+			blog(LOG_INFO,
+			     "obs-streamelements-core: state: restoring notification bar: %s",
+			     CefWriteJSON(notificationBarState,
+					  JSON_WRITER_DEFAULT)
+				     .ToString()
+				     .c_str());
+		}
+
 		GetWidgetManager()->DeserializeNotificationBar(
 			notificationBarState);
 	}
 
 	if (hotkeysState.get()) {
-		blog(LOG_INFO,
-		     "obs-streamelements-core: state: restoring hotkey bindings: %s",
-		     CefWriteJSON(hotkeysState, JSON_WRITER_DEFAULT)
-			     .ToString()
-			     .c_str());
+		if (IsTraceLogLevel()) {
+			blog(LOG_INFO,
+			     "obs-streamelements-core: state: restoring hotkey bindings: %s",
+			     CefWriteJSON(hotkeysState, JSON_WRITER_DEFAULT)
+				     .ToString()
+				     .c_str());
+		}
+
 		GetHotkeyManager()->DeserializeHotkeyBindings(hotkeysState);
 	}
 

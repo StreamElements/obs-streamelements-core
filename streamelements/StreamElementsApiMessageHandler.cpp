@@ -92,10 +92,13 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 			context->cefClientId = cefClientId;
 			context->source = source;
 			context->complete = [context]() {
-				blog(LOG_INFO,
-				     "obs-streamelements-core[%s]: API: completed call to '%s', callback id %d",
-				     context->target.c_str(), context->id.c_str(),
-				     context->cef_app_callback_id);
+				if (IsTraceLogLevel()) {
+					blog(LOG_INFO,
+					     "obs-streamelements-core[%s]: API: completed call to '%s', callback id %d",
+					     context->target.c_str(),
+					     context->id.c_str(),
+					     context->cef_app_callback_id);
+				}
 
 				if (context->cef_app_callback_id != -1) {
 					// Invoke result callback
@@ -130,23 +133,28 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 				CefRefPtr<CefValue> callArgsValue =
 					CefValue::Create();
 				callArgsValue->SetList(context->callArgs);
-				blog(LOG_INFO,
-				     "obs-streamelements-core[%s]: API: posting call to '%s', callback id %d, args: %s",
-				     context->target.c_str(), context->id.c_str(),
-				     context->cef_app_callback_id,
-				     CefWriteJSON(callArgsValue,
-						  JSON_WRITER_DEFAULT)
-					     .ToString()
-					     .c_str());
+				if (IsTraceLogLevel()) {
+					blog(LOG_INFO,
+					     "obs-streamelements-core[%s]: API: posting call to '%s', callback id %d, args: %s",
+					     context->target.c_str(),
+					     context->id.c_str(),
+					     context->cef_app_callback_id,
+					     CefWriteJSON(callArgsValue,
+							  JSON_WRITER_DEFAULT)
+						     .ToString()
+						     .c_str());
+				}
 			}
 
 			QtPostTask (
 				[context]() -> void {
-					blog(LOG_INFO,
-					     "obs-streamelements-core[%s]: API: performing call to '%s', callback id %d",
-					     context->target.c_str(),
-					     context->id.c_str(),
-					     context->cef_app_callback_id);
+					if (IsTraceLogLevel()) {
+						blog(LOG_INFO,
+						     "obs-streamelements-core[%s]: API: performing call to '%s', callback id %d",
+						     context->target.c_str(),
+						     context->id.c_str(),
+						     context->cef_app_callback_id);
+					}
 
 					context->self
 						->m_apiCallHandlers[context->id](
@@ -484,7 +492,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 						context->process();
 					},
 					context->cefClientId,
-					false /* enable_logging */);
+					IsTraceLogLevel() /* enable_logging */);
 			};
 
 			obs_frontend_defer_save_begin();
@@ -2190,9 +2198,11 @@ bool StreamElementsApiMessageHandler::InvokeHandler::InvokeApiCallAsync(
 	if (!m_apiCallHandlers.count(invoke))
 		return false;
 
-	blog(LOG_INFO,
-	     "obs-streamelements-core: StreamElementsApiMessageHandler::InvokeHandler::InvokeApiCallAsync: '%s', [%d]",
-	     invoke.c_str(), args->GetSize());
+	if (IsTraceLogLevel()) {
+		blog(LOG_INFO,
+		     "obs-streamelements-core: StreamElementsApiMessageHandler::InvokeHandler::InvokeApiCallAsync: '%s', [%d]",
+		     invoke.c_str(), args->GetSize());
+	}
 
 	incoming_call_handler_t handler = m_apiCallHandlers[invoke];
 
