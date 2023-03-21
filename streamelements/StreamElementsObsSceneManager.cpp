@@ -1263,10 +1263,6 @@ static void remove_source_signals(obs_source_t *source, void *data)
 	signal_handler_disconnect(handler, "update_properties",
 				  handle_scene_item_source_update_props, data);
 
-	signal_handler_disconnect(handler, "streamelements_update_settings",
-				  handle_scene_item_source_update_settings,
-				  data);
-
 	signal_handler_disconnect(handler, "rename",
 				  handle_scene_item_source_rename, data);
 }
@@ -1277,9 +1273,6 @@ static void add_source_signals(obs_source_t *source, void *data)
 
 	signal_handler_connect(handler, "update_properties",
 			       handle_scene_item_source_update_props, data);
-
-	signal_handler_connect(handler, "streamelements_update_settings",
-			       handle_scene_item_source_update_settings, data);
 
 	signal_handler_connect(handler, "rename",
 			       handle_scene_item_source_rename, data);

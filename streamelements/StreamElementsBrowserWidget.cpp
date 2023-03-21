@@ -120,7 +120,7 @@ static void InitAppActiveTracker()
 	if (!g_AppActiveTrackerHook) {
 		blog(LOG_ERROR,
 		     "InitAppActiveTracker: SetWindowsHookExA call failed");
-	} else {
+	} else if (IsTraceLogLevel()) {
 		blog(LOG_INFO,
 		     "InitAppActiveTracker: SetWindowsHookExA succeeded");
 	}
@@ -139,8 +139,10 @@ static void ShutdownAppActiveTracker()
 	if (UnhookWindowsHookEx(g_AppActiveTrackerHook)) {
 		g_AppActiveTrackerHook = NULL;
 
-		blog(LOG_INFO,
-		     "ShutdownAppActiveTracker: UnhookWindowsHookEx succeeded");
+		if (IsTraceLogLevel()) {
+			blog(LOG_INFO,
+			     "ShutdownAppActiveTracker: UnhookWindowsHookEx succeeded");
+		}
 	} else {
 		blog(LOG_ERROR,
 		     "ShutdownAppActiveTracker: UnhookWindowsHookEx call failed");
@@ -481,8 +483,10 @@ void StreamElementsBrowserWidget::focusInEvent(QFocusEvent *event)
 {
 	QWidget::focusInEvent(event);
 
-	blog(LOG_INFO, "QWidget::focusInEvent: reason %d: %s", event->reason(),
-	     m_url.c_str());
+	if (IsTraceLogLevel()) {
+		blog(LOG_INFO, "QWidget::focusInEvent: reason %d: %s",
+		     event->reason(), m_url.c_str());
+	}
 
 	m_cefWidget->setFocus();
 }
@@ -491,7 +495,9 @@ void StreamElementsBrowserWidget::focusOutEvent(QFocusEvent *event)
 {
 	QWidget::focusOutEvent(event);
 
-	blog(LOG_INFO, "QWidget::focusOutEvent: %s", m_url.c_str());
+	if (IsTraceLogLevel()) {
+		blog(LOG_INFO, "QWidget::focusOutEvent: %s", m_url.c_str());
+	}
 
 	if (event->reason() != Qt::MenuBarFocusReason && event->reason() != Qt::PopupFocusReason) {
 		m_cefWidget->clearFocus();

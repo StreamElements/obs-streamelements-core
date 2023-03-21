@@ -139,9 +139,11 @@ public:
 				std::string module =
 					modulesList->GetString(index).ToString();
 
-				blog(LOG_INFO,
-				     "StreamElementsCrashHandler: added module of interest: %s",
-				     module.c_str());
+				if (IsTraceLogLevel()) {
+					blog(LOG_INFO,
+					     "StreamElementsCrashHandler: added module of interest: %s",
+					     module.c_str());
+				}
 
 				modulesOfInterest.push_back(module);
 			}
