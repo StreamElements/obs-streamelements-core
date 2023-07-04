@@ -133,11 +133,17 @@ StreamElementsReportIssueDialog::StreamElementsReportIssueDialog(QWidget *parent
 	    (windowFlags() | Qt::CustomizeWindowHint)
 	    & ~Qt::WindowContextHelpButtonHint
 	    ));
+
+    QObject::connect(ui->txtIssue, &QPlainTextEdit::textChanged, this,
+		     &StreamElementsReportIssueDialog::update);
 }
 
 StreamElementsReportIssueDialog::~StreamElementsReportIssueDialog()
 {
-    delete ui;
+	QObject::disconnect(ui->txtIssue, &QPlainTextEdit::textChanged, this,
+			 &StreamElementsReportIssueDialog::update);
+
+	delete ui;
 }
 
 void StreamElementsReportIssueDialog::update()
