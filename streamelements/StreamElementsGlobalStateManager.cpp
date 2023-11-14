@@ -308,7 +308,19 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 				QMainWindow::AllowTabbedDocks);
 
 			std::string storagePath = GetCefVersionString();
-			int os_mkdirs_ret = os_mkdirs(storagePath.c_str());
+			std::string fullStoragePath;
+			{
+				auto rpath = obs_module_config_path(
+					storagePath.c_str());
+
+				auto path = os_get_abs_path_ptr(rpath);
+
+				fullStoragePath = path;
+
+				bfree(path);
+				bfree(rpath);
+			}
+			int os_mkdirs_ret = os_mkdirs(fullStoragePath.c_str());
 
 			m_cef = obs_browser_init_panel();
 			if (!m_cef) {
@@ -458,7 +470,7 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			if (MKDIR_ERROR == os_mkdirs_ret) {
 				blog(LOG_WARNING,
 				     "obs-streamelements-core: init: set on-boarding mode due to error creating new cookie storage path: %s",
-				     storagePath.c_str());
+				     fullStoragePath.c_str());
 
 				isOnBoarding = true;
 				onBoardingReason =
@@ -466,7 +478,7 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			} else if (MKDIR_SUCCESS == os_mkdirs_ret) {
 				blog(LOG_INFO,
 				     "obs-streamelements-core: init: set on-boarding mode due to new cookie storage path: %s",
-				     storagePath.c_str());
+				     fullStoragePath.c_str());
 
 				isOnBoarding = true;
 				onBoardingReason = "New cookie storage folder";
