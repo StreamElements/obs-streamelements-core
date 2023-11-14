@@ -307,7 +307,7 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 				QMainWindow::AllowNestedDocks |
 				QMainWindow::AllowTabbedDocks);
 
-			std::string storagePath = GetCefVersionString();
+			std::string storagePath = std::string("../obs-browser/") + GetCefVersionString();
 			std::string fullStoragePath;
 			{
 				auto rpath = obs_module_config_path(
