@@ -10,7 +10,7 @@ init:
 environment:
   BUGSPLAT_USERNAME: ilya77@gmail.com
   BUGSPLAT_PASSWORD:
-    secure: 9c6LeJtXAXvISt7o1o5lnw==
+    secure: VuWpM4WRVv4EBc27bOHR4Q==
   matrix:
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
       QT_VERSION: 6
