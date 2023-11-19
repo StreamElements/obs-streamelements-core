@@ -2475,7 +2475,7 @@ DeserializeAuxiliaryControlWidget(CefRefPtr<CefValue> input,
 	}
 
 	std::string styleSheet =
-		"QToolTip { color: #eeeeee; background-color: #000000; } ";
+		"QToolTip { color: palette(text); background-color: palette(dark); } ";
 
 	if (d->HasKey("color") && d->GetType("color") == VTYPE_STRING) {
 		styleSheet += "QPushButton { color: ";
@@ -2483,7 +2483,11 @@ DeserializeAuxiliaryControlWidget(CefRefPtr<CefValue> input,
 		styleSheet += " } ";
 	}
 
-	styleSheet += "QPushButton { padding: 0; } ";
+	styleSheet += "QPushButton { background-color: palette(button); padding: 1; padding-left: 1em; padding-right: 1em; } ";
+	styleSheet +=
+		"QPushButton:hover { background-color: palette(midlight); color: palette(dark); } ";
+	styleSheet +=
+		"QPushButton:pressed { background-color: palette(shadow); color: palette(bright-text); } ";
 
 	if (type == "container") {
 		if (!d->HasKey("items") || d->GetType("items") != VTYPE_LIST)
