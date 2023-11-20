@@ -277,6 +277,25 @@ bool StreamElementsWidgetManager::HideWidgetById(const char *const id)
 	return true;
 }
 
+static QDockWidget *GetSystemWidgetById(const char *widgetId)
+{
+	QMainWindow *main = (QMainWindow *)obs_frontend_get_main_window();
+
+	if (!main)
+		return nullptr;
+
+	auto list = main->findChildren<QDockWidget *>();
+
+	for (auto item : list) {
+		auto name = QString(":") + item->objectName();
+
+		if (name == widgetId)
+			return item;
+	}
+
+	return nullptr;
+}
+
 bool StreamElementsWidgetManager::ToggleWidgetFloatingStateById(
 	const char *const id)
 {
@@ -284,11 +303,16 @@ bool StreamElementsWidgetManager::ToggleWidgetFloatingStateById(
 
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
-	if (!m_dockWidgets.count(id)) {
-		return false;
+	QDockWidget *dock = nullptr;
+
+	if (m_dockWidgets.count(id)) {
+		dock = m_dockWidgets[id];
+	} else {
+		dock = GetSystemWidgetById(id);
 	}
 
-	QDockWidget *dock = m_dockWidgets[id];
+	if (!dock)
+		return false;
 
 	dock->setFloating(!dock->isFloating());
 
@@ -344,15 +368,16 @@ bool StreamElementsWidgetManager::SetWidgetPositionById(const char *const id,
 
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
-	if (!m_dockWidgets.count(id)) {
-		return false;
+	QDockWidget *dock = nullptr;
+
+	if (m_dockWidgets.count(id)) {
+		dock = m_dockWidgets[id];
+	} else {
+		dock = GetSystemWidgetById(id);
 	}
 
-	QDockWidget *dock = m_dockWidgets[id];
-
-	if (!dock->isFloating() || !dock->window()) {
+	if (!dock)
 		return false;
-	}
 
 	QPoint pos = dock->window()->pos();
 
