@@ -109,6 +109,13 @@ public:
 	void SerializeDockingWidgets(std::string& output) { StreamElementsWidgetManager::SerializeDockingWidgets(output); }
 	void DeserializeDockingWidgets(std::string& input) { StreamElementsWidgetManager::DeserializeDockingWidgets(input); }
 
+	bool GroupDockingWidgetPairByIds(const char *firstId,
+					 const char *secondId);
+
+	bool InsertDockingWidgetRelativeToId(const char *firstId,
+					const char *secondId,
+					const bool isBefore);
+
 	/********************/
 	/* Notification bar */
 	/********************/

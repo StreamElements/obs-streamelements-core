@@ -2,10 +2,9 @@
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
 
-#include "cef-headers.hpp"
-
 #include <QUuid>
 #include <QMainWindow>
+#include <QDockWidget>
 #include <QSpacerItem>
 
 #include <algorithm> // std::sort
@@ -21,6 +20,25 @@ StreamElementsBrowserWidgetManager::StreamElementsBrowserWidgetManager(
 }
 
 StreamElementsBrowserWidgetManager::~StreamElementsBrowserWidgetManager() {}
+
+static QDockWidget *GetSystemWidgetById(const char *widgetId)
+{
+	QMainWindow *main = (QMainWindow *)obs_frontend_get_main_window();
+
+	if (!main)
+		return nullptr;
+
+	auto list = main->findChildren<QDockWidget *>();
+
+	for (auto item : list) {
+		auto name = QString(":") + item->objectName();
+
+		if (name == widgetId)
+			return item;
+	}
+
+	return nullptr;
+}
 
 void StreamElementsBrowserWidgetManager::PushCentralBrowserWidget(
 	const char *const url, const char *const executeJavaScriptCodeOnLoad)
@@ -537,6 +555,379 @@ void StreamElementsBrowserWidgetManager::DeserializeDockingWidgets(
 			}
 		}
 	}
+}
+
+bool StreamElementsBrowserWidgetManager::GroupDockingWidgetPairByIds(
+	const char *firstId, const char *secondId)
+{
+	std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
+	QDockWidget *first = GetDockWidget(firstId);
+	QDockWidget *second = GetDockWidget(secondId);
+
+	if (!first)
+		first = GetSystemWidgetById(firstId);
+
+	if (!second)
+		second = GetSystemWidgetById(secondId);
+
+	if (!first || !second)
+		return false;
+
+	QMainWindow *main = (QMainWindow *)obs_frontend_get_main_window();
+
+	if (!main)
+		return false;
+
+	main->tabifyDockWidget(first, second);
+
+	return true;
+}
+
+bool StreamElementsBrowserWidgetManager::InsertDockingWidgetRelativeToId(
+		const char* firstId, const char* secondId, const bool isBefore)
+{
+	std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
+	QDockWidget *first = GetDockWidget(firstId);
+	QDockWidget *second = GetDockWidget(secondId);
+
+	if (!first)
+		first = GetSystemWidgetById(firstId);
+
+	if (!second)
+		second = GetSystemWidgetById(secondId);
+
+	if (!first || !second)
+		return false;
+
+	if (!first->parent())
+		return false;
+
+	if (!second->parent())
+		return false;
+
+	QMainWindow *main = (QMainWindow *)obs_frontend_get_main_window();
+
+	if (!main)
+		return false;
+
+	auto area = main->dockWidgetArea(first);
+
+	if (area == Qt::NoDockWidgetArea)
+		return false;
+
+	auto list = main->findChildren<QDockWidget *>();
+
+	QList<std::shared_ptr<QList<QDockWidget *>>> result;
+	bool isFound = false;
+	int prevListSize = 0;
+
+	std::map<std::string, bool> visited;
+
+	auto getTabified = [&](QDockWidget *dock) {
+		auto result = std::make_shared<QList<QDockWidget *>>();
+
+		auto tabified = main->tabifiedDockWidgets(dock);
+
+		// If dock is not part of a group, and is our dock to insert, count it as a dock which is rearranged, and not inserted
+		if (dock == second && tabified.size() == 0 &&
+		    !dock->isFloating() && dock->isVisible())
+			++prevListSize;
+
+		if (dock != second && visited.count(dock->objectName().toStdString()) == 0 && !dock->isFloating() && dock->isVisible()) {
+			result->push_back(dock);
+
+			visited[dock->objectName().toStdString()] = true;
+		}
+
+		for (auto item : tabified) {
+			if (item != second &&
+			    visited.count(item->objectName().toStdString()) ==
+				    0 &&
+			    !item->isFloating() && item->isVisible()) {
+				result->push_back(item);
+
+				visited[item->objectName().toStdString()] =
+					true;
+			}
+		}
+
+		return result;
+	};
+
+	auto hasItem = [&](std::shared_ptr<QList<QDockWidget *>> where,
+			   QDockWidget *dock) {
+		return where->count(dock) > 0;
+	};
+
+	auto visibleDockedCount =
+		[&](std::shared_ptr<QList<QDockWidget *>> where) {
+			int count = 0;
+			for (auto item : *where) {
+				if (item->isFloating())
+					continue;
+
+				if (!item->isVisible())
+					continue;
+
+				++count;
+			}
+			return count;
+		};
+
+	auto secondItemList = std::make_shared<QList<QDockWidget *>>();
+	secondItemList->push_back(second);
+
+	for (auto item : list) {
+		if (main->dockWidgetArea(item) != area)
+			continue;
+
+		auto tabified = getTabified(item);
+
+		if (visibleDockedCount(tabified) == 0)
+			continue;
+
+		++prevListSize;
+
+		if (item == second)
+			continue;
+
+		if (hasItem(tabified, first)) {
+			isFound = true;
+
+			if (!isBefore) {
+				result.push_back(tabified);
+			}
+
+			result.push_back(secondItemList);
+
+			if (isBefore) {
+				result.push_back(tabified);
+			}
+		} else {
+			result.push_back(tabified);
+		}
+	}
+
+	if (!isFound) {
+		if (isBefore) {
+			result.push_front(secondItemList);
+		} else {
+			result.push_back(secondItemList);
+		}
+	}
+
+	struct attr {
+		QDockWidget *dock;
+		QSize minSize;
+		QSize maxSize;
+		QSize sizeHint;
+		int width;
+		int height;
+		bool visible;
+	};
+
+	std::vector<std::shared_ptr<attr>> props;
+
+	// Remove all items first
+	for (auto group : result) {
+		auto item = group->at(0);
+		auto key = item->objectName();
+
+		auto p = std::make_shared<attr>();
+		p->dock = item;
+		p->minSize = item->minimumSize();
+		p->maxSize = item->maximumSize();
+		p->sizeHint = item->sizeHint();
+		p->width = item->width();
+		p->height = item->height();
+		p->visible = item->isVisible();
+
+		props.push_back(p);
+
+		for (auto dock : *group) {
+			main->removeDockWidget(dock);
+		}
+	}
+
+	if (result.size() != prevListSize) {
+		// Recalculate sizes
+		// When untabifying, take into account the space that we have to free
+
+		int targetTotalDim = 0;
+		int totalDim = 0;
+		int totalDimDelta = 0;
+		int canChangeCount = 0;
+
+		auto get = [&](size_t index) {
+			auto item = props.at(index);
+
+			if (area == Qt::TopDockWidgetArea ||
+			    area == Qt::BottomDockWidgetArea) {
+				return item->width;
+			}
+
+			if (area == Qt::LeftDockWidgetArea ||
+			    area == Qt::RightDockWidgetArea) {
+				return item->height;
+			}
+
+			return 0;
+		};
+
+		auto canChange = [&](size_t index, int direction) {
+			auto item = props.at(index);
+
+			if (area == Qt::TopDockWidgetArea ||
+			    area == Qt::BottomDockWidgetArea) {
+				if (direction < 0) {
+					return item->width >
+					       item->minSize.width();
+				} else if (direction > 0) {
+					return item->width <
+					       item->maxSize.width();
+				}
+			}
+
+			if (area == Qt::LeftDockWidgetArea ||
+			    area == Qt::RightDockWidgetArea) {
+				if (direction < 0) {
+					return item->height >
+					       item->minSize.height();
+				} else if (direction > 0) {
+					return item->height <
+					       item->maxSize.height();
+				}
+			}
+
+			return false;
+		};
+
+		auto set = [&](size_t index, int newVal) {
+			auto item = props.at(index);
+
+			if (area == Qt::TopDockWidgetArea ||
+			    area == Qt::BottomDockWidgetArea) {
+				int prev = item->width;
+
+				//item->width = std::min(
+				//	std::max(item->minSize.width(), newVal),
+				//	item->maxSize.width());
+
+				item->width = newVal;
+
+				return item->width != prev;
+			}
+
+			if (area == Qt::LeftDockWidgetArea ||
+			    area == Qt::RightDockWidgetArea) {
+				int prev = item->height;
+
+				//item->height = std::min(
+				//	std::max(item->minSize.height(),
+				//		 newVal),
+				//	item->maxSize.height());
+
+				item->height = newVal;
+
+				return item->height != prev;
+			}
+
+			return false;
+		};
+
+		auto recalc = [&]() {
+			for (size_t i = 0; i < props.size(); ++i) {
+				int val = get(i);
+
+				totalDim += val;
+
+				if (props.at(i)->dock != second)
+					targetTotalDim += val;
+			}
+
+			totalDimDelta = targetTotalDim - totalDim;
+
+			canChangeCount = 0;
+
+			for (size_t i = 0; i < props.size(); ++i) {
+				if (!canChange(i, totalDimDelta))
+					continue;
+
+				++canChangeCount;	
+			}
+		};
+
+		recalc();
+
+		for (size_t i = 0; i < props.size(); ++i) {
+			set(i, targetTotalDim / props.size());
+		}
+	}
+
+	// Add items back in their order, tabifying as necessary
+	for (auto group : result) {
+		main->addDockWidget(area, group->at(0));
+		group->at(0)->setFloating(false);
+
+		for (size_t i = 1; i < group->size(); ++i) {
+			main->addDockWidget(area, group->at(i));
+			group->at(i)->setFloating(false);
+			main->tabifyDockWidget(group->at(0), group->at(i));
+		}
+	}
+
+	// Set size
+	for (size_t key = 0; key < result.size(); ++key) {
+		auto group = result.at(key);
+
+		for (auto item : *group) {
+			int width = props[key]->width;
+			int height = props[key]->height;
+
+			if (area == Qt::TopDockWidgetArea ||
+			    area == Qt::BottomDockWidgetArea) {
+				item->setMinimumWidth(width);
+				item->setMaximumWidth(width);
+			}
+
+			if (area == Qt::LeftDockWidgetArea ||
+			    area == Qt::RightDockWidgetArea) {
+				item->setMinimumHeight(height);
+				item->setMaximumHeight(height);
+			}
+
+			item->setVisible(props[key]->visible);
+		}
+	}
+
+	//QApplication::sendPostedEvents();
+
+	// Restore original size constraints
+	for (size_t key = 0; key < result.size(); ++key) {
+		auto group = result.at(key);
+
+		for (auto item : *group) {
+			if (area == Qt::TopDockWidgetArea ||
+			    area == Qt::BottomDockWidgetArea) {
+				item->setMinimumWidth(props[key]->minSize.width());
+				item->setMaximumWidth(props[key]->maxSize.width());
+			}
+
+			if (area == Qt::LeftDockWidgetArea ||
+			    area == Qt::RightDockWidgetArea) {
+				item->setMinimumHeight(
+					props[key]->minSize.height());
+				item->setMaximumHeight(
+					props[key]->maxSize.height());
+			}
+		}
+	}
+
+	QApplication::sendPostedEvents();
+
+	return true;
 }
 
 void StreamElementsBrowserWidgetManager::ShowNotificationBar(

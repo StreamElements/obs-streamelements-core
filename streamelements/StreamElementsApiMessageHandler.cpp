@@ -865,6 +865,85 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("groupDockingWidgetsPairByIds");
+	{
+		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING && args->GetType(1) == VTYPE_STRING) {
+			result->SetBool(
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->GroupDockingWidgetPairByIds(
+						args->GetString(0)
+							.ToString()
+							.c_str(),
+						args->GetString(1)
+							.ToString()
+							.c_str()));
+
+			if (result->GetBool()) {
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				StreamElementsGlobalStateManager::GetInstance()
+					->PersistState();
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("insertDockingWidgetBeforeId");
+	{
+		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
+		    args->GetType(1) == VTYPE_STRING) {
+			result->SetBool(
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->InsertDockingWidgetRelativeToId(
+						args->GetString(0)
+							.ToString()
+							.c_str(),
+						args->GetString(1)
+							.ToString()
+							.c_str(),
+						true));
+
+			if (result->GetBool()) {
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				StreamElementsGlobalStateManager::GetInstance()
+					->PersistState();
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("insertDockingWidgetAfterId");
+	{
+		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
+		    args->GetType(1) == VTYPE_STRING) {
+			result->SetBool(
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->InsertDockingWidgetRelativeToId(
+						args->GetString(0)
+							.ToString()
+							.c_str(),
+						args->GetString(1)
+							.ToString()
+							.c_str(),
+						false));
+
+			if (result->GetBool()) {
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				StreamElementsGlobalStateManager::GetInstance()
+					->PersistState();
+			}
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("beginOnBoarding");
 	{
 		StreamElementsGlobalStateManager::GetInstance()->Reset();
