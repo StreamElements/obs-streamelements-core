@@ -382,6 +382,9 @@ static std::recursive_mutex s_sync_api_call_mutex;
 	complete_callback(); \
 	});
 
+#define API_HANDLER_END_ASYNC() \
+	});
+
 void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 {
 	RegisterIncomingApiCallHandler(
@@ -1192,17 +1195,28 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("showNonModalDialog");
 	{
 		if (args->GetSize()) {
-			auto future =
+			auto promise_ptr =
 				StreamElementsGlobalStateManager::GetInstance()
 					->DeserializeNonModalDialog(
 						args->GetValue(0));
 
-			future.wait();
+			std::thread([complete_callback, promise_ptr, result]() -> void {
+				auto future = promise_ptr->get_future();
 
-			result = future.get();
+				future.wait();
+
+				if (!future.valid()) {
+					result->SetNull();
+				} else {
+					result->SetValue(future.get());
+				}
+
+				complete_callback();
+			}).detach();
+				
 		}
 	}
-	API_HANDLER_END();
+	API_HANDLER_END_ASYNC();
 
 	API_HANDLER_BEGIN("getSystemCPUUsageTimes");
 	{

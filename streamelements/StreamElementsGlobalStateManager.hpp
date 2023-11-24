@@ -168,7 +168,7 @@ public:
 	bool DeserializePopupWindow(CefRefPtr<CefValue> input);
 	bool DeserializeModalDialog(CefRefPtr<CefValue> input,
 				    CefRefPtr<CefValue> &output);
-	std::future<CefRefPtr<CefValue>>
+	std::shared_ptr<std::promise<CefRefPtr<CefValue>>>
 	DeserializeNonModalDialog(CefRefPtr<CefValue> input);
 
 	void ReportIssue();

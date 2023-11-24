@@ -21,6 +21,8 @@ private:
 public:
     CefValueImpl(): m_type(VTYPE_NULL) {}
 
+    virtual void SetValue(CefRefPtr<CefValue> other);
+
     virtual bool IsValid() { return m_type != VTYPE_INVALID; }
     virtual bool IsOwned() { return true; }
     virtual bool IsReadOnly() { return false; }
@@ -90,6 +92,39 @@ CefRefPtr<CefValue> CefValueImpl::Copy() {
     }
 
     return result;
+}
+
+void CefValueImpl::SetValue(CefRefPtr<CefValue> other)
+{
+	switch (other->GetType()) {
+	case VTYPE_NULL:
+		this->SetType(VTYPE_NULL);
+		break;
+	case VTYPE_LIST:
+		this->SetList(other->GetList());
+		break;
+	case VTYPE_DICTIONARY:
+		this->SetDictionary(other->GetDictionary());
+		break;
+	case VTYPE_STRING:
+		this->SetString(other->GetString());
+		break;
+	case VTYPE_BINARY:
+		this->SetBinary(other->GetBinary());
+		break;
+	case VTYPE_BOOL:
+		this->SetBool(other->GetBool());
+		break;
+	case VTYPE_DOUBLE:
+		this->SetDouble(other->GetDouble());
+		break;
+	case VTYPE_INVALID:
+		this->SetType(VTYPE_INVALID);
+		break;
+	case VTYPE_INT:
+		this->SetInt(other->GetInt());
+		break;
+	}
 }
 
 bool CefValueImpl::GetBool() {

@@ -1111,11 +1111,9 @@ bool StreamElementsGlobalStateManager::DeserializeModalDialog(
 	return false;
 }
 
-std::future<CefRefPtr<CefValue>> StreamElementsGlobalStateManager::DeserializeNonModalDialog(CefRefPtr<CefValue> input)
+std::shared_ptr<std::promise<CefRefPtr<CefValue>>> StreamElementsGlobalStateManager::DeserializeNonModalDialog(CefRefPtr<CefValue> input)
 {
 	auto promise = std::make_shared<std::promise<CefRefPtr<CefValue>>>();
-
-	std::future<CefRefPtr<CefValue>> future = promise->get_future();
 
 	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
 
@@ -1158,7 +1156,8 @@ std::future<CefRefPtr<CefValue>> StreamElementsGlobalStateManager::DeserializeNo
 
 		dialog->connect(dialog, &QDialog::finished,
 				[this, dialog, promise](int result) {
-					CefRefPtr<CefValue> output;
+					CefRefPtr<CefValue> output =
+						CefValue::Create();
 
 					output->SetNull();
 
@@ -1173,6 +1172,7 @@ std::future<CefRefPtr<CefValue>> StreamElementsGlobalStateManager::DeserializeNo
 					promise->set_value(output);
 				});
 
+		dialog->setModal(false);
 		dialog->show();
 	} else {
 		auto nullResult = CefValue::Create();
@@ -1181,7 +1181,7 @@ std::future<CefRefPtr<CefValue>> StreamElementsGlobalStateManager::DeserializeNo
 		promise->set_value(nullResult);
 	}
 
-	return future;
+	return promise;
 }
 
 bool StreamElementsGlobalStateManager::DeserializePopupWindow(

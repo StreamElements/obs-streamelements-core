@@ -161,30 +161,25 @@ StreamElementsBrowserDialog::StreamElementsBrowserDialog(QWidget* parent, std::s
 	if (!!parent && IsAlwaysOnTop(parent)) {
 		SetAlwaysOnTop(this, true);
 	}
+
+	m_browser = new StreamElementsBrowserWidget(
+	nullptr, StreamElementsMessageBus::DEST_UI, m_url.c_str(),
+	m_executeJavaScriptOnLoad.c_str(), "reload", "dialog",
+	CreateGloballyUniqueIdString().c_str(),
+	std::make_shared<StreamElementsDialogApiMessageHandler>(this),
+	m_isIncognito);
+
+	layout()->addWidget(m_browser);
 }
 
 StreamElementsBrowserDialog::~StreamElementsBrowserDialog()
 {
+	m_browser->deleteLater();
 }
 
 int StreamElementsBrowserDialog::exec()
 {
-	m_browser = new StreamElementsBrowserWidget(
-		nullptr,
-		StreamElementsMessageBus::DEST_UI,
-		m_url.c_str(),
-		m_executeJavaScriptOnLoad.c_str(),
-		"reload",
-		"dialog",
-		CreateGloballyUniqueIdString().c_str(),
-		std::make_shared<StreamElementsDialogApiMessageHandler>(this),
-		m_isIncognito);
-
-	layout()->addWidget(m_browser);
-
 	int result = QDialog::exec();
-
-	m_browser->deleteLater();
 
 	return result;
 }
