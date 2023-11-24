@@ -94,6 +94,9 @@ CefString CefWriteJSON(CefRefPtr<CefValue> node,
 class CefValue {
 public:
     static CefRefPtr<CefValue> Create();
+
+    virtual void SetValue(CefRefPtr<CefValue> other) = 0;
+
     virtual bool IsValid() = 0;
     virtual bool IsOwned() = 0;
     virtual bool IsReadOnly() = 0;

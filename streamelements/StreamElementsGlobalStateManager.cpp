@@ -21,6 +21,8 @@
 #include <string.h>
 #endif
 
+#include <future>
+
 /* ========================================================================= */
 
 static QString GetLastErrorMsg()
@@ -1107,6 +1109,79 @@ bool StreamElementsGlobalStateManager::DeserializeModalDialog(
 	}
 
 	return false;
+}
+
+std::shared_ptr<std::promise<CefRefPtr<CefValue>>> StreamElementsGlobalStateManager::DeserializeNonModalDialog(CefRefPtr<CefValue> input)
+{
+	auto promise = std::make_shared<std::promise<CefRefPtr<CefValue>>>();
+
+	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
+
+	if (d.get() && d->HasKey("url")) {
+		std::string url = d->GetString("url").ToString();
+		std::string executeJavaScriptOnLoad;
+
+		if (d->HasKey("executeJavaScriptOnLoad")) {
+			executeJavaScriptOnLoad =
+				d->GetString("executeJavaScriptOnLoad");
+		}
+
+		int width = 800;
+		int height = 600;
+		bool isIncognito = false;
+
+		if (d->HasKey("width")) {
+			width = d->GetInt("width");
+		}
+
+		if (d->HasKey("height")) {
+			height = d->GetInt("height");
+		}
+
+		if (d->HasKey("incognitoMode") && d->GetBool("incognitoMode")) {
+			isIncognito = true;
+		}
+
+		auto dialog = new StreamElementsBrowserDialog(
+			mainWindow(), url,
+						   executeJavaScriptOnLoad,
+						   isIncognito);
+
+		if (d->HasKey("title")) {
+			dialog->setWindowTitle(QString(
+				d->GetString("title").ToString().c_str()));
+		}
+
+		dialog->setFixedSize(width, height);
+
+		dialog->connect(dialog, &QDialog::finished,
+				[this, dialog, promise](int result) {
+					CefRefPtr<CefValue> output =
+						CefValue::Create();
+
+					output->SetNull();
+
+					if (result == QDialog::Accepted) {
+						output = CefParseJSON(
+							dialog->result(),
+							JSON_PARSER_ALLOW_TRAILING_COMMAS);
+					}
+
+					dialog->deleteLater();
+
+					promise->set_value(output);
+				});
+
+		dialog->setModal(false);
+		dialog->show();
+	} else {
+		auto nullResult = CefValue::Create();
+		nullResult->SetNull();
+
+		promise->set_value(nullResult);
+	}
+
+	return promise;
 }
 
 bool StreamElementsGlobalStateManager::DeserializePopupWindow(

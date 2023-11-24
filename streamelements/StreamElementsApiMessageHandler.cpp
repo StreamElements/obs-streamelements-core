@@ -181,6 +181,8 @@ void StreamElementsApiMessageHandler::InvokeApiCallHandlerAsync(
 	const long cefClientId,
 	const bool enable_logging)
 {
+	auto runtimeStatus = m_runtimeStatus;
+
 	CefRefPtr<CefValue> result = CefValue::Create();
 	result->SetNull();
 
@@ -207,7 +209,9 @@ void StreamElementsApiMessageHandler::InvokeApiCallHandlerAsync(
 			     target.c_str(), invokeId.c_str());
 		}
 
-		result_callback(result);
+		if (runtimeStatus->m_running) {
+			result_callback(result);
+		}
 	});
 }
 
@@ -376,6 +380,9 @@ static std::recursive_mutex s_sync_api_call_mutex;
 			std::lock_guard<std::recursive_mutex> _api_sync_guard(s_sync_api_call_mutex);
 #define API_HANDLER_END() \
 	complete_callback(); \
+	});
+
+#define API_HANDLER_END_ASYNC() \
 	});
 
 void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
@@ -1184,6 +1191,32 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		}
 	}
 	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("showNonModalDialog");
+	{
+		if (args->GetSize()) {
+			auto promise_ptr =
+				StreamElementsGlobalStateManager::GetInstance()
+					->DeserializeNonModalDialog(
+						args->GetValue(0));
+
+			std::thread([complete_callback, promise_ptr, result]() -> void {
+				auto future = promise_ptr->get_future();
+
+				future.wait();
+
+				if (!future.valid()) {
+					result->SetNull();
+				} else {
+					result->SetValue(future.get());
+				}
+
+				complete_callback();
+			}).detach();
+				
+		}
+	}
+	API_HANDLER_END_ASYNC();
 
 	API_HANDLER_BEGIN("getSystemCPUUsageTimes");
 	{

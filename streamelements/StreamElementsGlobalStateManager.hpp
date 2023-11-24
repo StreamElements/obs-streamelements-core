@@ -168,6 +168,8 @@ public:
 	bool DeserializePopupWindow(CefRefPtr<CefValue> input);
 	bool DeserializeModalDialog(CefRefPtr<CefValue> input,
 				    CefRefPtr<CefValue> &output);
+	std::shared_ptr<std::promise<CefRefPtr<CefValue>>>
+	DeserializeNonModalDialog(CefRefPtr<CefValue> input);
 
 	void ReportIssue();
 	void UninstallPlugin();
