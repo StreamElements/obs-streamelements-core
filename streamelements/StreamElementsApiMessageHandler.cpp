@@ -181,6 +181,8 @@ void StreamElementsApiMessageHandler::InvokeApiCallHandlerAsync(
 	const long cefClientId,
 	const bool enable_logging)
 {
+	auto runtimeStatus = m_runtimeStatus;
+
 	CefRefPtr<CefValue> result = CefValue::Create();
 	result->SetNull();
 
@@ -207,7 +209,9 @@ void StreamElementsApiMessageHandler::InvokeApiCallHandlerAsync(
 			     target.c_str(), invokeId.c_str());
 		}
 
-		result_callback(result);
+		if (runtimeStatus->m_running) {
+			result_callback(result);
+		}
 	});
 }
 
@@ -1181,6 +1185,21 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			StreamElementsGlobalStateManager::GetInstance()
 				->DeserializeModalDialog(args->GetValue(0),
 							 result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("showNonModalDialog");
+	{
+		if (args->GetSize()) {
+			auto future =
+				StreamElementsGlobalStateManager::GetInstance()
+					->DeserializeNonModalDialog(
+						args->GetValue(0));
+
+			future.wait();
+
+			result = future.get();
 		}
 	}
 	API_HANDLER_END();

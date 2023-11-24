@@ -4,11 +4,30 @@
 
 #include <mutex>
 #include <functional>
+#include <memory>
+
+class StreamElementsApiMessageHandlerRuntimeStatus {
+public:
+	bool m_running = true;
+
+	StreamElementsApiMessageHandlerRuntimeStatus() : m_running(true) {
+
+	}
+};
 
 class StreamElementsApiMessageHandler {
 public:
+
+private:
+	std::shared_ptr<StreamElementsApiMessageHandlerRuntimeStatus>
+		m_runtimeStatus = std::make_shared<
+			StreamElementsApiMessageHandlerRuntimeStatus>();
+
+public:
 	StreamElementsApiMessageHandler() { RegisterIncomingApiCallHandlers(); }
-	virtual ~StreamElementsApiMessageHandler() {}
+	virtual ~StreamElementsApiMessageHandler() {
+		m_runtimeStatus->m_running = false;
+	}
 
 public:
 	virtual bool

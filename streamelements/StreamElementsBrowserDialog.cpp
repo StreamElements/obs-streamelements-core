@@ -78,6 +78,73 @@ protected:
 			}
 		}
 		API_HANDLER_END();
+
+		API_HANDLER_BEGIN("endNonModalDialog");
+		{
+			result->SetBool(false);
+
+			if (args->GetSize()) {
+				std::shared_ptr<
+					StreamElementsDialogApiMessageHandler>
+					msgHandler = std::static_pointer_cast<
+						StreamElementsDialogApiMessageHandler>(
+						self);
+
+				CefRefPtr<CefValue> arg = args->GetValue(0);
+
+				msgHandler->dialog()->m_result = "null";
+
+				if (arg->GetType() != VTYPE_NULL) {
+					CefString json = CefWriteJSON(
+						arg, JSON_WRITER_DEFAULT);
+
+					if (json.size() &&
+					    json.ToString().c_str()) {
+						msgHandler->dialog()->m_result =
+							json.ToString().c_str();
+					}
+				}
+
+				QMetaObject::invokeMethod(msgHandler->dialog(),
+							  "accept",
+							  Qt::QueuedConnection);
+			}
+		}
+		API_HANDLER_END();
+
+		API_HANDLER_BEGIN("endDialog");
+		{
+			result->SetBool(false);
+
+			if (args->GetSize()) {
+				std::shared_ptr<
+					StreamElementsDialogApiMessageHandler>
+					msgHandler = std::static_pointer_cast<
+						StreamElementsDialogApiMessageHandler>(
+						self);
+
+				CefRefPtr<CefValue> arg = args->GetValue(0);
+
+				msgHandler->dialog()->m_result = "null";
+
+				if (arg->GetType() != VTYPE_NULL) {
+					CefString json = CefWriteJSON(
+						arg, JSON_WRITER_DEFAULT);
+
+					if (json.size() &&
+					    json.ToString().c_str()) {
+						msgHandler->dialog()->m_result =
+							json.ToString().c_str();
+					}
+				}
+
+				QMetaObject::invokeMethod(msgHandler->dialog(),
+							  "accept",
+							  Qt::QueuedConnection);
+			}
+		}
+		API_HANDLER_END();
+
 	}
 };
 
