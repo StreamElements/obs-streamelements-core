@@ -27,6 +27,7 @@ struct QCefCookieManager;
 #include "StreamElementsCleanupManager.hpp"
 #include "StreamElementsPreviewManager.hpp"
 #include "StreamElementsWebsocketApiServer.hpp"
+#include "StreamElementsBrowserDialog.hpp"
 
 class StreamElementsGlobalStateManager : public StreamElementsObsAppMonitor {
 private:
@@ -168,14 +169,25 @@ public:
 	bool DeserializePopupWindow(CefRefPtr<CefValue> input);
 	bool DeserializeModalDialog(CefRefPtr<CefValue> input,
 				    CefRefPtr<CefValue> &output);
-	std::shared_ptr<std::promise<CefRefPtr<CefValue>>>
-	DeserializeNonModalDialog(CefRefPtr<CefValue> input);
 
 	void ReportIssue();
 	void UninstallPlugin();
 
 	void SerializeUserInterfaceState(CefRefPtr<CefValue> &output);
 	bool DeserializeUserInterfaceState(CefRefPtr<CefValue> input);
+
+public:
+	std::shared_ptr<std::promise<CefRefPtr<CefValue>>>
+	DeserializeNonModalDialog(CefRefPtr<CefValue> input);
+
+	void SerializeAllNonModalDialogs(CefRefPtr<CefValue> &output);
+	bool DeserializeCloseNonModalDialogsByIds(CefRefPtr<CefValue> input);
+	bool DeserializeFocusNonModalDialogById(CefRefPtr<CefValue> input);
+	bool DeserializeNonModalDialogDimensionsById(CefRefPtr<CefValue> dialogId, CefRefPtr<CefValue> dimensions);
+
+private:
+	std::map<std::string, StreamElementsBrowserDialog*>
+		m_nonModalDialogs;
 
 private:
 	std::recursive_mutex m_mutex;
