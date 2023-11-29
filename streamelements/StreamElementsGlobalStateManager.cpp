@@ -1111,8 +1111,136 @@ bool StreamElementsGlobalStateManager::DeserializeModalDialog(
 	return false;
 }
 
+void StreamElementsGlobalStateManager::SerializeAllNonModalDialogs(
+	CefRefPtr<CefValue> &output)
+{
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
+	CefRefPtr<CefDictionaryValue> result = CefDictionaryValue::Create();
+
+	for (auto pair : m_nonModalDialogs) {
+		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+
+		d->SetString("id", pair.first);
+		d->SetString("url", pair.second->getUrl());
+		d->SetString(
+			"executeJavaScriptOnLoad",
+			pair.second->getExecuteJavaScriptOnLoad());
+		d->SetBool(
+			"isIncognito",
+			pair.second->getIsIncognito());
+		d->SetString(
+			"title",
+			pair.second->windowTitle().toStdString());
+		d->SetInt("width", pair.second->width());
+		d->SetInt("height", pair.second->height());
+
+		result->SetDictionary(pair.first, d);
+	}
+
+	output->SetDictionary(result);
+}
+
+bool StreamElementsGlobalStateManager::DeserializeCloseNonModalDialogsByIds(
+	CefRefPtr<CefValue> input)
+{
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
+	if (input->GetType() != VTYPE_LIST)
+		return false;
+
+	auto list = input->GetList();
+
+	for (size_t i = 0; i < list->GetSize(); ++i) {
+		if (list->GetType(i) != VTYPE_STRING)
+			return false;
+	}
+
+	for (size_t i = 0; i < list->GetSize(); ++i) {
+		std::string id = list->GetString(i);
+
+		if (!m_nonModalDialogs.count(id))
+			continue;
+
+		auto dialog = m_nonModalDialogs[id];
+
+		// Schedule dialog reject
+		QMetaObject::invokeMethod(dialog, &QDialog::reject,
+					  Qt::QueuedConnection);
+	}
+
+	return true;
+}
+
+bool StreamElementsGlobalStateManager::DeserializeFocusNonModalDialogById(
+	CefRefPtr<CefValue> input)
+{
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
+	if (input->GetType() != VTYPE_STRING)
+		return false;
+
+	std::string id = input->GetString();
+
+	if (!m_nonModalDialogs.count(id))
+		return false;
+
+	auto dialog = m_nonModalDialogs[id];
+
+	dialog->activateWindow();
+
+	return true;
+}
+
+bool StreamElementsGlobalStateManager::DeserializeNonModalDialogDimensionsById(
+	CefRefPtr<CefValue> dialogId, CefRefPtr<CefValue> dimensions)
+{
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
+	if (dialogId->GetType() != VTYPE_STRING)
+		return false;
+
+	if (dimensions->GetType() != VTYPE_DICTIONARY)
+		return false;
+
+	auto d = dimensions->GetDictionary();
+
+	if (!d->HasKey("width") || d->GetType("width") != VTYPE_INT)
+		return false;
+
+	if (!d->HasKey("height") || d->GetType("height") != VTYPE_INT)
+		return false;
+
+	std::string id = dialogId->GetString();
+
+	if (!m_nonModalDialogs.count(id))
+		return false;
+
+	int width = d->GetInt("width");
+	int height = d->GetInt("height");
+
+	if (width < 1)
+		return false;
+
+	if (height < 1)
+		return false;
+
+	auto dialog = m_nonModalDialogs[id];
+
+	int centerX = dialog->x() + (dialog->width() / 2);
+	int centerY = dialog->y() + (dialog->height() / 2);
+
+	dialog->setFixedWidth(width);
+	dialog->setFixedHeight(height);
+	dialog->move(centerX - (width / 2), centerY - (height / 2));
+
+	return true;
+}
+
 std::shared_ptr<std::promise<CefRefPtr<CefValue>>> StreamElementsGlobalStateManager::DeserializeNonModalDialog(CefRefPtr<CefValue> input)
 {
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
 	auto promise = std::make_shared<std::promise<CefRefPtr<CefValue>>>();
 
 	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
@@ -1120,6 +1248,15 @@ std::shared_ptr<std::promise<CefRefPtr<CefValue>>> StreamElementsGlobalStateMana
 	if (d.get() && d->HasKey("url")) {
 		std::string url = d->GetString("url").ToString();
 		std::string executeJavaScriptOnLoad;
+		std::string id;
+
+		if (d->HasKey("id") && d->GetType("id") == VTYPE_STRING) {
+			id = d->GetString("id");
+		}
+
+		while (!id.size() || m_nonModalDialogs.count(id)) {
+			id = CreateGloballyUniqueIdString();
+		}
 
 		if (d->HasKey("executeJavaScriptOnLoad")) {
 			executeJavaScriptOnLoad =
@@ -1154,8 +1291,15 @@ std::shared_ptr<std::promise<CefRefPtr<CefValue>>> StreamElementsGlobalStateMana
 
 		dialog->setFixedSize(width, height);
 
+		m_nonModalDialogs[id] = dialog;
+
 		dialog->connect(dialog, &QDialog::finished,
-				[this, dialog, promise](int result) {
+				[this, dialog, promise, id](int result) {
+					std::lock_guard<decltype(m_mutex)> guard(
+						m_mutex);
+
+					m_nonModalDialogs.erase(id);
+
 					CefRefPtr<CefValue> output =
 						CefValue::Create();
 

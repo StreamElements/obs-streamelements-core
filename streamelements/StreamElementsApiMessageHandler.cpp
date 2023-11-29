@@ -1218,6 +1218,46 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END_ASYNC();
 
+	API_HANDLER_BEGIN("getAllNonModalDialogs");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->SerializeAllNonModalDialogs(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("closeNonModalDialogsByIds");
+	{
+		if (args->GetSize() >= 1) {
+			result->SetBool(
+				StreamElementsGlobalStateManager::GetInstance()
+					->DeserializeCloseNonModalDialogsByIds(
+						args->GetValue(0)));
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("focusNonModalDialogById");
+	{
+		if (args->GetSize() >= 1) {
+			result->SetBool(
+				StreamElementsGlobalStateManager::GetInstance()
+					->DeserializeFocusNonModalDialogById(
+						args->GetValue(0)));
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setNonModalDialogDimensionsById");
+	{
+		if (args->GetSize() >= 2) {
+			result->SetBool(
+				StreamElementsGlobalStateManager::GetInstance()
+					->DeserializeNonModalDialogDimensionsById(
+						args->GetValue(0), args->GetValue(1)));
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("getSystemCPUUsageTimes");
 	{
 		SerializeSystemTimes(result);
