@@ -54,7 +54,8 @@ void StreamElementsBrowserWidgetManager::PushCentralBrowserWidget(
 	StreamElementsBrowserWidget *widget = new StreamElementsBrowserWidget(
 		nullptr, StreamElementsMessageBus::DEST_UI, url,
 		executeJavaScriptCodeOnLoad, "reload", "center",
-		CreateGloballyUniqueIdString().c_str());
+		CreateGloballyUniqueIdString().c_str(),
+		std::make_shared<StreamElementsApiMessageHandler>("centralWidget"));
 
 	PushCentralWidget(widget);
 }
@@ -254,8 +255,9 @@ bool StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 	closeAction->setFont(font);
 
 	StreamElementsBrowserWidget *widget = new StreamElementsBrowserWidget(
-		nullptr, StreamElementsMessageBus::DEST_UI, url, executeJavaScriptCodeOnLoad,
-		reloadPolicy, DockWidgetAreaToString(area).c_str(), id);
+		nullptr, StreamElementsMessageBus::DEST_UI, url, executeJavaScriptCodeOnLoad, reloadPolicy,
+		DockWidgetAreaToString(area).c_str(), id,
+		std::make_shared<StreamElementsApiMessageHandler>("dockingWidget"));
 
 	main->setCentralWidget(widget);
 
@@ -939,8 +941,10 @@ void StreamElementsBrowserWidgetManager::ShowNotificationBar(
 	HideNotificationBar();
 
 	m_notificationBarBrowserWidget = new StreamElementsBrowserWidget(
-		nullptr, StreamElementsMessageBus::DEST_UI, url, executeJavaScriptCodeOnLoad,
-		"reload", "notification", CreateGloballyUniqueIdString().c_str());
+		nullptr, StreamElementsMessageBus::DEST_UI, url, executeJavaScriptCodeOnLoad, "reload", "notification",
+		CreateGloballyUniqueIdString().c_str(),
+		std::make_shared<StreamElementsApiMessageHandler>(
+			"notificationBar"));
 
 	const Qt::ToolBarArea NOTIFICATION_BAR_AREA = Qt::TopToolBarArea;
 

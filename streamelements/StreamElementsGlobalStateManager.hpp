@@ -180,6 +180,8 @@ public:
 	std::shared_ptr<std::promise<CefRefPtr<CefValue>>>
 	DeserializeNonModalDialog(CefRefPtr<CefValue> input);
 
+	bool HasNonModalDialog(const char *id);
+	std::string GetNonModalDialogUrl(const char *id);
 	void SerializeAllNonModalDialogs(CefRefPtr<CefValue> &output);
 	bool DeserializeCloseNonModalDialogsByIds(CefRefPtr<CefValue> input);
 	bool DeserializeFocusNonModalDialogById(CefRefPtr<CefValue> input);

@@ -1090,7 +1090,7 @@ bool StreamElementsGlobalStateManager::DeserializeModalDialog(
 
 		StreamElementsBrowserDialog dialog(mainWindow(), url,
 						   executeJavaScriptOnLoad,
-						   isIncognito);
+						   isIncognito, "modalDialog");
 
 		if (d->HasKey("title")) {
 			dialog.setWindowTitle(QString(
@@ -1109,6 +1109,23 @@ bool StreamElementsGlobalStateManager::DeserializeModalDialog(
 	}
 
 	return false;
+}
+
+bool StreamElementsGlobalStateManager::HasNonModalDialog(const char* id) {
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
+	return m_nonModalDialogs.count(id) > 0;
+}
+
+std::string StreamElementsGlobalStateManager::GetNonModalDialogUrl(const char *id)
+{
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
+	if (m_nonModalDialogs.count(id) > 0) {
+		m_nonModalDialogs[id]->getUrl();
+	}
+
+	return "";
 }
 
 void StreamElementsGlobalStateManager::SerializeAllNonModalDialogs(
@@ -1280,9 +1297,8 @@ std::shared_ptr<std::promise<CefRefPtr<CefValue>>> StreamElementsGlobalStateMana
 		}
 
 		auto dialog = new StreamElementsBrowserDialog(
-			mainWindow(), url,
-						   executeJavaScriptOnLoad,
-						   isIncognito);
+			mainWindow(), url, executeJavaScriptOnLoad, isIncognito,
+			"nonModalDialog");
 
 		if (d->HasKey("title")) {
 			dialog->setWindowTitle(QString(
@@ -1349,7 +1365,7 @@ bool StreamElementsGlobalStateManager::DeserializePopupWindow(
 			apiMessageHandler = nullptr;
 
 		apiMessageHandler =
-			std::make_shared<StreamElementsApiMessageHandler>();
+			std::make_shared<StreamElementsApiMessageHandler>("popupWindow");
 
 		QMainWindow *window = new QMainWindow();
 

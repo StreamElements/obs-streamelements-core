@@ -230,7 +230,7 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 
 	if (m_requestedApiMessageHandler == nullptr) {
 		m_requestedApiMessageHandler =
-			std::make_shared<StreamElementsApiMessageHandler>();
+			std::make_shared<StreamElementsApiMessageHandler>("unknown");
 	}
 
 	uint16_t port = StreamElementsGlobalStateManager::GetInstance()

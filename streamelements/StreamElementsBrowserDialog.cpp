@@ -32,15 +32,17 @@ static std::recursive_mutex s_sync_api_call_mutex;
 class StreamElementsDialogApiMessageHandler : public StreamElementsApiMessageHandler
 {
 public:
-	StreamElementsDialogApiMessageHandler(StreamElementsBrowserDialog* dialog) :
-		m_dialog(dialog)
+	StreamElementsDialogApiMessageHandler(
+		StreamElementsBrowserDialog *dialog, std::string containerType)
+		: StreamElementsApiMessageHandler(containerType),
+		  m_dialog(dialog)
 	{
 		RegisterIncomingApiCallHandlers();
 	}
 
 	virtual std::shared_ptr<StreamElementsApiMessageHandler> Clone() override
 	{
-		return std::make_shared<StreamElementsDialogApiMessageHandler>(m_dialog);
+		return std::make_shared<StreamElementsDialogApiMessageHandler>(m_dialog, m_containerType);
 	}
 
 private:
@@ -148,7 +150,9 @@ protected:
 	}
 };
 
-StreamElementsBrowserDialog::StreamElementsBrowserDialog(QWidget* parent, std::string url, std::string executeJavaScriptOnLoad, bool isIncognito)
+StreamElementsBrowserDialog::StreamElementsBrowserDialog(
+	QWidget *parent, std::string url, std::string executeJavaScriptOnLoad,
+	bool isIncognito, std::string containerType)
 	: QDialog(parent), m_url(url), m_executeJavaScriptOnLoad(executeJavaScriptOnLoad), m_isIncognito(isIncognito)
 {
 	setLayout(new QVBoxLayout());
@@ -166,7 +170,8 @@ StreamElementsBrowserDialog::StreamElementsBrowserDialog(QWidget* parent, std::s
 	nullptr, StreamElementsMessageBus::DEST_UI, m_url.c_str(),
 	m_executeJavaScriptOnLoad.c_str(), "reload", "dialog",
 	CreateGloballyUniqueIdString().c_str(),
-	std::make_shared<StreamElementsDialogApiMessageHandler>(this),
+		std::make_shared<StreamElementsDialogApiMessageHandler>(
+			this, containerType),
 	m_isIncognito);
 
 	layout()->addWidget(m_browser);

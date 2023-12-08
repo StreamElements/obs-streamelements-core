@@ -363,7 +363,7 @@ static std::recursive_mutex s_sync_api_call_mutex;
 
 #define API_HANDLER_BEGIN(name) \
 	RegisterIncomingApiCallHandler(name, []( \
-		std::shared_ptr<StreamElementsApiMessageHandler>, \
+		std::shared_ptr<StreamElementsApiMessageHandler> self, \
 		CefRefPtr<CefProcessMessage> message, \
 		CefRefPtr<CefListValue> args, \
 		CefRefPtr<CefValue>& result, \
@@ -371,6 +371,7 @@ static std::recursive_mutex s_sync_api_call_mutex;
 		const long cefClientId, \
 		std::function<void()> complete_callback) \
 		{ \
+			(void)self; \
 			(void)message; \
 			(void)args; \
 			(void)result; \
@@ -1104,10 +1105,12 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 		std::string dockingArea = "none";
 
-		StreamElementsBrowserWidgetManager::DockBrowserWidgetInfo *info =
-			StreamElementsGlobalStateManager::GetInstance()
-				->GetWidgetManager()
-				->GetDockBrowserWidgetInfo(target.c_str());
+		StreamElementsBrowserWidgetManager::DockBrowserWidgetInfo
+			*info = StreamElementsGlobalStateManager::
+					GetInstance()
+						->GetWidgetManager()
+						->GetDockBrowserWidgetInfo(
+							target.c_str());
 
 		if (info) {
 			dockingArea = info->m_dockingArea;
@@ -1120,6 +1123,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		d->SetString("id", target);
 		d->SetString("dockingArea", dockingArea);
 		d->SetString("theme", GetCurrentThemeName());
+		d->SetString("type", self->m_containerType);
 
 		result->SetDictionary(d);
 	}

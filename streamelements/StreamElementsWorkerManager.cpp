@@ -22,7 +22,7 @@ public:
 			m_url.c_str(), m_executeJavascriptOnLoad.c_str(),
 			"default", "popup",
 			CreateGloballyUniqueIdString().c_str(),
-			std::make_shared<StreamElementsApiMessageHandler>(),
+			std::make_shared<StreamElementsApiMessageHandler>("backgroundWorker"),
 			false);
 
 		auto mainWindow =

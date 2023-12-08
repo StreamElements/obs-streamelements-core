@@ -23,8 +23,15 @@ private:
 		m_runtimeStatus = std::make_shared<
 			StreamElementsApiMessageHandlerRuntimeStatus>();
 
+protected:
+	std::string m_containerType;
+
 public:
-	StreamElementsApiMessageHandler() { RegisterIncomingApiCallHandlers(); }
+	StreamElementsApiMessageHandler(std::string containerType)
+		: m_containerType(containerType)
+	{
+		RegisterIncomingApiCallHandlers();
+	}
 	virtual ~StreamElementsApiMessageHandler() {
 		m_runtimeStatus->m_running = false;
 	}
@@ -42,7 +49,7 @@ public:
 
 public:
 	virtual std::shared_ptr<StreamElementsApiMessageHandler> Clone() {
-		return std::make_shared<StreamElementsApiMessageHandler>();
+		return std::make_shared<StreamElementsApiMessageHandler>(m_containerType);
 	}
 
 protected:
@@ -95,7 +102,8 @@ public:
 class StreamElementsApiMessageHandler::InvokeHandler
 	: public StreamElementsApiMessageHandler {
 public:
-	InvokeHandler()
+	InvokeHandler(std::string containerType)
+		: StreamElementsApiMessageHandler(containerType)
 	{
 		RegisterIncomingApiCallHandlers();
 	}
@@ -113,7 +121,7 @@ public:
 			if (!s_singleton) {
 				s_singleton = std::make_shared<
 					StreamElementsApiMessageHandler::
-						InvokeHandler>();
+						InvokeHandler>("globalInvokeHandler");
 			}
 		}
 
