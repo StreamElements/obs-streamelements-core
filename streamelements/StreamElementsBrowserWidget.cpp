@@ -476,7 +476,6 @@ void StreamElementsBrowserWidget::BrowserLoadInitialPage(const char *const url)
 	}
 
 	m_cefWidget->setURL(m_url);
-	m_cefWidget->reloadPage();
 }
 
 void StreamElementsBrowserWidget::focusInEvent(QFocusEvent *event)
