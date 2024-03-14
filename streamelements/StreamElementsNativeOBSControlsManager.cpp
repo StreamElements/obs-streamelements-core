@@ -319,6 +319,8 @@ void StreamElementsNativeOBSControlsManager::HidePreviewTitleBar()
 
 void StreamElementsNativeOBSControlsManager::Reset()
 {
+	SetStartStreamingMode(StreamElementsNativeOBSControlsManager::start);
+
 	HidePreviewTitleBar();
 	HidePreviewFrame();
 }
