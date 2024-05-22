@@ -899,9 +899,11 @@ static void SerializeObsScene(obs_source_t *scene, CefRefPtr<CefValue> &result)
 
 	d->SetBool("active", is_active_scene(obs_scene_from_source(scene)));
 
+	#if SE_ENABLE_SCENE_ICONS
 	d->SetValue("icon",
 		    StreamElementsScenesListWidgetManager::GetSceneIcon(scene)
 			    ->Copy());
+	#endif
 
 	d->SetValue(
 		"auxiliaryData",
@@ -909,16 +911,20 @@ static void SerializeObsScene(obs_source_t *scene, CefRefPtr<CefValue> &result)
 			scene)
 			->Copy());
 
+	#if SE_ENABLE_SCENE_DEFAULT_ACTION
 	d->SetValue(
 		"defaultAction",
 		StreamElementsScenesListWidgetManager::GetSceneDefaultAction(
 			scene)
 			->Copy());
+	#endif
 
+	#if SE_ENABLE_SCENE_CONTEXT_MENU
 	d->SetValue("contextMenu",
 		    StreamElementsScenesListWidgetManager::GetSceneContextMenu(
 			    scene)
 			    ->Copy());
+	#endif
 
 	result->SetDictionary(d);
 }
@@ -2509,22 +2515,28 @@ void StreamElementsObsSceneManager::SetObsScenePropertiesById(
 				result = true;
 			}
 
+			#if SE_ENABLE_SCENE_ICONS
 			if (d->HasKey("icon")) {
 				m_scenesWidgetManager->SetSceneIcon(
 					scene, d->GetValue("icon")->Copy());
 			}
+			#endif
 
+			#if SE_ENABLE_SCENE_DEFAULT_ACTION
 			if (d->HasKey("defaultAction")) {
 				m_scenesWidgetManager->SetSceneDefaultAction(
 					scene,
 					d->GetValue("defaultAction")->Copy());
 			}
+			#endif
 
+			#if SE_ENABLE_SCENE_CONTEXT_MENU
 			if (d->HasKey("contextMenu")) {
 				m_scenesWidgetManager->SetSceneContextMenu(
 					scene,
 					d->GetValue("contextMenu")->Copy());
 			}
+			#endif
 
 			if (d->HasKey("auxiliaryData")) {
 				m_scenesWidgetManager->SetSceneAuxiliaryData(
