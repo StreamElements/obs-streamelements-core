@@ -399,6 +399,7 @@ StreamElementsScenesListWidgetManager::StreamElementsScenesListWidgetManager(
 
 		/* Subscribe to signals */
 
+		#if SE_ENABLE_SCENES_UI_EXTENSIONS
 		QObject::connect(model, &QAbstractItemModel::modelReset, this,
 				 &StreamElementsScenesListWidgetManager::
 					 HandleScenesModelReset);
@@ -424,6 +425,7 @@ StreamElementsScenesListWidgetManager::StreamElementsScenesListWidgetManager(
 				 &QListWidget::itemDoubleClicked, this,
 				 &StreamElementsScenesListWidgetManager::
 					 HandleScenesItemDoubleClicked);
+		#endif
 
 		#if SE_ENABLE_SCENES_UI_EXTENSIONS
 		ScheduleUpdateWidgets();
@@ -467,6 +469,7 @@ StreamElementsScenesListWidgetManager::
 
 	auto model = m_nativeWidget->model();
 
+	#if SE_ENABLE_SCENES_UI_EXTENSIONS
 	QObject::disconnect(m_nativeWidget, &QListWidget::itemDoubleClicked,
 			    this,
 			    &StreamElementsScenesListWidgetManager::
@@ -491,6 +494,7 @@ StreamElementsScenesListWidgetManager::
 	QObject::disconnect(model, &QAbstractItemModel::rowsMoved, this,
 			    &StreamElementsScenesListWidgetManager::
 				    HandleScenesModelItemMoved);
+	#endif
 
 	//m_nativeWidget->setItemDelegate(m_prevEditDelegate);
 	//m_editDelegate->deleteLater();
