@@ -16,6 +16,17 @@
 
 #include "cef-headers.hpp"
 
+#define SE_ENABLE_SCENEITEM_ACTIONS 0
+#define SE_ENABLE_SCENEITEM_ICONS 0
+#define SE_ENABLE_SCENEITEM_DEFAULT_ACTION 0
+#define SE_ENABLE_SCENEITEM_CONTEXT_MENU 0
+#define SE_ENABLE_SCENEITEM_RENDERING_SETTINGS 0
+#define SE_ENABLE_SCENEITEM_UI_EXTENSIONS                            \
+	(SE_ENABLE_SCENEITEM_ACTIONS || SE_ENABLE_SCENEITEM_ICONS || \
+	 SE_ENABLE_SCENEITEM_DEFAULT_ACTION ||                       \
+	 SE_ENABLE_SCENEITEM_CONTEXT_MENU ||                         \
+	 SE_ENABLE_SCENEITEM_RENDERING_SETTINGS)
+
 class StreamElementsSceneItemsMonitor : public QObject,
 					public StreamElementsObsAppMonitor {
 public:
@@ -32,29 +43,37 @@ public:
 				       CefRefPtr<CefValue> value,
 				       bool triggerUpdate = true);
 
+	#if SE_ENABLE_SCENEITEM_ACTIONS
 	static CefRefPtr<CefListValue>
 	GetSceneItemActions(obs_sceneitem_t *scene_item);
 
 	void SetSceneItemActions(obs_sceneitem_t *scene_item,
 				 CefRefPtr<CefListValue> m_actions);
+	#endif
 
+	#if SE_ENABLE_SCENEITEM_ICONS
 	static CefRefPtr<CefValue>
 	GetSceneItemIcon(obs_sceneitem_t *scene_item);
 
 	void SetSceneItemIcon(obs_sceneitem_t *scene_item,
 			      CefRefPtr<CefValue> m_icon);
+	#endif
 
+	#if SE_ENABLE_SCENEITEM_DEFAULT_ACTION
 	static CefRefPtr<CefValue>
 	GetSceneItemDefaultAction(obs_sceneitem_t *scene_item);
 
 	void SetSceneItemDefaultAction(obs_sceneitem_t *scene_item,
 				       CefRefPtr<CefValue> action);
+	#endif
 
+	#if SE_ENABLE_SCENEITEM_CONTEXT_MENU
 	static CefRefPtr<CefValue>
 	GetSceneItemContextMenu(obs_sceneitem_t *scene_item);
 
 	void SetSceneItemContextMenu(obs_sceneitem_t *scene_item,
 				     CefRefPtr<CefValue> menu);
+	#endif
 
 	CefRefPtr<CefValue> static GetSceneItemAuxiliaryData(
 		obs_sceneitem_t *scene_item);
@@ -62,17 +81,18 @@ public:
 	void SetSceneItemAuxiliaryData(obs_sceneitem_t *scene_item,
 				       CefRefPtr<CefValue> data);
 
+	#if SE_ENABLE_SCENEITEM_RENDERING_SETTINGS
 	CefRefPtr<CefValue> static GetSceneItemUISettings(
 		obs_sceneitem_t *scene_item);
+	void SetSceneItemUISettings(obs_sceneitem_t *scene_item,
+				    CefRefPtr<CefValue> data);
+	#endif
 
 	bool static GetSceneItemUISettingsEnabled(
 		obs_sceneitem_t *scene_item);
 
 	bool static GetSceneItemUISettingsMultiselectContextMenuEnabled(
 		obs_sceneitem_t *scene_item);
-
-	void SetSceneItemUISettings(obs_sceneitem_t *scene_item,
-				       CefRefPtr<CefValue> data);
 
 	bool InvokeCurrentSceneItemDefaultAction(obs_sceneitem_t *scene_item);
 
@@ -94,7 +114,11 @@ public:
 		output = m_sceneItemsToolBarActions->Copy();
 	}
 
-	void Update() { ScheduleUpdateSceneItemsWidgets(); }
+	void Update() {
+		#if SE_ENABLE_SCENEITEM_UI_EXTENSIONS
+		ScheduleUpdateSceneItemsWidgets();
+		#endif
+	}
 
 	QWidget* GetWidgetAtLocalPosition(const QPointF &p) {
 		QModelIndex index = m_sceneItemsListView->indexAt(QPoint(p.x(), p.y()));
@@ -110,9 +134,11 @@ public:
 private:
 	void DisconnectSignalHandlers();
 
+	#if SE_ENABLE_SCENEITEM_UI_EXTENSIONS
 	void ScheduleUpdateSceneItemsWidgets();
 
 	void UpdateSceneItemsWidgets();
+	#endif
 
 	void UpdateSceneItemsToolbar();
 
