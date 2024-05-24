@@ -78,6 +78,7 @@ StreamElementsNativeOBSControlsManager::StreamElementsNativeOBSControlsManager(Q
 
 	m_nativeCentralWidget = mainWindow->centralWidget();
 
+	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
 	m_nativePreviewLayout =
 		m_nativeCentralWidget->findChild<QLayout *>("previewLayout");
 
@@ -124,6 +125,7 @@ StreamElementsNativeOBSControlsManager::StreamElementsNativeOBSControlsManager(Q
 		HidePreviewTitleBar();
 		HidePreviewFrame();
 	}
+	#endif
 }
 
 StreamElementsNativeOBSControlsManager::~StreamElementsNativeOBSControlsManager()
@@ -153,6 +155,7 @@ StreamElementsNativeOBSControlsManager::~StreamElementsNativeOBSControlsManager(
 		m_nativeManageBroadcastButton = nullptr;
 	}
 
+	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
 	HidePreviewTitleBar();
 	HidePreviewFrame();
 
@@ -173,10 +176,12 @@ StreamElementsNativeOBSControlsManager::~StreamElementsNativeOBSControlsManager(
 		m_previewTitleLayout = nullptr;
 		m_previewTitleContainer = nullptr;
 	}
+	#endif
 
 	m_nativeCentralWidget = nullptr;
 }
 
+#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
 bool StreamElementsNativeOBSControlsManager::DeserializePreviewFrame(
 	CefRefPtr<CefValue> input)
 {
@@ -316,13 +321,16 @@ void StreamElementsNativeOBSControlsManager::HidePreviewTitleBar()
 
 	m_previewTitleSettings = CefDictionaryValue::Create();
 }
+#endif
 
 void StreamElementsNativeOBSControlsManager::Reset()
 {
 	SetStartStreamingMode(StreamElementsNativeOBSControlsManager::start);
 
+	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
 	HidePreviewTitleBar();
 	HidePreviewFrame();
+	#endif
 }
 
 void StreamElementsNativeOBSControlsManager::SetStreamingInitialState()

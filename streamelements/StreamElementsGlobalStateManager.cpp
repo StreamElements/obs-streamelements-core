@@ -876,28 +876,37 @@ void StreamElementsGlobalStateManager::PersistState(bool sendEventToGuest)
 	CefRefPtr<CefValue> workersState = CefValue::Create();
 	CefRefPtr<CefValue> hotkeysState = CefValue::Create();
 	CefRefPtr<CefValue> userInterfaceState = CefValue::Create();
+
+	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
 	CefRefPtr<CefValue> outputPreviewTitleBarState = CefValue::Create();
 	CefRefPtr<CefValue> outputPreviewFrameState = CefValue::Create();
+	#endif
 
 	GetWidgetManager()->SerializeDockingWidgets(dockingWidgetsState);
 	GetWidgetManager()->SerializeNotificationBar(notificationBarState);
 	GetWorkerManager()->Serialize(workersState);
 	GetHotkeyManager()->SerializeHotkeyBindings(hotkeysState, true);
 	SerializeUserInterfaceState(userInterfaceState);
+
+	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
 	GetNativeOBSControlsManager()->SerializePreviewTitleBar(
 		outputPreviewTitleBarState);
 	GetNativeOBSControlsManager()->SerializePreviewFrame(
 		outputPreviewFrameState);
+	#endif
 
 	rootDictionary->SetValue("dockingBrowserWidgets", dockingWidgetsState);
 	rootDictionary->SetValue("notificationBar", notificationBarState);
 	rootDictionary->SetValue("workers", workersState);
 	rootDictionary->SetValue("hotkeyBindings", hotkeysState);
 	rootDictionary->SetValue("userInterfaceState", userInterfaceState);
+
+	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
 	rootDictionary->SetValue("outputPreviewTitleBarState",
 				 outputPreviewTitleBarState);
 	rootDictionary->SetValue("outputPreviewFrameState",
 				 outputPreviewFrameState);
+	#endif
 
 	root->SetDictionary(rootDictionary);
 
@@ -954,10 +963,13 @@ void StreamElementsGlobalStateManager::RestoreState()
 	auto hotkeysState = rootDictionary->GetValue("hotkeyBindings");
 	auto userInterfaceState =
 		rootDictionary->GetValue("userInterfaceState");
+
+	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
 	auto outputPreviewTitleBarState =
 		rootDictionary->GetValue("outputPreviewTitleBarState");
 	auto outputPreviewFrameState =
 		rootDictionary->GetValue("outputPreviewFrameState");
+	#endif
 
 
 	if (workersState.get()) {
@@ -1016,6 +1028,7 @@ void StreamElementsGlobalStateManager::RestoreState()
 		DeserializeUserInterfaceState(userInterfaceState);
 	}
 
+	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
 	if (outputPreviewTitleBarState.get()) {
 		GetNativeOBSControlsManager()->DeserializePreviewTitleBar(
 			outputPreviewTitleBarState);
@@ -1025,6 +1038,7 @@ void StreamElementsGlobalStateManager::RestoreState()
 		GetNativeOBSControlsManager()->DeserializePreviewFrame(
 			outputPreviewFrameState);
 	}
+	#endif
 }
 
 void StreamElementsGlobalStateManager::OnObsExit()

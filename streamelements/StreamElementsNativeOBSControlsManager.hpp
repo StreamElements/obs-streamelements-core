@@ -20,6 +20,8 @@
 
 #include "StreamElementsBrowserWidget.hpp"
 
+#define SE_ENABLE_CENTRAL_WIDGET_DECORATIONS 0
+
 class StreamElementsNativeOBSControlsManager : public QObject
 {
 	Q_OBJECT
@@ -106,12 +108,14 @@ public:
 	void AdviseRequestStartStreamingAccepted();
 	void AdviseRequestStartStreamingRejected();
 
+	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
 	bool DeserializePreviewFrame(CefRefPtr<CefValue> input);
 	void SerializePreviewFrame(CefRefPtr<CefValue>& output);
 	void HidePreviewFrame();
 	bool DeserializePreviewTitleBar(CefRefPtr<CefValue> input);
 	void SerializePreviewTitleBar(CefRefPtr<CefValue>& output);
 	void HidePreviewTitleBar();
+	#endif
 
 	void Reset();
 
@@ -160,6 +164,7 @@ private:
 	QTimer* m_timeoutTimer = nullptr;
 	std::recursive_mutex m_timeoutTimerMutex;
 
+	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
 	QFrame *m_previewFrame = nullptr;
 	QVBoxLayout *m_previewFrameLayout = nullptr;
 	QLayout *m_nativePreviewLayout = nullptr;
@@ -174,4 +179,5 @@ private:
 	StreamElementsBrowserWidget *m_previewTitleBrowser = nullptr;
 	CefRefPtr<CefDictionaryValue> m_previewTitleSettings =
 		CefDictionaryValue::Create();
+	#endif
 };
