@@ -272,6 +272,7 @@ protected:
 
 			bool handled = false;
 
+			#if SE_ENABLE_SCENE_DEFAULT_ACTION
 			CefRefPtr<CefValue> value =
 				m_manager->GetSceneDefaultAction(scene);
 
@@ -294,6 +295,7 @@ protected:
 					value, defaultAction,
 					defaultContextMenu);
 			}
+			#endif
 
 			obs_source_release(scene);
 
@@ -306,10 +308,11 @@ protected:
 			if (!scene)
 				return false;
 
+			bool handled = false;
+
+			#if SE_ENABLE_SCENE_CONTEXT_MENU
 			CefRefPtr<CefValue> value =
 				m_manager->GetSceneContextMenu(scene);
-
-			bool handled = false;
 
 			if (value->GetType() == VTYPE_LIST &&
 			    value->GetList()->GetSize()) {
@@ -345,6 +348,7 @@ protected:
 						handled = false;
 				}
 			}
+			#endif
 
 			obs_source_release(scene);
 
@@ -395,6 +399,7 @@ StreamElementsScenesListWidgetManager::StreamElementsScenesListWidgetManager(
 
 		/* Subscribe to signals */
 
+		#if SE_ENABLE_SCENES_UI_EXTENSIONS
 		QObject::connect(model, &QAbstractItemModel::modelReset, this,
 				 &StreamElementsScenesListWidgetManager::
 					 HandleScenesModelReset);
@@ -420,8 +425,12 @@ StreamElementsScenesListWidgetManager::StreamElementsScenesListWidgetManager(
 				 &QListWidget::itemDoubleClicked, this,
 				 &StreamElementsScenesListWidgetManager::
 					 HandleScenesItemDoubleClicked);
+		#endif
 
+		#if SE_ENABLE_SCENES_UI_EXTENSIONS
 		ScheduleUpdateWidgets();
+		#endif
+
 		UpdateScenesToolbar();
 
 		m_enableSignals = true;
@@ -435,7 +444,9 @@ void StreamElementsScenesListWidgetManager::CheckViewMode()
 	if (mode != m_prevViewMode) {
 		m_prevViewMode = mode;
 
+		#if SE_ENABLE_SCENES_UI_EXTENSIONS
 		ScheduleUpdateWidgets();
+		#endif
 	}
 }
 
@@ -458,6 +469,7 @@ StreamElementsScenesListWidgetManager::
 
 	auto model = m_nativeWidget->model();
 
+	#if SE_ENABLE_SCENES_UI_EXTENSIONS
 	QObject::disconnect(m_nativeWidget, &QListWidget::itemDoubleClicked,
 			    this,
 			    &StreamElementsScenesListWidgetManager::
@@ -482,6 +494,7 @@ StreamElementsScenesListWidgetManager::
 	QObject::disconnect(model, &QAbstractItemModel::rowsMoved, this,
 			    &StreamElementsScenesListWidgetManager::
 				    HandleScenesModelItemMoved);
+	#endif
 
 	//m_nativeWidget->setItemDelegate(m_prevEditDelegate);
 	//m_editDelegate->deleteLater();
@@ -493,7 +506,9 @@ void StreamElementsScenesListWidgetManager::HandleSceneRename(
 	StreamElementsScenesListWidgetManager *self =
 		(StreamElementsScenesListWidgetManager *)data;
 
+	#if SE_ENABLE_SCENES_UI_EXTENSIONS
 	self->ScheduleUpdateWidgets();
+	#endif
 }
 
 void StreamElementsScenesListWidgetManager::HandleScenesModelReset()
@@ -501,7 +516,9 @@ void StreamElementsScenesListWidgetManager::HandleScenesModelReset()
 	if (!m_enableSignals)
 		return;
 
+	#if SE_ENABLE_SCENES_UI_EXTENSIONS
 	ScheduleUpdateWidgets();
+	#endif
 }
 
 void StreamElementsScenesListWidgetManager::HandleScenesModelItemInsertedRemoved(
@@ -510,7 +527,9 @@ void StreamElementsScenesListWidgetManager::HandleScenesModelItemInsertedRemoved
 	if (!m_enableSignals)
 		return;
 
+	#if SE_ENABLE_SCENES_UI_EXTENSIONS
 	ScheduleUpdateWidgets();
+	#endif
 }
 
 void StreamElementsScenesListWidgetManager::HandleScenesModelItemMoved(
@@ -519,7 +538,9 @@ void StreamElementsScenesListWidgetManager::HandleScenesModelItemMoved(
 	if (!m_enableSignals)
 		return;
 
+	#if SE_ENABLE_SCENES_UI_EXTENSIONS
 	ScheduleUpdateWidgets();
+	#endif
 }
 
 CefRefPtr<CefValue>
@@ -560,9 +581,11 @@ void StreamElementsScenesListWidgetManager::SetScenePropertyValue(
 
 	obs_data_release(private_data);
 
+	#if SE_ENABLE_SCENES_UI_EXTENSIONS
 	if (triggerUpdate) {
 		ScheduleUpdateWidgets();
 	}
+	#endif
 }
 
 CefRefPtr<CefValue>
@@ -578,6 +601,7 @@ void StreamElementsScenesListWidgetManager::SetSceneAuxiliaryData(
 			      false);
 }
 
+#if SE_ENABLE_SCENE_ICONS
 CefRefPtr<CefValue>
 StreamElementsScenesListWidgetManager::GetSceneIcon(obs_source_t *scene)
 {
@@ -601,7 +625,9 @@ void StreamElementsScenesListWidgetManager::SetSceneIcon(
 
 	SetScenePropertyValue(scene, ITEM_PRIVATE_DATA_KEY_UI_ICON, icon);
 }
+#endif
 
+#if SE_ENABLE_SCENE_DEFAULT_ACTION
 CefRefPtr<CefValue>
 StreamElementsScenesListWidgetManager::GetSceneDefaultAction(obs_source_t *scene)
 {
@@ -626,7 +652,9 @@ void StreamElementsScenesListWidgetManager::SetSceneDefaultAction(
 	SetScenePropertyValue(scene, ITEM_PRIVATE_DATA_KEY_UI_DEFAULT_ACTION,
 			      defaultAction);
 }
+#endif
 
+#if SE_ENABLE_SCENE_CONTEXT_MENU
 CefRefPtr<CefValue>
 StreamElementsScenesListWidgetManager::GetSceneContextMenu(obs_source_t *scene)
 {
@@ -651,7 +679,9 @@ void StreamElementsScenesListWidgetManager::SetSceneContextMenu(
 	SetScenePropertyValue(scene, ITEM_PRIVATE_DATA_KEY_UI_CONTEXT_MENU,
 			      contextMenu);
 }
+#endif
 
+#if SE_ENABLE_SCENES_UI_EXTENSIONS
 void StreamElementsScenesListWidgetManager::ScheduleUpdateWidgets()
 {
 	if (!m_enableSignals)
@@ -660,6 +690,7 @@ void StreamElementsScenesListWidgetManager::ScheduleUpdateWidgets()
 	m_updateWidgetsDeferredExecutive.Signal([this]() { UpdateWidgets(); },
 						250);
 }
+#endif
 
 void StreamElementsScenesListWidgetManager::UpdateScenesToolbar()
 {
@@ -730,6 +761,7 @@ void StreamElementsScenesListWidgetManager::UpdateScenesToolbar()
 	}
 }
 
+#if SE_ENABLE_SCENES_UI_EXTENSIONS
 void StreamElementsScenesListWidgetManager::UpdateWidgets()
 {
 	struct obs_frontend_source_list sources = {};
@@ -750,8 +782,10 @@ void StreamElementsScenesListWidgetManager::UpdateWidgets()
 				rowIndex < sources.sources.num;
 		++rowIndex) {
 		if (!isSignedIn) {
+			#if SE_ENABLE_SCENE_ICONS
 			m_nativeWidget->item(rowIndex)->setIcon(
 				QIcon());
+			#endif
 
 			continue;
 		}
@@ -768,21 +802,29 @@ void StreamElementsScenesListWidgetManager::UpdateWidgets()
 			SourceDataManager::instance()->setData(scene,
 								data);
 
+			#if SE_ENABLE_SCENE_ICONS
 			data->DeserializeIcon(GetSceneIcon(scene));
+			#endif
 
+			#if SE_ENABLE_SCENE_DEFAULT_ACTION
 			data->DeserializeDefaultAction(
 				GetSceneDefaultAction(scene));
+			#endif
 
+			#if SE_ENABLE_SCENE_CONTEXT_MENU
 			data->DeserializeContextMenu(
 				GetSceneContextMenu(scene));
+			#endif
 		}
 
+		#if SE_ENABLE_SCENE_ICONS
 		if (m_nativeWidget->viewMode() == QListView::IconMode) {
 			/* Grid Mode: icons are not supported */
 			m_nativeWidget->item(rowIndex)->setIcon(QIcon());
 		} else {
 			m_nativeWidget->item(rowIndex)->setIcon(data->icon());
 		}
+		#endif
 	}
 
 	obs_source_release(current_scene);
@@ -790,6 +832,7 @@ void StreamElementsScenesListWidgetManager::UpdateWidgets()
 	obs_frontend_source_list_free(
 		(obs_frontend_source_list *)&sources);
 }
+#endif
 
 void StreamElementsScenesListWidgetManager::HandleScenesItemDoubleClicked(
 	QListWidgetItem *item)

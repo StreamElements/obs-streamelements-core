@@ -158,6 +158,7 @@ static sceneitem_list_t* GetSelectedSceneItemsAddRef()
 	return sceneItems;
 }
 
+#if SE_ENABLE_SCENEITEM_CONTEXT_MENU
 static bool
 SceneItemHasCustomContextMenu(obs_sceneitem_t* scene_item)
 {
@@ -171,6 +172,7 @@ SceneItemHasCustomContextMenu(obs_sceneitem_t* scene_item)
 
 	return false;
 }
+#endif
 
 static bool HandleDefaultActionRequest(obs_sceneitem_t *scene_item,
 				       StreamElementsSceneItemsMonitor *monitor,
@@ -185,6 +187,7 @@ static bool HandleDefaultActionRequest(obs_sceneitem_t *scene_item,
 	if (!enabled) {
 		handled = true;
 	} else {
+		#if SE_ENABLE_SCENEITEM_DEFAULT_ACTION
 		CefRefPtr<CefValue> value = StreamElementsSceneItemsMonitor::
 			GetSceneItemDefaultAction(scene_item);
 
@@ -209,6 +212,7 @@ static bool HandleDefaultActionRequest(obs_sceneitem_t *scene_item,
 			handled = DeserializeAndInvokeAction(
 				value, defaultAction, defaultContextMenu);
 		}
+		#endif
 	}
 
 	return handled;
@@ -219,6 +223,7 @@ HandleSceneItemContextMenuRequest(obs_sceneitem_t *scene_item,
 				  StreamElementsSceneItemsMonitor *monitor,
 				  QEvent *e)
 {
+	#if SE_ENABLE_SCENEITEM_CONTEXT_MENU
 	bool handled = false;
 
 	bool enabled =
@@ -268,6 +273,9 @@ HandleSceneItemContextMenuRequest(obs_sceneitem_t *scene_item,
 	}
 
 	return handled;
+	#else
+	return false;
+	#endif
 }
 
 static bool IsContextMenuAllowed() {
@@ -286,6 +294,7 @@ static bool IsContextMenuAllowed() {
 		// item which is special to multiple item selection.
 		//
 		for (auto scene_item : *list) {
+			#if SE_ENABLE_SCENEITEM_CONTEXT_MENU
 			if (SceneItemHasCustomContextMenu(scene_item)) {
 				// Item has custom context menu, we don't allow default context
 				// menu in this case since it can lead to inconsistency.
@@ -294,6 +303,7 @@ static bool IsContextMenuAllowed() {
 				allowed = false;
 				break;
 			}
+			#endif
 
 			if (!StreamElementsSceneItemsMonitor::
 				    GetSceneItemUISettingsMultiselectContextMenuEnabled(
@@ -317,6 +327,7 @@ static bool IsContextMenuAllowed() {
 
 static bool IsSceneItemSettingsActionAllowed()
 {
+	#if SE_ENABLE_SCENEITEM_DEFAULT_ACTION
 	if (StreamElementsConfig::GetInstance()->IsOnBoardingMode())
 		return true;
 
@@ -346,6 +357,9 @@ static bool IsSceneItemSettingsActionAllowed()
 	ReleaseSceneItemsList(list);
 
 	return allowed;
+	#else
+	return true;
+	#endif
 }
 
 static bool IsSceneItemReorderActionAllowed() {
@@ -549,6 +563,7 @@ StreamElementsSceneItemsMonitor::StreamElementsSceneItemsMonitor(
 
 	/* Subscribe to signals */
 
+	#if SE_ENABLE_SCENEITEM_UI_EXTENSIONS
 	QObject::connect(
 		m_sceneItemsModel, &QAbstractItemModel::modelReset, this,
 		&StreamElementsSceneItemsMonitor::HandleSceneItemsModelReset);
@@ -566,10 +581,13 @@ StreamElementsSceneItemsMonitor::StreamElementsSceneItemsMonitor(
 	QObject::connect(
 		m_sceneItemsModel, &QAbstractItemModel::rowsMoved, this,
 		&StreamElementsSceneItemsMonitor::HandleSceneItemsModelItemMoved);
+	#endif
 
 	/* ======= */
 
+	#if SE_ENABLE_SCENEITEM_UI_EXTENSIONS
 	ScheduleUpdateSceneItemsWidgets();
+	#endif
 
 	m_sceneItemsToolBarActions->SetNull();
 
@@ -608,6 +626,7 @@ void StreamElementsSceneItemsMonitor::DisconnectSignalHandlers()
 
 	/* Unsubscribe from signals */
 
+	#if SE_ENABLE_SCENEITEM_UI_EXTENSIONS
 	QObject::disconnect(
 		m_sceneItemsModel, &QAbstractItemModel::modelReset, this,
 		&StreamElementsSceneItemsMonitor::HandleSceneItemsModelReset);
@@ -625,6 +644,7 @@ void StreamElementsSceneItemsMonitor::DisconnectSignalHandlers()
 	QObject::disconnect(
 		m_sceneItemsModel, &QAbstractItemModel::rowsMoved, this,
 		&StreamElementsSceneItemsMonitor::HandleSceneItemsModelItemMoved);
+	#endif
 }
 
 void StreamElementsSceneItemsMonitor::HandleSceneItemsModelReset()
@@ -632,7 +652,9 @@ void StreamElementsSceneItemsMonitor::HandleSceneItemsModelReset()
 	if (!m_enableSignals)
 		return;
 
+	#if SE_ENABLE_SCENEITEM_UI_EXTENSIONS
 	ScheduleUpdateSceneItemsWidgets();
+	#endif
 }
 
 void StreamElementsSceneItemsMonitor::HandleSceneItemsModelItemInsertedRemoved(
@@ -641,7 +663,9 @@ void StreamElementsSceneItemsMonitor::HandleSceneItemsModelItemInsertedRemoved(
 	if (!m_enableSignals)
 		return;
 
+	#if SE_ENABLE_SCENEITEM_UI_EXTENSIONS
 	ScheduleUpdateSceneItemsWidgets();
+	#endif
 }
 
 void StreamElementsSceneItemsMonitor::HandleSceneItemsModelItemMoved(
@@ -650,14 +674,18 @@ void StreamElementsSceneItemsMonitor::HandleSceneItemsModelItemMoved(
 	if (!m_enableSignals)
 		return;
 
+	#if SE_ENABLE_SCENEITEM_UI_EXTENSIONS
 	ScheduleUpdateSceneItemsWidgets();
+	#endif
 }
 
+#if SE_ENABLE_SCENEITEM_UI_EXTENSIONS
 void StreamElementsSceneItemsMonitor::ScheduleUpdateSceneItemsWidgets()
 {
 	m_updateSceneItemsWidgetsThrottledExecutive.Signal(
 		[this]() { UpdateSceneItemsWidgets(); }, 250);
 }
+#endif
 
 typedef std::vector<obs_sceneitem_t *> sceneitems_vector_t;
 
@@ -740,11 +768,14 @@ void StreamElementsSceneItemsMonitor::SetSceneItemPropertyValue(
 
 	obs_data_release(scene_item_private_data);
 
+	#if SE_ENABLE_SCENEITEM_UI_EXTENSIONS
 	if (triggerUpdate) {
 		ScheduleUpdateSceneItemsWidgets();
 	}
+	#endif
 }
 
+#if SE_ENABLE_SCENEITEM_ICONS
 CefRefPtr<CefValue>
 StreamElementsSceneItemsMonitor::GetSceneItemIcon(obs_sceneitem_t *scene_item)
 {
@@ -764,7 +795,9 @@ void StreamElementsSceneItemsMonitor::SetSceneItemIcon(
 	SetSceneItemPropertyValue(scene_item, ITEM_PRIVATE_DATA_KEY_UI_ICON,
 				  m_icon);
 }
+#endif
 
+#if SE_ENABLE_SCENEITEM_ACTIONS
 CefRefPtr<CefListValue> StreamElementsSceneItemsMonitor::GetSceneItemActions(
 	obs_sceneitem_t *scene_item)
 {
@@ -788,7 +821,9 @@ void StreamElementsSceneItemsMonitor::SetSceneItemActions(
 	SetSceneItemPropertyValue(
 		scene_item, ITEM_PRIVATE_DATA_KEY_UI_AUXILIARY_ACTIONS, val);
 }
+#endif
 
+#if SE_ENABLE_SCENEITEM_DEFAULT_ACTION
 CefRefPtr<CefValue> StreamElementsSceneItemsMonitor::GetSceneItemDefaultAction(
 	obs_sceneitem_t *scene_item)
 {
@@ -802,7 +837,9 @@ void StreamElementsSceneItemsMonitor::SetSceneItemDefaultAction(
 	SetSceneItemPropertyValue(
 		scene_item, ITEM_PRIVATE_DATA_KEY_UI_DEFAULT_ACTION, action);
 }
+#endif
 
+#if SE_ENABLE_SCENEITEM_CONTEXT_MENU
 CefRefPtr<CefValue> StreamElementsSceneItemsMonitor::GetSceneItemContextMenu(
 	obs_sceneitem_t *scene_item)
 {
@@ -816,7 +853,7 @@ void StreamElementsSceneItemsMonitor::SetSceneItemContextMenu(
 	SetSceneItemPropertyValue(scene_item,
 				  ITEM_PRIVATE_DATA_KEY_UI_CONTEXT_MENU, menu);
 }
-
+#endif
 
 CefRefPtr<CefValue> StreamElementsSceneItemsMonitor::GetSceneItemAuxiliaryData(
 	obs_sceneitem_t *scene_item)
@@ -832,15 +869,18 @@ void StreamElementsSceneItemsMonitor::SetSceneItemAuxiliaryData(
 				  data, false);
 }
 
+#if SE_ENABLE_SCENEITEM_RENDERING_SETTINGS
 CefRefPtr<CefValue> StreamElementsSceneItemsMonitor::GetSceneItemUISettings(
 	obs_sceneitem_t *scene_item)
 {
 	return GetSceneItemPropertyValue(scene_item, ITEM_PRIVATE_DATA_KEY_UI_SETTINGS);
 }
+#endif
 
 bool StreamElementsSceneItemsMonitor::GetSceneItemUISettingsEnabled(
 	obs_sceneitem_t *scene_item)
 {
+	#if SE_ENABLE_SCENEITEM_RENDERING_SETTINGS
 	CefRefPtr<CefValue> settings = GetSceneItemUISettings(scene_item);
 
 	if (!settings || settings->GetType() != VTYPE_DICTIONARY)
@@ -852,11 +892,15 @@ bool StreamElementsSceneItemsMonitor::GetSceneItemUISettingsEnabled(
 		return d->GetBool("enabled");
 	else
 		return true;
+	#else
+	return true;
+	#endif
 }
 
 bool StreamElementsSceneItemsMonitor::GetSceneItemUISettingsMultiselectContextMenuEnabled(
 	obs_sceneitem_t *scene_item)
 {
+	#if SE_ENABLE_SCENEITEM_RENDERING_SETTINGS
 	CefRefPtr<CefValue> settings = GetSceneItemUISettings(scene_item);
 
 	if (!settings || settings->GetType() != VTYPE_DICTIONARY)
@@ -869,8 +913,12 @@ bool StreamElementsSceneItemsMonitor::GetSceneItemUISettingsMultiselectContextMe
 		return d->GetBool("multipleItemsContextMenuEnabled");
 	else
 		return true;
+	#else
+	return true;
+	#endif
 }
 
+#if SE_ENABLE_SCENEITEM_RENDERING_SETTINGS
 void StreamElementsSceneItemsMonitor::SetSceneItemUISettings(
 	obs_sceneitem_t *scene_item, CefRefPtr<CefValue> data)
 {
@@ -878,11 +926,13 @@ void StreamElementsSceneItemsMonitor::SetSceneItemUISettings(
 				  ITEM_PRIVATE_DATA_KEY_UI_SETTINGS,
 				  data, false);
 }
+#endif
 
 static void deserializeAuxSceneItemsControls(
 	StreamElementsSceneItemsMonitor *monitor, obs_sceneitem_t *scene_item,
 	QWidget *auxWidget, QWidget *parentWidget, QLabel *nativeIconLabel)
 {
+#if SE_ENABLE_SCENEITEM_ACTIONS
 	auxWidget->setSizePolicy(QSizePolicy::Preferred,
 				 QSizePolicy::MinimumExpanding);
 
@@ -926,6 +976,7 @@ static void deserializeAuxSceneItemsControls(
 			auxLayout->addSpacing(2);
 		}
 	}
+#endif
 }
 
 static void deserializeSceneItemIcon(StreamElementsSceneItemsMonitor *monitor,
@@ -935,6 +986,7 @@ static void deserializeSceneItemIcon(StreamElementsSceneItemsMonitor *monitor,
 				     QPixmap *defaultPixmap,
 				     QLabel *nativeIconLabel)
 {
+	#if SE_ENABLE_SCENEITEM_ICONS
 	iconWidget->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Maximum);
 
 	QHBoxLayout *iconLayout =
@@ -965,8 +1017,10 @@ static void deserializeSceneItemIcon(StreamElementsSceneItemsMonitor *monitor,
 		nativeIconLabel->setAutoFillBackground(false);
 		nativeIconLabel->setStyleSheet("background: none;");
 	}
+	#endif
 }
 
+#if SE_ENABLE_SCENEITEM_UI_EXTENSIONS
 static void
 deserializeSceneItemUISettings(StreamElementsSceneItemsMonitor *monitor,
 			       obs_scene_t *scene, obs_sceneitem_t *scene_item,
@@ -1033,7 +1087,9 @@ deserializeSceneItemUISettings(StreamElementsSceneItemsMonitor *monitor,
 		nativeTextLabel->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
 	}
 }
+#endif
 
+#if SE_ENABLE_SCENEITEM_UI_EXTENSIONS
 void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 {
 	if (!m_sceneItemsModel)
@@ -1211,6 +1267,7 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 	release_sceneitems(&sceneItems);
 	obs_source_release(sceneSource);
 }
+#endif
 
 bool StreamElementsSceneItemsMonitor::InvokeCurrentSceneItemDefaultAction(
 	obs_sceneitem_t *scene_item)

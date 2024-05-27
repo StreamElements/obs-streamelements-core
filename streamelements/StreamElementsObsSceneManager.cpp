@@ -852,39 +852,49 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 			/* Not a group and not a scene, handled above */
 		}
 
+		#if SE_ENABLE_SCENEITEM_ACTIONS
 		root->SetList(
 			"actions",
 			StreamElementsSceneItemsMonitor::GetSceneItemActions(
 				sceneitem)
 				->Copy());
+		#endif
 
+		#if SE_ENABLE_SCENEITEM_ICONS
 		root->SetValue(
 			"icon",
 			StreamElementsSceneItemsMonitor::GetSceneItemIcon(
 				sceneitem)
 				->Copy());
+		#endif
 
+		#if SE_ENABLE_SCENEITEM_DEFAULT_ACTION 
 		root->SetValue("defaultAction",
 			       StreamElementsSceneItemsMonitor::
 				       GetSceneItemDefaultAction(sceneitem)
 					       ->Copy());
+		#endif
 
 		root->SetValue("auxiliaryData",
 			       StreamElementsSceneItemsMonitor::
 				       GetSceneItemAuxiliaryData(sceneitem)
 					       ->Copy());
 
+		#if SE_ENABLE_SCENEITEM_CONTEXT_MENU
 		root->SetValue(
 			"contextMenu",
 			StreamElementsSceneItemsMonitor::GetSceneItemContextMenu(
 				sceneitem)
 				->Copy());
+		#endif
 
+		#if SE_ENABLE_SCENEITEM_RENDERING_SETTINGS
 		root->SetValue(
 			"uiSettings",
 			StreamElementsSceneItemsMonitor::GetSceneItemUISettings(
 				sceneitem)
 				->Copy());
+		#endif
 	}
 
 	result->SetDictionary(root);
@@ -899,9 +909,11 @@ static void SerializeObsScene(obs_source_t *scene, CefRefPtr<CefValue> &result)
 
 	d->SetBool("active", is_active_scene(obs_scene_from_source(scene)));
 
+	#if SE_ENABLE_SCENE_ICONS
 	d->SetValue("icon",
 		    StreamElementsScenesListWidgetManager::GetSceneIcon(scene)
 			    ->Copy());
+	#endif
 
 	d->SetValue(
 		"auxiliaryData",
@@ -909,16 +921,20 @@ static void SerializeObsScene(obs_source_t *scene, CefRefPtr<CefValue> &result)
 			scene)
 			->Copy());
 
+	#if SE_ENABLE_SCENE_DEFAULT_ACTION
 	d->SetValue(
 		"defaultAction",
 		StreamElementsScenesListWidgetManager::GetSceneDefaultAction(
 			scene)
 			->Copy());
+	#endif
 
+	#if SE_ENABLE_SCENE_CONTEXT_MENU
 	d->SetValue("contextMenu",
 		    StreamElementsScenesListWidgetManager::GetSceneContextMenu(
 			    scene)
 			    ->Copy());
+	#endif
 
 	result->SetDictionary(d);
 }
@@ -2509,22 +2525,28 @@ void StreamElementsObsSceneManager::SetObsScenePropertiesById(
 				result = true;
 			}
 
+			#if SE_ENABLE_SCENE_ICONS
 			if (d->HasKey("icon")) {
 				m_scenesWidgetManager->SetSceneIcon(
 					scene, d->GetValue("icon")->Copy());
 			}
+			#endif
 
+			#if SE_ENABLE_SCENE_DEFAULT_ACTION
 			if (d->HasKey("defaultAction")) {
 				m_scenesWidgetManager->SetSceneDefaultAction(
 					scene,
 					d->GetValue("defaultAction")->Copy());
 			}
+			#endif
 
+			#if SE_ENABLE_SCENE_CONTEXT_MENU
 			if (d->HasKey("contextMenu")) {
 				m_scenesWidgetManager->SetSceneContextMenu(
 					scene,
 					d->GetValue("contextMenu")->Copy());
 			}
+			#endif
 
 			if (d->HasKey("auxiliaryData")) {
 				m_scenesWidgetManager->SetSceneAuxiliaryData(
@@ -2586,6 +2608,7 @@ void StreamElementsObsSceneManager::RemoveObsSceneItemsByIds(
 void StreamElementsObsSceneManager::DeserializeAuxiliaryObsSceneItemProperties(
 	obs_sceneitem_t *sceneitem, CefRefPtr<CefDictionaryValue> d)
 {
+	#if SE_ENABLE_SCENEITEM_ACTIONS
 	if (d->HasKey("actions")) {
 		if (d->GetType("actions") == VTYPE_LIST) {
 			CefRefPtr<CefListValue> actionsList =
@@ -2601,17 +2624,22 @@ void StreamElementsObsSceneManager::DeserializeAuxiliaryObsSceneItemProperties(
 				sceneitem, emptyList);
 		}
 	}
+	#endif
 
+	#if SE_ENABLE_SCENEITEM_ICONS
 	if (d->HasKey("icon")) {
 		m_sceneItemsMonitor->SetSceneItemIcon(
 			sceneitem, d->GetValue("icon")->Copy());
 	}
+	#endif
 
+	#if SE_ENABLE_SCENEITEM_DEFAULT_ACTION
 	if (d->HasKey("defaultAction")) {
 		m_sceneItemsMonitor->SetSceneItemDefaultAction(
 			sceneitem,
 			d->GetValue("defaultAction")->Copy());
 	}
+	#endif
 
 	if (d->HasKey("auxiliaryData")) {
 		m_sceneItemsMonitor->SetSceneItemAuxiliaryData(
@@ -2619,15 +2647,19 @@ void StreamElementsObsSceneManager::DeserializeAuxiliaryObsSceneItemProperties(
 			d->GetValue("auxiliaryData")->Copy());
 	}
 
+	#if SE_ENABLE_SCENEITEM_CONTEXT_MENU
 	if (d->HasKey("contextMenu")) {
 		m_sceneItemsMonitor->SetSceneItemContextMenu(
 			sceneitem, d->GetValue("contextMenu")->Copy());
 	}
+	#endif
 
+	#if SE_ENABLE_SCENEITEM_RENDERING_SETTINGS
 	if (d->HasKey("uiSettings")) {
 		m_sceneItemsMonitor->SetSceneItemUISettings(
 			sceneitem, d->GetValue("uiSettings")->Copy());
 	}
+	#endif
 
 #if ENABLE_OBS_GROUP_ADD_REMOVE_ITEM
 	std::string groupId = d->HasKey("parentId") && d->GetType("parentId") ==

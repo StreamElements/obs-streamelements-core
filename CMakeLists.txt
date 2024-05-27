@@ -436,18 +436,6 @@ if(ENABLE_ANGELSCRIPT)
 		deps/angelscript/add_on/scriptbuilder/scriptbuilder.cpp
 	)
 
-	if(MSVC AND CMAKE_CL_64)
-			enable_language(ASM_MASM)
-			if(CMAKE_ASM_MASM_COMPILER_WORKS)
-					set(obs-streamelements-core-streamelements-restore-script-host_SOURCES
-						${obs-streamelements-core-streamelements-restore-script-host_SOURCES}
-						deps/angelscript/source/as_callfunc_x64_msvc_asm.asm
-					)
-			else()
-					message(FATAL ERROR "MSVC x86_64 target requires a working assembler")
-			endif()
-	endif()
-
 	if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "^arm")
 			enable_language(ASM)
 			if(CMAKE_ASM_COMPILER_WORKS)
@@ -475,10 +463,28 @@ if(ENABLE_ANGELSCRIPT)
 	#if("${CMAKE_SIZEOF_VOID_P}" EQUAL "8")
 	#endif()
 
-	add_executable(obs-streamelements-core-streamelements-restore-script-host
-		${obs-streamelements-core-streamelements-restore-script-host_SOURCES}
-		${obs-streamelements-core-streamelements-restore-script-host_HEADERS}
+	if(MSVC AND CMAKE_CL_64)
+			enable_language(ASM_MASM)
+			if(CMAKE_ASM_MASM_COMPILER_WORKS)
+				ADD_CUSTOM_COMMAND(OUTPUT as_callfunc_x64_msvc_asm.obj
+					COMMAND "${CMAKE_ASM_MASM_COMPILER}" -c "${CMAKE_CURRENT_SOURCE_DIR}/deps/angelscript/source/as_callfunc_x64_msvc_asm.asm"
+					DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/deps/angelscript/source/as_callfunc_x64_msvc_asm.asm"
+					COMMENT "generate as_callfunc_x64_msvc_asm.obj")
+
+				add_executable(obs-streamelements-core-streamelements-restore-script-host
+					${obs-streamelements-core-streamelements-restore-script-host_SOURCES}
+					${obs-streamelements-core-streamelements-restore-script-host_HEADERS}
+					as_callfunc_x64_msvc_asm.obj
+				)
+			else()
+					message(FATAL ERROR "MSVC x86_64 target requires a working assembler")
+			endif()
+	else()
+		add_executable(obs-streamelements-core-streamelements-restore-script-host
+			${obs-streamelements-core-streamelements-restore-script-host_SOURCES}
+			${obs-streamelements-core-streamelements-restore-script-host_HEADERS}
 		)
+	endif()
 
 	target_link_libraries(obs-streamelements-core-streamelements-restore-script-host
 		${obs-streamelements-core-streamelements-restore-script-host_LIBRARIES}

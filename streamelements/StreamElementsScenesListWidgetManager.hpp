@@ -12,6 +12,13 @@
 #include <QListView>
 #include <QToolBar>
 
+#define SE_ENABLE_SCENE_ICONS 0
+#define SE_ENABLE_SCENE_DEFAULT_ACTION 0
+#define SE_ENABLE_SCENE_CONTEXT_MENU 0
+#define SE_ENABLE_SCENES_UI_EXTENSIONS \
+	(SE_ENABLE_SCENE_ICONS || SE_ENABLE_SCENE_DEFAULT_ACTION || \
+	 SE_ENABLE_SCENE_CONTEXT_MENU)
+
 class StreamElementsScenesListWidgetManager : public QObject {
 public:
 	StreamElementsScenesListWidgetManager(QMainWindow *mainWindow);
@@ -30,18 +37,24 @@ public:
 	void SetSceneAuxiliaryData(obs_source_t *scene,
 				   CefRefPtr<CefValue> data);
 
+	#if SE_ENABLE_SCENE_ICONS
 	static CefRefPtr<CefValue> GetSceneIcon(obs_source_t *scene);
 
 	void SetSceneIcon(obs_source_t *scene, CefRefPtr<CefValue> icon);
+	#endif
 
+	#if SE_ENABLE_SCENE_DEFAULT_ACTION
 	static CefRefPtr<CefValue> GetSceneDefaultAction(obs_source_t *scene);
 
 	void SetSceneDefaultAction(obs_source_t *scene,
 				   CefRefPtr<CefValue> icon);
+	#endif
 
+	#if SE_ENABLE_SCENE_CONTEXT_MENU
 	static CefRefPtr<CefValue> GetSceneContextMenu(obs_source_t *scene);
 
 	void SetSceneContextMenu(obs_source_t *scene, CefRefPtr<CefValue> icon);
+	#endif
 
 	bool InvokeCurrentSceneDefaultAction();
 	bool InvokeCurrentSceneDefaultContextMenu();
@@ -60,7 +73,11 @@ public:
 		output = m_scenesToolBarActions->Copy();
 	}
 
-	void Update() { ScheduleUpdateWidgets(); }
+	void Update() {
+		#if SE_ENABLE_SCENES_UI_EXTENSIONS
+		ScheduleUpdateWidgets();
+		#endif
+	}
 
 	QListWidget *GetScenesListWidget() { return m_nativeWidget; }
 
@@ -77,8 +94,10 @@ private:
 
 	void HandleScenesItemDoubleClicked(QListWidgetItem *item);
 
+	#if SE_ENABLE_SCENES_UI_EXTENSIONS
 	void ScheduleUpdateWidgets();
 	void UpdateWidgets();
+	#endif
 
 	void UpdateScenesToolbar();
 

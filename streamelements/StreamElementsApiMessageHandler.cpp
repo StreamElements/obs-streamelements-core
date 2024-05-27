@@ -2265,6 +2265,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
 	API_HANDLER_BEGIN("showOutputPreviewTitleBar");
 	{
 		if (args->GetSize()) {
@@ -2318,6 +2319,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		StreamElementsGlobalStateManager::GetInstance()->PersistState();
 	}
 	API_HANDLER_END();
+	#endif
 
 	API_HANDLER_BEGIN("getNativeStreamingServiceIntegrationStatus");
 	{
