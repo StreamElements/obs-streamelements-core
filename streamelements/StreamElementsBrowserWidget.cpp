@@ -432,14 +432,7 @@ StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 
 std::string StreamElementsBrowserWidget::GetInitialPageURLInternal()
 {
-	std::string htmlString = LoadResourceString(":/html/loading.html");
-	htmlString = std::regex_replace(htmlString, std::regex("\\$\\{URL\\}"),
-					m_url);
-	std::string base64uri =
-		"data:text/html;base64," +
-		base64_encode(htmlString.c_str(), htmlString.size());
-
-	return base64uri;
+	return m_url;
 }
 
 std::string StreamElementsBrowserWidget::GetStartUrl()
