@@ -9,7 +9,7 @@ public:
 	~StreamElementsCompositionEventListener() {}
 
 public:
-	//virtual void CompositionChanged(){};
+	//virtual void StopOutputRequested();
 };
 
 class StreamElementsCompositionBase {
