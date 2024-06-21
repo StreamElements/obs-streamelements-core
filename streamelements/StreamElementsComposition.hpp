@@ -33,6 +33,10 @@ public:
 		}
 
 	public:
+		// When true, consumers probably want to opt-in to streaming
+		// only when OBS main streaming output is active.
+		virtual bool IsObsDefault() = 0;
+
 		virtual obs_encoder_t *GetStreamingVideoEncoder() = 0;
 		virtual obs_encoder_t *
 		GetStreamingAudioEncoder(size_t index) = 0;

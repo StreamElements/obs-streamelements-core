@@ -23,6 +23,8 @@ public:
 	virtual ~StreamElementsDefaultCompositionInfo() {}
 
 public:
+	virtual bool IsObsDefault() { return true; }
+
 	virtual obs_encoder_t *GetStreamingVideoEncoder() {
 		auto output = obs_frontend_get_streaming_output();
 
