@@ -7,11 +7,16 @@
 
 class StreamElementsDefaultCompositionInfo
 	: public StreamElementsCompositionBase::StreamElementsCompositionInfo {
+private:
+	StreamElementsCompositionEventListener *m_listener;
+
 public:
 	StreamElementsDefaultCompositionInfo(
-		StreamElementsCompositionBase *owner)
+		StreamElementsCompositionBase *owner,
+		StreamElementsCompositionEventListener* listener)
 		: StreamElementsCompositionBase::StreamElementsCompositionInfo(
-			  owner)
+			  owner, listener),
+		  m_listener(listener)
 	{
 	}
 
@@ -44,9 +49,10 @@ public:
 
 std::shared_ptr<
 	StreamElementsCompositionBase::StreamElementsCompositionInfo>
-StreamElementsDefaultComposition::GetCompositionInfo()
+StreamElementsDefaultComposition::GetCompositionInfo(
+	StreamElementsCompositionEventListener* listener)
 {
-	return std::make_shared<StreamElementsDefaultCompositionInfo>(this);
+	return std::make_shared<StreamElementsDefaultCompositionInfo>(this, listener);
 }
 
 void StreamElementsDefaultComposition::SerializeComposition(

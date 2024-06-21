@@ -3,16 +3,27 @@
 #include <obs.h>
 #include "cef-headers.hpp"
 
+class StreamElementsCompositionEventListener {
+public:
+	StreamElementsCompositionEventListener() {}
+	~StreamElementsCompositionEventListener() {}
+
+public:
+	//virtual void CompositionChanged(){};
+};
+
 class StreamElementsCompositionBase {
 public:
 	class StreamElementsCompositionInfo {
 	private:
 		StreamElementsCompositionBase *m_owner;
+		StreamElementsCompositionEventListener *m_listener;
 
 	public:
 		StreamElementsCompositionInfo(
-			StreamElementsCompositionBase *owner)
-			: m_owner(owner)
+			StreamElementsCompositionBase *owner,
+			StreamElementsCompositionEventListener* listener)
+			: m_owner(owner), m_listener(listener)
 		{
 			m_owner->AddRef();
 		}
@@ -59,7 +70,7 @@ public:
 	}
 
 	virtual std::shared_ptr<StreamElementsCompositionInfo>
-	GetCompositionInfo() = 0;
+		GetCompositionInfo(StreamElementsCompositionEventListener* listener) = 0;
 
 private:
 	std::string m_id;
@@ -107,7 +118,7 @@ public:
 public:
 	virtual std::shared_ptr<
 		StreamElementsCompositionBase::StreamElementsCompositionInfo>
-	GetCompositionInfo();
+		GetCompositionInfo(StreamElementsCompositionEventListener* listener);
 
 	virtual bool CanRemove() { return false; }
 
