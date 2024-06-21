@@ -6,7 +6,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 class StreamElementsDefaultCompositionInfo
-	: public StreamElementsCompositionBase::StreamElementsCompositionInfo {
+	: public StreamElementsCompositionBase::CompositionInfo {
 private:
 	StreamElementsCompositionEventListener *m_listener;
 
@@ -14,7 +14,7 @@ public:
 	StreamElementsDefaultCompositionInfo(
 		StreamElementsCompositionBase *owner,
 		StreamElementsCompositionEventListener* listener)
-		: StreamElementsCompositionBase::StreamElementsCompositionInfo(
+		: StreamElementsCompositionBase::CompositionInfo(
 			  owner, listener),
 		  m_listener(listener)
 	{
@@ -50,7 +50,7 @@ public:
 };
 
 std::shared_ptr<
-	StreamElementsCompositionBase::StreamElementsCompositionInfo>
+	StreamElementsCompositionBase::CompositionInfo>
 StreamElementsDefaultComposition::GetCompositionInfo(
 	StreamElementsCompositionEventListener* listener)
 {

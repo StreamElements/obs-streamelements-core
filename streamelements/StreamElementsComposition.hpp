@@ -14,13 +14,13 @@ public:
 
 class StreamElementsCompositionBase {
 public:
-	class StreamElementsCompositionInfo {
+	class CompositionInfo {
 	private:
 		StreamElementsCompositionBase *m_owner;
 		StreamElementsCompositionEventListener *m_listener;
 
 	public:
-		StreamElementsCompositionInfo(
+		CompositionInfo(
 			StreamElementsCompositionBase *owner,
 			StreamElementsCompositionEventListener* listener)
 			: m_owner(owner), m_listener(listener)
@@ -28,7 +28,7 @@ public:
 			m_owner->AddRef();
 		}
 
-		virtual ~StreamElementsCompositionInfo() {
+		virtual ~CompositionInfo() {
 			m_owner->RemoveRef();
 		}
 
@@ -73,7 +73,7 @@ public:
 		return m_refCounter == 0;
 	}
 
-	virtual std::shared_ptr<StreamElementsCompositionInfo>
+	virtual std::shared_ptr<CompositionInfo>
 		GetCompositionInfo(StreamElementsCompositionEventListener* listener) = 0;
 
 private:
@@ -121,7 +121,7 @@ public:
 
 public:
 	virtual std::shared_ptr<
-		StreamElementsCompositionBase::StreamElementsCompositionInfo>
+		StreamElementsCompositionBase::CompositionInfo>
 		GetCompositionInfo(StreamElementsCompositionEventListener* listener);
 
 	virtual bool CanRemove() { return false; }
