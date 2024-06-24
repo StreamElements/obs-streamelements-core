@@ -17,12 +17,16 @@ void StreamElementsOutputBase::SetEnabled(bool enabled)
 
 	m_enabled = enabled;
 
-	if (m_enabled)
+	if (CanStart()) {
 		Start();
+	}
 }
 
 bool StreamElementsOutputBase::CanStart()
 {
+	if (!m_compositionInfo)
+		return false;
+
 	if (!IsEnabled())
 		return false;
 
@@ -40,7 +44,7 @@ bool StreamElementsOutputBase::Start()
 	if (!CanStart())
 		return false;
 
-	return StartInternal();
+	return StartInternal(m_compositionInfo);
 }
 
 void StreamElementsOutputBase::Stop()
@@ -61,11 +65,11 @@ bool StreamElementsCustomOutput::IsActive()
 	return obs_output_active(m_output);
 }
 
-bool StreamElementsCustomOutput::StartInternal()
+bool StreamElementsCustomOutput::StartInternal(
+	std::shared_ptr<StreamElementsCompositionBase::CompositionInfo>
+		compositionInfo)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-
-	if (m_compositionInfo)
+	if (!compositionInfo)
 		return false;
 
 	const char *output_type = obs_service_get_output_type(m_service);
@@ -87,11 +91,11 @@ bool StreamElementsCustomOutput::StartInternal()
 	if (m_output) {
 		obs_output_set_video_encoder(
 			m_output,
-			m_compositionInfo->GetStreamingVideoEncoder());
+			compositionInfo->GetStreamingVideoEncoder());
 
 		for (size_t i = 0;; ++i) {
 			auto encoder =
-				m_compositionInfo->GetStreamingAudioEncoder(i);
+				compositionInfo->GetStreamingAudioEncoder(i);
 
 			if (!encoder)
 				break;
@@ -111,15 +115,11 @@ bool StreamElementsCustomOutput::StartInternal()
 		obs_data_release(output_settings);
 	}
 
-	m_compositionInfo = nullptr;
-
 	return false;
 }
 
 void StreamElementsCustomOutput::StopInternal()
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-
 	if (!m_compositionInfo)
 		return;
 
@@ -129,6 +129,4 @@ void StreamElementsCustomOutput::StopInternal()
 
 	obs_output_release(m_output);
 	m_output = nullptr;
-
-	m_compositionInfo = nullptr;
 }

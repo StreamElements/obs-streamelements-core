@@ -23,7 +23,7 @@ public:
 	virtual ~StreamElementsDefaultCompositionInfo() {}
 
 public:
-	virtual bool IsObsDefault() { return true; }
+	virtual bool IsObsNative() { return true; }
 
 	virtual obs_encoder_t *GetStreamingVideoEncoder() {
 		auto output = obs_frontend_get_streaming_output();
@@ -51,13 +51,13 @@ public:
 
 std::shared_ptr<
 	StreamElementsCompositionBase::CompositionInfo>
-StreamElementsDefaultComposition::GetCompositionInfo(
+StreamElementsObsNativeComposition::GetCompositionInfo(
 	StreamElementsCompositionEventListener* listener)
 {
 	return std::make_shared<StreamElementsDefaultCompositionInfo>(this, listener);
 }
 
-void StreamElementsDefaultComposition::SerializeComposition(
+void StreamElementsObsNativeComposition::SerializeComposition(
 	CefRefPtr<CefValue> &output)
 {
 }

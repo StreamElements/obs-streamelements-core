@@ -35,7 +35,7 @@ public:
 	public:
 		// When true, consumers probably want to opt-in to streaming
 		// only when OBS main streaming output is active.
-		virtual bool IsObsDefault() = 0;
+		virtual bool IsObsNative() = 0;
 
 		virtual obs_encoder_t *GetStreamingVideoEncoder() = 0;
 		virtual obs_encoder_t *
@@ -93,9 +93,9 @@ public:
 };
 
 // OBS Main Composition
-class StreamElementsDefaultComposition : public StreamElementsCompositionBase,
+class StreamElementsObsNativeComposition : public StreamElementsCompositionBase,
 	  public std::enable_shared_from_this<
-		  StreamElementsDefaultComposition> {
+		  StreamElementsObsNativeComposition> {
 private:
 	struct Private {
 		explicit Private() = default;
@@ -103,19 +103,19 @@ private:
 
 public:
 	// ctor only usable by this class
-	StreamElementsDefaultComposition(Private)
+	StreamElementsObsNativeComposition(Private)
 		: StreamElementsCompositionBase("Default", "default")
 	{
 
 	}
 
-	virtual ~StreamElementsDefaultComposition() {
+	virtual ~StreamElementsObsNativeComposition() {
 	}
 
 public:
 	static std::shared_ptr<StreamElementsCompositionBase> Create()
 	{
-		return std::make_shared<StreamElementsDefaultComposition>(
+		return std::make_shared<StreamElementsObsNativeComposition>(
 			Private());
 	}
 
