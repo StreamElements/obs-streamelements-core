@@ -1,14 +1,14 @@
 #include <obs-frontend-api.h>
 #include "StreamElementsOutput.hpp"
 
-bool StreamElementsOutput::IsEnabled()
+bool StreamElementsOutputBase::IsEnabled()
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
 	return m_enabled;
 }
 
-void StreamElementsOutput::SetEnabled(bool enabled)
+void StreamElementsOutputBase::SetEnabled(bool enabled)
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
@@ -21,7 +21,34 @@ void StreamElementsOutput::SetEnabled(bool enabled)
 		Start();
 }
 
-bool StreamElementsOutput::IsActive()
+bool StreamElementsOutputBase::CanStart()
+{
+	if (!IsEnabled())
+		return false;
+
+	if (!obs_frontend_streaming_active())
+		return false;
+
+	if (IsActive())
+		return false;
+
+	return true;
+}
+
+bool StreamElementsOutputBase::Start()
+{
+	if (!CanStart())
+		return false;
+
+	return StartInternal();
+}
+
+void StreamElementsOutputBase::Stop()
+{
+	StopInternal();
+}
+
+bool StreamElementsCustomOutput::IsActive()
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
@@ -34,21 +61,7 @@ bool StreamElementsOutput::IsActive()
 	return obs_output_active(m_output);
 }
 
-bool StreamElementsOutput::Start()
-{
-	if (!obs_frontend_streaming_active())
-		return false;
-
-	return StartInternal();
-}
-
-void StreamElementsOutput::Stop()
-{
-	StopInternal();
-}
-
-
-bool StreamElementsOutput::StartInternal()
+bool StreamElementsCustomOutput::StartInternal()
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
@@ -68,7 +81,7 @@ bool StreamElementsOutput::StartInternal()
 	}
 	*/
 
-	m_output = obs_output_create(output_type, m_id.c_str(),
+	m_output = obs_output_create(output_type, GetId().c_str(),
 						 output_settings, nullptr);
 
 	if (m_output) {
@@ -103,7 +116,7 @@ bool StreamElementsOutput::StartInternal()
 	return false;
 }
 
-void StreamElementsOutput::StopInternal()
+void StreamElementsCustomOutput::StopInternal()
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 

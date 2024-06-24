@@ -2,14 +2,52 @@
 
 #include "StreamElementsComposition.hpp"
 
-class StreamElementsOutput : public StreamElementsCompositionEventListener {
+class StreamElementsOutputBase {
 private:
 	std::string m_id;
 	std::string m_name;
-	std::shared_ptr<StreamElementsCompositionBase> m_composition;
-
-	std::recursive_mutex m_mutex;
 	bool m_enabled;
+
+protected:
+	std::shared_ptr<StreamElementsCompositionBase> m_composition;
+	std::recursive_mutex m_mutex;
+
+public:
+	StreamElementsOutputBase(
+		std::string id, std::string name,
+		std::shared_ptr<StreamElementsCompositionBase> composition,
+		bool enabled)
+		: m_id(id), m_name(name), m_composition(composition), m_enabled(enabled)
+	{
+	}
+
+	std::string GetId() { return m_id; }
+	std::string GetName() { return m_name; }
+
+	virtual ~StreamElementsOutputBase() {}
+
+	virtual bool CanRemove() { return false; }
+	virtual bool CanChange() { return false; }
+	virtual bool CanStart();
+
+	virtual bool IsEnabled();
+	virtual void SetEnabled(bool enabled);
+
+	virtual bool Start();
+	virtual void Stop();
+
+	virtual bool IsActive() = 0;
+
+protected:
+	virtual bool StartInternal() = 0;
+	virtual void StopInternal() = 0;
+};
+
+class StreamElementsCustomOutput
+	: public StreamElementsOutputBase,
+	  public StreamElementsCompositionEventListener {
+private:
+	std::recursive_mutex m_mutex;
 	bool m_active;
 
 	std::shared_ptr<StreamElementsCompositionBase::CompositionInfo>
@@ -19,29 +57,27 @@ private:
 	obs_output_t *m_output = nullptr;
 
 public:
-	StreamElementsOutput(
-		std::string id,
-		std::string name,
-		std::shared_ptr<StreamElementsCompositionBase> composition, obs_service_t* service, bool enabled)
-		: m_id(id), m_name(name), m_composition(composition), m_service(service), m_enabled(enabled), m_active(false)
+	StreamElementsCustomOutput(
+		std::string id, std::string name,
+		std::shared_ptr<StreamElementsCompositionBase> composition,
+		bool enabled,
+		obs_service_t *service)
+		: StreamElementsOutputBase(id, name, composition, enabled),
+		  m_service(service),
+		  m_active(false)
 	{
 		// TODO: Deserialize input
 	}
 
-	virtual ~StreamElementsOutput() {
+	virtual ~StreamElementsCustomOutput()
+	{
 		Stop();
 
 		obs_service_release(m_service);
 		m_service = nullptr;
 	}
 
-	bool IsEnabled();
-	void SetEnabled(bool enabled);
-
 	virtual bool IsActive();
-
-	virtual bool Start();
-	virtual void Stop();
 
 protected:
 	virtual bool StartInternal();
