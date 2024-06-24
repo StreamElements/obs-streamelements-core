@@ -12,19 +12,25 @@ private:
 		m_compositionInfo;
 	std::recursive_mutex m_mutex;
 
+protected:
+	bool IsObsNativeComposition()
+	{
+		if (!m_compositionInfo)
+			return false;
+
+		return m_compositionInfo->IsObsNative();
+	}
+
 public:
 	StreamElementsOutputBase(
 		std::string id, std::string name,
-		std::shared_ptr<StreamElementsCompositionBase> composition,
-		bool enabled)
+		std::shared_ptr<StreamElementsCompositionBase> composition)
 		: m_id(id),
 		  m_name(name),
 		  m_composition(composition),
 		  m_enabled(false)
 	{
 		m_compositionInfo = composition->GetCompositionInfo(this);
-
-		SetEnabled(enabled);
 	}
 
 	std::string GetId() { return m_id; }
@@ -32,9 +38,9 @@ public:
 
 	virtual ~StreamElementsOutputBase() {}
 
-	virtual bool CanRemove() { return false; }
-	virtual bool CanChange() { return false; }
-	virtual bool CanStart();
+	bool CanRemove() { return !IsActive() && !IsObsNativeComposition(); }
+
+	bool CanChange() { return !IsActive() && !IsObsNativeComposition(); }
 
 	virtual bool IsEnabled();
 	virtual void SetEnabled(bool enabled);
@@ -45,6 +51,8 @@ public:
 	virtual bool IsActive() = 0;
 
 protected:
+	virtual bool CanStart();
+
 	virtual bool StartInternal(
 		std::shared_ptr<StreamElementsCompositionBase::CompositionInfo>
 			compositionInfo) = 0;
@@ -64,16 +72,22 @@ private:
 	obs_service_t *m_service;
 	obs_output_t *m_output = nullptr;
 
+	std::string m_bindToIP;
+
 public:
 	StreamElementsCustomOutput(
 		std::string id, std::string name,
 		std::shared_ptr<StreamElementsCompositionBase> composition,
-		bool enabled,
-		obs_service_t *service)
-		: StreamElementsOutputBase(id, name, composition, enabled),
+		obs_service_t *service, const char *bindToIP)
+		: StreamElementsOutputBase(id, name, composition),
 		  m_service(service),
 		  m_active(false)
 	{
+		if (bindToIP) {
+			m_bindToIP = bindToIP;
+		} else {
+			m_bindToIP = "";
+		}
 	}
 
 	virtual ~StreamElementsCustomOutput()
@@ -85,9 +99,6 @@ public:
 	}
 
 	virtual bool IsActive();
-
-	virtual bool CanRemove() { return true; }
-	virtual bool CanChange() { return !IsActive(); }
 
 protected:
 	virtual bool
@@ -102,9 +113,8 @@ class StreamElementsObsNativeOutput
 public:
 	StreamElementsObsNativeOutput(
 		std::string id, std::string name,
-		std::shared_ptr<StreamElementsCompositionBase> composition,
-		bool enabled, obs_service_t *service)
-		: StreamElementsOutputBase(id, name, composition, enabled)
+		std::shared_ptr<StreamElementsCompositionBase> composition)
+		: StreamElementsOutputBase(id, name, composition)
 	{
 	}
 
@@ -112,9 +122,5 @@ public:
 	{
 
 	}
-
-	virtual bool CanRemove() { return false; }
-	virtual bool CanChange() { return false; }
-	virtual bool CanStart() { return false; }
 }
 */

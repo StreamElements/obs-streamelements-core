@@ -24,6 +24,10 @@ void StreamElementsOutputBase::SetEnabled(bool enabled)
 
 bool StreamElementsOutputBase::CanStart()
 {
+	if (IsObsNativeComposition()) {
+		return false;
+	}
+
 	if (!m_compositionInfo)
 		return false;
 
@@ -54,10 +58,11 @@ void StreamElementsOutputBase::Stop()
 
 bool StreamElementsCustomOutput::IsActive()
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	if (IsObsNativeComposition()) {
+		return obs_frontend_streaming_active();
+	}
 
-	if (!m_compositionInfo)
-		return false;
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
 	if (!m_output)
 		return false;
@@ -79,11 +84,9 @@ bool StreamElementsCustomOutput::StartInternal(
 
 	obs_data_t *output_settings = obs_data_create();
 
-	/*
-	if (bindToIP) {
-		obs_data_set_string(output_settings, "bind_ip", bindToIP);
+	if (m_bindToIP.size()) {
+		obs_data_set_string(output_settings, "bind_ip", m_bindToIP.c_str());
 	}
-	*/
 
 	m_output = obs_output_create(output_type, GetId().c_str(),
 						 output_settings, nullptr);
