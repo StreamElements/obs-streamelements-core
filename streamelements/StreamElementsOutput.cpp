@@ -12,6 +12,9 @@ void StreamElementsOutputBase::SetEnabled(bool enabled)
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
+	if (!enabled && !CanDisable())
+		return;
+
 	if (enabled == m_enabled)
 		return;
 
@@ -24,7 +27,7 @@ void StreamElementsOutputBase::SetEnabled(bool enabled)
 
 bool StreamElementsOutputBase::CanStart()
 {
-	if (IsObsNativeComposition()) {
+	if (!CanDisable()) {
 		return false;
 	}
 
@@ -56,12 +59,17 @@ void StreamElementsOutputBase::Stop()
 	StopInternal();
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// StreamElementsCustomOutput
+////////////////////////////////////////////////////////////////////////////////
+
+bool StreamElementsCustomOutput::CanDisable()
+{
+	return true;
+}
+
 bool StreamElementsCustomOutput::IsActive()
 {
-	if (IsObsNativeComposition()) {
-		return obs_frontend_streaming_active();
-	}
-
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
 	if (!m_output)
@@ -132,4 +140,25 @@ void StreamElementsCustomOutput::StopInternal()
 
 	obs_output_release(m_output);
 	m_output = nullptr;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// StreamElementsObsNativeOutput
+////////////////////////////////////////////////////////////////////////////////
+
+bool StreamElementsObsNativeOutput::StartInternal(
+	std::shared_ptr<StreamElementsCompositionBase::CompositionInfo>
+	compositionInfo)
+{
+	return false;
+}
+
+void StreamElementsObsNativeOutput::StopInternal()
+{
+	return;
+}
+
+bool StreamElementsObsNativeOutput::IsActive()
+{
+	return obs_frontend_streaming_active();
 }

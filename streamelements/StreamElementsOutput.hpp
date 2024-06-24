@@ -31,6 +31,8 @@ public:
 		  m_enabled(false)
 	{
 		m_compositionInfo = composition->GetCompositionInfo(this);
+
+		m_enabled = !CanDisable();
 	}
 
 	std::string GetId() { return m_id; }
@@ -38,9 +40,8 @@ public:
 
 	virtual ~StreamElementsOutputBase() {}
 
-	bool CanRemove() { return !IsActive() && !IsObsNativeComposition(); }
-
-	bool CanChange() { return !IsActive() && !IsObsNativeComposition(); }
+	virtual bool CanRemove() { return !IsActive(); }
+	virtual bool CanChange() { return !IsActive(); }
 
 	virtual bool IsEnabled();
 	virtual void SetEnabled(bool enabled);
@@ -49,6 +50,7 @@ public:
 	virtual void Stop();
 
 	virtual bool IsActive() = 0;
+	virtual bool CanDisable() = 0;
 
 protected:
 	virtual bool CanStart();
@@ -99,6 +101,7 @@ public:
 	}
 
 	virtual bool IsActive();
+	virtual bool CanDisable();
 
 protected:
 	virtual bool
@@ -106,10 +109,7 @@ protected:
 	virtual void StopInternal();
 };
 
-/*
-class StreamElementsObsNativeOutput
-	: public StreamElementsOutputBase
-{
+class StreamElementsObsNativeOutput : public StreamElementsOutputBase {
 public:
 	StreamElementsObsNativeOutput(
 		std::string id, std::string name,
@@ -118,9 +118,17 @@ public:
 	{
 	}
 
-	virtual ~StreamElementsObsNativeOutput()
-	{
+	virtual ~StreamElementsObsNativeOutput() {}
 
-	}
-}
-*/
+	virtual bool CanRemove() { return false; }
+	virtual bool CanChange() { return false; }
+	virtual bool CanDisable() { return false; }
+
+	virtual bool IsActive();
+
+protected:
+	virtual bool StartInternal(
+		std::shared_ptr<StreamElementsCompositionBase::CompositionInfo>
+			compositionInfo);
+	virtual void StopInternal();
+};
