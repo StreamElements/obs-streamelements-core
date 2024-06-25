@@ -1,5 +1,26 @@
 #include <obs-frontend-api.h>
+
 #include "StreamElementsOutput.hpp"
+
+void StreamElementsOutputBase::handle_obs_frontend_event(
+	enum obs_frontend_event event,
+	void* data)
+{
+	StreamElementsOutputBase *self = (StreamElementsOutputBase *)data;
+
+	switch (event) {
+	case OBS_FRONTEND_EVENT_STREAMING_STARTING:
+	case OBS_FRONTEND_EVENT_STREAMING_STARTED:
+		self->Start();
+		break;
+	case OBS_FRONTEND_EVENT_STREAMING_STOPPING:
+	case OBS_FRONTEND_EVENT_STREAMING_STOPPED:
+		self->Stop();
+		break;
+	default:
+		return;
+	}
+}
 
 StreamElementsOutputBase::StreamElementsOutputBase(
 	std::string id, std::string name,
@@ -9,10 +30,16 @@ StreamElementsOutputBase::StreamElementsOutputBase(
 	m_compositionInfo = composition->GetCompositionInfo(this);
 
 	m_enabled = !CanDisable();
+
+	obs_frontend_add_event_callback(
+		StreamElementsOutputBase::handle_obs_frontend_event, this);
 }
 
 StreamElementsOutputBase::~StreamElementsOutputBase()
 {
+	obs_frontend_remove_event_callback(
+		StreamElementsOutputBase::handle_obs_frontend_event, this);
+
 	if (IsActive()) {
 		Stop();
 	}

@@ -40,6 +40,10 @@ protected:
 		std::shared_ptr<StreamElementsCompositionBase::CompositionInfo>
 			compositionInfo) = 0;
 	virtual void StopInternal() = 0;
+
+private:
+	static void handle_obs_frontend_event(enum obs_frontend_event event,
+					      void *data);
 };
 
 class StreamElementsCustomOutput
