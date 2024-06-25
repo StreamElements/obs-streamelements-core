@@ -9,11 +9,16 @@ StreamElementsCompositionManager::StreamElementsCompositionManager()
 
 StreamElementsCompositionManager::~StreamElementsCompositionManager()
 {
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	m_map.clear();
 }
 
 void StreamElementsCompositionManager::DeserializeComposition(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
 	// TODO: Implement
 	output->SetBool(false);
 }
