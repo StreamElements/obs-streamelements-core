@@ -12,33 +12,14 @@ private:
 		m_compositionInfo;
 	std::recursive_mutex m_mutex;
 
-protected:
-	bool IsObsNativeComposition()
-	{
-		if (!m_compositionInfo)
-			return false;
-
-		return m_compositionInfo->IsObsNative();
-	}
-
 public:
 	StreamElementsOutputBase(
 		std::string id, std::string name,
-		std::shared_ptr<StreamElementsCompositionBase> composition)
-		: m_id(id),
-		  m_name(name),
-		  m_composition(composition),
-		  m_enabled(false)
-	{
-		m_compositionInfo = composition->GetCompositionInfo(this);
-
-		m_enabled = !CanDisable();
-	}
+		std::shared_ptr<StreamElementsCompositionBase> composition);
+	virtual ~StreamElementsOutputBase();
 
 	std::string GetId() { return m_id; }
 	std::string GetName() { return m_name; }
-
-	virtual ~StreamElementsOutputBase() {}
 
 	virtual bool CanRemove() { return !IsActive(); }
 	virtual bool CanChange() { return !IsActive(); }
@@ -49,8 +30,8 @@ public:
 	virtual bool Start();
 	virtual void Stop();
 
-	virtual bool IsActive() = 0;
-	virtual bool CanDisable() = 0;
+	virtual bool IsActive() { return false; }
+	virtual bool CanDisable() { return false; }
 
 protected:
 	virtual bool CanStart();
@@ -100,8 +81,8 @@ public:
 		m_service = nullptr;
 	}
 
-	virtual bool IsActive();
-	virtual bool CanDisable();
+	virtual bool IsActive() override;
+	virtual bool CanDisable() override;
 
 protected:
 	virtual bool
@@ -120,15 +101,15 @@ public:
 
 	virtual ~StreamElementsObsNativeOutput() {}
 
-	virtual bool CanRemove() { return false; }
-	virtual bool CanChange() { return false; }
-	virtual bool CanDisable() { return false; }
+	virtual bool CanRemove() override { return false; }
+	virtual bool CanChange() override  { return false; }
+	virtual bool CanDisable() override { return false; }
 
-	virtual bool IsActive();
+	virtual bool IsActive() override;
 
 protected:
 	virtual bool StartInternal(
 		std::shared_ptr<StreamElementsCompositionBase::CompositionInfo>
-			compositionInfo);
-	virtual void StopInternal();
+			compositionInfo) override;
+	virtual void StopInternal() override;
 };

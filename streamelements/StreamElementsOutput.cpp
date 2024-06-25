@@ -1,6 +1,23 @@
 #include <obs-frontend-api.h>
 #include "StreamElementsOutput.hpp"
 
+StreamElementsOutputBase::StreamElementsOutputBase(
+	std::string id, std::string name,
+	std::shared_ptr<StreamElementsCompositionBase> composition)
+	: m_id(id), m_name(name), m_composition(composition), m_enabled(false)
+{
+	m_compositionInfo = composition->GetCompositionInfo(this);
+
+	m_enabled = !CanDisable();
+}
+
+StreamElementsOutputBase::~StreamElementsOutputBase()
+{
+	if (IsActive()) {
+		Stop();
+	}
+}
+
 bool StreamElementsOutputBase::IsEnabled()
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
@@ -150,12 +167,20 @@ bool StreamElementsObsNativeOutput::StartInternal(
 	std::shared_ptr<StreamElementsCompositionBase::CompositionInfo>
 	compositionInfo)
 {
-	return false;
+	if (IsActive())
+		return false;
+
+	obs_frontend_streaming_start();
+
+	return true;
 }
 
 void StreamElementsObsNativeOutput::StopInternal()
 {
-	return;
+	if (!IsActive())
+		return;
+
+	obs_frontend_streaming_stop();
 }
 
 bool StreamElementsObsNativeOutput::IsActive()
