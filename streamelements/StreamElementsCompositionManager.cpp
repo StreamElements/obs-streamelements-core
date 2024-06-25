@@ -2,9 +2,9 @@
 
 StreamElementsCompositionManager::StreamElementsCompositionManager()
 {
-	auto composition = StreamElementsObsNativeComposition::Create();
+	m_nativeComposition = StreamElementsObsNativeComposition::Create();
 
-	m_map[composition->GetId()] = composition;
+	m_map[m_nativeComposition->GetId()] = m_nativeComposition;
 }
 
 StreamElementsCompositionManager::~StreamElementsCompositionManager()
