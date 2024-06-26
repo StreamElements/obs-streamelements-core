@@ -1,4 +1,6 @@
 #include "StreamElementsOutputManager.hpp"
+#include "StreamElementsUtils.hpp"
+
 StreamElementsOutputManager::StreamElementsOutputManager(
 	std::shared_ptr<StreamElementsCompositionManager> compositionManager)
 	: m_compositionManager(compositionManager)
@@ -20,8 +22,6 @@ void StreamElementsOutputManager::DeserializeOutput(CefRefPtr<CefValue> input,
 {
 	output->SetBool(false);
 
-	// TODO: Validate `id`
-
 	if (!input.get())
 		return;
 
@@ -30,10 +30,24 @@ void StreamElementsOutputManager::DeserializeOutput(CefRefPtr<CefValue> input,
 
 	auto d = input->GetDictionary();
 
-	if (d->GetType("id") != VTYPE_STRING)
-		return;
+	std::string id = ""; 
+	if (d->GetType("id") == VTYPE_STRING) {
+		id = d->GetString("id");
+	}
 
+	while (!id.size() || m_map.count(id)) {
+		id = CreateGloballyUniqueIdString();
+	}
 
+	d->SetString("id", id);
+
+	input->SetDictionary(d);
+
+	auto customOutput = StreamElementsCustomOutput::Create(input);
+
+	m_map[customOutput->GetId()] = customOutput;
+
+	customOutput->SerializeOutput(output);
 }
 
 void StreamElementsOutputManager::SerializeAllOutputs(
