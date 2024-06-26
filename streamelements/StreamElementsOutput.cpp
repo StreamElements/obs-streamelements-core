@@ -1,6 +1,7 @@
 #include <obs-frontend-api.h>
 
 #include "StreamElementsOutput.hpp"
+#include "StreamElementsGlobalStateManager.hpp"
 
 void StreamElementsOutputBase::handle_obs_frontend_event(
 	enum obs_frontend_event event,
@@ -33,6 +34,7 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 	d->SetString("compositionId", m_composition->GetId());
 	d->SetBool("isEnabled", IsEnabled());
 	d->SetBool("isActive", IsActive());
+	d->SetDictionary("auxiliaryData", m_auxData);
 
 	auto streamingSettings = CefValue::Create();
 
@@ -45,9 +47,12 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 
 StreamElementsOutputBase::StreamElementsOutputBase(
 	std::string id, std::string name,
-	std::shared_ptr<StreamElementsCompositionBase> composition)
+	std::shared_ptr<StreamElementsCompositionBase> composition,
+	CefRefPtr<CefDictionaryValue> auxData)
 	: m_id(id), m_name(name), m_composition(composition), m_enabled(false)
 {
+	m_auxData = auxData.get() ? auxData : CefDictionaryValue::Create();
+
 	m_compositionInfo = composition->GetCompositionInfo(this);
 
 	m_enabled = !CanDisable();
@@ -246,16 +251,22 @@ std::shared_ptr <StreamElementsCustomOutput> StreamElementsCustomOutput::Create(
 	auto rootDict = input->GetDictionary();
 
 	if (rootDict->GetType("id") != VTYPE_STRING ||
-	    rootDict->GetType("name") != VTYPE_STRING ||
-	    rootDict->GetType("compositionId") != VTYPE_STRING)
+	    rootDict->GetType("name") != VTYPE_STRING)
 		return nullptr;
 
 	if (rootDict->GetType("streamingSettings") != VTYPE_DICTIONARY)
 		return nullptr;
 
+	auto auxData = rootDict->GetType("auxiliaryData") == VTYPE_DICTIONARY
+			       ? rootDict->GetDictionary("auxiliaryData")
+			       : CefDictionaryValue::Create();
+
 	std::string id = rootDict->GetString("id");
 	std::string name = rootDict->GetString("name");
-	std::string compositionId = rootDict->GetString("compositionId");
+	std::string compositionId =
+		(rootDict->GetType("compositionId") == VTYPE_STRING
+			? rootDict->GetString("compositionId")
+			: "");
 	bool isEnabled = rootDict->GetType("isEnabled") == VTYPE_BOOL
 				 ? rootDict->GetBool("isEnabled")
 				 : true;
@@ -263,7 +274,7 @@ std::shared_ptr <StreamElementsCustomOutput> StreamElementsCustomOutput::Create(
 	auto d = rootDict->GetDictionary("streamingSettings");
 
 	if (!d.get() || !d->HasKey("serverUrl") || !d->HasKey("streamKey")) {
-		return false;
+		return nullptr;
 	}
 
 	std::string serverUrl = d->GetString("serverUrl");
@@ -300,8 +311,17 @@ std::shared_ptr <StreamElementsCustomOutput> StreamElementsCustomOutput::Create(
 
 	// TODO: Get composition from composition manager
 
-	std::make_shared<StreamElementsCustomOutput>(id, name, composition,
-						     service, bindToIP);
+	auto composition = StreamElementsGlobalStateManager::GetInstance()
+		->GetCompositionManager()
+		->GetCompositionById(id);
+
+	if (!composition) {
+		composition = StreamElementsGlobalStateManager::GetInstance()
+				      ->GetCompositionManager()
+				      ->GetObsNativeComposition();
+	}
+
+	return std::make_shared<StreamElementsCustomOutput>(id, name, composition, service, bindToIP, auxData);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

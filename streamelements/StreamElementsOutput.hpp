@@ -12,10 +12,13 @@ private:
 		m_compositionInfo;
 	std::recursive_mutex m_mutex;
 
+	CefRefPtr<CefDictionaryValue> m_auxData;
+
 public:
 	StreamElementsOutputBase(
 		std::string id, std::string name,
-		std::shared_ptr<StreamElementsCompositionBase> composition);
+		std::shared_ptr<StreamElementsCompositionBase> composition,
+		CefRefPtr<CefDictionaryValue> auxData);
 	virtual ~StreamElementsOutputBase();
 
 	std::string GetId() { return m_id; }
@@ -70,8 +73,9 @@ public:
 	StreamElementsCustomOutput(
 		std::string id, std::string name,
 		std::shared_ptr<StreamElementsCompositionBase> composition,
-		obs_service_t *service, const char *bindToIP)
-		: StreamElementsOutputBase(id, name, composition),
+		obs_service_t *service, const char *bindToIP,
+		CefRefPtr<CefDictionaryValue> auxData)
+		: StreamElementsOutputBase(id, name, composition, auxData),
 		  m_service(service),
 		  m_active(false)
 	{
@@ -110,7 +114,7 @@ public:
 	StreamElementsObsNativeOutput(
 		std::string id, std::string name,
 		std::shared_ptr<StreamElementsCompositionBase> composition)
-		: StreamElementsOutputBase(id, name, composition)
+		: StreamElementsOutputBase(id, name, composition, CefDictionaryValue::Create())
 	{
 	}
 

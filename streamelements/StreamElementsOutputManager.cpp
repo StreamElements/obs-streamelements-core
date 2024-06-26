@@ -18,6 +18,21 @@ StreamElementsOutputManager::~StreamElementsOutputManager()
 void StreamElementsOutputManager::DeserializeOutput(CefRefPtr<CefValue> input,
 						    CefRefPtr<CefValue> &output)
 {
+	output->SetBool(false);
+
+	// TODO: Validate `id`
+
+	if (!input.get())
+		return;
+
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto d = input->GetDictionary();
+
+	if (d->GetType("id") != VTYPE_STRING)
+		return;
+
 
 }
 

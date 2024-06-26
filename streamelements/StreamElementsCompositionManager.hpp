@@ -1,3 +1,5 @@
+#pragma once
+
 #include "StreamElementsComposition.hpp"
 
 class StreamElementsCompositionManager {
