@@ -235,6 +235,75 @@ void StreamElementsCustomOutput::SerializeStreamingSettings(
 	output->SetDictionary(d);
 }
 
+std::shared_ptr <StreamElementsCustomOutput> StreamElementsCustomOutput::Create(CefRefPtr<CefValue> input)
+{
+	if (!input.get())
+		return nullptr;
+
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return nullptr;
+
+	auto rootDict = input->GetDictionary();
+
+	if (rootDict->GetType("id") != VTYPE_STRING ||
+	    rootDict->GetType("name") != VTYPE_STRING ||
+	    rootDict->GetType("compositionId") != VTYPE_STRING)
+		return nullptr;
+
+	if (rootDict->GetType("streamingSettings") != VTYPE_DICTIONARY)
+		return nullptr;
+
+	std::string id = rootDict->GetString("id");
+	std::string name = rootDict->GetString("name");
+	std::string compositionId = rootDict->GetString("compositionId");
+	bool isEnabled = rootDict->GetType("isEnabled") == VTYPE_BOOL
+				 ? rootDict->GetBool("isEnabled")
+				 : true;
+
+	auto d = rootDict->GetDictionary("streamingSettings");
+
+	if (!d.get() || !d->HasKey("serverUrl") || !d->HasKey("streamKey")) {
+		return false;
+	}
+
+	std::string serverUrl = d->GetString("serverUrl");
+	std::string streamKey = d->GetString("streamKey");
+	bool useAuth = d->HasKey("useAuth") && d->GetBool("useAuth");
+	std::string authUsername = (useAuth && d->HasKey("authUsername"))
+					   ? d->GetString("authUsername")
+					   : "";
+	std::string authPassword = (useAuth && d->HasKey("authPassword"))
+					   ? d->GetString("authPassword")
+					   : "";
+
+	// Streaming service
+	obs_service_t *service = obs_service_create(
+		"rtmp_custom", "default_service", NULL, NULL);
+	obs_data_t *service_settings = obs_service_get_settings(service);
+
+	obs_data_set_string(service_settings, "server", serverUrl.c_str());
+	obs_data_set_string(service_settings, "key", streamKey.c_str());
+
+	obs_data_set_bool(service_settings, "use_auth", useAuth);
+	if (useAuth) {
+		obs_data_set_string(service_settings, "username",
+				    authUsername.c_str());
+		obs_data_set_string(service_settings, "password",
+				    authPassword.c_str());
+	}
+
+	obs_service_update(service, service_settings);
+
+	obs_data_release(service_settings);
+
+	auto bindToIP = "";
+
+	// TODO: Get composition from composition manager
+
+	std::make_shared<StreamElementsCustomOutput>(id, name, composition,
+						     service, bindToIP);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // StreamElementsObsNativeOutput
 ////////////////////////////////////////////////////////////////////////////////

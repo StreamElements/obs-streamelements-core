@@ -96,6 +96,9 @@ public:
 	virtual void
 	SerializeStreamingSettings(CefRefPtr<CefValue> &output) override;
 
+	static std::shared_ptr<StreamElementsCustomOutput>
+	Create(CefRefPtr<CefValue> input);
+
 protected:
 	virtual bool
 		StartInternal(std::shared_ptr<StreamElementsCompositionBase::CompositionInfo> compositionInfo);
