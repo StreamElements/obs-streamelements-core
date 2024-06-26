@@ -321,7 +321,12 @@ std::shared_ptr <StreamElementsCustomOutput> StreamElementsCustomOutput::Create(
 				      ->GetObsNativeComposition();
 	}
 
-	return std::make_shared<StreamElementsCustomOutput>(id, name, composition, service, bindToIP, auxData);
+	auto result = std::make_shared<StreamElementsCustomOutput>(
+		id, name, composition, service, bindToIP, auxData);
+
+	result->SetEnabled(isEnabled);
+
+	return result;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
