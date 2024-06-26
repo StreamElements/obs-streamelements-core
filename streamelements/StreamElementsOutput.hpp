@@ -33,6 +33,11 @@ public:
 	virtual bool IsActive() { return false; }
 	virtual bool CanDisable() { return false; }
 
+	void SerializeOutput(CefRefPtr<CefValue> &output);
+
+	virtual void
+	SerializeStreamingSettings(CefRefPtr<CefValue> &output) = 0;
+
 protected:
 	virtual bool CanStart();
 
@@ -88,6 +93,9 @@ public:
 	virtual bool IsActive() override;
 	virtual bool CanDisable() override;
 
+	virtual void
+	SerializeStreamingSettings(CefRefPtr<CefValue> &output) override;
+
 protected:
 	virtual bool
 		StartInternal(std::shared_ptr<StreamElementsCompositionBase::CompositionInfo> compositionInfo);
@@ -116,4 +124,7 @@ protected:
 		std::shared_ptr<StreamElementsCompositionBase::CompositionInfo>
 			compositionInfo) override;
 	virtual void StopInternal() override;
+
+	virtual void
+	SerializeStreamingSettings(CefRefPtr<CefValue> &output) override;
 };

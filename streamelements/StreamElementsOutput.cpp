@@ -22,6 +22,27 @@ void StreamElementsOutputBase::handle_obs_frontend_event(
 	}
 }
 
+void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	auto d = CefDictionaryValue::Create();
+
+	d->SetString("id", GetId());
+	d->SetString("name", GetName());
+	d->SetString("compositionId", m_composition->GetId());
+	d->SetBool("isEnabled", IsEnabled());
+	d->SetBool("isActive", IsActive());
+
+	auto streamingSettings = CefValue::Create();
+
+	SerializeStreamingSettings(streamingSettings);
+
+	d->SetValue("streamingSettings", streamingSettings);
+
+	output->SetDictionary(d);
+}
+
 StreamElementsOutputBase::StreamElementsOutputBase(
 	std::string id, std::string name,
 	std::shared_ptr<StreamElementsCompositionBase> composition)
@@ -186,6 +207,34 @@ void StreamElementsCustomOutput::StopInternal()
 	m_output = nullptr;
 }
 
+void StreamElementsCustomOutput::SerializeStreamingSettings(
+	CefRefPtr<CefValue>& output)
+{
+	auto d = CefDictionaryValue::Create();
+
+	obs_data_t *service_settings = obs_service_get_settings(m_service);
+
+	d->SetString("type", obs_service_get_type(m_service));
+
+	d->SetString("serverUrl",
+		     obs_data_get_string(service_settings, "server"));
+
+	d->SetString("streamKey", obs_data_get_string(service_settings, "key"));
+
+	bool useAuth = obs_data_get_bool(service_settings, "use_auth");
+
+	d->SetBool("useAuth", useAuth);
+
+	if (useAuth) {
+		d->SetString("authUsername", obs_data_get_string(service_settings, "username"));
+		d->SetString("authPassword", obs_data_get_string(service_settings, "password"));
+	}
+
+	obs_data_release(service_settings);
+
+	output->SetDictionary(d);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // StreamElementsObsNativeOutput
 ////////////////////////////////////////////////////////////////////////////////
@@ -213,4 +262,36 @@ void StreamElementsObsNativeOutput::StopInternal()
 bool StreamElementsObsNativeOutput::IsActive()
 {
 	return obs_frontend_streaming_active();
+}
+
+void StreamElementsObsNativeOutput::SerializeStreamingSettings(
+	CefRefPtr<CefValue> &output)
+{
+	auto d = CefDictionaryValue::Create();
+
+	obs_service_t *service = obs_frontend_get_streaming_service(); // No refcount increment
+
+	obs_data_t *service_settings = obs_service_get_settings(service);
+
+	d->SetString("type", obs_service_get_type(service));
+
+	d->SetString("serverUrl",
+		     obs_data_get_string(service_settings, "server"));
+
+	d->SetString("streamKey", obs_data_get_string(service_settings, "key"));
+
+	bool useAuth = obs_data_get_bool(service_settings, "use_auth");
+
+	d->SetBool("useAuth", useAuth);
+
+	if (useAuth) {
+		d->SetString("authUsername",
+			     obs_data_get_string(service_settings, "username"));
+		d->SetString("authPassword",
+			     obs_data_get_string(service_settings, "password"));
+	}
+
+	obs_data_release(service_settings);
+
+	output->SetDictionary(d);
 }

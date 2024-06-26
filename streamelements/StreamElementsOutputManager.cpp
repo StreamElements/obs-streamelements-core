@@ -18,24 +18,118 @@ StreamElementsOutputManager::~StreamElementsOutputManager()
 void StreamElementsOutputManager::DeserializeOutput(CefRefPtr<CefValue> input,
 						    CefRefPtr<CefValue> &output)
 {
+
 }
 
 void StreamElementsOutputManager::SerializeAllOutputs(
 	CefRefPtr<CefValue> &output)
 {
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	auto d = CefDictionaryValue::Create();
+
+	for (auto kv : m_map) {
+		auto serializedOutput = CefValue::Create();
+
+		kv.second->SerializeOutput(serializedOutput);
+
+		d->SetValue(kv.first, serializedOutput);
+	}
+
+	output->SetDictionary(d);
 }
 
 void StreamElementsOutputManager::RemoveOutputsByIds(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	output->SetBool(false);
+
+	std::map<std::string, bool> map;
+
+	if (!GetValidIds(input, map))
+		return;
+
+	// Remove all valid IDs
+	for (auto kv : map) {
+		m_map.erase(kv.first);
+	}
+
+	output->SetBool(true);
 }
 
 void StreamElementsOutputManager::EnableOutputsByIds(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	output->SetBool(false);
+
+	std::map<std::string, bool> map;
+
+	if (!GetValidIds(input, map))
+		return;
+
+	// Remove all valid IDs
+	for (auto kv : map) {
+		m_map[kv.first]->SetEnabled(true);
+	}
+
+	output->SetBool(true);
 }
 
 void StreamElementsOutputManager::DisableOutputsByIds(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	output->SetBool(false);
+
+	std::map<std::string, bool> map;
+
+	if (!GetValidIds(input, map))
+		return;
+
+	// Remove all valid IDs
+	for (auto kv : map) {
+		m_map[kv.first]->SetEnabled(false);
+	}
+
+	output->SetBool(true);
+}
+
+bool StreamElementsOutputManager::GetValidIds(
+	CefRefPtr<CefValue> input,
+	std::map<std::string, bool>& output)
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	if (input->GetType() != VTYPE_LIST)
+		return false;
+
+	auto list = input->GetList();
+
+	std::map<std::string, bool> map;
+
+	// Check if all IDs are valid
+	for (size_t i = 0; i < list->GetSize(); ++i) {
+		if (list->GetType(i) != VTYPE_STRING)
+			return false;
+
+		std::string id = list->GetString(i);
+
+		if (!id.size())
+			return false;
+
+		if (!m_map.count(id))
+			return false;
+
+		if (!m_map[id]->CanRemove())
+			return false;
+
+		output[id] = true;
+	}
+
+	return true;
 }
