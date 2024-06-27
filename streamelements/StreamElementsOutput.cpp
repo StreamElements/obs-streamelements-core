@@ -36,9 +36,34 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 	d->SetBool("isActive", IsActive());
 	d->SetBool("canDisable", CanDisable());
 	d->SetBool("canRemove", !IsObsNative());
-	d->SetBool("canPause", CanPause());
 	d->SetBool("isObsNative", IsObsNative());
-	d->SetBool("isReconnecting", IsReconnecting());
+
+	auto obs_output = GetOutput();
+
+	if (output) {
+		d->SetBool("canPause", obs_output_can_pause(obs_output));
+		d->SetBool("isReconnecting",
+			   obs_output_reconnecting(obs_output));
+		d->SetBool("width", obs_output_get_width(obs_output));
+		d->SetBool("height", obs_output_get_height(obs_output));
+
+		d->SetBool("framesDropped",
+			   obs_output_get_frames_dropped(obs_output));
+
+		d->SetBool("congestion", obs_output_get_congestion(obs_output));
+
+		auto last_error = obs_output_get_last_error(obs_output);
+
+		if (last_error)
+			d->SetString("lastErrorMessage", last_error);
+		else
+			d->SetNull("lastErrorMessage");
+
+		d->SetInt("totalBytes", obs_output_get_total_bytes(obs_output));
+		d->SetInt("totalFrames",
+			  obs_output_get_total_frames(obs_output));
+	}
+
 	d->SetDictionary("auxiliaryData", m_auxData);
 
 	auto streamingSettings = CefValue::Create();

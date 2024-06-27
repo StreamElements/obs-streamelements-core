@@ -37,8 +37,6 @@ public:
 	virtual bool IsActive() { return false; }
 	virtual bool CanDisable() { return false; }
 
-	virtual bool IsReconnecting() { return false; }
-	virtual bool CanPause() { return false; }
 	virtual bool IsObsNative() = 0;
 
 	void SerializeOutput(CefRefPtr<CefValue> &output);
@@ -47,6 +45,8 @@ public:
 	SerializeStreamingSettings(CefRefPtr<CefValue> &output) = 0;
 
 protected:
+	virtual obs_output_t *GetOutput() = 0;
+
 	virtual bool CanStart();
 
 	virtual bool StartInternal(
@@ -108,17 +108,11 @@ public:
 	static std::shared_ptr<StreamElementsCustomOutput>
 	Create(CefRefPtr<CefValue> input);
 
-	virtual bool IsReconnecting() override
-	{
-		return obs_output_reconnecting(m_output);
-	}
-
-	virtual bool CanPause() override { return obs_output_can_pause(m_output); }
-
 	virtual bool IsObsNative() override { return false; }
 
-
 protected:
+	virtual obs_output_t *GetOutput() override { return m_output; }
+
 	virtual bool
 		StartInternal(std::shared_ptr<StreamElementsCompositionBase::CompositionInfo> compositionInfo);
 	virtual void StopInternal();
@@ -141,20 +135,11 @@ public:
 
 	virtual bool IsActive() override;
 
-	virtual bool IsReconnecting() override
-	{
-		return obs_output_reconnecting(obs_frontend_get_streaming_output());
-	}
-
-	virtual bool CanPause() override
-	{
-		return obs_output_can_pause(
-			obs_frontend_get_streaming_output());
-	}
-
 	virtual bool IsObsNative() override { return true; }
 
 protected:
+	virtual obs_output_t *GetOutput() override { return obs_frontend_get_streaming_output(); }
+
 	virtual bool StartInternal(
 		std::shared_ptr<StreamElementsCompositionBase::CompositionInfo>
 			compositionInfo) override;
