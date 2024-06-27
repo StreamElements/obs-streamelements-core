@@ -27,5 +27,6 @@ public:
 
 private:
 	bool GetValidIds(CefRefPtr<CefValue> input,
-			 std::map<std::string, bool> &output);
+			 std::map<std::string, bool> &output, bool testRemove,
+			 bool testDisable);
 };

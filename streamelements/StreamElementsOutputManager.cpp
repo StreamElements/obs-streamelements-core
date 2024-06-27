@@ -77,7 +77,7 @@ void StreamElementsOutputManager::RemoveOutputsByIds(
 
 	std::map<std::string, bool> map;
 
-	if (!GetValidIds(input, map))
+	if (!GetValidIds(input, map, true, false))
 		return;
 
 	// Remove all valid IDs
@@ -97,7 +97,7 @@ void StreamElementsOutputManager::EnableOutputsByIds(
 
 	std::map<std::string, bool> map;
 
-	if (!GetValidIds(input, map))
+	if (!GetValidIds(input, map, false, false))
 		return;
 
 	// Remove all valid IDs
@@ -117,7 +117,7 @@ void StreamElementsOutputManager::DisableOutputsByIds(
 
 	std::map<std::string, bool> map;
 
-	if (!GetValidIds(input, map))
+	if (!GetValidIds(input, map, false, true))
 		return;
 
 	// Remove all valid IDs
@@ -130,7 +130,7 @@ void StreamElementsOutputManager::DisableOutputsByIds(
 
 bool StreamElementsOutputManager::GetValidIds(
 	CefRefPtr<CefValue> input,
-	std::map<std::string, bool>& output)
+	std::map<std::string, bool>& output, bool testRemove, bool testDisable)
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
@@ -154,7 +154,10 @@ bool StreamElementsOutputManager::GetValidIds(
 		if (!m_map.count(id))
 			return false;
 
-		if (!m_map[id]->CanRemove())
+		if (testRemove && !m_map[id]->CanRemove())
+			return false;
+
+		if (testDisable && !m_map[id]->CanDisable())
 			return false;
 
 		output[id] = true;

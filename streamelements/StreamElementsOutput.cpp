@@ -138,8 +138,12 @@ void StreamElementsOutputBase::SetEnabled(bool enabled)
 
 	m_enabled = enabled;
 
-	if (CanStart()) {
-		Start();
+	if (m_enabled) {
+		if (CanStart()) {
+			Start();
+		}
+	} else {
+		Stop();
 	}
 }
 

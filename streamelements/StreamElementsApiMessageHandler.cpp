@@ -2356,6 +2356,35 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("removeStreamingOutputsByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->RemoveOutputsByIds(args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("enableStreamingOutputsByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->EnableOutputsByIds(args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("disableStreamingOutputsByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->DisableOutputsByIds(args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("crashProgram");
 	{
