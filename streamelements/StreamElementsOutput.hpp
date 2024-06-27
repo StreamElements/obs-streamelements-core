@@ -34,7 +34,8 @@ public:
 	virtual bool Start();
 	virtual void Stop();
 
-	virtual bool IsActive() { return false; }
+	virtual bool IsActive();
+
 	virtual bool CanDisable() { return false; }
 
 	virtual bool IsObsNative() = 0;
@@ -64,7 +65,6 @@ class StreamElementsCustomOutput
 {
 private:
 	std::recursive_mutex m_mutex;
-	bool m_active;
 
 	std::shared_ptr<StreamElementsCompositionBase::CompositionInfo>
 		m_compositionInfo = nullptr;
@@ -81,8 +81,7 @@ public:
 		obs_service_t *service, const char *bindToIP,
 		CefRefPtr<CefDictionaryValue> auxData)
 		: StreamElementsOutputBase(id, name, composition, auxData),
-		  m_service(service),
-		  m_active(false)
+		  m_service(service)
 	{
 		if (bindToIP) {
 			m_bindToIP = bindToIP;
@@ -99,7 +98,6 @@ public:
 		m_service = nullptr;
 	}
 
-	virtual bool IsActive() override;
 	virtual bool CanDisable() override;
 
 	virtual void
@@ -132,8 +130,6 @@ public:
 	virtual bool CanRemove() override { return false; }
 	virtual bool CanChange() override  { return false; }
 	virtual bool CanDisable() override { return false; }
-
-	virtual bool IsActive() override;
 
 	virtual bool IsObsNative() override { return true; }
 

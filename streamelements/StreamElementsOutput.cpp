@@ -105,10 +105,6 @@ StreamElementsOutputBase::~StreamElementsOutputBase()
 {
 	obs_frontend_remove_event_callback(
 		StreamElementsOutputBase::handle_obs_frontend_event, this);
-
-	if (IsActive()) {
-		Stop();
-	}
 }
 
 bool StreamElementsOutputBase::IsEnabled()
@@ -116,6 +112,18 @@ bool StreamElementsOutputBase::IsEnabled()
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
 	return m_enabled;
+}
+
+bool StreamElementsOutputBase::IsActive()
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	auto output = GetOutput();
+
+	if (!output)
+		return false;
+
+	return obs_output_active(output);
 }
 
 void StreamElementsOutputBase::SetEnabled(bool enabled)
@@ -178,16 +186,6 @@ bool StreamElementsCustomOutput::CanDisable()
 	return true;
 }
 
-bool StreamElementsCustomOutput::IsActive()
-{
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-
-	if (!m_output)
-		return false;
-
-	return obs_output_active(m_output);
-}
-
 bool StreamElementsCustomOutput::StartInternal(
 	std::shared_ptr<StreamElementsCompositionBase::CompositionInfo>
 		compositionInfo)
@@ -227,6 +225,8 @@ bool StreamElementsCustomOutput::StartInternal(
 		obs_output_set_service(m_output, m_service);
 
 		if (obs_output_start(m_output)) {
+			m_compositionInfo = compositionInfo;
+
 			return true;
 		}
 
@@ -290,24 +290,28 @@ std::shared_ptr <StreamElementsCustomOutput> StreamElementsCustomOutput::Create(
 
 	auto rootDict = input->GetDictionary();
 
+	if (!rootDict->HasKey("id") || !rootDict->HasKey("name"))
+		return nullptr;
+
 	if (rootDict->GetType("id") != VTYPE_STRING ||
 	    rootDict->GetType("name") != VTYPE_STRING)
 		return nullptr;
 
-	if (rootDict->GetType("streamingSettings") != VTYPE_DICTIONARY)
+	if (!rootDict->HasKey("streamingSettings") || rootDict->GetType("streamingSettings") != VTYPE_DICTIONARY)
 		return nullptr;
 
-	auto auxData = rootDict->GetType("auxiliaryData") == VTYPE_DICTIONARY
+	auto auxData = (rootDict->HasKey("auxiliaryData") && rootDict->GetType("auxiliaryData") == VTYPE_DICTIONARY)
 			       ? rootDict->GetDictionary("auxiliaryData")
 			       : CefDictionaryValue::Create();
 
 	std::string id = rootDict->GetString("id");
 	std::string name = rootDict->GetString("name");
 	std::string compositionId =
-		(rootDict->GetType("compositionId") == VTYPE_STRING
+		(rootDict->HasKey("compositionId") && rootDict->GetType("compositionId") ==
+					       VTYPE_STRING
 			? rootDict->GetString("compositionId")
 			: "");
-	bool isEnabled = rootDict->GetType("isEnabled") == VTYPE_BOOL
+	bool isEnabled = rootDict->HasKey("isEnabled") && rootDict->GetType("isEnabled") == VTYPE_BOOL
 				 ? rootDict->GetBool("isEnabled")
 				 : true;
 
@@ -384,11 +388,6 @@ bool StreamElementsObsNativeOutput::StartInternal(
 void StreamElementsObsNativeOutput::StopInternal()
 {
 	// NOP
-}
-
-bool StreamElementsObsNativeOutput::IsActive()
-{
-	return obs_frontend_streaming_active();
 }
 
 void StreamElementsObsNativeOutput::SerializeStreamingSettings(

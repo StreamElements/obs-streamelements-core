@@ -2335,15 +2335,27 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		result->SetDictionary(d);
 
 	}
+
 	API_HANDLER_END();
 
-		API_HANDLER_BEGIN("getAllStreamingOutputs");
+	API_HANDLER_BEGIN("getAllStreamingOutputs");
 	{
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetOutputManager()
 			->SerializeAllOutputs(result);
 	}
 	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addStreamingOutput");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->DeserializeOutput(args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
 
 	API_HANDLER_BEGIN("crashProgram");
 	{
