@@ -16,12 +16,12 @@ class StreamElementsCompositionBase {
 public:
 	class CompositionInfo {
 	private:
-		StreamElementsCompositionBase *m_owner;
+		std::shared_ptr<StreamElementsCompositionBase> m_owner;
 		StreamElementsCompositionEventListener *m_listener;
 
 	public:
 		CompositionInfo(
-			StreamElementsCompositionBase *owner,
+			std::shared_ptr<StreamElementsCompositionBase> owner,
 			StreamElementsCompositionEventListener* listener)
 			: m_owner(owner), m_listener(listener)
 		{
@@ -30,6 +30,12 @@ public:
 
 		virtual ~CompositionInfo() {
 			m_owner->RemoveRef();
+		}
+
+	public:
+		std::shared_ptr<StreamElementsCompositionBase> GetComposition()
+		{
+			return m_owner;
 		}
 
 	public:
@@ -94,8 +100,7 @@ public:
 
 // OBS Main Composition
 class StreamElementsObsNativeComposition : public StreamElementsCompositionBase,
-	  public std::enable_shared_from_this<
-		  StreamElementsObsNativeComposition> {
+	  public std::enable_shared_from_this<StreamElementsCompositionBase> {
 private:
 	struct Private {
 		explicit Private() = default;

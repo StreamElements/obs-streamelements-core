@@ -12,7 +12,7 @@ private:
 
 public:
 	StreamElementsDefaultCompositionInfo(
-		StreamElementsCompositionBase *owner,
+		std::shared_ptr<StreamElementsCompositionBase> owner,
 		StreamElementsCompositionEventListener* listener)
 		: StreamElementsCompositionBase::CompositionInfo(
 			  owner, listener),
@@ -54,7 +54,8 @@ std::shared_ptr<
 StreamElementsObsNativeComposition::GetCompositionInfo(
 	StreamElementsCompositionEventListener* listener)
 {
-	return std::make_shared<StreamElementsDefaultCompositionInfo>(this, listener);
+	return std::make_shared<StreamElementsDefaultCompositionInfo>(
+		shared_from_this(), listener);
 }
 
 void StreamElementsObsNativeComposition::SerializeComposition(

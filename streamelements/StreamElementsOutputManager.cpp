@@ -31,7 +31,7 @@ void StreamElementsOutputManager::DeserializeOutput(CefRefPtr<CefValue> input,
 	auto d = input->GetDictionary();
 
 	std::string id = ""; 
-	if (d->GetType("id") == VTYPE_STRING) {
+	if (d->HasKey("id") && d->GetType("id") == VTYPE_STRING) {
 		id = d->GetString("id");
 	}
 
