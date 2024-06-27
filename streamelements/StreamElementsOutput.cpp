@@ -34,6 +34,11 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 	d->SetString("compositionId", m_composition->GetId());
 	d->SetBool("isEnabled", IsEnabled());
 	d->SetBool("isActive", IsActive());
+	d->SetBool("canDisable", CanDisable());
+	d->SetBool("canRemove", !IsObsNative());
+	d->SetBool("canPause", CanPause());
+	d->SetBool("isObsNative", IsObsNative());
+	d->SetBool("isReconnecting", IsReconnecting());
 	d->SetDictionary("auxiliaryData", m_auxData);
 
 	auto streamingSettings = CefValue::Create();

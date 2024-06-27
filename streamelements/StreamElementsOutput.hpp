@@ -1,5 +1,6 @@
 #pragma once
 
+#include <obs-frontend-api.h>
 #include "StreamElementsComposition.hpp"
 
 class StreamElementsOutputBase : public StreamElementsCompositionEventListener {
@@ -35,6 +36,10 @@ public:
 
 	virtual bool IsActive() { return false; }
 	virtual bool CanDisable() { return false; }
+
+	virtual bool IsReconnecting() { return false; }
+	virtual bool CanPause() { return false; }
+	virtual bool IsObsNative() = 0;
 
 	void SerializeOutput(CefRefPtr<CefValue> &output);
 
@@ -103,6 +108,16 @@ public:
 	static std::shared_ptr<StreamElementsCustomOutput>
 	Create(CefRefPtr<CefValue> input);
 
+	virtual bool IsReconnecting() override
+	{
+		return obs_output_reconnecting(m_output);
+	}
+
+	virtual bool CanPause() override { return obs_output_can_pause(m_output); }
+
+	virtual bool IsObsNative() override { return false; }
+
+
 protected:
 	virtual bool
 		StartInternal(std::shared_ptr<StreamElementsCompositionBase::CompositionInfo> compositionInfo);
@@ -125,6 +140,19 @@ public:
 	virtual bool CanDisable() override { return false; }
 
 	virtual bool IsActive() override;
+
+	virtual bool IsReconnecting() override
+	{
+		return obs_output_reconnecting(obs_frontend_get_streaming_output());
+	}
+
+	virtual bool CanPause() override
+	{
+		return obs_output_can_pause(
+			obs_frontend_get_streaming_output());
+	}
+
+	virtual bool IsObsNative() override { return true; }
 
 protected:
 	virtual bool StartInternal(
