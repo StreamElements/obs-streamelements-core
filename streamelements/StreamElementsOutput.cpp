@@ -44,13 +44,13 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 		d->SetBool("canPause", obs_output_can_pause(obs_output));
 		d->SetBool("isReconnecting",
 			   obs_output_reconnecting(obs_output));
-		d->SetBool("width", obs_output_get_width(obs_output));
-		d->SetBool("height", obs_output_get_height(obs_output));
+		d->SetInt("width", obs_output_get_width(obs_output));
+		d->SetInt("height", obs_output_get_height(obs_output));
 
-		d->SetBool("framesDropped",
+		d->SetInt("framesDropped",
 			   obs_output_get_frames_dropped(obs_output));
 
-		d->SetBool("congestion", obs_output_get_congestion(obs_output));
+		d->SetDouble("congestion", obs_output_get_congestion(obs_output));
 
 		auto last_error = obs_output_get_last_error(obs_output);
 
@@ -370,7 +370,7 @@ bool StreamElementsObsNativeOutput::StartInternal(
 	if (IsActive())
 		return false;
 
-	obs_frontend_streaming_start();
+	// obs_frontend_streaming_start();
 
 	return true;
 }
@@ -380,7 +380,7 @@ void StreamElementsObsNativeOutput::StopInternal()
 	if (!IsActive())
 		return;
 
-	obs_frontend_streaming_stop();
+	// obs_frontend_streaming_stop();
 }
 
 bool StreamElementsObsNativeOutput::IsActive()
