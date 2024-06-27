@@ -377,16 +377,17 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 				new StreamElementsPreviewManager(
 					mainWindow());
 
-			m_compositionManager = std::make_shared<
-				StreamElementsCompositionManager>();
-			m_outputManager = std::make_shared<StreamElementsOutputManager>(
-					m_compositionManager);
-
 			m_websocketApiServer =
 				new StreamElementsWebsocketApiServer();
 			m_windowStateEventFilter =
 				new WindowStateChangeEventFilter(
 					mainWindow());
+
+			m_compositionManager = std::make_shared<
+				StreamElementsCompositionManager>();
+			m_outputManager =
+				std::make_shared<StreamElementsOutputManager>(
+					m_compositionManager);
 
 						m_appStateListener = new ApplicationStateListener();
 			m_themeChangeListener = new ThemeChangeListener();

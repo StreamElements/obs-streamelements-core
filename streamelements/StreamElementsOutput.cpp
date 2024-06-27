@@ -1,7 +1,171 @@
 #include <obs-frontend-api.h>
 
+#include "StreamElementsUtils.hpp"
 #include "StreamElementsOutput.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
+
+static void dispatch_list_change_event()
+{
+	DispatchClientJSEvent("hostStreamingOutputListChanged", "null");
+}
+
+static void dispatch_event(
+	StreamElementsOutputBase *output, std::string eventName,
+	CefRefPtr<CefDictionaryValue> args = CefDictionaryValue::Create())
+{
+	args->SetString("outputId", output->GetId());
+
+	auto value = CefValue::Create();
+	value->SetDictionary(args);
+
+	std::string json = CefWriteJSON(value, JSON_WRITER_DEFAULT).ToString();
+
+	DispatchClientJSEvent(eventName, json);
+}
+
+void StreamElementsOutputBase::handle_output_start(void *my_data,
+							  calldata_t *cd)
+{
+	auto self = (StreamElementsOutputBase *)my_data;
+
+	dispatch_event(self, "hostStreamingOutputStarted");
+	dispatch_list_change_event();
+}
+
+void StreamElementsOutputBase::handle_output_stop(void *my_data,
+							 calldata_t *cd)
+{
+	auto self = (StreamElementsOutputBase *)my_data;
+
+	int code = calldata_int(cd, "code");
+
+	if (code != OBS_OUTPUT_SUCCESS) {
+		auto args = CefDictionaryValue::Create();
+
+		switch (code) {
+		case OBS_OUTPUT_SUCCESS:
+			args->SetString("reason", "Successfully stopped");
+			break;
+		case OBS_OUTPUT_BAD_PATH:
+			args->SetString("reason",
+					"The specified path was invalid");
+			break;
+		case OBS_OUTPUT_CONNECT_FAILED:
+			args->SetString("reason",
+					"Failed to connect to a server");
+			break;
+		case OBS_OUTPUT_INVALID_STREAM:
+			args->SetString("reason", "Invalid stream path");
+			break;
+		case OBS_OUTPUT_ERROR:
+			args->SetString("reason", "Generic error");
+			break;
+		case OBS_OUTPUT_DISCONNECTED:
+			args->SetString("reason", "Unexpectedly disconnected");
+			break;
+		case OBS_OUTPUT_UNSUPPORTED:
+			args->SetString(
+				"reason",
+				"The settings, video/audio format, or codecs are unsupported by this output");
+			break;
+		case OBS_OUTPUT_NO_SPACE:
+			args->SetString("reason", "Ran out of disk space");
+			break;
+		case OBS_OUTPUT_ENCODE_ERROR:
+			args->SetString("reason", "Encoder error");
+			break;
+
+		default:
+			char buffer[32];
+			std::string reason = "Unknown reason code ";
+			reason += itoa(code, buffer, 10);
+
+			args->SetString("reason", reason);
+			break;
+		}
+
+		self->SetError(args->GetString("reason"));
+
+		dispatch_event(self, "hostStreamingOutputError", args);
+	}
+
+	dispatch_event(self, "hostStreamingOutputStopped");
+
+	dispatch_list_change_event();
+}
+
+void StreamElementsOutputBase::handle_output_pause(void *my_data,
+							  calldata_t *cd)
+{
+	auto self = (StreamElementsOutputBase *)my_data;
+
+	dispatch_event(self, "hostStreamingOutputPaused");
+	dispatch_list_change_event();
+}
+
+void StreamElementsOutputBase::handle_output_unpause(void *my_data,
+							    calldata_t *cd)
+{
+	auto self = (StreamElementsOutputBase *)my_data;
+
+	dispatch_event(self, "hostStreamingOutputUnpaused");
+	dispatch_list_change_event();
+}
+
+void StreamElementsOutputBase::handle_output_starting(void *my_data,
+							     calldata_t *cd)
+{
+	auto self = (StreamElementsOutputBase *)my_data;
+
+	dispatch_event(self, "hostStreamingOutputStarting");
+	dispatch_list_change_event();
+}
+
+void StreamElementsOutputBase::handle_output_stopping(void *my_data,
+							     calldata_t *cd)
+{
+	auto self = (StreamElementsOutputBase *)my_data;
+
+	dispatch_event(self, "hostStreamingOutputStopping");
+	dispatch_list_change_event();
+}
+
+void StreamElementsOutputBase::handle_output_activate(void *my_data,
+							     calldata_t *cd)
+{
+	auto self = (StreamElementsOutputBase *)my_data;
+
+	dispatch_event(self, "hostStreamingOutputActivated");
+	dispatch_list_change_event();
+}
+
+void StreamElementsOutputBase::handle_output_deactivate(void *my_data,
+							       calldata_t *cd)
+{
+	auto self = (StreamElementsOutputBase *)my_data;
+
+	dispatch_event(self, "hostStreamingOutputDeactivated");
+	dispatch_list_change_event();
+}
+
+void StreamElementsOutputBase::handle_output_reconnect(void *my_data,
+							      calldata_t *cd)
+{
+	auto self = (StreamElementsOutputBase *)my_data;
+
+	dispatch_event(self, "hostStreamingOutputReconnecting");
+	dispatch_list_change_event();
+}
+
+void
+StreamElementsOutputBase::handle_output_reconnect_success(void *my_data,
+							  calldata_t *cd)
+{
+	auto self = (StreamElementsOutputBase *)my_data;
+
+	dispatch_event(self, "hostStreamingOutputReconnected");
+	dispatch_list_change_event();
+}
 
 void StreamElementsOutputBase::handle_obs_frontend_event(
 	enum obs_frontend_event event,
@@ -11,10 +175,8 @@ void StreamElementsOutputBase::handle_obs_frontend_event(
 
 	switch (event) {
 	case OBS_FRONTEND_EVENT_STREAMING_STARTING:
-	case OBS_FRONTEND_EVENT_STREAMING_STARTED:
 		self->Start();
 		break;
-	case OBS_FRONTEND_EVENT_STREAMING_STOPPING:
 	case OBS_FRONTEND_EVENT_STREAMING_STOPPED:
 	case OBS_FRONTEND_EVENT_EXIT:
 		self->Stop();
@@ -38,6 +200,16 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 	d->SetBool("canDisable", CanDisable());
 	d->SetBool("canRemove", !IsObsNative());
 	d->SetBool("isObsNative", IsObsNative());
+
+	if (m_error.size()) {
+		auto error = CefDictionaryValue::Create();
+
+		error->SetString("message", m_error);
+
+		d->SetDictionary("error", error);
+	} else {
+		d->SetNull("error");
+	}
 
 	auto obs_output = GetOutput();
 
@@ -96,7 +268,9 @@ StreamElementsOutputBase::StreamElementsOutputBase(
 
 	m_compositionInfo = composition->GetCompositionInfo(this);
 
-	m_enabled = !CanDisable();
+	m_enabled = IsObsNative();
+
+	dispatch_list_change_event();
 
 	obs_frontend_add_event_callback(
 		StreamElementsOutputBase::handle_obs_frontend_event, this);
@@ -106,6 +280,8 @@ StreamElementsOutputBase::~StreamElementsOutputBase()
 {
 	obs_frontend_remove_event_callback(
 		StreamElementsOutputBase::handle_obs_frontend_event, this);
+
+	dispatch_list_change_event();
 }
 
 bool StreamElementsOutputBase::IsEnabled()
@@ -160,8 +336,8 @@ bool StreamElementsOutputBase::CanStart()
 	if (!IsEnabled())
 		return false;
 
-	if (!obs_frontend_streaming_active())
-		return false;
+	//if (!obs_frontend_streaming_active())
+	//	return false;
 
 	if (IsActive())
 		return false;
@@ -171,15 +347,82 @@ bool StreamElementsOutputBase::CanStart()
 
 bool StreamElementsOutputBase::Start()
 {
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	SetError("");
+
 	if (!CanStart())
 		return false;
 
 	return StartInternal(m_compositionInfo);
 }
 
+void StreamElementsOutputBase::ConnectOutputEvents()
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	if (m_outputEventsConnected)
+		return;
+
+	auto handler = obs_output_get_signal_handler(GetOutput());
+
+	signal_handler_connect(handler, "start", handle_output_start, this);
+	signal_handler_connect(handler, "stop", handle_output_stop, this);
+	signal_handler_connect(handler, "pause", handle_output_pause, this);
+	signal_handler_connect(handler, "unpause", handle_output_unpause, this);
+	signal_handler_connect(handler, "starting", handle_output_starting,
+			       this);
+	signal_handler_connect(handler, "stopping", handle_output_stopping,
+			       this);
+	signal_handler_connect(handler, "activate", handle_output_activate,
+			       this);
+	signal_handler_connect(handler, "deactivate", handle_output_deactivate,
+			       this);
+	signal_handler_connect(handler, "reconnect", handle_output_reconnect,
+			       this);
+	signal_handler_connect(handler, "reconnect_success",
+			       handle_output_reconnect_success, this);
+
+	m_outputEventsConnected = true;
+}
+
+void StreamElementsOutputBase::DisconnectOutputEvents()
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	if (!m_outputEventsConnected)
+		return;
+
+	auto handler = obs_output_get_signal_handler(GetOutput());
+
+	signal_handler_disconnect(handler, "start", handle_output_start, this);
+	signal_handler_disconnect(handler, "stop", handle_output_stop, this);
+	signal_handler_disconnect(handler, "pause", handle_output_pause, this);
+	signal_handler_disconnect(handler, "unpause", handle_output_unpause,
+				  this);
+	signal_handler_disconnect(handler, "starting", handle_output_starting,
+				  this);
+	signal_handler_disconnect(handler, "stopping", handle_output_stopping,
+				  this);
+	signal_handler_disconnect(handler, "activate", handle_output_activate,
+				  this);
+	signal_handler_disconnect(handler, "deactivate",
+				  handle_output_deactivate, this);
+	signal_handler_disconnect(handler, "reconnect", handle_output_reconnect,
+				  this);
+	signal_handler_disconnect(handler, "reconnect_success",
+				  handle_output_reconnect_success, this);
+
+	m_outputEventsConnected = false;
+}
+
 void StreamElementsOutputBase::Stop()
 {
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
 	StopInternal();
+
+	SetError("");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -229,11 +472,15 @@ bool StreamElementsCustomOutput::StartInternal(
 
 		obs_output_set_service(m_output, m_service);
 
+		ConnectOutputEvents();
+
 		if (obs_output_start(m_output)) {
 			m_compositionInfo = compositionInfo;
 
 			return true;
 		}
+
+		DisconnectOutputEvents();
 
 		obs_output_release(m_output);
 		m_output = nullptr;
@@ -252,6 +499,8 @@ void StreamElementsCustomOutput::StopInternal()
 	// obs_output_stop(m_output);
 
 	obs_output_force_stop(m_output);
+
+	DisconnectOutputEvents();
 
 	obs_output_release(m_output);
 	m_output = nullptr;
@@ -387,12 +636,17 @@ bool StreamElementsObsNativeOutput::StartInternal(
 	compositionInfo)
 {
 	// NOP: This is managed by the OBS front-end
+
+	ConnectOutputEvents();
+
 	return true;
 }
 
 void StreamElementsObsNativeOutput::StopInternal()
 {
-	// NOP
+	// NOP: This is managed by the OBS front-end
+
+	DisconnectOutputEvents();
 }
 
 void StreamElementsObsNativeOutput::SerializeStreamingSettings(
