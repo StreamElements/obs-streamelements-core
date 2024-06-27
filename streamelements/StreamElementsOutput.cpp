@@ -40,28 +40,38 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 
 	auto obs_output = GetOutput();
 
-	if (output) {
-		d->SetBool("canPause", obs_output_can_pause(obs_output));
-		d->SetBool("isReconnecting",
-			   obs_output_reconnecting(obs_output));
-		d->SetInt("width", obs_output_get_width(obs_output));
-		d->SetInt("height", obs_output_get_height(obs_output));
+	if (output && IsActive()) {
+		auto stats = CefDictionaryValue::Create();
 
-		d->SetInt("framesDropped",
+		stats->SetBool("canPause", obs_output_can_pause(obs_output));
+		stats->SetBool("isReconnecting",
+			   obs_output_reconnecting(obs_output));
+		stats->SetInt("width", obs_output_get_width(obs_output));
+		stats->SetInt("height", obs_output_get_height(obs_output));
+
+		stats->SetInt("framesDropped",
 			   obs_output_get_frames_dropped(obs_output));
 
-		d->SetDouble("congestion", obs_output_get_congestion(obs_output));
+		stats->SetDouble("congestion",
+				 obs_output_get_congestion(obs_output));
 
 		auto last_error = obs_output_get_last_error(obs_output);
 
 		if (last_error)
-			d->SetString("lastErrorMessage", last_error);
+			stats->SetString("lastErrorMessage", last_error);
 		else
-			d->SetNull("lastErrorMessage");
+			stats->SetNull("lastErrorMessage");
 
-		d->SetInt("totalBytes", obs_output_get_total_bytes(obs_output));
-		d->SetInt("totalFrames",
+		stats->SetInt("totalBytes",
+			      obs_output_get_total_bytes(obs_output));
+		stats->SetInt("totalFrames",
 			  obs_output_get_total_frames(obs_output));
+
+		stats->SetBool("isPaused", obs_output_paused(obs_output));
+
+		d->SetDictionary("stats", stats);
+	} else {
+		d->SetNull("stats");
 	}
 
 	d->SetDictionary("auxiliaryData", m_auxData);
@@ -367,20 +377,13 @@ bool StreamElementsObsNativeOutput::StartInternal(
 	std::shared_ptr<StreamElementsCompositionBase::CompositionInfo>
 	compositionInfo)
 {
-	if (IsActive())
-		return false;
-
-	// obs_frontend_streaming_start();
-
+	// NOP: This is managed by the OBS front-end
 	return true;
 }
 
 void StreamElementsObsNativeOutput::StopInternal()
 {
-	if (!IsActive())
-		return;
-
-	// obs_frontend_streaming_stop();
+	// NOP
 }
 
 bool StreamElementsObsNativeOutput::IsActive()
