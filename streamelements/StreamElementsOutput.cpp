@@ -16,6 +16,7 @@ void StreamElementsOutputBase::handle_obs_frontend_event(
 		break;
 	case OBS_FRONTEND_EVENT_STREAMING_STOPPING:
 	case OBS_FRONTEND_EVENT_STREAMING_STOPPED:
+	case OBS_FRONTEND_EVENT_EXIT:
 		self->Stop();
 		break;
 	default:
