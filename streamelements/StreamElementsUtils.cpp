@@ -2954,3 +2954,28 @@ void DispatchClientJSEvent(std::string target, std::string event, std::string ev
 		->GetWebsocketApiServer()
 		->DispatchJSEvent("system", target, event, eventArgsJson);
 }
+
+bool SecureJoinPaths(std::string base, std::string subpath, std::string &result)
+{
+	char *absPath = os_get_abs_path_ptr(base.c_str());
+	std::string root = absPath;
+	bfree(absPath);
+
+	root += "/";
+
+	absPath = os_get_abs_path_ptr((root + subpath).c_str());
+	std::string joined = absPath;
+	bfree(absPath);
+
+	if (joined.size() < root.size()) {
+		return false;
+	}
+
+	if (strncmp(root.c_str(), joined.c_str(), root.size()) != 0) {
+		return false;
+	}
+
+	result = joined;
+
+	return true;
+}
