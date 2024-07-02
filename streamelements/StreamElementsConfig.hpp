@@ -35,6 +35,31 @@ public:
 	void SaveConfig();
 
 public:
+	bool GetScopedTextFileFolderPath(std::string scope,
+					 std::string container,
+					 std::string &result);
+
+	bool ReadScopedTextFile(std::string scope, std::string container,
+				std::string filename, std::string &result);
+	bool WriteScopedTextFile(std::string scope, std::string container,
+				 std::string filename, std::string content);
+	bool RemoveScopedTextFile(std::string scope, std::string container,
+				  std::string filename);
+
+	bool ReadScopedTextFilesList(std::string scope, std::string container,
+				     std::vector<std::string> &result);
+
+public:
+	void ReadScopedTextFile(CefRefPtr<CefValue> input,
+					 CefRefPtr<CefValue> &output);
+	void WriteScopedTextFile(CefRefPtr<CefValue> input,
+					    CefRefPtr<CefValue> &output);
+	void ReadScopedTextFilesList(CefRefPtr<CefValue> input,
+					  CefRefPtr<CefValue> &output);
+	void RemoveScopedTextFile(CefRefPtr<CefValue> input,
+					     CefRefPtr<CefValue> &output);
+
+public:
 	int64_t GetStreamElementsPluginVersion()
 	{
 		return config_get_uint(

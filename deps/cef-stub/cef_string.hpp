@@ -84,7 +84,7 @@ public:
         return *this;
     }
     CefString& operator=(const char* str) {
-        m_string = str;
+	m_string = str ? str : "";
         return *this;
     }
     operator std::wstring() const { return ToWString(); }
@@ -93,7 +93,7 @@ public:
         return *this;
     }
     CefString& operator=(const wchar_t* str) {
-        InitFromWString(std::wstring(str));
+	InitFromWString(std::wstring(str ? str : L""));
         return *this;
     }
 

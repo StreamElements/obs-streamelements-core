@@ -399,3 +399,8 @@ void DispatchClientJSEvent(std::string target, std::string event,
 			   std::string eventArgsJson);
 
 void DispatchClientJSEvent(std::string event, std::string eventArgsJson);
+
+/* ========================================================= */
+
+bool SecureJoinPaths(std::string base, std::string subpath,
+			    std::string &result);

@@ -91,3 +91,308 @@ std::string StreamElementsConfig::GetHeapAnalyticsAppId()
 
 	return result;
 }
+
+static bool isSecureFilename(std::string filename) {
+	if (filename == ".")
+		return false;
+
+	if (filename == "..")
+		return false;
+
+	if (strstr(filename.c_str(), "/"))
+		return false;
+
+	if (strstr(filename.c_str(), "\\"))
+		return false;
+
+	return true;
+}
+
+bool StreamElementsConfig::GetScopedTextFileFolderPath(
+	std::string scope,
+	std::string container,
+	std::string &result)
+{
+	if (!isSecureFilename(scope))
+		return false;
+
+	if (!isSecureFilename(container))
+		return false;
+
+	char *configDir = obs_module_config_path("");
+	configDir[strlen(configDir) - 1] = 0; // remove last char
+	std::string root = configDir;
+	bfree(configDir);
+
+	root += "/scoped_config/";
+	root += scope;
+	root += "/";
+	root += container;
+
+	char *abs = os_get_abs_path_ptr(root.c_str());
+	result = abs;
+	bfree(abs);
+
+	return true;
+}
+
+bool StreamElementsConfig::ReadScopedTextFile(std::string scope,
+					      std::string container,
+					      std::string filename,
+					      std::string &result)
+{
+	if (!isSecureFilename(filename))
+		return false;
+
+	std::string root;
+	if (!GetScopedTextFileFolderPath(scope, container, root))
+		return false;
+
+	if (os_mkdirs(root.c_str()) != 0)
+		return false;
+
+	std::string path = root + "/" + filename;
+
+	if (!os_file_exists(path.c_str()))
+		return false;
+
+	char *data = os_quick_read_utf8_file(path.c_str());
+
+	if (!data)
+		return false;
+
+	result = data;
+
+	bfree(data);
+
+	return true;
+}
+
+bool StreamElementsConfig::WriteScopedTextFile(std::string scope,
+					       std::string container,
+					       std::string filename,
+					       std::string content)
+{
+	if (!isSecureFilename(filename))
+		return false;
+
+	std::string root;
+	if (!GetScopedTextFileFolderPath(scope, container, root))
+		return false;
+
+	if (os_mkdirs(root.c_str()) != 0)
+		return false;
+
+	std::string path = root + "/" + filename;
+
+	os_quick_write_utf8_file(path.c_str(), content.c_str(), content.size(),
+				 true);
+
+	return true;
+}
+
+bool StreamElementsConfig::RemoveScopedTextFile(std::string scope,
+						std::string container,
+						std::string filename)
+{
+	if (!isSecureFilename(filename))
+		return false;
+
+	std::string root;
+	if (!GetScopedTextFileFolderPath(scope, container, root))
+		return false;
+
+	if (os_mkdirs(root.c_str()) != 0)
+		return false;
+
+	std::string path = root + "/" + filename;
+
+	if (!os_file_exists(path.c_str()))
+		return false;
+
+	return (os_unlink(path.c_str()) == 0);
+}
+
+bool StreamElementsConfig::ReadScopedTextFilesList(
+	std::string scope, std::string container,
+	std::vector<std::string> &result)
+{
+	std::string root;
+	if (!GetScopedTextFileFolderPath(scope, container, root))
+		return false;
+
+	if (os_mkdirs(root.c_str()) != 0)
+		return false;
+
+	std::string path = root + "/*";
+
+	os_glob_t *glob;
+	if (os_glob(path.c_str(), 0, &glob) != 0)
+		return false;
+
+	for (size_t i = 0; i < glob->gl_pathc; i++) {
+		struct os_globent ent = glob->gl_pathv[i];
+
+		if (ent.directory)
+			continue;
+
+		QFile file(ent.path);
+
+		result.push_back(file.fileName().toStdString());
+	}
+
+	os_globfree(glob);
+
+	return true;
+}
+
+void StreamElementsConfig::ReadScopedTextFile(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	output->SetNull();
+
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto d = input->GetDictionary();
+
+	if (!d->HasKey("scope") || !d->HasKey("container") ||
+	    !d->HasKey("item"))
+		return;
+
+	if (d->GetType("scope") != VTYPE_STRING ||
+	    d->GetType("container") != VTYPE_STRING ||
+	    d->GetType("item") != VTYPE_STRING)
+		return;
+
+	std::string scope = d->GetString("scope");
+	std::string container = d->GetString("container");
+	std::string file = d->GetString("item");
+
+	std::string result;
+	if (!ReadScopedTextFile(scope, container, file, result))
+		return;
+
+	auto r = CefDictionaryValue::Create();
+
+	r->SetString("scope", scope);
+	r->SetString("container", container);
+	r->SetString("item", file);
+	r->SetString("content", result);
+
+	output->SetDictionary(r);
+}
+
+void StreamElementsConfig::WriteScopedTextFile(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	output->SetNull();
+
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto d = input->GetDictionary();
+
+	if (!d->HasKey("scope") || !d->HasKey("container") ||
+	    !d->HasKey("item") || !d->HasKey("content"))
+		return;
+
+	if (d->GetType("scope") != VTYPE_STRING ||
+	    d->GetType("container") != VTYPE_STRING ||
+	    d->GetType("item") != VTYPE_STRING ||
+	    d->GetType("content") != VTYPE_STRING)
+		return;
+
+	std::string scope = d->GetString("scope");
+	std::string container = d->GetString("container");
+	std::string file = d->GetString("item");
+	std::string content = d->GetString("content");
+
+	if (!WriteScopedTextFile(scope, container, file, content))
+		return;
+
+	auto r = CefDictionaryValue::Create();
+
+	r->SetString("scope", scope);
+	r->SetString("container", container);
+	r->SetString("item", file);
+	r->SetString("content", content);
+
+	output->SetDictionary(r);
+}
+
+void StreamElementsConfig::ReadScopedTextFilesList(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto d = input->GetDictionary();
+
+	if (!d->HasKey("scope") || !d->HasKey("container"))
+		return;
+
+	if (d->GetType("scope") != VTYPE_STRING ||
+	    d->GetType("container") != VTYPE_STRING)
+		return;
+
+	std::string scope = d->GetString("scope");
+	std::string container = d->GetString("container");
+
+	std::vector<std::string> result;
+	if (!ReadScopedTextFilesList(scope, container, result))
+		return;
+
+	auto r = CefListValue::Create();
+
+	for (auto file : result) {
+		auto f = CefDictionaryValue::Create();
+
+		f->SetString("item", file);
+		f->SetString("scope", scope);
+		f->SetString("container", container);
+
+		r->SetDictionary(r->GetSize(), f);
+	}
+
+	output->SetList(r);
+}
+
+void StreamElementsConfig::RemoveScopedTextFile(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	output->SetNull();
+
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto d = input->GetDictionary();
+
+	if (!d->HasKey("scope") || !d->HasKey("container") ||
+	    !d->HasKey("item"))
+		return;
+
+	if (d->GetType("scope") != VTYPE_STRING ||
+	    d->GetType("container") != VTYPE_STRING ||
+	    d->GetType("item") != VTYPE_STRING)
+		return;
+
+	std::string scope = d->GetString("scope");
+	std::string container = d->GetString("container");
+	std::string file = d->GetString("item");
+
+	if (!RemoveScopedTextFile(scope, container, file))
+		return;
+
+	auto r = CefDictionaryValue::Create();
+
+	r->SetString("scope", scope);
+	r->SetString("container", container);
+	r->SetString("item", file);
+
+	output->SetDictionary(r);
+}
