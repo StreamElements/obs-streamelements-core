@@ -352,6 +352,8 @@ void StreamElementsConfig::ReadScopedTextFilesList(
 		auto f = CefDictionaryValue::Create();
 
 		f->SetString("item", file);
+		f->SetString("scope", scope);
+		f->SetString("container", container);
 
 		r->SetDictionary(r->GetSize(), f);
 	}

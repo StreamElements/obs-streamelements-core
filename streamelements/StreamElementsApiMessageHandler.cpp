@@ -2386,7 +2386,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("readScopedStorageTextFile");
+	API_HANDLER_BEGIN("readScopedStorageTextItem");
 	{
 		if (args->GetSize()) {
 			StreamElementsConfig::GetInstance()->ReadScopedTextFile(
@@ -2395,7 +2395,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("writeScopedStorageTextFile");
+	API_HANDLER_BEGIN("writeScopedStorageTextItem");
 	{
 		if (args->GetSize()) {
 			StreamElementsConfig::GetInstance()->WriteScopedTextFile(
@@ -2404,7 +2404,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("removeScopedStorageTextFile");
+	API_HANDLER_BEGIN("removeScopedStorageTextItem");
 	{
 		if (args->GetSize()) {
 			StreamElementsConfig::GetInstance()->RemoveScopedTextFile(
@@ -2413,7 +2413,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("queryScopedStorageTextFilesList");
+	API_HANDLER_BEGIN("queryScopedStorageTextItemsList");
 	{
 		if (args->GetSize()) {
 			StreamElementsConfig::GetInstance()
