@@ -2386,16 +2386,42 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
-	/*
-	API_HANDLER_BEGIN("disableStreamingOutputsByIds");
+	API_HANDLER_BEGIN("readScopedStorageTextFile");
 	{
 		if (args->GetSize()) {
-			StreamElementsConfig::GetInstance()->
+			StreamElementsConfig::GetInstance()->ReadScopedTextFile(
+				args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
-	*/
 
+	API_HANDLER_BEGIN("writeScopedStorageTextFile");
+	{
+		if (args->GetSize()) {
+			StreamElementsConfig::GetInstance()->WriteScopedTextFile(
+				args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeScopedStorageTextFile");
+	{
+		if (args->GetSize()) {
+			StreamElementsConfig::GetInstance()->RemoveScopedTextFile(
+				args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("queryScopedStorageTextFilesList");
+	{
+		if (args->GetSize()) {
+			StreamElementsConfig::GetInstance()
+				->ReadScopedTextFilesList(args->GetValue(0),
+							  result);
+		}
+	}
+	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("crashProgram");
 	{
