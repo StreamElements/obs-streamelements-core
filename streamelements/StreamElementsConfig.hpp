@@ -50,6 +50,16 @@ public:
 				     std::vector<std::string> &result);
 
 public:
+	void SerializeReadScopedTextFile(CefRefPtr<CefValue> input,
+					 CefRefPtr<CefValue> &output);
+	void DeserializeWriteScopedTextFile(CefRefPtr<CefValue> input,
+					    CefRefPtr<CefValue> &output);
+	void SerializeScopedTextFilesList(CefRefPtr<CefValue> input,
+					  CefRefPtr<CefValue> &output);
+	void DeserializeRemoveScopedTextFile(CefRefPtr<CefValue> input,
+					     CefRefPtr<CefValue> &output);
+
+public:
 	int64_t GetStreamElementsPluginVersion()
 	{
 		return config_get_uint(

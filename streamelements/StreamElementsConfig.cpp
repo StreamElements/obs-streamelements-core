@@ -242,4 +242,155 @@ bool StreamElementsConfig::ReadScopedTextFilesList(
 	}
 
 	os_globfree(glob);
+
+	return true;
+}
+
+void StreamElementsConfig::SerializeReadScopedTextFile(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	output->SetNull();
+
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto d = input->GetDictionary();
+
+	if (!d->HasKey("scope") || !d->HasKey("container") ||
+	    !d->HasKey("item"))
+		return;
+
+	if (d->GetType("scope") != VTYPE_STRING ||
+	    d->GetType("container") != VTYPE_STRING ||
+	    d->GetType("item") != VTYPE_STRING)
+		return;
+
+	std::string scope = d->GetString("scope");
+	std::string container = d->GetString("container");
+	std::string file = d->GetString("item");
+
+	std::string result;
+	if (!ReadScopedTextFile(scope, container, file, result))
+		return;
+
+	auto r = CefDictionaryValue::Create();
+
+	r->SetString("scope", scope);
+	r->SetString("container", container);
+	r->SetString("item", file);
+	r->SetString("content", result);
+
+	output->SetDictionary(r);
+}
+
+void StreamElementsConfig::DeserializeWriteScopedTextFile(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	output->SetNull();
+
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto d = input->GetDictionary();
+
+	if (!d->HasKey("scope") || !d->HasKey("container") ||
+	    !d->HasKey("item") || !d->HasKey("content"))
+		return;
+
+	if (d->GetType("scope") != VTYPE_STRING ||
+	    d->GetType("container") != VTYPE_STRING ||
+	    d->GetType("item") != VTYPE_STRING ||
+	    d->GetType("content") != VTYPE_STRING)
+		return;
+
+	std::string scope = d->GetString("scope");
+	std::string container = d->GetString("container");
+	std::string file = d->GetString("item");
+	std::string content = d->GetString("content");
+
+	if (!WriteScopedTextFile(scope, container, file, content))
+		return;
+
+	auto r = CefDictionaryValue::Create();
+
+	r->SetString("scope", scope);
+	r->SetString("container", container);
+	r->SetString("item", file);
+	r->SetString("content", content);
+
+	output->SetDictionary(r);
+}
+
+void StreamElementsConfig::SerializeScopedTextFilesList(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto d = input->GetDictionary();
+
+	if (!d->HasKey("scope") || !d->HasKey("container"))
+		return;
+
+	if (d->GetType("scope") != VTYPE_STRING ||
+	    d->GetType("container") != VTYPE_STRING)
+		return;
+
+	std::string scope = d->GetString("scope");
+	std::string container = d->GetString("container");
+
+	std::vector<std::string> result;
+	if (!ReadScopedTextFilesList(scope, container, result))
+		return;
+
+	auto r = CefListValue::Create();
+
+	for (auto file : result) {
+		auto f = CefDictionaryValue::Create();
+
+		f->SetString("item", file);
+
+		r->SetDictionary(r->GetSize(), f);
+	}
+
+	output->SetList(r);
+}
+
+void StreamElementsConfig::DeserializeRemoveScopedTextFile(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	output->SetNull();
+
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto d = input->GetDictionary();
+
+	if (!d->HasKey("scope") || !d->HasKey("container") ||
+	    !d->HasKey("item"))
+		return;
+
+	if (d->GetType("scope") != VTYPE_STRING ||
+	    d->GetType("container") != VTYPE_STRING ||
+	    d->GetType("item") != VTYPE_STRING)
+		return;
+
+	std::string scope = d->GetString("scope");
+	std::string container = d->GetString("container");
+	std::string file = d->GetString("item");
+
+	if (!RemoveScopedTextFile(scope, container, file))
+		return;
+
+	auto r = CefDictionaryValue::Create();
+
+	r->SetString("scope", scope);
+	r->SetString("container", container);
+	r->SetString("item", file);
+
+	output->SetDictionary(r);
 }
