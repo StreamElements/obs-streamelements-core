@@ -2386,6 +2386,17 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	/*
+	API_HANDLER_BEGIN("disableStreamingOutputsByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsConfig::GetInstance()->
+		}
+	}
+	API_HANDLER_END();
+	*/
+
+
 	API_HANDLER_BEGIN("crashProgram");
 	{
 		QtPostTask([]() -> void {

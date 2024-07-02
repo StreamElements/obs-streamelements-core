@@ -50,13 +50,13 @@ public:
 				     std::vector<std::string> &result);
 
 public:
-	void SerializeReadScopedTextFile(CefRefPtr<CefValue> input,
+	void ReadScopedTextFile(CefRefPtr<CefValue> input,
 					 CefRefPtr<CefValue> &output);
-	void DeserializeWriteScopedTextFile(CefRefPtr<CefValue> input,
+	void WriteScopedTextFile(CefRefPtr<CefValue> input,
 					    CefRefPtr<CefValue> &output);
-	void SerializeScopedTextFilesList(CefRefPtr<CefValue> input,
+	void ReadScopedTextFilesList(CefRefPtr<CefValue> input,
 					  CefRefPtr<CefValue> &output);
-	void DeserializeRemoveScopedTextFile(CefRefPtr<CefValue> input,
+	void RemoveScopedTextFile(CefRefPtr<CefValue> input,
 					     CefRefPtr<CefValue> &output);
 
 public:

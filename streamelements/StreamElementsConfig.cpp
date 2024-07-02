@@ -246,7 +246,7 @@ bool StreamElementsConfig::ReadScopedTextFilesList(
 	return true;
 }
 
-void StreamElementsConfig::SerializeReadScopedTextFile(
+void StreamElementsConfig::ReadScopedTextFile(
 	CefRefPtr<CefValue> input,
 	CefRefPtr<CefValue>& output)
 {
@@ -284,7 +284,7 @@ void StreamElementsConfig::SerializeReadScopedTextFile(
 	output->SetDictionary(r);
 }
 
-void StreamElementsConfig::DeserializeWriteScopedTextFile(
+void StreamElementsConfig::WriteScopedTextFile(
 	CefRefPtr<CefValue> input,
 	CefRefPtr<CefValue>& output)
 {
@@ -323,7 +323,7 @@ void StreamElementsConfig::DeserializeWriteScopedTextFile(
 	output->SetDictionary(r);
 }
 
-void StreamElementsConfig::SerializeScopedTextFilesList(
+void StreamElementsConfig::ReadScopedTextFilesList(
 	CefRefPtr<CefValue> input,
 	CefRefPtr<CefValue>& output)
 {
@@ -359,7 +359,7 @@ void StreamElementsConfig::SerializeScopedTextFilesList(
 	output->SetList(r);
 }
 
-void StreamElementsConfig::DeserializeRemoveScopedTextFile(
+void StreamElementsConfig::RemoveScopedTextFile(
 	CefRefPtr<CefValue> input,
 	CefRefPtr<CefValue>& output)
 {
