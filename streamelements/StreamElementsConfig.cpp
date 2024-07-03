@@ -108,6 +108,22 @@ static bool isSecureFilename(std::string filename) {
 	return true;
 }
 
+std::string StreamElementsConfig::GetScopedConfigStorageRootPath()
+{
+	char *configDir = obs_module_config_path("");
+	configDir[strlen(configDir) - 1] = 0; // remove last char
+	std::string root = configDir;
+	bfree(configDir);
+
+	root += "/scoped_config_storage";
+
+	char* path = os_get_abs_path_ptr(root.c_str());
+	root = path;
+	bfree(path);
+
+	return root;
+}
+
 bool StreamElementsConfig::GetScopedTextFileFolderPath(
 	std::string scope,
 	std::string container,
@@ -119,12 +135,8 @@ bool StreamElementsConfig::GetScopedTextFileFolderPath(
 	if (!isSecureFilename(container))
 		return false;
 
-	char *configDir = obs_module_config_path("");
-	configDir[strlen(configDir) - 1] = 0; // remove last char
-	std::string root = configDir;
-	bfree(configDir);
-
-	root += "/scoped_config/";
+	std::string root = GetScopedConfigStorageRootPath();
+	root += "/";
 	root += scope;
 	root += "/";
 	root += container;

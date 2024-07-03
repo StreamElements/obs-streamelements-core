@@ -35,6 +35,8 @@ public:
 	void SaveConfig();
 
 public:
+	std::string GetScopedConfigStorageRootPath();
+
 	bool GetScopedTextFileFolderPath(std::string scope,
 					 std::string container,
 					 std::string &result);
