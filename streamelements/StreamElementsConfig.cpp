@@ -148,8 +148,7 @@ bool StreamElementsConfig::ReadScopedTextFile(std::string scope,
 	if (!GetScopedTextFileFolderPath(scope, container, root))
 		return false;
 
-	if (os_mkdirs(root.c_str()) != 0)
-		return false;
+	os_mkdirs(root.c_str());
 
 	std::string path = root + "/" + filename;
 
@@ -180,8 +179,7 @@ bool StreamElementsConfig::WriteScopedTextFile(std::string scope,
 	if (!GetScopedTextFileFolderPath(scope, container, root))
 		return false;
 
-	if (os_mkdirs(root.c_str()) != 0)
-		return false;
+	os_mkdirs(root.c_str());
 
 	std::string path = root + "/" + filename;
 
@@ -202,8 +200,7 @@ bool StreamElementsConfig::RemoveScopedTextFile(std::string scope,
 	if (!GetScopedTextFileFolderPath(scope, container, root))
 		return false;
 
-	if (os_mkdirs(root.c_str()) != 0)
-		return false;
+	os_mkdirs(root.c_str());
 
 	std::string path = root + "/" + filename;
 
@@ -221,8 +218,7 @@ bool StreamElementsConfig::ReadScopedTextFilesList(
 	if (!GetScopedTextFileFolderPath(scope, container, root))
 		return false;
 
-	if (os_mkdirs(root.c_str()) != 0)
-		return false;
+	os_mkdirs(root.c_str());
 
 	std::string path = root + "/*";
 
@@ -327,6 +323,8 @@ void StreamElementsConfig::ReadScopedTextFilesList(
 	CefRefPtr<CefValue> input,
 	CefRefPtr<CefValue>& output)
 {
+	output->SetNull();
+
 	if (input->GetType() != VTYPE_DICTIONARY)
 		return;
 
@@ -348,12 +346,16 @@ void StreamElementsConfig::ReadScopedTextFilesList(
 
 	auto r = CefListValue::Create();
 
-	for (auto file : result) {
+	for (auto path : result) {
 		auto f = CefDictionaryValue::Create();
+
+		std::string file =
+			path.substr(path.find_last_of("/\\") + 1);
 
 		f->SetString("item", file);
 		f->SetString("scope", scope);
 		f->SetString("container", container);
+		f->SetInt("contentLength", os_get_file_size(path.c_str()));
 
 		r->SetDictionary(r->GetSize(), f);
 	}
