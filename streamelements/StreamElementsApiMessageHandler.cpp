@@ -2413,7 +2413,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("queryScopedStorageTextItemsList");
+	API_HANDLER_BEGIN("getAllScopedStorageTextItems");
 	{
 		if (args->GetSize()) {
 			StreamElementsConfig::GetInstance()
