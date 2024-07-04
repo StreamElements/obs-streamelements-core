@@ -55,6 +55,9 @@ static void glob_dirs(std::string pattern,
 
 		path = path.substr(path.find_last_of("/\\") + 1);
 
+		if (path == "." || path == "..")
+			continue;
+
 		callback(path);
 	}
 
@@ -641,12 +644,12 @@ static bool AddScopedStorageToZip(zip_t *zip, std::string timestamp)
 
 	std::map<std::string, std::string> relToAbsMap;
 
-	glob_dirs(basePath + "*", [&](std::string scope) {
+	glob_dirs(basePath + "/*", [&](std::string scope) {
 		glob_dirs(basePath + "/" + scope + "/*", [&](std::string
 								     container) {
 			glob_files(
 				basePath + "/" + scope + "/" + container +
-					"*.json",
+					"/*.json",
 				[&](std::string file) {
 					// TODO: We should calculate this better
 					std::string relPath =
@@ -655,7 +658,8 @@ static bool AddScopedStorageToZip(zip_t *zip, std::string timestamp)
 						file;
 
 					std::string absPath =
-						basePath + "/" + relPath;
+						basePath + "/" + scope + "/" +
+						container + "/" + file;
 
 					relToAbsMap[relPath] = absPath;
 				});
