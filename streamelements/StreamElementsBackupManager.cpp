@@ -534,6 +534,114 @@ static bool AddProfileToZip(zip_t *zip, std::string basePath,
 	return true;
 }
 
+static void glob_dirs(std::string pattern, std::function<void(std::string)> callback)
+{
+	os_glob_t *glob;
+	if (os_glob(pattern.c_str(), 0, &glob) != 0)
+		return;
+
+	for (size_t i = 0; i < glob->gl_pathc; i++) {
+		struct os_globent ent = glob->gl_pathv[i];
+
+		if (!ent.directory)
+			continue;
+
+		QFile file(ent.path);
+
+		std::string path = file.fileName().toStdString();
+
+		path = path.substr(
+			path.find_last_of("/\\") + 1);
+
+		callback(path);
+	}
+
+	os_globfree(glob);
+}
+
+static void glob_files(std::string pattern,
+		      std::function<void(std::string)> callback)
+{
+	os_glob_t *glob;
+	if (os_glob(pattern.c_str(), 0, &glob) != 0)
+		return;
+
+	for (size_t i = 0; i < glob->gl_pathc; i++) {
+		struct os_globent ent = glob->gl_pathv[i];
+
+		if (ent.directory)
+			continue;
+
+		QFile file(ent.path);
+
+		std::string path = file.fileName().toStdString();
+
+		path = path.substr(path.find_last_of("/\\") + 1);
+
+		callback(path);
+	}
+
+	os_globfree(glob);
+}
+
+static bool AddScopedStorageToZip(zip_t *zip, std::string timestamp)
+{
+	std::string basePath = StreamElementsConfig::GetInstance()
+				       ->GetScopedConfigStorageRootPath();
+
+	std::map<std::string, std::string> relToAbsMap;
+
+	glob_dirs(basePath + "*", [&](std::string scope) {
+		glob_dirs(basePath + "/" + scope + "/*", [&](std::string
+								     container) {
+			glob_files(
+				basePath + "/" + scope + "/" + container +
+					"*.json",
+				[&](std::string file) {
+					// TODO: We should calculate this better
+					std::string relPath =
+						"plugin_config/obs-streamelements-core/scoped_config_storage/" +
+						scope + "/" + container + "/" +
+						file;
+
+					std::string absPath =
+						basePath + "/" + relPath;
+
+					relToAbsMap[relPath] = absPath;
+				});
+		});
+	});
+
+	for (auto kv : relToAbsMap) {
+		auto relPath = kv.first;
+		auto absPath = kv.second;
+
+		char *buffer = os_quick_read_utf8_file(absPath.c_str());
+		CefRefPtr<CefValue> content = CefParseJSON(
+			CefString(buffer), JSON_PARSER_ALLOW_TRAILING_COMMAS);
+		bfree(buffer);
+
+		if (!content.get() || content->GetType() == VTYPE_NULL)
+			return false;
+
+		std::map<std::string, std::string> filesMap;
+		CefRefPtr<CefValue> resultContent = CefValue::Create();
+
+		if (!AddReferencedFilesToZip(zip, timestamp, content,
+					     resultContent))
+			return false;
+
+		std::string json =
+			CefWriteJSON(resultContent, JSON_WRITER_PRETTY_PRINT);
+
+		if (!AddBufferToZip(zip, (BYTE *)json.c_str(), json.size(),
+				    relPath))
+			return false;
+	}
+
+	return true;
+}
+
 static void ReadListOfSceneCollectionIds(std::vector<std::string> &output)
 {
 	std::map<std::string, std::string> items;
@@ -748,6 +856,10 @@ void StreamElementsBackupManager::CreateLocalBackupPackage(
 		d->SetString("name", collection);
 
 		addedCollections->SetDictionary(addedCollections->GetSize(), d);
+	}
+
+	if (!AddScopedStorageToZip(zip, timestamp)) {
+		// NOP
 	}
 
 	zip_close(zip);
