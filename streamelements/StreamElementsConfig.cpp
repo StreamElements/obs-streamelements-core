@@ -201,7 +201,7 @@ bool StreamElementsConfig::WriteScopedTextFile(std::string scope,
 	return true;
 }
 
-bool StreamElementsConfig::RemoveScopedTextFile(std::string scope,
+bool StreamElementsConfig::RemoveScopedFile(std::string scope,
 						std::string container,
 						std::string filename)
 {
@@ -222,9 +222,10 @@ bool StreamElementsConfig::RemoveScopedTextFile(std::string scope,
 	return (os_unlink(path.c_str()) == 0);
 }
 
-bool StreamElementsConfig::ReadScopedTextFilesList(
-	std::string scope, std::string container,
-	std::vector<std::string> &result)
+bool StreamElementsConfig::ReadScopedFilesList(std::string scope,
+					       std::string container,
+					       std::string pattern,
+					       std::vector<std::string> &result)
 {
 	std::string root;
 	if (!GetScopedTextFileFolderPath(scope, container, root))
@@ -232,7 +233,7 @@ bool StreamElementsConfig::ReadScopedTextFilesList(
 
 	os_mkdirs(root.c_str());
 
-	std::string path = root + "/*";
+	std::string path = root + "/" + pattern;
 
 	os_glob_t *glob;
 	if (os_glob(path.c_str(), 0, &glob) != 0)
@@ -254,7 +255,7 @@ bool StreamElementsConfig::ReadScopedTextFilesList(
 	return true;
 }
 
-void StreamElementsConfig::ReadScopedTextFile(
+void StreamElementsConfig::ReadScopedJsonFile(
 	CefRefPtr<CefValue> input,
 	CefRefPtr<CefValue>& output)
 {
@@ -276,23 +277,31 @@ void StreamElementsConfig::ReadScopedTextFile(
 
 	std::string scope = d->GetString("scope");
 	std::string container = d->GetString("container");
-	std::string file = d->GetString("item");
+	std::string file = d->GetString("item").ToString() + ".json";
 
-	std::string result;
-	if (!ReadScopedTextFile(scope, container, file, result))
+	std::string resultText;
+	if (!ReadScopedTextFile(scope, container, file, resultText))
 		return;
 
 	auto r = CefDictionaryValue::Create();
 
+	auto result = CefParseJSON(resultText, JSON_PARSER_ALLOW_TRAILING_COMMAS);
+
+	if (!result.get())
+		return;
+
+	if (!result->IsValid())
+		return;
+
 	r->SetString("scope", scope);
 	r->SetString("container", container);
 	r->SetString("item", file);
-	r->SetString("content", result);
+	r->SetValue("content", result);
 
 	output->SetDictionary(r);
 }
 
-void StreamElementsConfig::WriteScopedTextFile(
+void StreamElementsConfig::WriteScopedJsonFile(
 	CefRefPtr<CefValue> input,
 	CefRefPtr<CefValue>& output)
 {
@@ -315,8 +324,8 @@ void StreamElementsConfig::WriteScopedTextFile(
 
 	std::string scope = d->GetString("scope");
 	std::string container = d->GetString("container");
-	std::string file = d->GetString("item");
-	std::string content = d->GetString("content");
+	std::string file = d->GetString("item").ToString() + ".json";
+	std::string content = CefWriteJSON(d->GetValue("content"), JSON_WRITER_PRETTY_PRINT).ToString();
 
 	if (!WriteScopedTextFile(scope, container, file, content))
 		return;
@@ -331,7 +340,7 @@ void StreamElementsConfig::WriteScopedTextFile(
 	output->SetDictionary(r);
 }
 
-void StreamElementsConfig::ReadScopedTextFilesList(
+void StreamElementsConfig::ReadScopedJsonFilesList(
 	CefRefPtr<CefValue> input,
 	CefRefPtr<CefValue>& output)
 {
@@ -353,7 +362,7 @@ void StreamElementsConfig::ReadScopedTextFilesList(
 	std::string container = d->GetString("container");
 
 	std::vector<std::string> result;
-	if (!ReadScopedTextFilesList(scope, container, result))
+	if (!ReadScopedFilesList(scope, container, "*.json", result))
 		return;
 
 	auto r = CefListValue::Create();
@@ -363,6 +372,8 @@ void StreamElementsConfig::ReadScopedTextFilesList(
 
 		std::string file =
 			path.substr(path.find_last_of("/\\") + 1);
+
+		file = file.substr(file.size() - 5); // remove ".json" suffix
 
 		f->SetString("item", file);
 		f->SetString("scope", scope);
@@ -375,7 +386,7 @@ void StreamElementsConfig::ReadScopedTextFilesList(
 	output->SetList(r);
 }
 
-void StreamElementsConfig::RemoveScopedTextFile(
+void StreamElementsConfig::RemoveScopedJsonFile(
 	CefRefPtr<CefValue> input,
 	CefRefPtr<CefValue>& output)
 {
@@ -397,9 +408,9 @@ void StreamElementsConfig::RemoveScopedTextFile(
 
 	std::string scope = d->GetString("scope");
 	std::string container = d->GetString("container");
-	std::string file = d->GetString("item");
+	std::string file = d->GetString("item").ToString() + ".json";
 
-	if (!RemoveScopedTextFile(scope, container, file))
+	if (!RemoveScopedFile(scope, container, file))
 		return;
 
 	auto r = CefDictionaryValue::Create();

@@ -2386,38 +2386,38 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("readScopedStorageTextItem");
+	API_HANDLER_BEGIN("readScopedStorageJsonItem");
 	{
 		if (args->GetSize()) {
-			StreamElementsConfig::GetInstance()->ReadScopedTextFile(
+			StreamElementsConfig::GetInstance()->ReadScopedJsonFile(
 				args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("writeScopedStorageTextItem");
+	API_HANDLER_BEGIN("writeScopedStorageJsonItem");
 	{
 		if (args->GetSize()) {
-			StreamElementsConfig::GetInstance()->WriteScopedTextFile(
+			StreamElementsConfig::GetInstance()->WriteScopedJsonFile(
 				args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("removeScopedStorageTextItem");
+	API_HANDLER_BEGIN("removeScopedStorageJsonItem");
 	{
 		if (args->GetSize()) {
-			StreamElementsConfig::GetInstance()->RemoveScopedTextFile(
+			StreamElementsConfig::GetInstance()->RemoveScopedJsonFile(
 				args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("getAllScopedStorageTextItems");
+	API_HANDLER_BEGIN("getAllScopedStorageJsonItems");
 	{
 		if (args->GetSize()) {
 			StreamElementsConfig::GetInstance()
-				->ReadScopedTextFilesList(args->GetValue(0),
+				->ReadScopedJsonFilesList(args->GetValue(0),
 							  result);
 		}
 	}
