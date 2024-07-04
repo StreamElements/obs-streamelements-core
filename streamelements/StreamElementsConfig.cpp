@@ -319,8 +319,7 @@ void StreamElementsConfig::WriteScopedJsonFile(
 
 	if (d->GetType("scope") != VTYPE_STRING ||
 	    d->GetType("container") != VTYPE_STRING ||
-	    d->GetType("item") != VTYPE_STRING ||
-	    d->GetType("content") != VTYPE_STRING)
+	    d->GetType("item") != VTYPE_STRING)
 		return;
 
 	std::string scope = d->GetString("scope");
@@ -337,7 +336,7 @@ void StreamElementsConfig::WriteScopedJsonFile(
 	r->SetString("container", container);
 	r->SetString("item",
 		     file.substr(0, file.size() - 5)); // remove ".json" suffix
-	r->SetString("content", content);
+	r->SetValue("content", d->GetValue("content"));
 
 	output->SetDictionary(r);
 }
