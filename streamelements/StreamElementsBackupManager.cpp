@@ -36,6 +36,56 @@ typedef unsigned char BYTE;
 
 #define MAX_BACKUP_FILE_SIZE 0x7FFFFFFF
 
+static void glob_dirs(std::string pattern,
+		      std::function<void(std::string)> callback)
+{
+	os_glob_t *glob;
+	if (os_glob(pattern.c_str(), 0, &glob) != 0)
+		return;
+
+	for (size_t i = 0; i < glob->gl_pathc; i++) {
+		struct os_globent ent = glob->gl_pathv[i];
+
+		if (!ent.directory)
+			continue;
+
+		QFile file(ent.path);
+
+		std::string path = file.fileName().toStdString();
+
+		path = path.substr(path.find_last_of("/\\") + 1);
+
+		callback(path);
+	}
+
+	os_globfree(glob);
+}
+
+static void glob_files(std::string pattern,
+		       std::function<void(std::string)> callback)
+{
+	os_glob_t *glob;
+	if (os_glob(pattern.c_str(), 0, &glob) != 0)
+		return;
+
+	for (size_t i = 0; i < glob->gl_pathc; i++) {
+		struct os_globent ent = glob->gl_pathv[i];
+
+		if (ent.directory)
+			continue;
+
+		QFile file(ent.path);
+
+		std::string path = file.fileName().toStdString();
+
+		path = path.substr(path.find_last_of("/\\") + 1);
+
+		callback(path);
+	}
+
+	os_globfree(glob);
+}
+
 static bool GetLocalPathFromURL(std::string url, std::string &path)
 {
 	if (VerifySessionSignedAbsolutePathURL(url, path))
@@ -219,6 +269,7 @@ static bool ScanForFileReferencesMonikersToRestore(CefRefPtr<CefValue> &node,
 	return true;
 }
 
+// TODO: Refactor to include scoped config
 static bool ScanForFileReferencesMonikersToRestore(std::string srcBasePath,
 						   std::string destBasePath)
 {
@@ -532,56 +583,6 @@ static bool AddProfileToZip(zip_t *zip, std::string basePath,
 	}
 
 	return true;
-}
-
-static void glob_dirs(std::string pattern, std::function<void(std::string)> callback)
-{
-	os_glob_t *glob;
-	if (os_glob(pattern.c_str(), 0, &glob) != 0)
-		return;
-
-	for (size_t i = 0; i < glob->gl_pathc; i++) {
-		struct os_globent ent = glob->gl_pathv[i];
-
-		if (!ent.directory)
-			continue;
-
-		QFile file(ent.path);
-
-		std::string path = file.fileName().toStdString();
-
-		path = path.substr(
-			path.find_last_of("/\\") + 1);
-
-		callback(path);
-	}
-
-	os_globfree(glob);
-}
-
-static void glob_files(std::string pattern,
-		      std::function<void(std::string)> callback)
-{
-	os_glob_t *glob;
-	if (os_glob(pattern.c_str(), 0, &glob) != 0)
-		return;
-
-	for (size_t i = 0; i < glob->gl_pathc; i++) {
-		struct os_globent ent = glob->gl_pathv[i];
-
-		if (ent.directory)
-			continue;
-
-		QFile file(ent.path);
-
-		std::string path = file.fileName().toStdString();
-
-		path = path.substr(path.find_last_of("/\\") + 1);
-
-		callback(path);
-	}
-
-	os_globfree(glob);
 }
 
 static bool AddScopedStorageToZip(zip_t *zip, std::string timestamp)
