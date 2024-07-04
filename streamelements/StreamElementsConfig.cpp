@@ -295,7 +295,8 @@ void StreamElementsConfig::ReadScopedJsonFile(
 
 	r->SetString("scope", scope);
 	r->SetString("container", container);
-	r->SetString("item", file);
+	r->SetString("item",
+		     file.substr(0, file.size() - 5)); // remove ".json" suffix
 	r->SetValue("content", result);
 
 	output->SetDictionary(r);
@@ -334,7 +335,8 @@ void StreamElementsConfig::WriteScopedJsonFile(
 
 	r->SetString("scope", scope);
 	r->SetString("container", container);
-	r->SetString("item", file);
+	r->SetString("item",
+		     file.substr(0, file.size() - 5)); // remove ".json" suffix
 	r->SetString("content", content);
 
 	output->SetDictionary(r);
@@ -373,9 +375,7 @@ void StreamElementsConfig::ReadScopedJsonFilesList(
 		std::string file =
 			path.substr(path.find_last_of("/\\") + 1);
 
-		file = file.substr(file.size() - 5); // remove ".json" suffix
-
-		f->SetString("item", file);
+		f->SetString("item", file.substr(0, file.size() - 5)); // remove ".json" suffix
 		f->SetString("scope", scope);
 		f->SetString("container", container);
 		f->SetInt("contentLength", os_get_file_size(path.c_str()));
@@ -417,7 +417,8 @@ void StreamElementsConfig::RemoveScopedJsonFile(
 
 	r->SetString("scope", scope);
 	r->SetString("container", container);
-	r->SetString("item", file);
+	r->SetString("item",
+		     file.substr(0, file.size() - 5)); // remove ".json" suffix
 
 	output->SetDictionary(r);
 }
