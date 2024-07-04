@@ -269,9 +269,43 @@ static bool ScanForFileReferencesMonikersToRestore(CefRefPtr<CefValue> &node,
 	return true;
 }
 
-// TODO: Refactor to include scoped config
-static bool ScanForFileReferencesMonikersToRestore(std::string srcBasePath,
-						   std::string destBasePath)
+static bool ScanFileForFileReferencesMonikersToRestoreAndReplace(
+	std::string filePath, std::string srcBasePath, std::string destBasePath)
+{
+	char *buffer = os_quick_read_utf8_file(filePath.c_str());
+
+	if (!buffer) {
+		return false;
+	}
+
+	CefRefPtr<CefValue> content = CefParseJSON(
+		CefString(buffer), JSON_PARSER_ALLOW_TRAILING_COMMAS);
+	bfree(buffer);
+
+	if (!content.get() || content->GetType() == VTYPE_NULL)
+		return true;
+
+	CefRefPtr<CefValue> resultContent = CefValue::Create();
+
+	if (!ScanForFileReferencesMonikersToRestore(
+		    content, resultContent, srcBasePath, destBasePath)) {
+		return false;
+	}
+
+	std::string json =
+		CefWriteJSON(resultContent, JSON_WRITER_PRETTY_PRINT);
+
+	if (!os_quick_write_utf8_file(filePath.c_str(), json.c_str(),
+				      json.size(), false)) {
+		return false;
+	}
+
+	return true;
+}
+
+static bool
+ScanScenesForFileReferencesMonikersToRestore(std::string srcBasePath,
+	std::string destBasePath)
 {
 	bool success = true;
 
@@ -300,39 +334,8 @@ static bool ScanForFileReferencesMonikersToRestore(std::string srcBasePath,
 
 		std::string srcFilePath = srcScanPath + "/" + fileName;
 
-		char *buffer = os_quick_read_utf8_file(srcFilePath.c_str());
-
-		if (!buffer) {
-			success = false;
-
-			break;
-		}
-
-		CefRefPtr<CefValue> content = CefParseJSON(
-			CefString(buffer), JSON_PARSER_ALLOW_TRAILING_COMMAS);
-		bfree(buffer);
-
-		if (!content.get() || content->GetType() == VTYPE_NULL)
-			continue;
-
-		CefRefPtr<CefValue> resultContent = CefValue::Create();
-
-		if (!ScanForFileReferencesMonikersToRestore(
-			    content, resultContent, srcBasePath,
-			    destBasePath)) {
-			success = false;
-
-			break;
-		}
-
-		std::string json =
-			CefWriteJSON(resultContent, JSON_WRITER_PRETTY_PRINT);
-
-		std::string destFilePath = srcFilePath; // this is NOT a bug
-
-		if (!os_quick_write_utf8_file(destFilePath.c_str(),
-					      json.c_str(), json.size(),
-					      false)) {
+		if (!ScanFileForFileReferencesMonikersToRestoreAndReplace(
+			    srcFilePath, srcBasePath, destBasePath)) {
 			success = false;
 
 			break;
@@ -342,6 +345,52 @@ static bool ScanForFileReferencesMonikersToRestore(std::string srcBasePath,
 	os_closedir(dir);
 
 	return success;
+}
+
+static bool
+ScanScopedStorageForFileReferencesMonikersToRestore(std::string srcBasePath,
+						    std::string destBasePath)
+{
+	std::string srcScanPath = srcBasePath + "plugin_config/obs-streamelements-core/scoped_config_storage";
+
+	std::vector<std::string> srcFiles;
+
+	glob_dirs(srcScanPath + "*", [&](std::string scope) {
+		glob_dirs(srcScanPath + "/" + scope + "/*", [&](std::string
+								     container) {
+			glob_files(
+				srcScanPath + "/" + scope + "/" + container +
+					"*.json",
+				[&](std::string file) {
+					srcFiles.push_back(
+						srcScanPath + "/" + scope +
+						"/" + container + "/" + file);
+				});
+		});
+	});
+
+	for (auto srcFilePath : srcFiles) {
+		if (!ScanFileForFileReferencesMonikersToRestoreAndReplace(
+			    srcFilePath, srcBasePath, destBasePath)) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+static bool ScanForFileReferencesMonikersToRestore(std::string srcBasePath,
+						   std::string destBasePath)
+{
+	if (!ScanScenesForFileReferencesMonikersToRestore(srcBasePath,
+							  destBasePath))
+		return false;
+
+	if (!ScanScopedStorageForFileReferencesMonikersToRestore(srcBasePath,
+								 destBasePath))
+		return false;
+
+	return true;
 }
 
 static bool
