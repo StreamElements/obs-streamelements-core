@@ -2335,6 +2335,92 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		result->SetDictionary(d);
 
 	}
+
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllStreamingOutputs");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetOutputManager()
+			->SerializeAllOutputs(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addStreamingOutput");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->DeserializeOutput(args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeStreamingOutputsByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->RemoveOutputsByIds(args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("enableStreamingOutputsByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->EnableOutputsByIds(args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("disableStreamingOutputsByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->DisableOutputsByIds(args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("readScopedStorageJsonItem");
+	{
+		if (args->GetSize()) {
+			StreamElementsConfig::GetInstance()->ReadScopedJsonFile(
+				args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("writeScopedStorageJsonItem");
+	{
+		if (args->GetSize()) {
+			StreamElementsConfig::GetInstance()->WriteScopedJsonFile(
+				args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeScopedStorageJsonItem");
+	{
+		if (args->GetSize()) {
+			StreamElementsConfig::GetInstance()->RemoveScopedJsonFile(
+				args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllScopedStorageJsonItems");
+	{
+		if (args->GetSize()) {
+			StreamElementsConfig::GetInstance()
+				->ReadScopedJsonFilesList(args->GetValue(0),
+							  result);
+		}
+	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("crashProgram");

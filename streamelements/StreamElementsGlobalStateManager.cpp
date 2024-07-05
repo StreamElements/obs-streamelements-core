@@ -376,11 +376,18 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			m_previewManager =
 				new StreamElementsPreviewManager(
 					mainWindow());
+
 			m_websocketApiServer =
 				new StreamElementsWebsocketApiServer();
 			m_windowStateEventFilter =
 				new WindowStateChangeEventFilter(
 					mainWindow());
+
+			m_compositionManager = std::make_shared<
+				StreamElementsVideoCompositionManager>();
+			m_outputManager =
+				std::make_shared<StreamElementsOutputManager>(
+					m_compositionManager);
 
 						m_appStateListener = new ApplicationStateListener();
 			m_themeChangeListener = new ThemeChangeListener();
@@ -570,6 +577,9 @@ void StreamElementsGlobalStateManager::Shutdown()
 			//mainWindow()->removeDockWidget(m_themeChangeListener);
 			m_themeChangeListener->deleteLater();
 			m_appStateListener->deleteLater();
+
+			m_compositionManager = nullptr;
+			m_outputManager = nullptr;
 
 			delete m_analyticsEventsManager;
 			delete m_performanceHistoryTracker;

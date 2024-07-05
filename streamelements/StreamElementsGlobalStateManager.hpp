@@ -28,6 +28,8 @@ struct QCefCookieManager;
 #include "StreamElementsPreviewManager.hpp"
 #include "StreamElementsWebsocketApiServer.hpp"
 #include "StreamElementsBrowserDialog.hpp"
+#include "StreamElementsVideoCompositionManager.hpp"
+#include "StreamElementsOutputManager.hpp"
 
 class StreamElementsGlobalStateManager : public StreamElementsObsAppMonitor {
 private:
@@ -162,6 +164,15 @@ public:
 	StreamElementsWebsocketApiServer* GetWebsocketApiServer() {
 		return m_websocketApiServer;
 	}
+	std::shared_ptr<StreamElementsVideoCompositionManager> GetCompositionManager()
+	{
+		return m_compositionManager;
+	}
+	std::shared_ptr<StreamElementsOutputManager> GetOutputManager()
+	{
+		return m_outputManager;
+	}
+		
 	QMainWindow *mainWindow() { return m_mainWindow; }
 
 public:
@@ -227,6 +238,9 @@ private:
 	StreamElementsPreviewManager *m_previewManager = nullptr;
 	StreamElementsWebsocketApiServer *m_websocketApiServer = nullptr;
 	WindowStateChangeEventFilter *m_windowStateEventFilter = nullptr;
+	std::shared_ptr<StreamElementsVideoCompositionManager> m_compositionManager =
+		nullptr;
+	std::shared_ptr<StreamElementsOutputManager> m_outputManager = nullptr;
 
 private:
 	static StreamElementsGlobalStateManager *s_instance;

@@ -228,6 +228,10 @@ set(obs-streamelements-core_SOURCES
 	streamelements/StreamElementsHttpServerManager.cpp
 	streamelements/StreamElementsWebsocketApiServer.cpp
 	streamelements/StreamElementsLocalFilesystemHttpServer.cpp
+	streamelements/StreamElementsVideoComposition.cpp
+	streamelements/StreamElementsVideoCompositionManager.cpp
+	streamelements/StreamElementsOutput.cpp
+	streamelements/StreamElementsOutputManager.cpp
 	streamelements/deps/StackWalker/StackWalker.cpp
 	streamelements/deps/zip/zip.c
 	streamelements/deps/server/NamedPipesServer.cpp
@@ -309,6 +313,10 @@ set(obs-streamelements-core_HEADERS
 	streamelements/StreamElementsHttpServerManager.hpp
 	streamelements/StreamElementsWebsocketApiServer.hpp
 	streamelements/StreamElementsLocalFilesystemHttpServer.hpp
+	streamelements/StreamElementsVideoComposition.hpp
+	streamelements/StreamElementsVideoCompositionManager.hpp
+	streamelements/StreamElementsOutput.hpp
+	streamelements/StreamElementsOutputManager.hpp
 	streamelements/deps/StackWalker/StackWalker.h
 	streamelements/deps/zip/zip.h
 	streamelements/deps/zip/miniz.h
