@@ -178,7 +178,7 @@ StreamElementsCustomVideoComposition ::~StreamElementsCustomVideoComposition()
 
 	if (m_transition) {
 		obs_transition_clear(m_transition);
-		//obs_source_release(m_transition);
+		obs_source_release(m_transition);
 		m_transition = nullptr;
 	}
 
