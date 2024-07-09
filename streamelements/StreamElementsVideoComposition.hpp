@@ -87,7 +87,11 @@ private:
 	std::string m_name;
 
 protected:
-	StreamElementsVideoCompositionBase(const std::string name, const std::string id): m_id(id), m_name(name) {}
+	StreamElementsVideoCompositionBase(
+		const std::string id, const std::string name)
+		: m_id(id), m_name(name)
+	{
+	}
 	virtual ~StreamElementsVideoCompositionBase() {}
 
 public:
@@ -109,7 +113,7 @@ private:
 public:
 	// ctor only usable by this class
 	StreamElementsObsNativeVideoComposition(Private)
-		: StreamElementsVideoCompositionBase("Default", "default")
+		: StreamElementsVideoCompositionBase("default", "Default")
 	{
 
 	}
@@ -130,6 +134,51 @@ public:
 		GetCompositionInfo(StreamElementsCompositionEventListener* listener);
 
 	virtual bool CanRemove() { return false; }
+
+	virtual void SerializeComposition(CefRefPtr<CefValue> &output);
+};
+
+// Custom Composition
+class StreamElementsCustomVideoComposition
+	: public StreamElementsVideoCompositionBase,
+	  public std::enable_shared_from_this<
+		  StreamElementsVideoCompositionBase> {
+private:
+	struct Private {
+		explicit Private() = default;
+	};
+
+private:
+	std::recursive_mutex m_mutex;
+
+public:
+	// ctor only usable by this class
+	StreamElementsCustomVideoComposition(Private, std::string id,
+					     std::string name, uint32_t width,
+		uint32_t height, std::string videoEncoderId,
+		obs_data_t *videoEncoderSettings,
+		obs_data_t *videoEncoderHotkeyData);
+
+	virtual ~StreamElementsCustomVideoComposition();
+
+public:
+	static std::shared_ptr<StreamElementsVideoCompositionBase>
+	Create(std::string id, std::string name, uint32_t width,
+	       uint32_t height, std::string videoEncoderId, obs_data_t* videoEncoderSettings, obs_data_t* videoEncoderHotkeyData)
+	{
+		return std::make_shared<StreamElementsCustomVideoComposition>(
+			Private(), id, name, width, height, videoEncoderId, videoEncoderSettings, videoEncoderHotkeyData);
+	}
+
+private:
+	obs_encoder_t *m_videoEncoder;
+	obs_view_t *m_view;
+	video_t *m_video;
+
+public:
+	virtual std::shared_ptr<
+		StreamElementsVideoCompositionBase::CompositionInfo>
+	GetCompositionInfo(StreamElementsCompositionEventListener *listener);
 
 	virtual void SerializeComposition(CefRefPtr<CefValue> &output);
 };
