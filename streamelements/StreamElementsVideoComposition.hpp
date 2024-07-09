@@ -175,6 +175,8 @@ private:
 	obs_view_t *m_view;
 	video_t *m_video;
 
+	obs_source_t *m_transition;
+
 public:
 	virtual std::shared_ptr<
 		StreamElementsVideoCompositionBase::CompositionInfo>

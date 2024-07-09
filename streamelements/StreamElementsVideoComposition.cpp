@@ -132,6 +132,14 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	if (!m_videoEncoder)
 		throw std::exception("obs_video_encoder_create() failed", 2);
 
+	m_transition = obs_source_create_private(
+		"cut_transition", (name + ": transition").c_str(), nullptr);
+
+	if (!m_transition) {
+		obs_encoder_release(m_videoEncoder);
+		throw std::exception("obs_source_create_private(cut_transition) failed", 2);
+	}
+
 	ovi.base_width = width;
 	ovi.base_height = height;
 	ovi.output_width = width;
@@ -139,6 +147,8 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 
 	m_view = obs_view_create();
 	m_video = obs_view_add2(m_view, &ovi);
+
+	obs_view_set_source(m_view, 0, m_transition);
 
 	obs_encoder_set_video(m_videoEncoder, m_video);
 }
@@ -151,9 +161,13 @@ StreamElementsCustomVideoComposition ::~StreamElementsCustomVideoComposition()
 	m_videoEncoder = nullptr;
 
 	obs_view_remove(m_view);
+	obs_view_destroy(m_view);
 	m_view = nullptr;
 
 	m_video = nullptr;
+
+	obs_source_release(m_transition);
+	m_transition = nullptr;
 }
 
 std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
