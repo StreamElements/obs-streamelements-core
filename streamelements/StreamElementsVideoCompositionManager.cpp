@@ -5,6 +5,13 @@ StreamElementsVideoCompositionManager::StreamElementsVideoCompositionManager()
 	m_nativeVideoComposition = StreamElementsObsNativeVideoComposition::Create();
 
 	m_videoCompositionsMap[m_nativeVideoComposition->GetId()] = m_nativeVideoComposition;
+
+	// TODO: Remove debug code
+	auto testComposition = StreamElementsCustomVideoComposition::Create(
+		"test1", "Test 1", 480, 640, "x264", obs_data_create(),
+		obs_data_create());
+
+	m_videoCompositionsMap[testComposition->GetId()] = testComposition;
 }
 
 StreamElementsVideoCompositionManager::~StreamElementsVideoCompositionManager()
