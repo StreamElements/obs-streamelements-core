@@ -171,11 +171,13 @@ public:
 	}
 
 private:
-	obs_encoder_t *m_videoEncoder;
-	obs_view_t *m_view;
-	video_t *m_video;
+	obs_encoder_t *m_videoEncoder = nullptr;
+	obs_view_t *m_view = nullptr;
+	video_t *m_video = nullptr;
 
-	obs_source_t *m_transition;
+	obs_source_t *m_transition = nullptr;
+
+	std::vector<obs_scene_t *> m_scenes;
 
 public:
 	virtual std::shared_ptr<

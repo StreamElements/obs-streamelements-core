@@ -151,23 +151,44 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	obs_view_set_source(m_view, 0, m_transition);
 
 	obs_encoder_set_video(m_videoEncoder, m_video);
+
+	auto scene1 = obs_scene_create_private("Scene 1");
+	m_scenes.push_back(scene1);
+	
+	obs_transition_start(m_transition, OBS_TRANSITION_MODE_AUTO, 0,
+			     obs_scene_get_source(scene1));
 }
 
 StreamElementsCustomVideoComposition ::~StreamElementsCustomVideoComposition()
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
-	obs_encoder_release(m_videoEncoder);
-	m_videoEncoder = nullptr;
+	if (m_videoEncoder) {
+		obs_encoder_release(m_videoEncoder);
+		m_videoEncoder = nullptr;
+	}
 
-	obs_view_remove(m_view);
-	obs_view_destroy(m_view);
-	m_view = nullptr;
+	if (m_view) {
+		obs_view_remove(m_view);
+		obs_view_destroy(m_view);
+		m_view = nullptr;
+	}
 
 	m_video = nullptr;
 
-	obs_source_release(m_transition);
-	m_transition = nullptr;
+	if (m_transition) {
+		obs_transition_clear(m_transition);
+		//obs_source_release(m_transition);
+		m_transition = nullptr;
+	}
+
+	if (m_scenes.size()) {
+		for (auto scene : m_scenes) {
+			obs_scene_release(scene);
+		}
+
+		m_scenes.clear();
+	}
 }
 
 std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
