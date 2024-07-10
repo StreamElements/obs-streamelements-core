@@ -230,6 +230,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/StreamElementsLocalFilesystemHttpServer.cpp
 	streamelements/StreamElementsVideoComposition.cpp
 	streamelements/StreamElementsVideoCompositionManager.cpp
+	streamelements/StreamElementsVideoCompositionViewWidget.cpp
 	streamelements/StreamElementsOutput.cpp
 	streamelements/StreamElementsOutputManager.cpp
 	streamelements/deps/StackWalker/StackWalker.cpp
@@ -315,6 +316,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/StreamElementsLocalFilesystemHttpServer.hpp
 	streamelements/StreamElementsVideoComposition.hpp
 	streamelements/StreamElementsVideoCompositionManager.hpp
+	streamelements/StreamElementsVideoCompositionViewWidget.hpp
 	streamelements/StreamElementsOutput.hpp
 	streamelements/StreamElementsOutputManager.hpp
 	streamelements/deps/StackWalker/StackWalker.h
