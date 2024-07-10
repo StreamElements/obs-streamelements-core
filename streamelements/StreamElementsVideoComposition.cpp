@@ -47,6 +47,8 @@ public:
 
 	virtual video_t *GetVideo() { return obs_get_video(); }
 	virtual audio_t *GetAudio() { return obs_get_audio(); }
+
+	virtual void Render() { obs_render_main_texture(); }
 };
 
 std::shared_ptr<
@@ -74,15 +76,17 @@ private:
 
 	video_t *m_video;
 	obs_encoder_t *m_videoEncoder;
+	obs_view_t *m_videoView;
 
 public:
 	StreamElementsCustomVideoCompositionInfo(
 		std::shared_ptr<StreamElementsVideoCompositionBase> owner,
-		StreamElementsCompositionEventListener *listener, video_t* video, obs_encoder_t *videoEncoder)
+		StreamElementsCompositionEventListener *listener, video_t* video, obs_encoder_t *videoEncoder, obs_view_t *videoView)
 		: StreamElementsVideoCompositionBase::CompositionInfo(owner,
 								      listener),
 		  m_video(video),
 		  m_videoEncoder(videoEncoder),
+		  m_videoView(videoView),
 		  m_listener(listener)
 	{
 	}
@@ -110,6 +114,8 @@ public:
 
 	virtual video_t *GetVideo() { return m_video; }
 	virtual audio_t *GetAudio() { return obs_get_audio(); }
+
+	virtual void Render() { obs_view_render(m_videoView); }
 };
 
 // ctor only usable by this class
@@ -159,7 +165,7 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 			     obs_scene_get_source(scene1));
 }
 
-StreamElementsCustomVideoComposition ::~StreamElementsCustomVideoComposition()
+StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
@@ -198,7 +204,7 @@ StreamElementsCustomVideoComposition::GetCompositionInfo(
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
 	return std::make_shared<StreamElementsCustomVideoCompositionInfo>(
-		shared_from_this(), listener, m_video, m_videoEncoder);
+		shared_from_this(), listener, m_video, m_videoEncoder, m_view);
 }
 
 void StreamElementsCustomVideoComposition::SerializeComposition(
