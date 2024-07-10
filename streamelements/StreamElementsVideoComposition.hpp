@@ -49,6 +49,8 @@ public:
 
 		virtual video_t *GetVideo() = 0;
 		virtual audio_t *GetAudio() = 0;
+
+		virtual void Render() = 0;
 	};
 
 private:

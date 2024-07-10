@@ -2,6 +2,45 @@
 #include <QWindow>
 #include <QScreen>
 
+static inline void startRegion(int vX, int vY, int vCX, int vCY, float oL,
+			       float oR, float oT, float oB)
+{
+	gs_projection_push();
+	gs_viewport_push();
+	gs_set_viewport(vX, vY, vCX, vCY);
+	gs_ortho(oL, oR, oT, oB, -100.0f, 100.0f);
+}
+
+static inline void endRegion()
+{
+	gs_viewport_pop();
+	gs_projection_pop();
+}
+
+static inline void GetScaleAndCenterPos(int baseCX, int baseCY, int windowCX,
+					int windowCY, int &x, int &y,
+					float &scale)
+{
+	double windowAspect, baseAspect;
+	int newCX, newCY;
+
+	windowAspect = double(windowCX) / double(windowCY);
+	baseAspect = double(baseCX) / double(baseCY);
+
+	if (windowAspect > baseAspect) {
+		scale = float(windowCY) / float(baseCY);
+		newCX = int(double(windowCY) * baseAspect);
+		newCY = windowCY;
+	} else {
+		scale = float(windowCX) / float(baseCX);
+		newCX = windowCX;
+		newCY = int(float(windowCX) / baseAspect);
+	}
+
+	x = windowCX / 2 - newCX / 2;
+	y = windowCY / 2 - newCY / 2;
+}
+
 static inline QSize GetPixelSize(QWidget *widget)
 {
 	return widget->size() * widget->devicePixelRatioF();
@@ -197,8 +236,34 @@ void StreamElementsVideoCompositionViewWidget::OnDisplayChange()
 		obs_display_update_color_space(m_display);
 }
 
-void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* data, uint32_t cx,
-	uint32_t cy)
+void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* data, uint32_t displayWidth,
+	uint32_t displayHeight)
 {
+	StreamElementsVideoCompositionViewWidget *window =
+		reinterpret_cast<StreamElementsVideoCompositionViewWidget *>(
+			data);
 
+	uint32_t sourceWidth;
+	uint32_t sourceHeight;
+	int centerX, centerY;
+	int newCX, newCY;
+	float scale;
+
+	auto video = window->m_videoCompositionInfo->GetVideo();
+	auto ovi = video_output_get_info(video);
+
+	sourceWidth = ovi->width;
+	sourceHeight = ovi->height;
+
+	GetScaleAndCenterPos(sourceWidth, sourceHeight, displayWidth, displayHeight, centerX, centerY, scale);
+
+	newCX = int(scale * float(sourceWidth));
+	newCY = int(scale * float(sourceHeight));
+
+	startRegion(centerX, centerY, newCX, newCY, 0.0f, float(sourceWidth), 0.0f,
+		    float(sourceHeight));
+
+	window->m_videoCompositionInfo->Render();
+
+	endRegion();
 }
