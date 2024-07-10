@@ -8,6 +8,8 @@ static inline void startRegion(int vX, int vY, int vCX, int vCY, float oL,
 	gs_projection_push();
 	gs_viewport_push();
 	gs_set_viewport(vX, vY, vCX, vCY);
+
+	// We're projecting source-sized rectangle to the viewport rectangle set above
 	gs_ortho(oL, oR, oT, oB, -100.0f, 100.0f);
 }
 
@@ -17,28 +19,28 @@ static inline void endRegion()
 	gs_projection_pop();
 }
 
-static inline void GetScaleAndCenterPos(int baseCX, int baseCY, int windowCX,
-					int windowCY, int &x, int &y,
+static inline void GetScaleAndViewPos(int sourceWidth, int sourceHeight, int viewportWidth,
+					int viewportHeight, int &viewX, int &viewY,
 					float &scale)
 {
 	double windowAspect, baseAspect;
 	int newCX, newCY;
 
-	windowAspect = double(windowCX) / double(windowCY);
-	baseAspect = double(baseCX) / double(baseCY);
+	windowAspect = double(viewportWidth) / double(viewportHeight);
+	baseAspect = double(sourceWidth) / double(sourceHeight);
 
 	if (windowAspect > baseAspect) {
-		scale = float(windowCY) / float(baseCY);
-		newCX = int(double(windowCY) * baseAspect);
-		newCY = windowCY;
+		scale = float(viewportHeight) / float(sourceHeight);
+		newCX = int(double(viewportHeight) * baseAspect);
+		newCY = viewportHeight;
 	} else {
-		scale = float(windowCX) / float(baseCX);
-		newCX = windowCX;
-		newCY = int(float(windowCX) / baseAspect);
+		scale = float(viewportWidth) / float(sourceWidth);
+		newCX = viewportWidth;
+		newCY = int(float(viewportWidth) / baseAspect);
 	}
 
-	x = windowCX / 2 - newCX / 2;
-	y = windowCY / 2 - newCY / 2;
+	viewX = viewportWidth / 2 - newCX / 2;
+	viewY = viewportHeight / 2 - newCY / 2;
 }
 
 static inline QSize GetPixelSize(QWidget *widget)
@@ -236,8 +238,8 @@ void StreamElementsVideoCompositionViewWidget::OnDisplayChange()
 		obs_display_update_color_space(m_display);
 }
 
-void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* data, uint32_t displayWidth,
-	uint32_t displayHeight)
+void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* data, uint32_t viewportWidth,
+	uint32_t viewportHeight)
 {
 	StreamElementsVideoCompositionViewWidget *window =
 		reinterpret_cast<StreamElementsVideoCompositionViewWidget *>(
@@ -245,8 +247,8 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 
 	uint32_t sourceWidth;
 	uint32_t sourceHeight;
-	int centerX, centerY;
-	int newCX, newCY;
+	int viewX, viewY;
+	int viewWidth, viewHeight;
 	float scale;
 
 	auto video = window->m_videoCompositionInfo->GetVideo();
@@ -255,14 +257,15 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	sourceWidth = ovi->width;
 	sourceHeight = ovi->height;
 
-	GetScaleAndCenterPos(sourceWidth, sourceHeight, displayWidth, displayHeight, centerX, centerY, scale);
+	GetScaleAndViewPos(sourceWidth, sourceHeight, viewportWidth, viewportHeight, viewX, viewY, scale);
 
-	newCX = int(scale * float(sourceWidth));
-	newCY = int(scale * float(sourceHeight));
+	viewWidth = int(scale * float(sourceWidth));
+	viewHeight = int(scale * float(sourceHeight));
 
-	startRegion(centerX, centerY, newCX, newCY, 0.0f, float(sourceWidth), 0.0f,
+	startRegion(viewX, viewY, viewWidth, viewHeight, 0.0f, float(sourceWidth), 0.0f,
 		    float(sourceHeight));
 
+	// Render the view into the region set above
 	window->m_videoCompositionInfo->Render();
 
 	endRegion();
