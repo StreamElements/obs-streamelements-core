@@ -141,7 +141,7 @@ StreamElementsVideoCompositionViewWidget::StreamElementsVideoCompositionViewWidg
 			new SurfaceEventFilter(this));
 #endif
 
-	CreateDisplay();
+	//CreateDisplay();
 }
 
 StreamElementsVideoCompositionViewWidget::
