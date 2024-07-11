@@ -2,18 +2,29 @@
 #include <QWindow>
 #include <QScreen>
 
-static inline void startRegion(int vX, int vY, int vCX, int vCY, float oL,
+//
+// Define a projection region for drawing a view texture.
+//
+// The projection region maps a rectangle of the view source dimensions onto
+// a rectangle on the destination display viewport.
+//
+// That way when obs_render_main_texture() or obs_view_render() are called,
+// they can just draw the source scene/transition and not bother themselves
+// with scaling and projection onto the target surface at the correct
+// coordinates: everything is predetermined.
+//
+static inline void startProjectionRegion(int vX, int vY, int vCX, int vCY, float oL,
 			       float oR, float oT, float oB)
 {
 	gs_projection_push();
 	gs_viewport_push();
 	gs_set_viewport(vX, vY, vCX, vCY);
 
-	// We're projecting source-sized rectangle to the viewport rectangle set above
+	// We're projecting source-view-sized rectangle to the viewport rectangle set above
 	gs_ortho(oL, oR, oT, oB, -100.0f, 100.0f);
 }
 
-static inline void endRegion()
+static inline void endProjectionRegion()
 {
 	gs_viewport_pop();
 	gs_projection_pop();
@@ -262,11 +273,11 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	viewWidth = int(scale * float(sourceWidth));
 	viewHeight = int(scale * float(sourceHeight));
 
-	startRegion(viewX, viewY, viewWidth, viewHeight, 0.0f, float(sourceWidth), 0.0f,
+	startProjectionRegion(viewX, viewY, viewWidth, viewHeight, 0.0f, float(sourceWidth), 0.0f,
 		    float(sourceHeight));
 
 	// Render the view into the region set above
 	window->m_videoCompositionInfo->Render();
 
-	endRegion();
+	endProjectionRegion();
 }
