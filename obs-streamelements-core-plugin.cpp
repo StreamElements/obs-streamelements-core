@@ -28,6 +28,7 @@ using namespace json11;
 
 /* ========================================================================= */
 
+#include <obs-frontend-api.h>
 #include "streamelements/StreamElementsGlobalStateManager.hpp"
 #include "streamelements/StreamElementsUtils.hpp"
 
@@ -40,11 +41,21 @@ bool obs_module_load(void)
 	return true;
 }
 
-void obs_module_post_load(void)
+void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 {
+	if (event != OBS_FRONTEND_EVENT_FINISHED_LOADING)
+		return;
+
+	obs_frontend_remove_event_callback(handle_obs_frontend_event, nullptr);
+
 	// Initialize StreamElements plug-in
 	StreamElementsGlobalStateManager::GetInstance()->Initialize(
 		(QMainWindow *)obs_frontend_get_main_window());
+}
+
+void obs_module_post_load(void)
+{
+	obs_frontend_add_event_callback(handle_obs_frontend_event, nullptr);
 
 	/*
 	auto vendor = obs_websocket_register_vendor("obs-streamelements-core");

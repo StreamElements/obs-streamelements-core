@@ -1,6 +1,8 @@
 #include "StreamElementsVideoComposition.hpp"
 #include <obs-frontend-api.h>
 
+#include "StreamElementsUtils.hpp"
+
 ////////////////////////////////////////////////////////////////////////////////
 // OBS Main Composition
 ////////////////////////////////////////////////////////////////////////////////
@@ -160,9 +162,82 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 
 	auto scene1 = obs_scene_create_private("Scene 1");
 	m_scenes.push_back(scene1);
-	
+
 	obs_transition_start(m_transition, OBS_TRANSITION_MODE_AUTO, 0,
 			     obs_scene_get_source(scene1));
+
+	// TODO: Remove debug code
+	QtPostTask([=]() -> void {
+		auto source = obs_source_create("browser_source",
+						"test browser source", nullptr,
+						nullptr);
+
+		//obs_data_t *settings = obs_data_create();
+		//obs_source_update(source, settings);
+		//obs_data_release(settings);
+
+		struct atomic_update_args {
+			obs_source_t *source;
+			obs_sceneitem_t *sceneItem;
+			//obs_sceneitem_t *group;
+		};
+
+		atomic_update_args args = {};
+
+		args.source = source;
+		args.sceneItem = nullptr;
+		//args.group = nullptr;
+
+		obs_enter_graphics();
+		obs_scene_atomic_update(
+			scene1,
+			[](void *data, obs_scene_t *scene) {
+				atomic_update_args *args =
+					(atomic_update_args *)data;
+
+				auto sceneItem =
+					obs_scene_add(scene, args->source);
+				obs_sceneitem_addref(
+					sceneItem); // obs_scene_add() does not increment refcount for result. why? because.
+
+				args->sceneItem = sceneItem;
+			},
+			&args);
+		obs_leave_graphics();
+
+		obs_sceneitem_release(args.sceneItem);
+		obs_source_release(source);
+
+		obs_enum_sources(
+			[](void *arg, obs_source_t *iterator) {
+				std::string id = obs_source_get_id(iterator);
+				std::string name =
+					obs_source_get_name(iterator);
+
+				std::string showing =
+					obs_source_showing(iterator) ? "showing"
+								     : "hidden";
+
+				std::string active = obs_source_active(iterator)
+							     ? "active"
+							     : "inactive";
+
+				OutputDebugStringA(
+					("source: " + id + " - " + name + " - " + showing + ", " + active + "\n")
+						.c_str());
+
+				return true;
+			},
+			nullptr);
+
+		uint32_t cx, cy;
+		obs_transition_get_size(m_transition, &cx, &cy);
+		char buffer[32];
+		std::string size = itoa(cx, buffer, 10);
+		size += " x ";
+		size += itoa(cy, buffer, 10);
+		OutputDebugStringA(("transition size: " + size).c_str());
+	});
 }
 
 StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
