@@ -108,7 +108,7 @@ StreamElementsVideoCompositionViewWidget::StreamElementsVideoCompositionViewWidg
 	auto windowVisible = [this](bool visible) {
 		if (!visible) {
 #if !defined(_WIN32) && !defined(__APPLE__)
-			display = nullptr;
+			//m_display = nullptr;
 #endif
 			return;
 		}
@@ -164,6 +164,9 @@ void StreamElementsVideoCompositionViewWidget::CreateDisplay()
 	if (m_display)
 		return;
 
+	if (!isVisible())
+		return;
+
 	if (!windowHandle()->isExposed())
 		return;
 
@@ -178,7 +181,7 @@ void StreamElementsVideoCompositionViewWidget::CreateDisplay()
 	if (!QTToGSWindow(windowHandle(), info.window))
 		return;
 
-	m_display = obs_display_create(&info, 0L);
+	m_display = obs_display_create(&info, 0x008000L);
 
 	obs_display_add_draw_callback(m_display, obs_display_draw_callback, this);
 }
@@ -252,6 +255,7 @@ void StreamElementsVideoCompositionViewWidget::OnDisplayChange()
 void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* data, uint32_t viewportWidth,
 	uint32_t viewportHeight)
 {
+	OutputDebugStringA("obs_display_draw_callback\n");
 	StreamElementsVideoCompositionViewWidget *window =
 		reinterpret_cast<StreamElementsVideoCompositionViewWidget *>(
 			data);

@@ -1,5 +1,10 @@
 #include "StreamElementsVideoCompositionManager.hpp"
 
+#include <QDialog>
+#include <QVBoxLayout>
+#include "StreamElementsVideoCompositionViewWidget.hpp"
+#include "StreamElementsUtils.hpp"
+
 StreamElementsVideoCompositionManager::StreamElementsVideoCompositionManager()
 {
 	m_nativeVideoComposition = StreamElementsObsNativeVideoComposition::Create();
@@ -7,11 +12,26 @@ StreamElementsVideoCompositionManager::StreamElementsVideoCompositionManager()
 	m_videoCompositionsMap[m_nativeVideoComposition->GetId()] = m_nativeVideoComposition;
 
 	// TODO: Remove debug code
-	auto testComposition = StreamElementsCustomVideoComposition::Create(
-		"test1", "Test 1", 480, 640, "x264", obs_data_create(),
-		obs_data_create());
+	QtPostTask([=]() -> void {
+		auto testComposition =
+			StreamElementsCustomVideoComposition::Create(
+				"test1", "Test 1", 1920, 1080, "x264",
+				obs_data_create(), obs_data_create());
 
-	m_videoCompositionsMap[testComposition->GetId()] = testComposition;
+		m_videoCompositionsMap[testComposition->GetId()] =
+			testComposition;
+
+		auto widget = new StreamElementsVideoCompositionViewWidget(
+			nullptr, testComposition);
+
+		auto dlg = new QDialog();
+		dlg->setFixedSize(1024, 768);
+		auto topLayout = new QVBoxLayout(dlg);
+		topLayout->addWidget(widget);
+		//dlg->show();
+
+		QtPostTask([=]() -> void { dlg->exec(); });
+	});
 }
 
 StreamElementsVideoCompositionManager::~StreamElementsVideoCompositionManager()
