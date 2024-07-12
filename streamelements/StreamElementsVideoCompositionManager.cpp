@@ -30,7 +30,7 @@ StreamElementsVideoCompositionManager::StreamElementsVideoCompositionManager()
 		topLayout->addWidget(widget);
 		//dlg->show();
 
-		QtPostTask([=]() -> void { dlg->exec(); });
+		QtDelayTask([=]() -> void { dlg->exec(); }, 1000);
 	});
 }
 

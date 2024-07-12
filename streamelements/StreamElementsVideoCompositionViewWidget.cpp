@@ -30,6 +30,7 @@ static inline void endProjectionRegion()
 	gs_projection_pop();
 }
 
+/*
 static inline void GetScaleAndViewPos(int sourceWidth, int sourceHeight, int viewportWidth,
 					int viewportHeight, int &viewX, int &viewY,
 					float &scale)
@@ -53,6 +54,7 @@ static inline void GetScaleAndViewPos(int sourceWidth, int sourceHeight, int vie
 	viewX = viewportWidth / 2 - newCX / 2;
 	viewY = viewportHeight / 2 - newCY / 2;
 }
+*/
 
 static inline QSize GetPixelSize(QWidget *widget)
 {
@@ -262,9 +264,9 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 
 	uint32_t sourceWidth;
 	uint32_t sourceHeight;
-	int viewX, viewY;
-	int viewWidth, viewHeight;
-	float scale;
+	//int viewX, viewY;
+	//int viewWidth, viewHeight;
+	//float scale;
 
 	auto video = window->m_videoCompositionInfo->GetVideo();
 	auto ovi = video_output_get_info(video);
@@ -272,13 +274,16 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	sourceWidth = ovi->width;
 	sourceHeight = ovi->height;
 
-	GetScaleAndViewPos(sourceWidth, sourceHeight, viewportWidth, viewportHeight, viewX, viewY, scale);
+	//GetScaleAndViewPos(sourceWidth, sourceHeight, viewportWidth, viewportHeight, viewX, viewY, scale);
 
-	viewWidth = int(scale * float(sourceWidth));
-	viewHeight = int(scale * float(sourceHeight));
+	//viewWidth = int(scale * float(sourceWidth));
+	//viewHeight = int(scale * float(sourceHeight));
 
-	startProjectionRegion(viewX, viewY, viewWidth, viewHeight, 0.0f, float(sourceWidth), 0.0f,
-		    float(sourceHeight));
+	//startProjectionRegion(viewX, viewY, viewWidth, viewHeight, 0.0f, float(sourceWidth), 0.0f,
+	//	    float(sourceHeight));
+
+	startProjectionRegion(0, 0, viewportWidth, viewportHeight, 0.0f,
+			float(sourceWidth), 0.0f, float(sourceHeight));
 
 	// Render the view into the region set above
 	window->m_videoCompositionInfo->Render();
