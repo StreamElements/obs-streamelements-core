@@ -123,6 +123,8 @@ public:
 	}
 };
 
+std::future<void> QtDelayTask(std::function<void()> task, int delayMs);
+
 #define QtPostTask QtAsyncCallFunctor(__FILE__, __LINE__, &__QtPostTask_Impl)
 #define QtExecSync QtAsyncCallFunctor(__FILE__, __LINE__, &__QtExecSync_Impl)
 

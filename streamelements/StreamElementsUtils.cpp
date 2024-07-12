@@ -176,6 +176,29 @@ static void AsyncCallContextPop()
 	delete last;
 }
 
+std::future<void> QtDelayTask(std::function<void()> task, int delayMs)
+{
+	auto promise = std::make_shared<std::promise<void>>();
+
+	auto t = new QTimer();
+
+	t->moveToThread(qApp->thread());
+	t->setSingleShot(true);
+
+	QObject::connect(t, &QTimer::timeout, [=]() {
+		t->deleteLater();
+
+		task();
+
+		promise->set_value();
+	});
+
+	QMetaObject::invokeMethod(t, "start", Qt::QueuedConnection,
+				  Q_ARG(int, delayMs));
+
+	return promise->get_future();
+}
+
 std::future<void> __QtPostTask_Impl(std::function<void()> task,
 				    std::string file, int line)
 {

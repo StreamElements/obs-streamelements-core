@@ -172,9 +172,11 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 						"test browser source", nullptr,
 						nullptr);
 
-		//obs_data_t *settings = obs_data_create();
-		//obs_source_update(source, settings);
-		//obs_data_release(settings);
+		obs_data_t *settings = obs_data_create();
+		obs_data_set_int(settings, "width", width);
+		obs_data_set_int(settings, "height", height);
+		obs_source_update(source, settings);
+		obs_data_release(settings);
 
 		struct atomic_update_args {
 			obs_source_t *source;
