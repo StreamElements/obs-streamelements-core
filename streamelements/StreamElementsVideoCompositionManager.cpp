@@ -12,7 +12,7 @@ StreamElementsVideoCompositionManager::StreamElementsVideoCompositionManager()
 	m_videoCompositionsMap[m_nativeVideoComposition->GetId()] = m_nativeVideoComposition;
 
 	// TODO: Remove debug code
-	QtPostTask([=]() -> void {
+	QtDelayTask([=]() -> void {
 		auto testComposition =
 			StreamElementsCustomVideoComposition::Create(
 				"test1", "Test 1", 1920, 1080, "x264",
@@ -31,7 +31,7 @@ StreamElementsVideoCompositionManager::StreamElementsVideoCompositionManager()
 		//dlg->show();
 
 		QtDelayTask([=]() -> void { dlg->exec(); }, 1000);
-	});
+	}, 1000);
 }
 
 StreamElementsVideoCompositionManager::~StreamElementsVideoCompositionManager()
