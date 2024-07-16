@@ -37,7 +37,7 @@ static inline void colorToVec4(QColor color, vec4 *vec) {
 		 color.blueF(), color.alphaF());
 }
 
-static void fillRect(float x1, float y1, float x2, float y2, QColor color)
+static inline void fillRect(float x1, float y1, float x2, float y2, QColor color)
 {
 	x1 = std::round(x1);
 	x2 = std::round(x2);
@@ -54,11 +54,6 @@ static void fillRect(float x1, float y1, float x2, float y2, QColor color)
 
 	vec4 colorVec4;
 	colorToVec4(color, &colorVec4);
-
-	char buffer[512];
-	sprintf(buffer, "color: %f %f %f %f\n", colorVec4.x, colorVec4.y, colorVec4.z,
-		colorVec4.w);
-	OutputDebugStringA(buffer);
 
 	gs_matrix_push();
 	gs_matrix_identity();
@@ -87,6 +82,68 @@ static void fillRect(float x1, float y1, float x2, float y2, QColor color)
 	gs_technique_end(tech);
 }
 
+static inline void drawRect(float x1, float y1, float x2, float y2,
+			    float thickness, QColor color)
+{
+	x1 = std::round(x1);
+	x2 = std::round(x2);
+	y1 = std::round(y1);
+	y2 = std::round(y2);
+
+	fillRect(x1, y1, x2, y1 + thickness, color);
+	fillRect(x1, y2 - thickness, x2, y2, color);
+	fillRect(x1, y1 + thickness, x1 + thickness, y2 - thickness, color);
+	fillRect(x2 - thickness, y1 + thickness, x2, y2 - thickness, color);
+}
+
+static inline void drawLine(float x1, float y1, float x2, float y2,
+			    float thickness,
+			    QColor color)
+{
+	x1 = std::round(x1);
+	x2 = std::round(x2);
+	y1 = std::round(y1);
+	y2 = std::round(y2);
+
+	gs_effect_t *solid = obs_get_base_effect(OBS_EFFECT_SOLID);
+	gs_technique_t *tech = gs_effect_get_technique(solid, "Solid");
+
+	gs_technique_begin(tech);
+	gs_technique_begin_pass(tech, 0);
+
+	gs_eparam_t *colParam =
+		gs_effect_get_param_by_name(gs_get_effect(), "color");
+
+	vec4 colorVec4;
+	colorToVec4(color, &colorVec4);
+
+	gs_matrix_push();
+	gs_matrix_identity();
+
+	//gs_matrix_translate3f(x1, y1, 0.0f);       // Start top/left position
+	//gs_matrix_scale3f(x2 - x1, y2 - y1, 1.0f); // Width/height
+
+	gs_effect_set_vec4(colParam, &colorVec4);
+
+	gs_render_start(true);
+	gs_vertex2f(x1, y1);
+	gs_vertex2f(x1 + thickness, y1 + thickness);
+	gs_vertex2f(x2 + thickness, y2 + thickness);
+	gs_vertex2f(x2, y2);
+	gs_vertex2f(x1, y1);
+	auto vertexBuffer = gs_render_save();
+
+	gs_load_vertexbuffer(vertexBuffer);
+	gs_draw(GS_TRISTRIP, 0, 0);
+	gs_vertexbuffer_destroy(vertexBuffer);
+
+	gs_matrix_pop();
+
+	gs_load_vertexbuffer(nullptr);
+
+	gs_technique_end_pass(tech);
+	gs_technique_end(tech);
+}
 /*
 static inline void GetScaleAndViewPos(int sourceWidth, int sourceHeight, int viewportWidth,
 					int viewportHeight, int &viewX, int &viewY,
@@ -373,8 +430,8 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 		reinterpret_cast<StreamElementsVideoCompositionViewWidget *>(
 			data);
 
-	uint32_t sourceWidth;
-	uint32_t sourceHeight;
+	uint32_t worldWidth;
+	uint32_t worldHeight;
 	//int viewX, viewY;
 	//int viewWidth, viewHeight;
 	//float scale;
@@ -382,8 +439,8 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	auto video = self->m_videoCompositionInfo->GetVideo();
 	auto ovi = video_output_get_info(video);
 
-	sourceWidth = ovi->width;
-	sourceHeight = ovi->height;
+	worldWidth = ovi->width;
+	worldHeight = ovi->height;
 
 	//GetScaleAndViewPos(sourceWidth, sourceHeight, viewportWidth, viewportHeight, viewX, viewY, scale);
 
@@ -394,16 +451,28 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	//	    float(sourceHeight));
 
 	startProjectionRegion(0, 0, viewportWidth, viewportHeight, 0.0f,
-			float(sourceWidth), 0.0f, float(sourceHeight));
+			float(worldWidth), 0.0f, float(worldHeight));
 
 	// Render the view into the region set above
 	self->m_videoCompositionInfo->Render();
 
 	if (self->m_currUnderMouse) {
-		fillRect(self->m_currMouseWorldX, self->m_currMouseWorldY,
+		drawRect(self->m_currMouseWorldX, self->m_currMouseWorldY,
 			 self->m_currMouseWorldX + 50,
-			 self->m_currMouseWorldY + 50,
+			 self->m_currMouseWorldY + 50, 5.0f,
 			 QColor(255, 0, 0, 175));
+
+		drawLine(0, 0, self->m_currMouseWorldX, self->m_currMouseWorldY,
+			 5.0f, QColor(0, 255, 0, 175));
+
+		drawLine(0, worldHeight, self->m_currMouseWorldX, self->m_currMouseWorldY,
+			 5.0f, QColor(0, 255, 0, 175));
+
+		drawLine(worldWidth, worldHeight, self->m_currMouseWorldX,
+			 self->m_currMouseWorldY, 5.0f, QColor(0, 255, 0, 175));
+
+		drawLine(worldWidth, 0, self->m_currMouseWorldX,
+			 self->m_currMouseWorldY, 5.0f, QColor(0, 255, 0, 175));
 	}
 
 	endProjectionRegion();
