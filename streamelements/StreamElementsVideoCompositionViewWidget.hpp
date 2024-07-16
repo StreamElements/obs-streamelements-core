@@ -37,6 +37,11 @@ protected:
 				 long *) override;
 #endif
 
+protected:
+	virtual void mouseMoveEvent(QMouseEvent *event) override;
+	virtual void mousePressEvent(QMouseEvent *event) override;
+	virtual void mouseReleaseEvent(QMouseEvent *event) override;
+
 private:
 	static void obs_display_draw_callback(void *data, uint32_t cx,
 					      uint32_t cy);

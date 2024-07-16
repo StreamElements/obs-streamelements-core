@@ -1,6 +1,7 @@
 #include "StreamElementsVideoCompositionViewWidget.hpp"
 #include <QWindow>
 #include <QScreen>
+#include <QMouseEvent>
 
 //
 // Define a projection region for drawing a view texture.
@@ -104,6 +105,8 @@ StreamElementsVideoCompositionViewWidget::StreamElementsVideoCompositionViewWidg
 	setAttribute(Qt::WA_OpaquePaintEvent);
 	setAttribute(Qt::WA_DontCreateNativeAncestors);
 	setAttribute(Qt::WA_NativeWindow);
+
+	setMouseTracking(true);
 
 	m_videoCompositionInfo = m_videoComposition->GetCompositionInfo(this);
 
@@ -254,10 +257,54 @@ void StreamElementsVideoCompositionViewWidget::OnDisplayChange()
 		obs_display_update_color_space(m_display);
 }
 
+void StreamElementsVideoCompositionViewWidget::mouseMoveEvent(QMouseEvent *event)
+{
+	QWidget::mouseMoveEvent(event);
+
+	auto displaySize = GetPixelSize(this);
+
+	auto displayPos = event->localPos();
+
+	auto ovi = video_output_get_info(m_videoCompositionInfo->GetVideo());
+
+	auto displayWidth = (uint32_t)displaySize.width();
+	auto displayHeight = (uint32_t)displaySize.height();
+
+	auto worldWidth = ovi->width;
+	auto worldHeight = ovi->height;
+
+	auto widthRatio = (double)displayWidth / (double)worldWidth;
+	auto heightRatio = (double)displayHeight / (double)worldHeight;
+
+	auto worldX = (uint32_t)((double)displayPos.x() / widthRatio);
+	auto worldY = (uint32_t)((double)displayPos.y() / heightRatio);
+
+	char buffer[512];
+	sprintf(buffer,
+		"display: %d x %d | world: %d x %d | display pos: %d x %d | world pos: %d x %d\n",
+		displayWidth, displayHeight, worldWidth, worldHeight,
+		(uint32_t)displayPos.x(), (uint32_t)displayPos.y(), worldX, worldY);
+
+	OutputDebugStringA(buffer);
+}
+
+void StreamElementsVideoCompositionViewWidget::mousePressEvent(
+	QMouseEvent *event)
+{
+	QWidget::mousePressEvent(event);
+}
+
+void StreamElementsVideoCompositionViewWidget::mouseReleaseEvent(
+	QMouseEvent *event)
+{
+	QWidget::mouseReleaseEvent(event);
+}
+
+
 void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* data, uint32_t viewportWidth,
 	uint32_t viewportHeight)
 {
-	OutputDebugStringA("obs_display_draw_callback\n");
+	//OutputDebugStringA("obs_display_draw_callback\n");
 	StreamElementsVideoCompositionViewWidget *window =
 		reinterpret_cast<StreamElementsVideoCompositionViewWidget *>(
 			data);
