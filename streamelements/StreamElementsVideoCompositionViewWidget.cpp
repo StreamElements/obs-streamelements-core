@@ -126,7 +126,7 @@ static inline void drawLine(float x1, float y1, float x2, float y2,
 	gs_effect_set_vec4(colParam, &colorVec4);
 
 	gs_render_start(true);
-	gs_vertex2f(x1, y1);
+	gs_vertex2f(x1 - (thickness / 2.0f), y1 - (thickness / 2.0f));
 	gs_vertex2f(x1 + thickness, y1 + thickness);
 	gs_vertex2f(x2 + thickness, y2 + thickness);
 	gs_vertex2f(x2, y2);
@@ -457,6 +457,11 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	self->m_videoCompositionInfo->Render();
 
 	if (self->m_currUnderMouse) {
+		fillRect(self->m_currMouseWorldX, self->m_currMouseWorldY,
+			 self->m_currMouseWorldX + 50,
+			 self->m_currMouseWorldY + 50,
+			 QColor(255, 255, 0, 175));
+
 		drawRect(self->m_currMouseWorldX, self->m_currMouseWorldY,
 			 self->m_currMouseWorldX + 50,
 			 self->m_currMouseWorldY + 50, 5.0f,
