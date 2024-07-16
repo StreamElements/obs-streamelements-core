@@ -119,22 +119,26 @@ StreamElementsVideoCompositionViewWidget::StreamElementsVideoCompositionViewWidg
 		}
 
 		if (!m_display) {
-			CreateDisplay();
+			//CreateDisplay();
 		} else {
 			QSize size = GetPixelSize(this);
+			obs_enter_graphics();
 			obs_display_resize(m_display, size.width(),
 					   size.height());
+			obs_leave_graphics();
 		}
 	};
 
 	auto screenChanged = [this](QScreen *) {
-		CreateDisplay();
+		//CreateDisplay();
 
 		if (!m_display)
 			return;
 
 		QSize size = GetPixelSize(this);
+		obs_enter_graphics();
 		obs_display_resize(m_display, size.width(), size.height());
+		obs_leave_graphics();
 	};
 
 	connect(windowHandle(), &QWindow::visibleChanged, windowVisible);
@@ -153,10 +157,12 @@ StreamElementsVideoCompositionViewWidget::
 ~StreamElementsVideoCompositionViewWidget()
 {
 	if (m_display) {
+		obs_enter_graphics();
 		obs_display_remove_draw_callback(
 			m_display, obs_display_draw_callback, this);
 
 		obs_display_destroy(m_display);
+		obs_leave_graphics();
 
 		m_display = nullptr;
 	}
@@ -186,9 +192,11 @@ void StreamElementsVideoCompositionViewWidget::CreateDisplay()
 	if (!QTToGSWindow(windowHandle(), info.window))
 		return;
 
+	obs_enter_graphics();
 	m_display = obs_display_create(&info, 0x008000L);
 
 	obs_display_add_draw_callback(m_display, obs_display_draw_callback, this);
+	obs_leave_graphics();
 }
 
 void StreamElementsVideoCompositionViewWidget::paintEvent(QPaintEvent *event)
@@ -282,15 +290,7 @@ void StreamElementsVideoCompositionViewWidget::mouseMoveEvent(QMouseEvent *event
 {
 	QWidget::mouseMoveEvent(event);
 
-	uint32_t worldX, worldY;
-	viewportToWorldCoords(event, &worldX, &worldY);
-
-	char buffer[512];
-	sprintf(buffer,
-		"world pos: %d x %d\n",
-		worldX, worldY);
-
-	OutputDebugStringA(buffer);
+	viewportToWorldCoords(event, &m_currMouseWorldX, &m_currMouseWorldY);
 }
 
 void StreamElementsVideoCompositionViewWidget::mousePressEvent(
@@ -298,8 +298,7 @@ void StreamElementsVideoCompositionViewWidget::mousePressEvent(
 {
 	QWidget::mousePressEvent(event);
 
-	uint32_t worldX, worldY;
-	viewportToWorldCoords(event, &worldX, &worldY);
+	viewportToWorldCoords(event, &m_currMouseWorldX, &m_currMouseWorldY);
 }
 
 void StreamElementsVideoCompositionViewWidget::mouseReleaseEvent(
@@ -307,8 +306,7 @@ void StreamElementsVideoCompositionViewWidget::mouseReleaseEvent(
 {
 	QWidget::mouseReleaseEvent(event);
 
-	uint32_t worldX, worldY;
-	viewportToWorldCoords(event, &worldX, &worldY);
+	viewportToWorldCoords(event, &m_currMouseWorldX, &m_currMouseWorldY);
 }
 
 void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* data, uint32_t viewportWidth,
@@ -346,4 +344,11 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	window->m_videoCompositionInfo->Render();
 
 	endProjectionRegion();
+
+	char buffer[512];
+	sprintf(buffer, "under mouse: %s | world pos: %d x %d\n",
+		window->m_currUnderMouse ? "Y" : "N", window->m_currMouseWorldX,
+		window->m_currMouseWorldY);
+
+	OutputDebugStringA(buffer);
 }

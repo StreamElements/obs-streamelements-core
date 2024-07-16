@@ -3,6 +3,7 @@
 #include "StreamElementsVideoCompositionManager.hpp"
 #include <QWidget>
 #include <QMouseEvent>
+#include <QEnterEvent>
 
 class StreamElementsVideoCompositionViewWidget : public QWidget, public StreamElementsCompositionEventListener
 {
@@ -10,7 +11,7 @@ private:
 	std::shared_ptr<StreamElementsVideoCompositionBase> m_videoComposition;
 	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo> m_videoCompositionInfo;
 
-	obs_display_t *m_display;
+	obs_display_t *m_display = nullptr;
 
 public:
 	StreamElementsVideoCompositionViewWidget(
@@ -39,6 +40,10 @@ protected:
 #endif
 
 protected:
+	uint32_t m_currMouseWorldX = 0;
+	uint32_t m_currMouseWorldY = 0;
+	bool m_currUnderMouse = false;
+
 	void viewportToWorldCoords(uint32_t viewportX, uint32_t viewportY,
 				   uint32_t *worldX, uint32_t *worldY);
 
@@ -63,6 +68,13 @@ protected:
 	virtual void mouseMoveEvent(QMouseEvent *event) override;
 	virtual void mousePressEvent(QMouseEvent *event) override;
 	virtual void mouseReleaseEvent(QMouseEvent *event) override;
+
+	virtual void enterEvent(QEnterEvent *event) override {
+		viewportToWorldCoords(event->localPos(), &m_currMouseWorldX, &m_currMouseWorldY);
+
+		m_currUnderMouse = true;
+	}
+	virtual void leaveEvent(QEvent *event) override { m_currUnderMouse = false; }
 
 private:
 	static void obs_display_draw_callback(void *data, uint32_t cx,
