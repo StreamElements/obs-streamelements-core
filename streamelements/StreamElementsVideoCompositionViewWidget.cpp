@@ -2,6 +2,7 @@
 #include <QWindow>
 #include <QScreen>
 #include <QMouseEvent>
+#include <QColor>
 
 //
 // Define a projection region for drawing a view texture.
@@ -29,6 +30,61 @@ static inline void endProjectionRegion()
 {
 	gs_viewport_pop();
 	gs_projection_pop();
+}
+
+static inline void colorToVec4(QColor color, vec4 *vec) {
+	vec4_set(vec, color.redF(), color.greenF(),
+		 color.blueF(), color.alphaF());
+}
+
+static void fillRect(float x1, float y1, float x2, float y2, QColor color)
+{
+	x1 = std::round(x1);
+	x2 = std::round(x2);
+	y1 = std::round(y1);
+	y2 = std::round(y2);
+
+	gs_effect_t *solid = obs_get_base_effect(OBS_EFFECT_SOLID);
+	gs_technique_t *tech = gs_effect_get_technique(solid, "Solid");
+
+	gs_technique_begin(tech);
+	gs_technique_begin_pass(tech, 0);
+
+	gs_eparam_t *colParam = gs_effect_get_param_by_name(gs_get_effect(), "color");
+
+	vec4 colorVec4;
+	colorToVec4(color, &colorVec4);
+
+	char buffer[512];
+	sprintf(buffer, "color: %f %f %f %f\n", colorVec4.x, colorVec4.y, colorVec4.z,
+		colorVec4.w);
+	OutputDebugStringA(buffer);
+
+	gs_matrix_push();
+	gs_matrix_identity();
+	
+	gs_matrix_translate3f(x1, y1, 0.0f); // Start top/left position
+	gs_matrix_scale3f(x2 - x1, y2 - y1, 1.0f); // Width/height
+
+	gs_effect_set_vec4(colParam, &colorVec4);
+
+	gs_render_start(true);
+	gs_vertex2f(0.0f, 0.0f);
+	gs_vertex2f(1.0f, 0.0f);
+	gs_vertex2f(0.0f, 1.0f);
+	gs_vertex2f(1.0f, 1.0f);
+	auto vertexBuffer = gs_render_save();
+
+	gs_load_vertexbuffer(vertexBuffer); // tl, tr, br, bl
+	gs_draw(GS_TRISTRIP, 0, 0);
+	gs_vertexbuffer_destroy(vertexBuffer);
+
+	gs_matrix_pop();
+
+	gs_load_vertexbuffer(nullptr);
+
+	gs_technique_end_pass(tech);
+	gs_technique_end(tech);
 }
 
 /*
@@ -313,7 +369,7 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	uint32_t viewportHeight)
 {
 	//OutputDebugStringA("obs_display_draw_callback\n");
-	StreamElementsVideoCompositionViewWidget *window =
+	StreamElementsVideoCompositionViewWidget *self =
 		reinterpret_cast<StreamElementsVideoCompositionViewWidget *>(
 			data);
 
@@ -323,7 +379,7 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	//int viewWidth, viewHeight;
 	//float scale;
 
-	auto video = window->m_videoCompositionInfo->GetVideo();
+	auto video = self->m_videoCompositionInfo->GetVideo();
 	auto ovi = video_output_get_info(video);
 
 	sourceWidth = ovi->width;
@@ -341,14 +397,21 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 			float(sourceWidth), 0.0f, float(sourceHeight));
 
 	// Render the view into the region set above
-	window->m_videoCompositionInfo->Render();
+	self->m_videoCompositionInfo->Render();
+
+	if (self->m_currUnderMouse) {
+		fillRect(self->m_currMouseWorldX, self->m_currMouseWorldY,
+			 self->m_currMouseWorldX + 50,
+			 self->m_currMouseWorldY + 50,
+			 QColor(255, 0, 0, 175));
+	}
 
 	endProjectionRegion();
 
 	char buffer[512];
 	sprintf(buffer, "under mouse: %s | world pos: %d x %d\n",
-		window->m_currUnderMouse ? "Y" : "N", window->m_currMouseWorldX,
-		window->m_currMouseWorldY);
+		self->m_currUnderMouse ? "Y" : "N", self->m_currMouseWorldX,
+		self->m_currMouseWorldY);
 
 	OutputDebugStringA(buffer);
 }
