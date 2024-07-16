@@ -257,13 +257,11 @@ void StreamElementsVideoCompositionViewWidget::OnDisplayChange()
 		obs_display_update_color_space(m_display);
 }
 
-void StreamElementsVideoCompositionViewWidget::mouseMoveEvent(QMouseEvent *event)
+void StreamElementsVideoCompositionViewWidget::viewportToWorldCoords(
+	uint32_t viewportX, uint32_t viewportY,
+	uint32_t* worldX, uint32_t* worldY)
 {
-	QWidget::mouseMoveEvent(event);
-
 	auto displaySize = GetPixelSize(this);
-
-	auto displayPos = event->localPos();
 
 	auto ovi = video_output_get_info(m_videoCompositionInfo->GetVideo());
 
@@ -276,14 +274,21 @@ void StreamElementsVideoCompositionViewWidget::mouseMoveEvent(QMouseEvent *event
 	auto widthRatio = (double)displayWidth / (double)worldWidth;
 	auto heightRatio = (double)displayHeight / (double)worldHeight;
 
-	auto worldX = (uint32_t)((double)displayPos.x() / widthRatio);
-	auto worldY = (uint32_t)((double)displayPos.y() / heightRatio);
+	*worldX = (uint32_t)((double)viewportX / widthRatio);
+	*worldY = (uint32_t)((double)viewportY / heightRatio);
+}
+
+void StreamElementsVideoCompositionViewWidget::mouseMoveEvent(QMouseEvent *event)
+{
+	QWidget::mouseMoveEvent(event);
+
+	uint32_t worldX, worldY;
+	viewportToWorldCoords(event, &worldX, &worldY);
 
 	char buffer[512];
 	sprintf(buffer,
-		"display: %d x %d | world: %d x %d | display pos: %d x %d | world pos: %d x %d\n",
-		displayWidth, displayHeight, worldWidth, worldHeight,
-		(uint32_t)displayPos.x(), (uint32_t)displayPos.y(), worldX, worldY);
+		"world pos: %d x %d\n",
+		worldX, worldY);
 
 	OutputDebugStringA(buffer);
 }
@@ -292,14 +297,19 @@ void StreamElementsVideoCompositionViewWidget::mousePressEvent(
 	QMouseEvent *event)
 {
 	QWidget::mousePressEvent(event);
+
+	uint32_t worldX, worldY;
+	viewportToWorldCoords(event, &worldX, &worldY);
 }
 
 void StreamElementsVideoCompositionViewWidget::mouseReleaseEvent(
 	QMouseEvent *event)
 {
 	QWidget::mouseReleaseEvent(event);
-}
 
+	uint32_t worldX, worldY;
+	viewportToWorldCoords(event, &worldX, &worldY);
+}
 
 void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* data, uint32_t viewportWidth,
 	uint32_t viewportHeight)
