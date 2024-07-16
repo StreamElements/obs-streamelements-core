@@ -2,6 +2,7 @@
 
 #include "StreamElementsVideoCompositionManager.hpp"
 #include <QWidget>
+#include <QMouseEvent>
 
 class StreamElementsVideoCompositionViewWidget : public QWidget, public StreamElementsCompositionEventListener
 {
@@ -38,6 +39,27 @@ protected:
 #endif
 
 protected:
+	void viewportToWorldCoords(uint32_t viewportX, uint32_t viewportY,
+				   uint32_t *worldX, uint32_t *worldY);
+
+	inline void viewportToWorldCoords(QPoint pos, uint32_t *worldX,
+					  uint32_t *worldY)
+	{
+		viewportToWorldCoords(pos.x(), pos.y(), worldX, worldY);
+	}
+
+	inline void viewportToWorldCoords(QPointF pos, uint32_t *worldX,
+					  uint32_t *worldY)
+	{
+		viewportToWorldCoords(pos.x(), pos.y(), worldX, worldY);
+	}
+
+	inline void viewportToWorldCoords(QMouseEvent *event, uint32_t *worldX,
+					  uint32_t *worldY)
+	{
+		viewportToWorldCoords(event->localPos(), worldX, worldY);
+	}
+
 	virtual void mouseMoveEvent(QMouseEvent *event) override;
 	virtual void mousePressEvent(QMouseEvent *event) override;
 	virtual void mouseReleaseEvent(QMouseEvent *event) override;
