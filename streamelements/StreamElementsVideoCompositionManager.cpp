@@ -12,26 +12,22 @@ StreamElementsVideoCompositionManager::StreamElementsVideoCompositionManager()
 	m_videoCompositionsMap[m_nativeVideoComposition->GetId()] = m_nativeVideoComposition;
 
 	// TODO: Remove debug code
-	//QtDelayTask([=]() -> void {
-		auto testComposition =
-			StreamElementsCustomVideoComposition::Create(
-				"test1", "Test 1", 1920, 1080, "x264",
-				obs_data_create(), obs_data_create());
+	auto testComposition =
+		StreamElementsCustomVideoComposition::Create(
+			"test1", "Test 1", 1920, 1080, "x264",
+			obs_data_create(), obs_data_create());
 
-		m_videoCompositionsMap[testComposition->GetId()] =
-			testComposition;
+	m_videoCompositionsMap[testComposition->GetId()] =
+		testComposition;
 
-		auto widget = new StreamElementsVideoCompositionViewWidget(
-			nullptr, testComposition);
+	auto widget = new StreamElementsVideoCompositionViewWidget(
+		nullptr, testComposition);
 
-		auto dlg = new QDialog();
-		dlg->setFixedSize(1024, 768);
-		auto topLayout = new QVBoxLayout(dlg);
-		topLayout->addWidget(widget);
-		dlg->show();
-
-		//QtDelayTask([=]() -> void { dlg->exec(); }, 1000);
-	//}, 1000);
+	auto dlg = new QDialog();
+	dlg->setFixedSize(1024, 768);
+	auto topLayout = new QVBoxLayout(dlg);
+	topLayout->addWidget(widget);
+	dlg->show();
 }
 
 StreamElementsVideoCompositionManager::~StreamElementsVideoCompositionManager()
