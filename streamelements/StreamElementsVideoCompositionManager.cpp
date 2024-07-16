@@ -12,7 +12,7 @@ StreamElementsVideoCompositionManager::StreamElementsVideoCompositionManager()
 	m_videoCompositionsMap[m_nativeVideoComposition->GetId()] = m_nativeVideoComposition;
 
 	// TODO: Remove debug code
-	QtDelayTask([=]() -> void {
+	//QtDelayTask([=]() -> void {
 		auto testComposition =
 			StreamElementsCustomVideoComposition::Create(
 				"test1", "Test 1", 1920, 1080, "x264",
@@ -28,10 +28,10 @@ StreamElementsVideoCompositionManager::StreamElementsVideoCompositionManager()
 		dlg->setFixedSize(1024, 768);
 		auto topLayout = new QVBoxLayout(dlg);
 		topLayout->addWidget(widget);
-		//dlg->show();
+		dlg->show();
 
-		QtDelayTask([=]() -> void { dlg->exec(); }, 1000);
-	}, 1000);
+		//QtDelayTask([=]() -> void { dlg->exec(); }, 1000);
+	//}, 1000);
 }
 
 StreamElementsVideoCompositionManager::~StreamElementsVideoCompositionManager()
