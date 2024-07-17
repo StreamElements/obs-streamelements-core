@@ -1,3 +1,5 @@
+#include "graphics/matrix4.h"
+
 #include "StreamElementsVideoCompositionViewWidget.hpp"
 #include <QWindow>
 #include <QScreen>
@@ -206,6 +208,185 @@ static inline void drawLine(float x1, float y1, float x2, float y2,
 	gs_technique_end_pass(tech);
 	gs_technique_end(tech);
 }
+
+static vec3 getTransformedPosition(float x, float y, const matrix4 &mat)
+{
+	vec3 result;
+	vec3_set(&result, x, y, 0.0f);
+	vec3_transform(&result, &result, &mat);
+	return result;
+}
+
+class ControlPoint {
+public:
+	obs_scene_t *m_scene;
+	obs_sceneitem_t *m_sceneItem;
+
+	double m_x;
+	double m_y;
+	double m_width;
+	double m_height;
+
+	bool m_modifyX;
+	bool m_modifyY;
+	bool m_modifyRotation;
+
+	std::shared_ptr<ControlPoint> m_lineTo;
+
+public:
+	ControlPoint(obs_scene_t *scene, obs_sceneitem_t *sceneItem, double x,
+		     double y, double width, double height, bool modifyX,
+		     bool modifyY, bool modifyRotation,
+		     std::shared_ptr<ControlPoint> lineTo = nullptr)
+		: m_scene(scene),
+		  m_sceneItem(sceneItem),
+		  m_x(x),
+		  m_y(y),
+		  m_width(width),
+		  m_height(height),
+		  m_modifyX(modifyX),
+		  m_modifyY(modifyY),
+		  m_modifyRotation(modifyRotation),
+		  m_lineTo(lineTo)
+	{
+		obs_sceneitem_addref(m_sceneItem);
+	}
+
+	~ControlPoint() { obs_sceneitem_release(m_sceneItem); }
+
+	virtual void Draw()
+	{
+		matrix4 transform;
+		obs_sceneitem_get_box_transform(m_sceneItem, &transform);
+
+		/*
+		auto parentSceneItem = obs_sceneitem_get_group(m_scene, m_sceneItem);
+		if (parentSceneItem) {
+			matrix4 parentTransform;
+			obs_sceneitem_get_draw_transform(parentSceneItem,
+							 &parentTransform);
+			
+			matrix4_mul(&transform, &transform, &parentTransform);
+		}
+		*/
+
+		//auto pos = getTransformedPosition(m_x, m_y, transform);
+		//auto pos = getTransformedPosition(0.0f, 0.0f, transform);
+		//auto pos2 = getTransformedPosition(1.0f, 1.0f, transform);
+
+		//drawRect(pos.x, pos.x, pos2.x, pos2.y, 20,
+		//	 QColor(255, 0, 0, 255));
+
+		obs_transform_info info;
+		obs_sceneitem_get_info(m_sceneItem, &info);
+
+		gs_matrix_push();
+		gs_matrix_mul(&transform); // this works with rotation = 0
+		drawRect(info.pos.x, info.pos.y, info.pos.x + info.bounds.x, info.pos.y + info.bounds.y, 20, QColor(255, 0, 0, 255));
+		gs_matrix_pop();
+
+		//char buf[512];
+		//sprintf(buf, "(%d x %d)\n", (int)pos.x, (int)pos.y);
+		//OutputDebugStringA(buf);
+	}
+};
+
+std::vector<std::shared_ptr<ControlPoint>>
+createSceneItemControlPoints(obs_scene_t* scene, obs_sceneitem_t *item)
+{
+	const float thickness = 20.0f;
+	const float rotationDistance = 100.0f;
+
+	obs_transform_info info;
+	obs_sceneitem_get_info(item, &info);
+
+	vec2 bounds;
+	auto source = obs_sceneitem_get_source(item);
+	vec2_set(&bounds, obs_source_get_width(source) * info.scale.x,
+		 obs_source_get_height(source) * info.scale.y);
+
+	std::vector<std::shared_ptr<ControlPoint>> result;
+
+	// Top-left
+	result.push_back(std::make_shared<ControlPoint>(
+		scene, item, -thickness / 2.0f, -thickness / 2.0f,
+		thickness / 2.0f, thickness / 2.0f, true, true, false));
+
+	// Top-right
+	result.push_back(std::make_shared<ControlPoint>(
+		scene, item, bounds.x - thickness / 2.0f, -thickness / 2.0f,
+		bounds.x + thickness / 2.0f, thickness / 2.0f, true, true,
+		false));
+
+	// Bottom-Left
+	result.push_back(std::make_shared<ControlPoint>(
+		scene, item, -thickness / 2.0f, bounds.y - thickness / 2.0f,
+		thickness / 2.0f, bounds.y + thickness / 2.0f, true, true,
+		false));
+
+	// Bottom-Right
+	result.push_back(std::make_shared<ControlPoint>(
+		scene, item, bounds.x - thickness / 2.0f,
+		bounds.y - thickness / 2.0f, bounds.x + thickness / 2.0f,
+		bounds.y + thickness / 2.0f, true, true, false));
+
+	// Top
+	result.push_back(std::make_shared<ControlPoint>(
+		scene, item, (bounds.x / 2.0f) - thickness / 2.0f,
+		-thickness / 2.0f, (bounds.x / 2.0f) + thickness / 2.0f,
+		thickness / 2.0f, false, true, false));
+
+	// Bottom
+	auto bottomPoint = std::make_shared<ControlPoint>(
+		scene, item, (bounds.x / 2.0f) - thickness / 2.0f,
+		bounds.y - thickness / 2.0f,
+		(bounds.x / 2.0f) + thickness / 2.0f,
+		bounds.y + thickness / 2.0f, false, true, false);
+
+	result.push_back(bottomPoint);
+
+	// Left
+	result.push_back(std::make_shared<ControlPoint>(
+		scene, item, -thickness / 2.0f,
+		(bounds.y / 2.0f) - thickness / 2.0f, thickness / 2.0f,
+		(bounds.y / 2.0f) + thickness / 2.0f, true, false, false));
+
+	// Right
+	result.push_back(std::make_shared<ControlPoint>(
+		scene, item, bounds.x - thickness / 2.0f,
+		(bounds.y / 2.0f) - thickness / 2.0f,
+		bounds.x + thickness / 2.0f,
+		(bounds.y / 2.0f) + thickness / 2.0f, true, false, false));
+
+	// Rotation
+	result.push_back(std::make_shared<ControlPoint>(
+		scene, item, (bounds.x / 2.0f) - thickness / 2.0f,
+		bounds.y + rotationDistance - thickness / 2.0f,
+		(bounds.x / 2.0f) + thickness / 2.0f,
+		bounds.y + rotationDistance + thickness / 2.0f, false, false,
+		true, bottomPoint));
+
+	return result;
+}
+
+std::vector<std::shared_ptr<ControlPoint>>
+createSceneItemsControlPoints(obs_scene_t *scene)
+{
+	std::vector<std::shared_ptr<ControlPoint>> result;
+
+	scanSceneItems(
+		scene, [&](obs_sceneitem_t *item) {
+			// TODO: check for selection
+
+			for (auto point :
+			     createSceneItemControlPoints(scene, item)) {
+				result.push_back(point);
+			}
+		}, true);
+
+	return result;
+}
+
 /*
 static inline void GetScaleAndViewPos(int sourceWidth, int sourceHeight, int viewportWidth,
 					int viewportHeight, int &viewX, int &viewY,
@@ -501,6 +682,7 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	auto video = self->m_videoCompositionInfo->GetVideo();
 	auto ovi = video_output_get_info(video);
 
+	// TODO: Figure out what to do with scaled output size: i.e. we probably want to get the video dimension info from the view, or maybe from another place
 	worldWidth = ovi->width;
 	worldHeight = ovi->height;
 
@@ -542,12 +724,36 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 			 self->m_currMouseWorldY, 5.0f, QColor(0, 255, 0, 175));
 	}
 
+	auto controlPoints = createSceneItemsControlPoints(
+	self->m_videoComposition->GetCurrentScene());
+
+
+	/*
+	std::string buf;
+	for (auto controlPoint : controlPoints) {
+		controlPoint->Draw();
+
+		char buffer[512];
+		sprintf(buffer, "(%d, %d, %d, %d)", (int)controlPoint->m_x,
+			(int)controlPoint->m_y, (int)controlPoint->m_width,
+			(int)controlPoint->m_height);
+
+		buf += buffer;
+		buf += "    ";
+	}
+
+	OutputDebugStringA(("controlPoints: " + buf + "\n").c_str());
+	*/
+	controlPoints[0]->Draw();
+
 	endProjectionRegion();
 
+	/*
 	char buffer[512];
 	sprintf(buffer, "under mouse: %s | world pos: %d x %d\n",
 		self->m_currUnderMouse ? "Y" : "N", self->m_currMouseWorldX,
 		self->m_currMouseWorldY);
 
 	OutputDebugStringA(buffer);
+	*/
 }

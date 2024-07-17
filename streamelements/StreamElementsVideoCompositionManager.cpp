@@ -20,8 +20,10 @@ StreamElementsVideoCompositionManager::StreamElementsVideoCompositionManager()
 	m_videoCompositionsMap[testComposition->GetId()] =
 		testComposition;
 
-	auto widget = new StreamElementsVideoCompositionViewWidget(
-		nullptr, testComposition);
+	auto composition = m_nativeVideoComposition;
+
+	auto widget = new StreamElementsVideoCompositionViewWidget(nullptr,
+								   composition);
 
 	auto dlg = new QDialog();
 	dlg->setFixedSize(1024, 768);
