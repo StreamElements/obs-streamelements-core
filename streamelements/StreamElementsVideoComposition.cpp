@@ -67,6 +67,16 @@ void StreamElementsObsNativeVideoComposition::SerializeComposition(
 {
 }
 
+obs_scene_t* StreamElementsObsNativeVideoComposition::GetCurrentScene()
+{
+	auto source = obs_frontend_get_current_scene();
+	auto scene = obs_scene_from_source(source);
+
+	obs_source_release(source);
+
+	return scene;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Custom Views
 ////////////////////////////////////////////////////////////////////////////////
@@ -160,11 +170,11 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 
 	obs_encoder_set_video(m_videoEncoder, m_video);
 
-	auto scene1 = obs_scene_create_private("Scene 1");
-	m_scenes.push_back(scene1);
+	m_currentScene = obs_scene_create_private("Scene 1");
+	m_scenes.push_back(m_currentScene);
 
 	obs_transition_start(m_transition, OBS_TRANSITION_MODE_AUTO, 0,
-			     obs_scene_get_source(scene1));
+			     obs_scene_get_source(m_currentScene));
 
 	// TODO: Remove debug code
 	QtPostTask([=]() -> void {
@@ -192,7 +202,7 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 
 		obs_enter_graphics();
 		obs_scene_atomic_update(
-			scene1,
+			m_currentScene,
 			[](void *data, obs_scene_t *scene) {
 				atomic_update_args *args =
 					(atomic_update_args *)data;
@@ -288,4 +298,11 @@ void StreamElementsCustomVideoComposition::SerializeComposition(
 	CefRefPtr<CefValue> &output)
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+}
+
+obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentScene()
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	return m_currentScene;
 }

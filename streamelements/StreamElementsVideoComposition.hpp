@@ -102,6 +102,8 @@ public:
 
 public:
 	virtual void SerializeComposition(CefRefPtr<CefValue> &output) = 0;
+
+	virtual obs_scene_t *GetCurrentScene() = 0;
 };
 
 // OBS Main Composition
@@ -138,6 +140,8 @@ public:
 	virtual bool CanRemove() { return false; }
 
 	virtual void SerializeComposition(CefRefPtr<CefValue> &output);
+
+	virtual obs_scene_t *GetCurrentScene();
 };
 
 // Custom Composition
@@ -180,6 +184,7 @@ private:
 	obs_source_t *m_transition = nullptr;
 
 	std::vector<obs_scene_t *> m_scenes;
+	obs_scene_t *m_currentScene = nullptr;
 
 public:
 	virtual std::shared_ptr<
@@ -187,4 +192,6 @@ public:
 	GetCompositionInfo(StreamElementsCompositionEventListener *listener);
 
 	virtual void SerializeComposition(CefRefPtr<CefValue> &output);
+
+	virtual obs_scene_t *GetCurrentScene();
 };
