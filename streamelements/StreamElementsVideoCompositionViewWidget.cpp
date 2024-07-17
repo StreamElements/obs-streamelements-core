@@ -280,14 +280,6 @@ public:
 		obs_transform_info info;
 		obs_sceneitem_get_info(m_sceneItem, &info);
 
-		matrix4 projection;
-		gs_matrix_get(&projection);
-
-		gs_matrix_push();
-		gs_matrix_mul(&transform); // this works with rotation = 0
-		drawRect(info.pos.x, info.pos.y, info.pos.x + info.bounds.x, info.pos.y + info.bounds.y, 20, QColor(255, 0, 0, 255));
-		gs_matrix_pop();
-
 		// This respects rotation and maps to world coordinates!
 		auto topLeft = getTransformedPosition(0.0f, 0.0f, transform);
 		auto topRight = getTransformedPosition(1.0f, 0.0f, transform);
@@ -295,8 +287,8 @@ public:
 		auto bottomRight =
 			getTransformedPosition(1.0f, 1.0f, transform);
 
-		drawRect(topLeft.x, topLeft.y, bottomRight.x, bottomRight.y, 10,
-			 QColor(0, 0, 255, 255));
+		//drawRect(topLeft.x, topLeft.y, bottomRight.x, bottomRight.y, 10,
+		//	 QColor(0, 0, 255, 255));
 
 		fillRect(topLeft.x, topLeft.y, topLeft.x + 10, topLeft.y + 10,
 			 QColor(0, 255, 255, 255));
