@@ -288,13 +288,22 @@ public:
 		drawRect(info.pos.x, info.pos.y, info.pos.x + info.bounds.x, info.pos.y + info.bounds.y, 20, QColor(255, 0, 0, 255));
 		gs_matrix_pop();
 
-		// This behaves differently when rotated
+		// This respects rotation and maps to world coordinates!
 		auto topLeft = getTransformedPosition(0.0f, 0.0f, transform);
+		auto topRight = getTransformedPosition(1.0f, 0.0f, transform);
+
 		auto bottomRight =
 			getTransformedPosition(1.0f, 1.0f, transform);
 
 		drawRect(topLeft.x, topLeft.y, bottomRight.x, bottomRight.y, 10,
 			 QColor(0, 0, 255, 255));
+
+		fillRect(topLeft.x, topLeft.y, topLeft.x + 10, topLeft.y + 10,
+			 QColor(0, 255, 255, 255));
+
+		fillRect(topRight.x - 10, topRight.y, topRight.x,
+			 topRight.y + 10,
+			 QColor(0, 255, 255, 255));
 
 		char buf[512];
 		sprintf(buf, "topLeft: (%d x %d) | bottomRight: (%d x %d)\n",
