@@ -280,14 +280,27 @@ public:
 		obs_transform_info info;
 		obs_sceneitem_get_info(m_sceneItem, &info);
 
+		matrix4 projection;
+		gs_matrix_get(&projection);
+
 		gs_matrix_push();
 		gs_matrix_mul(&transform); // this works with rotation = 0
 		drawRect(info.pos.x, info.pos.y, info.pos.x + info.bounds.x, info.pos.y + info.bounds.y, 20, QColor(255, 0, 0, 255));
 		gs_matrix_pop();
 
-		//char buf[512];
-		//sprintf(buf, "(%d x %d)\n", (int)pos.x, (int)pos.y);
-		//OutputDebugStringA(buf);
+		// This behaves differently when rotated
+		auto topLeft = getTransformedPosition(0.0f, 0.0f, transform);
+		auto bottomRight =
+			getTransformedPosition(1.0f, 1.0f, transform);
+
+		drawRect(topLeft.x, topLeft.y, bottomRight.x, bottomRight.y, 10,
+			 QColor(0, 0, 255, 255));
+
+		char buf[512];
+		sprintf(buf, "topLeft: (%d x %d) | bottomRight: (%d x %d)\n",
+			(int)topLeft.x, (int)topLeft.y, (int)bottomRight.x,
+			(int)bottomRight.y);
+		OutputDebugStringA(buf);
 	}
 };
 
@@ -744,7 +757,8 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 
 	OutputDebugStringA(("controlPoints: " + buf + "\n").c_str());
 	*/
-	controlPoints[0]->Draw();
+	if (controlPoints.size() > 0)
+		controlPoints[0]->Draw();
 
 	endProjectionRegion();
 
