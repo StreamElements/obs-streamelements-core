@@ -117,6 +117,48 @@ static void scanSceneItems(
 		&data);
 }
 
+static void
+calculateViewportPositionAndSize(double sourceWidth, double sourceHeight,
+				 double viewportWidth, double viewportHeight,
+				 double *viewX, double *viewY, double *viewWidth, double *viewHeight)
+{
+	*viewWidth = sourceWidth;
+	*viewHeight = sourceHeight;
+
+	std::string buf;
+
+	if (*viewWidth > viewportWidth) {
+		double ratio = viewportWidth / (*viewWidth);
+
+		*viewWidth *= ratio;
+		*viewHeight *= ratio;
+
+		char b[512];
+		sprintf(b, "(width corr: (%0.2f x %0.2f) ratio: %0.2f    viewportWidth: %0.2f)    ", *viewWidth, *viewHeight, ratio, viewportWidth);
+		buf += b;
+	}
+
+	if (*viewHeight > viewportHeight) {
+		double ratio = viewportHeight / (*viewHeight);
+
+		*viewWidth *= ratio;
+		*viewHeight *= ratio;
+
+		char b[512];
+		sprintf(b, "(height corr: (%0.2f x %0.2f) ratio: %0.2f    viewportHeight: %0.2f)    ",
+			*viewWidth, *viewHeight, ratio, viewportHeight);
+		buf += b;
+	}
+
+	OutputDebugStringA((buf + "\n").c_str());
+
+	*viewWidth = std::floor(*viewWidth);
+	*viewHeight = std::floor(*viewHeight);
+
+	*viewX = std::floor((viewportWidth / 2.0f) - (*viewWidth / 2.0f));
+	*viewY = std::floor((viewportHeight / 2.0f) - (*viewHeight / 2.0f));
+}
+
 //
 // Define a projection region for drawing a view texture.
 //
@@ -128,8 +170,8 @@ static void scanSceneItems(
 // with scaling and projection onto the target surface at the correct
 // coordinates: everything is predetermined.
 //
-static inline void startProjectionRegion(int vX, int vY, int vCX, int vCY, float oL,
-			       float oR, float oT, float oB)
+static inline void startProjectionRegion(int vX, int vY, int vCX, int vCY,
+					 float oL, float oT, float oR, float oB)
 {
 	gs_projection_push();
 	gs_viewport_push();
@@ -697,25 +739,28 @@ void StreamElementsVideoCompositionViewWidget::viewportToWorldCoords(
 
 void StreamElementsVideoCompositionViewWidget::mouseMoveEvent(QMouseEvent *event)
 {
-	QWidget::mouseMoveEvent(event);
+	m_currMouseViewportX = event->localPos().x();
+	m_currMouseViewportY = event->localPos().y();
 
-	viewportToWorldCoords(event, &m_currMouseWorldX, &m_currMouseWorldY);
+	QWidget::mouseMoveEvent(event);
 }
 
 void StreamElementsVideoCompositionViewWidget::mousePressEvent(
 	QMouseEvent *event)
 {
-	QWidget::mousePressEvent(event);
+	m_currMouseViewportX = event->localPos().x();
+	m_currMouseViewportY = event->localPos().y();
 
-	viewportToWorldCoords(event, &m_currMouseWorldX, &m_currMouseWorldY);
+	QWidget::mousePressEvent(event);
 }
 
 void StreamElementsVideoCompositionViewWidget::mouseReleaseEvent(
 	QMouseEvent *event)
 {
-	QWidget::mouseReleaseEvent(event);
+	m_currMouseViewportX = event->localPos().x();
+	m_currMouseViewportY = event->localPos().y();
 
-	viewportToWorldCoords(event, &m_currMouseWorldX, &m_currMouseWorldY);
+	QWidget::mouseReleaseEvent(event);
 }
 
 void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* data, uint32_t viewportWidth,
@@ -744,11 +789,29 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	//viewWidth = int(scale * float(sourceWidth));
 	//viewHeight = int(scale * float(sourceHeight));
 
-	//startProjectionRegion(viewX, viewY, viewWidth, viewHeight, 0.0f, float(sourceWidth), 0.0f,
+	//startProjectionRegion(viewX, viewY, viewWidth, viewHeight, 0.0f, 0.0f, float(sourceWidth),
 	//	    float(sourceHeight));
 
-	startProjectionRegion(0, 0, viewportWidth, viewportHeight, 0.0f,
-			float(worldWidth), 0.0f, float(worldHeight));
+	double viewX, viewY, viewWidth, viewHeight;
+	calculateViewportPositionAndSize(worldWidth, worldHeight, viewportWidth,
+					 viewportHeight, &viewX, &viewY,
+					 &viewWidth, &viewHeight);
+
+	startProjectionRegion(viewX, viewY, viewWidth, viewHeight, 0.0f, 0.0f,
+			      float(worldWidth), float(worldHeight));
+
+	auto mouseScale = viewWidth / worldWidth;
+	self->m_currMouseWorldX =
+		(double)(self->m_currMouseViewportX - viewX) / mouseScale;
+	self->m_currMouseWorldY =
+		(double)(self->m_currMouseViewportY - viewY) / mouseScale;
+
+	char buf[512];
+	sprintf(buf, "mouse: %0.2f x %0.2f \n", self->m_currMouseWorldX,
+		self->m_currMouseWorldY);
+	//OutputDebugStringA(buf);
+
+	fillRect(0, 0, worldWidth, worldHeight, QColor(0, 0, 0, 255));
 
 	// Render the view into the region set above
 	self->m_videoCompositionInfo->Render();
