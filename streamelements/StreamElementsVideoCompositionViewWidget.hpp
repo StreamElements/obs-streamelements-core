@@ -39,10 +39,12 @@ protected:
 				 long *) override;
 #endif
 
-protected:
+public: // Used by ControlPoint
 	uint32_t m_currMouseWorldX = 0;
 	uint32_t m_currMouseWorldY = 0;
 	bool m_currUnderMouse = false;
+
+protected:
 
 	void viewportToWorldCoords(uint32_t viewportX, uint32_t viewportY,
 				   uint32_t *worldX, uint32_t *worldY);

@@ -6,6 +6,55 @@
 #include <QMouseEvent>
 #include <QColor>
 
+#define PI (3.1415926535f)
+
+static inline double radiansToDegrees(double radians) {
+	return radians * 180.0f / PI;
+}
+
+static inline double degreesToRadians(double degrees) {
+	return degrees * PI / 180.0f;
+}
+
+static inline double getCircleDegrees(vec2 center, vec2 periphery) {
+	double adjacent = periphery.x - center.x;
+	double opposite = periphery.y - center.y;
+
+	if (adjacent == 0.0f) {
+		return opposite > 0.0f ? 0.0f : 180.0f;
+	} else {
+		auto result = radiansToDegrees(atan(abs(opposite) / abs(adjacent)));
+
+		if (opposite > 0.0f) {
+			// bottom
+			if (adjacent > 0.0f) {
+				// right
+				result += 270.0f;
+			} else {
+				// left
+				result = 90.0f - result;
+			}
+		} else {
+			// top
+			if (adjacent > 0.0f) {
+				// right
+				result = 90.0f - result + 180.0f;
+			} else {
+				// left
+				result += 90.0f;
+			}
+		}
+
+		result += 180.0f;
+
+		if (result >= 360.0f) {
+			result -= 360.0f;
+		}
+
+		return result;
+	}
+}
+
 static void
 scanGroupSceneItems(obs_sceneitem_t *group,
 		    std::function<void(obs_sceneitem_t * /*item*/)> callback,
@@ -209,6 +258,42 @@ static inline void drawLine(float x1, float y1, float x2, float y2,
 	gs_technique_end(tech);
 }
 
+static void getSceneItemTransformMatrices(obs_sceneitem_t *sceneItem,
+				   matrix4 *transform, matrix4 *inv_transform)
+{
+	obs_sceneitem_get_box_transform(sceneItem, transform);
+
+	auto scene = obs_sceneitem_get_scene(sceneItem);
+	auto parentSceneItem = obs_sceneitem_get_group(scene, sceneItem);
+	if (parentSceneItem) {
+		matrix4 parentTransform;
+		obs_sceneitem_get_draw_transform(parentSceneItem,
+						 &parentTransform);
+
+		matrix4_mul(transform, transform, &parentTransform);
+	}
+
+	matrix4_inv(inv_transform, transform);
+}
+
+static vec2 getSceneItemFinalScale(obs_sceneitem_t *sceneItem)
+{
+	obs_transform_info info;
+	obs_sceneitem_get_info(sceneItem, &info);
+
+	auto scene = obs_sceneitem_get_scene(sceneItem);
+	auto parentSceneItem = obs_sceneitem_get_group(scene, sceneItem);
+	if (parentSceneItem) {
+		obs_transform_info parentInfo;
+		obs_sceneitem_get_info(parentSceneItem, &parentInfo);
+
+		info.scale.x *= parentInfo.scale.x;
+		info.scale.y *= parentInfo.scale.y;
+	}
+
+	return info.scale;
+}
+
 static vec3 getTransformedPosition(float x, float y, const matrix4 &mat)
 {
 	vec3 result;
@@ -254,137 +339,112 @@ public:
 
 	~ControlPoint() { obs_sceneitem_release(m_sceneItem); }
 
-	virtual void Draw()
+	virtual void Draw(StreamElementsVideoCompositionViewWidget* view)
 	{
-		matrix4 transform;
-		obs_sceneitem_get_box_transform(m_sceneItem, &transform);
+		matrix4 transform, inv_tranform;
+		getSceneItemTransformMatrices(m_sceneItem, &transform,
+					      &inv_tranform);
+
+		auto anchorPosition =
+			getTransformedPosition(m_x, m_y, transform);
+
+		fillRect(anchorPosition.x - m_width / 2.0f,
+			 anchorPosition.y - m_height / 2.0f,
+			 anchorPosition.x + m_width / 2.0f,
+			 anchorPosition.y + m_width / 2.0f,
+			 QColor(255, 0, 0, 255));
 
 		/*
-		auto parentSceneItem = obs_sceneitem_get_group(m_scene, m_sceneItem);
-		if (parentSceneItem) {
-			matrix4 parentTransform;
-			obs_sceneitem_get_draw_transform(parentSceneItem,
-							 &parentTransform);
-			
-			matrix4_mul(&transform, &transform, &parentTransform);
-		}
+		auto center3 = getTransformedPosition(0.5f, 0.5f, transform);
+		vec2 center;
+		vec2_set(&center, center3.x, center3.y);
+		vec2 mouse;
+		vec2_set(&mouse, view->m_currMouseWorldX,
+			 view->m_currMouseWorldY);
+
+		auto degrees = getCircleDegrees(center, mouse);
 		*/
-
-		//auto pos = getTransformedPosition(m_x, m_y, transform);
-		//auto pos = getTransformedPosition(0.0f, 0.0f, transform);
-		//auto pos2 = getTransformedPosition(1.0f, 1.0f, transform);
-
-		//drawRect(pos.x, pos.x, pos2.x, pos2.y, 20,
-		//	 QColor(255, 0, 0, 255));
-
-		obs_transform_info info;
-		obs_sceneitem_get_info(m_sceneItem, &info);
-
-		// This respects rotation and maps to world coordinates!
-		auto topLeft = getTransformedPosition(0.0f, 0.0f, transform);
-		auto topRight = getTransformedPosition(1.0f, 0.0f, transform);
-
-		auto bottomRight =
-			getTransformedPosition(1.0f, 1.0f, transform);
-
-		//drawRect(topLeft.x, topLeft.y, bottomRight.x, bottomRight.y, 10,
-		//	 QColor(0, 0, 255, 255));
-
-		fillRect(topLeft.x, topLeft.y, topLeft.x + 10, topLeft.y + 10,
-			 QColor(0, 255, 255, 255));
-
-		fillRect(topRight.x - 10, topRight.y, topRight.x,
-			 topRight.y + 10,
-			 QColor(0, 255, 255, 255));
-
-		char buf[512];
-		sprintf(buf, "topLeft: (%d x %d) | bottomRight: (%d x %d)\n",
-			(int)topLeft.x, (int)topLeft.y, (int)bottomRight.x,
-			(int)bottomRight.y);
-		OutputDebugStringA(buf);
 	}
 };
 
-std::vector<std::shared_ptr<ControlPoint>>
-createSceneItemControlPoints(obs_scene_t* scene, obs_sceneitem_t *item)
+std::vector<std::shared_ptr<ControlPoint>> createSceneItemControlPoints(
+	StreamElementsVideoCompositionViewWidget* view, obs_scene_t *scene,
+	obs_sceneitem_t *item)
 {
-	const float thickness = 20.0f;
-	const float rotationDistance = 100.0f;
+	auto pixelDensity = (double)view->devicePixelRatioF();
 
-	obs_transform_info info;
-	obs_sceneitem_get_info(item, &info);
-
-	vec2 bounds;
-	auto source = obs_sceneitem_get_source(item);
-	vec2_set(&bounds, obs_source_get_width(source) * info.scale.x,
-		 obs_source_get_height(source) * info.scale.y);
+	const float thickness = 20.0f * pixelDensity;
+	const float rotationDistance = 200.0f * pixelDensity;
 
 	std::vector<std::shared_ptr<ControlPoint>> result;
 
 	// Top-left
-	result.push_back(std::make_shared<ControlPoint>(
-		scene, item, -thickness / 2.0f, -thickness / 2.0f,
-		thickness / 2.0f, thickness / 2.0f, true, true, false));
+	result.push_back(std::make_shared<ControlPoint>(scene, item, 0.0f, 0.0f,
+							thickness, thickness,
+							true, true, false));
 
 	// Top-right
-	result.push_back(std::make_shared<ControlPoint>(
-		scene, item, bounds.x - thickness / 2.0f, -thickness / 2.0f,
-		bounds.x + thickness / 2.0f, thickness / 2.0f, true, true,
-		false));
+	result.push_back(std::make_shared<ControlPoint>(scene, item, 1.0f, 0.0f,
+							thickness, thickness,
+							true, true, false));
 
 	// Bottom-Left
-	result.push_back(std::make_shared<ControlPoint>(
-		scene, item, -thickness / 2.0f, bounds.y - thickness / 2.0f,
-		thickness / 2.0f, bounds.y + thickness / 2.0f, true, true,
-		false));
+	result.push_back(std::make_shared<ControlPoint>(scene, item, 0.0f, 1.0f,
+							thickness, thickness,
+							true, true, false));
 
 	// Bottom-Right
-	result.push_back(std::make_shared<ControlPoint>(
-		scene, item, bounds.x - thickness / 2.0f,
-		bounds.y - thickness / 2.0f, bounds.x + thickness / 2.0f,
-		bounds.y + thickness / 2.0f, true, true, false));
+	result.push_back(std::make_shared<ControlPoint>(scene, item, 1.0f, 1.0f,
+							thickness, thickness,
+							true, true, false));
 
 	// Top
-	result.push_back(std::make_shared<ControlPoint>(
-		scene, item, (bounds.x / 2.0f) - thickness / 2.0f,
-		-thickness / 2.0f, (bounds.x / 2.0f) + thickness / 2.0f,
-		thickness / 2.0f, false, true, false));
+	auto topPoint = std::make_shared<ControlPoint>(scene, item, 0.5f, 0.0f,
+						       thickness, thickness,
+						       false, true, false);
+
+	result.push_back(topPoint);
 
 	// Bottom
-	auto bottomPoint = std::make_shared<ControlPoint>(
-		scene, item, (bounds.x / 2.0f) - thickness / 2.0f,
-		bounds.y - thickness / 2.0f,
-		(bounds.x / 2.0f) + thickness / 2.0f,
-		bounds.y + thickness / 2.0f, false, true, false);
-
-	result.push_back(bottomPoint);
+	result.push_back(std::make_shared<ControlPoint>(scene, item, 0.5f, 1.0f,
+							thickness, thickness,
+							false, true, false));
 
 	// Left
-	result.push_back(std::make_shared<ControlPoint>(
-		scene, item, -thickness / 2.0f,
-		(bounds.y / 2.0f) - thickness / 2.0f, thickness / 2.0f,
-		(bounds.y / 2.0f) + thickness / 2.0f, true, false, false));
+	result.push_back(std::make_shared<ControlPoint>(scene, item, 0.0f, 0.5f,
+							thickness, thickness,
+							true, false, false));
 
 	// Right
-	result.push_back(std::make_shared<ControlPoint>(
-		scene, item, bounds.x - thickness / 2.0f,
-		(bounds.y / 2.0f) - thickness / 2.0f,
-		bounds.x + thickness / 2.0f,
-		(bounds.y / 2.0f) + thickness / 2.0f, true, false, false));
+	result.push_back(std::make_shared<ControlPoint>(scene, item, 1.0f, 0.5f,
+							thickness, thickness,
+							true, false, false));
+
+	//
+	// Calculate the distance of the rotation handle from the source in _source_ coordinates (0.0 - 1.0)
+	// We do this by calculating the source _final_ scale, based on it's own scale and it's parent scale,
+	// dividing it by the source height, and then multiplying it by the rotation distance in _world_ coordinate
+	// space.
+	//
+	// We have to perform this complex transformation since control point coordinates are relative to the _source_
+	// coordinate system, but the visible distance is in _world_ coordinate space:
+	// this way we can supply the distance in the same coord space as the rest of the control points.
+	//
+	auto scale = getSceneItemFinalScale(item);
+	auto scaledRotationDistance = rotationDistance * scale.y / (double)obs_source_get_height(obs_sceneitem_get_source(item));
 
 	// Rotation
 	result.push_back(std::make_shared<ControlPoint>(
-		scene, item, (bounds.x / 2.0f) - thickness / 2.0f,
-		bounds.y + rotationDistance - thickness / 2.0f,
-		(bounds.x / 2.0f) + thickness / 2.0f,
-		bounds.y + rotationDistance + thickness / 2.0f, false, false,
-		true, bottomPoint));
+		scene, item, 0.5f, 0.0f - scaledRotationDistance,
+		thickness,
+		thickness, false, false,
+		true, topPoint));
 
 	return result;
 }
 
-std::vector<std::shared_ptr<ControlPoint>>
-createSceneItemsControlPoints(obs_scene_t *scene)
+std::vector<std::shared_ptr<ControlPoint>> createSceneItemsControlPoints(
+	StreamElementsVideoCompositionViewWidget* view, obs_scene_t *scene)
 {
 	std::vector<std::shared_ptr<ControlPoint>> result;
 
@@ -393,39 +453,13 @@ createSceneItemsControlPoints(obs_scene_t *scene)
 			// TODO: check for selection
 
 			for (auto point :
-			     createSceneItemControlPoints(scene, item)) {
+			     createSceneItemControlPoints(view, scene, item)) {
 				result.push_back(point);
 			}
 		}, true);
 
 	return result;
 }
-
-/*
-static inline void GetScaleAndViewPos(int sourceWidth, int sourceHeight, int viewportWidth,
-					int viewportHeight, int &viewX, int &viewY,
-					float &scale)
-{
-	double windowAspect, baseAspect;
-	int newCX, newCY;
-
-	windowAspect = double(viewportWidth) / double(viewportHeight);
-	baseAspect = double(sourceWidth) / double(sourceHeight);
-
-	if (windowAspect > baseAspect) {
-		scale = float(viewportHeight) / float(sourceHeight);
-		newCX = int(double(viewportHeight) * baseAspect);
-		newCY = viewportHeight;
-	} else {
-		scale = float(viewportWidth) / float(sourceWidth);
-		newCX = viewportWidth;
-		newCY = int(float(viewportWidth) / baseAspect);
-	}
-
-	viewX = viewportWidth / 2 - newCX / 2;
-	viewY = viewportHeight / 2 - newCY / 2;
-}
-*/
 
 static inline QSize GetPixelSize(QWidget *widget)
 {
@@ -739,14 +773,14 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	}
 
 	auto controlPoints = createSceneItemsControlPoints(
-	self->m_videoComposition->GetCurrentScene());
+		self, self->m_videoComposition->GetCurrentScene());
 
 
-	/*
-	std::string buf;
+	//std::string buf;
 	for (auto controlPoint : controlPoints) {
-		controlPoint->Draw();
+		controlPoint->Draw(self);
 
+		/*
 		char buffer[512];
 		sprintf(buffer, "(%d, %d, %d, %d)", (int)controlPoint->m_x,
 			(int)controlPoint->m_y, (int)controlPoint->m_width,
@@ -754,12 +788,13 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 
 		buf += buffer;
 		buf += "    ";
+		*/
 	}
 
-	OutputDebugStringA(("controlPoints: " + buf + "\n").c_str());
-	*/
-	if (controlPoints.size() > 0)
-		controlPoints[0]->Draw();
+	//OutputDebugStringA(("controlPoints: " + buf + "\n").c_str());
+
+	//if (controlPoints.size() > 0)
+	//	controlPoints[0]->Draw(self);
 
 	endProjectionRegion();
 
