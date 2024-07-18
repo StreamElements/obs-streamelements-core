@@ -355,14 +355,19 @@ public:
 			 QColor(255, 0, 0, 255));
 
 		/*
-		auto center3 = getTransformedPosition(0.5f, 0.5f, transform);
 		vec2 center;
-		vec2_set(&center, center3.x, center3.y);
+		vec2_set(&center, 0.5f, 0.5f);
+		vec3 mouse3 = getTransformedPosition(view->m_currMouseWorldX,
+						     view->m_currMouseWorldY,
+						     inv_tranform);
 		vec2 mouse;
-		vec2_set(&mouse, view->m_currMouseWorldX,
-			 view->m_currMouseWorldY);
+		vec2_set(&mouse, mouse3.x, mouse3.y);
 
 		auto degrees = getCircleDegrees(center, mouse);
+
+		char buf[512];
+		sprintf(buf, "degrees: %0.2f\n", degrees);
+		OutputDebugStringA(buf);
 		*/
 	}
 };
