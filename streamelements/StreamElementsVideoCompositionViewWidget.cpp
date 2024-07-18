@@ -125,17 +125,11 @@ calculateViewportPositionAndSize(double sourceWidth, double sourceHeight,
 	*viewWidth = sourceWidth;
 	*viewHeight = sourceHeight;
 
-	std::string buf;
-
 	if (*viewWidth > viewportWidth) {
 		double ratio = viewportWidth / (*viewWidth);
 
 		*viewWidth *= ratio;
 		*viewHeight *= ratio;
-
-		char b[512];
-		sprintf(b, "(width corr: (%0.2f x %0.2f) ratio: %0.2f    viewportWidth: %0.2f)    ", *viewWidth, *viewHeight, ratio, viewportWidth);
-		buf += b;
 	}
 
 	if (*viewHeight > viewportHeight) {
@@ -143,14 +137,7 @@ calculateViewportPositionAndSize(double sourceWidth, double sourceHeight,
 
 		*viewWidth *= ratio;
 		*viewHeight *= ratio;
-
-		char b[512];
-		sprintf(b, "(height corr: (%0.2f x %0.2f) ratio: %0.2f    viewportHeight: %0.2f)    ",
-			*viewWidth, *viewHeight, ratio, viewportHeight);
-		buf += b;
 	}
-
-	OutputDebugStringA((buf + "\n").c_str());
 
 	*viewWidth = std::floor(*viewWidth);
 	*viewHeight = std::floor(*viewHeight);
