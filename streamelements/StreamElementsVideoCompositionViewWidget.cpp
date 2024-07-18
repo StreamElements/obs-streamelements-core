@@ -121,9 +121,19 @@ static inline void scanSceneItems(
 		&data);
 }
 
-static inline void calculateViewportPositionAndSize(
-	StreamElementsVideoCompositionViewWidget *self, double sourceWidth,
-	double sourceHeight, double unpaddedViewportWidth, double unpaddedViewportHeight,
+//
+// Calculate video viewport position and size based on world width & height, and
+// viewport width & height constraints.
+//
+// Adds mandatory padding, so video will not occupy 100% of either X or Y axis
+// of the viewport.
+//
+// The output of this function can be used as input to startProjectionRegion()
+// output position and dimensions.
+//
+static inline void calculateVideoViewportPositionAndSize(
+	StreamElementsVideoCompositionViewWidget *self, double worldWidth,
+	double worldHeight, double unpaddedViewportWidth, double unpaddedViewportHeight,
 	double *viewX, double *viewY, double *viewWidth, double *viewHeight)
 {
 	double pixelDensity = self->devicePixelRatioF();
@@ -134,8 +144,8 @@ static inline void calculateViewportPositionAndSize(
 	double viewportWidth = unpaddedViewportWidth - (paddingX * 2.0f);
 	double viewportHeight = unpaddedViewportHeight - (paddingY * 2.0f);
 
-	*viewWidth = sourceWidth;
-	*viewHeight = sourceHeight;
+	*viewWidth = worldWidth;
+	*viewHeight = worldHeight;
 
 	if (*viewWidth > viewportWidth) {
 		double ratio = viewportWidth / (*viewWidth);
@@ -180,12 +190,19 @@ static inline void startProjectionRegion(int vX, int vY, int vCX, int vCY,
 	gs_ortho(oL, oR, oT, oB, -100.0f, 100.0f);
 }
 
+//
+// Restore projection to whatever state it was before call to startProjectionRegion()
+// above.
+//
 static inline void endProjectionRegion()
 {
 	gs_viewport_pop();
 	gs_projection_pop();
 }
 
+//
+// Transform QColor to format suitable for use with gs_XXX functions
+//
 static inline void colorToVec4(QColor color, vec4 *vec) {
 	vec4_set(vec, color.redF(), color.greenF(),
 		 color.blueF(), color.alphaF());
@@ -347,10 +364,12 @@ class SceneItemControlBase {
 protected:
 	obs_scene_t *m_scene;
 	obs_sceneitem_t *m_sceneItem;
+	StreamElementsVideoCompositionViewWidget *m_view;
 
 public:
-	SceneItemControlBase(obs_scene_t *scene, obs_sceneitem_t *sceneItem)
-		: m_scene(scene), m_sceneItem(sceneItem)
+	SceneItemControlBase(StreamElementsVideoCompositionViewWidget *view,
+			     obs_scene_t *scene, obs_sceneitem_t *sceneItem)
+		: m_view(view), m_scene(scene), m_sceneItem(sceneItem)
 	{
 		obs_scene_addref(m_scene);
 		obs_sceneitem_addref(m_sceneItem);
@@ -364,7 +383,7 @@ public:
 		obs_scene_release(m_scene);
 	}
 
-	virtual void Draw(StreamElementsVideoCompositionViewWidget *view) = 0;
+	virtual void Draw() = 0;
 };
 
 class SceneItemControlPoint : public SceneItemControlBase {
@@ -382,11 +401,12 @@ public:
 
 public:
 	SceneItemControlPoint(
+		StreamElementsVideoCompositionViewWidget *view,
 		obs_scene_t *scene, obs_sceneitem_t *sceneItem, double x,
 		double y, double width, double height, bool modifyX,
 		bool modifyY, bool modifyRotation,
 		std::shared_ptr<SceneItemControlPoint> lineTo = nullptr)
-		: SceneItemControlBase(scene, sceneItem),
+		: SceneItemControlBase(view, scene, sceneItem),
 		  m_x(x),
 		  m_y(y),
 		  m_width(width),
@@ -400,9 +420,10 @@ public:
 
 	~SceneItemControlPoint() {}
 
-	virtual void
-	Draw(StreamElementsVideoCompositionViewWidget *view) override
+	virtual void Draw() override
 	{
+		QColor color(255, 0, 0, 255);
+
 		matrix4 transform, inv_tranform;
 		getSceneItemTransformMatrices(m_sceneItem, &transform,
 					      &inv_tranform);
@@ -413,8 +434,18 @@ public:
 		fillRect(anchorPosition.x - m_width / 2.0f,
 			 anchorPosition.y - m_height / 2.0f,
 			 anchorPosition.x + m_width / 2.0f,
-			 anchorPosition.y + m_width / 2.0f,
-			 QColor(255, 0, 0, 255));
+			 anchorPosition.y + m_width / 2.0f, color);
+
+		if (m_lineTo.get()) {
+			double thickness = 5.0f * m_view->devicePixelRatioF();
+
+			auto otherPosition = getTransformedPosition(
+				m_lineTo->m_x, m_lineTo->m_y, transform);
+
+			drawLine(anchorPosition.x, anchorPosition.y,
+				 otherPosition.x, otherPosition.y, thickness,
+				 color);
+		}
 
 		/*
 		vec2 center;
@@ -436,18 +467,17 @@ public:
 
 class SceneItemControlBox : public SceneItemControlBase {
 public:
-	SceneItemControlBox(
-		obs_scene_t *scene, obs_sceneitem_t *sceneItem)
-		: SceneItemControlBase(scene, sceneItem)
+	SceneItemControlBox(StreamElementsVideoCompositionViewWidget *view,
+			    obs_scene_t *scene, obs_sceneitem_t *sceneItem)
+		: SceneItemControlBase(view, scene, sceneItem)
 	{
 	}
 
 	~SceneItemControlBox() {}
 
-	virtual void
-	Draw(StreamElementsVideoCompositionViewWidget *view) override
+	virtual void Draw() override
 	{
-		const double thickness = 5.0f * view->devicePixelRatioF();
+		const double thickness = 5.0f * m_view->devicePixelRatioF();
 
 		matrix4 transform, inv_tranform;
 		getSceneItemTransformMatrices(m_sceneItem, &transform,
@@ -478,49 +508,50 @@ createSceneItemControls(StreamElementsVideoCompositionViewWidget *view,
 	std::vector<std::shared_ptr<SceneItemControlBase>> result;
 
 	// Box
-	result.push_back(std::make_shared<SceneItemControlBox>(scene, item));
+	result.push_back(
+		std::make_shared<SceneItemControlBox>(view, scene, item));
 
 	// Top-left
 	result.push_back(std::make_shared<SceneItemControlPoint>(
-		scene, item, 0.0f, 0.0f, thickness, thickness, true, true,
+		view, scene, item, 0.0f, 0.0f, thickness, thickness, true, true,
 		false));
 
 	// Top-right
 	result.push_back(std::make_shared<SceneItemControlPoint>(
-		scene, item, 1.0f, 0.0f, thickness, thickness, true, true,
+		view, scene, item, 1.0f, 0.0f, thickness, thickness, true, true,
 		false));
 
 	// Bottom-Left
 	result.push_back(std::make_shared<SceneItemControlPoint>(
-		scene, item, 0.0f, 1.0f, thickness, thickness, true, true,
+		view, scene, item, 0.0f, 1.0f, thickness, thickness, true, true,
 		false));
 
 	// Bottom-Right
 	result.push_back(std::make_shared<SceneItemControlPoint>(
-		scene, item, 1.0f, 1.0f, thickness, thickness, true, true,
+		view, scene, item, 1.0f, 1.0f, thickness, thickness, true, true,
 		false));
 
 	// Top
 	auto topPoint = std::make_shared<SceneItemControlPoint>(
-		scene, item, 0.5f, 0.0f, thickness, thickness, false, true,
-		false);
+		view, scene, item, 0.5f, 0.0f, thickness, thickness, false,
+		true, false);
 
 	result.push_back(topPoint);
 
 	// Bottom
 	result.push_back(std::make_shared<SceneItemControlPoint>(
-		scene, item, 0.5f, 1.0f, thickness, thickness, false, true,
-		false));
+		view, scene, item, 0.5f, 1.0f, thickness, thickness, false,
+		true, false));
 
 	// Left
 	result.push_back(std::make_shared<SceneItemControlPoint>(
-		scene, item, 0.0f, 0.5f, thickness, thickness, true, false,
-		false));
+		view, scene, item, 0.0f, 0.5f, thickness, thickness, true,
+		false, false));
 
 	// Right
 	result.push_back(std::make_shared<SceneItemControlPoint>(
-		scene, item, 1.0f, 0.5f, thickness, thickness, true, false,
-		false));
+		view, scene, item, 1.0f, 0.5f, thickness, thickness, true,
+		false, false));
 
 	//
 	// Calculate the distance of the rotation handle from the source in _source_ coordinates (0.0 - 1.0)
@@ -539,8 +570,8 @@ createSceneItemControls(StreamElementsVideoCompositionViewWidget *view,
 
 	// Rotation
 	result.push_back(std::make_shared<SceneItemControlPoint>(
-		scene, item, 0.5f, 0.0f - scaledRotationDistance, thickness,
-		thickness, false, false, true, topPoint));
+		view, scene, item, 0.5f, 0.0f - scaledRotationDistance,
+		thickness, thickness, false, false, true, topPoint));
 
 	return result;
 }
@@ -843,7 +874,7 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	worldHeight = ovi->height;
 
 	double viewX, viewY, viewWidth, viewHeight;
-	calculateViewportPositionAndSize(self, worldWidth, worldHeight,
+	calculateVideoViewportPositionAndSize(self, worldWidth, worldHeight,
 					 viewportWidth, viewportHeight, &viewX,
 					 &viewY, &viewWidth, &viewHeight);
 
@@ -896,7 +927,7 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 
 
 	for (auto controlPoint : controlPoints) {
-		controlPoint->Draw(self);
+		controlPoint->Draw();
 	}
 
 	endProjectionRegion();
