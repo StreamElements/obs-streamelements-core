@@ -16,6 +16,16 @@ static inline double degreesToRadians(double degrees) {
 	return degrees * PI / 180.0f;
 }
 
+static inline double normalizeDegrees(double degrees) {
+	while (degrees >= 360.0f)
+		degrees -= 360.0f;
+
+	while (degrees < 0.0f)
+		degrees += 360.0f;
+
+	return degrees;
+}
+
 static inline double getCircleDegrees(vec2 center, vec2 periphery) {
 	double adjacent = periphery.x - center.x;
 	double opposite = periphery.y - center.y;
@@ -45,17 +55,11 @@ static inline double getCircleDegrees(vec2 center, vec2 periphery) {
 			}
 		}
 
-		result += 180.0f;
-
-		if (result >= 360.0f) {
-			result -= 360.0f;
-		}
-
-		return result;
+		return normalizeDegrees(result + 180.0f);
 	}
 }
 
-static void
+static inline void
 scanGroupSceneItems(obs_sceneitem_t *group,
 		    std::function<void(obs_sceneitem_t * /*item*/)> callback,
 		    bool recursive)
@@ -85,7 +89,7 @@ scanGroupSceneItems(obs_sceneitem_t *group,
 		&data);
 }
 
-static void scanSceneItems(
+static inline void scanSceneItems(
 	obs_scene_t* scene,
 	std::function<void(obs_sceneitem_t * /*item*/)> callback,
 	bool recursive)
@@ -117,7 +121,7 @@ static void scanSceneItems(
 		&data);
 }
 
-static void calculateViewportPositionAndSize(
+static inline void calculateViewportPositionAndSize(
 	StreamElementsVideoCompositionViewWidget *self, double sourceWidth,
 	double sourceHeight, double unpaddedViewportWidth, double unpaddedViewportHeight,
 	double *viewX, double *viewY, double *viewWidth, double *viewHeight)
