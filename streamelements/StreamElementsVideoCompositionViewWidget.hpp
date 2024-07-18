@@ -40,8 +40,8 @@ protected:
 #endif
 
 public: // Used by ControlPoint
-	double m_currMouseViewportX = 0;
-	double m_currMouseViewportY = 0;
+	double m_currMouseWidgetX = 0;
+	double m_currMouseWidgetY = 0;
 	double m_currMouseWorldX = 0;
 	double m_currMouseWorldY = 0;
 	bool m_currUnderMouse = false;
@@ -74,8 +74,8 @@ protected:
 	virtual void mouseReleaseEvent(QMouseEvent *event) override;
 
 	virtual void enterEvent(QEnterEvent *event) override {
-		m_currMouseViewportX = event->localPos().x();
-		m_currMouseViewportY = event->localPos().y();
+		m_currMouseWidgetX = event->localPos().x();
+		m_currMouseWidgetY = event->localPos().y();
 
 		m_currUnderMouse = true;
 	}
