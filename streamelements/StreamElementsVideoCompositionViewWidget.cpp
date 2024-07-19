@@ -1,3 +1,4 @@
+#include <util/platform.h>
 #include "graphics/matrix4.h"
 
 #include "StreamElementsVideoCompositionViewWidget.hpp"
@@ -5,6 +6,41 @@
 #include <QScreen>
 #include <QMouseEvent>
 #include <QColor>
+
+class FileTexture {
+private:
+	std::string m_path;
+	std::mutex m_mutex;
+	gs_texture_t *m_texture = nullptr;
+
+public:
+	FileTexture(std::string path): m_path(path) {}
+
+	~FileTexture()
+	{
+		if (m_texture)
+			gs_texture_destroy(m_texture);
+	}
+
+	gs_texture_t *get()
+	{
+		if (m_texture)
+			return m_texture;
+
+		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+		if (m_texture)
+			return m_texture;
+
+		auto textureFilePath = os_get_abs_path_ptr(m_path.c_str());
+		m_texture = gs_texture_create_from_file(textureFilePath);
+		bfree(textureFilePath);
+
+		return m_texture;
+	}
+};
+
+static FileTexture g_overflowTexture("../../data/obs-studio/images/overflow.png");
 
 #define PI (3.1415926535f)
 
@@ -313,7 +349,26 @@ static inline void drawLine(float x1, float y1, float x2, float y2,
 	gs_technique_end(tech);
 }
 
-static void getSceneItemTransformMatrices(obs_sceneitem_t *sceneItem,
+static void getSceneItemDrawTransformMatrices(obs_sceneitem_t *sceneItem,
+					      matrix4 *transform,
+					      matrix4 *inv_transform)
+{
+	obs_sceneitem_get_draw_transform(sceneItem, transform);
+
+	auto scene = obs_sceneitem_get_scene(sceneItem);
+	auto parentSceneItem = obs_sceneitem_get_group(scene, sceneItem);
+	if (parentSceneItem) {
+		matrix4 parentTransform;
+		obs_sceneitem_get_draw_transform(parentSceneItem,
+						 &parentTransform);
+
+		matrix4_mul(transform, transform, &parentTransform);
+	}
+
+	matrix4_inv(inv_transform, transform);
+}
+
+static void getSceneItemBoxTransformMatrices(obs_sceneitem_t *sceneItem,
 				   matrix4 *transform, matrix4 *inv_transform)
 {
 	obs_sceneitem_get_box_transform(sceneItem, transform);
@@ -422,7 +477,7 @@ public:
 		QColor color(255, 0, 0, 255);
 
 		matrix4 transform, inv_tranform;
-		getSceneItemTransformMatrices(m_sceneItem, &transform,
+		getSceneItemBoxTransformMatrices(m_sceneItem, &transform,
 					      &inv_tranform);
 
 		auto anchorPosition =
@@ -477,7 +532,7 @@ public:
 		const double thickness = 5.0f * m_view->devicePixelRatioF();
 
 		matrix4 transform, inv_tranform;
-		getSceneItemTransformMatrices(m_sceneItem, &transform,
+		getSceneItemBoxTransformMatrices(m_sceneItem, &transform,
 					      &inv_tranform);
 
 		auto tl = getTransformedPosition(0.0f, 0.0f, transform);
@@ -490,6 +545,67 @@ public:
 		drawLine(tr.x, tr.y, br.x, br.y, thickness, color);
 		drawLine(br.x, br.y, bl.x, bl.y, thickness, color);
 		drawLine(bl.x, bl.y, tl.x, tl.y, thickness, color);
+	}
+};
+
+class SceneItemOverflowBox : public SceneItemControlBase {
+public:
+	SceneItemOverflowBox(StreamElementsVideoCompositionViewWidget *view,
+			    obs_scene_t *scene, obs_sceneitem_t *sceneItem)
+		: SceneItemControlBase(view, scene, sceneItem)
+	{
+	}
+
+	~SceneItemOverflowBox() {}
+
+	virtual void Draw() override
+	{
+		// TODO: How the !#$%!@#$!# is this done?
+		matrix4 transform, inv_tranform;
+		getSceneItemDrawTransformMatrices(m_sceneItem, &transform,
+						  &inv_tranform);
+
+		gs_matrix_push();
+		gs_matrix_mul(&transform);
+
+		gs_effect_t *solid = obs_get_base_effect(OBS_EFFECT_REPEAT);
+		gs_eparam_t *image =
+			gs_effect_get_param_by_name(solid, "image");
+		gs_eparam_t *scale =
+			gs_effect_get_param_by_name(solid, "scale");
+
+		vec2 s;
+		//vec2_set(&s, transform.x.x / 96, transform.y.y / 96);
+		vec2_set(&s, 1.0f, 1.0f);
+		gs_effect_set_vec2(scale, &s);
+		gs_effect_set_texture(image, g_overflowTexture.get());
+
+		//gs_render_start(true);
+		//gs_vertex2f(0.0f, 0.0f);
+		//gs_vertex2f(1.0f, 0.0f);
+		//gs_vertex2f(0.0f, 1.0f);
+		//gs_vertex2f(1.0f, 1.0f);
+		//auto vertexBuffer = gs_render_save();
+
+		//gs_load_vertexbuffer(vertexBuffer); // tl, tr, br, bl
+
+		//gs_technique_t *tech = gs_effect_get_technique(solid, "Repeat");
+
+		//gs_technique_begin(tech);
+		//gs_technique_begin_pass(tech, 0);
+
+		while (gs_effect_loop(solid, "Draw")) {
+			gs_draw_sprite(g_overflowTexture.get(), 0, 1, 1);
+		}
+		//gs_draw(GS_TRISTRIP, 0, 0);
+
+		//gs_technique_end_pass(tech);
+		//gs_technique_end(tech);
+
+		//gs_vertexbuffer_destroy(vertexBuffer);
+		gs_load_vertexbuffer(nullptr);
+
+		gs_matrix_pop();
 	}
 };
 
@@ -569,6 +685,9 @@ createSceneItemControls(StreamElementsVideoCompositionViewWidget *view,
 	result.push_back(std::make_shared<SceneItemControlPoint>(
 		view, scene, item, 0.5f, 0.0f - scaledRotationDistance,
 		thickness, thickness, false, false, true, topPoint));
+
+	result.push_back(
+		std::make_shared<SceneItemOverflowBox>(view, scene, item));
 
 	return result;
 }
@@ -925,7 +1044,7 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	// coordinate system.
 	//
 	gs_viewport_push();
-	gs_set_viewport(0, 0, viewportWidth, viewportHeight);
+	gs_set_viewport(0, 0, viewportWidth, viewportHeight); // Viewport was originally set to the video projection area, now we extend it so elements we draw can be seen
 	gs_matrix_push();
 	gs_matrix_scale3f(viewWidth / double(viewportWidth),
 			  viewHeight / double(viewportHeight), 1.0f);
