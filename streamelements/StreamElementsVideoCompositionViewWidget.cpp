@@ -227,7 +227,7 @@ static inline void fillRect(float x1, float y1, float x2, float y2, QColor color
 	colorToVec4(color, &colorVec4);
 
 	gs_matrix_push();
-	gs_matrix_identity();
+	//gs_matrix_identity();
 	
 	gs_matrix_translate3f(x1, y1, 0.0f); // Start top/left position
 	gs_matrix_scale3f(x2 - x1, y2 - y1, 1.0f); // Width/height
@@ -289,10 +289,7 @@ static inline void drawLine(float x1, float y1, float x2, float y2,
 	colorToVec4(color, &colorVec4);
 
 	gs_matrix_push();
-	gs_matrix_identity();
-
-	//gs_matrix_translate3f(x1, y1, 0.0f);       // Start top/left position
-	//gs_matrix_scale3f(x2 - x1, y2 - y1, 1.0f); // Width/height
+	//gs_matrix_identity();
 
 	gs_effect_set_vec4(colParam, &colorVec4);
 
@@ -879,7 +876,7 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 					 &viewY, &viewWidth, &viewHeight);
 
 	startProjectionRegion(viewX, viewY, viewWidth, viewHeight, 0.0f, 0.0f,
-			      float(worldWidth), float(worldHeight));
+			      double(worldWidth), double(worldHeight));
 
 	// Calculate World mouse coordinates based on viewport position and size (scale)
 	//
@@ -922,6 +919,20 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 			 self->m_currMouseWorldY, 5.0f, QColor(0, 255, 0, 175));
 	}
 
+	//
+	// Set the viewport to the entire area of the display, and adjust translation & scaling,
+	// so we can draw outside of the video boundaries while still using the same
+	// coordinate system.
+	//
+	gs_viewport_push();
+	gs_set_viewport(0, 0, viewportWidth, viewportHeight);
+	gs_matrix_push();
+	gs_matrix_scale3f(viewWidth / double(viewportWidth),
+			  viewHeight / double(viewportHeight), 1.0f);
+
+	// TODO: Figure out where did this 2.0f factor come from
+	gs_matrix_translate3f(viewX * 2.0f, viewY * 2.0f, 0.0f);
+
 	auto controlPoints = createSceneItemsControls(
 		self, self->m_videoComposition->GetCurrentScene());
 
@@ -929,6 +940,9 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	for (auto controlPoint : controlPoints) {
 		controlPoint->Draw();
 	}
+
+	gs_matrix_pop();
+	gs_viewport_pop();
 
 	endProjectionRegion();
 }
