@@ -523,18 +523,6 @@ public:
 		OutputDebugStringA(buf);
 		*/
 	}
-
-	virtual void AppendPointsWorldCoordinates(std::vector<vec3> corners)
-	{
-		matrix4 transform, inv_tranform;
-		getSceneItemBoxTransformMatrices(m_sceneItem, &transform,
-						 &inv_tranform);
-
-		auto anchorPosition =
-			getTransformedPosition(m_x, m_y, transform);
-
-		corners.push_back(anchorPosition);
-	}
 };
 
 class SceneItemControlBox : public SceneItemControlBase {
@@ -720,10 +708,18 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::Updat
 
 	scanSceneItems(
 		scene,
-		[&](obs_sceneitem_t *item) { existingSceneItems[item] = true; },
+		[&](obs_sceneitem_t *item) {
+			if (obs_sceneitem_locked(item))
+				return;
+
+			if (!obs_sceneitem_visible(item))
+				return;
+
+			existingSceneItems[item] = true;
+		},
 		true);
 
-	// Remove scene items which have been removed from the scene
+	// Remove scene items which have been removed from the scene, hidden or locked
 	for (auto it = m_sceneItems.cbegin(); it != m_sceneItems.cend(); ++it) {
 		if (!existingSceneItems.count(it->first)) {
 			m_sceneItems.erase(it);
@@ -994,6 +990,11 @@ void StreamElementsVideoCompositionViewWidget::mouseMoveEvent(QMouseEvent *event
 	m_currMouseWidgetX = event->localPos().x();
 	m_currMouseWidgetY = event->localPos().y();
 
+	m_mouseArmedForClickEvent = false;
+
+	m_visualElementsState.HandleMouseMove(event, m_currMouseWorldX,
+					      m_currMouseWorldY);
+
 	QWidget::mouseMoveEvent(event);
 }
 
@@ -1003,6 +1004,11 @@ void StreamElementsVideoCompositionViewWidget::mousePressEvent(
 	m_currMouseWidgetX = event->localPos().x();
 	m_currMouseWidgetY = event->localPos().y();
 
+	m_mouseArmedForClickEvent = true;
+
+	m_visualElementsState.HandleMouseDown(event, m_currMouseWorldX,
+					      m_currMouseWorldY);
+
 	QWidget::mousePressEvent(event);
 }
 
@@ -1011,6 +1017,16 @@ void StreamElementsVideoCompositionViewWidget::mouseReleaseEvent(
 {
 	m_currMouseWidgetX = event->localPos().x();
 	m_currMouseWidgetY = event->localPos().y();
+
+	m_visualElementsState.HandleMouseUp(event, m_currMouseWorldX,
+					    m_currMouseWorldY);
+
+	if (m_mouseArmedForClickEvent) {
+		m_mouseArmedForClickEvent = false;
+
+		m_visualElementsState.HandleMouseClick(event, m_currMouseWorldX,
+						       m_currMouseWorldY);
+	}
 
 	QWidget::mouseReleaseEvent(event);
 }
