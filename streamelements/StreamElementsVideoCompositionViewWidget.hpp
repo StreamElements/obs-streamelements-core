@@ -16,10 +16,10 @@ public:
 	public:
 		virtual void Draw() = 0;
 
-		virtual void
-		AppendPointsWorldCoordinates(std::vector<vec3> corners)
-		{
-		}
+		virtual void HandleMouseDown(QMouseEvent *event, double worldX, double worldY) { }
+		virtual void HandleMouseUp(QMouseEvent *event, double worldX, double worldY) { }
+		virtual void HandleMouseClick(QMouseEvent *event, double worldX, double worldY) { }
+		virtual void HandleMouseMove(QMouseEvent *event, double worldX, double worldY) { }
 	};
 
 	class VisualElements {
@@ -38,7 +38,7 @@ public:
 			       obs_scene_t *scene, obs_sceneitem_t *item);
 		~VisualElements() {}
 
-			void DrawTopLayer()
+		void DrawTopLayer()
 		{
 			for (auto element : m_topLayer) {
 				element->Draw();
@@ -49,6 +49,38 @@ public:
 		{
 			for (auto element : m_bottomLayer) {
 				element->Draw();
+			}
+		}
+
+		virtual void HandleMouseDown(QMouseEvent *event, double worldX,
+					     double worldY)
+		{
+			for (auto element : m_topLayer) {
+				element->HandleMouseDown(event, worldX, worldY);
+			}
+		}
+
+		virtual void HandleMouseUp(QMouseEvent *event, double worldX,
+					   double worldY)
+		{
+			for (auto element : m_topLayer) {
+				element->HandleMouseUp(event, worldX, worldY);
+			}
+		}
+
+		virtual void HandleMouseClick(QMouseEvent *event, double worldX,
+					      double worldY)
+		{
+			for (auto element : m_topLayer) {
+				element->HandleMouseClick(event, worldX, worldY);
+			}
+		}
+
+		virtual void HandleMouseMove(QMouseEvent *event, double worldX,
+					     double worldY)
+		{
+			for (auto element : m_topLayer) {
+				element->HandleMouseMove(event, worldX, worldY);
 			}
 		}
 	};
@@ -69,6 +101,41 @@ public:
 		~VisualElementsStateManager() {}
 
 		void UpdateAndDraw(obs_scene_t* scene);
+
+		virtual void HandleMouseDown(QMouseEvent *event, double worldX,
+					     double worldY)
+		{
+			for (auto kv : m_sceneItems) {
+				kv.second->HandleMouseDown(event, worldX,
+							   worldY);
+			}
+		}
+
+		virtual void HandleMouseUp(QMouseEvent *event, double worldX,
+					   double worldY)
+		{
+			for (auto kv : m_sceneItems) {
+				kv.second->HandleMouseUp(event, worldX, worldY);
+			}
+		}
+
+		virtual void HandleMouseClick(QMouseEvent *event, double worldX,
+					      double worldY)
+		{
+			for (auto kv : m_sceneItems) {
+				kv.second->HandleMouseClick(event, worldX,
+							   worldY);
+			}
+		}
+
+		virtual void HandleMouseMove(QMouseEvent *event, double worldX,
+					     double worldY)
+		{
+			for (auto kv : m_sceneItems) {
+				kv.second->HandleMouseMove(event, worldX,
+							   worldY);
+			}
+		}
 	};
 
 
@@ -112,6 +179,8 @@ public: // Used by ControlPoint
 	double m_currMouseWorldX = 0;
 	double m_currMouseWorldY = 0;
 	bool m_currUnderMouse = false;
+
+	bool m_mouseArmedForClickEvent = false;
 
 protected:
 
