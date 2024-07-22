@@ -560,13 +560,20 @@ public:
 
 	virtual void Draw() override
 	{
-		// TODO: How the !#$%!@#$!# is this done?
 		matrix4 transform, inv_tranform;
-		getSceneItemDrawTransformMatrices(m_sceneItem, &transform,
+		getSceneItemBoxTransformMatrices(m_sceneItem, &transform,
 						  &inv_tranform);
+
+		auto itemScale = getSceneItemFinalScale(m_sceneItem);
 
 		gs_matrix_push();
 		gs_matrix_mul(&transform);
+
+		const bool previous = gs_framebuffer_srgb_enabled();
+		gs_enable_framebuffer_srgb(true);
+
+		gs_blend_state_push();
+		gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
 
 		gs_effect_t *solid = obs_get_base_effect(OBS_EFFECT_REPEAT);
 		gs_eparam_t *image =
@@ -574,36 +581,25 @@ public:
 		gs_eparam_t *scale =
 			gs_effect_get_param_by_name(solid, "scale");
 
+		gs_eparam_t *const param =
+			gs_effect_get_param_by_name(solid, "image");
+		gs_effect_set_texture_srgb(param, g_overflowTexture.get());
+
 		vec2 s;
-		//vec2_set(&s, transform.x.x / 96, transform.y.y / 96);
-		vec2_set(&s, 1.0f, 1.0f);
+		// Black magic copied from OBS code. This keeps the output scale of the texture
+		// rectangle constant disregarding the scaling of the scene item so it always
+		// has stripes of the same visual size.
+		vec2_set(&s, transform.x.x / 96, transform.y.y / 96);
 		gs_effect_set_vec2(scale, &s);
 		gs_effect_set_texture(image, g_overflowTexture.get());
 
-		//gs_render_start(true);
-		//gs_vertex2f(0.0f, 0.0f);
-		//gs_vertex2f(1.0f, 0.0f);
-		//gs_vertex2f(0.0f, 1.0f);
-		//gs_vertex2f(1.0f, 1.0f);
-		//auto vertexBuffer = gs_render_save();
-
-		//gs_load_vertexbuffer(vertexBuffer); // tl, tr, br, bl
-
-		//gs_technique_t *tech = gs_effect_get_technique(solid, "Repeat");
-
-		//gs_technique_begin(tech);
-		//gs_technique_begin_pass(tech, 0);
-
 		while (gs_effect_loop(solid, "Draw")) {
-			gs_draw_sprite(g_overflowTexture.get(), 0, 1, 1);
+			gs_draw_sprite(g_overflowTexture.get(), 0, 1, 1); // Output width & height
 		}
-		//gs_draw(GS_TRISTRIP, 0, 0);
 
-		//gs_technique_end_pass(tech);
-		//gs_technique_end(tech);
+		gs_blend_state_pop();
 
-		//gs_vertexbuffer_destroy(vertexBuffer);
-		gs_load_vertexbuffer(nullptr);
+		gs_enable_framebuffer_srgb(previous);
 
 		gs_matrix_pop();
 	}
@@ -1059,6 +1055,16 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	for (auto controlPoint : controlPoints) {
 		controlPoint->Draw();
 	}
+
+
+	/////// BEGIN
+
+	
+
+
+	/////// END
+
+
 
 	gs_matrix_pop();
 	gs_viewport_pop();
