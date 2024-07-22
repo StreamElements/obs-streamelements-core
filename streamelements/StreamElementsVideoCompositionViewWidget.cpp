@@ -580,7 +580,6 @@ public:
 		gs_enable_framebuffer_srgb(true);
 
 		gs_blend_state_push();
-		gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
 
 		gs_effect_t *solid = obs_get_base_effect(OBS_EFFECT_REPEAT);
 		gs_eparam_t *image =
@@ -714,6 +713,12 @@ public:
 			element->Draw();
 		}
 	}
+};
+
+class VisualElementsStateManager {
+public:
+	VisualElementsStateManager() {}
+	~VisualElementsStateManager() {}
 };
 
 std::vector<std::shared_ptr<VisualElements>>
@@ -1086,16 +1091,6 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	for (auto visualElements : visualElementsList) {
 		visualElements->DrawTopLayer();
 	}
-
-
-	/////// BEGIN
-
-	
-
-
-	/////// END
-
-
 
 	gs_matrix_pop();
 	gs_viewport_pop();
