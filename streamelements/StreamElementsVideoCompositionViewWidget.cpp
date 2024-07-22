@@ -412,16 +412,8 @@ static vec3 getTransformedPosition(float x, float y, const matrix4 &mat)
 	return result;
 }
 
-class VisualElementBase {
-public:
-	VisualElementBase() {}
-	~VisualElementBase() {}
-
-public:
-	virtual void Draw() = 0;
-};
-
-class SceneItemControlBase : public VisualElementBase {
+class SceneItemControlBase
+	: public StreamElementsVideoCompositionViewWidget::VisualElementBase {
 protected:
 	obs_scene_t *m_scene;
 	obs_sceneitem_t *m_sceneItem;
@@ -518,7 +510,7 @@ public:
 		auto degrees = getCircleDegrees(center, mouse);
 
 		char buf[512];
-		sprintf(buf, "degrees: %0.2f\n", degrees);
+		sprintf(buf, "degrees: %0.2fn", degrees);
 		OutputDebugStringA(buf);
 		*/
 	}
@@ -611,132 +603,138 @@ public:
 	}
 };
 
-class VisualElements {
-private:
-	std::vector<std::shared_ptr<VisualElementBase>> m_topLayer;
-	std::vector<std::shared_ptr<VisualElementBase>> m_bottomLayer;
-
-public:
-	VisualElements(StreamElementsVideoCompositionViewWidget *view,
-		       obs_scene_t *scene, obs_sceneitem_t *item)
-	{
-		// TODO: check for selection
-
-		auto pixelDensity = (double)view->devicePixelRatioF();
-
-		const float thickness = 20.0f * pixelDensity;
-		const float rotationDistance = 200.0f * pixelDensity;
-
-		// Overflow box
-		m_bottomLayer.push_back(std::make_shared<SceneItemOverflowBox>(
-			view, scene, item));
-
-		// Box
-		m_topLayer.push_back(std::make_shared<SceneItemControlBox>(
-			view, scene, item));
-
-		// Top-left
-		m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-			view, scene, item, 0.0f, 0.0f, thickness, thickness,
-			true, true, false));
-
-		// Top-right
-		m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-			view, scene, item, 1.0f, 0.0f, thickness, thickness,
-			true, true, false));
-
-		// Bottom-Left
-		m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-			view, scene, item, 0.0f, 1.0f, thickness, thickness,
-			true, true, false));
-
-		// Bottom-Right
-		m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-			view, scene, item, 1.0f, 1.0f, thickness, thickness,
-			true, true, false));
-
-		// Top
-		auto topPoint = std::make_shared<SceneItemControlPoint>(
-			view, scene, item, 0.5f, 0.0f, thickness, thickness,
-			false, true, false);
-
-		m_topLayer.push_back(topPoint);
-
-		// Bottom
-		m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-			view, scene, item, 0.5f, 1.0f, thickness, thickness,
-			false, true, false));
-
-		// Left
-		m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-			view, scene, item, 0.0f, 0.5f, thickness, thickness,
-			true, false, false));
-
-		// Right
-		m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-			view, scene, item, 1.0f, 0.5f, thickness, thickness,
-			true, false, false));
-
-		//
-		// Calculate the distance of the rotation handle from the source in _source_ coordinates (0.0 - 1.0)
-		// We do this by calculating the source _final_ scale, based on it's own scale and it's parent scale,
-		// dividing it by the source height, and then multiplying it by the rotation distance in _world_ coordinate
-		// space.
-		//
-		// We have to perform this complex transformation since control point coordinates are relative to the _source_
-		// coordinate system, but the visible distance is in _world_ coordinate space:
-		// this way we can supply the distance in the same coord space as the rest of the control points.
-		//
-		auto scale = getSceneItemFinalScale(item);
-		auto scaledRotationDistance =
-			rotationDistance * scale.y /
-			(double)obs_source_get_height(
-				obs_sceneitem_get_source(item));
-
-		// Rotation
-		m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-			view, scene, item, 0.5f, 0.0f - scaledRotationDistance,
-			thickness, thickness, false, false, true, topPoint));
-	}
-	~VisualElements() {}
-
-	void DrawTopLayer()
-	{
-		for (auto element : m_topLayer) {
-			element->Draw();
-		}
-	}
-
-	void DrawBottomLayer()
-	{
-		for (auto element : m_bottomLayer) {
-			element->Draw();
-		}
-	}
-};
-
-class VisualElementsStateManager {
-public:
-	VisualElementsStateManager() {}
-	~VisualElementsStateManager() {}
-};
-
-std::vector<std::shared_ptr<VisualElements>>
-createSceneItemsVisualElements(StreamElementsVideoCompositionViewWidget *view,
-			 obs_scene_t *scene)
+StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
+	StreamElementsVideoCompositionViewWidget *view,
+		obs_scene_t *scene, obs_sceneitem_t *item)
 {
-	std::vector<std::shared_ptr<VisualElements>> result;
+	// TODO: check for selection
+
+	auto pixelDensity = (double)view->devicePixelRatioF();
+
+	const float thickness = 20.0f * pixelDensity;
+	const float rotationDistance = 200.0f * pixelDensity;
+
+	// Overflow box
+	m_bottomLayer.push_back(std::make_shared<SceneItemOverflowBox>(
+		view, scene, item));
+
+	// Box
+	m_topLayer.push_back(std::make_shared<SceneItemControlBox>(
+		view, scene, item));
+
+	// Top-left
+	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
+		view, scene, item, 0.0f, 0.0f, thickness, thickness,
+		true, true, false));
+
+	// Top-right
+	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
+		view, scene, item, 1.0f, 0.0f, thickness, thickness,
+		true, true, false));
+
+	// Bottom-Left
+	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
+		view, scene, item, 0.0f, 1.0f, thickness, thickness,
+		true, true, false));
+
+	// Bottom-Right
+	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
+		view, scene, item, 1.0f, 1.0f, thickness, thickness,
+		true, true, false));
+
+	// Top
+	auto topPoint = std::make_shared<SceneItemControlPoint>(
+		view, scene, item, 0.5f, 0.0f, thickness, thickness,
+		false, true, false);
+
+	m_topLayer.push_back(topPoint);
+
+	// Bottom
+	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
+		view, scene, item, 0.5f, 1.0f, thickness, thickness,
+		false, true, false));
+
+	// Left
+	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
+		view, scene, item, 0.0f, 0.5f, thickness, thickness,
+		true, false, false));
+
+	// Right
+	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
+		view, scene, item, 1.0f, 0.5f, thickness, thickness,
+		true, false, false));
+
+	//
+	// Calculate the distance of the rotation handle from the source in _source_ coordinates (0.0 - 1.0)
+	// We do this by calculating the source _final_ scale, based on it's own scale and it's parent scale,
+	// dividing it by the source height, and then multiplying it by the rotation distance in _world_ coordinate
+	// space.
+	//
+	// We have to perform this complex transformation since control point coordinates are relative to the _source_
+	// coordinate system, but the visible distance is in _world_ coordinate space:
+	// this way we can supply the distance in the same coord space as the rest of the control points.
+	//
+	auto scale = getSceneItemFinalScale(item);
+	auto scaledRotationDistance =
+		rotationDistance * scale.y /
+		(double)obs_source_get_height(
+			obs_sceneitem_get_source(item));
+
+	// Rotation
+	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
+		view, scene, item, 0.5f, 0.0f - scaledRotationDistance,
+		thickness, thickness, false, false, true, topPoint));
+}
+
+//
+// Remove state for scene items which are no longer present on the scene, and
+// add scene items which are present on the scene but haven't been tracked so far.
+//
+// After that, draw bottom layer visuals, render video, and draw top layer visuals.
+//
+void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::UpdateAndDraw(
+	obs_scene_t *scene)
+{
+	std::map<obs_sceneitem_t *, bool> existingSceneItems;
 
 	scanSceneItems(
 		scene,
-		[&](obs_sceneitem_t *item) {
-			result.push_back(
-				std::make_shared<VisualElements>(
-					view, scene, item));
-		},
+		[&](obs_sceneitem_t *item) { existingSceneItems[item] = true; },
 		true);
 
-	return result;
+	// Remove scene items which have been removed from the scene
+	for (auto it = m_sceneItems.cbegin(); it != m_sceneItems.cend(); ++it) {
+		if (!existingSceneItems.count(it->first)) {
+			m_sceneItems.erase(it);
+		}
+	}
+
+	// Add scene items which do not exist in the state yet
+	for (auto kv : existingSceneItems) {
+		auto item = kv.first;
+
+		if (m_sceneItems.count(item))
+			continue;
+
+		m_sceneItems[item] = std::make_shared<
+			StreamElementsVideoCompositionViewWidget::VisualElements>(
+			m_view, scene, item);
+	}
+
+	//
+	// Draw visual elements and video render
+	//
+
+	for (auto kv : m_sceneItems) {
+		kv.second->DrawBottomLayer();
+	}
+
+	// Render the view into the region set above
+	m_view->m_videoCompositionInfo->Render();
+
+	for (auto kv : m_sceneItems) {
+		kv.second->DrawTopLayer();
+	}
 }
 
 static inline QSize GetPixelSize(QWidget *widget)
@@ -779,7 +777,9 @@ static bool QTToGSWindow(QWindow *window, gs_window &gswindow)
 StreamElementsVideoCompositionViewWidget::StreamElementsVideoCompositionViewWidget(
 	QWidget* parent,
 	std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition)
-	: m_videoComposition(videoComposition), QWidget(parent)
+	: m_videoComposition(videoComposition),
+	  QWidget(parent),
+	  m_visualElementsState(this)
 {
 	setAttribute(Qt::WA_PaintOnScreen);
 	setAttribute(Qt::WA_StaticContents);
@@ -1078,19 +1078,9 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	// TODO: Figure out where did this 2.0f factor come from
 	gs_matrix_translate3f(viewX * 2.0f, viewY * 2.0f, 0.0f);
 
-	auto visualElementsList = createSceneItemsVisualElements(
-		self, self->m_videoComposition->GetCurrentScene());
-
-	for (auto visualElements : visualElementsList) {
-		visualElements->DrawBottomLayer();
-	}
-
-	// Render the view into the region set above
-	self->m_videoCompositionInfo->Render();
-
-	for (auto visualElements : visualElementsList) {
-		visualElements->DrawTopLayer();
-	}
+	// Update visual elements state and draw them on screen
+	self->m_visualElementsState.UpdateAndDraw(
+		self->m_videoComposition->GetCurrentScene());
 
 	gs_matrix_pop();
 	gs_viewport_pop();
