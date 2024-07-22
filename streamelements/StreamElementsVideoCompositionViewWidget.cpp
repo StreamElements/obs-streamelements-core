@@ -95,6 +95,15 @@ static inline double getCircleDegrees(vec2 center, vec2 periphery) {
 	}
 }
 
+static inline double getDistanceBetweenTwoPoints(double x1, double y1, double x2, double y2) {
+	return sqrt(pow((x2 - x1), 2) + pow((y2 - y1), 2));
+}
+
+static inline double getDistanceBetweenTwoPoints(vec2 &a, vec2 &b)
+{
+	return sqrt(pow((b.x - a.x), 2) + pow((b.y - a.y), 2));
+}
+
 static inline void
 scanGroupSceneItems(obs_sceneitem_t *group,
 		    std::function<void(obs_sceneitem_t * /*item*/)> callback,
@@ -513,6 +522,18 @@ public:
 		sprintf(buf, "degrees: %0.2fn", degrees);
 		OutputDebugStringA(buf);
 		*/
+	}
+
+	virtual void AppendPointsWorldCoordinates(std::vector<vec3> corners)
+	{
+		matrix4 transform, inv_tranform;
+		getSceneItemBoxTransformMatrices(m_sceneItem, &transform,
+						 &inv_tranform);
+
+		auto anchorPosition =
+			getTransformedPosition(m_x, m_y, transform);
+
+		corners.push_back(anchorPosition);
 	}
 };
 

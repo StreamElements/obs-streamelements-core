@@ -15,6 +15,11 @@ public:
 
 	public:
 		virtual void Draw() = 0;
+
+		virtual void
+		AppendPointsWorldCoordinates(std::vector<vec3> corners)
+		{
+		}
 	};
 
 	class VisualElements {
