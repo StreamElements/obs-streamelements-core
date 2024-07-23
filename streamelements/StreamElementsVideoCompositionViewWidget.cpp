@@ -209,12 +209,12 @@ static inline void scanSceneItems(
 		   void *data_p) {
 			auto data = (data_t *)data_p;
 
-			data->callback(item, nullptr);
-
 			if (data->recursive && obs_sceneitem_is_group(item)) {
 				scanGroupSceneItems(item, data->callback,
 						    data->recursive);
 			}
+
+			data->callback(item, nullptr);
 
 			return true;
 		},
@@ -587,15 +587,27 @@ static vec2 getSceneItemFinalBoxScale(obs_sceneitem_t *sceneItem,
 				      obs_sceneitem_t *parentSceneItem)
 {
 	vec2 scale;
+	/*
 	obs_sceneitem_get_box_scale(sceneItem, &scale);
 
 	if (parentSceneItem) {
 		vec2 parentScale;
 		obs_sceneitem_get_box_scale(parentSceneItem, &parentScale);
 
-		scale.x *= parentScale.x;
-		scale.y *= parentScale.y;
+		char buf[512];
+		sprintf(buf, "item scale: %0.2f %0.2f       parent scale: %0.2f %0.2f\n", scale.x, scale.y, parentScale.x, parentScale.y);
+		OutputDebugStringA(buf);
+
+		scale.x *= abs(parentScale.x);
+		scale.y *= abs(parentScale.y);
 	}
+	*/
+
+	matrix4 transform, inv_transform;
+	getSceneItemBoxTransformMatrices(sceneItem, parentSceneItem, &transform,
+					 &inv_transform);
+
+	vec2_set(&scale, transform.x.x, transform.y.y);
 
 	return scale;
 }
@@ -763,7 +775,7 @@ public:
 
 		if (event->buttons() == Qt::NoButton && m_isMouseOver) {
 			// No button is pressed and we're not dragging
-			return true;
+			return false;
 		} else if ((event->buttons() & Qt::LeftButton) && (m_isMouseOver || obs_sceneitem_selected(m_sceneItem))) {
 			if (!obs_sceneitem_selected(m_sceneItem)) {
 				// Check if anything else is selected, while we are not.
@@ -787,50 +799,34 @@ public:
 					return false;
 			}
 
+			// Actual dragging here
 			matrix4 parentTransform, parentInvTransform;
 
 			getSceneItemParentDrawTransformMatrices(
-				m_sceneItem, m_parentSceneItem, &parentTransform,
-				&parentInvTransform);
+				m_sceneItem, m_parentSceneItem,
+				&parentTransform, &parentInvTransform);
 
-			if (!m_isDragging) {
-				// Begin drag and select the scene item if it hasn't been selected yet
-				obs_sceneitem_select(m_sceneItem, true);
 
-				m_dragStartMouseParentPosition =
-					getTransformedPosition(worldX, worldY,
-						parentInvTransform);
+			auto currMouseParentPosition =
+				getTransformedPosition(worldX, worldY,
+							parentInvTransform);
 
-				obs_sceneitem_get_pos(
-					m_sceneItem,
-					&m_dragStartSceneItemTransformPos);
+			double deltaX =
+				currMouseParentPosition.x -
+				m_dragStartMouseParentPosition.x;
 
-				m_isDragging = true;
+			double deltaY =
+				currMouseParentPosition.y -
+				m_dragStartMouseParentPosition.y;
 
-				return true;
-			} else {
-				// Actual dragging here
-				auto currMouseParentPosition =
-					getTransformedPosition(worldX, worldY,
-							       parentInvTransform);
+			vec2 newPos;
+			vec2_set(&newPos,
+					m_dragStartSceneItemTransformPos.x +
+						deltaX,
+					m_dragStartSceneItemTransformPos.y +
+						deltaY);
 
-				double deltaX =
-					currMouseParentPosition.x -
-					m_dragStartMouseParentPosition.x;
-
-				double deltaY =
-					currMouseParentPosition.y -
-					m_dragStartMouseParentPosition.y;
-
-				vec2 newPos;
-				vec2_set(&newPos,
-					 m_dragStartSceneItemTransformPos.x +
-						 deltaX,
-					 m_dragStartSceneItemTransformPos.y +
-						 deltaY);
-
-				obs_sceneitem_set_pos(m_sceneItem, &newPos);
-			}
+			obs_sceneitem_set_pos(m_sceneItem, &newPos);
 		} else {
 			m_isDragging = false;
 		}
@@ -838,32 +834,76 @@ public:
 		return false;
 	}
 
-	virtual bool HandleMouseClick(QMouseEvent *event, double worldX,
+	virtual bool HandleMouseUp(QMouseEvent *event, double worldX,
+				     double worldY) override
+	{
+		m_isDragging = false;
+
+		return false;
+	}
+
+	virtual bool HandleMouseDown(QMouseEvent *event, double worldX,
 				      double worldY) override
 	{
 		if (!m_isMouseOver)
 			return false;
 
+		if (obs_sceneitem_locked(m_sceneItem))
+			return false;
+
 		if (QGuiApplication::keyboardModifiers() &
 		    Qt::ControlModifier) {
 			// Control modifier: toggle selection of multiple items
-			obs_sceneitem_select(m_sceneItem, !obs_sceneitem_selected(m_sceneItem));
+			if (obs_sceneitem_selected(m_sceneItem)) {
+				// Toggle selection off if _this_ item is already selected
+				obs_sceneitem_select(m_sceneItem, false);
+			} else if (!m_parentSceneItem) {
+				// Otherwise, toggle selection on only if we don't have a parent scene item (always yield mouse selection to the parent)
+				obs_sceneitem_select(m_sceneItem, true);
+			}
 		} else {
-			// No modifiers: select one
-			scanSceneItems(
-				m_scene,
-				[&](obs_sceneitem_t *item,
-				    obs_sceneitem_t * /*parent*/) {
-					if (obs_sceneitem_selected(item) !=
-					    (item == m_sceneItem)) {
-						obs_sceneitem_select(
-							item,
-							item == m_sceneItem);
-					}
-				}, true);
+			if (!obs_sceneitem_selected(m_sceneItem)) {
+				if (!m_parentSceneItem) {
+					// No modifiers: select me, but only if we don't have a parent scene item (always yield mouse selection to the parent)
+					scanSceneItems(
+						m_scene,
+						[&](obs_sceneitem_t *item,
+						    obs_sceneitem_t
+							    * /*parent*/) {
+							if (obs_sceneitem_selected(
+								    item) !=
+							    (item ==
+							     m_sceneItem)) {
+								obs_sceneitem_select(
+									item,
+									item == m_sceneItem);
+							}
+						},
+						true);
+				}
+			}
 		}
 
-		return true;
+		if (obs_sceneitem_selected(m_sceneItem)) {
+			// Begin drag and select the scene item if it hasn't been selected yet
+			matrix4 parentTransform, parentInvTransform;
+
+			getSceneItemParentDrawTransformMatrices(
+				m_sceneItem, m_parentSceneItem,
+				&parentTransform, &parentInvTransform);
+
+			m_dragStartMouseParentPosition = getTransformedPosition(
+				worldX, worldY, parentInvTransform);
+
+			obs_sceneitem_get_pos(
+				m_sceneItem, &m_dragStartSceneItemTransformPos);
+
+			m_isDragging = true;
+
+			return true;
+		}
+
+		return false;
 	}
 
 	virtual void Draw() override
@@ -898,15 +938,22 @@ public:
 		matrix4 transform, inv_transform;
 		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem, &transform,
 					      &inv_transform);
-		// TODO: Figure out what happens in a Group - coordinates seem very very off
 
 		auto boxScale = getSceneItemFinalBoxScale(m_sceneItem, m_parentSceneItem);
 
-		/*
 		gs_matrix_push();
 		gs_matrix_mul(&transform);
 
-		if (!isSelected && !m_isMouseOver) {
+		if (isSelected || m_isMouseOver) {
+			drawLine(0.0f, 0.0f, 1.0f, 0.0f, thickness, boxScale,
+				 color);
+			drawLine(0.0f, 1.0f, 1.0f, 1.0f, thickness, boxScale,
+				 color);
+			drawLine(0.0f, 0.0f, 0.0f, 1.0f, thickness, boxScale,
+				 color);
+			drawLine(1.0f, 0.0f, 1.0f, 1.0f, thickness, boxScale,
+				 color);
+		} else {
 			QColor cropMarkerColor = g_colorCrop.get();
 
 			if (crop.top > 0)
@@ -928,21 +975,11 @@ public:
 				drawStripedLine(1.0f, 0.0f, 1.0f, 1.0f,
 						thickness, boxScale,
 						cropMarkerColor);
-		} else {
-			drawLine(0.0f, 0.0f, 1.0f, 0.0f, thickness, boxScale,
-				 color);
-			drawLine(0.0f, 1.0f, 1.0f, 1.0f, thickness, boxScale,
-				 color);
-			drawLine(0.0f, 0.0f, 0.0f, 1.0f, thickness, boxScale,
-				 color);
-			drawLine(1.0f, 0.0f, 1.0f, 1.0f, thickness, boxScale,
-				 color);
 		}
 
 		gs_matrix_pop();
-		*/
 
-		
+		/*
 		auto tl = getTransformedPosition(0.0f, 0.0f, transform);
 		auto tr = getTransformedPosition(1.0f, 0.0f, transform);
 		auto bl = getTransformedPosition(0.0f, 1.0f, transform);
@@ -952,7 +989,7 @@ public:
 		drawLine(tr.x, tr.y, br.x, br.y, thickness, color);
 		drawLine(br.x, br.y, bl.x, bl.y, thickness, color);
 		drawLine(bl.x, bl.y, tl.x, tl.y, thickness, color);
-		
+		*/
 	}
 };
 
@@ -1106,8 +1143,8 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 //
 // After that, draw bottom layer visuals, render video, and draw top layer visuals.
 //
-void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::UpdateAndDraw(
-	obs_scene_t *scene)
+void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
+	UpdateAndDraw(obs_scene_t *scene, double worldWidth, double worldHeight)
 {
 	std::map<obs_sceneitem_t *, obs_sceneitem_t *> existingSceneItems;
 
@@ -1151,6 +1188,9 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::Updat
 	for (auto kv : m_sceneItems) {
 		kv.second->DrawBottomLayer();
 	}
+
+	// Fill video viewport background with black color
+	fillRect(0, 0, worldWidth, worldHeight, QColor(0, 0, 0, 255));
 
 	// Render the view into the region set above
 	m_view->m_videoCompositionInfo->Render();
@@ -1476,9 +1516,6 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	self->m_currMouseWorldY =
 		(double)(self->m_currMouseWidgetY - viewY) / viewWidth * worldWidth;
 
-	// Fill video viewport background with black color
-	fillRect(0, 0, worldWidth, worldHeight, QColor(0, 0, 0, 255));
-
 	// Render the view into the region set above
 	// self->m_videoCompositionInfo->Render();
 
@@ -1523,7 +1560,8 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 
 	// Update visual elements state and draw them on screen
 	self->m_visualElementsState.UpdateAndDraw(
-		self->m_videoComposition->GetCurrentScene());
+		self->m_videoComposition->GetCurrentScene(), worldWidth,
+		worldHeight);
 
 	gs_matrix_pop();
 	gs_viewport_pop();
