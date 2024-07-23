@@ -16,10 +16,10 @@ public:
 	public:
 		virtual void Draw() = 0;
 
-		virtual void HandleMouseDown(QMouseEvent *event, double worldX, double worldY) { }
-		virtual void HandleMouseUp(QMouseEvent *event, double worldX, double worldY) { }
-		virtual void HandleMouseClick(QMouseEvent *event, double worldX, double worldY) { }
-		virtual void HandleMouseMove(QMouseEvent *event, double worldX, double worldY) { }
+		virtual bool HandleMouseDown(QMouseEvent *event, double worldX, double worldY) { return false; }
+		virtual bool HandleMouseUp(QMouseEvent *event, double worldX, double worldY) { return false; }
+		virtual bool HandleMouseClick(QMouseEvent *event, double worldX, double worldY) { return false; }
+		virtual bool HandleMouseMove(QMouseEvent *event, double worldX, double worldY) { return false; }
 	};
 
 	class VisualElements {
@@ -52,36 +52,52 @@ public:
 			}
 		}
 
-		virtual void HandleMouseDown(QMouseEvent *event, double worldX,
+		virtual bool HandleMouseDown(QMouseEvent *event, double worldX,
 					     double worldY)
 		{
 			for (auto element : m_topLayer) {
-				element->HandleMouseDown(event, worldX, worldY);
+				if (element->HandleMouseDown(event, worldX,
+							     worldY))
+					return true;
 			}
+
+			return false;
 		}
 
-		virtual void HandleMouseUp(QMouseEvent *event, double worldX,
+		virtual bool HandleMouseUp(QMouseEvent *event, double worldX,
 					   double worldY)
 		{
 			for (auto element : m_topLayer) {
-				element->HandleMouseUp(event, worldX, worldY);
+				if (element->HandleMouseUp(event, worldX,
+							   worldY))
+					return true;
 			}
+
+			return false;
 		}
 
-		virtual void HandleMouseClick(QMouseEvent *event, double worldX,
+		virtual bool HandleMouseClick(QMouseEvent *event, double worldX,
 					      double worldY)
 		{
 			for (auto element : m_topLayer) {
-				element->HandleMouseClick(event, worldX, worldY);
+				if (element->HandleMouseClick(event, worldX,
+							      worldY))
+					return true;
 			}
+
+			return false;
 		}
 
-		virtual void HandleMouseMove(QMouseEvent *event, double worldX,
+		virtual bool HandleMouseMove(QMouseEvent *event, double worldX,
 					     double worldY)
 		{
 			for (auto element : m_topLayer) {
-				element->HandleMouseMove(event, worldX, worldY);
+				if (element->HandleMouseMove(event, worldX,
+							     worldY))
+					return true;
 			}
+
+			return false;
 		}
 	};
 
@@ -102,39 +118,52 @@ public:
 
 		void UpdateAndDraw(obs_scene_t* scene);
 
-		virtual void HandleMouseDown(QMouseEvent *event, double worldX,
+		virtual bool HandleMouseDown(QMouseEvent *event, double worldX,
 					     double worldY)
 		{
 			for (auto kv : m_sceneItems) {
-				kv.second->HandleMouseDown(event, worldX,
-							   worldY);
+				if (kv.second->HandleMouseDown(event, worldX,
+							       worldY))
+					return true;
 			}
+
+			return false;
 		}
 
-		virtual void HandleMouseUp(QMouseEvent *event, double worldX,
+		virtual bool HandleMouseUp(QMouseEvent *event, double worldX,
 					   double worldY)
 		{
 			for (auto kv : m_sceneItems) {
-				kv.second->HandleMouseUp(event, worldX, worldY);
+				if (kv.second->HandleMouseUp(event, worldX,
+							     worldY))
+					return true;
 			}
+
+			return false;
 		}
 
-		virtual void HandleMouseClick(QMouseEvent *event, double worldX,
+		virtual bool HandleMouseClick(QMouseEvent *event, double worldX,
 					      double worldY)
 		{
 			for (auto kv : m_sceneItems) {
-				kv.second->HandleMouseClick(event, worldX,
-							   worldY);
+				if (kv.second->HandleMouseClick(event, worldX,
+								worldY))
+					return true;
 			}
+
+			return false;
 		}
 
-		virtual void HandleMouseMove(QMouseEvent *event, double worldX,
+		virtual bool HandleMouseMove(QMouseEvent *event, double worldX,
 					     double worldY)
 		{
 			for (auto kv : m_sceneItems) {
-				kv.second->HandleMouseMove(event, worldX,
-							   worldY);
+				if (kv.second->HandleMouseMove(event, worldX,
+							       worldY))
+					return true;
 			}
+
+			return false;
 		}
 	};
 
