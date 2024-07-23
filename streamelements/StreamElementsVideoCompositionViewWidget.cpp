@@ -606,6 +606,8 @@ public:
 
 		obs_sceneitem_select(m_sceneItem, true);
 
+		// TODO: If no modifiers pressed, deselect the rest of the scene items
+
 		return true;
 	}
 
