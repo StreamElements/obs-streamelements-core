@@ -706,7 +706,7 @@ public:
 			 anchorPosition.y + m_width / 2.0f, color);
 
 		if (m_lineTo.get()) {
-			double thickness = 5.0f * m_view->devicePixelRatioF();
+			double thickness = 4.0f * m_view->devicePixelRatioF();
 
 			auto otherPosition = getTransformedPosition(
 				m_lineTo->m_x, m_lineTo->m_y, transform);
