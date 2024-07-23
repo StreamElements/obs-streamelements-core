@@ -565,6 +565,9 @@ public:
 };
 
 class SceneItemControlBox : public SceneItemControlBase {
+private:
+	bool m_isMouseOver = false;
+
 public:
 	SceneItemControlBox(StreamElementsVideoCompositionViewWidget *view,
 			    obs_scene_t *scene, obs_sceneitem_t *sceneItem)
@@ -574,20 +577,61 @@ public:
 
 	~SceneItemControlBox() {}
 
+	virtual bool HandleMouseMove(QMouseEvent *event, double worldX,
+				     double worldY) override
+	{
+		matrix4 transform, inv_transform;
+		getSceneItemBoxTransformMatrices(m_sceneItem, &transform,
+						 &inv_transform);
+
+		auto mousePosition = getTransformedPosition(worldX, worldY, inv_transform);
+
+		m_isMouseOver =
+			(mousePosition.x >= 0.0f && mousePosition.x <= 1.0f &&
+			 mousePosition.y >= 0.0f && mousePosition.y <= 1.0f);
+
+		if (event->button() == Qt::NoButton && m_isMouseOver) {
+			// No button is pressed and we're not dragging
+			return true;
+		}
+
+		return false;
+	}
+
+	virtual bool HandleMouseClick(QMouseEvent *event, double worldX,
+				      double worldY) override
+	{
+		if (!m_isMouseOver)
+			return false;
+
+		obs_sceneitem_select(m_sceneItem, true);
+
+		return true;
+	}
+
 	virtual void Draw() override
 	{
-		const double thickness = 5.0f * m_view->devicePixelRatioF();
+		QColor color;
 
-		matrix4 transform, inv_tranform;
+		if (obs_sceneitem_selected(m_sceneItem)) {
+			color = g_colorSelection.get();
+		} else if (m_isMouseOver) {
+			color = g_colorHover.get();
+		} else {
+			return;
+		}
+
+		const double thickness = 3.0f * m_view->devicePixelRatioF();
+
+		matrix4 transform, inv_transform;
 		getSceneItemBoxTransformMatrices(m_sceneItem, &transform,
-					      &inv_tranform);
+					      &inv_transform);
 
 		auto tl = getTransformedPosition(0.0f, 0.0f, transform);
 		auto tr = getTransformedPosition(1.0f, 0.0f, transform);
 		auto bl = getTransformedPosition(0.0f, 1.0f, transform);
 		auto br = getTransformedPosition(1.0f, 1.0f, transform);
 
-		QColor color(g_colorSelection.get());
 		drawLine(tl.x, tl.y, tr.x, tr.y, thickness, color);
 		drawLine(tr.x, tr.y, br.x, br.y, thickness, color);
 		drawLine(br.x, br.y, bl.x, bl.y, thickness, color);
