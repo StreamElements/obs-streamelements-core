@@ -1056,6 +1056,7 @@ public:
 StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 	StreamElementsVideoCompositionViewWidget *view, obs_scene_t *scene,
 	obs_sceneitem_t *sceneItem, obs_sceneitem_t *parentSceneItem)
+	: m_scene(scene), m_sceneItem(sceneItem), m_parentSceneItem(parentSceneItem)
 {
 	// TODO: check for selection
 
@@ -1133,7 +1134,7 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 	// Rotation
 	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
 		view, scene, sceneItem, parentSceneItem, 0.5f,
-		0.0f - scaledRotationDistance,
+		0.0f + scaledRotationDistance,
 		thickness, thickness, false, false, true, topPoint));
 }
 
@@ -1195,8 +1196,16 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 	// Render the view into the region set above
 	m_view->m_videoCompositionInfo->Render();
 
+	// Draw groups first
 	for (auto kv : m_sceneItems) {
-		kv.second->DrawTopLayer();
+		if (!kv.second->HasParent())
+			kv.second->DrawTopLayer();
+	}
+
+	// Draw children second
+	for (auto kv : m_sceneItems) {
+		if (kv.second->HasParent())
+			kv.second->DrawTopLayer();
 	}
 }
 

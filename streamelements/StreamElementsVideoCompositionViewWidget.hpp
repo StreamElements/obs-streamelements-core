@@ -33,11 +33,17 @@ public:
 						VisualElementBase>>
 			m_bottomLayer;
 
+		obs_scene_t *m_scene;
+		obs_sceneitem_t *m_sceneItem;
+		obs_sceneitem_t *m_parentSceneItem;
+
 	public:
 		VisualElements(StreamElementsVideoCompositionViewWidget *view,
 			       obs_scene_t *scene, obs_sceneitem_t *item,
 			       obs_sceneitem_t *parentItem);
 		~VisualElements() {}
+
+		bool HasParent() { return !!m_parentSceneItem; }
 
 		void DrawTopLayer()
 		{
