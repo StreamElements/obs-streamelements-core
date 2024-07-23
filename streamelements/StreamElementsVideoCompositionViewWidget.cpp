@@ -1,4 +1,6 @@
+#include <obs-frontend-api.h>
 #include <util/platform.h>
+#include <util/config-file.h>
 #include "graphics/matrix4.h"
 
 #include "StreamElementsVideoCompositionViewWidget.hpp"
@@ -6,6 +8,38 @@
 #include <QScreen>
 #include <QMouseEvent>
 #include <QColor>
+
+class ConfigAccessibilityColor {
+	std::string m_name;
+	QColor m_defaultValue;
+
+public:
+	ConfigAccessibilityColor(std::string name, QColor defaultValue)
+		: m_name(name), m_defaultValue(defaultValue)
+	{
+	}
+	ConfigAccessibilityColor(ConfigAccessibilityColor &other) = delete;
+	~ConfigAccessibilityColor() {}
+
+	QColor get() {
+		if (config_get_bool(obs_frontend_get_global_config(),
+				    "Accessibility",
+				    "OverrideColors")) {
+			return color_from_int(config_get_int(
+				obs_frontend_get_global_config(),
+				"Accessibility", m_name.c_str()));
+		} else {
+			return m_defaultValue;
+		}
+	}
+
+private:
+	inline QColor color_from_int(long long val)
+	{
+		return QColor(val & 0xff, (val >> 8) & 0xff, (val >> 16) & 0xff,
+			      (val >> 24) & 0xff);
+	}
+};
 
 class FileTexture {
 private:
@@ -41,6 +75,11 @@ public:
 };
 
 static FileTexture g_overflowTexture("../../data/obs-studio/images/overflow.png");
+
+static ConfigAccessibilityColor g_colorSelection("SelectRed",
+						 QColor(255, 0, 0));
+static ConfigAccessibilityColor g_colorCrop("SelectGreen", QColor(255, 0, 0));
+static ConfigAccessibilityColor g_colorHover("SelectBlue", QColor(0, 0, 255));
 
 #define PI (3.1415926535f)
 
@@ -482,7 +521,7 @@ public:
 
 	virtual void Draw() override
 	{
-		QColor color(255, 0, 0, 255);
+		QColor color(g_colorSelection.get());
 
 		matrix4 transform, inv_tranform;
 		getSceneItemBoxTransformMatrices(m_sceneItem, &transform,
@@ -548,7 +587,7 @@ public:
 		auto bl = getTransformedPosition(0.0f, 1.0f, transform);
 		auto br = getTransformedPosition(1.0f, 1.0f, transform);
 
-		QColor color(255, 0, 0, 255);
+		QColor color(g_colorSelection.get());
 		drawLine(tl.x, tl.y, tr.x, tr.y, thickness, color);
 		drawLine(tr.x, tr.y, br.x, br.y, thickness, color);
 		drawLine(br.x, br.y, bl.x, bl.y, thickness, color);
