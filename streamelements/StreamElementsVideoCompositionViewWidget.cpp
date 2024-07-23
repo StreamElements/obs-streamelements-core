@@ -528,6 +528,25 @@ static void getSceneItemDrawTransformMatrices(obs_sceneitem_t *sceneItem,
 	matrix4_inv(inv_transform, transform);
 }
 
+static void getSceneItemParentDrawTransformMatrices(obs_sceneitem_t *sceneItem,
+					     matrix4 *transform,
+					     matrix4 *inv_transform)
+{
+	matrix4_identity(transform);
+
+	auto scene = obs_sceneitem_get_scene(sceneItem);
+	auto parentSceneItem = obs_sceneitem_get_group(scene, sceneItem);
+	if (parentSceneItem) {
+		matrix4 parentTransform;
+		obs_sceneitem_get_draw_transform(parentSceneItem,
+						 &parentTransform);
+
+		matrix4_mul(transform, transform, &parentTransform);
+	}
+
+	matrix4_inv(inv_transform, transform);
+}
+
 static void getSceneItemBoxTransformMatrices(obs_sceneitem_t *sceneItem,
 				   matrix4 *transform, matrix4 *inv_transform)
 {
@@ -699,8 +718,8 @@ private:
 	bool m_isMouseOver = false;
 	bool m_isDragging = false;
 
-	double m_dragStartMouseWorldX = 0.0f;
-	double m_dragStartMouseWorldY = 0.0f;
+	vec3 m_dragStartMouseParentPosition = {0, 0, 0};
+	vec2 m_dragStartSceneItemTransformPos = {0, 0};
 
 private:
 	void checkMouseOver(double worldX, double worldY) {
@@ -730,19 +749,72 @@ public:
 	{
 		checkMouseOver(worldX, worldY);
 
-		if (event->button() == Qt::NoButton && m_isMouseOver) {
+		if (event->buttons() == Qt::NoButton && m_isMouseOver) {
 			// No button is pressed and we're not dragging
 			return true;
-		} else if (event->button() == Qt::LeftButton && (m_isMouseOver || obs_sceneitem_selected(m_sceneItem))) {
+		} else if ((event->buttons() & Qt::LeftButton) && (m_isMouseOver || obs_sceneitem_selected(m_sceneItem))) {
+			if (!obs_sceneitem_selected(m_sceneItem)) {
+				// Check if anything else is selected, while we are not.
+				// If so - forfeit our implicit selection on drag start
+				bool isAnythingElseSelected = false;
+
+				scanSceneItems(
+					m_scene, [&](obs_sceneitem_t *item) { if (item == m_sceneItem) return;
+						if (obs_sceneitem_selected(
+							    item))
+							isAnythingElseSelected =
+								true;
+					},
+					true);
+
+				if (isAnythingElseSelected)
+					return false;
+			}
+
+
+			matrix4 parentTransform, parentInvTransform;
+
+			getSceneItemParentDrawTransformMatrices(
+				m_sceneItem, &parentTransform,
+				&parentInvTransform);
+
 			if (!m_isDragging) {
 				// Begin drag and select the scene item if it hasn't been selected yet
 				obs_sceneitem_select(m_sceneItem, true);
 
+				m_dragStartMouseParentPosition =
+					getTransformedPosition(worldX, worldY,
+							       parentTransform);
+
+				obs_sceneitem_get_pos(
+					m_sceneItem,
+					&m_dragStartSceneItemTransformPos);
+
 				m_isDragging = true;
-				m_dragStartMouseWorldX = worldX;
-				m_dragStartMouseWorldY = worldY;
+
+				return true;
 			} else {
-				// TODO: Actual dragging here
+				// Actual dragging here
+				auto currMouseParentPosition =
+					getTransformedPosition(worldX, worldY,
+							       parentInvTransform);
+
+				double deltaX =
+					currMouseParentPosition.x -
+					m_dragStartMouseParentPosition.x;
+
+				double deltaY =
+					currMouseParentPosition.y -
+					m_dragStartMouseParentPosition.y;
+
+				vec2 newPos;
+				vec2_set(&newPos,
+					 m_dragStartSceneItemTransformPos.x +
+						 deltaX,
+					 m_dragStartSceneItemTransformPos.y +
+						 deltaY);
+
+				obs_sceneitem_set_pos(m_sceneItem, &newPos);
 			}
 		} else {
 			m_isDragging = false;
