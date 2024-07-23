@@ -733,6 +733,8 @@ private:
 		m_isMouseOver =
 			(mousePosition.x >= 0.0f && mousePosition.x <= 1.0f &&
 			 mousePosition.y >= 0.0f && mousePosition.y <= 1.0f);
+
+		// TODO: Check what's up with Group sizes, they seem to be off when there are no child items inside
 	}
 
 public:
@@ -770,7 +772,6 @@ public:
 				if (isAnythingElseSelected)
 					return false;
 			}
-
 
 			matrix4 parentTransform, parentInvTransform;
 
