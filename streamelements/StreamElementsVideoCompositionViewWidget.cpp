@@ -697,6 +697,24 @@ public:
 class SceneItemControlBox : public SceneItemControlBase {
 private:
 	bool m_isMouseOver = false;
+	bool m_isDragging = false;
+
+	double m_dragStartMouseWorldX = 0.0f;
+	double m_dragStartMouseWorldY = 0.0f;
+
+private:
+	void checkMouseOver(double worldX, double worldY) {
+		matrix4 transform, inv_transform;
+		getSceneItemBoxTransformMatrices(m_sceneItem, &transform,
+						 &inv_transform);
+
+		auto mousePosition =
+			getTransformedPosition(worldX, worldY, inv_transform);
+
+		m_isMouseOver =
+			(mousePosition.x >= 0.0f && mousePosition.x <= 1.0f &&
+			 mousePosition.y >= 0.0f && mousePosition.y <= 1.0f);
+	}
 
 public:
 	SceneItemControlBox(StreamElementsVideoCompositionViewWidget *view,
@@ -710,19 +728,24 @@ public:
 	virtual bool HandleMouseMove(QMouseEvent *event, double worldX,
 				     double worldY) override
 	{
-		matrix4 transform, inv_transform;
-		getSceneItemBoxTransformMatrices(m_sceneItem, &transform,
-						 &inv_transform);
-
-		auto mousePosition = getTransformedPosition(worldX, worldY, inv_transform);
-
-		m_isMouseOver =
-			(mousePosition.x >= 0.0f && mousePosition.x <= 1.0f &&
-			 mousePosition.y >= 0.0f && mousePosition.y <= 1.0f);
+		checkMouseOver(worldX, worldY);
 
 		if (event->button() == Qt::NoButton && m_isMouseOver) {
 			// No button is pressed and we're not dragging
 			return true;
+		} else if (event->button() == Qt::LeftButton && (m_isMouseOver || obs_sceneitem_selected(m_sceneItem))) {
+			if (!m_isDragging) {
+				// Begin drag and select the scene item if it hasn't been selected yet
+				obs_sceneitem_select(m_sceneItem, true);
+
+				m_isDragging = true;
+				m_dragStartMouseWorldX = worldX;
+				m_dragStartMouseWorldY = worldY;
+			} else {
+				// TODO: Actual dragging here
+			}
+		} else {
+			m_isDragging = false;
 		}
 
 		return false;
@@ -752,16 +775,6 @@ public:
 		}
 
 		return true;
-	}
-
-	virtual bool HandleMouseDown(QMouseEvent *event, double worldX,
-				     double worldY) override
-	{
-	}
-
-	virtual bool HandleMouseUp(QMouseEvent *event, double worldX,
-				   double worldY) override
-	{
 	}
 
 	virtual void Draw() override
