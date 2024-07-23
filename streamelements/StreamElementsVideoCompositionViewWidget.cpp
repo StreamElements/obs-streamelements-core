@@ -784,7 +784,7 @@ public:
 
 				m_dragStartMouseParentPosition =
 					getTransformedPosition(worldX, worldY,
-							       parentTransform);
+						parentInvTransform);
 
 				obs_sceneitem_get_pos(
 					m_sceneItem,
