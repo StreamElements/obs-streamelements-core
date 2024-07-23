@@ -8,6 +8,7 @@
 #include <QScreen>
 #include <QMouseEvent>
 #include <QColor>
+#include <QGuiApplication>
 
 class ConfigAccessibilityColor {
 	std::string m_name;
@@ -351,6 +352,47 @@ static inline void drawRect(float x1, float y1, float x2, float y2,
 	fillRect(x2 - thickness, y1 + thickness, x2, y2 - thickness, color);
 }
 
+static inline void drawLine(float x1, float y1, float x2, float y2, float thickness,
+		     vec2 scale, QColor color)
+{
+	float ySide = (y1 == y2) ? (y1 < 0.5f ? 1.0f : -1.0f) : 0.0f;
+	float xSide = (x1 == x2) ? (x1 < 0.5f ? 1.0f : -1.0f) : 0.0f;
+
+	gs_render_start(true);
+
+	gs_vertex2f(x1, y1);
+	gs_vertex2f(x1 + (xSide * (thickness / scale.x)),
+		    y1 + (ySide * (thickness / scale.y)));
+	gs_vertex2f(x2 + (xSide * (thickness / scale.x)),
+		    y2 + (ySide * (thickness / scale.y)));
+	gs_vertex2f(x2, y2);
+	gs_vertex2f(x1, y1);
+
+	gs_vertbuffer_t *line = gs_render_save();
+
+	gs_effect_t *solid = obs_get_base_effect(OBS_EFFECT_SOLID);
+	gs_technique_t *tech = gs_effect_get_technique(solid, "Solid");
+
+	gs_technique_begin(tech);
+	gs_technique_begin_pass(tech, 0);
+
+	gs_eparam_t *colParam =
+		gs_effect_get_param_by_name(gs_get_effect(), "color");
+
+	vec4 colorVec4;
+	colorToVec4(color, &colorVec4);
+
+	gs_effect_set_vec4(colParam, &colorVec4);
+
+	gs_load_vertexbuffer(line);
+	gs_draw(GS_TRISTRIP, 0, 0);
+	gs_vertexbuffer_destroy(line);
+	gs_load_vertexbuffer(nullptr);
+
+	gs_technique_end_pass(tech);
+	gs_technique_end(tech);
+}
+
 static inline void drawLine(float x1, float y1, float x2, float y2,
 			    float thickness,
 			    QColor color)
@@ -372,10 +414,10 @@ static inline void drawLine(float x1, float y1, float x2, float y2,
 	vec4 colorVec4;
 	colorToVec4(color, &colorVec4);
 
+	gs_effect_set_vec4(colParam, &colorVec4);
+
 	gs_matrix_push();
 	//gs_matrix_identity();
-
-	gs_effect_set_vec4(colParam, &colorVec4);
 
 	gs_render_start(true);
 	gs_vertex2f(x1 - (thickness / 2.0f), y1 - (thickness / 2.0f));
@@ -450,6 +492,24 @@ static vec2 getSceneItemFinalScale(obs_sceneitem_t *sceneItem)
 	}
 
 	return info.scale;
+}
+
+static vec2 getSceneItemFinalBoxScale(obs_sceneitem_t *sceneItem)
+{
+	vec2 scale;
+	obs_sceneitem_get_box_scale(sceneItem, &scale);
+
+	auto scene = obs_sceneitem_get_scene(sceneItem);
+	auto parentSceneItem = obs_sceneitem_get_group(scene, sceneItem);
+	if (parentSceneItem) {
+		vec2 parentScale;
+		obs_sceneitem_get_box_scale(parentSceneItem, &parentScale);
+
+		scale.x *= parentScale.x;
+		scale.y *= parentScale.y;
+	}
+
+	return scale;
 }
 
 static vec3 getTransformedPosition(float x, float y, const matrix4 &mat)
@@ -604,9 +664,22 @@ public:
 		if (!m_isMouseOver)
 			return false;
 
-		obs_sceneitem_select(m_sceneItem, true);
-
-		// TODO: If no modifiers pressed, deselect the rest of the scene items
+		if (QGuiApplication::keyboardModifiers() &
+		    Qt::ControlModifier) {
+			// Control modifier: toggle selection of multiple items
+			obs_sceneitem_select(m_sceneItem, !obs_sceneitem_selected(m_sceneItem));
+		} else {
+			// No modifiers: select one
+			scanSceneItems(
+				m_scene, [&](obs_sceneitem_t *item) {
+					if (obs_sceneitem_selected(item) !=
+					    (item == m_sceneItem)) {
+						obs_sceneitem_select(
+							item,
+							item == m_sceneItem);
+					}
+				}, true);
+		}
 
 		return true;
 	}
@@ -623,12 +696,26 @@ public:
 			return;
 		}
 
-		const double thickness = 3.0f * m_view->devicePixelRatioF();
+		const double thickness = 4.0f * m_view->devicePixelRatioF() / 2.0f;
 
 		matrix4 transform, inv_transform;
 		getSceneItemBoxTransformMatrices(m_sceneItem, &transform,
 					      &inv_transform);
 
+		auto boxScale = getSceneItemFinalBoxScale(m_sceneItem);
+
+		gs_matrix_push();
+		gs_matrix_mul(&transform);
+
+		drawLine(0.0f, 0.0f, 1.0f, 0.0f, thickness, boxScale, color);
+		drawLine(0.0f, 1.0f, 1.0f, 1.0f, thickness, boxScale, color);
+
+		drawLine(0.0f, 0.0f, 0.0f, 1.0f, thickness, boxScale, color);
+		drawLine(1.0f, 0.0f, 1.0f, 1.0f, thickness, boxScale, color);
+
+		gs_matrix_pop();
+
+		/*
 		auto tl = getTransformedPosition(0.0f, 0.0f, transform);
 		auto tr = getTransformedPosition(1.0f, 0.0f, transform);
 		auto bl = getTransformedPosition(0.0f, 1.0f, transform);
@@ -638,6 +725,7 @@ public:
 		drawLine(tr.x, tr.y, br.x, br.y, thickness, color);
 		drawLine(br.x, br.y, bl.x, bl.y, thickness, color);
 		drawLine(bl.x, bl.y, tl.x, tl.y, thickness, color);
+		*/
 	}
 };
 
