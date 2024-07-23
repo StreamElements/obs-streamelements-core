@@ -84,6 +84,12 @@ static ConfigAccessibilityColor g_colorHover("SelectBlue", QColor(0, 0, 255));
 
 #define PI (3.1415926535f)
 
+static inline bool isCropped(const obs_sceneitem_crop *crop)
+{
+	return crop->left > 0 || crop->top > 0 || crop->right > 0 ||
+	       crop->bottom > 0;
+}
+
 static inline double radiansToDegrees(double radians) {
 	return radians * 180.0f / PI;
 }
@@ -350,6 +356,70 @@ static inline void drawRect(float x1, float y1, float x2, float y2,
 	fillRect(x1, y2 - thickness, x2, y2, color);
 	fillRect(x1, y1 + thickness, x1 + thickness, y2 - thickness, color);
 	fillRect(x2 - thickness, y1 + thickness, x2, y2 - thickness, color);
+}
+
+static void drawStripedLine(float x1, float y1, float x2, float y2,
+			    float thickness, vec2 scale, QColor color)
+{
+	gs_effect_t *solid = obs_get_base_effect(OBS_EFFECT_SOLID);
+	gs_technique_t *tech = gs_effect_get_technique(solid, "Solid");
+
+	gs_technique_begin(tech);
+	gs_technique_begin_pass(tech, 0);
+
+	gs_eparam_t *colParam =
+		gs_effect_get_param_by_name(gs_get_effect(), "color");
+
+	vec4 colorVec4;
+	colorToVec4(color, &colorVec4);
+
+	gs_effect_set_vec4(colParam, &colorVec4);
+
+	float ySide = (y1 == y2) ? (y1 < 0.5f ? 1.0f : -1.0f) : 0.0f;
+	float xSide = (x1 == x2) ? (x1 < 0.5f ? 1.0f : -1.0f) : 0.0f;
+
+	float dist =
+		sqrt(pow((x1 - x2) * scale.x, 2) + pow((y1 - y2) * scale.y, 2));
+	float offX = (x2 - x1) / dist;
+	float offY = (y2 - y1) / dist;
+
+	for (int i = 0, l = ceil(dist / 15); i < l; i++) {
+		gs_render_start(true);
+
+		float xx1 = x1 + i * 15 * offX;
+		float yy1 = y1 + i * 15 * offY;
+
+		float dx;
+		float dy;
+
+		if (x1 < x2) {
+			dx = std::min(xx1 + 7.5f * offX, x2);
+		} else {
+			dx = std::max(xx1 + 7.5f * offX, x2);
+		}
+
+		if (y1 < y2) {
+			dy = std::min(yy1 + 7.5f * offY, y2);
+		} else {
+			dy = std::max(yy1 + 7.5f * offY, y2);
+		}
+
+		gs_vertex2f(xx1, yy1);
+		gs_vertex2f(xx1 + (xSide * (thickness / scale.x)),
+			    yy1 + (ySide * (thickness / scale.y)));
+		gs_vertex2f(dx, dy);
+		gs_vertex2f(dx + (xSide * (thickness / scale.x)),
+			    dy + (ySide * (thickness / scale.y)));
+
+		gs_vertbuffer_t *line = gs_render_save();
+
+		gs_load_vertexbuffer(line);
+		gs_draw(GS_TRISTRIP, 0, 0);
+		gs_vertexbuffer_destroy(line);
+	}
+
+	gs_technique_end_pass(tech);
+	gs_technique_end(tech);
 }
 
 static inline void drawLine(float x1, float y1, float x2, float y2, float thickness,
@@ -684,15 +754,40 @@ public:
 		return true;
 	}
 
+	virtual bool HandleMouseDown(QMouseEvent *event, double worldX,
+				     double worldY) override
+	{
+	}
+
+	virtual bool HandleMouseUp(QMouseEvent *event, double worldX,
+				   double worldY) override
+	{
+	}
+
 	virtual void Draw() override
 	{
 		QColor color;
 
-		if (obs_sceneitem_selected(m_sceneItem)) {
+		bool isSelected = obs_sceneitem_selected(m_sceneItem);
+
+		obs_sceneitem_crop crop = {0, 0, 0, 0};
+
+		if (isSelected) {
 			color = g_colorSelection.get();
 		} else if (m_isMouseOver) {
 			color = g_colorHover.get();
 		} else {
+			obs_sceneitem_get_crop(m_sceneItem, &crop);
+
+			if (!isCropped(&crop))
+				return;
+
+			obs_transform_info info;
+			obs_sceneitem_get_info(m_sceneItem, &info);
+
+			if (info.bounds_type != OBS_BOUNDS_NONE)
+				return;
+
 			return;
 		}
 
@@ -707,11 +802,38 @@ public:
 		gs_matrix_push();
 		gs_matrix_mul(&transform);
 
-		drawLine(0.0f, 0.0f, 1.0f, 0.0f, thickness, boxScale, color);
-		drawLine(0.0f, 1.0f, 1.0f, 1.0f, thickness, boxScale, color);
+		if (!isSelected && !m_isMouseOver) {
+			QColor cropMarkerColor = g_colorCrop.get();
 
-		drawLine(0.0f, 0.0f, 0.0f, 1.0f, thickness, boxScale, color);
-		drawLine(1.0f, 0.0f, 1.0f, 1.0f, thickness, boxScale, color);
+			if (crop.top > 0)
+				drawStripedLine(0.0f, 0.0f, 1.0f, 0.0f,
+						thickness, boxScale,
+						cropMarkerColor);
+
+			if (crop.bottom > 0)
+				drawStripedLine(0.0f, 1.0f, 1.0f, 1.0f,
+						thickness, boxScale,
+						cropMarkerColor);
+
+			if (crop.left > 0)
+				drawStripedLine(0.0f, 0.0f, 0.0f, 1.0f,
+						thickness, boxScale,
+						cropMarkerColor);
+
+			if (crop.right > 0)
+				drawStripedLine(1.0f, 0.0f, 1.0f, 1.0f,
+						thickness, boxScale,
+						cropMarkerColor);
+		} else {
+			drawLine(0.0f, 0.0f, 1.0f, 0.0f, thickness, boxScale,
+				 color);
+			drawLine(0.0f, 1.0f, 1.0f, 1.0f, thickness, boxScale,
+				 color);
+			drawLine(0.0f, 0.0f, 0.0f, 1.0f, thickness, boxScale,
+				 color);
+			drawLine(1.0f, 0.0f, 1.0f, 1.0f, thickness, boxScale,
+				 color);
+		}
 
 		gs_matrix_pop();
 
