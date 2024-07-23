@@ -117,7 +117,8 @@ public:
 		}
 		~VisualElementsStateManager() {}
 
-		void UpdateAndDraw(obs_scene_t* scene);
+		void UpdateAndDraw(obs_scene_t *scene, double worldWidth,
+				   double worldHeight);
 
 		virtual bool HandleMouseDown(QMouseEvent *event, double worldX,
 					     double worldY)
