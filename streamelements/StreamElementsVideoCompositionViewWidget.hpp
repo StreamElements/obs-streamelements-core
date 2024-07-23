@@ -35,7 +35,8 @@ public:
 
 	public:
 		VisualElements(StreamElementsVideoCompositionViewWidget *view,
-			       obs_scene_t *scene, obs_sceneitem_t *item);
+			       obs_scene_t *scene, obs_sceneitem_t *item,
+			       obs_sceneitem_t *parentItem);
 		~VisualElements() {}
 
 		void DrawTopLayer()

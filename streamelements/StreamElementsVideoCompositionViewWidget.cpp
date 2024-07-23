@@ -152,24 +152,30 @@ static inline double getDistanceBetweenTwoPoints(vec2 &a, vec2 &b)
 
 static inline void
 scanGroupSceneItems(obs_sceneitem_t *group,
-		    std::function<void(obs_sceneitem_t * /*item*/)> callback,
+		    std::function<void(obs_sceneitem_t * /*item*/,
+				       obs_sceneitem_t * /*parent*/)>
+			    callback,
 		    bool recursive)
 {
 	struct data_t {
-		std::function<void(obs_sceneitem_t * /*item*/)> callback;
+		std::function<void(obs_sceneitem_t * /*item*/,
+				   obs_sceneitem_t * /*parent*/)>
+			callback;
 		bool recursive;
+		obs_sceneitem_t *group;
 	};
 
 	data_t data = {};
 	data.callback = callback;
 	data.recursive = recursive;
+	data.group = group;
 
 	obs_sceneitem_group_enum_items(
 		group,
 		[](obs_scene_t *scene, obs_sceneitem_t *item, void *data_p) {
 			auto data = (data_t *)data_p;
 
-			data->callback(item);
+			data->callback(item, data->group);
 
 			if (data->recursive && obs_sceneitem_is_group(item)) {
 				scanGroupSceneItems(item, data->callback, data->recursive);
@@ -182,11 +188,14 @@ scanGroupSceneItems(obs_sceneitem_t *group,
 
 static inline void scanSceneItems(
 	obs_scene_t* scene,
-	std::function<void(obs_sceneitem_t * /*item*/)> callback,
+	std::function<void(obs_sceneitem_t * /*item*/, obs_sceneitem_t * /*parent*/)>
+		callback,
 	bool recursive)
 {
 	struct data_t {
-		std::function<void(obs_sceneitem_t * /*item*/)> callback;
+		std::function<void(obs_sceneitem_t * /*item*/,
+				   obs_sceneitem_t * /*parent*/)>
+			callback;
 		bool recursive;
 	};
 
@@ -200,7 +209,7 @@ static inline void scanSceneItems(
 		   void *data_p) {
 			auto data = (data_t *)data_p;
 
-			data->callback(item);
+			data->callback(item, nullptr);
 
 			if (data->recursive && obs_sceneitem_is_group(item)) {
 				scanGroupSceneItems(item, data->callback,
@@ -509,69 +518,60 @@ static inline void drawLine(float x1, float y1, float x2, float y2,
 	gs_technique_end(tech);
 }
 
+static void applyParentSceneItemTransform(obs_sceneitem_t *childSceneItem,
+					  obs_sceneitem_t *parentSceneItem,
+					  matrix4 *transform)
+{
+	if (parentSceneItem) {
+		matrix4 parentTransform;
+		obs_sceneitem_get_draw_transform(parentSceneItem,
+						 &parentTransform);
+
+		matrix4_mul(transform, transform, &parentTransform);
+	}
+}
+
 static void getSceneItemDrawTransformMatrices(obs_sceneitem_t *sceneItem,
+					      obs_sceneitem_t *parentSceneItem,
 					      matrix4 *transform,
 					      matrix4 *inv_transform)
 {
 	obs_sceneitem_get_draw_transform(sceneItem, transform);
 
-	auto scene = obs_sceneitem_get_scene(sceneItem);
-	auto parentSceneItem = obs_sceneitem_get_group(scene, sceneItem);
-	if (parentSceneItem) {
-		matrix4 parentTransform;
-		obs_sceneitem_get_draw_transform(parentSceneItem,
-						 &parentTransform);
-
-		matrix4_mul(transform, transform, &parentTransform);
-	}
+	applyParentSceneItemTransform(sceneItem, parentSceneItem, transform);
 
 	matrix4_inv(inv_transform, transform);
 }
 
-static void getSceneItemParentDrawTransformMatrices(obs_sceneitem_t *sceneItem,
-					     matrix4 *transform,
-					     matrix4 *inv_transform)
+static void getSceneItemParentDrawTransformMatrices(
+	obs_sceneitem_t *sceneItem, obs_sceneitem_t *parentSceneItem,
+	matrix4 *transform, matrix4 *inv_transform)
 {
 	matrix4_identity(transform);
 
-	auto scene = obs_sceneitem_get_scene(sceneItem);
-	auto parentSceneItem = obs_sceneitem_get_group(scene, sceneItem);
-	if (parentSceneItem) {
-		matrix4 parentTransform;
-		obs_sceneitem_get_draw_transform(parentSceneItem,
-						 &parentTransform);
-
-		matrix4_mul(transform, transform, &parentTransform);
-	}
+	applyParentSceneItemTransform(sceneItem, parentSceneItem, transform);
 
 	matrix4_inv(inv_transform, transform);
 }
 
 static void getSceneItemBoxTransformMatrices(obs_sceneitem_t *sceneItem,
-				   matrix4 *transform, matrix4 *inv_transform)
+					     obs_sceneitem_t *parentSceneItem,
+					     matrix4 *transform,
+					     matrix4 *inv_transform)
 {
 	obs_sceneitem_get_box_transform(sceneItem, transform);
 
-	auto scene = obs_sceneitem_get_scene(sceneItem);
-	auto parentSceneItem = obs_sceneitem_get_group(scene, sceneItem);
-	if (parentSceneItem) {
-		matrix4 parentTransform;
-		obs_sceneitem_get_draw_transform(parentSceneItem,
-						 &parentTransform);
-
-		matrix4_mul(transform, transform, &parentTransform);
-	}
+	applyParentSceneItemTransform(sceneItem, parentSceneItem, transform);
 
 	matrix4_inv(inv_transform, transform);
 }
 
-static vec2 getSceneItemFinalScale(obs_sceneitem_t *sceneItem)
+static vec2 getSceneItemFinalScale(obs_sceneitem_t *sceneItem,
+				   obs_sceneitem_t *parentSceneItem)
 {
 	obs_transform_info info;
 	obs_sceneitem_get_info(sceneItem, &info);
 
-	auto scene = obs_sceneitem_get_scene(sceneItem);
-	auto parentSceneItem = obs_sceneitem_get_group(scene, sceneItem);
 	if (parentSceneItem) {
 		obs_transform_info parentInfo;
 		obs_sceneitem_get_info(parentSceneItem, &parentInfo);
@@ -583,13 +583,12 @@ static vec2 getSceneItemFinalScale(obs_sceneitem_t *sceneItem)
 	return info.scale;
 }
 
-static vec2 getSceneItemFinalBoxScale(obs_sceneitem_t *sceneItem)
+static vec2 getSceneItemFinalBoxScale(obs_sceneitem_t *sceneItem,
+				      obs_sceneitem_t *parentSceneItem)
 {
 	vec2 scale;
 	obs_sceneitem_get_box_scale(sceneItem, &scale);
 
-	auto scene = obs_sceneitem_get_scene(sceneItem);
-	auto parentSceneItem = obs_sceneitem_get_group(scene, sceneItem);
 	if (parentSceneItem) {
 		vec2 parentScale;
 		obs_sceneitem_get_box_scale(parentSceneItem, &parentScale);
@@ -614,12 +613,17 @@ class SceneItemControlBase
 protected:
 	obs_scene_t *m_scene;
 	obs_sceneitem_t *m_sceneItem;
+	obs_sceneitem_t *m_parentSceneItem;
 	StreamElementsVideoCompositionViewWidget *m_view;
 
 public:
 	SceneItemControlBase(StreamElementsVideoCompositionViewWidget *view,
-			     obs_scene_t *scene, obs_sceneitem_t *sceneItem)
-		: m_view(view), m_scene(scene), m_sceneItem(sceneItem)
+			     obs_scene_t *scene, obs_sceneitem_t *sceneItem,
+			     obs_sceneitem_t *parentSceneItem)
+		: m_view(view),
+		  m_scene(scene),
+		  m_sceneItem(sceneItem),
+		  m_parentSceneItem(parentSceneItem)
 	{
 		obs_scene_addref(m_scene);
 		obs_sceneitem_addref(m_sceneItem);
@@ -650,11 +654,12 @@ public:
 public:
 	SceneItemControlPoint(
 		StreamElementsVideoCompositionViewWidget *view,
-		obs_scene_t *scene, obs_sceneitem_t *sceneItem, double x,
+		obs_scene_t *scene, obs_sceneitem_t *sceneItem,
+		obs_sceneitem_t *parentSceneItem, double x,
 		double y, double width, double height, bool modifyX,
 		bool modifyY, bool modifyRotation,
 		std::shared_ptr<SceneItemControlPoint> lineTo = nullptr)
-		: SceneItemControlBase(view, scene, sceneItem),
+		: SceneItemControlBase(view, scene, sceneItem, parentSceneItem),
 		  m_x(x),
 		  m_y(y),
 		  m_width(width),
@@ -670,10 +675,14 @@ public:
 
 	virtual void Draw() override
 	{
+		if (!obs_sceneitem_selected(m_sceneItem) ||
+		    obs_sceneitem_locked(m_sceneItem))
+			return;
+
 		QColor color(g_colorSelection.get());
 
 		matrix4 transform, inv_tranform;
-		getSceneItemBoxTransformMatrices(m_sceneItem, &transform,
+		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem, &transform,
 					      &inv_tranform);
 
 		auto anchorPosition =
@@ -724,7 +733,7 @@ private:
 private:
 	void checkMouseOver(double worldX, double worldY) {
 		matrix4 transform, inv_transform;
-		getSceneItemBoxTransformMatrices(m_sceneItem, &transform,
+		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem, &transform,
 						 &inv_transform);
 
 		auto mousePosition =
@@ -739,8 +748,9 @@ private:
 
 public:
 	SceneItemControlBox(StreamElementsVideoCompositionViewWidget *view,
-			    obs_scene_t *scene, obs_sceneitem_t *sceneItem)
-		: SceneItemControlBase(view, scene, sceneItem)
+			    obs_scene_t *scene, obs_sceneitem_t *sceneItem,
+			    obs_sceneitem_t *parentSceneItem)
+		: SceneItemControlBase(view, scene, sceneItem, parentSceneItem)
 	{
 	}
 
@@ -761,7 +771,11 @@ public:
 				bool isAnythingElseSelected = false;
 
 				scanSceneItems(
-					m_scene, [&](obs_sceneitem_t *item) { if (item == m_sceneItem) return;
+					m_scene,
+					[&](obs_sceneitem_t *item,
+					    obs_sceneitem_t * /*parent*/) {
+						if (item == m_sceneItem)
+							return;
 						if (obs_sceneitem_selected(
 							    item))
 							isAnythingElseSelected =
@@ -776,7 +790,7 @@ public:
 			matrix4 parentTransform, parentInvTransform;
 
 			getSceneItemParentDrawTransformMatrices(
-				m_sceneItem, &parentTransform,
+				m_sceneItem, m_parentSceneItem, &parentTransform,
 				&parentInvTransform);
 
 			if (!m_isDragging) {
@@ -837,7 +851,9 @@ public:
 		} else {
 			// No modifiers: select one
 			scanSceneItems(
-				m_scene, [&](obs_sceneitem_t *item) {
+				m_scene,
+				[&](obs_sceneitem_t *item,
+				    obs_sceneitem_t * /*parent*/) {
 					if (obs_sceneitem_selected(item) !=
 					    (item == m_sceneItem)) {
 						obs_sceneitem_select(
@@ -880,11 +896,13 @@ public:
 		const double thickness = 4.0f * m_view->devicePixelRatioF() / 2.0f;
 
 		matrix4 transform, inv_transform;
-		getSceneItemBoxTransformMatrices(m_sceneItem, &transform,
+		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem, &transform,
 					      &inv_transform);
+		// TODO: Figure out what happens in a Group - coordinates seem very very off
 
-		auto boxScale = getSceneItemFinalBoxScale(m_sceneItem);
+		auto boxScale = getSceneItemFinalBoxScale(m_sceneItem, m_parentSceneItem);
 
+		/*
 		gs_matrix_push();
 		gs_matrix_mul(&transform);
 
@@ -922,8 +940,9 @@ public:
 		}
 
 		gs_matrix_pop();
+		*/
 
-		/*
+		
 		auto tl = getTransformedPosition(0.0f, 0.0f, transform);
 		auto tr = getTransformedPosition(1.0f, 0.0f, transform);
 		auto bl = getTransformedPosition(0.0f, 1.0f, transform);
@@ -933,15 +952,16 @@ public:
 		drawLine(tr.x, tr.y, br.x, br.y, thickness, color);
 		drawLine(br.x, br.y, bl.x, bl.y, thickness, color);
 		drawLine(bl.x, bl.y, tl.x, tl.y, thickness, color);
-		*/
+		
 	}
 };
 
 class SceneItemOverflowBox : public SceneItemControlBase {
 public:
 	SceneItemOverflowBox(StreamElementsVideoCompositionViewWidget *view,
-			    obs_scene_t *scene, obs_sceneitem_t *sceneItem)
-		: SceneItemControlBase(view, scene, sceneItem)
+			     obs_scene_t *scene, obs_sceneitem_t *sceneItem,
+			     obs_sceneitem_t *parentSceneItem)
+		: SceneItemControlBase(view, scene, sceneItem, parentSceneItem)
 	{
 	}
 
@@ -949,11 +969,14 @@ public:
 
 	virtual void Draw() override
 	{
+		if (obs_sceneitem_get_group(m_scene, m_sceneItem))
+			return;
+
 		matrix4 transform, inv_tranform;
-		getSceneItemBoxTransformMatrices(m_sceneItem, &transform,
+		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem, &transform,
 						  &inv_tranform);
 
-		auto itemScale = getSceneItemFinalScale(m_sceneItem);
+		auto itemScale = getSceneItemFinalScale(m_sceneItem, m_parentSceneItem);
 
 		gs_matrix_push();
 		gs_matrix_mul(&transform);
@@ -994,8 +1017,8 @@ public:
 };
 
 StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
-	StreamElementsVideoCompositionViewWidget *view,
-		obs_scene_t *scene, obs_sceneitem_t *item)
+	StreamElementsVideoCompositionViewWidget *view, obs_scene_t *scene,
+	obs_sceneitem_t *sceneItem, obs_sceneitem_t *parentSceneItem)
 {
 	// TODO: check for selection
 
@@ -1006,52 +1029,52 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 
 	// Overflow box
 	m_bottomLayer.push_back(std::make_shared<SceneItemOverflowBox>(
-		view, scene, item));
+		view, scene, sceneItem, parentSceneItem));
 
 	// Box
 	m_topLayer.push_back(std::make_shared<SceneItemControlBox>(
-		view, scene, item));
+		view, scene, sceneItem, parentSceneItem));
 
 	// Top-left
 	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-		view, scene, item, 0.0f, 0.0f, thickness, thickness,
+		view, scene, sceneItem, parentSceneItem, 0.0f, 0.0f, thickness, thickness,
 		true, true, false));
 
 	// Top-right
 	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-		view, scene, item, 1.0f, 0.0f, thickness, thickness,
+		view, scene, sceneItem, parentSceneItem, 1.0f, 0.0f, thickness, thickness,
 		true, true, false));
 
 	// Bottom-Left
 	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-		view, scene, item, 0.0f, 1.0f, thickness, thickness,
+		view, scene, sceneItem, parentSceneItem, 0.0f, 1.0f, thickness, thickness,
 		true, true, false));
 
 	// Bottom-Right
 	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-		view, scene, item, 1.0f, 1.0f, thickness, thickness,
+		view, scene, sceneItem, parentSceneItem, 1.0f, 1.0f, thickness, thickness,
 		true, true, false));
 
 	// Top
 	auto topPoint = std::make_shared<SceneItemControlPoint>(
-		view, scene, item, 0.5f, 0.0f, thickness, thickness,
+		view, scene, sceneItem, parentSceneItem, 0.5f, 0.0f, thickness, thickness,
 		false, true, false);
 
 	m_topLayer.push_back(topPoint);
 
 	// Bottom
 	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-		view, scene, item, 0.5f, 1.0f, thickness, thickness,
+		view, scene, sceneItem, parentSceneItem, 0.5f, 1.0f, thickness, thickness,
 		false, true, false));
 
 	// Left
 	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-		view, scene, item, 0.0f, 0.5f, thickness, thickness,
+		view, scene, sceneItem, parentSceneItem, 0.0f, 0.5f, thickness, thickness,
 		true, false, false));
 
 	// Right
 	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-		view, scene, item, 1.0f, 0.5f, thickness, thickness,
+		view, scene, sceneItem, parentSceneItem, 1.0f, 0.5f, thickness, thickness,
 		true, false, false));
 
 	//
@@ -1064,15 +1087,16 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 	// coordinate system, but the visible distance is in _world_ coordinate space:
 	// this way we can supply the distance in the same coord space as the rest of the control points.
 	//
-	auto scale = getSceneItemFinalScale(item);
+	auto scale = getSceneItemFinalScale(sceneItem, parentSceneItem);
 	auto scaledRotationDistance =
 		rotationDistance * scale.y /
 		(double)obs_source_get_height(
-			obs_sceneitem_get_source(item));
+			obs_sceneitem_get_source(sceneItem));
 
 	// Rotation
 	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-		view, scene, item, 0.5f, 0.0f - scaledRotationDistance,
+		view, scene, sceneItem, parentSceneItem, 0.5f,
+		0.0f - scaledRotationDistance,
 		thickness, thickness, false, false, true, topPoint));
 }
 
@@ -1085,18 +1109,18 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::UpdateAndDraw(
 	obs_scene_t *scene)
 {
-	std::map<obs_sceneitem_t *, bool> existingSceneItems;
+	std::map<obs_sceneitem_t *, obs_sceneitem_t *> existingSceneItems;
 
 	scanSceneItems(
 		scene,
-		[&](obs_sceneitem_t *item) {
+		[&](obs_sceneitem_t *item, obs_sceneitem_t *parent) {
 			if (obs_sceneitem_locked(item))
 				return;
 
 			if (!obs_sceneitem_visible(item))
 				return;
 
-			existingSceneItems[item] = true;
+			existingSceneItems[item] = parent;
 		},
 		true);
 
@@ -1110,13 +1134,14 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::Updat
 	// Add scene items which do not exist in the state yet
 	for (auto kv : existingSceneItems) {
 		auto item = kv.first;
+		auto parentItem = kv.second;
 
 		if (m_sceneItems.count(item))
 			continue;
 
 		m_sceneItems[item] = std::make_shared<
 			StreamElementsVideoCompositionViewWidget::VisualElements>(
-			m_view, scene, item);
+			m_view, scene, item, parentItem);
 	}
 
 	//
