@@ -65,6 +65,8 @@ public:
 private:
 	bool m_isDragging = false;
 	bool m_isMouseOver = false;
+	vec3 m_mousePosition = {0, 0};
+	double m_prevRotMouseDegrees = 0.0f;
 
 	void checkMouseOver(double worldX, double worldY)
 	{
@@ -72,7 +74,7 @@ private:
 		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
 						 &transform, &inv_transform);
 
-		auto mousePosition =
+		m_mousePosition =
 			getTransformedPosition(worldX, worldY, inv_transform);
 
 		auto boxScale = getSceneItemFinalBoxScale(m_sceneItem,
@@ -87,8 +89,18 @@ private:
 		auto y2 = m_y + m_height / boxScale.y / 2;
 
 		m_isMouseOver =
-			(mousePosition.x >= x1 && mousePosition.x <= x2 &&
-			 mousePosition.y >= y1 && mousePosition.y <= y2);
+			(m_mousePosition.x >= x1 && m_mousePosition.x <= x2 &&
+			 m_mousePosition.y >= y1 && m_mousePosition.y <= y2);
+	}
+
+	double getMouseAngleDegrees() {
+		vec2 center;
+		vec2_set(&center, 0.0f, 0.0f);
+
+		vec2 mouse;
+		vec2_set(&mouse, m_mousePosition.x, m_mousePosition.y);
+
+		return getCircleDegrees(center, mouse);
 	}
 
 public:
@@ -167,7 +179,27 @@ public:
 		if (!m_isDragging)
 			return false;
 
-		return false;
+		vec2 center;
+		vec2_set(&center, 0.5f, 0.5f);
+
+		vec2 mouse;
+		vec2_set(&mouse, m_mousePosition.x, m_mousePosition.y);
+
+		auto mouseAngle = getCircleDegrees(center, mouse);
+
+		obs_transform_info info;
+		obs_sceneitem_get_info(m_sceneItem, &info);
+		info.rot = mouseAngle;
+		obs_sceneitem_set_info(m_sceneItem, &info);
+
+		auto rotDelta =
+			normalizeDegrees(mouseAngle - m_prevRotMouseDegrees + 360.0f);
+
+		char buf[512];
+		sprintf(buf, "mouseAngle: %0.2f    rotDelta: %0.2f    mousePosition: %0.2f %0.2f\n", mouseAngle, rotDelta, m_mousePosition.x, m_mousePosition.y);
+		OutputDebugStringA(buf);
+
+		return true;
 	}
 
 	virtual bool HandleMouseDown(QMouseEvent *event, double worldX,
@@ -180,6 +212,8 @@ public:
 			return false;
 
 		m_isDragging = true;
+
+		m_prevRotMouseDegrees = getMouseAngleDegrees();
 
 		return true;
 	}
