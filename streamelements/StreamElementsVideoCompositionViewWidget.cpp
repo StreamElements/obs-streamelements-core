@@ -310,10 +310,10 @@ static inline void colorToVec4(QColor color, vec4 *vec) {
 
 static inline void fillRect(float x1, float y1, float x2, float y2, QColor color)
 {
-	x1 = std::round(x1);
-	x2 = std::round(x2);
-	y1 = std::round(y1);
-	y2 = std::round(y2);
+	//x1 = std::round(x1);
+	//x2 = std::round(x2);
+	//y1 = std::round(y1);
+	//y2 = std::round(y2);
 
 	gs_effect_t *solid = obs_get_base_effect(OBS_EFFECT_SOLID);
 	gs_technique_t *tech = gs_effect_get_technique(solid, "Solid");
@@ -586,27 +586,11 @@ static vec2 getSceneItemFinalScale(obs_sceneitem_t *sceneItem,
 static vec2 getSceneItemFinalBoxScale(obs_sceneitem_t *sceneItem,
 				      obs_sceneitem_t *parentSceneItem)
 {
-	vec2 scale;
-	/*
-	obs_sceneitem_get_box_scale(sceneItem, &scale);
-
-	if (parentSceneItem) {
-		vec2 parentScale;
-		obs_sceneitem_get_box_scale(parentSceneItem, &parentScale);
-
-		char buf[512];
-		sprintf(buf, "item scale: %0.2f %0.2f       parent scale: %0.2f %0.2f\n", scale.x, scale.y, parentScale.x, parentScale.y);
-		OutputDebugStringA(buf);
-
-		scale.x *= abs(parentScale.x);
-		scale.y *= abs(parentScale.y);
-	}
-	*/
-
 	matrix4 transform, inv_transform;
 	getSceneItemBoxTransformMatrices(sceneItem, parentSceneItem, &transform,
 					 &inv_transform);
 
+	vec2 scale;
 	vec2_set(&scale, transform.x.x, transform.y.y);
 
 	return scale;
@@ -697,6 +681,28 @@ public:
 		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem, &transform,
 					      &inv_tranform);
 
+		auto boxScale = getSceneItemFinalBoxScale(m_sceneItem, m_parentSceneItem);
+
+		auto x1 = m_x - m_width / boxScale.x / 2;
+		auto x2 = m_x + m_width / boxScale.x / 2;
+		auto y1 = m_y - m_height / boxScale.y / 2;
+		auto y2 = m_y + m_height / boxScale.y / 2;
+
+		gs_matrix_push();
+		gs_matrix_mul(&transform);
+
+		fillRect(x1, y1, x2, y2, color);
+
+		if (m_lineTo.get()) {
+			double thickness = 4.0f * m_view->devicePixelRatioF();
+
+			drawLine(m_x, m_y, m_lineTo.get()->m_x,
+				 m_lineTo.get()->m_y, thickness, boxScale, color);
+		}
+
+		gs_matrix_pop();
+
+		/*
 		auto anchorPosition =
 			getTransformedPosition(m_x, m_y, transform);
 
@@ -715,6 +721,7 @@ public:
 				 otherPosition.x, otherPosition.y, thickness,
 				 color);
 		}
+		*/
 
 		/*
 		vec2 center;
@@ -1063,7 +1070,6 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 	auto pixelDensity = (double)view->devicePixelRatioF();
 
 	const float thickness = 20.0f * pixelDensity;
-	const float rotationDistance = 200.0f * pixelDensity;
 
 	// Overflow box
 	m_bottomLayer.push_back(std::make_shared<SceneItemOverflowBox>(
@@ -1125,16 +1131,16 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 	// coordinate system, but the visible distance is in _world_ coordinate space:
 	// this way we can supply the distance in the same coord space as the rest of the control points.
 	//
-	auto scale = getSceneItemFinalScale(sceneItem, parentSceneItem);
-	auto scaledRotationDistance =
-		rotationDistance * scale.y /
-		(double)obs_source_get_height(
-			obs_sceneitem_get_source(sceneItem));
+	const float rotationDistance = 60.0f * pixelDensity;
+
+	auto scale = getSceneItemFinalBoxScale(sceneItem, parentSceneItem);
+
+	double scaledRotationDistance = rotationDistance / abs(scale.y);
 
 	// Rotation
 	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
 		view, scene, sceneItem, parentSceneItem, 0.5f,
-		0.0f + scaledRotationDistance,
+		0.0f - scaledRotationDistance,
 		thickness, thickness, false, false, true, topPoint));
 }
 
