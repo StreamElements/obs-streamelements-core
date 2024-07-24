@@ -780,63 +780,31 @@ public:
 	{
 		checkMouseOver(worldX, worldY);
 
-		if (event->buttons() == Qt::NoButton && m_isMouseOver) {
-			// No button is pressed and we're not dragging
+		if (!m_isDragging)
 			return false;
-		} else if ((event->buttons() & Qt::LeftButton) && (m_isMouseOver || obs_sceneitem_selected(m_sceneItem))) {
-			if (!obs_sceneitem_selected(m_sceneItem)) {
-				// Check if anything else is selected, while we are not.
-				// If so - forfeit our implicit selection on drag start
-				bool isAnythingElseSelected = false;
 
-				scanSceneItems(
-					m_scene,
-					[&](obs_sceneitem_t *item,
-					    obs_sceneitem_t * /*parent*/) {
-						if (item == m_sceneItem)
-							return;
-						if (obs_sceneitem_selected(
-							    item))
-							isAnythingElseSelected =
-								true;
-					},
-					true);
+		// Actual dragging here
+		matrix4 parentTransform, parentInvTransform;
 
-				if (isAnythingElseSelected)
-					return false;
-			}
+		getSceneItemParentDrawTransformMatrices(m_sceneItem,
+							m_parentSceneItem,
+							&parentTransform,
+							&parentInvTransform);
 
-			// Actual dragging here
-			matrix4 parentTransform, parentInvTransform;
+		auto currMouseParentPosition = getTransformedPosition(
+			worldX, worldY, parentInvTransform);
 
-			getSceneItemParentDrawTransformMatrices(
-				m_sceneItem, m_parentSceneItem,
-				&parentTransform, &parentInvTransform);
-
-
-			auto currMouseParentPosition =
-				getTransformedPosition(worldX, worldY,
-							parentInvTransform);
-
-			double deltaX =
-				currMouseParentPosition.x -
+		double deltaX = currMouseParentPosition.x -
 				m_dragStartMouseParentPosition.x;
 
-			double deltaY =
-				currMouseParentPosition.y -
+		double deltaY = currMouseParentPosition.y -
 				m_dragStartMouseParentPosition.y;
 
-			vec2 newPos;
-			vec2_set(&newPos,
-					m_dragStartSceneItemTransformPos.x +
-						deltaX,
-					m_dragStartSceneItemTransformPos.y +
-						deltaY);
+		vec2 newPos;
+		vec2_set(&newPos, m_dragStartSceneItemTransformPos.x + deltaX,
+			 m_dragStartSceneItemTransformPos.y + deltaY);
 
-			obs_sceneitem_set_pos(m_sceneItem, &newPos);
-		} else {
-			m_isDragging = false;
-		}
+		obs_sceneitem_set_pos(m_sceneItem, &newPos);
 
 		return false;
 	}
@@ -852,46 +820,59 @@ public:
 	virtual bool HandleMouseDown(QMouseEvent *event, double worldX,
 				      double worldY) override
 	{
-		if (!m_isMouseOver)
-			return false;
-
 		if (obs_sceneitem_locked(m_sceneItem))
 			return false;
 
-		if (QGuiApplication::keyboardModifiers() &
-		    Qt::ControlModifier) {
-			// Control modifier: toggle selection of multiple items
-			if (obs_sceneitem_selected(m_sceneItem)) {
-				// Toggle selection off if _this_ item is already selected
-				obs_sceneitem_select(m_sceneItem, false);
-			} else if (!m_parentSceneItem) {
-				// Otherwise, toggle selection on only if we don't have a parent scene item (always yield mouse selection to the parent)
-				obs_sceneitem_select(m_sceneItem, true);
-			}
-		} else {
-			if (!obs_sceneitem_selected(m_sceneItem)) {
-				if (!m_parentSceneItem) {
-					// No modifiers: select me, but only if we don't have a parent scene item (always yield mouse selection to the parent)
-					scanSceneItems(
-						m_scene,
-						[&](obs_sceneitem_t *item,
-						    obs_sceneitem_t
-							    * /*parent*/) {
-							if (obs_sceneitem_selected(
-								    item) !=
-							    (item ==
-							     m_sceneItem)) {
-								obs_sceneitem_select(
-									item,
-									item == m_sceneItem);
-							}
-						},
-						true);
+		if (m_isMouseOver) {
+			// TODO: Check for selected children at position
+
+			if (QGuiApplication::keyboardModifiers() &
+			    Qt::ControlModifier) {
+				// Control modifier: toggle selection of multiple items
+				if (obs_sceneitem_selected(m_sceneItem)) {
+					// Toggle selection off if _this_ item is already selected
+					obs_sceneitem_select(m_sceneItem,
+							     false);
+				} else if (!m_parentSceneItem) {
+					// Otherwise, toggle selection on only if we don't have a parent scene item (always yield mouse selection to the parent)
+					obs_sceneitem_select(m_sceneItem, true);
+				}
+			} else {
+				if (!obs_sceneitem_selected(m_sceneItem)) {
+					if (!m_parentSceneItem) {
+						// No modifiers: select me, but only if we don't have a parent scene item (always yield mouse selection to the parent)
+						scanSceneItems(
+							m_scene,
+							[&](obs_sceneitem_t
+								    *item,
+							    obs_sceneitem_t
+								    * /*parent*/) {
+								if (obs_sceneitem_selected(
+									    item) !=
+								    (item ==
+								     m_sceneItem)) {
+									obs_sceneitem_select(
+										item,
+										item == m_sceneItem);
+								}
+							},
+							true);
+					}
 				}
 			}
 		}
 
 		if (obs_sceneitem_selected(m_sceneItem)) {
+			// Unselect all children if we're a group
+			scanGroupSceneItems(m_sceneItem,
+					    [&](obs_sceneitem_t *sceneItem,
+						obs_sceneitem_t *
+						/*parentSceneItem*/) {
+					if (obs_sceneitem_selected(sceneItem))
+						obs_sceneitem_select(sceneItem, false);
+				}, true);
+
+
 			// Begin drag and select the scene item if it hasn't been selected yet
 			matrix4 parentTransform, parentInvTransform;
 
@@ -907,7 +888,7 @@ public:
 
 			m_isDragging = true;
 
-			return true;
+			return false;
 		}
 
 		return false;
@@ -1155,6 +1136,8 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 {
 	std::map<obs_sceneitem_t *, obs_sceneitem_t *> existingSceneItems;
 
+	m_sceneItemsEventProcessingOrder.clear();
+
 	scanSceneItems(
 		scene,
 		[&](obs_sceneitem_t *item, obs_sceneitem_t *parent) {
@@ -1165,13 +1148,15 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 				return;
 
 			existingSceneItems[item] = parent;
+
+			m_sceneItemsEventProcessingOrder.push_back(item);
 		},
 		true);
 
 	// Remove scene items which have been removed from the scene, hidden or locked
-	for (auto it = m_sceneItems.cbegin(); it != m_sceneItems.cend(); ++it) {
+	for (auto it = m_sceneItemsVisualElementsMap.cbegin(); it != m_sceneItemsVisualElementsMap.cend(); ++it) {
 		if (!existingSceneItems.count(it->first)) {
-			m_sceneItems.erase(it);
+			m_sceneItemsVisualElementsMap.erase(it);
 		}
 	}
 
@@ -1180,10 +1165,10 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 		auto item = kv.first;
 		auto parentItem = kv.second;
 
-		if (m_sceneItems.count(item))
+		if (m_sceneItemsVisualElementsMap.count(item))
 			continue;
 
-		m_sceneItems[item] = std::make_shared<
+		m_sceneItemsVisualElementsMap[item] = std::make_shared<
 			StreamElementsVideoCompositionViewWidget::VisualElements>(
 			m_view, scene, item, parentItem);
 	}
@@ -1192,7 +1177,7 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 	// Draw visual elements and video render
 	//
 
-	for (auto kv : m_sceneItems) {
+	for (auto kv : m_sceneItemsVisualElementsMap) {
 		kv.second->DrawBottomLayer();
 	}
 
@@ -1203,13 +1188,13 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 	m_view->m_videoCompositionInfo->Render();
 
 	// Draw groups first
-	for (auto kv : m_sceneItems) {
+	for (auto kv : m_sceneItemsVisualElementsMap) {
 		if (!kv.second->HasParent())
 			kv.second->DrawTopLayer();
 	}
 
 	// Draw children second
-	for (auto kv : m_sceneItems) {
+	for (auto kv : m_sceneItemsVisualElementsMap) {
 		if (kv.second->HasParent())
 			kv.second->DrawTopLayer();
 	}

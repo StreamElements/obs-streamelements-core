@@ -113,7 +113,8 @@ public:
 		StreamElementsVideoCompositionViewWidget* m_view;
 		obs_scene_t *m_scene;
 		std::map<obs_sceneitem_t *, std::shared_ptr<VisualElements>>
-			m_sceneItems;
+			m_sceneItemsVisualElementsMap;
+		std::vector<obs_sceneitem_t *> m_sceneItemsEventProcessingOrder;
 
 	public:
 		VisualElementsStateManager(
@@ -129,8 +130,10 @@ public:
 		virtual bool HandleMouseDown(QMouseEvent *event, double worldX,
 					     double worldY)
 		{
-			for (auto kv : m_sceneItems) {
-				if (kv.second->HandleMouseDown(event, worldX,
+			for (auto sceneItem :
+			     m_sceneItemsEventProcessingOrder) {
+				if (m_sceneItemsVisualElementsMap[sceneItem]
+					    ->HandleMouseDown(event, worldX,
 							       worldY))
 					return true;
 			}
@@ -141,9 +144,11 @@ public:
 		virtual bool HandleMouseUp(QMouseEvent *event, double worldX,
 					   double worldY)
 		{
-			for (auto kv : m_sceneItems) {
-				if (kv.second->HandleMouseUp(event, worldX,
-							     worldY))
+			for (auto sceneItem :
+			     m_sceneItemsEventProcessingOrder) {
+				if (m_sceneItemsVisualElementsMap[sceneItem]
+					    ->HandleMouseUp(event, worldX,
+							    worldY))
 					return true;
 			}
 
@@ -153,8 +158,10 @@ public:
 		virtual bool HandleMouseClick(QMouseEvent *event, double worldX,
 					      double worldY)
 		{
-			for (auto kv : m_sceneItems) {
-				if (kv.second->HandleMouseClick(event, worldX,
+			for (auto sceneItem :
+			     m_sceneItemsEventProcessingOrder) {
+				if (m_sceneItemsVisualElementsMap[sceneItem]
+					    ->HandleMouseClick(event, worldX,
 								worldY))
 					return true;
 			}
@@ -165,8 +172,10 @@ public:
 		virtual bool HandleMouseMove(QMouseEvent *event, double worldX,
 					     double worldY)
 		{
-			for (auto kv : m_sceneItems) {
-				if (kv.second->HandleMouseMove(event, worldX,
+			for (auto sceneItem :
+			     m_sceneItemsEventProcessingOrder) {
+				if (m_sceneItemsVisualElementsMap[sceneItem]
+					    ->HandleMouseMove(event, worldX,
 							       worldY))
 					return true;
 			}
