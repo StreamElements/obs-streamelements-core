@@ -1129,9 +1129,8 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 
 	//
 	// Calculate the distance of the rotation handle from the source in _source_ coordinates (0.0 - 1.0)
-	// We do this by calculating the source _final_ scale, based on it's own scale and it's parent scale,
-	// dividing it by the source height, and then multiplying it by the rotation distance in _world_ coordinate
-	// space.
+	// We do this by calculating the scene item box final scale (ratio between world coordinates and source coordinates),
+	// and then dividing the rotation control point distance in world coordinates, by that ratio.
 	//
 	// We have to perform this complex transformation since control point coordinates are relative to the _source_
 	// coordinate system, but the visible distance is in _world_ coordinate space:
