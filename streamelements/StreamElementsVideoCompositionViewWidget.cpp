@@ -151,6 +151,10 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 	//
 
 	for (auto kv : m_sceneItemsVisualElementsMap) {
+		kv.second->Tick();
+	}
+
+	for (auto kv : m_sceneItemsVisualElementsMap) {
 		kv.second->DrawBottomLayer();
 	}
 

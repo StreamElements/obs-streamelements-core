@@ -14,6 +14,7 @@ public:
 		~VisualElementBase() {}
 
 	public:
+		virtual void Tick() {}
 		virtual void Draw() = 0;
 
 		virtual bool HandleMouseDown(QMouseEvent *event, double worldX, double worldY) { return false; }
@@ -45,6 +46,17 @@ public:
 
 		bool HasParent() { return !!m_parentSceneItem; }
 
+		void Tick()
+		{
+			for (auto element : m_bottomLayer) {
+				element->Tick();
+			}
+
+			for (auto element : m_topLayer) {
+				element->Tick();
+			}
+		}
+
 		void DrawTopLayer()
 		{
 			// Draw in reverse order of mouse event processing
@@ -62,7 +74,7 @@ public:
 			}
 		}
 
-		virtual bool HandleMouseDown(QMouseEvent *event, double worldX,
+		bool HandleMouseDown(QMouseEvent *event, double worldX,
 					     double worldY)
 		{
 			for (auto element : m_topLayer) {
@@ -74,7 +86,7 @@ public:
 			return false;
 		}
 
-		virtual bool HandleMouseUp(QMouseEvent *event, double worldX,
+		bool HandleMouseUp(QMouseEvent *event, double worldX,
 					   double worldY)
 		{
 			for (auto element : m_topLayer) {
@@ -86,7 +98,7 @@ public:
 			return false;
 		}
 
-		virtual bool HandleMouseClick(QMouseEvent *event, double worldX,
+		bool HandleMouseClick(QMouseEvent *event, double worldX,
 					      double worldY)
 		{
 			for (auto element : m_topLayer) {
@@ -98,7 +110,7 @@ public:
 			return false;
 		}
 
-		virtual bool HandleMouseMove(QMouseEvent *event, double worldX,
+		bool HandleMouseMove(QMouseEvent *event, double worldX,
 					     double worldY)
 		{
 			for (auto element : m_topLayer) {
@@ -130,7 +142,7 @@ public:
 		void UpdateAndDraw(obs_scene_t *scene, double worldWidth,
 				   double worldHeight);
 
-		virtual bool HandleMouseDown(QMouseEvent *event, double worldX,
+		bool HandleMouseDown(QMouseEvent *event, double worldX,
 					     double worldY)
 		{
 			for (auto sceneItem :
@@ -144,7 +156,7 @@ public:
 			return false;
 		}
 
-		virtual bool HandleMouseUp(QMouseEvent *event, double worldX,
+		bool HandleMouseUp(QMouseEvent *event, double worldX,
 					   double worldY)
 		{
 			for (auto sceneItem :
@@ -158,7 +170,7 @@ public:
 			return false;
 		}
 
-		virtual bool HandleMouseClick(QMouseEvent *event, double worldX,
+		bool HandleMouseClick(QMouseEvent *event, double worldX,
 					      double worldY)
 		{
 			for (auto sceneItem :
@@ -172,7 +184,7 @@ public:
 			return false;
 		}
 
-		virtual bool HandleMouseMove(QMouseEvent *event, double worldX,
+		bool HandleMouseMove(QMouseEvent *event, double worldX,
 					     double worldY)
 		{
 			for (auto sceneItem :
