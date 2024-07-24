@@ -185,6 +185,7 @@ public:
 		vec2 mouse;
 		vec2_set(&mouse, m_mousePosition.x, m_mousePosition.y);
 
+		// TODO: Calculate based on WORLD coordinates, with a starting rotation and delta offsets until rotation is done
 		auto mouseAngle = getCircleDegrees(center, mouse);
 
 		matrix4 transform;
