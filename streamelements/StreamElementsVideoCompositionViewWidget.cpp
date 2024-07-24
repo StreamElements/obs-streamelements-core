@@ -761,8 +761,35 @@ private:
 		m_isMouseOver =
 			(mousePosition.x >= 0.0f && mousePosition.x <= 1.0f &&
 			 mousePosition.y >= 0.0f && mousePosition.y <= 1.0f);
+	}
 
-		// TODO: Check what's up with Group sizes, they seem to be off when there are no child items inside
+	bool hasSelectedChildrenAtPosition(double worldX, double worldY) {
+		bool result = false;
+
+		scanGroupSceneItems(
+			m_sceneItem,
+			[&](obs_sceneitem_t *sceneItem,
+			    obs_sceneitem_t *parentSceneItem) {
+				matrix4 transform, inv_transform;
+				getSceneItemBoxTransformMatrices(
+					sceneItem, parentSceneItem, &transform,
+					&inv_transform);
+
+				auto mousePosition = getTransformedPosition(
+					worldX, worldY, inv_transform);
+
+				bool isMouseOver = (mousePosition.x >= 0.0f &&
+						    mousePosition.x <= 1.0f &&
+						    mousePosition.y >= 0.0f &&
+						    mousePosition.y <= 1.0f);
+
+				if (isMouseOver) {
+					result |= obs_sceneitem_selected(sceneItem);
+				}
+			},
+			true);
+
+		return result;
 	}
 
 public:
@@ -823,9 +850,7 @@ public:
 		if (obs_sceneitem_locked(m_sceneItem))
 			return false;
 
-		if (m_isMouseOver) {
-			// TODO: Check for selected children at position
-
+		if (m_isMouseOver && !hasSelectedChildrenAtPosition(worldX, worldY)) {
 			if (QGuiApplication::keyboardModifiers() &
 			    Qt::ControlModifier) {
 				// Control modifier: toggle selection of multiple items
