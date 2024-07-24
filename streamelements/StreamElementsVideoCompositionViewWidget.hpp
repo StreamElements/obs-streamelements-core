@@ -47,7 +47,10 @@ public:
 
 		void DrawTopLayer()
 		{
-			for (auto element : m_topLayer) {
+			// Draw in reverse order of mouse event processing
+			for (size_t i = m_topLayer.size(); i > 0; --i) {
+				auto element = m_topLayer[i - 1];
+
 				element->Draw();
 			}
 		}
