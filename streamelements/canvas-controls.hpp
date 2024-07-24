@@ -62,6 +62,35 @@ public:
 
 	std::shared_ptr<SceneItemControlPoint> m_lineTo;
 
+private:
+	bool m_isDragging = false;
+	bool m_isMouseOver = false;
+
+	void checkMouseOver(double worldX, double worldY)
+	{
+		matrix4 transform, inv_transform;
+		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
+						 &transform, &inv_transform);
+
+		auto mousePosition =
+			getTransformedPosition(worldX, worldY, inv_transform);
+
+		auto boxScale = getSceneItemFinalBoxScale(m_sceneItem,
+							  m_parentSceneItem);
+
+		boxScale.x = abs(boxScale.x);
+		boxScale.y = abs(boxScale.y);
+
+		auto x1 = m_x - m_width / boxScale.x / 2;
+		auto x2 = m_x + m_width / boxScale.x / 2;
+		auto y1 = m_y - m_height / boxScale.y / 2;
+		auto y2 = m_y + m_height / boxScale.y / 2;
+
+		m_isMouseOver =
+			(mousePosition.x >= x1 && mousePosition.x <= x2 &&
+			 mousePosition.y >= y1 && mousePosition.y <= y2);
+	}
+
 public:
 	SceneItemControlPoint(
 		StreamElementsVideoCompositionViewWidget *view,
@@ -90,13 +119,17 @@ public:
 		    obs_sceneitem_locked(m_sceneItem))
 			return;
 
-		QColor color(g_colorSelection.get());
+		QColor color(m_isMouseOver ? g_colorHover.get()
+					   : g_colorSelection.get());
 
 		matrix4 transform, inv_tranform;
 		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem, &transform,
 					      &inv_tranform);
 
 		auto boxScale = getSceneItemFinalBoxScale(m_sceneItem, m_parentSceneItem);
+
+		boxScale.x = abs(boxScale.x);
+		boxScale.y = abs(boxScale.y);
 
 		auto x1 = m_x - m_width / boxScale.x / 2;
 		auto x2 = m_x + m_width / boxScale.x / 2;
@@ -109,50 +142,46 @@ public:
 		fillRect(x1, y1, x2, y2, color);
 
 		if (m_lineTo.get()) {
-			double thickness = 4.0f * m_view->devicePixelRatioF();
+			double thickness = 3.0f * m_view->devicePixelRatioF();
 
 			drawLine(m_x, m_y, m_lineTo.get()->m_x,
 				 m_lineTo.get()->m_y, thickness, boxScale, color);
 		}
 
 		gs_matrix_pop();
+	}
 
-		/*
-		auto anchorPosition =
-			getTransformedPosition(m_x, m_y, transform);
+	virtual bool HandleMouseUp(QMouseEvent *event, double worldX,
+				   double worldY) override
+	{
+		m_isDragging = false;
 
-		fillRect(anchorPosition.x - m_width / 2.0f,
-			 anchorPosition.y - m_height / 2.0f,
-			 anchorPosition.x + m_width / 2.0f,
-			 anchorPosition.y + m_width / 2.0f, color);
+		return false;
+	}
 
-		if (m_lineTo.get()) {
-			double thickness = 4.0f * m_view->devicePixelRatioF();
+	virtual bool HandleMouseMove(QMouseEvent *event, double worldX,
+				     double worldY) override
+	{
+		checkMouseOver(worldX, worldY);
 
-			auto otherPosition = getTransformedPosition(
-				m_lineTo->m_x, m_lineTo->m_y, transform);
+		if (!m_isDragging)
+			return false;
 
-			drawLine(anchorPosition.x, anchorPosition.y,
-				 otherPosition.x, otherPosition.y, thickness,
-				 color);
-		}
-		*/
+		return false;
+	}
 
-		/*
-		vec2 center;
-		vec2_set(&center, 0.5f, 0.5f);
-		vec3 mouse3 = getTransformedPosition(view->m_currMouseWorldX,
-						     view->m_currMouseWorldY,
-						     inv_tranform);
-		vec2 mouse;
-		vec2_set(&mouse, mouse3.x, mouse3.y);
+	virtual bool HandleMouseDown(QMouseEvent *event, double worldX,
+				     double worldY) override
+	{
+		if (obs_sceneitem_locked(m_sceneItem))
+			return false;
 
-		auto degrees = getCircleDegrees(center, mouse);
+		if (!m_isMouseOver)
+			return false;
 
-		char buf[512];
-		sprintf(buf, "degrees: %0.2fn", degrees);
-		OutputDebugStringA(buf);
-		*/
+		m_isDragging = true;
+
+		return true;
 	}
 };
 
@@ -162,7 +191,7 @@ private:
 	bool m_isDragging = false;
 
 	vec3 m_dragStartMouseParentPosition = {0, 0, 0};
-	vec2 m_dragStartSceneItemTransformPos = {0, 0};
+	vec2 m_dragStartSceneItemTranslatePos = {0, 0};
 
 private:
 	void checkMouseOver(double worldX, double worldY) {
@@ -243,8 +272,8 @@ public:
 				m_dragStartMouseParentPosition.y;
 
 		vec2 newPos;
-		vec2_set(&newPos, m_dragStartSceneItemTransformPos.x + deltaX,
-			 m_dragStartSceneItemTransformPos.y + deltaY);
+		vec2_set(&newPos, m_dragStartSceneItemTranslatePos.x + deltaX,
+			 m_dragStartSceneItemTranslatePos.y + deltaY);
 
 		obs_sceneitem_set_pos(m_sceneItem, &newPos);
 
@@ -324,7 +353,7 @@ public:
 				worldX, worldY, parentInvTransform);
 
 			obs_sceneitem_get_pos(
-				m_sceneItem, &m_dragStartSceneItemTransformPos);
+				m_sceneItem, &m_dragStartSceneItemTranslatePos);
 
 			m_isDragging = true;
 

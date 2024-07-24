@@ -30,10 +30,6 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 	m_bottomLayer.push_back(std::make_shared<SceneItemOverflowBox>(
 		view, scene, sceneItem, parentSceneItem));
 
-	// Box
-	m_topLayer.push_back(std::make_shared<SceneItemControlBox>(
-		view, scene, sceneItem, parentSceneItem));
-
 	// Top-left
 	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
 		view, scene, sceneItem, parentSceneItem, 0.0f, 0.0f, thickness, thickness,
@@ -96,6 +92,10 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 		view, scene, sceneItem, parentSceneItem, 0.5f,
 		0.0f - scaledRotationDistance,
 		thickness, thickness, false, false, true, topPoint));
+
+	// Drag Box
+	m_topLayer.push_back(std::make_shared<SceneItemControlBox>(
+		view, scene, sceneItem, parentSceneItem));
 }
 
 //
@@ -511,6 +511,7 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	gs_matrix_pop();
 	gs_viewport_pop();
 
+	/*
 	if (self->m_currUnderMouse) {
 		// Temporary mouse tracking debugger
 		fillRect(self->m_currMouseWorldX, self->m_currMouseWorldY,
@@ -535,6 +536,7 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 		drawLine(worldWidth, 0, self->m_currMouseWorldX,
 			 self->m_currMouseWorldY, 5.0f, QColor(0, 255, 0, 175));
 	}
+	*/
 
 	endProjectionRegion();
 }
