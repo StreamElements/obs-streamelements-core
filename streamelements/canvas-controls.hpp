@@ -66,10 +66,15 @@ private:
 	bool m_isDragging = false;
 	bool m_isMouseOver = false;
 	vec3 m_mousePosition = {0, 0};
-	double m_prevRotMouseDegrees = 0.0f;
+	vec3 m_worldMousePosition = {0, 0};
+	double m_rotationStartWorldMouseAngle = 0.0f;
+	double m_rotationStartSceneItemRotationAngle = 0.0f;
+	vec3 m_rotationStartParentCenterPosition = {0, 0};
 
 	void checkMouseOver(double worldX, double worldY)
 	{
+		vec3_set(&m_worldMousePosition, worldX, worldY, 0.0f);
+
 		matrix4 transform, inv_transform;
 		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
 						 &transform, &inv_transform);
@@ -94,13 +99,35 @@ private:
 	}
 
 	double getMouseAngleDegrees() {
+		matrix4 transform, inv_transform;
+		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
+						 &transform, &inv_transform);
+
+		vec3 worldCenterPosition;
+		vec3_set(&worldCenterPosition, 0.5f, 0.5f, 0.0f);
+		vec3_transform(&worldCenterPosition, &worldCenterPosition,
+			       &transform);
+
 		vec2 center;
-		vec2_set(&center, 0.0f, 0.0f);
+		vec2_set(&center, worldCenterPosition.x, worldCenterPosition.y);
 
 		vec2 mouse;
-		vec2_set(&mouse, m_mousePosition.x, m_mousePosition.y);
+		vec2_set(&mouse, m_worldMousePosition.x,
+			 m_worldMousePosition.y);
 
 		return getCircleDegrees(center, mouse);
+	}
+
+	vec3 getCenterParentPosition()
+	{
+		matrix4 transform;
+		obs_sceneitem_get_box_transform(m_sceneItem, &transform);
+
+		vec3 center;
+		vec3_set(&center, 0.5f, 0.5f, 0.0f);
+		vec3_transform(&center, &center, &transform);
+
+		return center;
 	}
 
 public:
@@ -124,6 +151,48 @@ public:
 	}
 
 	~SceneItemControlPoint() {}
+
+	virtual void Tick() override
+	{
+		if (!m_isDragging)
+			return;
+
+		double worldMouseAngle = getMouseAngleDegrees();
+		double angleDelta =
+			worldMouseAngle - m_rotationStartWorldMouseAngle;
+		double newAngle = normalizeDegrees(
+			m_rotationStartSceneItemRotationAngle + angleDelta);
+
+		if (newAngle == obs_sceneitem_get_rot(m_sceneItem))
+			return;
+
+		obs_sceneitem_set_rot(m_sceneItem, newAngle);
+
+		auto centerAfterRotation = getCenterParentPosition();
+
+		vec2 posDelta;
+		vec2_set(&posDelta,
+			 m_rotationStartParentCenterPosition.x -
+				 centerAfterRotation.x,
+			 m_rotationStartParentCenterPosition.y -
+				 centerAfterRotation.y);
+
+		vec2 pos;
+		obs_sceneitem_get_pos(m_sceneItem, &pos);
+		pos.x += posDelta.x;
+		pos.y += posDelta.y;
+		obs_sceneitem_set_pos(m_sceneItem, &pos);
+
+		/*
+		char buf[512];
+		sprintf(buf,
+			"mouseAngle: %0.2f    centerBeforeRotation: %0.2f %0.2f    centerAfterRotation: %0.2f %0.2f\n",
+			mouseAngle, centerBeforeRotation.x,
+			centerBeforeRotation.y, centerAfterRotation.x,
+			centerAfterRotation.y);
+		OutputDebugStringA(buf);
+		*/
+	}
 
 	virtual void Draw() override
 	{
@@ -179,50 +248,6 @@ public:
 		if (!m_isDragging)
 			return false;
 
-		vec2 center;
-		vec2_set(&center, 0.5f, 0.5f);
-
-		vec2 mouse;
-		vec2_set(&mouse, m_mousePosition.x, m_mousePosition.y);
-
-		// TODO: Calculate based on WORLD coordinates, with a starting rotation and delta offsets until rotation is done
-		auto mouseAngle = getCircleDegrees(center, mouse);
-
-		matrix4 transform;
-		obs_sceneitem_get_box_transform(m_sceneItem, &transform);
-
-		vec3 centerBeforeRotation;
-		vec3_set(&centerBeforeRotation, 0.5f, 0.5f, 0.0f);
-		vec3_transform(&centerBeforeRotation, &centerBeforeRotation,
-			       &transform);
-
-		obs_sceneitem_set_rot(m_sceneItem, mouseAngle);
-
-		obs_sceneitem_get_box_transform(m_sceneItem, &transform);
-
-		vec3 centerAfterRotation;
-		vec3_set(&centerAfterRotation, 0.5f, 0.5f, 0.0f);
-		vec3_transform(&centerAfterRotation, &centerAfterRotation,
-			       &transform);
-
-		vec2 posDelta;
-		vec2_set(&posDelta, centerBeforeRotation.x - centerAfterRotation.x,
-			 centerBeforeRotation.y - centerAfterRotation.y);
-
-		vec2 pos;
-		obs_sceneitem_get_pos(m_sceneItem, &pos);
-		pos.x += posDelta.x;
-		pos.y += posDelta.y;
-		obs_sceneitem_set_pos(m_sceneItem, &pos);
-
-		char buf[512];
-		sprintf(buf,
-			"mouseAngle: %0.2f    centerBeforeRotation: %0.2f %0.2f    centerAfterRotation: %0.2f %0.2f\n",
-			mouseAngle, centerBeforeRotation.x,
-			centerBeforeRotation.y, centerAfterRotation.x,
-			centerAfterRotation.y);
-		OutputDebugStringA(buf);
-
 		return true;
 	}
 
@@ -237,7 +262,11 @@ public:
 
 		m_isDragging = true;
 
-		m_prevRotMouseDegrees = getMouseAngleDegrees();
+		m_rotationStartSceneItemRotationAngle =
+			obs_sceneitem_get_rot(m_sceneItem);
+		m_rotationStartWorldMouseAngle = getMouseAngleDegrees();
+
+		m_rotationStartParentCenterPosition = getCenterParentPosition();
 
 		return true;
 	}
