@@ -187,16 +187,39 @@ public:
 
 		auto mouseAngle = getCircleDegrees(center, mouse);
 
-		obs_transform_info info;
-		obs_sceneitem_get_info(m_sceneItem, &info);
-		info.rot = mouseAngle;
-		obs_sceneitem_set_info(m_sceneItem, &info);
+		matrix4 transform;
+		obs_sceneitem_get_box_transform(m_sceneItem, &transform);
 
-		auto rotDelta =
-			normalizeDegrees(mouseAngle - m_prevRotMouseDegrees + 360.0f);
+		vec3 centerBeforeRotation;
+		vec3_set(&centerBeforeRotation, 0.5f, 0.5f, 0.0f);
+		vec3_transform(&centerBeforeRotation, &centerBeforeRotation,
+			       &transform);
+
+		obs_sceneitem_set_rot(m_sceneItem, mouseAngle);
+
+		obs_sceneitem_get_box_transform(m_sceneItem, &transform);
+
+		vec3 centerAfterRotation;
+		vec3_set(&centerAfterRotation, 0.5f, 0.5f, 0.0f);
+		vec3_transform(&centerAfterRotation, &centerAfterRotation,
+			       &transform);
+
+		vec2 posDelta;
+		vec2_set(&posDelta, centerBeforeRotation.x - centerAfterRotation.x,
+			 centerBeforeRotation.y - centerAfterRotation.y);
+
+		vec2 pos;
+		obs_sceneitem_get_pos(m_sceneItem, &pos);
+		pos.x += posDelta.x;
+		pos.y += posDelta.y;
+		obs_sceneitem_set_pos(m_sceneItem, &pos);
 
 		char buf[512];
-		sprintf(buf, "mouseAngle: %0.2f    rotDelta: %0.2f    mousePosition: %0.2f %0.2f\n", mouseAngle, rotDelta, m_mousePosition.x, m_mousePosition.y);
+		sprintf(buf,
+			"mouseAngle: %0.2f    centerBeforeRotation: %0.2f %0.2f    centerAfterRotation: %0.2f %0.2f\n",
+			mouseAngle, centerBeforeRotation.x,
+			centerBeforeRotation.y, centerAfterRotation.x,
+			centerAfterRotation.y);
 		OutputDebugStringA(buf);
 
 		return true;
