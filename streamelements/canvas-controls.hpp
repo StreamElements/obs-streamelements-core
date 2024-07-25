@@ -192,17 +192,35 @@ public:
 		pos.y += posDelta.y;
 		obs_sceneitem_set_pos(m_sceneItem, &pos);
 
+		auto centerAfterAdjustment = getCenterPosition();
+
+		vec2_set(&posDelta,
+				m_rotationStartParentCenterPosition.x -
+					centerAfterAdjustment.x,
+				m_rotationStartParentCenterPosition.y -
+					centerAfterAdjustment.y);
+
+		obs_sceneitem_get_pos(m_sceneItem, &pos);
+		pos.x += posDelta.x / 2.0f;
+		pos.y += posDelta.y / 2.0f;
+		obs_sceneitem_set_pos(m_sceneItem, &pos);
+
 		vec2 parentPosAfter = {0, 0};
 		if (m_parentSceneItem)
 			obs_sceneitem_get_pos(m_parentSceneItem,
 					      &parentPosAfter);
 
+		/*
 		char buf[512];
 		sprintf(buf,
-			"newAngle: %0.2f   posDelta: %0.2f %0.2f     parentPosAfter: %0.2f %0.2f    posAfter: %0.2f %0.2f\n",
+			"newAngle: %0.2f   posDelta: %0.2f %0.2f     parentPosAfter: %0.2f %0.2f    posAfter: %0.2f %0.2f    centerAfterAdj: %0.2f %0.2f    wantCenter: %0.2f %0.2f\n",
 			newAngle, posDelta.x, posDelta.y, parentPosAfter.x,
-			parentPosAfter.y, pos.x, pos.y);
+			parentPosAfter.y, pos.x, pos.y, centerAfterAdjustment.x,
+			centerAfterAdjustment.y,
+			m_rotationStartParentCenterPosition.x,
+			m_rotationStartParentCenterPosition.y);
 		OutputDebugStringA(buf);
+		*/
 
 
 		/*
