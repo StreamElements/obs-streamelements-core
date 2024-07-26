@@ -70,7 +70,8 @@ private:
 	double m_worldMouseAngle = 0.0f;
 	double m_rotationStartWorldMouseAngle = 0.0f;
 	double m_rotationStartSceneItemRotationAngle = 0.0f;
-	vec3 m_rotationStartParentCenterPosition = {0, 0};
+	vec3 m_rotationStartWorldCenterPosition = {0, 0, 0};
+	vec2 m_rotationStartSceneItemTranslatePos = {0, 0};
 
 	void checkMouseOver(double worldX, double worldY)
 	{
@@ -86,8 +87,8 @@ private:
 		auto boxScale = getSceneItemFinalBoxScale(m_sceneItem,
 							  m_parentSceneItem);
 
-		boxScale.x = abs(boxScale.x);
-		boxScale.y = abs(boxScale.y);
+		boxScale.x = fabsf(boxScale.x);
+		boxScale.y = fabsf(boxScale.y);
 
 		auto x1 = m_x - m_width / boxScale.x / 2;
 		auto x2 = m_x + m_width / boxScale.x / 2;
@@ -114,8 +115,8 @@ private:
 
 		vec2 center;
 		vec2_set(
-			&center, m_rotationStartParentCenterPosition.x,
-			 m_rotationStartParentCenterPosition.y);
+			&center, m_rotationStartWorldCenterPosition.x,
+			 m_rotationStartWorldCenterPosition.y);
 
 		vec2 mouse;
 		vec2_set(&mouse, m_worldMousePosition.x,
@@ -124,7 +125,7 @@ private:
 		return std::round(getCircleDegrees(center, mouse));
 	}
 
-	vec3 getCenterPosition()
+	vec3 getCenterWorldPosition()
 	{
 		matrix4 transform, inv_transform;
 		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
@@ -132,9 +133,68 @@ private:
 
 		vec3 center;
 		vec3_set(&center, 0.5f, 0.5f, 0.0f);
-		vec3_transform(&center, &center, &transform);
+		vec3_transform(&center, &center,
+			       &transform); // Local to WORLD coords
 
 		return center;
+	}
+
+	vec3 getPositionRelativeToParent(double worldX, double worldY)
+	{
+		matrix4 parentTransform, parentInvTransform;
+
+		getSceneItemParentDrawTransformMatrices(m_sceneItem,
+							m_parentSceneItem,
+							&parentTransform,
+							&parentInvTransform);
+
+
+		return getTransformedPosition(worldX, worldY,
+					      parentInvTransform);
+	}
+
+	void adjustCenterPosition() {
+		obs_sceneitem_set_pos(m_sceneItem,
+				      &m_rotationStartSceneItemTranslatePos);
+
+		vec3 currentCenterWorldPosition = getCenterWorldPosition();
+
+		vec3 currentParentCenterPosition = getPositionRelativeToParent(
+			currentCenterWorldPosition.x,
+			currentCenterWorldPosition.y);
+
+		vec3 targetParentCenterPosition = getPositionRelativeToParent(
+			m_rotationStartWorldCenterPosition.x,
+			m_rotationStartWorldCenterPosition.y);
+
+		vec2 posDelta = {0, 0};
+		vec2_set(&posDelta,
+			 targetParentCenterPosition.x -
+				 currentParentCenterPosition.x,
+			 targetParentCenterPosition.y -
+				 currentParentCenterPosition.y);
+
+		vec2 pos;
+		vec2_set(&pos, m_rotationStartSceneItemTranslatePos.x + posDelta.x,
+			 m_rotationStartSceneItemTranslatePos.y + posDelta.y);
+		//obs_sceneitem_get_pos(m_sceneItem, &pos);
+		//pos.x += posDelta.x;
+		//pos.y += posDelta.y;
+		obs_sceneitem_set_pos(m_sceneItem, &pos);
+	}
+
+private:
+	void RotatePos(vec2 *pos, float rot)
+	{
+		float cosR = cos(rot);
+		float sinR = sin(rot);
+
+		vec2 newPos;
+
+		newPos.x = cosR * pos->x - sinR * pos->y;
+		newPos.y = sinR * pos->x + cosR * pos->y;
+
+		vec2_copy(pos, &newPos);
 	}
 
 public:
@@ -171,67 +231,35 @@ public:
 		if (newAngle == obs_sceneitem_get_rot(m_sceneItem))
 			return;
 
-		vec2 parentPosBefore = {0, 0};
-		if (m_parentSceneItem)
-			obs_sceneitem_get_pos(m_parentSceneItem, &parentPosBefore);
+		//
+		// This piece of code was copied directly from OBS code.
+		//
+		// I don't know exactly how it works, but apparently it does in both
+		// cases where there is a parent group, and where there is none.
+		//
+		// TODO: Figure this out later
+		matrix4 transform;
+		obs_sceneitem_get_box_transform(m_sceneItem, &transform);
+		vec2 rotatePoint;
+		vec2_set(&rotatePoint,
+			 transform.t.x + transform.x.x / 2 + transform.y.x / 2,
+			 transform.t.y + transform.x.y / 2 + transform.y.y / 2);
+		vec2 offsetPoint;
+		obs_sceneitem_get_pos(m_sceneItem, &offsetPoint);
+
+		offsetPoint.x -= rotatePoint.x;
+		offsetPoint.y -= rotatePoint.y;
+
+		RotatePos(&offsetPoint, -degreesToRadians(obs_sceneitem_get_rot(m_sceneItem)));
+
+		vec2 pos3;
+		vec2_copy(&pos3, &offsetPoint);
+		RotatePos(&pos3, degreesToRadians(newAngle));
+		pos3.x += rotatePoint.x;
+		pos3.y += rotatePoint.y;
 
 		obs_sceneitem_set_rot(m_sceneItem, newAngle);
-
-		vec2 posDelta = {0, 0};
-		auto centerAfterRotation = getCenterPosition();
-
-		vec2_set(&posDelta,
-				m_rotationStartParentCenterPosition.x -
-					centerAfterRotation.x,
-				m_rotationStartParentCenterPosition.y -
-					centerAfterRotation.y);
-
-		vec2 pos;
-		obs_sceneitem_get_pos(m_sceneItem, &pos);
-		pos.x += posDelta.x;
-		pos.y += posDelta.y;
-		obs_sceneitem_set_pos(m_sceneItem, &pos);
-
-		auto centerAfterAdjustment = getCenterPosition();
-
-		vec2_set(&posDelta,
-				m_rotationStartParentCenterPosition.x -
-					centerAfterAdjustment.x,
-				m_rotationStartParentCenterPosition.y -
-					centerAfterAdjustment.y);
-
-		obs_sceneitem_get_pos(m_sceneItem, &pos);
-		pos.x += posDelta.x / 2.0f;
-		pos.y += posDelta.y / 2.0f;
-		obs_sceneitem_set_pos(m_sceneItem, &pos);
-
-		vec2 parentPosAfter = {0, 0};
-		if (m_parentSceneItem)
-			obs_sceneitem_get_pos(m_parentSceneItem,
-					      &parentPosAfter);
-
-		/*
-		char buf[512];
-		sprintf(buf,
-			"newAngle: %0.2f   posDelta: %0.2f %0.2f     parentPosAfter: %0.2f %0.2f    posAfter: %0.2f %0.2f    centerAfterAdj: %0.2f %0.2f    wantCenter: %0.2f %0.2f\n",
-			newAngle, posDelta.x, posDelta.y, parentPosAfter.x,
-			parentPosAfter.y, pos.x, pos.y, centerAfterAdjustment.x,
-			centerAfterAdjustment.y,
-			m_rotationStartParentCenterPosition.x,
-			m_rotationStartParentCenterPosition.y);
-		OutputDebugStringA(buf);
-		*/
-
-
-		/*
-		char buf[512];
-		sprintf(buf,
-			"mouseAngle: %0.2f    centerBeforeRotation: %0.2f %0.2f    centerAfterRotation: %0.2f %0.2f\n",
-			mouseAngle, centerBeforeRotation.x,
-			centerBeforeRotation.y, centerAfterRotation.x,
-			centerAfterRotation.y);
-		OutputDebugStringA(buf);
-		*/
+		obs_sceneitem_set_pos(m_sceneItem, &pos3);
 	}
 
 	virtual void Draw() override
@@ -249,8 +277,8 @@ public:
 
 		auto boxScale = getSceneItemFinalBoxScale(m_sceneItem, m_parentSceneItem);
 
-		boxScale.x = abs(boxScale.x);
-		boxScale.y = abs(boxScale.y);
+		boxScale.x = fabsf(boxScale.x);
+		boxScale.y = fabsf(boxScale.y);
 
 		auto x1 = m_x - m_width / boxScale.x / 2;
 		auto x2 = m_x + m_width / boxScale.x / 2;
@@ -308,7 +336,10 @@ public:
 			obs_sceneitem_get_rot(m_sceneItem);
 		m_rotationStartWorldMouseAngle = getMouseAngleDegrees();
 
-		m_rotationStartParentCenterPosition = getCenterPosition();
+		m_rotationStartWorldCenterPosition = getCenterWorldPosition();
+
+		obs_sceneitem_get_pos(m_sceneItem,
+				      &m_rotationStartSceneItemTranslatePos);
 
 		return true;
 	}
