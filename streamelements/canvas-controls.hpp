@@ -49,6 +49,329 @@ public:
 	}
 };
 
+class SceneItemControlBox : public SceneItemControlBase {
+private:
+	bool m_isMouseOver = false;
+	bool m_isDragging = false;
+
+	vec3 m_dragStartMouseParentPosition = {0, 0, 0};
+	vec2 m_dragStartSceneItemTranslatePos = {0, 0};
+
+private:
+	void checkMouseOver(double worldX, double worldY)
+	{
+		matrix4 transform, inv_transform;
+		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
+						 &transform, &inv_transform);
+
+		auto mousePosition =
+			getTransformedPosition(worldX, worldY, inv_transform);
+
+		m_isMouseOver =
+			(mousePosition.x >= 0.0f && mousePosition.x <= 1.0f &&
+			 mousePosition.y >= 0.0f && mousePosition.y <= 1.0f);
+	}
+
+	bool hasSelectedChildrenAtPosition(double worldX, double worldY)
+	{
+		bool result = false;
+
+		scanGroupSceneItems(
+			m_sceneItem,
+			[&](obs_sceneitem_t *sceneItem,
+			    obs_sceneitem_t *parentSceneItem) {
+				matrix4 transform, inv_transform;
+				getSceneItemBoxTransformMatrices(
+					sceneItem, parentSceneItem, &transform,
+					&inv_transform);
+
+				auto mousePosition = getTransformedPosition(
+					worldX, worldY, inv_transform);
+
+				bool isMouseOver = (mousePosition.x >= 0.0f &&
+						    mousePosition.x <= 1.0f &&
+						    mousePosition.y >= 0.0f &&
+						    mousePosition.y <= 1.0f);
+
+				if (isMouseOver) {
+					result |= obs_sceneitem_selected(
+						sceneItem);
+				}
+			},
+			true);
+
+		return result;
+	}
+
+public:
+	SceneItemControlBox(StreamElementsVideoCompositionViewWidget *view,
+			    obs_scene_t *scene, obs_sceneitem_t *sceneItem,
+			    obs_sceneitem_t *parentSceneItem)
+		: SceneItemControlBase(view, scene, sceneItem, parentSceneItem)
+	{
+	}
+
+	~SceneItemControlBox() {}
+
+	virtual bool HandleMouseMove(QMouseEvent *event, double worldX,
+				     double worldY) override
+	{
+		checkMouseOver(worldX, worldY);
+
+		if (!m_isDragging)
+			return false;
+
+		// Actual dragging here
+		matrix4 parentTransform, parentInvTransform;
+
+		getSceneItemParentDrawTransformMatrices(m_sceneItem,
+							m_parentSceneItem,
+							&parentTransform,
+							&parentInvTransform);
+
+		auto currMouseParentPosition = getTransformedPosition(
+			worldX, worldY, parentInvTransform);
+
+		double deltaX = currMouseParentPosition.x -
+				m_dragStartMouseParentPosition.x;
+
+		double deltaY = currMouseParentPosition.y -
+				m_dragStartMouseParentPosition.y;
+
+		vec2 newPos;
+		vec2_set(&newPos, m_dragStartSceneItemTranslatePos.x + deltaX,
+			 m_dragStartSceneItemTranslatePos.y + deltaY);
+
+		obs_sceneitem_set_pos(m_sceneItem, &newPos);
+
+		return false;
+	}
+
+	virtual bool HandleMouseUp(QMouseEvent *event, double worldX,
+				   double worldY) override
+	{
+		m_isDragging = false;
+
+		return false;
+	}
+
+	virtual bool HandleMouseDown(QMouseEvent *event, double worldX,
+				     double worldY) override
+	{
+		if (obs_sceneitem_locked(m_sceneItem))
+			return false;
+
+		if (m_isMouseOver &&
+		    !hasSelectedChildrenAtPosition(worldX, worldY)) {
+			if (QGuiApplication::keyboardModifiers() &
+			    Qt::ControlModifier) {
+				// Control modifier: toggle selection of multiple items
+				if (obs_sceneitem_selected(m_sceneItem)) {
+					// Toggle selection off if _this_ item is already selected
+					obs_sceneitem_select(m_sceneItem,
+							     false);
+				} else if (!m_parentSceneItem) {
+					// Otherwise, toggle selection on only if we don't have a parent scene item (always yield mouse selection to the parent)
+					obs_sceneitem_select(m_sceneItem, true);
+				}
+			} else {
+				if (!obs_sceneitem_selected(m_sceneItem)) {
+					if (!m_parentSceneItem) {
+						// No modifiers: select me, but only if we don't have a parent scene item (always yield mouse selection to the parent)
+						scanSceneItems(
+							m_scene,
+							[&](obs_sceneitem_t
+								    *item,
+							    obs_sceneitem_t
+								    * /*parent*/) {
+								if (obs_sceneitem_selected(
+									    item) !=
+								    (item ==
+								     m_sceneItem)) {
+									obs_sceneitem_select(
+										item,
+										item == m_sceneItem);
+								}
+							},
+							true);
+					}
+				}
+			}
+		}
+
+		if (obs_sceneitem_selected(m_sceneItem)) {
+			// Unselect all children if we're a group
+			scanGroupSceneItems(
+				m_sceneItem,
+				[&](obs_sceneitem_t *sceneItem,
+				    obs_sceneitem_t *
+				    /*parentSceneItem*/) {
+					if (obs_sceneitem_selected(sceneItem))
+						obs_sceneitem_select(sceneItem,
+								     false);
+				},
+				true);
+
+			// Begin drag and select the scene item if it hasn't been selected yet
+			matrix4 parentTransform, parentInvTransform;
+
+			getSceneItemParentDrawTransformMatrices(
+				m_sceneItem, m_parentSceneItem,
+				&parentTransform, &parentInvTransform);
+
+			m_dragStartMouseParentPosition = getTransformedPosition(
+				worldX, worldY, parentInvTransform);
+
+			obs_sceneitem_get_pos(
+				m_sceneItem, &m_dragStartSceneItemTranslatePos);
+
+			m_isDragging = true;
+
+			return false;
+		}
+
+		return false;
+	}
+
+	virtual void Draw() override
+	{
+		QColor color;
+
+		bool isSelected = obs_sceneitem_selected(m_sceneItem);
+
+		obs_sceneitem_crop crop = {0, 0, 0, 0};
+
+		if (isSelected) {
+			color = g_colorSelection.get();
+		} else if (m_isMouseOver) {
+			color = g_colorHover.get();
+		} else {
+			obs_sceneitem_get_crop(m_sceneItem, &crop);
+
+			if (!isCropped(&crop))
+				return;
+
+			obs_transform_info info;
+			obs_sceneitem_get_info(m_sceneItem, &info);
+
+			if (info.bounds_type != OBS_BOUNDS_NONE)
+				return;
+
+			return;
+		}
+
+		const double thickness =
+			4.0f * m_view->devicePixelRatioF() / 2.0f;
+
+		matrix4 transform, inv_transform;
+		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
+						 &transform, &inv_transform);
+
+		auto boxScale = getSceneItemFinalBoxScale(m_sceneItem,
+							  m_parentSceneItem);
+
+		gs_matrix_push();
+		gs_matrix_mul(&transform);
+
+		if (isSelected || m_isMouseOver) {
+			drawLine(0.0f, 0.0f, 1.0f, 0.0f, thickness, boxScale,
+				 color);
+			drawLine(0.0f, 1.0f, 1.0f, 1.0f, thickness, boxScale,
+				 color);
+			drawLine(0.0f, 0.0f, 0.0f, 1.0f, thickness, boxScale,
+				 color);
+			drawLine(1.0f, 0.0f, 1.0f, 1.0f, thickness, boxScale,
+				 color);
+		} else {
+			QColor cropMarkerColor = g_colorCrop.get();
+
+			if (crop.top > 0)
+				drawStripedLine(0.0f, 0.0f, 1.0f, 0.0f,
+						thickness, boxScale,
+						cropMarkerColor);
+
+			if (crop.bottom > 0)
+				drawStripedLine(0.0f, 1.0f, 1.0f, 1.0f,
+						thickness, boxScale,
+						cropMarkerColor);
+
+			if (crop.left > 0)
+				drawStripedLine(0.0f, 0.0f, 0.0f, 1.0f,
+						thickness, boxScale,
+						cropMarkerColor);
+
+			if (crop.right > 0)
+				drawStripedLine(1.0f, 0.0f, 1.0f, 1.0f,
+						thickness, boxScale,
+						cropMarkerColor);
+		}
+
+		gs_matrix_pop();
+	}
+};
+
+class SceneItemOverflowBox : public SceneItemControlBase {
+public:
+	SceneItemOverflowBox(StreamElementsVideoCompositionViewWidget *view,
+			     obs_scene_t *scene, obs_sceneitem_t *sceneItem,
+			     obs_sceneitem_t *parentSceneItem)
+		: SceneItemControlBase(view, scene, sceneItem, parentSceneItem)
+	{
+	}
+
+	~SceneItemOverflowBox() {}
+
+	virtual void Draw() override
+	{
+		if (obs_sceneitem_get_group(m_scene, m_sceneItem))
+			return;
+
+		matrix4 transform, inv_tranform;
+		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
+						 &transform, &inv_tranform);
+
+		auto itemScale =
+			getSceneItemFinalScale(m_sceneItem, m_parentSceneItem);
+
+		gs_matrix_push();
+		gs_matrix_mul(&transform);
+
+		const bool previous = gs_framebuffer_srgb_enabled();
+		gs_enable_framebuffer_srgb(true);
+
+		gs_blend_state_push();
+
+		gs_effect_t *solid = obs_get_base_effect(OBS_EFFECT_REPEAT);
+		gs_eparam_t *image =
+			gs_effect_get_param_by_name(solid, "image");
+		gs_eparam_t *scale =
+			gs_effect_get_param_by_name(solid, "scale");
+
+		gs_eparam_t *const param =
+			gs_effect_get_param_by_name(solid, "image");
+		gs_effect_set_texture_srgb(param, g_overflowTexture.get());
+
+		vec2 s;
+		// Black magic copied from OBS code. This keeps the output scale of the texture
+		// rectangle constant disregarding the scaling of the scene item so it always
+		// has stripes of the same visual size.
+		vec2_set(&s, transform.x.x / 96, transform.y.y / 96);
+		gs_effect_set_vec2(scale, &s);
+		gs_effect_set_texture(image, g_overflowTexture.get());
+
+		while (gs_effect_loop(solid, "Draw")) {
+			gs_draw_sprite(g_overflowTexture.get(), 0, 1,
+				       1); // Output width & height
+		}
+
+		gs_blend_state_pop();
+
+		gs_enable_framebuffer_srgb(previous);
+
+		gs_matrix_pop();
+	}
+};
+
 class SceneItemControlPoint : public SceneItemControlBase {
 public:
 	double m_x;
@@ -275,315 +598,17 @@ public:
 	}
 };
 
-class SceneItemControlBox : public SceneItemControlBase {
-private:
-	bool m_isMouseOver = false;
-	bool m_isDragging = false;
-
-	vec3 m_dragStartMouseParentPosition = {0, 0, 0};
-	vec2 m_dragStartSceneItemTranslatePos = {0, 0};
-
-private:
-	void checkMouseOver(double worldX, double worldY) {
-		matrix4 transform, inv_transform;
-		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem, &transform,
-						 &inv_transform);
-
-		auto mousePosition =
-			getTransformedPosition(worldX, worldY, inv_transform);
-
-		m_isMouseOver =
-			(mousePosition.x >= 0.0f && mousePosition.x <= 1.0f &&
-			 mousePosition.y >= 0.0f && mousePosition.y <= 1.0f);
-	}
-
-	bool hasSelectedChildrenAtPosition(double worldX, double worldY) {
-		bool result = false;
-
-		scanGroupSceneItems(
-			m_sceneItem,
-			[&](obs_sceneitem_t *sceneItem,
-			    obs_sceneitem_t *parentSceneItem) {
-				matrix4 transform, inv_transform;
-				getSceneItemBoxTransformMatrices(
-					sceneItem, parentSceneItem, &transform,
-					&inv_transform);
-
-				auto mousePosition = getTransformedPosition(
-					worldX, worldY, inv_transform);
-
-				bool isMouseOver = (mousePosition.x >= 0.0f &&
-						    mousePosition.x <= 1.0f &&
-						    mousePosition.y >= 0.0f &&
-						    mousePosition.y <= 1.0f);
-
-				if (isMouseOver) {
-					result |= obs_sceneitem_selected(sceneItem);
-				}
-			},
-			true);
-
-		return result;
-	}
-
+class SceneItemStretchControlPoint : public SceneItemControlPoint {
 public:
-	SceneItemControlBox(StreamElementsVideoCompositionViewWidget *view,
-			    obs_scene_t *scene, obs_sceneitem_t *sceneItem,
-			    obs_sceneitem_t *parentSceneItem)
-		: SceneItemControlBase(view, scene, sceneItem, parentSceneItem)
+	SceneItemStretchControlPoint(
+		StreamElementsVideoCompositionViewWidget *view,
+		obs_scene_t *scene, obs_sceneitem_t *sceneItem,
+		obs_sceneitem_t *parentSceneItem, double x, double y,
+		double width, double height)
+		: SceneItemControlPoint(view, scene, sceneItem, parentSceneItem,
+					x, y, width, height, nullptr)
 	{
 	}
 
-	~SceneItemControlBox() {}
-
-	virtual bool HandleMouseMove(QMouseEvent *event, double worldX,
-				     double worldY) override
-	{
-		checkMouseOver(worldX, worldY);
-
-		if (!m_isDragging)
-			return false;
-
-		// Actual dragging here
-		matrix4 parentTransform, parentInvTransform;
-
-		getSceneItemParentDrawTransformMatrices(m_sceneItem,
-							m_parentSceneItem,
-							&parentTransform,
-							&parentInvTransform);
-
-		auto currMouseParentPosition = getTransformedPosition(
-			worldX, worldY, parentInvTransform);
-
-		double deltaX = currMouseParentPosition.x -
-				m_dragStartMouseParentPosition.x;
-
-		double deltaY = currMouseParentPosition.y -
-				m_dragStartMouseParentPosition.y;
-
-		vec2 newPos;
-		vec2_set(&newPos, m_dragStartSceneItemTranslatePos.x + deltaX,
-			 m_dragStartSceneItemTranslatePos.y + deltaY);
-
-		obs_sceneitem_set_pos(m_sceneItem, &newPos);
-
-		return false;
-	}
-
-	virtual bool HandleMouseUp(QMouseEvent *event, double worldX,
-				     double worldY) override
-	{
-		m_isDragging = false;
-
-		return false;
-	}
-
-	virtual bool HandleMouseDown(QMouseEvent *event, double worldX,
-				      double worldY) override
-	{
-		if (obs_sceneitem_locked(m_sceneItem))
-			return false;
-
-		if (m_isMouseOver && !hasSelectedChildrenAtPosition(worldX, worldY)) {
-			if (QGuiApplication::keyboardModifiers() &
-			    Qt::ControlModifier) {
-				// Control modifier: toggle selection of multiple items
-				if (obs_sceneitem_selected(m_sceneItem)) {
-					// Toggle selection off if _this_ item is already selected
-					obs_sceneitem_select(m_sceneItem,
-							     false);
-				} else if (!m_parentSceneItem) {
-					// Otherwise, toggle selection on only if we don't have a parent scene item (always yield mouse selection to the parent)
-					obs_sceneitem_select(m_sceneItem, true);
-				}
-			} else {
-				if (!obs_sceneitem_selected(m_sceneItem)) {
-					if (!m_parentSceneItem) {
-						// No modifiers: select me, but only if we don't have a parent scene item (always yield mouse selection to the parent)
-						scanSceneItems(
-							m_scene,
-							[&](obs_sceneitem_t
-								    *item,
-							    obs_sceneitem_t
-								    * /*parent*/) {
-								if (obs_sceneitem_selected(
-									    item) !=
-								    (item ==
-								     m_sceneItem)) {
-									obs_sceneitem_select(
-										item,
-										item == m_sceneItem);
-								}
-							},
-							true);
-					}
-				}
-			}
-		}
-
-		if (obs_sceneitem_selected(m_sceneItem)) {
-			// Unselect all children if we're a group
-			scanGroupSceneItems(m_sceneItem,
-					    [&](obs_sceneitem_t *sceneItem,
-						obs_sceneitem_t *
-						/*parentSceneItem*/) {
-					if (obs_sceneitem_selected(sceneItem))
-						obs_sceneitem_select(sceneItem, false);
-				}, true);
-
-
-			// Begin drag and select the scene item if it hasn't been selected yet
-			matrix4 parentTransform, parentInvTransform;
-
-			getSceneItemParentDrawTransformMatrices(
-				m_sceneItem, m_parentSceneItem,
-				&parentTransform, &parentInvTransform);
-
-			m_dragStartMouseParentPosition = getTransformedPosition(
-				worldX, worldY, parentInvTransform);
-
-			obs_sceneitem_get_pos(
-				m_sceneItem, &m_dragStartSceneItemTranslatePos);
-
-			m_isDragging = true;
-
-			return false;
-		}
-
-		return false;
-	}
-
-	virtual void Draw() override
-	{
-		QColor color;
-
-		bool isSelected = obs_sceneitem_selected(m_sceneItem);
-
-		obs_sceneitem_crop crop = {0, 0, 0, 0};
-
-		if (isSelected) {
-			color = g_colorSelection.get();
-		} else if (m_isMouseOver) {
-			color = g_colorHover.get();
-		} else {
-			obs_sceneitem_get_crop(m_sceneItem, &crop);
-
-			if (!isCropped(&crop))
-				return;
-
-			obs_transform_info info;
-			obs_sceneitem_get_info(m_sceneItem, &info);
-
-			if (info.bounds_type != OBS_BOUNDS_NONE)
-				return;
-
-			return;
-		}
-
-		const double thickness = 4.0f * m_view->devicePixelRatioF() / 2.0f;
-
-		matrix4 transform, inv_transform;
-		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem, &transform,
-					      &inv_transform);
-
-		auto boxScale = getSceneItemFinalBoxScale(m_sceneItem, m_parentSceneItem);
-
-		gs_matrix_push();
-		gs_matrix_mul(&transform);
-
-		if (isSelected || m_isMouseOver) {
-			drawLine(0.0f, 0.0f, 1.0f, 0.0f, thickness, boxScale,
-				 color);
-			drawLine(0.0f, 1.0f, 1.0f, 1.0f, thickness, boxScale,
-				 color);
-			drawLine(0.0f, 0.0f, 0.0f, 1.0f, thickness, boxScale,
-				 color);
-			drawLine(1.0f, 0.0f, 1.0f, 1.0f, thickness, boxScale,
-				 color);
-		} else {
-			QColor cropMarkerColor = g_colorCrop.get();
-
-			if (crop.top > 0)
-				drawStripedLine(0.0f, 0.0f, 1.0f, 0.0f,
-						thickness, boxScale,
-						cropMarkerColor);
-
-			if (crop.bottom > 0)
-				drawStripedLine(0.0f, 1.0f, 1.0f, 1.0f,
-						thickness, boxScale,
-						cropMarkerColor);
-
-			if (crop.left > 0)
-				drawStripedLine(0.0f, 0.0f, 0.0f, 1.0f,
-						thickness, boxScale,
-						cropMarkerColor);
-
-			if (crop.right > 0)
-				drawStripedLine(1.0f, 0.0f, 1.0f, 1.0f,
-						thickness, boxScale,
-						cropMarkerColor);
-		}
-
-		gs_matrix_pop();
-	}
-};
-
-class SceneItemOverflowBox : public SceneItemControlBase {
-public:
-	SceneItemOverflowBox(StreamElementsVideoCompositionViewWidget *view,
-			     obs_scene_t *scene, obs_sceneitem_t *sceneItem,
-			     obs_sceneitem_t *parentSceneItem)
-		: SceneItemControlBase(view, scene, sceneItem, parentSceneItem)
-	{
-	}
-
-	~SceneItemOverflowBox() {}
-
-	virtual void Draw() override
-	{
-		if (obs_sceneitem_get_group(m_scene, m_sceneItem))
-			return;
-
-		matrix4 transform, inv_tranform;
-		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem, &transform,
-						  &inv_tranform);
-
-		auto itemScale = getSceneItemFinalScale(m_sceneItem, m_parentSceneItem);
-
-		gs_matrix_push();
-		gs_matrix_mul(&transform);
-
-		const bool previous = gs_framebuffer_srgb_enabled();
-		gs_enable_framebuffer_srgb(true);
-
-		gs_blend_state_push();
-
-		gs_effect_t *solid = obs_get_base_effect(OBS_EFFECT_REPEAT);
-		gs_eparam_t *image =
-			gs_effect_get_param_by_name(solid, "image");
-		gs_eparam_t *scale =
-			gs_effect_get_param_by_name(solid, "scale");
-
-		gs_eparam_t *const param =
-			gs_effect_get_param_by_name(solid, "image");
-		gs_effect_set_texture_srgb(param, g_overflowTexture.get());
-
-		vec2 s;
-		// Black magic copied from OBS code. This keeps the output scale of the texture
-		// rectangle constant disregarding the scaling of the scene item so it always
-		// has stripes of the same visual size.
-		vec2_set(&s, transform.x.x / 96, transform.y.y / 96);
-		gs_effect_set_vec2(scale, &s);
-		gs_effect_set_texture(image, g_overflowTexture.get());
-
-		while (gs_effect_loop(solid, "Draw")) {
-			gs_draw_sprite(g_overflowTexture.get(), 0, 1, 1); // Output width & height
-		}
-
-		gs_blend_state_pop();
-
-		gs_enable_framebuffer_srgb(previous);
-
-		gs_matrix_pop();
-	}
+	~SceneItemStretchControlPoint() {}
 };
