@@ -599,9 +599,6 @@ public:
 };
 
 class SceneItemStretchControlPoint : public SceneItemControlPoint {
-private:
-	vec3 m_localMousePosition = {0, 0, 0};
-
 public:
 	SceneItemStretchControlPoint(
 		StreamElementsVideoCompositionViewWidget *view,
@@ -647,24 +644,262 @@ public:
 		if (!m_isDragging)
 			return false;
 
-		matrix4 transform, inv_transform;
-		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
-						 &transform, &inv_transform);
-
-		m_localMousePosition = getTransformedPosition(worldX, worldY, inv_transform);
-
-		if (m_x == 1.0f) {
-			processRight();
-		}
-
-		if (m_y == 1.0f) {
-			processBottom();
-		}
+		process();
 
 		return false;
 	}
 
 private:
+	vec2 getSceneItemSize()
+	{
+		obs_bounds_type boundsType =
+			obs_sceneitem_get_bounds_type(m_sceneItem);
+		vec2 size;
+
+		if (boundsType != OBS_BOUNDS_NONE) {
+			obs_sceneitem_get_bounds(m_sceneItem, &size);
+		} else {
+			obs_source_t *source =
+				obs_sceneitem_get_source(m_sceneItem);
+			obs_sceneitem_crop crop;
+			vec2 scale;
+
+			obs_sceneitem_get_scale(m_sceneItem, &scale);
+			obs_sceneitem_get_crop(m_sceneItem, &crop);
+			size.x = float(obs_source_get_width(source) -
+				       crop.left - crop.right) *
+				 scale.x;
+			size.y = float(obs_source_get_height(source) -
+				       crop.top - crop.bottom) *
+				 scale.y;
+		}
+
+		return size;
+	}
+
+	vec3 calculateStretchPos(const vec3 &tl, const vec3 &br)
+	{
+		uint32_t alignment = obs_sceneitem_get_alignment(m_sceneItem);
+		vec3 pos;
+
+		vec3_zero(&pos);
+
+		if (alignment & OBS_ALIGN_LEFT)
+			pos.x = tl.x;
+		else if (alignment & OBS_ALIGN_RIGHT)
+			pos.x = br.x;
+		else
+			pos.x = (br.x - tl.x) * 0.5f + tl.x;
+
+		if (alignment & OBS_ALIGN_TOP)
+			pos.y = tl.y;
+		else if (alignment & OBS_ALIGN_BOTTOM)
+			pos.y = br.y;
+		else
+			pos.y = (br.y - tl.y) * 0.5f + tl.y;
+
+		return pos;
+	}
+
+	void clampAspect(vec3 &tl, vec3 &br, vec2 &size, const vec2 &baseSize)
+	{
+		float baseAspect = baseSize.x / baseSize.y;
+		float aspect = size.x / size.y;
+
+		bool isCorner = (m_x == 0.0f || m_x == 1.0f) &&
+				(m_y == 0.0f || m_y == 1.0f);
+
+		bool isTopOrBottomCenter = (m_x == 0.5f) &&
+					   (m_y == 0.0f || m_y == 1.0f);
+
+		bool isLeftOrRightCenter = (m_y == 0.5f) &&
+					   (m_x == 0.0f || m_x == 1.0f);
+
+		if (isCorner) {
+			if (aspect < baseAspect) {
+				if ((size.y >= 0.0f && size.x >= 0.0f) ||
+				    (size.y <= 0.0f && size.x <= 0.0f))
+					size.x = size.y * baseAspect;
+				else
+					size.x = size.y * baseAspect * -1.0f;
+			} else {
+				if ((size.y >= 0.0f && size.x >= 0.0f) ||
+				    (size.y <= 0.0f && size.x <= 0.0f))
+					size.y = size.x / baseAspect;
+				else
+					size.y = size.x / baseAspect * -1.0f;
+			}
+
+		} else if (isTopOrBottomCenter) {
+			if ((size.y >= 0.0f && size.x >= 0.0f) ||
+			    (size.y <= 0.0f && size.x <= 0.0f))
+				size.x = size.y * baseAspect;
+			else
+				size.x = size.y * baseAspect * -1.0f;
+
+		} else if (isLeftOrRightCenter) {
+			if ((size.y >= 0.0f && size.x >= 0.0f) ||
+			    (size.y <= 0.0f && size.x <= 0.0f))
+				size.y = size.x / baseAspect;
+			else
+				size.y = size.x / baseAspect * -1.0f;
+		}
+
+		size.x = std::round(size.x);
+		size.y = std::round(size.y);
+
+		if (m_x == 0.0f)
+			tl.x = br.x - size.x;
+		else if (m_x == 1.0f)
+			br.x = tl.x + size.x;
+
+		if (m_y == 0.0f)
+			tl.y = br.y - size.y;
+		else if (m_y == 1.0f)
+			br.y = tl.y + size.y;
+	}
+
+	void process() {
+		auto pos = m_worldMousePosition;
+		if (m_parentSceneItem) {
+			matrix4 invGroupTransform;
+			obs_sceneitem_get_draw_transform(m_parentSceneItem,
+							 &invGroupTransform);
+			matrix4_inv(&invGroupTransform, &invGroupTransform);
+
+			vec3 group_pos;
+			vec3_set(&group_pos, pos.x, pos.y, 0.0f);
+			vec3_transform(&group_pos, &group_pos,
+				       &invGroupTransform);
+			pos.x = group_pos.x;
+			pos.y = group_pos.y;
+		}
+
+
+		matrix4 boxTransform;
+		vec3 itemUL;
+		float itemRot;
+
+		auto stretchItemSize = getSceneItemSize();
+
+		obs_sceneitem_get_box_transform(m_sceneItem, &boxTransform);
+		itemRot = obs_sceneitem_get_rot(m_sceneItem);
+		vec3_from_vec4(&itemUL, &boxTransform.t);
+
+		/* build the item space conversion matrices */
+		matrix4 itemToScreen;
+		matrix4_identity(&itemToScreen);
+		matrix4_rotate_aa4f(&itemToScreen, &itemToScreen, 0.0f, 0.0f,
+				    1.0f, degreesToRadians(itemRot));
+		matrix4_translate3f(&itemToScreen, &itemToScreen, itemUL.x,
+				    itemUL.y, 0.0f);
+
+		matrix4 screenToItem;
+		matrix4_identity(&screenToItem);
+		matrix4_translate3f(&screenToItem, &screenToItem, -itemUL.x,
+				    -itemUL.y, 0.0f);
+		matrix4_rotate_aa4f(&screenToItem, &screenToItem, 0.0f, 0.0f,
+				    1.0f, degreesToRadians(-itemRot));
+
+		obs_sceneitem_crop startCrop;
+		obs_sceneitem_get_crop(m_sceneItem, &startCrop);
+		vec2 startItemPos;
+		obs_sceneitem_get_pos(m_sceneItem, &startItemPos);
+
+		obs_source_t *source = obs_sceneitem_get_source(m_sceneItem);
+		vec2 cropSize;
+		vec2_zero(&cropSize);
+		cropSize.x = float(obs_source_get_width(source) -
+				   startCrop.left - startCrop.right);
+		cropSize.y = float(obs_source_get_height(source) -
+				   startCrop.top - startCrop.bottom);
+
+		if (m_parentSceneItem) {
+			matrix4 invGroupTransform;
+			obs_sceneitem_get_draw_transform(m_parentSceneItem,
+							 &invGroupTransform);
+			matrix4_inv(&invGroupTransform, &invGroupTransform);
+			obs_sceneitem_defer_group_resize_begin(m_parentSceneItem);
+		}
+
+		///////////////////////////////////////////////////////////////////////////////
+
+		Qt::KeyboardModifiers modifiers =
+			QGuiApplication::keyboardModifiers();
+		obs_bounds_type boundsType =
+			obs_sceneitem_get_bounds_type(m_sceneItem);
+		bool shiftDown = (modifiers & Qt::ShiftModifier);
+		vec3 tl, br, pos3;
+
+		vec3_zero(&tl);
+		vec3_set(&br, stretchItemSize.x, stretchItemSize.y, 0.0f);
+
+		vec3_set(&pos3, pos.x, pos.y, 0.0f);
+		vec3_transform(&pos3, &pos3, &screenToItem);
+
+		if (m_x == 0.0f)
+			tl.x = pos3.x;
+		else if (m_x == 1.0f)
+			br.x = pos3.x;
+
+		if (m_y == 0.0f)
+			tl.y = pos3.y;
+		else if (m_y == 1.0f)
+			br.y = pos3.y;
+
+		//if (!(modifiers & Qt::ControlModifier))
+		//	SnapStretchingToScreen(tl, br);
+
+		uint32_t source_cx = obs_source_get_width(source);
+		uint32_t source_cy = obs_source_get_height(source);
+
+		// if the source's internal size has been set to 0 for whatever reason
+		// while resizing, do not update transform, otherwise source will be
+		// stuck invisible until a complete transform reset
+		if (!source_cx || !source_cy)
+			return;
+
+		vec2 baseSize;
+		vec2_set(&baseSize, float(source_cx), float(source_cy));
+
+		vec2 size;
+		vec2_set(&size, br.x - tl.x, br.y - tl.y);
+
+		if (boundsType != OBS_BOUNDS_NONE) {
+			if (shiftDown)
+				clampAspect(tl, br, size, baseSize);
+
+			if (tl.x > br.x)
+				std::swap(tl.x, br.x);
+			if (tl.y > br.y)
+				std::swap(tl.y, br.y);
+
+			vec2_abs(&size, &size);
+
+			obs_sceneitem_set_bounds(m_sceneItem, &size);
+		} else {
+			obs_sceneitem_crop crop;
+			obs_sceneitem_get_crop(m_sceneItem, &crop);
+
+			baseSize.x -= float(crop.left + crop.right);
+			baseSize.y -= float(crop.top + crop.bottom);
+
+			if (!shiftDown)
+				clampAspect(tl, br, size, baseSize);
+
+			vec2_div(&size, &size, &baseSize);
+			obs_sceneitem_set_scale(m_sceneItem, &size);
+		}
+
+		pos3 = calculateStretchPos(tl, br);
+		vec3_transform(&pos3, &pos3, &itemToScreen);
+
+		vec2 newPos;
+		vec2_set(&newPos, std::round(pos3.x), std::round(pos3.y));
+		obs_sceneitem_set_pos(m_sceneItem, &newPos);
+	}
+
+	/*
 	void processRight() {
 		vec2 scale;
 		obs_sceneitem_get_scale(m_sceneItem, &scale);
@@ -687,4 +922,5 @@ private:
 
 		obs_sceneitem_set_scale(m_sceneItem, &scale);
 	}
+	*/
 };
