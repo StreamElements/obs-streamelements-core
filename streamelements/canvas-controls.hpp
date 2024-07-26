@@ -56,21 +56,13 @@ public:
 	double m_width;
 	double m_height;
 
-	bool m_modifyX;
-	bool m_modifyY;
-	bool m_modifyRotation;
-
 	std::shared_ptr<SceneItemControlPoint> m_lineTo;
 
-private:
+protected:
 	bool m_isDragging = false;
 	bool m_isMouseOver = false;
 	vec3 m_mousePosition = {0, 0};
 	vec3 m_worldMousePosition = {0, 0};
-	double m_worldMouseAngle = 0.0f;
-	double m_rotationStartWorldMouseAngle = 0.0f;
-	double m_rotationStartSceneItemRotationAngle = 0.0f;
-	vec3 m_rotationStartWorldCenterPosition = {0, 0, 0};
 
 	void checkMouseOver(double worldX, double worldY)
 	{
@@ -99,116 +91,23 @@ private:
 			 m_mousePosition.y >= y1 && m_mousePosition.y <= y2);
 	}
 
-	double getMouseAngleDegrees() {
-		matrix4 transform, inv_transform;
-		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
-						 &transform, &inv_transform);
-
-		vec2 center;
-		vec2_set(
-			&center, m_rotationStartWorldCenterPosition.x,
-			 m_rotationStartWorldCenterPosition.y);
-
-		vec2 mouse;
-		vec2_set(&mouse, m_worldMousePosition.x,
-			 m_worldMousePosition.y);
-
-		return std::round(getCircleDegrees(center, mouse));
-	}
-
-	vec3 getCenterWorldPosition()
-	{
-		matrix4 transform, inv_transform;
-		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
-						 &transform, &inv_transform);
-
-		vec3 center;
-		vec3_set(&center, 0.5f, 0.5f, 0.0f);
-		vec3_transform(&center, &center,
-			       &transform); // Local to WORLD coords
-
-		return center;
-	}
-
-private:
-	void RotatePos(vec2 *pos, float rot)
-	{
-		float cosR = cos(rot);
-		float sinR = sin(rot);
-
-		vec2 newPos;
-
-		newPos.x = cosR * pos->x - sinR * pos->y;
-		newPos.y = sinR * pos->x + cosR * pos->y;
-
-		vec2_copy(pos, &newPos);
-	}
-
 public:
 	SceneItemControlPoint(
 		StreamElementsVideoCompositionViewWidget *view,
 		obs_scene_t *scene, obs_sceneitem_t *sceneItem,
 		obs_sceneitem_t *parentSceneItem, double x,
-		double y, double width, double height, bool modifyX,
-		bool modifyY, bool modifyRotation,
+		double y, double width, double height,
 		std::shared_ptr<SceneItemControlPoint> lineTo = nullptr)
 		: SceneItemControlBase(view, scene, sceneItem, parentSceneItem),
 		  m_x(x),
 		  m_y(y),
 		  m_width(width),
 		  m_height(height),
-		  m_modifyX(modifyX),
-		  m_modifyY(modifyY),
-		  m_modifyRotation(modifyRotation),
 		  m_lineTo(lineTo)
 	{
 	}
 
 	~SceneItemControlPoint() {}
-
-	virtual void Tick() override
-	{
-		if (!m_isDragging)
-			return;
-
-		m_worldMouseAngle = getMouseAngleDegrees();
-		double newAngle =
-			normalizeDegrees(m_worldMouseAngle -
-					 m_rotationStartSceneItemRotationAngle);
-
-		if (newAngle == obs_sceneitem_get_rot(m_sceneItem))
-			return;
-
-		//
-		// This piece of code was copied directly from OBS code.
-		//
-		// I don't know exactly how it works, but apparently it does in both
-		// cases where there is a parent group, and where there is none.
-		//
-		// TODO: Figure this out later
-		matrix4 transform;
-		obs_sceneitem_get_box_transform(m_sceneItem, &transform);
-		vec2 rotatePoint;
-		vec2_set(&rotatePoint,
-			 transform.t.x + transform.x.x / 2 + transform.y.x / 2,
-			 transform.t.y + transform.x.y / 2 + transform.y.y / 2);
-		vec2 offsetPoint;
-		obs_sceneitem_get_pos(m_sceneItem, &offsetPoint);
-
-		offsetPoint.x -= rotatePoint.x;
-		offsetPoint.y -= rotatePoint.y;
-
-		RotatePos(&offsetPoint, -degreesToRadians(obs_sceneitem_get_rot(m_sceneItem)));
-
-		vec2 pos3;
-		vec2_copy(&pos3, &offsetPoint);
-		RotatePos(&pos3, degreesToRadians(newAngle));
-		pos3.x += rotatePoint.x;
-		pos3.y += rotatePoint.y;
-
-		obs_sceneitem_set_rot(m_sceneItem, newAngle);
-		obs_sceneitem_set_pos(m_sceneItem, &pos3);
-	}
 
 	virtual void Draw() override
 	{
@@ -246,6 +145,118 @@ public:
 		}
 
 		gs_matrix_pop();
+	}
+};
+
+class SceneItemRotationControlPoint : public SceneItemControlPoint {
+public:
+	SceneItemRotationControlPoint(
+		StreamElementsVideoCompositionViewWidget *view,
+		obs_scene_t *scene, obs_sceneitem_t *sceneItem,
+		obs_sceneitem_t *parentSceneItem, double x, double y,
+		double width, double height,
+		std::shared_ptr<SceneItemControlPoint> lineTo)
+		: SceneItemControlPoint(view, scene, sceneItem,
+					parentSceneItem, x, y, width, height, lineTo)
+	{
+	}
+
+	~SceneItemRotationControlPoint() {}
+
+private:
+	double m_worldMouseAngle = 0.0f;
+	double m_rotationStartWorldMouseAngle = 0.0f;
+	double m_rotationStartSceneItemRotationAngle = 0.0f;
+	vec3 m_rotationStartWorldCenterPosition = {0, 0, 0};
+
+	double getMouseAngleDegrees()
+	{
+		matrix4 transform, inv_transform;
+		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
+						 &transform, &inv_transform);
+
+		vec2 center;
+		vec2_set(&center, m_rotationStartWorldCenterPosition.x,
+			 m_rotationStartWorldCenterPosition.y);
+
+		vec2 mouse;
+		vec2_set(&mouse, m_worldMousePosition.x,
+			 m_worldMousePosition.y);
+
+		return std::round(getCircleDegrees(center, mouse));
+	}
+
+	vec3 getCenterWorldPosition()
+	{
+		matrix4 transform, inv_transform;
+		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
+						 &transform, &inv_transform);
+
+		vec3 center;
+		vec3_set(&center, 0.5f, 0.5f, 0.0f);
+		vec3_transform(&center, &center,
+			       &transform); // Local to WORLD coords
+
+		return center;
+	}
+
+	void rotatePos(vec2 *pos, float rot)
+	{
+		float cosR = cos(rot);
+		float sinR = sin(rot);
+
+		vec2 newPos;
+
+		newPos.x = cosR * pos->x - sinR * pos->y;
+		newPos.y = sinR * pos->x + cosR * pos->y;
+
+		vec2_copy(pos, &newPos);
+	}
+
+public:
+	virtual void Tick() override
+	{
+		if (!m_isDragging)
+			return;
+
+		m_worldMouseAngle = getMouseAngleDegrees();
+		double newAngle = normalizeDegrees(
+			m_worldMouseAngle -
+			m_rotationStartSceneItemRotationAngle); // TODO: Make this look into the direction of the mouse pointer
+
+		if (newAngle == obs_sceneitem_get_rot(m_sceneItem))
+			return;
+
+		//
+		// This piece of code was copied directly from OBS code.
+		//
+		// I don't know exactly how it works, but apparently it does in both
+		// cases where there is a parent group, and where there is none.
+		//
+		// TODO: Figure this out later
+		matrix4 transform;
+		obs_sceneitem_get_box_transform(m_sceneItem, &transform);
+		vec2 rotatePoint;
+		vec2_set(&rotatePoint,
+			 transform.t.x + transform.x.x / 2 + transform.y.x / 2,
+			 transform.t.y + transform.x.y / 2 + transform.y.y / 2);
+		vec2 offsetPoint;
+		obs_sceneitem_get_pos(m_sceneItem, &offsetPoint);
+
+		offsetPoint.x -= rotatePoint.x;
+		offsetPoint.y -= rotatePoint.y;
+
+		rotatePos(&offsetPoint, -degreesToRadians(obs_sceneitem_get_rot(
+						m_sceneItem)));
+
+		vec2 pos3;
+		vec2_copy(&pos3, &offsetPoint);
+		rotatePos(&pos3, degreesToRadians(newAngle));
+		pos3.x += rotatePoint.x;
+		pos3.y += rotatePoint.y;
+
+		obs_sceneitem_set_rot(m_sceneItem, newAngle);
+		obs_sceneitem_set_pos(m_sceneItem, &pos3);
 	}
 
 	virtual bool HandleMouseUp(QMouseEvent *event, double worldX,

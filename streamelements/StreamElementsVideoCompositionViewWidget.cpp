@@ -32,45 +32,37 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 
 	// Top-left
 	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-		view, scene, sceneItem, parentSceneItem, 0.0f, 0.0f, thickness, thickness,
-		true, true, false));
+		view, scene, sceneItem, parentSceneItem, 0.0f, 0.0f, thickness, thickness));
 
 	// Top-right
 	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-		view, scene, sceneItem, parentSceneItem, 1.0f, 0.0f, thickness, thickness,
-		true, true, false));
+		view, scene, sceneItem, parentSceneItem, 1.0f, 0.0f, thickness, thickness));
 
 	// Bottom-Left
 	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-		view, scene, sceneItem, parentSceneItem, 0.0f, 1.0f, thickness, thickness,
-		true, true, false));
+		view, scene, sceneItem, parentSceneItem, 0.0f, 1.0f, thickness, thickness));
 
 	// Bottom-Right
 	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-		view, scene, sceneItem, parentSceneItem, 1.0f, 1.0f, thickness, thickness,
-		true, true, false));
+		view, scene, sceneItem, parentSceneItem, 1.0f, 1.0f, thickness, thickness));
 
 	// Top
 	auto topPoint = std::make_shared<SceneItemControlPoint>(
-		view, scene, sceneItem, parentSceneItem, 0.5f, 0.0f, thickness, thickness,
-		false, true, false);
+		view, scene, sceneItem, parentSceneItem, 0.5f, 0.0f, thickness, thickness);
 
 	m_topLayer.push_back(topPoint);
 
 	// Bottom
 	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-		view, scene, sceneItem, parentSceneItem, 0.5f, 1.0f, thickness, thickness,
-		false, true, false));
+		view, scene, sceneItem, parentSceneItem, 0.5f, 1.0f, thickness, thickness));
 
 	// Left
 	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-		view, scene, sceneItem, parentSceneItem, 0.0f, 0.5f, thickness, thickness,
-		true, false, false));
+		view, scene, sceneItem, parentSceneItem, 0.0f, 0.5f, thickness, thickness));
 
 	// Right
 	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
-		view, scene, sceneItem, parentSceneItem, 1.0f, 0.5f, thickness, thickness,
-		true, false, false));
+		view, scene, sceneItem, parentSceneItem, 1.0f, 0.5f, thickness, thickness));
 
 	//
 	// Calculate the distance of the rotation handle from the source in _source_ coordinates (0.0 - 1.0)
@@ -88,10 +80,10 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 	double scaledRotationDistance = rotationDistance / abs(scale.y);
 
 	// Rotation
-	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
+	m_topLayer.push_back(std::make_shared<SceneItemRotationControlPoint>(
 		view, scene, sceneItem, parentSceneItem, 0.5f,
 		0.0f - scaledRotationDistance,
-		thickness, thickness, false, false, true, topPoint));
+		thickness, thickness, topPoint));
 
 	// Drag Box
 	m_topLayer.push_back(std::make_shared<SceneItemControlBox>(
