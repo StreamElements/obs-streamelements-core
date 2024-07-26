@@ -231,14 +231,14 @@ public:
 		rotatePos(&offsetPoint, -degreesToRadians(obs_sceneitem_get_rot(
 						m_sceneItem)));
 
-		vec2 pos3;
-		vec2_copy(&pos3, &offsetPoint);
-		rotatePos(&pos3, degreesToRadians(newAngle));
-		pos3.x += rotatePoint.x;
-		pos3.y += rotatePoint.y;
+		vec2 newPosition;
+		vec2_copy(&newPosition, &offsetPoint);
+		rotatePos(&newPosition, degreesToRadians(newAngle));
+		newPosition.x += rotatePoint.x;
+		newPosition.y += rotatePoint.y;
 
 		obs_sceneitem_set_rot(m_sceneItem, newAngle);
-		obs_sceneitem_set_pos(m_sceneItem, &pos3);
+		obs_sceneitem_set_pos(m_sceneItem, &newPosition);
 	}
 
 	virtual bool HandleMouseUp(QMouseEvent *event, double worldX,
