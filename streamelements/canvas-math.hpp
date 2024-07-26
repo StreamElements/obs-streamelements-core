@@ -30,7 +30,7 @@ static inline double getCircleDegrees(vec2 center, vec2 periphery) {
 	if (adjacent == 0.0f) {
 		return opposite > 0.0f ? 0.0f : 180.0f;
 	} else {
-		auto result = radiansToDegrees(atan(abs(opposite) / abs(adjacent)));
+		auto result = radiansToDegrees(atan(fabsf(opposite) / fabsf(adjacent)));
 
 		if (opposite > 0.0f) {
 			// bottom
