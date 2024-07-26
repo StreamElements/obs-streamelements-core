@@ -71,7 +71,6 @@ private:
 	double m_rotationStartWorldMouseAngle = 0.0f;
 	double m_rotationStartSceneItemRotationAngle = 0.0f;
 	vec3 m_rotationStartWorldCenterPosition = {0, 0, 0};
-	vec2 m_rotationStartSceneItemTranslatePos = {0, 0};
 
 	void checkMouseOver(double worldX, double worldY)
 	{
@@ -105,14 +104,6 @@ private:
 		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
 						 &transform, &inv_transform);
 
-		vec3 worldCenterPosition =
-			getTransformedPosition(0.5f, 0.5f, transform);
-		/*
-		vec3_set(&worldCenterPosition, 0.5f, 0.5f, 0.0f);
-		vec3_transform(&worldCenterPosition, &worldCenterPosition,
-			       &transform);
-		*/
-
 		vec2 center;
 		vec2_set(
 			&center, m_rotationStartWorldCenterPosition.x,
@@ -137,50 +128,6 @@ private:
 			       &transform); // Local to WORLD coords
 
 		return center;
-	}
-
-	vec3 getPositionRelativeToParent(double worldX, double worldY)
-	{
-		matrix4 parentTransform, parentInvTransform;
-
-		getSceneItemParentDrawTransformMatrices(m_sceneItem,
-							m_parentSceneItem,
-							&parentTransform,
-							&parentInvTransform);
-
-
-		return getTransformedPosition(worldX, worldY,
-					      parentInvTransform);
-	}
-
-	void adjustCenterPosition() {
-		obs_sceneitem_set_pos(m_sceneItem,
-				      &m_rotationStartSceneItemTranslatePos);
-
-		vec3 currentCenterWorldPosition = getCenterWorldPosition();
-
-		vec3 currentParentCenterPosition = getPositionRelativeToParent(
-			currentCenterWorldPosition.x,
-			currentCenterWorldPosition.y);
-
-		vec3 targetParentCenterPosition = getPositionRelativeToParent(
-			m_rotationStartWorldCenterPosition.x,
-			m_rotationStartWorldCenterPosition.y);
-
-		vec2 posDelta = {0, 0};
-		vec2_set(&posDelta,
-			 targetParentCenterPosition.x -
-				 currentParentCenterPosition.x,
-			 targetParentCenterPosition.y -
-				 currentParentCenterPosition.y);
-
-		vec2 pos;
-		vec2_set(&pos, m_rotationStartSceneItemTranslatePos.x + posDelta.x,
-			 m_rotationStartSceneItemTranslatePos.y + posDelta.y);
-		//obs_sceneitem_get_pos(m_sceneItem, &pos);
-		//pos.x += posDelta.x;
-		//pos.y += posDelta.y;
-		obs_sceneitem_set_pos(m_sceneItem, &pos);
 	}
 
 private:
@@ -219,13 +166,14 @@ public:
 
 	~SceneItemControlPoint() {}
 
-	virtual void Tick2() /* override*/
+	virtual void Tick() override
 	{
 		if (!m_isDragging)
 			return;
 
 		m_worldMouseAngle = getMouseAngleDegrees();
-		double newAngle = normalizeDegrees(m_worldMouseAngle -
+		double newAngle =
+			normalizeDegrees(m_worldMouseAngle -
 					 m_rotationStartSceneItemRotationAngle);
 
 		if (newAngle == obs_sceneitem_get_rot(m_sceneItem))
@@ -316,8 +264,6 @@ public:
 		if (!m_isDragging)
 			return false;
 
-		Tick2();
-
 		return true;
 	}
 
@@ -337,9 +283,6 @@ public:
 		m_rotationStartWorldMouseAngle = getMouseAngleDegrees();
 
 		m_rotationStartWorldCenterPosition = getCenterWorldPosition();
-
-		obs_sceneitem_get_pos(m_sceneItem,
-				      &m_rotationStartSceneItemTranslatePos);
 
 		return true;
 	}
