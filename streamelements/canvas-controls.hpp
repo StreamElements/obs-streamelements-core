@@ -599,6 +599,9 @@ public:
 };
 
 class SceneItemStretchControlPoint : public SceneItemControlPoint {
+private:
+	vec3 m_localMousePosition = {0, 0, 0};
+
 public:
 	SceneItemStretchControlPoint(
 		StreamElementsVideoCompositionViewWidget *view,
@@ -611,4 +614,77 @@ public:
 	}
 
 	~SceneItemStretchControlPoint() {}
+
+	virtual bool HandleMouseUp(QMouseEvent* event, double worldX,
+		double worldY) override
+	{
+		m_isDragging = false;
+
+		return false;
+	}
+
+	virtual bool HandleMouseDown(QMouseEvent* event, double worldX,
+		double worldY) override
+	{
+		checkMouseOver(worldX, worldY);
+
+		if (!m_isMouseOver)
+			return false;
+
+		if (obs_sceneitem_locked(m_sceneItem))
+			return false;
+
+		m_isDragging = true;
+
+		return true;
+	}
+
+	virtual bool HandleMouseMove(QMouseEvent* event, double worldX,
+		double worldY) override
+	{
+		checkMouseOver(worldX, worldY);
+
+		if (!m_isDragging)
+			return false;
+
+		matrix4 transform, inv_transform;
+		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
+						 &transform, &inv_transform);
+
+		m_localMousePosition = getTransformedPosition(worldX, worldY, inv_transform);
+
+		if (m_x == 1.0f) {
+			processRight();
+		}
+
+		if (m_y == 1.0f) {
+			processBottom();
+		}
+
+		return false;
+	}
+
+private:
+	void processRight() {
+		vec2 scale;
+		obs_sceneitem_get_scale(m_sceneItem, &scale);
+
+		double localDelta = m_localMousePosition.x - 1.0f;
+		double newLocalWidth = 1.0f + localDelta;
+		scale.x *= newLocalWidth;
+
+		obs_sceneitem_set_scale(m_sceneItem, &scale);
+	}
+
+	void processBottom()
+	{
+		vec2 scale;
+		obs_sceneitem_get_scale(m_sceneItem, &scale);
+
+		double localDelta = m_localMousePosition.y - 1.0f;
+		double newLocalWidth = 1.0f + localDelta;
+		scale.y *= newLocalWidth;
+
+		obs_sceneitem_set_scale(m_sceneItem, &scale);
+	}
 };
