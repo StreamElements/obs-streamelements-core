@@ -164,40 +164,23 @@ public:
 	~SceneItemRotationControlPoint() {}
 
 private:
-	double m_worldMouseAngle = 0.0f;
-	double m_rotationStartWorldMouseAngle = 0.0f;
-	double m_rotationStartSceneItemRotationAngle = 0.0f;
-	vec3 m_rotationStartWorldCenterPosition = {0, 0, 0};
-
-	double getMouseAngleDegrees()
+	double getMouseAngleDegreesDelta()
 	{
 		matrix4 transform, inv_transform;
 		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
 						 &transform, &inv_transform);
 
 		vec2 center;
-		vec2_set(&center, m_rotationStartWorldCenterPosition.x,
-			 m_rotationStartWorldCenterPosition.y);
+		vec2_set(&center, 0.5f, 0.5f);
+
+		auto localMouse = getTransformedPosition(m_worldMousePosition.x,
+							 m_worldMousePosition.y,
+							 inv_transform);
 
 		vec2 mouse;
-		vec2_set(&mouse, m_worldMousePosition.x,
-			 m_worldMousePosition.y);
+		vec2_set(&mouse, localMouse.x, localMouse.y);
 
 		return std::round(getCircleDegrees(center, mouse));
-	}
-
-	vec3 getCenterWorldPosition()
-	{
-		matrix4 transform, inv_transform;
-		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
-						 &transform, &inv_transform);
-
-		vec3 center;
-		vec3_set(&center, 0.5f, 0.5f, 0.0f);
-		vec3_transform(&center, &center,
-			       &transform); // Local to WORLD coords
-
-		return center;
 	}
 
 	void rotatePos(vec2 *pos, float rot)
@@ -219,10 +202,9 @@ public:
 		if (!m_isDragging)
 			return;
 
-		m_worldMouseAngle = getMouseAngleDegrees();
-		double newAngle = normalizeDegrees(
-			m_worldMouseAngle -
-			m_rotationStartSceneItemRotationAngle); // TODO: Make this look into the direction of the mouse pointer
+		double newAngle =
+			normalizeDegrees(obs_sceneitem_get_rot(m_sceneItem) +
+					 getMouseAngleDegreesDelta());
 
 		if (newAngle == obs_sceneitem_get_rot(m_sceneItem))
 			return;
@@ -288,12 +270,6 @@ public:
 			return false;
 
 		m_isDragging = true;
-
-		m_rotationStartSceneItemRotationAngle =
-			obs_sceneitem_get_rot(m_sceneItem);
-		m_rotationStartWorldMouseAngle = getMouseAngleDegrees();
-
-		m_rotationStartWorldCenterPosition = getCenterWorldPosition();
 
 		return true;
 	}
