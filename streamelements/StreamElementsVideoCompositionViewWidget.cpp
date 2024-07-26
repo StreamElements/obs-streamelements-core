@@ -31,37 +31,37 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 		view, scene, sceneItem, parentSceneItem));
 
 	// Top-left
-	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
+	m_topLayer.push_back(std::make_shared<SceneItemStretchControlPoint>(
 		view, scene, sceneItem, parentSceneItem, 0.0f, 0.0f, thickness, thickness));
 
 	// Top-right
-	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
+	m_topLayer.push_back(std::make_shared<SceneItemStretchControlPoint>(
 		view, scene, sceneItem, parentSceneItem, 1.0f, 0.0f, thickness, thickness));
 
 	// Bottom-Left
-	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
+	m_topLayer.push_back(std::make_shared<SceneItemStretchControlPoint>(
 		view, scene, sceneItem, parentSceneItem, 0.0f, 1.0f, thickness, thickness));
 
 	// Bottom-Right
-	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
+	m_topLayer.push_back(std::make_shared<SceneItemStretchControlPoint>(
 		view, scene, sceneItem, parentSceneItem, 1.0f, 1.0f, thickness, thickness));
 
 	// Top
-	auto topPoint = std::make_shared<SceneItemControlPoint>(
+	auto topPoint = std::make_shared<SceneItemStretchControlPoint>(
 		view, scene, sceneItem, parentSceneItem, 0.5f, 0.0f, thickness, thickness);
 
 	m_topLayer.push_back(topPoint);
 
 	// Bottom
-	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
+	m_topLayer.push_back(std::make_shared<SceneItemStretchControlPoint>(
 		view, scene, sceneItem, parentSceneItem, 0.5f, 1.0f, thickness, thickness));
 
 	// Left
-	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
+	m_topLayer.push_back(std::make_shared<SceneItemStretchControlPoint>(
 		view, scene, sceneItem, parentSceneItem, 0.0f, 0.5f, thickness, thickness));
 
 	// Right
-	m_topLayer.push_back(std::make_shared<SceneItemControlPoint>(
+	m_topLayer.push_back(std::make_shared<SceneItemStretchControlPoint>(
 		view, scene, sceneItem, parentSceneItem, 1.0f, 0.5f, thickness, thickness));
 
 	//
