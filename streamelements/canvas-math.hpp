@@ -133,14 +133,17 @@ static vec2 getSceneItemFinalScale(obs_sceneitem_t *sceneItem,
 static vec2 getSceneItemFinalBoxScale(obs_sceneitem_t *sceneItem,
 				      obs_sceneitem_t *parentSceneItem)
 {
-	matrix4 transform, inv_transform;
-	getSceneItemBoxTransformMatrices(sceneItem, parentSceneItem, &transform,
-					 &inv_transform);
+	vec2 boxScale;
+	obs_sceneitem_get_box_scale(sceneItem, &boxScale);
 
-	vec2 scale;
-	vec2_set(&scale, transform.x.x, transform.y.y);
+	if (parentSceneItem) {
+		vec2 parentItemScale;
+		obs_sceneitem_get_scale(parentSceneItem, &parentItemScale);
+		boxScale.x *= parentItemScale.x;
+		boxScale.y *= parentItemScale.y;
+	}
 
-	return scale;
+	return boxScale;
 }
 
 static vec3 getTransformedPosition(float x, float y, const matrix4 &mat)
