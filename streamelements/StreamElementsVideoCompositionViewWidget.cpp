@@ -86,7 +86,7 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 		thickness, thickness, topPoint));
 
 	// Drag Box
-	m_topLayer.push_back(std::make_shared<SceneItemControlBox>(
+	m_topLayer.push_back(std::make_shared<SceneItemMoveControlBox>(
 		view, scene, sceneItem, parentSceneItem));
 }
 
