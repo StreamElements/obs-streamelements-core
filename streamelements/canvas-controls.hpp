@@ -181,9 +181,9 @@ private:
 		add(1.0f, 1.0f);
 	}
 
-	bool getClosestPoint(const std::vector<vec2> &what,
-			     const std::vector<vec2> &where, vec2 &targetPoint,
-			     vec2 &sourcePoint)
+	bool getClosestSnapPoint(const std::vector<vec2> &what,
+				 const std::vector<vec2> &where,
+				 vec2 &targetPoint, vec2 &sourcePoint)
 	{
 		if (!what.size())
 			return false;
@@ -196,12 +196,21 @@ private:
 
 		bool isFirst = true;
 
+		const float snapDistance =
+			config_get_double(obs_frontend_get_global_config(),
+					  "BasicWindow", "SnapDistance");
+
 		for (auto target : where) {
 			for (auto source : what) {
 				double currXDist = abs(target.x - source.x);
 				double currYDist = abs(target.y - source.y);
 
-				if (currXDist < xDist || currYDist < yDist || isFirst) {
+				if (currXDist > snapDistance &&
+				    currYDist > snapDistance && !isFirst)
+					continue;
+
+				if (currXDist < xDist || currYDist < yDist ||
+				    isFirst) {
 					vec2_copy(&targetPoint, &target);
 					vec2_copy(&sourcePoint, &source);
 
@@ -315,10 +324,25 @@ private:
 				if (obs_sceneitem_locked(sceneItem))
 					return;
 
-				addSceneItemWorldPointsOfInterest(
-					sceneItem, parentSceneItem, result);
+				if (!obs_sceneitem_get_group(m_scene, sceneItem)) {
+					// Not group
+					addSceneItemWorldPointsOfInterest(
+						sceneItem, parentSceneItem,
+						result);
+				} else {
+					// Add group subitems instead
+					scanGroupSceneItems(
+						sceneItem,
+						[&](obs_sceneitem_t *item,
+						    obs_sceneitem_t *parent) {
+							addSceneItemWorldPointsOfInterest(
+								item,
+								parent,
+								result);
+						}, false);
+				}
 			},
-			true);
+			false);
 	}
 
 	void getParentCoordsSnapOffset(vec2 &result) {
@@ -331,17 +355,9 @@ private:
 
 		vec2 targetPoint, sourcePoint;
 
-		if (!getClosestPoint(selectedSceneItemsPoints, worldSnapPoints,
+		if (!getClosestSnapPoint(selectedSceneItemsPoints, worldSnapPoints,
 				     targetPoint, sourcePoint))
 			return;
-
-		char buf[512];
-		sprintf(buf,
-			"targetPoint: %0.2f %0.2f     sourcePoint: %0.2f %0.2f\n",
-			targetPoint.x, targetPoint.y, sourcePoint.x,
-			sourcePoint.y);
-		OutputDebugStringA(buf);
-
 
 		matrix4 parentTransform, parentInvTransform;
 
@@ -355,7 +371,15 @@ private:
 		auto parentTargetPoint = getTransformedPosition(
 			targetPoint.x, targetPoint.y, parentInvTransform);
 
-		const double snapDistance = 40.0f;
+		const float snapDistance =
+			config_get_double(obs_frontend_get_global_config(),
+					  "BasicWindow", "SnapDistance");
+
+		char buf[512];
+		sprintf(buf, "x: %0.2f - %0.2f = %0.2f <= %0.2f\n", targetPoint.x,
+			sourcePoint.x, abs(targetPoint.x - sourcePoint.x),
+			snapDistance);
+		//OutputDebugStringA(buf);
 
 		if (abs(targetPoint.x - sourcePoint.x) <= snapDistance) {
 			result.x = parentTargetPoint.x - parentSourcePoint.x;
