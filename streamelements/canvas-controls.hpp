@@ -101,17 +101,20 @@ public:
 	}
 };
 
-class SceneItemControlBox : public SceneItemControlBase {
+class SceneItemMoveControlBox : public SceneItemControlBase {
 private:
 	bool m_isMouseOver = false;
 	bool m_isDragging = false;
 
 	vec3 m_dragStartMouseParentPosition = {0, 0, 0};
 	vec2 m_dragStartSceneItemTranslatePos = {0, 0};
+	vec2 m_mouseWorldPosition = {0, 0};
 
 private:
 	void checkMouseOver(double worldX, double worldY)
 	{
+		vec2_set(&m_mouseWorldPosition, worldX, worldY);
+
 		matrix4 transform, inv_transform;
 		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
 						 &transform, &inv_transform);
@@ -155,192 +158,223 @@ private:
 		return result;
 	}
 
-	struct SelectedItemBounds {
-		bool first = true;
-		vec3 tl, br;
-	};
-
-	static bool addItemBounds(obs_scene_t * /* scene */,
-				  obs_sceneitem_t *item, void *param)
+	void addSceneItemWorldPointsOfInterest(obs_sceneitem_t *sceneItem,
+					       obs_sceneitem_t *parentSceneItem,
+					       std::vector<vec2> &result)
 	{
-		SelectedItemBounds *data =
-			reinterpret_cast<SelectedItemBounds *>(param);
-		vec3 t[4];
+		matrix4 transform, inv_transform;
+		getSceneItemBoxTransformMatrices(sceneItem, parentSceneItem,
+						 &transform, &inv_transform);
 
-		auto add_bounds = [data, &t]() {
-			for (const vec3 &v : t) {
-				if (data->first) {
-					vec3_copy(&data->tl, &v);
-					vec3_copy(&data->br, &v);
-					data->first = false;
-				} else {
-					vec3_min(&data->tl, &data->tl, &v);
-					vec3_max(&data->br, &data->br, &v);
-				}
-			}
+		auto add = [&](double x, double y) {
+			auto pos = getTransformedPosition(
+				x, y, transform); // To world coords
+
+			vec2 v;
+			vec2_set(&v, pos.x, pos.y);
+			result.push_back(v);
 		};
 
-		if (obs_sceneitem_is_group(item)) {
-			SelectedItemBounds sib;
-			obs_sceneitem_group_enum_items(item, addItemBounds,
-						       &sib);
+		add(0.0f, 0.0f);
+		add(1.0f, 0.0f);
+		add(0.0f, 1.0f);
+		add(1.0f, 1.0f);
+	}
 
-			if (!sib.first) {
-				matrix4 xform;
-				obs_sceneitem_get_draw_transform(item, &xform);
+	bool getClosestPoint(const std::vector<vec2> &what,
+			     const std::vector<vec2> &where, vec2 &targetPoint,
+			     vec2 &sourcePoint)
+	{
+		if (!what.size())
+			return false;
 
-				vec3_set(&t[0], sib.tl.x, sib.tl.y, 0.0f);
-				vec3_set(&t[1], sib.tl.x, sib.br.y, 0.0f);
-				vec3_set(&t[2], sib.br.x, sib.tl.y, 0.0f);
-				vec3_set(&t[3], sib.br.x, sib.br.y, 0.0f);
-				vec3_transform(&t[0], &t[0], &xform);
-				vec3_transform(&t[1], &t[1], &xform);
-				vec3_transform(&t[2], &t[2], &xform);
-				vec3_transform(&t[3], &t[3], &xform);
-				add_bounds();
+		if (!where.size())
+			return false;
+
+		double xDist = 0.0f;
+		double yDist = 0.0f;
+
+		bool isFirst = true;
+
+		for (auto target : where) {
+			for (auto source : what) {
+				double currXDist = abs(target.x - source.x);
+				double currYDist = abs(target.y - source.y);
+
+				if (currXDist < xDist || currYDist < yDist || isFirst) {
+					vec2_copy(&targetPoint, &target);
+					vec2_copy(&sourcePoint, &source);
+
+					xDist = currXDist;
+					yDist = currYDist;
+
+					isFirst = false;
+				}
 			}
 		}
-		if (!obs_sceneitem_selected(item))
-			return true;
-
-		matrix4 boxTransform;
-		obs_sceneitem_get_box_transform(item, &boxTransform);
-
-		t[0] = getTransformedPosition(0.0f, 0.0f, boxTransform);
-		t[1] = getTransformedPosition(1.0f, 0.0f, boxTransform);
-		t[2] = getTransformedPosition(0.0f, 1.0f, boxTransform);
-		t[3] = getTransformedPosition(1.0f, 1.0f, boxTransform);
-		add_bounds();
 
 		return true;
 	}
 
-	struct OffsetData {
-		float clampDist;
-		vec3 tl, br, offset;
-	};
-
-	static bool getSourceSnapOffset(obs_scene_t * /* scene */,
-					obs_sceneitem_t *item, void *param)
+	void addWorldSnapPoints(std::vector<vec2> &result)
 	{
-		OffsetData *data = reinterpret_cast<OffsetData *>(param);
+		const bool isSnapEnabled =
+			config_get_bool(obs_frontend_get_global_config(),
+					"BasicWindow", "SnappingEnabled");
 
-		if (obs_sceneitem_selected(item))
-			return true;
+		if (!isSnapEnabled)
+			return;
 
-		matrix4 boxTransform;
-		obs_sceneitem_get_box_transform(item, &boxTransform);
+		const bool snapToSources =
+			config_get_bool(obs_frontend_get_global_config(),
+					"BasicWindow", "SourceSnapping");
 
-		vec3 t[4] = {getTransformedPosition(0.0f, 0.0f, boxTransform),
-			     getTransformedPosition(1.0f, 0.0f, boxTransform),
-			     getTransformedPosition(0.0f, 1.0f, boxTransform),
-			     getTransformedPosition(1.0f, 1.0f, boxTransform)};
+		const bool snapToScreen =
+			config_get_bool(obs_frontend_get_global_config(),
+					"BasicWindow", "ScreenSnapping");
+		const bool snapToScreenCenter =
+			config_get_bool(obs_frontend_get_global_config(),
+					"BasicWindow", "CenterSnapping");
 
-		bool first = true;
-		vec3 tl, br;
-		vec3_zero(&tl);
-		vec3_zero(&br);
-		for (const vec3 &v : t) {
-			if (first) {
-				vec3_copy(&tl, &v);
-				vec3_copy(&br, &v);
-				first = false;
-			} else {
-				vec3_min(&tl, &tl, &v);
-				vec3_max(&br, &br, &v);
-			}
-		}
-
-		// Snap to other source edges
-#define EDGE_SNAP(l, r, x, y)                                               \
-	do {                                                                \
-		double dist = fabsf(l.x - data->r.x);                       \
-		if (dist < data->clampDist &&                               \
-		    fabsf(data->offset.x) < EPSILON && data->tl.y < br.y && \
-		    data->br.y > tl.y &&                                    \
-		    (fabsf(data->offset.x) > dist ||                        \
-		     data->offset.x < EPSILON))                             \
-			data->offset.x = l.x - data->r.x;                   \
-	} while (false)
-
-		EDGE_SNAP(tl, br, x, y);
-		EDGE_SNAP(tl, br, y, x);
-		EDGE_SNAP(br, tl, x, y);
-		EDGE_SNAP(br, tl, y, x);
-#undef EDGE_SNAP
-
-		return true;
-	}
-
-	void snapItemMovement(vec2 &offset)
-	{
 		uint32_t worldWidth, worldHeight;
 		m_view->GetVideoBaseDimensions(&worldWidth, &worldHeight);
 
-		// Calculate top-left and bottom-right positions for all selected items
-		SelectedItemBounds sibData;
-		obs_scene_enum_items(m_scene, addItemBounds, &sibData);
-
-		vec3 tl = sibData.tl;
-		vec3 br = sibData.br;
-
-		tl.x += offset.x;
-		tl.y += offset.y;
-		br.x += offset.x;
-		br.y += offset.y;
-
-		vec3 snapOffset = getSnapOffset(tl, br, worldWidth, worldHeight);
-
-		const bool snap =
-			config_get_bool(obs_frontend_get_global_config(),
-					"BasicWindow", "SnappingEnabled");
-		const bool sourcesSnap = config_get_bool(obs_frontend_get_global_config(),
-					"BasicWindow", "SourceSnapping");
-		if (snap == false)
-			return;
-
-		if (sourcesSnap == false) {
-			offset.x += snapOffset.x;
-			offset.y += snapOffset.y;
-			return;
-		}
-
-		const float clampDist = config_get_double(obs_frontend_get_global_config(),
-					  "BasicWindow", "SnapDistance");
-
-
-		struct OffsetData {
-			float clampDist;
-			vec3 tl, br, offset;
+		auto add = [&](double x, double y) {
+			vec2 v;
+			vec2_set(&v, x, y);
+			result.push_back(v);
 		};
 
-		OffsetData offsetData;
-		offsetData.clampDist = clampDist;
-		offsetData.tl = tl;
-		offsetData.br = br;
-		vec3_copy(&offsetData.offset, &snapOffset);
+		if (snapToScreen) {
+			add(0, 0);
+			add(0, worldHeight);
+			add(worldWidth, 0);
+			add(worldWidth, worldHeight);
+		}
 
-		obs_scene_enum_items(m_scene, getSourceSnapOffset, &offsetData);
+		if (snapToScreenCenter) {
+			add(worldWidth / 2, worldHeight / 2);
+		}
 
-		if (fabsf(offsetData.offset.x) > EPSILON ||
-		    fabsf(offsetData.offset.y) > EPSILON) {
-			offset.x += offsetData.offset.x;
-			offset.y += offsetData.offset.y;
-		} else {
-			offset.x += snapOffset.x;
-			offset.y += snapOffset.y;
+		// Snap to sources is the largest workload
+		if (!snapToSources)
+			return;
+
+		bool isFirst = true;
+
+		vec2 tl;
+		vec2 br;
+
+		scanSceneItems(m_scene, [&](obs_sceneitem_t *sceneItem,
+					    obs_sceneitem_t *parentSceneItem) {
+				if (obs_sceneitem_selected(sceneItem))
+					return;
+
+				if (obs_sceneitem_locked(sceneItem))
+					return;
+
+				std::vector<vec2> points;
+				addSceneItemWorldPointsOfInterest(
+					sceneItem, parentSceneItem, points);
+
+				for (auto p : points) {
+					if (isFirst) {
+						vec2_copy(&tl, &p);
+						vec2_copy(&br, &p);
+
+						isFirst = false;
+
+						continue;
+					}
+
+					if (p.x < tl.x)
+						tl.x = p.x;
+					if (p.y < tl.y)
+						tl.y = p.y;
+
+					if (p.x > br.x)
+						br.x = p.x;
+					if (p.y > br.y)
+						br.y = p.y;
+				}
+		}, true);
+
+		result.push_back(tl);
+		result.push_back(br);
+	}
+
+	void addSelectedSceneItemsWorldCoordsSnapPoints(std::vector<vec2>& result)
+	{
+		scanSceneItems(
+			m_scene,
+			[&](obs_sceneitem_t *sceneItem,
+			    obs_sceneitem_t *parentSceneItem) {
+				if (!obs_sceneitem_selected(sceneItem))
+					return;
+
+				if (obs_sceneitem_locked(sceneItem))
+					return;
+
+				addSceneItemWorldPointsOfInterest(
+					sceneItem, parentSceneItem, result);
+			},
+			true);
+	}
+
+	void getParentCoordsSnapOffset(vec2 &result) {
+		vec2_zero(&result);
+		std::vector<vec2> selectedSceneItemsPoints, worldSnapPoints;
+
+		addSelectedSceneItemsWorldCoordsSnapPoints(
+			selectedSceneItemsPoints);
+		addWorldSnapPoints(worldSnapPoints);
+
+		vec2 targetPoint, sourcePoint;
+
+		if (!getClosestPoint(selectedSceneItemsPoints, worldSnapPoints,
+				     targetPoint, sourcePoint))
+			return;
+
+		char buf[512];
+		sprintf(buf,
+			"targetPoint: %0.2f %0.2f     sourcePoint: %0.2f %0.2f\n",
+			targetPoint.x, targetPoint.y, sourcePoint.x,
+			sourcePoint.y);
+		OutputDebugStringA(buf);
+
+
+		matrix4 parentTransform, parentInvTransform;
+
+		getSceneItemParentDrawTransformMatrices(m_sceneItem,
+							m_parentSceneItem,
+							&parentTransform,
+							&parentInvTransform);
+
+		auto parentSourcePoint = getTransformedPosition(
+			sourcePoint.x, sourcePoint.y, parentInvTransform);
+		auto parentTargetPoint = getTransformedPosition(
+			targetPoint.x, targetPoint.y, parentInvTransform);
+
+		const double snapDistance = 40.0f;
+
+		if (abs(targetPoint.x - sourcePoint.x) <= snapDistance) {
+			result.x = parentTargetPoint.x - parentSourcePoint.x;
+		}
+
+		if (abs(targetPoint.y - sourcePoint.y) <= snapDistance) {
+			result.y = parentTargetPoint.y - parentSourcePoint.y;
 		}
 	}
 
 public:
-	SceneItemControlBox(StreamElementsVideoCompositionViewWidget *view,
+	SceneItemMoveControlBox(StreamElementsVideoCompositionViewWidget *view,
 			    obs_scene_t *scene, obs_sceneitem_t *sceneItem,
 			    obs_sceneitem_t *parentSceneItem)
 		: SceneItemControlBase(view, scene, sceneItem, parentSceneItem)
 	{
 	}
 
-	~SceneItemControlBox() {}
+	~SceneItemMoveControlBox() {}
 
 	virtual bool HandleMouseMove(QMouseEvent *event, double worldX,
 				     double worldY) override
@@ -359,7 +393,8 @@ public:
 							&parentInvTransform);
 
 		auto currMouseParentPosition = getTransformedPosition(
-			worldX, worldY, parentInvTransform);
+			m_mouseWorldPosition.x, m_mouseWorldPosition.y,
+			parentInvTransform);
 
 		vec2 moveOffset;
 		vec2_set(&moveOffset,
@@ -368,15 +403,24 @@ public:
 			 currMouseParentPosition.y -
 				 m_dragStartMouseParentPosition.y);
 
-		if (!(QGuiApplication::keyboardModifiers() &
-		      Qt::ControlModifier))
-			snapItemMovement(moveOffset);
-
 		vec2 newPos;
-		vec2_set(&newPos, m_dragStartSceneItemTranslatePos.x + moveOffset.x,
+		vec2_set(&newPos,
+			 m_dragStartSceneItemTranslatePos.x + moveOffset.x,
 			 m_dragStartSceneItemTranslatePos.y + moveOffset.y);
 
 		obs_sceneitem_set_pos(m_sceneItem, &newPos);
+
+		if (!(QGuiApplication::keyboardModifiers() &
+		      Qt::ControlModifier)) {
+			// SNAP
+			vec2 snapParentMoveOffset;
+			getParentCoordsSnapOffset(snapParentMoveOffset);
+
+			newPos.x += snapParentMoveOffset.x;
+			newPos.y += snapParentMoveOffset.y;
+
+			obs_sceneitem_set_pos(m_sceneItem, &newPos);
+		}
 
 		return false;
 	}
