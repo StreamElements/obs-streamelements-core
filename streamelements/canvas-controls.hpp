@@ -759,6 +759,43 @@ private:
 			br.y = tl.y + size.y;
 	}
 
+	void snapStretchingToScreen(vec3 &tl, vec3 &br, matrix4 &itemToScreen, matrix4 &screenToItem)
+	{
+		/*
+		vec3 newTL = getTransformedPosition(tl.x, tl.y, itemToScreen);
+		vec3 newTR = getTransformedPosition(br.x, tl.y, itemToScreen);
+		vec3 newBL = getTransformedPosition(tl.x, br.y, itemToScreen);
+		vec3 newBR = getTransformedPosition(br.x, br.y, itemToScreen);
+		vec3 boundingTL;
+		vec3 boundingBR;
+
+		vec3_copy(&boundingTL, &newTL);
+		vec3_min(&boundingTL, &boundingTL, &newTR);
+		vec3_min(&boundingTL, &boundingTL, &newBL);
+		vec3_min(&boundingTL, &boundingTL, &newBR);
+
+		vec3_copy(&boundingBR, &newTL);
+		vec3_max(&boundingBR, &boundingBR, &newTR);
+		vec3_max(&boundingBR, &boundingBR, &newBL);
+		vec3_max(&boundingBR, &boundingBR, &newBR);
+
+		vec3 offset = GetSnapOffset(boundingTL, boundingBR);
+		vec3_add(&offset, &offset, &newTL);
+		vec3_transform(&offset, &offset, &screenToItem);
+		vec3_sub(&offset, &offset, &tl);
+
+		if (m_x == 0.0f)
+			tl.x += offset.x;
+		else if (m_x == 1.0f)
+			br.x += offset.x;
+
+		if (m_y == 0.0f)
+			tl.y += offset.y;
+		else if (m_y == 1.0f)
+			br.y += offset.y;
+		*/
+	}
+
 	void process() {
 		auto pos = m_worldMousePosition;
 		if (m_parentSceneItem) {
@@ -847,8 +884,8 @@ private:
 		else if (m_y == 1.0f)
 			br.y = pos3.y;
 
-		//if (!(modifiers & Qt::ControlModifier))
-		//	SnapStretchingToScreen(tl, br);
+		if (!(modifiers & Qt::ControlModifier))
+			snapStretchingToScreen(tl, br, itemToScreen, screenToItem);
 
 		uint32_t source_cx = obs_source_get_width(source);
 		uint32_t source_cy = obs_source_get_height(source);
@@ -898,29 +935,4 @@ private:
 		vec2_set(&newPos, std::round(pos3.x), std::round(pos3.y));
 		obs_sceneitem_set_pos(m_sceneItem, &newPos);
 	}
-
-	/*
-	void processRight() {
-		vec2 scale;
-		obs_sceneitem_get_scale(m_sceneItem, &scale);
-
-		double localDelta = m_localMousePosition.x - 1.0f;
-		double newLocalWidth = 1.0f + localDelta;
-		scale.x *= newLocalWidth;
-
-		obs_sceneitem_set_scale(m_sceneItem, &scale);
-	}
-
-	void processBottom()
-	{
-		vec2 scale;
-		obs_sceneitem_get_scale(m_sceneItem, &scale);
-
-		double localDelta = m_localMousePosition.y - 1.0f;
-		double newLocalWidth = 1.0f + localDelta;
-		scale.y *= newLocalWidth;
-
-		obs_sceneitem_set_scale(m_sceneItem, &scale);
-	}
-	*/
 };

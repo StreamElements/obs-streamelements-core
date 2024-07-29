@@ -456,16 +456,9 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 
 	uint32_t worldWidth;
 	uint32_t worldHeight;
-	//int viewX, viewY;
-	//int viewWidth, viewHeight;
-	//float scale;
 
-	auto video = self->m_videoCompositionInfo->GetVideo();
-	auto ovi = video_output_get_info(video);
-
-	// TODO: Figure out what to do with scaled output size: i.e. we probably want to get the video dimension info from the view, or maybe from another place
-	worldWidth = ovi->width;
-	worldHeight = ovi->height;
+	self->m_videoCompositionInfo->GetVideoBaseDimensions(&worldWidth,
+							     &worldHeight);
 
 	double viewX, viewY, viewWidth, viewHeight;
 	calculateVideoViewportPositionAndSize(self, worldWidth, worldHeight,
