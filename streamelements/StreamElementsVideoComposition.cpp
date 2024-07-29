@@ -54,10 +54,24 @@ public:
 	virtual void GetVideoBaseDimensions(uint32_t *videoWidth,
 					    uint32_t *videoHeight)
 	{
+		obs_video_info ovi;
+		vec2 size;
+		vec2_zero(&size);
+
+		if (obs_get_video_info(&ovi)) {
+			size.x = float(ovi.base_width);
+			size.y = float(ovi.base_height);
+		}
+
+		*videoWidth = size.x;
+		*videoHeight = size.y;
+
+		/*
 		*videoWidth = (uint32_t)config_get_uint(
 			obs_frontend_get_profile_config(), "Video", "BaseCX");
 		*videoHeight = (uint32_t)config_get_uint(
 			obs_frontend_get_profile_config(), "Video", "BaseCY");
+		*/
 	}
 
 	virtual void Render() { obs_render_main_texture(); }

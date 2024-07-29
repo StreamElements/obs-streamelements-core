@@ -19,6 +19,58 @@ static inline bool isCropped(const obs_sceneitem_crop *crop)
 	       crop->bottom > 0;
 }
 
+static vec3 getSnapOffset(const vec3 &tl, const vec3 &br, double worldWidth, double worldHeight)
+{
+	vec2 screenSize;
+	vec2_set(&screenSize, worldWidth, worldHeight);
+
+	vec3 clampOffset;
+
+	vec3_zero(&clampOffset);
+
+	const bool snap = config_get_bool(obs_frontend_get_global_config(), "BasicWindow",
+					  "SnappingEnabled");
+	if (snap == false)
+		return clampOffset;
+
+	const bool screenSnap = config_get_bool(obs_frontend_get_global_config(), "BasicWindow",
+				"ScreenSnapping");
+	const bool centerSnap = config_get_bool(obs_frontend_get_global_config(), "BasicWindow",
+				"CenterSnapping");
+
+	const float clampDist =
+		config_get_double(obs_frontend_get_global_config(),
+				  "BasicWindow", "SnapDistance");
+	const float centerX = br.x - (br.x - tl.x) / 2.0f;
+	const float centerY = br.y - (br.y - tl.y) / 2.0f;
+
+	// Left screen edge.
+	if (screenSnap && fabsf(tl.x) < clampDist)
+		clampOffset.x = -tl.x;
+	// Right screen edge.
+	if (screenSnap && fabsf(clampOffset.x) < EPSILON &&
+	    fabsf(screenSize.x - br.x) < clampDist)
+		clampOffset.x = screenSize.x - br.x;
+	// Horizontal center.
+	if (centerSnap && fabsf(screenSize.x - (br.x - tl.x)) > clampDist &&
+	    fabsf(screenSize.x / 2.0f - centerX) < clampDist)
+		clampOffset.x = screenSize.x / 2.0f - centerX;
+
+	// Top screen edge.
+	if (screenSnap && fabsf(tl.y) < clampDist)
+		clampOffset.y = -tl.y;
+	// Bottom screen edge.
+	if (screenSnap && fabsf(clampOffset.y) < EPSILON &&
+	    fabsf(screenSize.y - br.y) < clampDist)
+		clampOffset.y = screenSize.y - br.y;
+	// Vertical center.
+	if (centerSnap && fabsf(screenSize.y - (br.y - tl.y)) > clampDist &&
+	    fabsf(screenSize.y / 2.0f - centerY) < clampDist)
+		clampOffset.y = screenSize.y / 2.0f - centerY;
+
+	return clampOffset;
+}
+
 class SceneItemControlBase
 	: public StreamElementsVideoCompositionViewWidget::VisualElementBase {
 protected:
@@ -761,7 +813,10 @@ private:
 
 	void snapStretchingToScreen(vec3 &tl, vec3 &br, matrix4 &itemToScreen, matrix4 &screenToItem)
 	{
-		/*
+		uint32_t worldWidth;
+		uint32_t worldHeight;
+		m_view->GetVideoBaseDimensions(&worldWidth, &worldHeight);
+
 		vec3 newTL = getTransformedPosition(tl.x, tl.y, itemToScreen);
 		vec3 newTR = getTransformedPosition(br.x, tl.y, itemToScreen);
 		vec3 newBL = getTransformedPosition(tl.x, br.y, itemToScreen);
@@ -779,7 +834,7 @@ private:
 		vec3_max(&boundingBR, &boundingBR, &newBL);
 		vec3_max(&boundingBR, &boundingBR, &newBR);
 
-		vec3 offset = GetSnapOffset(boundingTL, boundingBR);
+		vec3 offset = getSnapOffset(boundingTL, boundingBR, worldWidth, worldHeight);
 		vec3_add(&offset, &offset, &newTL);
 		vec3_transform(&offset, &offset, &screenToItem);
 		vec3_sub(&offset, &offset, &tl);
@@ -793,7 +848,6 @@ private:
 			tl.y += offset.y;
 		else if (m_y == 1.0f)
 			br.y += offset.y;
-		*/
 	}
 
 	void process() {

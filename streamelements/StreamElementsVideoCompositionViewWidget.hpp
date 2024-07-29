@@ -215,6 +215,12 @@ public:
 			videoComposition);
 	~StreamElementsVideoCompositionViewWidget();
 
+	void GetVideoBaseDimensions(uint32_t *videoWidth, uint32_t *videoHeight)
+	{
+		m_videoCompositionInfo->GetVideoBaseDimensions(videoWidth,
+							       videoHeight);
+	}
+
 private:
 	void CreateDisplay();
 
