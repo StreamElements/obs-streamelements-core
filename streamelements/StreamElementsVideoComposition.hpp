@@ -50,6 +50,9 @@ public:
 		virtual video_t *GetVideo() = 0;
 		virtual audio_t *GetAudio() = 0;
 
+		virtual void GetVideoBaseDimensions(uint32_t *videoWidth,
+						    uint32_t *videoHeight) = 0;
+
 		virtual void Render() = 0;
 	};
 
@@ -157,11 +160,14 @@ private:
 private:
 	std::recursive_mutex m_mutex;
 
+	uint32_t m_baseWidth;
+	uint32_t m_baseHeight;
+
 public:
 	// ctor only usable by this class
 	StreamElementsCustomVideoComposition(Private, std::string id,
-					     std::string name, uint32_t width,
-		uint32_t height, std::string videoEncoderId,
+					     std::string name, uint32_t baseWidth,
+		uint32_t baseHeight, std::string videoEncoderId,
 		obs_data_t *videoEncoderSettings,
 		obs_data_t *videoEncoderHotkeyData);
 

@@ -1,5 +1,6 @@
 #include "StreamElementsVideoComposition.hpp"
 #include <obs-frontend-api.h>
+#include <util/config-file.h>
 
 #include "StreamElementsUtils.hpp"
 
@@ -50,6 +51,15 @@ public:
 	virtual video_t *GetVideo() { return obs_get_video(); }
 	virtual audio_t *GetAudio() { return obs_get_audio(); }
 
+	virtual void GetVideoBaseDimensions(uint32_t *videoWidth,
+					    uint32_t *videoHeight)
+	{
+		*videoWidth = (uint32_t)config_get_uint(
+			obs_frontend_get_profile_config(), "Video", "BaseCX");
+		*videoHeight = (uint32_t)config_get_uint(
+			obs_frontend_get_profile_config(), "Video", "BaseCY");
+	}
+
 	virtual void Render() { obs_render_main_texture(); }
 };
 
@@ -89,14 +99,20 @@ private:
 	video_t *m_video;
 	obs_encoder_t *m_videoEncoder;
 	obs_view_t *m_videoView;
+	uint32_t m_baseWidth;
+	uint32_t m_baseHeight;
 
 public:
 	StreamElementsCustomVideoCompositionInfo(
 		std::shared_ptr<StreamElementsVideoCompositionBase> owner,
-		StreamElementsCompositionEventListener *listener, video_t* video, obs_encoder_t *videoEncoder, obs_view_t *videoView)
+		StreamElementsCompositionEventListener *listener,
+		video_t *video, uint32_t baseWidth, uint32_t baseHeight,
+		obs_encoder_t *videoEncoder, obs_view_t *videoView)
 		: StreamElementsVideoCompositionBase::CompositionInfo(owner,
 								      listener),
 		  m_video(video),
+		  m_baseWidth(baseWidth),
+		  m_baseHeight(baseHeight),
 		  m_videoEncoder(videoEncoder),
 		  m_videoView(videoView),
 		  m_listener(listener)
@@ -127,16 +143,25 @@ public:
 	virtual video_t *GetVideo() { return m_video; }
 	virtual audio_t *GetAudio() { return obs_get_audio(); }
 
+	virtual void GetVideoBaseDimensions(uint32_t *videoWidth,
+					    uint32_t *videoHeight)
+	{
+		*videoWidth = m_baseWidth;
+		*videoHeight = m_baseHeight;
+	}
+
 	virtual void Render() { obs_view_render(m_videoView); }
 };
 
 // ctor only usable by this class
 StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	StreamElementsCustomVideoComposition::Private, std::string id,
-	std::string name, uint32_t width, uint32_t height,
+	std::string name, uint32_t baseWidth, uint32_t baseHeight,
 	std::string videoEncoderId, obs_data_t *videoEncoderSettings,
 	obs_data_t *videoEncoderHotkeyData)
-	: StreamElementsVideoCompositionBase(id, name)
+	: StreamElementsVideoCompositionBase(id, name),
+	  m_baseWidth(baseWidth),
+	  m_baseHeight(baseHeight)
 {
 	obs_video_info ovi;
 
@@ -158,10 +183,10 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 		throw std::exception("obs_source_create_private(cut_transition) failed", 2);
 	}
 
-	ovi.base_width = width;
-	ovi.base_height = height;
-	ovi.output_width = width;
-	ovi.output_height = height;
+	ovi.base_width = m_baseWidth;
+	ovi.base_height = m_baseHeight;
+	ovi.output_width = m_baseWidth;
+	ovi.output_height = m_baseHeight;
 
 	m_view = obs_view_create();
 	m_video = obs_view_add2(m_view, &ovi);
@@ -183,8 +208,8 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 						nullptr);
 
 		obs_data_t *settings = obs_data_create();
-		obs_data_set_int(settings, "width", width);
-		obs_data_set_int(settings, "height", height);
+		obs_data_set_int(settings, "width", baseWidth);
+		obs_data_set_int(settings, "height", baseHeight);
 		obs_source_update(source, settings);
 		obs_data_release(settings);
 
@@ -291,7 +316,7 @@ StreamElementsCustomVideoComposition::GetCompositionInfo(
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
 	return std::make_shared<StreamElementsCustomVideoCompositionInfo>(
-		shared_from_this(), listener, m_video, m_videoEncoder, m_view);
+		shared_from_this(), listener, m_video, m_baseWidth, m_baseHeight, m_videoEncoder, m_view);
 }
 
 void StreamElementsCustomVideoComposition::SerializeComposition(
