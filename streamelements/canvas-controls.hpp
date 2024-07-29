@@ -763,6 +763,34 @@ public:
 			normalizeDegrees(obs_sceneitem_get_rot(m_sceneItem) +
 					 getMouseAngleDegreesDelta());
 
+		Qt::KeyboardModifiers modifiers =
+		QGuiApplication::keyboardModifiers();
+		bool shiftDown = (modifiers & Qt::ShiftModifier);
+		bool ctrlDown = (modifiers & Qt::ControlModifier);
+
+		auto snapRotationAngleDegrees = [&](double angle, double thres) {
+			if (fabsf(normalizeDegrees(angle) -
+				  normalizeDegrees(newAngle)) < thres)
+				newAngle = normalizeDegrees(angle);
+		};
+
+		if (shiftDown) {
+			for (int i = 0; i < 360 / 15; i++) {
+				snapRotationAngleDegrees(i * 15, 7.5f);
+			}
+		} else if (!ctrlDown) {
+			snapRotationAngleDegrees(obs_sceneitem_get_rot(m_sceneItem), 5);
+
+			snapRotationAngleDegrees(0, 5);
+			snapRotationAngleDegrees(45, 5);
+			snapRotationAngleDegrees(90, 5);
+			snapRotationAngleDegrees(135, 5);
+			snapRotationAngleDegrees(180, 5);
+			snapRotationAngleDegrees(225, 5);
+			snapRotationAngleDegrees(270, 5);
+			snapRotationAngleDegrees(315, 5);
+		}
+
 		if (newAngle == obs_sceneitem_get_rot(m_sceneItem))
 			return;
 
