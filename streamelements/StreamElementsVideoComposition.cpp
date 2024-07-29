@@ -65,13 +65,6 @@ public:
 
 		*videoWidth = size.x;
 		*videoHeight = size.y;
-
-		/*
-		*videoWidth = (uint32_t)config_get_uint(
-			obs_frontend_get_profile_config(), "Video", "BaseCX");
-		*videoHeight = (uint32_t)config_get_uint(
-			obs_frontend_get_profile_config(), "Video", "BaseCY");
-		*/
 	}
 
 	virtual void Render() { obs_render_main_texture(); }
