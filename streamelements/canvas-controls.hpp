@@ -179,13 +179,14 @@ private:
 		add(1.0f, 0.0f);
 		add(0.0f, 1.0f);
 		add(1.0f, 1.0f);
+
 		add(0.5f, 0.5f);
 	}
 
 	bool getClosestSnapPoint(const std::vector<vec2> &what,
 				 const std::vector<vec2> &where,
 				 double snapDistance,
-				 vec2 &targetPoint, vec2 &sourcePoint)
+				 vec2 &targetPoint, vec2 &sourcePoint, bool &hasX, bool &hasY)
 	{
 		if (!what.size())
 			return false;
@@ -198,29 +199,45 @@ private:
 
 		bool isFirst = true;
 
+		hasX = false;
+		hasY = false;
+
 		for (auto target : where) {
 			for (auto source : what) {
 				double currXDist = abs(target.x - source.x);
 				double currYDist = abs(target.y - source.y);
 
-				if (currXDist > snapDistance &&
-				    currYDist > snapDistance && !isFirst)
-					continue;
-
-				if (currXDist < xDist || currYDist < yDist ||
-				    isFirst) {
-					vec2_copy(&targetPoint, &target);
-					vec2_copy(&sourcePoint, &source);
+				if (isFirst) {
+					//vec2_copy(&targetPoint, &target);
+					//vec2_copy(&sourcePoint, &source);
 
 					xDist = currXDist;
 					yDist = currYDist;
 
 					isFirst = false;
 				}
+
+				if (currXDist <= xDist && currXDist < snapDistance) {
+					targetPoint.x = target.x;
+					sourcePoint.x = source.x;
+
+					xDist = currXDist;
+
+					hasX = true;
+				}
+
+				if (currYDist <= yDist && currYDist < snapDistance) {
+					targetPoint.y = target.y;
+					sourcePoint.y = source.y;
+
+					yDist = currYDist;
+
+					hasY = true;
+				}
 			}
 		}
 
-		return true;
+		return hasX || hasY;
 	}
 
 	void addWorldSnapPoints(std::vector<vec2> &result)
@@ -260,7 +277,7 @@ private:
 		}
 
 		if (snapToScreenCenter) {
-			add(worldWidth / 2, worldHeight / 2);
+			add(worldWidth / 2.0f, worldHeight / 2.0f);
 		}
 
 		// Snap to sources is the largest workload
@@ -272,12 +289,35 @@ private:
 		vec2 tl;
 		vec2 br;
 
+		std::map<obs_sceneitem_t *, bool> selectedSceneItemsParentsMap;
+
+		// Get a list of parent groups of all the selected scene items
+		scanSceneItems(
+			m_scene,
+			[&](obs_sceneitem_t *sceneItem,
+			    obs_sceneitem_t *parentSceneItem) {
+				if (!obs_sceneitem_selected(sceneItem))
+					return;
+
+				if (!parentSceneItem)
+					return;
+
+				selectedSceneItemsParentsMap[parentSceneItem] =
+					true;
+			},
+			true);
+
 		scanSceneItems(m_scene, [&](obs_sceneitem_t *sceneItem,
 					    obs_sceneitem_t *parentSceneItem) {
 				if (obs_sceneitem_selected(sceneItem))
 					return;
 
 				if (obs_sceneitem_locked(sceneItem))
+					return;
+
+				// Check if we're a parent of a selected scene item
+				if (selectedSceneItemsParentsMap.count(
+					    sceneItem))
 					return;
 
 				if (parentSceneItem) {
@@ -362,8 +402,10 @@ private:
 			config_get_double(obs_frontend_get_global_config(),
 					  "BasicWindow", "SnapDistance");
 
-		if (!getClosestSnapPoint(selectedSceneItemsPoints, worldSnapPoints,
-					 snapDistance, targetPoint, sourcePoint))
+		bool hasXSnapPoint, hasYSnapPoint;
+		if (!getClosestSnapPoint(selectedSceneItemsPoints, worldSnapPoints, snapDistance,
+					 targetPoint, sourcePoint,
+					 hasXSnapPoint, hasYSnapPoint))
 			return;
 
 		matrix4 parentTransform, parentInvTransform;
@@ -378,21 +420,27 @@ private:
 		auto parentTargetPoint = getTransformedPosition(
 			targetPoint.x, targetPoint.y, parentInvTransform);
 
-		if (abs(targetPoint.x - sourcePoint.x) <= snapDistance) {
-			result.x = parentTargetPoint.x - parentSourcePoint.x;
+		if (hasXSnapPoint) {
+			//result.x = parentTargetPoint.x - parentSourcePoint.x;
+			result.x = targetPoint.x - sourcePoint.x;
 
 			snapWorldCoords.x = targetPoint.x;
 		}
 
-		if (abs(targetPoint.y - sourcePoint.y) <= snapDistance) {
-			result.y = parentTargetPoint.y - parentSourcePoint.y;
+		if (hasYSnapPoint) {
+			//result.y = parentTargetPoint.y - parentSourcePoint.y;
+			result.y = targetPoint.y - sourcePoint.y;
 
 			snapWorldCoords.y = targetPoint.y;
 		}
-	}
 
-private:
-	bool m_hasMouseMoved = false;
+		/*
+		for (auto point : worldSnapPoints) {
+			m_rulersX.push_back(point.x);
+			m_rulersY.push_back(point.y);
+		}
+		*/
+	}
 
 public:
 	SceneItemMoveControlBox(StreamElementsVideoCompositionViewWidget *view,
@@ -404,12 +452,31 @@ public:
 
 	~SceneItemMoveControlBox() {}
 
+	std::vector<double> m_rulersX;
+	std::vector<double> m_rulersY;
+
 	virtual void Tick() override {
 		if (!m_isDragging)
 			return;
 
-		if (!m_hasMouseMoved)
-			return;
+		for (auto coord : m_rulersX)
+			m_view->AddVerticalRulerX(coord);
+
+		for (auto coord : m_rulersY)
+			m_view->AddHorizontalRulerY(coord);
+
+	}
+
+	virtual bool HandleMouseMove(QMouseEvent *event, double worldX,
+				     double worldY) override
+	{
+		checkMouseOver(worldX, worldY);
+
+		m_rulersX.clear();
+		m_rulersY.clear();
+
+		if (!m_isDragging)
+			return false;
 
 		// Actual dragging here
 		matrix4 parentTransform, parentInvTransform;
@@ -450,24 +517,13 @@ public:
 			obs_sceneitem_set_pos(m_sceneItem, &newPos);
 
 			if (snapWorldCoords.x >= 0) {
-				m_view->AddVerticalRulerX(snapWorldCoords.x);
+				//m_rulersX.push_back(snapWorldCoords.x);
 			}
 
 			if (snapWorldCoords.y >= 0) {
-				m_view->AddHorizontalRulerY(snapWorldCoords.y);
+				//m_rulersY.push_back(snapWorldCoords.x);
 			}
 		}
-	}
-
-	virtual bool HandleMouseMove(QMouseEvent *event, double worldX,
-				     double worldY) override
-	{
-		checkMouseOver(worldX, worldY);
-
-		if (!m_isDragging)
-			return false;
-
-		m_hasMouseMoved = true;
 
 		return false;
 	}
@@ -476,7 +532,6 @@ public:
 				   double worldY) override
 	{
 		m_isDragging = false;
-		m_hasMouseMoved = false;
 
 		return false;
 	}
@@ -484,8 +539,6 @@ public:
 	virtual bool HandleMouseDown(QMouseEvent *event, double worldX,
 				     double worldY) override
 	{
-		m_hasMouseMoved = false;
-
 		if (obs_sceneitem_locked(m_sceneItem))
 			return false;
 
