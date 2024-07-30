@@ -506,22 +506,28 @@ public:
 
 		if (!(QGuiApplication::keyboardModifiers() &
 		      Qt::ControlModifier)) {
-			// SNAP
-			vec2 snapParentMoveOffset, snapWorldCoords;
-			getParentCoordsSnapOffset(snapParentMoveOffset,
-						  snapWorldCoords);
+			// TODO: Somewhere in the future, we want to make sure that child items coordinates
+			//       are treated properly. The current state is jumpy, so we'll disable snapping
+			//       for group child items until we can properly figure out why is it not behaving
+			//       100% properly.
+			if (!m_parentSceneItem) {
+				// SNAP
+				vec2 snapParentMoveOffset, snapWorldCoords;
+				getParentCoordsSnapOffset(snapParentMoveOffset,
+							  snapWorldCoords);
 
-			newPos.x += snapParentMoveOffset.x;
-			newPos.y += snapParentMoveOffset.y;
+				newPos.x += snapParentMoveOffset.x;
+				newPos.y += snapParentMoveOffset.y;
 
-			obs_sceneitem_set_pos(m_sceneItem, &newPos);
+				obs_sceneitem_set_pos(m_sceneItem, &newPos);
 
-			if (snapWorldCoords.x >= 0) {
-				//m_rulersX.push_back(snapWorldCoords.x);
-			}
+				if (snapWorldCoords.x >= 0) {
+					//m_rulersX.push_back(snapWorldCoords.x);
+				}
 
-			if (snapWorldCoords.y >= 0) {
-				//m_rulersY.push_back(snapWorldCoords.x);
+				if (snapWorldCoords.y >= 0) {
+					//m_rulersY.push_back(snapWorldCoords.x);
+				}
 			}
 		}
 
