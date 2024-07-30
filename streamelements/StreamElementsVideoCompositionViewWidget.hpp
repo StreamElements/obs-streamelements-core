@@ -123,7 +123,7 @@ public:
 		}
 	};
 
-	static class VisualElementsStateManager {
+	class VisualElementsStateManager {
 	private:
 		StreamElementsVideoCompositionViewWidget* m_view;
 		obs_scene_t *m_scene;
@@ -199,7 +199,6 @@ public:
 		}
 	};
 
-
 private:
 	std::shared_ptr<StreamElementsVideoCompositionBase> m_videoComposition;
 	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo> m_videoCompositionInfo;
@@ -207,6 +206,9 @@ private:
 	obs_display_t *m_display = nullptr;
 
 	VisualElementsStateManager m_visualElementsState;
+
+	std::vector<double> m_worldVerticalRulersX;
+	std::vector<double> m_worldHorizontalRulersY;
 
 public:
 	StreamElementsVideoCompositionViewWidget(
@@ -219,6 +221,16 @@ public:
 	{
 		m_videoCompositionInfo->GetVideoBaseDimensions(videoWidth,
 							       videoHeight);
+	}
+
+	void AddVerticalRulerX(double x)
+	{
+		m_worldVerticalRulersX.push_back(x);
+	}
+
+	void AddHorizontalRulerY(double y)
+	{
+		m_worldHorizontalRulersY.push_back(y);
 	}
 
 private:
