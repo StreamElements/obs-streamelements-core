@@ -179,6 +179,7 @@ private:
 		add(1.0f, 0.0f);
 		add(0.0f, 1.0f);
 		add(1.0f, 1.0f);
+		add(0.5f, 0.5f);
 	}
 
 	bool getClosestSnapPoint(const std::vector<vec2> &what,
@@ -317,6 +318,13 @@ private:
 
 		result.push_back(tl);
 		result.push_back(br);
+
+		double width = (br.x - tl.x);
+		double height = (br.y - tl.y);
+		vec2 center;
+		vec2_set(&center, tl.x + width / 2.0f, tl.y + height / 2.0f);
+
+		result.push_back(center);
 	}
 
 	void addSelectedSceneItemsWorldCoordsSnapPoints(std::vector<vec2>& result)
@@ -338,8 +346,10 @@ private:
 			true);
 	}
 
-	void getParentCoordsSnapOffset(vec2 &result) {
+	void getParentCoordsSnapOffset(vec2 &result, vec2 &snapWorldCoords) {
 		vec2_zero(&result);
+		vec2_set(&snapWorldCoords, -1.0f, -1.0f);
+
 		std::vector<vec2> selectedSceneItemsPoints, worldSnapPoints;
 
 		addSelectedSceneItemsWorldCoordsSnapPoints(
@@ -370,12 +380,19 @@ private:
 
 		if (abs(targetPoint.x - sourcePoint.x) <= snapDistance) {
 			result.x = parentTargetPoint.x - parentSourcePoint.x;
+
+			snapWorldCoords.x = targetPoint.x;
 		}
 
 		if (abs(targetPoint.y - sourcePoint.y) <= snapDistance) {
 			result.y = parentTargetPoint.y - parentSourcePoint.y;
+
+			snapWorldCoords.y = targetPoint.y;
 		}
 	}
+
+private:
+	bool m_hasMouseMoved = false;
 
 public:
 	SceneItemMoveControlBox(StreamElementsVideoCompositionViewWidget *view,
@@ -387,13 +404,12 @@ public:
 
 	~SceneItemMoveControlBox() {}
 
-	virtual bool HandleMouseMove(QMouseEvent *event, double worldX,
-				     double worldY) override
-	{
-		checkMouseOver(worldX, worldY);
-
+	virtual void Tick() override {
 		if (!m_isDragging)
-			return false;
+			return;
+
+		if (!m_hasMouseMoved)
+			return;
 
 		// Actual dragging here
 		matrix4 parentTransform, parentInvTransform;
@@ -424,14 +440,34 @@ public:
 		if (!(QGuiApplication::keyboardModifiers() &
 		      Qt::ControlModifier)) {
 			// SNAP
-			vec2 snapParentMoveOffset;
-			getParentCoordsSnapOffset(snapParentMoveOffset);
+			vec2 snapParentMoveOffset, snapWorldCoords;
+			getParentCoordsSnapOffset(snapParentMoveOffset,
+						  snapWorldCoords);
 
 			newPos.x += snapParentMoveOffset.x;
 			newPos.y += snapParentMoveOffset.y;
 
 			obs_sceneitem_set_pos(m_sceneItem, &newPos);
+
+			if (snapWorldCoords.x >= 0) {
+				m_view->AddVerticalRulerX(snapWorldCoords.x);
+			}
+
+			if (snapWorldCoords.y >= 0) {
+				m_view->AddHorizontalRulerY(snapWorldCoords.y);
+			}
 		}
+	}
+
+	virtual bool HandleMouseMove(QMouseEvent *event, double worldX,
+				     double worldY) override
+	{
+		checkMouseOver(worldX, worldY);
+
+		if (!m_isDragging)
+			return false;
+
+		m_hasMouseMoved = true;
 
 		return false;
 	}
@@ -440,6 +476,7 @@ public:
 				   double worldY) override
 	{
 		m_isDragging = false;
+		m_hasMouseMoved = false;
 
 		return false;
 	}
@@ -447,6 +484,8 @@ public:
 	virtual bool HandleMouseDown(QMouseEvent *event, double worldX,
 				     double worldY) override
 	{
+		m_hasMouseMoved = false;
+
 		if (obs_sceneitem_locked(m_sceneItem))
 			return false;
 

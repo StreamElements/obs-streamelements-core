@@ -99,6 +99,9 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 	UpdateAndDraw(obs_scene_t *scene, double worldWidth, double worldHeight)
 {
+	m_view->m_worldHorizontalRulersY.clear();
+	m_view->m_worldVerticalRulersX.clear();
+
 	std::map<obs_sceneitem_t *, obs_sceneitem_t *> existingSceneItems;
 
 	m_sceneItemsEventProcessingOrder.clear();
@@ -166,6 +169,21 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 	for (auto kv : m_sceneItemsVisualElementsMap) {
 		if (kv.second->HasParent())
 			kv.second->DrawTopLayer();
+	}
+
+	// Draw rulers
+	vec2 boxScale;
+	vec2_set(&boxScale, worldWidth, worldHeight);
+	const double thickness = 2.0f;
+
+	QColor rulerColor(125, 125, 125);
+
+	for (auto x : m_view->m_worldVerticalRulersX) {
+		drawLine(x, 0.0f, x, worldHeight, thickness, rulerColor);
+	}
+
+	for (auto y : m_view->m_worldHorizontalRulersY) {
+		drawLine(0.0f, y, worldWidth, y, thickness, rulerColor);
 	}
 }
 
