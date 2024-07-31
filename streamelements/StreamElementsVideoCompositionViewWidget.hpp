@@ -48,6 +48,9 @@ public:
 
 		bool HasParent() { return !!m_parentSceneItem; }
 
+		obs_sceneitem_t *GetSceneItem() { return m_sceneItem; }
+		obs_sceneitem_t *GetParentSceneItem() { return m_parentSceneItem; }
+
 		void Tick()
 		{
 			for (auto element : m_bottomLayer) {
