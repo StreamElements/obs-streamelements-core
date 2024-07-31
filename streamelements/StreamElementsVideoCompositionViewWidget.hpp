@@ -135,24 +135,6 @@ public:
 			m_sceneItemsVisualElementsMap;
 		std::vector<obs_sceneitem_t *> m_sceneItemsEventProcessingOrder;
 
-	private:
-		bool scanItems(
-			bool selected,
-			std::function<bool(obs_sceneitem_t *)>
-				callback)
-		{
-			for (auto sceneItem :
-			     m_sceneItemsEventProcessingOrder) {
-				if (obs_sceneitem_selected(sceneItem) != selected)
-					continue;
-
-				if (callback(sceneItem))
-					return true;
-			}
-
-			return false;
-		}
-
 	public:
 		VisualElementsStateManager(
 			StreamElementsVideoCompositionViewWidget *view)
@@ -179,6 +161,9 @@ public:
 						->HandleMouseDown(event, worldX,
 								  worldY);
 			}
+
+			if (wasSelected)
+				return true;
 
 			for (auto sceneItem :
 			     m_sceneItemsEventProcessingOrder) {
