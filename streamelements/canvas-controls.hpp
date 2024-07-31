@@ -483,6 +483,9 @@ public:
 		m_rulersX.clear();
 		m_rulersY.clear();
 
+		if (!obs_sceneitem_selected(m_sceneItem))
+			m_isDragging = false;
+
 		if (!m_isDragging)
 			return false;
 
@@ -1021,6 +1024,20 @@ public:
 
 		m_isDragging = true;
 
+		scanSceneItems(
+			m_scene,
+			[&](obs_sceneitem_t *sceneItem,
+			    obs_sceneitem_t * /* parentSceneItem */) -> bool {
+				if (sceneItem == m_sceneItem)
+					return true;
+
+				// Unselect everything else
+				obs_sceneitem_select(sceneItem, false);
+
+				return true;
+			},
+			true);
+
 		return true;
 	}
 };
@@ -1059,6 +1076,19 @@ public:
 			return false;
 
 		m_isDragging = true;
+
+		scanSceneItems(
+			m_scene,
+			[&](obs_sceneitem_t *sceneItem,
+			    obs_sceneitem_t * /* parentSceneItem */) -> bool {
+				if (sceneItem == m_sceneItem)
+					return true;
+
+				// Unselect everything else
+				obs_sceneitem_select(sceneItem, false);
+
+				return true;
+			}, true);
 
 		return true;
 	}
@@ -1240,7 +1270,6 @@ private:
 			pos.x = group_pos.x;
 			pos.y = group_pos.y;
 		}
-
 
 		matrix4 boxTransform;
 		vec3 itemUL;
