@@ -496,8 +496,17 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	double worldPadX = (scaledWorldWidth - double(worldWidth)) / 2.0f;
 	double worldPadY = (scaledWorldHeight - double(worldHeight)) / 2.0f;
 
-	//startProjectionRegion(viewX, viewY, viewWidth, viewHeight, 0.0f, 0.0f,
-	//		      double(worldWidth), double(worldHeight));
+	// The trick here is to project a larger portion of the world onto the final projection
+	// region: that way the actual video area is getting shrinked relative to the parent
+	// display area.
+	//
+	// So we add padding to the world, calculated in proportion to the difference in size between
+	// the world and the projection region.
+	//
+	// We need all this complexity to be able to draw stuff outside of the video region while
+	// still using the same coordinate system as the rest of the world (the world being the
+	// video being projected).
+	//
 	startProjectionRegion(0, 0, viewportWidth, viewportHeight, 0.0f - worldPadX, 0.0f - worldPadY,
 			      double(worldWidth) + worldPadX, double(worldHeight) + worldPadY);
 
@@ -511,27 +520,10 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	self->m_currMouseWorldY =
 		(double)(self->m_currMouseWidgetY - viewY) / viewWidth * worldWidth;
 
-	//
-	// Set the viewport to the entire area of the display, and adjust translation & scaling,
-	// so we can draw outside of the video boundaries while still using the same
-	// coordinate system.
-	//
-	//gs_viewport_push();
-	//gs_set_viewport(0, 0, viewportWidth, viewportHeight); // Viewport was originally set to the video projection area, now we extend it so elements we draw can be seen
-	//gs_matrix_push();
-	//gs_matrix_scale3f(viewWidth / double(viewportWidth),
-	//		  viewHeight / double(viewportHeight), 1.0f);
-
-	// TODO: Figure out where did this 2.0f factor come from
-	//gs_matrix_translate3f(viewX * 2.0f, viewY * 2.0f, 0.0f);
-
 	// Update visual elements state and draw them on screen
 	self->m_visualElementsState.UpdateAndDraw(
 		self->m_videoComposition->GetCurrentScene(), worldWidth,
 		worldHeight);
-
-	//gs_matrix_pop();
-	//gs_viewport_pop();
 
 	/*
 	if (self->m_currUnderMouse) {
