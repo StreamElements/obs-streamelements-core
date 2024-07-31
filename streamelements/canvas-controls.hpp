@@ -99,6 +99,9 @@ public:
 		obs_sceneitem_release(m_sceneItem);
 		obs_scene_release(m_scene);
 	}
+
+	obs_sceneitem_t *GetSceneItem() { return m_sceneItem; }
+	obs_sceneitem_t *GetParentSceneItem() { return m_parentSceneItem; }
 };
 
 class SceneItemMoveControlBox : public SceneItemControlBase {
@@ -606,9 +609,10 @@ public:
 				[&](obs_sceneitem_t *sceneItem,
 				    obs_sceneitem_t *
 				    /*parentSceneItem*/) -> bool {
-					if (obs_sceneitem_selected(sceneItem))
+					if (obs_sceneitem_selected(sceneItem)) {
 						obs_sceneitem_select(sceneItem,
 								     false);
+					}
 
 					return true;
 				},
@@ -1019,6 +1023,9 @@ public:
 		if (obs_sceneitem_locked(m_sceneItem))
 			return false;
 
+		if (!obs_sceneitem_selected(m_sceneItem))
+			return false;
+
 		if (!m_isMouseOver)
 			return false;
 
@@ -1073,6 +1080,9 @@ public:
 			return false;
 
 		if (obs_sceneitem_locked(m_sceneItem))
+			return false;
+
+		if (!obs_sceneitem_selected(m_sceneItem))
 			return false;
 
 		m_isDragging = true;

@@ -135,8 +135,11 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 		auto item = kv.first;
 		auto parentItem = kv.second;
 
-		if (m_sceneItemsVisualElementsMap.count(item))
-			continue;
+		if (m_sceneItemsVisualElementsMap.count(item)) {
+			if (m_sceneItemsVisualElementsMap[item]
+				    ->GetParentSceneItem() == parentItem)
+				continue;
+		}
 
 		m_sceneItemsVisualElementsMap[item] = std::make_shared<
 			StreamElementsVideoCompositionViewWidget::VisualElements>(
