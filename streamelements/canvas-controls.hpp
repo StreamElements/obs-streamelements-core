@@ -152,6 +152,8 @@ private:
 					result |= obs_sceneitem_selected(
 						sceneItem);
 				}
+
+				return !result; // Continue iteration until no result found
 			},
 			true);
 
@@ -295,39 +297,41 @@ private:
 		scanSceneItems(
 			m_scene,
 			[&](obs_sceneitem_t *sceneItem,
-			    obs_sceneitem_t *parentSceneItem) {
+			    obs_sceneitem_t *parentSceneItem) -> bool {
 				if (!obs_sceneitem_selected(sceneItem))
-					return;
+					return true;
 
 				if (!parentSceneItem)
-					return;
+					return true;
 
 				selectedSceneItemsParentsMap[parentSceneItem] =
 					true;
+
+				return true;
 			},
 			true);
 
 		scanSceneItems(m_scene, [&](obs_sceneitem_t *sceneItem,
-					    obs_sceneitem_t *parentSceneItem) {
+					    obs_sceneitem_t *parentSceneItem) -> bool {
 				if (obs_sceneitem_selected(sceneItem))
-					return;
+					return true;
 
 				if (obs_sceneitem_locked(sceneItem))
-					return;
+					return true;
 
 				// Check if we're a parent of a selected scene item
 				if (selectedSceneItemsParentsMap.count(
 					    sceneItem))
-					return;
+					return true;
 
 				if (parentSceneItem) {
 					if (obs_sceneitem_selected(
 						    parentSceneItem))
-						return;
+						return true;
 
 					if (obs_sceneitem_locked(
 						    parentSceneItem))
-						return;
+						return true;
 				}
 
 				std::vector<vec2> points;
@@ -354,6 +358,8 @@ private:
 					if (p.y > br.y)
 						br.y = p.y;
 				}
+
+				return true;
 		}, true);
 
 		result.push_back(tl);
@@ -372,16 +378,18 @@ private:
 		scanSceneItems(
 			m_scene,
 			[&](obs_sceneitem_t *sceneItem,
-			    obs_sceneitem_t *parentSceneItem) {
+			    obs_sceneitem_t *parentSceneItem) -> bool {
 				if (!obs_sceneitem_selected(sceneItem))
-					return;
+					return true;
 
 				if (obs_sceneitem_locked(sceneItem))
-					return;
+					return true;
 
 				addSceneItemWorldPointsOfInterest(
 					sceneItem, parentSceneItem,
 					result);
+
+				return true;
 			},
 			true);
 	}
@@ -570,7 +578,7 @@ public:
 							[&](obs_sceneitem_t
 								    *item,
 							    obs_sceneitem_t
-								    * /*parent*/) {
+								    * /*parent*/) -> bool {
 								if (obs_sceneitem_selected(
 									    item) !=
 								    (item ==
@@ -579,6 +587,8 @@ public:
 										item,
 										item == m_sceneItem);
 								}
+
+								return true;
 							},
 							true);
 					}
@@ -592,10 +602,12 @@ public:
 				m_sceneItem,
 				[&](obs_sceneitem_t *sceneItem,
 				    obs_sceneitem_t *
-				    /*parentSceneItem*/) {
+				    /*parentSceneItem*/) -> bool {
 					if (obs_sceneitem_selected(sceneItem))
 						obs_sceneitem_select(sceneItem,
 								     false);
+
+					return true;
 				},
 				true);
 
@@ -614,10 +626,10 @@ public:
 
 			m_isDragging = true;
 
-			return false;
+			return m_isMouseOver;
 		}
 
-		return false;
+		return m_isMouseOver;
 	}
 
 	virtual void Draw() override
