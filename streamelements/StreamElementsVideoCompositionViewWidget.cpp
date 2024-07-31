@@ -483,8 +483,23 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 					 viewportWidth, viewportHeight, &viewX,
 					 &viewY, &viewWidth, &viewHeight);
 
-	startProjectionRegion(viewX, viewY, viewWidth, viewHeight, 0.0f, 0.0f,
-			      double(worldWidth), double(worldHeight));
+	// Calculate by how much we want to expand viewWidth and viewHeight so it
+	// will occupy the whole size of the display
+	double scaleX = double(viewportWidth) / (viewWidth);
+	double scaleY = double(viewportHeight) / (viewHeight);
+
+	// Use calculation above to figure out expanded width/height of the world
+	double scaledWorldWidth = double(worldWidth) * scaleX;
+	double scaledWorldHeight = double(worldHeight) * scaleY;
+
+	// Calcualte how much we want to add to each world side
+	double worldPadX = (scaledWorldWidth - double(worldWidth)) / 2.0f;
+	double worldPadY = (scaledWorldHeight - double(worldHeight)) / 2.0f;
+
+	//startProjectionRegion(viewX, viewY, viewWidth, viewHeight, 0.0f, 0.0f,
+	//		      double(worldWidth), double(worldHeight));
+	startProjectionRegion(0, 0, viewportWidth, viewportHeight, 0.0f - worldPadX, 0.0f - worldPadY,
+			      double(worldWidth) + worldPadX, double(worldHeight) + worldPadY);
 
 	// Calculate World mouse coordinates based on viewport position and size (scale)
 	//
@@ -501,22 +516,22 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	// so we can draw outside of the video boundaries while still using the same
 	// coordinate system.
 	//
-	gs_viewport_push();
-	gs_set_viewport(0, 0, viewportWidth, viewportHeight); // Viewport was originally set to the video projection area, now we extend it so elements we draw can be seen
-	gs_matrix_push();
-	gs_matrix_scale3f(viewWidth / double(viewportWidth),
-			  viewHeight / double(viewportHeight), 1.0f);
+	//gs_viewport_push();
+	//gs_set_viewport(0, 0, viewportWidth, viewportHeight); // Viewport was originally set to the video projection area, now we extend it so elements we draw can be seen
+	//gs_matrix_push();
+	//gs_matrix_scale3f(viewWidth / double(viewportWidth),
+	//		  viewHeight / double(viewportHeight), 1.0f);
 
 	// TODO: Figure out where did this 2.0f factor come from
-	gs_matrix_translate3f(viewX * 2.0f, viewY * 2.0f, 0.0f);
+	//gs_matrix_translate3f(viewX * 2.0f, viewY * 2.0f, 0.0f);
 
 	// Update visual elements state and draw them on screen
 	self->m_visualElementsState.UpdateAndDraw(
 		self->m_videoComposition->GetCurrentScene(), worldWidth,
 		worldHeight);
 
-	gs_matrix_pop();
-	gs_viewport_pop();
+	//gs_matrix_pop();
+	//gs_viewport_pop();
 
 	/*
 	if (self->m_currUnderMouse) {
