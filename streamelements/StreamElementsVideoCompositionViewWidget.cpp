@@ -515,6 +515,10 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	// This can also be done with getTransformedPosition() using an inverted projection matrix,
 	// but since the calculation is so simple, we won't be using matrix algebra here.
 	//
+	// TODO: We might want to transform those coords using an inverse of the world projection
+	//       matrix. For the time being it works very well as is, so we'll leave this excercise
+	//       for a later time.
+	//
 	self->m_currMouseWorldX =
 		(double)(self->m_currMouseWidgetX - viewX) / viewWidth * worldWidth;
 	self->m_currMouseWorldY =
