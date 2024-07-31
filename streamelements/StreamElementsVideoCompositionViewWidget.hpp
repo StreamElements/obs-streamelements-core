@@ -5,6 +5,8 @@
 #include <QMouseEvent>
 #include <QEnterEvent>
 
+#include "canvas-scan.hpp"
+
 class StreamElementsVideoCompositionViewWidget : public QWidget, public StreamElementsCompositionEventListener
 {
 public:
@@ -126,10 +128,27 @@ public:
 	class VisualElementsStateManager {
 	private:
 		StreamElementsVideoCompositionViewWidget* m_view;
-		obs_scene_t *m_scene;
 		std::map<obs_sceneitem_t *, std::shared_ptr<VisualElements>>
 			m_sceneItemsVisualElementsMap;
 		std::vector<obs_sceneitem_t *> m_sceneItemsEventProcessingOrder;
+
+	private:
+		bool scanItems(
+			bool selected,
+			std::function<bool(obs_sceneitem_t *)>
+				callback)
+		{
+			for (auto sceneItem :
+			     m_sceneItemsEventProcessingOrder) {
+				if (obs_sceneitem_selected(sceneItem) != selected)
+					continue;
+
+				if (callback(sceneItem))
+					return true;
+			}
+
+			return false;
+		}
 
 	public:
 		VisualElementsStateManager(
@@ -145,12 +164,40 @@ public:
 		bool HandleMouseDown(QMouseEvent *event, double worldX,
 					     double worldY)
 		{
+			bool wasSelected = false;
+
 			for (auto sceneItem :
 			     m_sceneItemsEventProcessingOrder) {
-				if (m_sceneItemsVisualElementsMap[sceneItem]
-					    ->HandleMouseDown(event, worldX,
-							       worldY))
-					return true;
+				if (!obs_sceneitem_selected(sceneItem))
+					continue;
+
+				wasSelected |=
+					m_sceneItemsVisualElementsMap[sceneItem]
+						->HandleMouseDown(event, worldX,
+								  worldY);
+			}
+
+			for (auto sceneItem :
+			     m_sceneItemsEventProcessingOrder) {
+				if (obs_sceneitem_selected(sceneItem))
+					continue;
+
+				wasSelected |=
+					m_sceneItemsVisualElementsMap[sceneItem]
+						->HandleMouseDown(event, worldX,
+								  worldY);
+			}
+
+			if (wasSelected)
+				return true;
+
+			// Nothing selected
+			for (auto sceneItem :
+			     m_sceneItemsEventProcessingOrder) {
+				if (!obs_sceneitem_selected(sceneItem))
+					continue;
+
+				obs_sceneitem_select(sceneItem, false);
 			}
 
 			return false;
@@ -231,6 +278,11 @@ public:
 	void AddHorizontalRulerY(double y)
 	{
 		m_worldHorizontalRulersY.push_back(y);
+	}
+
+	obs_scene_t *GetCurrentScene()
+	{
+		return m_videoComposition->GetCurrentScene();
 	}
 
 private:

@@ -2,73 +2,86 @@
 
 #include <obs.h>
 
-static inline void
+static inline bool
 scanGroupSceneItems(obs_sceneitem_t *group,
-		    std::function<void(obs_sceneitem_t * /*item*/,
+		    std::function<bool(obs_sceneitem_t * /*item*/,
 				       obs_sceneitem_t * /*parent*/)>
 			    callback,
 		    bool recursive)
 {
 	struct data_t {
-		std::function<void(obs_sceneitem_t * /*item*/,
+		std::function<bool(obs_sceneitem_t * /*item*/,
 				   obs_sceneitem_t * /*parent*/)>
 			callback;
 		bool recursive;
 		obs_sceneitem_t *group;
+		bool result;
 	};
 
 	data_t data = {};
 	data.callback = callback;
 	data.recursive = recursive;
 	data.group = group;
+	data.result = true;
 
 	obs_sceneitem_group_enum_items(
 		group,
 		[](obs_scene_t *scene, obs_sceneitem_t *item, void *data_p) {
 			auto data = (data_t *)data_p;
 
-			data->callback(item, data->group);
-
 			if (data->recursive && obs_sceneitem_is_group(item)) {
-				scanGroupSceneItems(item, data->callback, data->recursive);
+				data->result = scanGroupSceneItems(
+					item, data->callback, data->recursive);
 			}
 
-			return true;
+			if (data->result)
+				data->result =
+					data->callback(item, data->group);
+
+			return data->result;
 		},
 		&data);
+
+	return data.result;
 }
 
-static inline void scanSceneItems(
-	obs_scene_t* scene,
-	std::function<void(obs_sceneitem_t * /*item*/, obs_sceneitem_t * /*parent*/)>
-		callback,
-	bool recursive)
+static inline bool
+scanSceneItems(obs_scene_t *scene,
+	       std::function<bool(obs_sceneitem_t * /*item*/,
+				  obs_sceneitem_t * /*parent*/)>
+		       callback,
+	       bool recursive)
 {
 	struct data_t {
-		std::function<void(obs_sceneitem_t * /*item*/,
+		std::function<bool(obs_sceneitem_t * /*item*/,
 				   obs_sceneitem_t * /*parent*/)>
 			callback;
 		bool recursive;
+		bool result;
 	};
 
 	data_t data = {};
 	data.callback = callback;
 	data.recursive = recursive;
+	data.result = true;
 
 	obs_scene_enum_items(
 		scene,
 		[](obs_scene_t * /* scene */, obs_sceneitem_t *item,
-		   void *data_p) {
+		   void *data_p) -> bool {
 			auto data = (data_t *)data_p;
 
 			if (data->recursive && obs_sceneitem_is_group(item)) {
-				scanGroupSceneItems(item, data->callback,
-						    data->recursive);
+				data->result = scanGroupSceneItems(
+					item, data->callback, data->recursive);
 			}
 
-			data->callback(item, nullptr);
+			if (data->result)
+				data->callback(item, nullptr);
 
-			return true;
+			return data->result;
 		},
 		&data);
+
+	return data.result;
 }

@@ -108,16 +108,18 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 
 	scanSceneItems(
 		scene,
-		[&](obs_sceneitem_t *item, obs_sceneitem_t *parent) {
+		[&](obs_sceneitem_t *item, obs_sceneitem_t *parent) -> bool {
 			if (obs_sceneitem_locked(item))
-				return;
+				return true;
 
 			if (!obs_sceneitem_visible(item))
-				return;
+				return true;
 
 			existingSceneItems[item] = parent;
 
 			m_sceneItemsEventProcessingOrder.push_back(item);
+
+			return true;
 		},
 		true);
 
