@@ -5,6 +5,8 @@
 #include "StreamElementsVideoCompositionViewWidget.hpp"
 #include "StreamElementsUtils.hpp"
 
+#include "StreamElementsBrowserDialog.hpp"
+
 StreamElementsVideoCompositionManager::StreamElementsVideoCompositionManager()
 {
 	m_nativeVideoComposition = StreamElementsObsNativeVideoComposition::Create();
@@ -22,13 +24,19 @@ StreamElementsVideoCompositionManager::StreamElementsVideoCompositionManager()
 
 	auto composition = m_nativeVideoComposition;
 
-	auto widget = new StreamElementsVideoCompositionViewWidget(nullptr,
-								   composition);
-
-	auto dlg = new QDialog();
+	auto dlg = new StreamElementsBrowserDialog(
+		nullptr, "https://www.google.com", "", false, "dialog");
 	dlg->setFixedSize(1024, 768);
-	auto topLayout = new QVBoxLayout(dlg);
-	topLayout->addWidget(widget);
+
+	//auto topLayout = new QVBoxLayout(dlg);
+	//topLayout->addWidget(compositionViewWidget);
+
+	auto compositionViewWidget =
+		new StreamElementsVideoCompositionViewWidget(dlg,
+							     composition);
+	compositionViewWidget->setGeometry(256, 192, 512, 384);
+	compositionViewWidget->show();
+
 	dlg->show();
 }
 
