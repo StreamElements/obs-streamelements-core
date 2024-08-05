@@ -82,6 +82,7 @@ StreamElementsObsNativeVideoComposition::GetCompositionInfo(
 void StreamElementsObsNativeVideoComposition::SerializeComposition(
 	CefRefPtr<CefValue> &output)
 {
+	// TODO: Implement
 }
 
 obs_scene_t* StreamElementsObsNativeVideoComposition::GetCurrentScene()
@@ -330,6 +331,8 @@ void StreamElementsCustomVideoComposition::SerializeComposition(
 	CefRefPtr<CefValue> &output)
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	// TODO: Implement
 }
 
 obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentScene()
