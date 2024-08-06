@@ -2441,6 +2441,14 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("getAllVideoCompositions");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->SerializeAllCompositions(result);
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("crashProgram");
 	{
 		QtPostTask([]() -> void {

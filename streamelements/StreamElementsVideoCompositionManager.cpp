@@ -16,20 +16,18 @@ StreamElementsVideoCompositionManager::StreamElementsVideoCompositionManager()
 	// TODO: Remove debug code
 	auto testComposition =
 		StreamElementsCustomVideoComposition::Create(
-			"test1", "Test 1", 1920, 1080, "x264",
+			"test1", "Test 1", 1920, 1080, "obs_x264",
 			obs_data_create(), obs_data_create());
 
 	m_videoCompositionsMap[testComposition->GetId()] =
 		testComposition;
 
-	auto composition = m_nativeVideoComposition;
+	//auto composition = m_nativeVideoComposition;
+	auto composition = testComposition;
 
 	auto dlg = new StreamElementsBrowserDialog(
 		nullptr, "https://www.google.com", "", false, "dialog");
 	dlg->setFixedSize(1024, 768);
-
-	//auto topLayout = new QVBoxLayout(dlg);
-	//topLayout->addWidget(compositionViewWidget);
 
 	auto compositionViewWidget =
 		new StreamElementsVideoCompositionViewWidget(dlg,
@@ -111,7 +109,7 @@ void StreamElementsVideoCompositionManager::SerializeAllCompositions(
 	CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
 
 	for (auto kv : m_videoCompositionsMap) {
-		CefRefPtr<CefValue> composition;
+		auto composition = CefValue::Create();
 
 		kv.second->SerializeComposition(composition);
 

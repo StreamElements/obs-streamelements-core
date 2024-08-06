@@ -8,11 +8,22 @@ static CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e)
 {
 	auto result = CefDictionaryValue::Create();
 
-	result->SetString("class", obs_encoder_get_id(e));
-	result->SetString("name", obs_encoder_get_name(e));
+	auto id = obs_encoder_get_id(e);
+	result->SetString("class", id);
+
+	auto name = obs_encoder_get_name(e);
+	result->SetString("name", name ? name : id);
+
+	auto displayName = obs_encoder_get_display_name(obs_encoder_get_id(e));
 	result->SetString("displayName",
-			  obs_encoder_get_display_name(obs_encoder_get_id(e)));
-	result->SetString("codec", obs_encoder_get_codec(e));
+			  displayName ? displayName : (name ? name : id));
+
+	auto codec = obs_encoder_get_codec(e);
+
+	if (codec)
+		result->SetString("codec", obs_encoder_get_codec(e));
+	else
+		result->SetNull("codec");
 
 	if (obs_encoder_get_type(e) == OBS_ENCODER_VIDEO) {
 		result->SetInt("width", obs_encoder_get_width(e));
@@ -36,9 +47,15 @@ static void SerializeObsEncoders(StreamElementsVideoCompositionBase* composition
 {
 	auto info = composition->GetCompositionInfo(nullptr);
 
+	auto encoder = info->GetStreamingVideoEncoder();
+
+	// OBS Native composition doesn't have an encoder until we start streaming
+	if (!encoder)
+		return;
+
 	auto streamingVideoEncoders = CefListValue::Create();
 	streamingVideoEncoders->SetDictionary(
-		0, SerializeObsEncoder(info->GetStreamingVideoEncoder()));
+		0, SerializeObsEncoder(encoder));
 	root->SetList("streamingVideoEncoders", streamingVideoEncoders);
 
 	auto streamingAudioEncoders = CefListValue::Create();
