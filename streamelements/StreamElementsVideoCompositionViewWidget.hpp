@@ -143,8 +143,13 @@ public:
 		}
 		~VisualElementsStateManager() {}
 
-		void UpdateAndDraw(obs_scene_t *scene, double worldWidth,
-				   double worldHeight);
+		void UpdateAndDraw(
+			StreamElementsVideoCompositionViewWidget *self,
+			obs_scene_t *scene, uint32_t viewportWidth,
+			uint32_t viewportHeight,
+			std::shared_ptr<StreamElementsVideoCompositionBase::
+						CompositionInfo>
+				videoCompositionInfo);
 
 		bool HandleMouseDown(QMouseEvent *event, double worldX,
 					     double worldY)

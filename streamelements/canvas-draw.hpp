@@ -16,7 +16,7 @@
 // output position and dimensions.
 //
 static inline void calculateVideoViewportPositionAndSize(
-	StreamElementsVideoCompositionViewWidget *self, double worldWidth,
+	QWidget *self, double worldWidth,
 	double worldHeight, double unpaddedViewportWidth, double unpaddedViewportHeight,
 	double *viewX, double *viewY, double *viewWidth, double *viewHeight)
 {

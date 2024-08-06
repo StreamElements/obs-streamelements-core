@@ -97,8 +97,70 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 // After that, draw bottom layer visuals, render video, and draw top layer visuals.
 //
 void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
-	UpdateAndDraw(obs_scene_t *scene, double worldWidth, double worldHeight)
+	UpdateAndDraw(
+		StreamElementsVideoCompositionViewWidget *self,
+		obs_scene_t *scene, uint32_t viewportWidth,
+		uint32_t viewportHeight,
+		std::shared_ptr<
+			StreamElementsVideoCompositionBase::CompositionInfo>
+			videoCompositionInfo)
 {
+	uint32_t worldWidth;
+	uint32_t worldHeight;
+
+	videoCompositionInfo->GetVideoBaseDimensions(&worldWidth, &worldHeight);
+
+	double viewX, viewY, viewWidth, viewHeight;
+	calculateVideoViewportPositionAndSize(self, worldWidth, worldHeight,
+					      viewportWidth, viewportHeight,
+					      &viewX, &viewY, &viewWidth,
+					      &viewHeight);
+
+	// Calculate by how much we want to expand viewWidth and viewHeight so it
+	// will occupy the whole size of the display
+	double scaleX = double(viewportWidth) / (viewWidth);
+	double scaleY = double(viewportHeight) / (viewHeight);
+
+	// Use calculation above to figure out expanded width/height of the world
+	double scaledWorldWidth = double(worldWidth) * scaleX;
+	double scaledWorldHeight = double(worldHeight) * scaleY;
+
+	// Calcualte how much we want to add to each world side
+	double worldPadX = (scaledWorldWidth - double(worldWidth)) / 2.0f;
+	double worldPadY = (scaledWorldHeight - double(worldHeight)) / 2.0f;
+
+	// The trick here is to project a larger portion of the world onto the final projection
+	// region: that way the actual video area is getting shrinked relative to the parent
+	// display area.
+	//
+	// So we add padding to the world, calculated in proportion to the difference in size between
+	// the world and the projection region.
+	//
+	// We need all this complexity to be able to draw stuff outside of the video region while
+	// still using the same coordinate system as the rest of the world (the world being the
+	// video being projected).
+	//
+	startProjectionRegion(0, 0, viewportWidth, viewportHeight,
+			      0.0f - worldPadX, 0.0f - worldPadY,
+			      double(worldWidth) + worldPadX,
+			      double(worldHeight) + worldPadY);
+
+	// Calculate World mouse coordinates based on viewport position and size (scale)
+	//
+	// This can also be done with getTransformedPosition() using an inverted projection matrix,
+	// but since the calculation is so simple, we won't be using matrix algebra here.
+	//
+	// TODO: We might want to transform those coords using an inverse of the world projection
+	//       matrix. For the time being it works very well as is, so we'll leave this excercise
+	//       for a later time.
+	//
+	self->m_currMouseWorldX = (double)(self->m_currMouseWidgetX - viewX) /
+				  viewWidth * worldWidth;
+	self->m_currMouseWorldY = (double)(self->m_currMouseWidgetY - viewY) /
+				  viewWidth * worldWidth;
+
+	///////////////////////////////////////////
+
 	m_view->m_worldHorizontalRulersY.clear();
 	m_view->m_worldVerticalRulersX.clear();
 
@@ -161,8 +223,15 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 	// Fill video viewport background with black color
 	fillRect(0, 0, worldWidth, worldHeight, QColor(0, 0, 0, 255));
 
+	// We need a clipped projection region for the video part of the rendering
+	startProjectionRegion(viewX, viewY, viewWidth, viewHeight, 0, 0,
+			      double(worldWidth), double(worldHeight));
+
 	// Render the view into the region set above
 	m_view->m_videoCompositionInfo->Render();
+
+	// Return to the clipped projection region set above to draw the top layer graphics
+	endProjectionRegion();
 
 	// Draw groups first
 	for (auto kv : m_sceneItemsVisualElementsMap) {
@@ -190,6 +259,35 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 	for (auto y : m_view->m_worldHorizontalRulersY) {
 		drawLine(0.0f, y, worldWidth, y, thickness, rulerColor);
 	}
+
+	/*
+	if (self->m_currUnderMouse) {
+		// Temporary mouse tracking debugger
+		fillRect(self->m_currMouseWorldX, self->m_currMouseWorldY,
+			 self->m_currMouseWorldX + 50,
+			 self->m_currMouseWorldY + 50,
+			 QColor(255, 255, 0, 175));
+
+		drawRect(self->m_currMouseWorldX, self->m_currMouseWorldY,
+			 self->m_currMouseWorldX + 50,
+			 self->m_currMouseWorldY + 50, 5.0f,
+			 QColor(255, 0, 0, 175));
+
+		drawLine(0, 0, self->m_currMouseWorldX, self->m_currMouseWorldY,
+			 5.0f, QColor(0, 255, 0, 175));
+
+		drawLine(0, worldHeight, self->m_currMouseWorldX,
+			 self->m_currMouseWorldY, 5.0f, QColor(0, 255, 0, 175));
+
+		drawLine(worldWidth, worldHeight, self->m_currMouseWorldX,
+			 self->m_currMouseWorldY, 5.0f, QColor(0, 255, 0, 175));
+
+		drawLine(worldWidth, 0, self->m_currMouseWorldX,
+			 self->m_currMouseWorldY, 5.0f, QColor(0, 255, 0, 175));
+	}
+	*/
+
+	endProjectionRegion();
 }
 
 static inline QSize GetPixelSize(QWidget *widget)
@@ -472,67 +570,16 @@ void StreamElementsVideoCompositionViewWidget::mouseReleaseEvent(
 void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* data, uint32_t viewportWidth,
 	uint32_t viewportHeight)
 {
-	//OutputDebugStringA("obs_display_draw_callback\n");
 	StreamElementsVideoCompositionViewWidget *self =
 		reinterpret_cast<StreamElementsVideoCompositionViewWidget *>(
 			data);
 
-	uint32_t worldWidth;
-	uint32_t worldHeight;
-
-	self->m_videoCompositionInfo->GetVideoBaseDimensions(&worldWidth,
-							     &worldHeight);
-
-	double viewX, viewY, viewWidth, viewHeight;
-	calculateVideoViewportPositionAndSize(self, worldWidth, worldHeight,
-					 viewportWidth, viewportHeight, &viewX,
-					 &viewY, &viewWidth, &viewHeight);
-
-	// Calculate by how much we want to expand viewWidth and viewHeight so it
-	// will occupy the whole size of the display
-	double scaleX = double(viewportWidth) / (viewWidth);
-	double scaleY = double(viewportHeight) / (viewHeight);
-
-	// Use calculation above to figure out expanded width/height of the world
-	double scaledWorldWidth = double(worldWidth) * scaleX;
-	double scaledWorldHeight = double(worldHeight) * scaleY;
-
-	// Calcualte how much we want to add to each world side
-	double worldPadX = (scaledWorldWidth - double(worldWidth)) / 2.0f;
-	double worldPadY = (scaledWorldHeight - double(worldHeight)) / 2.0f;
-
-	// The trick here is to project a larger portion of the world onto the final projection
-	// region: that way the actual video area is getting shrinked relative to the parent
-	// display area.
-	//
-	// So we add padding to the world, calculated in proportion to the difference in size between
-	// the world and the projection region.
-	//
-	// We need all this complexity to be able to draw stuff outside of the video region while
-	// still using the same coordinate system as the rest of the world (the world being the
-	// video being projected).
-	//
-	startProjectionRegion(0, 0, viewportWidth, viewportHeight, 0.0f - worldPadX, 0.0f - worldPadY,
-			      double(worldWidth) + worldPadX, double(worldHeight) + worldPadY);
-
-	// Calculate World mouse coordinates based on viewport position and size (scale)
-	//
-	// This can also be done with getTransformedPosition() using an inverted projection matrix,
-	// but since the calculation is so simple, we won't be using matrix algebra here.
-	//
-	// TODO: We might want to transform those coords using an inverse of the world projection
-	//       matrix. For the time being it works very well as is, so we'll leave this excercise
-	//       for a later time.
-	//
-	self->m_currMouseWorldX =
-		(double)(self->m_currMouseWidgetX - viewX) / viewWidth * worldWidth;
-	self->m_currMouseWorldY =
-		(double)(self->m_currMouseWidgetY - viewY) / viewWidth * worldWidth;
 
 	// Update visual elements state and draw them on screen
 	self->m_visualElementsState.UpdateAndDraw(
-		self->m_videoComposition->GetCurrentScene(), worldWidth,
-		worldHeight);
+		self,
+		self->m_videoComposition->GetCurrentScene(), viewportWidth,
+		viewportHeight, self->m_videoCompositionInfo);
 
 	/*
 	if (self->m_currUnderMouse) {
