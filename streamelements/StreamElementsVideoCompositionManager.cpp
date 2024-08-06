@@ -166,7 +166,7 @@ void StreamElementsVideoCompositionManager::SerializeAvailableEncoderClasses(
 	obs_encoder_type type,
 	CefRefPtr<CefValue>& output)
 {
-	auto root = CefDictionaryValue::Create();
+	auto root = CefListValue::Create();
 
 	const char *id;
 	for (size_t i = 0; obs_enum_encoder_types(i, &id); ++i) {
@@ -177,10 +177,11 @@ void StreamElementsVideoCompositionManager::SerializeAvailableEncoderClasses(
 
 		d->SetString("class", id);
 		d->SetString("displayName", obs_encoder_get_display_name(id));
+		d->SetString("codec", obs_get_encoder_codec(id));
 		d->SetValue("properties", SerializeObsEncoderProperties(id));
 
-		root->SetDictionary(id, d);
+		root->SetDictionary(root->GetSize(), d);
 	}
 
-	output->SetDictionary(root);
+	output->SetList(root);
 }
