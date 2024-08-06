@@ -2423,6 +2423,24 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("getAllAvailableVideoEncoderClasses");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->SerializeAvailableEncoderClasses(OBS_ENCODER_VIDEO,
+							   result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllAvailableAudioEncoderClasses");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->SerializeAvailableEncoderClasses(OBS_ENCODER_AUDIO,
+							   result);
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("crashProgram");
 	{
 		QtPostTask([]() -> void {

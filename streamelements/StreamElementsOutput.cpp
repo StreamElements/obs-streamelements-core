@@ -610,12 +610,12 @@ std::shared_ptr <StreamElementsCustomOutput> StreamElementsCustomOutput::Create(
 	// TODO: Get composition from composition manager
 
 	auto composition = StreamElementsGlobalStateManager::GetInstance()
-		->GetCompositionManager()
+		->GetVideoCompositionManager()
 		->GetVideoCompositionById(id);
 
 	if (!composition) {
 		composition = StreamElementsGlobalStateManager::GetInstance()
-				      ->GetCompositionManager()
+				      ->GetVideoCompositionManager()
 				      ->GetObsNativeVideoComposition();
 	}
 

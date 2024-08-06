@@ -164,7 +164,7 @@ public:
 	StreamElementsWebsocketApiServer* GetWebsocketApiServer() {
 		return m_websocketApiServer;
 	}
-	std::shared_ptr<StreamElementsVideoCompositionManager> GetCompositionManager()
+	std::shared_ptr<StreamElementsVideoCompositionManager> GetVideoCompositionManager()
 	{
 		return m_compositionManager;
 	}
