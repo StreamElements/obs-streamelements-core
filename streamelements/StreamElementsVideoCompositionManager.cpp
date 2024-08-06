@@ -50,7 +50,7 @@ void StreamElementsVideoCompositionManager::DeserializeComposition(
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
-	output->SetBool(false);
+	output->SetNull();
 
 	// TODO: Implement
 	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
