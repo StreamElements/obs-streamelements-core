@@ -168,7 +168,7 @@ void StreamElementsVideoCompositionManager::SerializeAvailableEncoderClasses(
 {
 	auto root = CefDictionaryValue::Create();
 
-	char *id;
+	const char *id;
 	for (size_t i = 0; obs_enum_encoder_types(i, &id); ++i) {
 		if (obs_get_encoder_type(id) != type)
 			continue;
