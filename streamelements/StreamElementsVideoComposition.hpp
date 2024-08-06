@@ -165,25 +165,29 @@ private:
 
 public:
 	// ctor only usable by this class
-	StreamElementsCustomVideoComposition(Private, std::string id,
-					     std::string name, uint32_t baseWidth,
-		uint32_t baseHeight, std::string videoEncoderId,
-		obs_data_t *videoEncoderSettings,
-		obs_data_t *videoEncoderHotkeyData);
+	StreamElementsCustomVideoComposition(
+		Private, std::string id, std::string name, uint32_t baseWidth,
+		uint32_t baseHeight, std::string streamingVideoEncoderId,
+		obs_data_t *streamingVideoEncoderSettings,
+		obs_data_t *streamingVideoEncoderHotkeyData);
 
 	virtual ~StreamElementsCustomVideoComposition();
 
 public:
 	static std::shared_ptr<StreamElementsVideoCompositionBase>
 	Create(std::string id, std::string name, uint32_t width,
-	       uint32_t height, std::string videoEncoderId, obs_data_t* videoEncoderSettings, obs_data_t* videoEncoderHotkeyData)
+	       uint32_t height, std::string streamingVideoEncoderId, obs_data_t* streamingVideoEncoderSettings, obs_data_t* streamingVideoEncoderHotkeyData)
 	{
 		return std::make_shared<StreamElementsCustomVideoComposition>(
-			Private(), id, name, width, height, videoEncoderId, videoEncoderSettings, videoEncoderHotkeyData);
+			Private(), id, name, width, height, streamingVideoEncoderId, streamingVideoEncoderSettings, streamingVideoEncoderHotkeyData);
 	}
 
+	static std::shared_ptr<StreamElementsVideoCompositionBase>
+	Create(std::string id, std::string name, uint32_t width,
+	       uint32_t height, CefRefPtr<CefValue> streamingVideoEncoders);
+
 private:
-	obs_encoder_t *m_videoEncoder = nullptr;
+	obs_encoder_t *m_streamingVideoEncoder = nullptr;
 	obs_view_t *m_view = nullptr;
 	video_t *m_video = nullptr;
 

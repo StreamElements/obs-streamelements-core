@@ -52,8 +52,55 @@ void StreamElementsVideoCompositionManager::DeserializeComposition(
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
-	// TODO: Implement
 	output->SetBool(false);
+
+	// TODO: Implement
+	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto root = input->GetDictionary();
+
+	if (!root->HasKey("id") || root->GetType("id") != VTYPE_STRING)
+		return;
+
+	if (!root->HasKey("name") || root->GetType("name") != VTYPE_STRING)
+		return;
+
+	if (!root->HasKey("videoFrame") || root->GetType("videoFrame") != VTYPE_DICTIONARY)
+		return;
+
+	if (!root->HasKey("streamingVideoEncoders"))
+		return;
+
+	std::string id = root->GetString("id");
+
+	if (m_videoCompositionsMap.count(id))
+		return;
+
+	auto videoFrame = root->GetDictionary("videoFrame");
+
+	if (!videoFrame->HasKey("width") ||
+	    videoFrame->GetType("width") != VTYPE_INT)
+		return;
+
+	if (!videoFrame->HasKey("height") ||
+	    videoFrame->GetType("height") != VTYPE_INT)
+		return;
+
+	try {
+		auto composition = StreamElementsCustomVideoComposition::Create(
+			id, root->GetString("name"),
+			videoFrame->GetInt("width"),
+			videoFrame->GetInt("height"),
+			root->GetValue("streamingVideoEncoders"));
+
+		m_videoCompositionsMap[id] = composition;
+
+		composition->SerializeComposition(output);
+	} catch (...) {
+		// Creation failed
+		return;
+	}
 }
 
 void StreamElementsVideoCompositionManager::SerializeAllCompositions(
