@@ -174,9 +174,31 @@ void StreamElementsVideoCompositionManager::SerializeAvailableEncoderClasses(
 		auto d = CefDictionaryValue::Create();
 
 		d->SetString("class", id);
-		d->SetString("displayName", obs_encoder_get_display_name(id));
+		d->SetString("label", obs_encoder_get_display_name(id));
 		d->SetString("codec", obs_get_encoder_codec(id));
 		d->SetValue("properties", SerializeObsEncoderProperties(id));
+
+		obs_encoder_t *encoder = nullptr;
+
+		if (type == OBS_ENCODER_VIDEO)
+			encoder = obs_video_encoder_create(id, id, nullptr,
+							   nullptr);
+		else if (type == OBS_ENCODER_AUDIO)
+			encoder = obs_audio_encoder_create(id, id, nullptr, 0,
+							   nullptr);
+
+		if (encoder) {
+			auto defaultSettings = obs_encoder_get_defaults(encoder);
+
+			if (defaultSettings) {
+				d->SetValue("defaultSettings",
+					    SerializeObsData(defaultSettings));
+
+				obs_data_release(defaultSettings);
+			}
+
+			obs_encoder_release(encoder);
+		}
 
 		root->SetDictionary(root->GetSize(), d);
 	}

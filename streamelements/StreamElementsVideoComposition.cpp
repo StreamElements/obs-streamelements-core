@@ -15,7 +15,7 @@ static CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e)
 	result->SetString("name", name ? name : id);
 
 	auto displayName = obs_encoder_get_display_name(obs_encoder_get_id(e));
-	result->SetString("displayName",
+	result->SetString("label",
 			  displayName ? displayName : (name ? name : id));
 
 	auto codec = obs_encoder_get_codec(e);
@@ -37,6 +37,15 @@ static CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e)
 				      JSON_PARSER_ALLOW_TRAILING_COMMAS));
 
 	result->SetValue("properties", SerializeObsEncoderProperties(obs_encoder_get_id(e), settings));
+
+	auto defaultSettings = obs_encoder_get_defaults(e);
+
+	if (defaultSettings) {
+		result->SetValue("defaultSettings",
+			    SerializeObsData(defaultSettings));
+
+		obs_data_release(defaultSettings);
+	}
 
 	obs_data_release(settings);
 
