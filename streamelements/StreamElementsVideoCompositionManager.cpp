@@ -92,6 +92,9 @@ void StreamElementsVideoCompositionManager::DeserializeComposition(
 			videoFrame->GetInt("height"),
 			root->GetValue("streamingVideoEncoders"));
 
+		if (!composition)
+			return;
+
 		m_videoCompositionsMap[id] = composition;
 
 		composition->SerializeComposition(output);
