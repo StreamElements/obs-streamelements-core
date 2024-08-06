@@ -4,6 +4,45 @@
 
 #include "StreamElementsUtils.hpp"
 
+static CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e)
+{
+	auto result = CefDictionaryValue::Create();
+
+	result->SetString("id", obs_encoder_get_id(e));
+
+	auto settings = obs_encoder_get_settings(e);
+
+	result->SetValue("settings",
+			 CefParseJSON(obs_data_get_json(settings),
+				      JSON_PARSER_ALLOW_TRAILING_COMMAS));
+
+	obs_data_release(settings);
+
+	return result;
+}
+
+static void SerializeObsEncoders(StreamElementsVideoCompositionBase* composition, CefRefPtr<CefDictionaryValue>& root)
+{
+	auto info = composition->GetCompositionInfo(nullptr);
+
+	auto streamingVideoEncoders = CefListValue::Create();
+	streamingVideoEncoders->SetDictionary(
+		0, SerializeObsEncoder(info->GetStreamingVideoEncoder()));
+	root->SetList("streamingVideoEncoders", streamingVideoEncoders);
+
+	auto streamingAudioEncoders = CefListValue::Create();
+	for (size_t i = 0;; ++i) {
+		auto encoder = info->GetStreamingAudioEncoder(i);
+
+		if (!encoder)
+			break;
+
+		streamingAudioEncoders->SetDictionary(
+			i, SerializeObsEncoder(encoder));
+	}
+	root->SetList("streamingAudioEncoders", streamingAudioEncoders);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // OBS Main Composition
 ////////////////////////////////////////////////////////////////////////////////
@@ -82,7 +121,30 @@ StreamElementsObsNativeVideoComposition::GetCompositionInfo(
 void StreamElementsObsNativeVideoComposition::SerializeComposition(
 	CefRefPtr<CefValue> &output)
 {
-	// TODO: Implement
+	obs_video_info ovi;
+	vec2 size;
+	vec2_zero(&size);
+
+	if (obs_get_video_info(&ovi)) {
+		size.x = float(ovi.base_width);
+		size.y = float(ovi.base_height);
+	}
+
+	auto root = CefDictionaryValue::Create();
+
+	root->SetString("id", GetId());
+	root->SetString("name", GetName());
+
+	auto videoFrame = CefDictionaryValue::Create();
+
+	videoFrame->SetInt("width", int(size.x));
+	videoFrame->SetInt("height", int(size.y));
+
+	root->SetDictionary("videoFrame", videoFrame);
+
+	SerializeObsEncoders(this, root);
+
+	output->SetDictionary(root);
 }
 
 obs_scene_t* StreamElementsObsNativeVideoComposition::GetCurrentScene()
@@ -332,7 +394,21 @@ void StreamElementsCustomVideoComposition::SerializeComposition(
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
-	// TODO: Implement
+	auto root = CefDictionaryValue::Create();
+
+	root->SetString("id", GetId());
+	root->SetString("name", GetName());
+
+	auto videoFrame = CefDictionaryValue::Create();
+
+	videoFrame->SetInt("width", m_baseWidth);
+	videoFrame->SetInt("height", m_baseHeight);
+
+	root->SetDictionary("videoFrame", videoFrame);
+
+	SerializeObsEncoders(this, root);
+
+	output->SetDictionary(root);
 }
 
 obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentScene()
