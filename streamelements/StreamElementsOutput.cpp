@@ -175,6 +175,19 @@ void StreamElementsOutputBase::handle_obs_frontend_event(
 
 	switch (event) {
 	case OBS_FRONTEND_EVENT_STREAMING_STARTING:
+		//
+		// OBS native output video encoder is already set up at this stage,
+		// so we can start our outputs as well.
+		//
+		// State is important, just in case that we are pulling from the native
+		// OBS video composition: in this case we want to re-use the encoder
+		// which has already been set-up by OBS itself.
+		//
+		// This is *especially* important for audio: at this moment, we are
+		// re-using the OBS native audio encoder for *all* our outputs -
+		// there is no API to mix a different audio stream, or to apply
+		// different encoding to the existing mix.
+		// 
 		self->Start();
 		break;
 	case OBS_FRONTEND_EVENT_STREAMING_STOPPED:
