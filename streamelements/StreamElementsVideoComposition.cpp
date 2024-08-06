@@ -9,6 +9,7 @@ static CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e)
 	auto result = CefDictionaryValue::Create();
 
 	result->SetString("id", obs_encoder_get_id(e));
+	result->SetString("codec", obs_encoder_get_codec(e));
 
 	auto settings = obs_encoder_get_settings(e);
 
@@ -135,6 +136,9 @@ void StreamElementsObsNativeVideoComposition::SerializeComposition(
 	root->SetString("id", GetId());
 	root->SetString("name", GetName());
 
+	root->SetBool("isObsNativeComposition", true);
+	root->SetBool("canRemove", CanRemove());
+
 	auto videoFrame = CefDictionaryValue::Create();
 
 	videoFrame->SetInt("width", int(size.x));
@@ -227,8 +231,8 @@ public:
 StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	StreamElementsCustomVideoComposition::Private, std::string id,
 	std::string name, uint32_t baseWidth, uint32_t baseHeight,
-	std::string videoEncoderId, obs_data_t *videoEncoderSettings,
-	obs_data_t *videoEncoderHotkeyData)
+	std::string streamingVideoEncoderId, obs_data_t *streamingVideoEncoderSettings,
+	obs_data_t *streamingVideoEncoderHotkeyData)
 	: StreamElementsVideoCompositionBase(id, name),
 	  m_baseWidth(baseWidth),
 	  m_baseHeight(baseHeight)
@@ -238,18 +242,18 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	if (!obs_get_video_info(&ovi))
 		throw std::exception("obs_get_video_info() failed", 1);
 
-	m_videoEncoder = obs_video_encoder_create(
-		videoEncoderId.c_str(), (name + ": video encoder").c_str(),
-		videoEncoderSettings, videoEncoderHotkeyData);
+	m_streamingVideoEncoder = obs_video_encoder_create(
+		streamingVideoEncoderId.c_str(), (name + ": video encoder").c_str(),
+		streamingVideoEncoderSettings, streamingVideoEncoderHotkeyData);
 
-	if (!m_videoEncoder)
+	if (!m_streamingVideoEncoder)
 		throw std::exception("obs_video_encoder_create() failed", 2);
 
 	m_transition = obs_source_create_private(
 		"cut_transition", (name + ": transition").c_str(), nullptr);
 
 	if (!m_transition) {
-		obs_encoder_release(m_videoEncoder);
+		obs_encoder_release(m_streamingVideoEncoder);
 		throw std::exception("obs_source_create_private(cut_transition) failed", 2);
 	}
 
@@ -263,7 +267,7 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 
 	obs_view_set_source(m_view, 0, m_transition);
 
-	obs_encoder_set_video(m_videoEncoder, m_video);
+	obs_encoder_set_video(m_streamingVideoEncoder, m_video);
 
 	m_currentScene = obs_scene_create_private("Scene 1");
 	m_scenes.push_back(m_currentScene);
@@ -351,9 +355,9 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
-	if (m_videoEncoder) {
-		obs_encoder_release(m_videoEncoder);
-		m_videoEncoder = nullptr;
+	if (m_streamingVideoEncoder) {
+		obs_encoder_release(m_streamingVideoEncoder);
+		m_streamingVideoEncoder = nullptr;
 	}
 
 	if (m_view) {
@@ -386,7 +390,14 @@ StreamElementsCustomVideoComposition::GetCompositionInfo(
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
 	return std::make_shared<StreamElementsCustomVideoCompositionInfo>(
-		shared_from_this(), listener, m_video, m_baseWidth, m_baseHeight, m_videoEncoder, m_view);
+		shared_from_this(), listener, m_video, m_baseWidth, m_baseHeight, m_streamingVideoEncoder, m_view);
+}
+
+obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentScene()
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	return m_currentScene;
 }
 
 void StreamElementsCustomVideoComposition::SerializeComposition(
@@ -398,6 +409,9 @@ void StreamElementsCustomVideoComposition::SerializeComposition(
 
 	root->SetString("id", GetId());
 	root->SetString("name", GetName());
+
+	root->SetBool("isObsNativeComposition", false);
+	root->SetBool("canRemove", this->CanRemove());
 
 	auto videoFrame = CefDictionaryValue::Create();
 
@@ -411,9 +425,65 @@ void StreamElementsCustomVideoComposition::SerializeComposition(
 	output->SetDictionary(root);
 }
 
-obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentScene()
+std::shared_ptr<StreamElementsVideoCompositionBase>
+StreamElementsCustomVideoComposition::Create(
+	std::string id, std::string name, uint32_t width, uint32_t height,
+       CefRefPtr<CefValue> streamingVideoEncoders)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	if (!streamingVideoEncoders.get() ||
+	    streamingVideoEncoders->GetType() != VTYPE_LIST)
+		return nullptr;
 
-	return m_currentScene;
+	auto streamingVideoEncodersList = streamingVideoEncoders->GetList();
+
+	// TODO: In the future we want to support multiple encoders per canvas
+	if (streamingVideoEncodersList->GetSize() != 1)
+		return nullptr;
+
+	std::string streamingVideoEncoderId;
+	obs_data_t *streamingVideoEncoderSettings;
+	obs_data_t *streamingVideoEncoderHotkeyData = nullptr;
+
+	// For each encoder
+	{
+		auto encoderRoot = streamingVideoEncodersList->GetDictionary(0);
+
+		if (!encoderRoot->HasKey("id") ||
+		    encoderRoot->GetType("id") != VTYPE_STRING)
+			return nullptr;
+
+		if (!encoderRoot->HasKey("settings") ||
+		    encoderRoot->GetType("settings") != VTYPE_DICTIONARY)
+			return nullptr;
+
+		streamingVideoEncoderId = encoderRoot->GetString("id");
+
+		streamingVideoEncoderSettings = obs_data_create_from_json(
+			CefWriteJSON(encoderRoot->GetValue("settings"),
+				     JSON_WRITER_DEFAULT)
+				.c_str());
+	}
+
+	std::exception_ptr exception = nullptr;
+	std::shared_ptr<StreamElementsVideoCompositionBase> result = nullptr;
+
+	try {
+		result = Create(id, name, width, height,
+				streamingVideoEncoderId,
+				streamingVideoEncoderSettings,
+				streamingVideoEncoderHotkeyData);
+	} catch(...) {
+		result = nullptr;
+
+		exception = std::current_exception();
+	}
+
+	obs_data_release(streamingVideoEncoderSettings);
+	if (streamingVideoEncoderHotkeyData)
+		obs_data_release(streamingVideoEncoderHotkeyData);
+
+	if (exception)
+		std::rethrow_exception(exception);
+
+	return result;
 }
