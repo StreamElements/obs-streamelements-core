@@ -19,6 +19,9 @@ public:
 	void RemoveCompositionsByIds(
 		CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output);
 
+	void SerializeAvailableEncoderClasses(obs_encoder_type type,
+					CefRefPtr<CefValue> &output);
+
 public:
 	std::shared_ptr<StreamElementsVideoCompositionBase> GetObsNativeVideoComposition()
 	{

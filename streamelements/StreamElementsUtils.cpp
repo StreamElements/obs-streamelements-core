@@ -3438,7 +3438,7 @@ CefRefPtr<CefValue> SerializeObsData(obs_data_t *data)
 }
 
 CefRefPtr<CefValue>
-SerializeObsEncoderProperties(std::string id, obs_data_t *settings = nullptr)
+SerializeObsEncoderProperties(std::string id, obs_data_t *settings)
 {
 	auto result = CefValue::Create();
 

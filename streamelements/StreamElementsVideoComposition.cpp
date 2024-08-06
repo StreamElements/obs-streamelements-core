@@ -4,26 +4,6 @@
 
 #include "StreamElementsUtils.hpp"
 
-static CefRefPtr<CefValue> SerializeObsEncoderProperties(std::string id, obs_data_t* settings = nullptr)
-{
-	auto result = CefValue::Create();
-
-	result->SetNull();
-
-	auto props = obs_get_encoder_properties(id.c_str());
-
-	if (props) {
-		if (settings)
-			obs_properties_apply_settings(props, settings);
-
-		SerializeObsProperties(props, result);
-
-		obs_properties_destroy(props);
-	}
-
-	return result;
-}
-
 static CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e)
 {
 	auto result = CefDictionaryValue::Create();
