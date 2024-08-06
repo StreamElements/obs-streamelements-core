@@ -3002,3 +3002,458 @@ bool SecureJoinPaths(std::string base, std::string subpath, std::string &result)
 
 	return true;
 }
+
+bool SerializeObsProperty(obs_property_t *prop, CefRefPtr<CefValue> &output)
+{
+	if (!prop)
+		return false;
+
+	if (!obs_property_visible(prop))
+		return false;
+
+	auto safe_str = [](const char *input) -> std::string {
+		if (!input)
+			return "";
+		else
+			return input;
+	};
+
+	CefRefPtr<CefDictionaryValue> root = CefDictionaryValue::Create();
+
+	obs_property_type type_id = obs_property_get_type(prop);
+	std::string dataType = "";
+	std::string controlType = "";
+	std::string controlMode = "";
+	std::string valueFormat = "";
+	std::string propDefault = "";
+
+	switch (type_id) {
+	case OBS_PROPERTY_BOOL:
+		dataType = "bool";
+		controlType = "checkbox";
+		controlMode = "";
+		break;
+
+	case OBS_PROPERTY_INT:
+		dataType = "integer";
+		controlType = "number";
+
+		switch (obs_property_int_type(prop)) {
+		case OBS_NUMBER_SCROLLER:
+			controlMode = "scroller";
+			break;
+		case OBS_NUMBER_SLIDER:
+			controlMode = "slider";
+			break;
+		default:
+			return false;
+		}
+		break;
+
+	case OBS_PROPERTY_FLOAT:
+		dataType = "float";
+		controlType = "number";
+
+		switch (obs_property_float_type(prop)) {
+		case OBS_NUMBER_SCROLLER:
+			controlMode = "scroller";
+			break;
+		case OBS_NUMBER_SLIDER:
+			controlMode = "slider";
+			break;
+		default:
+			return false;
+		}
+		break;
+
+	case OBS_PROPERTY_TEXT:
+		dataType = "string";
+		controlType = "text";
+		controlMode = "";
+
+		switch (obs_property_text_type(prop)) {
+		case OBS_TEXT_DEFAULT:
+			controlMode = "text";
+			break;
+		case OBS_TEXT_PASSWORD:
+			controlMode = "password";
+			break;
+		case OBS_TEXT_MULTILINE:
+			controlMode = "textarea";
+			break;
+		default:
+			return false;
+		}
+		break;
+
+	case OBS_PROPERTY_PATH:
+		dataType = "string";
+		controlType = "path";
+
+		switch (obs_property_path_type(prop)) {
+		case OBS_PATH_FILE:
+			controlMode = "open";
+			break;
+		case OBS_PATH_FILE_SAVE:
+			controlMode = "save";
+			break;
+		case OBS_PATH_DIRECTORY:
+			controlMode = "folder";
+			break;
+		default:
+			return false;
+		}
+
+		valueFormat = safe_str(obs_property_path_filter(prop));
+		propDefault = safe_str(obs_property_path_default_path(prop));
+		break;
+
+	case OBS_PROPERTY_LIST:
+		controlType = "select";
+
+		switch (obs_property_list_type(prop)) {
+		case OBS_COMBO_TYPE_EDITABLE:
+			controlMode = "dynamic";
+			break;
+		case OBS_COMBO_TYPE_LIST:
+			controlMode = "static";
+			break;
+		default:
+			return false;
+		}
+
+		switch (obs_property_list_format(prop)) {
+		case OBS_COMBO_FORMAT_INT:
+			dataType = "integer";
+			break;
+		case OBS_COMBO_FORMAT_FLOAT:
+			dataType = "float";
+			break;
+		case OBS_COMBO_FORMAT_STRING:
+			dataType = "string";
+			break;
+		default:
+			return false;
+		}
+		break;
+
+	case OBS_PROPERTY_COLOR:
+		dataType = "string";
+		controlType = "text";
+		controlMode = "color";
+		break;
+
+	case OBS_PROPERTY_BUTTON:
+		return false;
+
+	case OBS_PROPERTY_FONT:
+		dataType = "font";
+		controlType = "font";
+		controlMode = "";
+		break;
+
+	case OBS_PROPERTY_EDITABLE_LIST:
+		dataType = "array";
+		controlType = "list";
+		controlMode = "dynamic";
+		valueFormat = safe_str(obs_property_editable_list_filter(prop));
+		propDefault =
+			safe_str(obs_property_editable_list_default_path(prop));
+		break;
+
+	case OBS_PROPERTY_FRAME_RATE:
+		dataType = "frame_rate";
+		controlType = "frame_rate";
+		controlMode = "";
+		break;
+
+	case OBS_PROPERTY_GROUP:
+		dataType = "group";
+		controlType = "group";
+
+		switch (obs_property_group_type(prop)) {
+		case OBS_GROUP_NORMAL:
+			controlMode = "normal";
+			break;
+
+		case OBS_GROUP_CHECKABLE:
+			controlMode = "checkable";
+			break;
+
+		default:
+			return false;
+		}
+		break;
+
+	default:
+		return false;
+	}
+
+	root->SetString("name", obs_property_name(prop));
+	root->SetString("label", safe_str(obs_property_description(prop)));
+	root->SetString("description",
+			safe_str(obs_property_long_description(prop)));
+	root->SetString("dataType", dataType);
+	root->SetString("controlType", controlType);
+
+	if (controlMode.size())
+		root->SetString("controlMode", controlMode);
+
+	if (propDefault.size())
+		root->SetString("defaultValue", propDefault);
+
+	if (valueFormat.size())
+		root->SetString("valueFormat", valueFormat);
+
+	if (type_id == OBS_PROPERTY_LIST) {
+		const size_t count = obs_property_list_item_count(prop);
+		const obs_combo_format comboFormat =
+			obs_property_list_format(prop);
+
+		CefRefPtr<CefListValue> items = CefListValue::Create();
+
+		for (size_t index = 0; index < count; ++index) {
+			CefRefPtr<CefDictionaryValue> item =
+				CefDictionaryValue::Create();
+
+			item->SetString("name",
+					safe_str(obs_property_list_item_name(
+						prop, index)));
+
+			item->SetBool("enabled",
+				      !obs_property_list_item_disabled(prop,
+								       index));
+
+			switch (comboFormat) {
+			case OBS_COMBO_FORMAT_INT:
+				item->SetInt("value",
+					     obs_property_list_item_int(prop,
+									index));
+				break;
+			case OBS_COMBO_FORMAT_FLOAT:
+				item->SetDouble("value",
+						obs_property_list_item_float(
+							prop, index));
+				break;
+			case OBS_COMBO_FORMAT_STRING:
+				item->SetString(
+					"value",
+					safe_str(obs_property_list_item_string(
+						prop, index)));
+				break;
+			default:
+				continue;
+			}
+
+			items->SetDictionary(items->GetSize(), item);
+		}
+
+		root->SetList("items", items);
+	} else if (type_id == OBS_PROPERTY_EDITABLE_LIST) {
+		/* Nothing to do */
+	} else if (type_id == OBS_GROUP_NORMAL) {
+		obs_properties_t *props = obs_property_group_content(
+			prop); // Does not increment refcount
+
+		if (props) {
+			CefRefPtr<CefListValue> items = CefListValue::Create();
+
+			obs_property_t *itemProp = obs_properties_first(props);
+
+			do {
+				if (!itemProp)
+					break;
+
+				CefRefPtr<CefValue> item = CefValue::Create();
+
+				if (SerializeObsProperty(itemProp, item)) {
+					items->SetValue(items->GetSize(), item);
+				}
+			} while (obs_property_next(&prop));
+
+			root->SetList("items", items);
+		}
+	}
+
+	output->SetDictionary(root);
+
+	return true;
+}
+
+bool SerializeObsProperties(obs_properties_t *props,
+			    CefRefPtr<CefValue> &output)
+{
+	auto list = CefListValue::Create();
+
+	obs_property_t *prop = obs_properties_first(props);
+
+	do {
+		if (!prop)
+			break;
+
+		CefRefPtr<CefValue> item = CefValue::Create();
+
+		if (SerializeObsProperty(prop, item)) {
+			list->SetValue(list->GetSize(), item);
+		}
+	} while (obs_property_next(&prop));
+
+	output->SetList(list);
+
+	return true;
+}
+
+
+bool DeserializeObsData(CefRefPtr<CefValue> input, obs_data_t *data)
+{
+	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
+		return false;
+
+	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
+
+	CefDictionaryValue::KeyList keys;
+
+	if (!d->GetKeys(keys))
+		return false;
+
+	for (std::string key : keys) {
+		CefRefPtr<CefValue> v = d->GetValue(key);
+
+		if (v->GetType() == VTYPE_STRING)
+			obs_data_set_string(data, key.c_str(),
+					    v->GetString().ToString().c_str());
+		else if (v->GetType() == VTYPE_INT)
+			obs_data_set_int(data, key.c_str(), v->GetInt());
+		else if (v->GetType() == VTYPE_DOUBLE)
+			obs_data_set_double(data, key.c_str(), v->GetDouble());
+		else if (v->GetType() == VTYPE_BOOL)
+			obs_data_set_bool(data, key.c_str(), v->GetBool());
+		else if (v->GetType() == VTYPE_DICTIONARY) {
+			obs_data_t *obj = obs_data_create_from_json(
+				CefWriteJSON(v, JSON_WRITER_DEFAULT)
+					.ToString()
+					.c_str());
+
+			obs_data_set_obj(data, key.c_str(), obj);
+
+			obs_data_release(obj);
+		} else if (v->GetType() == VTYPE_LIST) {
+			CefRefPtr<CefListValue> list = v->GetList();
+
+			obs_data_array_t *array = obs_data_array_create();
+
+			for (size_t index = 0; index < list->GetSize();
+			     ++index) {
+				obs_data_t *obj = obs_data_create_from_json(
+					CefWriteJSON(v, JSON_WRITER_DEFAULT)
+						.ToString()
+						.c_str());
+
+				obs_data_array_push_back(array, obj);
+
+				obs_data_release(obj);
+			}
+
+			obs_data_set_array(data, key.c_str(), array);
+
+			obs_data_array_release(array);
+		} else {
+			/* Unexpected data type */
+			return false;
+		}
+	}
+
+	return true;
+}
+
+CefRefPtr<CefValue> SerializeObsData(obs_data_t *data)
+{
+	CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+
+	for (obs_data_item_t *item = obs_data_first(data); item;
+	     obs_data_item_next(&item)) {
+		enum obs_data_type type = obs_data_item_gettype(item);
+		const char *name = obs_data_item_get_name(item);
+
+		if (!name)
+			continue;
+
+		if (type == OBS_DATA_STRING) {
+			if (obs_data_item_has_user_value(item) ||
+			    obs_data_item_has_default_value(item)) {
+				const char *str =
+					obs_data_item_get_string(item);
+
+				if (str) {
+					d->SetString(name, str);
+				} else {
+					d->SetNull(name);
+				}
+			} else {
+				d->SetNull(name);
+			}
+		} else if (type == OBS_DATA_NUMBER) {
+			if (obs_data_item_numtype(item) == OBS_DATA_NUM_INT) {
+				d->SetInt(name, obs_data_item_get_int(item));
+			} else if (obs_data_item_numtype(item) ==
+				   OBS_DATA_NUM_DOUBLE) {
+				d->SetDouble(name,
+					     obs_data_item_get_double(item));
+			}
+		} else if (type == OBS_DATA_BOOLEAN)
+			d->SetBool(name, obs_data_item_get_bool(item));
+		else if (type == OBS_DATA_OBJECT) {
+			obs_data_t *obj = obs_data_item_get_obj(item);
+			d->SetValue(name, SerializeObsData(obj));
+			obs_data_release(obj);
+		} else if (type == OBS_DATA_ARRAY) {
+			CefRefPtr<CefListValue> list = CefListValue::Create();
+
+			obs_data_array_t *array = obs_data_item_get_array(item);
+			size_t count = obs_data_array_count(array);
+
+			for (size_t idx = 0; idx < count; idx++) {
+				obs_data_t *sub_item =
+					obs_data_array_item(array, idx);
+
+				list->SetValue(list->GetSize(),
+					       SerializeObsData(sub_item));
+
+				obs_data_release(sub_item);
+			}
+
+			obs_data_array_release(array);
+		}
+	}
+
+	CefRefPtr<CefValue> result = CefValue::Create();
+	result->SetDictionary(d);
+
+	/*
+	return CefParseJSON(obs_data_get_json(data),
+			JSON_PARSER_ALLOW_TRAILING_COMMAS);
+	*/
+
+	return result;
+}
+
+CefRefPtr<CefValue>
+SerializeObsEncoderProperties(std::string id, obs_data_t *settings = nullptr)
+{
+	auto result = CefValue::Create();
+
+	result->SetNull();
+
+	auto props = obs_get_encoder_properties(id.c_str());
+
+	if (props) {
+		if (settings)
+			obs_properties_apply_settings(props, settings);
+
+		SerializeObsProperties(props, result);
+
+		obs_properties_destroy(props);
+	}
+
+	return result;
+}

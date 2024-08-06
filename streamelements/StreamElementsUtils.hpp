@@ -406,3 +406,15 @@ void DispatchClientJSEvent(std::string event, std::string eventArgsJson);
 
 bool SecureJoinPaths(std::string base, std::string subpath,
 			    std::string &result);
+
+/* ========================================================= */
+
+bool SerializeObsProperty(obs_property_t *prop, CefRefPtr<CefValue> &output);
+bool SerializeObsProperties(obs_properties_t *props,
+			    CefRefPtr<CefValue> &output);
+
+CefRefPtr<CefValue> SerializeObsData(obs_data_t *data);
+bool DeserializeObsData(CefRefPtr<CefValue> input, obs_data_t *data);
+
+CefRefPtr<CefValue>
+SerializeObsEncoderProperties(std::string id, obs_data_t *settings = nullptr);

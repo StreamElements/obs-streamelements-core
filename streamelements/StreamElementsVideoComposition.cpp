@@ -4,18 +4,48 @@
 
 #include "StreamElementsUtils.hpp"
 
+static CefRefPtr<CefValue> SerializeObsEncoderProperties(std::string id, obs_data_t* settings = nullptr)
+{
+	auto result = CefValue::Create();
+
+	result->SetNull();
+
+	auto props = obs_get_encoder_properties(id.c_str());
+
+	if (props) {
+		if (settings)
+			obs_properties_apply_settings(props, settings);
+
+		SerializeObsProperties(props, result);
+
+		obs_properties_destroy(props);
+	}
+
+	return result;
+}
+
 static CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e)
 {
 	auto result = CefDictionaryValue::Create();
 
-	result->SetString("id", obs_encoder_get_id(e));
+	result->SetString("class", obs_encoder_get_id(e));
+	result->SetString("name", obs_encoder_get_name(e));
+	result->SetString("displayName",
+			  obs_encoder_get_display_name(obs_encoder_get_id(e)));
 	result->SetString("codec", obs_encoder_get_codec(e));
+
+	if (obs_encoder_get_type(e) == OBS_ENCODER_VIDEO) {
+		result->SetInt("width", obs_encoder_get_width(e));
+		result->SetInt("height", obs_encoder_get_height(e));
+	}
 
 	auto settings = obs_encoder_get_settings(e);
 
 	result->SetValue("settings",
 			 CefParseJSON(obs_data_get_json(settings),
 				      JSON_PARSER_ALLOW_TRAILING_COMMAS));
+
+	result->SetValue("properties", SerializeObsEncoderProperties(obs_encoder_get_id(e), settings));
 
 	obs_data_release(settings);
 
@@ -448,20 +478,24 @@ StreamElementsCustomVideoComposition::Create(
 	{
 		auto encoderRoot = streamingVideoEncodersList->GetDictionary(0);
 
-		if (!encoderRoot->HasKey("id") ||
-		    encoderRoot->GetType("id") != VTYPE_STRING)
+		if (!encoderRoot->HasKey("class") ||
+		    encoderRoot->GetType("class") != VTYPE_STRING)
 			return nullptr;
 
 		if (!encoderRoot->HasKey("settings") ||
 		    encoderRoot->GetType("settings") != VTYPE_DICTIONARY)
 			return nullptr;
 
-		streamingVideoEncoderId = encoderRoot->GetString("id");
+		streamingVideoEncoderId = encoderRoot->GetString("class");
 
-		streamingVideoEncoderSettings = obs_data_create_from_json(
-			CefWriteJSON(encoderRoot->GetValue("settings"),
-				     JSON_WRITER_DEFAULT)
-				.c_str());
+		streamingVideoEncoderSettings = obs_data_create();
+
+		if (!DeserializeObsData(encoderRoot->GetValue("settings"),
+					streamingVideoEncoderSettings)) {
+			obs_data_release(streamingVideoEncoderSettings);
+
+			return nullptr;
+		}
 	}
 
 	std::exception_ptr exception = nullptr;
