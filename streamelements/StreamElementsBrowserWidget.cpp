@@ -233,6 +233,8 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 			std::make_shared<StreamElementsApiMessageHandler>("unknown");
 	}
 
+	m_requestedApiMessageHandler->SetBrowserWidget(this);
+
 	uint16_t port = StreamElementsGlobalStateManager::GetInstance()
 				->GetWebsocketApiServer()
 				->GetPort();
@@ -408,6 +410,8 @@ StreamElementsBrowserWidget::GetWidgetByMessageTargetId(std::string target)
 StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 {
 	std::lock_guard<decltype(s_mutex)> guard(s_mutex);
+
+	m_requestedApiMessageHandler->SetBrowserWidget(nullptr);
 
 	StreamElementsGlobalStateManager::GetInstance()
 		->GetWebsocketApiServer()
