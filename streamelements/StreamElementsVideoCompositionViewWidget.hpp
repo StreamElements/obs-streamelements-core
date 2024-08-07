@@ -273,6 +273,12 @@ public:
 		m_worldHorizontalRulersY.push_back(y);
 	}
 
+	std::shared_ptr<StreamElementsVideoCompositionBase>
+	GetVideoComposition()
+	{
+		return m_videoComposition;
+	}
+
 	obs_scene_t *GetCurrentScene()
 	{
 		return m_videoComposition->GetCurrentScene();
