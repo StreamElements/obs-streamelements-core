@@ -40,10 +40,12 @@ public:
 		RegisterIncomingApiCallHandlers();
 	}
 
+	/*
 	virtual std::shared_ptr<StreamElementsApiMessageHandler> Clone() override
 	{
 		return std::make_shared<StreamElementsDialogApiMessageHandler>(m_dialog, m_containerType);
 	}
+	*/
 
 private:
 	StreamElementsBrowserDialog* m_dialog;

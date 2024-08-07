@@ -6,6 +6,8 @@
 #include <functional>
 #include <memory>
 
+class StreamElementsBrowserWidget;
+
 class StreamElementsApiMessageHandlerRuntimeStatus {
 public:
 	bool m_running = true;
@@ -15,7 +17,8 @@ public:
 	}
 };
 
-class StreamElementsApiMessageHandler {
+class StreamElementsApiMessageHandler : public std::enable_shared_from_this <
+					StreamElementsApiMessageHandler> {
 public:
 
 private:
@@ -25,6 +28,7 @@ private:
 
 protected:
 	std::string m_containerType;
+	StreamElementsBrowserWidget *m_browserWidget = nullptr;
 
 public:
 	StreamElementsApiMessageHandler(std::string containerType)
@@ -32,8 +36,19 @@ public:
 	{
 		RegisterIncomingApiCallHandlers();
 	}
+
 	virtual ~StreamElementsApiMessageHandler() {
 		m_runtimeStatus->m_running = false;
+	}
+
+	//
+	// Called by StreamElementsBrowserWidget ctor/dtor to set/unset m_browserWidget
+	//
+	// This is necessary for implementing API calls which impact the browser widget itself.
+	//
+	void SetBrowserWidget(StreamElementsBrowserWidget* browserWidget)
+	{
+		m_browserWidget = browserWidget;
 	}
 
 public:
@@ -49,7 +64,7 @@ public:
 
 public:
 	virtual std::shared_ptr<StreamElementsApiMessageHandler> Clone() {
-		return std::make_shared<StreamElementsApiMessageHandler>(m_containerType);
+		return shared_from_this();
 	}
 
 protected:
