@@ -18,6 +18,9 @@
 
 #include "StreamElementsApiMessageHandler.hpp"
 
+#include "StreamElementsVideoComposition.hpp"
+#include "StreamElementsVideoCompositionViewWidget.hpp"
+
 #include <QtWidgets>
 
 #ifdef APPLE
@@ -45,6 +48,9 @@ private:
 
 	bool m_isIncognito = false;
 
+	StreamElementsVideoCompositionViewWidget
+		*m_activeVideoCompositionViewWidget = nullptr;
+
 public:
 	StreamElementsBrowserWidget(
 		QWidget* parent,
@@ -68,6 +74,16 @@ public:
 
 	void BrowserReload(bool ignoreCache);
 	void BrowserLoadInitialPage(const char* const url = nullptr);
+
+	void SetVideoCompositionView(
+		std::shared_ptr<StreamElementsVideoCompositionBase>,
+		QRect &coords);
+	void RemoveVideoCompositionView();
+
+	void DeserializeVideoCompositionView(CefRefPtr<CefValue> input,
+					     CefRefPtr<CefValue> &output);
+
+	void SerializeVideoCompositionView(CefRefPtr<CefValue> &output);
 
 private:
 	std::string GetInitialPageURLInternal();
