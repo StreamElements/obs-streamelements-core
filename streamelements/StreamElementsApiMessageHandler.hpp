@@ -51,6 +51,11 @@ public:
 		m_browserWidget = browserWidget;
 	}
 
+	StreamElementsBrowserWidget* GetBrowserWidget()
+	{
+		return m_browserWidget;
+	}
+
 public:
 	virtual bool
 	OnProcessMessageReceived(std::string source,

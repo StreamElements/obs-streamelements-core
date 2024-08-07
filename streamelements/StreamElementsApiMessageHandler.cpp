@@ -2470,6 +2470,46 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("removeVideoCompositionViewOverlay");
+	{
+		auto browserWidget = self->GetBrowserWidget();
+
+		if (browserWidget) {
+			browserWidget->RemoveVideoCompositionView();
+
+			result->SetBool(true);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getVideoCompositionViewOverlayProperties");
+	{
+		result->SetNull();
+
+		auto browserWidget = self->GetBrowserWidget();
+
+		if (browserWidget) {
+			browserWidget->SerializeVideoCompositionView(result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setVideoCompositionViewOverlayProperties");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			auto browserWidget = self->GetBrowserWidget();
+
+			if (browserWidget) {
+				browserWidget->DeserializeVideoCompositionView(
+					args->GetValue(0),
+					result);
+			}
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("crashProgram");
 	{
 		QtPostTask([]() -> void {
