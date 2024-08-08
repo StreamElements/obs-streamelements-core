@@ -15,6 +15,8 @@
 #include <QHBoxLayout>
 #include <QPushButton>
 
+#include "StreamElementsGlobalStateManager.hpp"
+
 #ifndef WIN32
 #define stricmp strcasecmp
 #endif
@@ -1316,6 +1318,33 @@ static void handle_source_remove(void *data, calldata_t *cd)
 
 ///////////////////////////////////////////////////////////////////////
 
+static std::shared_ptr<StreamElementsVideoCompositionBase>
+GetVideoComposition(CefRefPtr<CefValue> input)
+{
+	auto result = StreamElementsGlobalStateManager::GetInstance()
+			      ->GetVideoCompositionManager()
+			      ->GetObsNativeVideoComposition();
+
+	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
+		return result;
+
+	auto root = input->GetDictionary();
+
+	if (!root->HasKey("videoCompositionId") ||
+	    root->GetType("videoCompositionId") != VTYPE_STRING)
+		return result;
+
+	std::string videoCompositionId = root->GetString("videoCompositionId");
+
+	result = StreamElementsGlobalStateManager::GetInstance()
+			 ->GetVideoCompositionManager()
+			 ->GetVideoCompositionById(videoCompositionId);
+
+	return result;
+}
+
+///////////////////////////////////////////////////////////////////////
+
 StreamElementsObsSceneManager::StreamElementsObsSceneManager(QMainWindow *parent)
 	: m_parent(parent)
 {
@@ -2105,13 +2134,12 @@ void StreamElementsObsSceneManager::SerializeObsCurrentScene(
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
-	obs_source_t *scene = obs_frontend_get_current_scene();
+	auto videoComposition = StreamElementsGlobalStateManager::GetInstance()
+					->GetVideoCompositionManager()
+					->GetObsNativeVideoComposition();
 
-	if (scene) {
-		SerializeObsScene(scene, output);
-
-		obs_source_release(scene);
-	}
+	videoComposition->SerializeScene(videoComposition->GetCurrentScene(),
+					 output);
 }
 
 void StreamElementsObsSceneManager::SerializeObsScenes(
@@ -2139,55 +2167,6 @@ void StreamElementsObsSceneManager::SerializeObsScenes(
 	obs_frontend_source_list_free(&scenes);
 
 	output->SetList(list);
-}
-
-std::string
-StreamElementsObsSceneManager::ObsGetUniqueSceneName(std::string name)
-{
-	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
-
-	std::string result(name);
-
-	struct obs_frontend_source_list scenes = {};
-
-	obs_frontend_get_scenes(&scenes);
-
-	auto hasSceneName = [&](std::string name) -> bool {
-		for (size_t idx = 0; idx < scenes.sources.num; ++idx) {
-			/* Get the scene (a scene is a source) */
-			obs_source_t *scene = scenes.sources.array[idx];
-
-			if (stricmp(name.c_str(), obs_source_get_name(scene)) ==
-			    0)
-				return true;
-		}
-
-		return false;
-	};
-
-	int sequence = 0;
-	bool isUnique = false;
-
-	while (!isUnique) {
-		isUnique = true;
-
-		if (hasSceneName(result)) {
-			isUnique = false;
-		}
-
-		if (!isUnique) {
-			++sequence;
-
-			char buf[32];
-			sprintf(buf, "%d", sequence);
-			result = name + " ";
-			result += buf;
-		}
-	}
-
-	obs_frontend_source_list_free(&scenes);
-
-	return result;
 }
 
 std::string
@@ -2246,13 +2225,14 @@ void StreamElementsObsSceneManager::DeserializeObsScene(
 
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
-	std::string name = ObsGetUniqueSceneName(d->GetString("name"));
+	auto videoComposition = GetVideoComposition(input);
+	if (!videoComposition.get())
+		return;
 
-	obs_scene_t *scene = obs_scene_create(name.c_str());
-	//QApplication::processEvents();
+	obs_scene_t *scene = videoComposition->AddScene(d->GetString("name"));
 
 	if (activate) {
-		obs_frontend_set_current_scene(obs_scene_get_source(scene));
+		videoComposition->SetCurrentScene(scene);
 	}
 
 	SerializeObsScene(scene, output);
@@ -2275,30 +2255,19 @@ void StreamElementsObsSceneManager::SetCurrentObsSceneById(
 
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
-	const void *sceneIdPointer = GetPointerFromId(id.c_str());
-
-	if (!sceneIdPointer)
+	auto videoComposition = GetVideoComposition(input);
+	if (!videoComposition.get())
 		return;
 
-	struct obs_frontend_source_list scenes = {};
+	auto scene = videoComposition->GetSceneById(id);
 
-	obs_frontend_get_scenes(&scenes);
+	if (!scene)
+		return;
 
-	for (size_t idx = 0; idx < scenes.sources.num; ++idx) {
-		/* Get the scene (a scene is a source) */
-		obs_source_t *scene = scenes.sources.array[idx];
+	if (!videoComposition->SetCurrentScene(scene))
+		return;
 
-		if (sceneIdPointer == (void *)scene) {
-			obs_frontend_set_current_scene(scene);
-			//QApplication::processEvents();
-
-			SerializeObsScene(scene, output);
-
-			break;
-		}
-	}
-
-	obs_frontend_source_list_free(&scenes);
+	SerializeObsScene(scene, output);
 }
 
 void StreamElementsObsSceneManager::RemoveObsScenesByIds(

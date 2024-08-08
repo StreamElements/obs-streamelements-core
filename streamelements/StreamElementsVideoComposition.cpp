@@ -81,6 +81,52 @@ static void SerializeObsEncoders(StreamElementsVideoCompositionBase* composition
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// Composition base
+////////////////////////////////////////////////////////////////////////////////
+
+std::string
+StreamElementsVideoCompositionBase::GetUniqueSceneName(std::string name)
+{
+	std::string result(name);
+
+	std::vector<obs_scene_t *> scenes;
+	GetAllScenes(scenes);
+
+	auto hasSceneName = [&](std::string name) -> bool {
+		for (auto scene : scenes) {
+			if (stricmp(name.c_str(),
+				    obs_source_get_name(
+					    obs_scene_get_source(scene))) == 0)
+				return true;
+		}
+
+		return false;
+	};
+
+	int sequence = 0;
+	bool isUnique = false;
+
+	while (!isUnique) {
+		isUnique = true;
+
+		if (hasSceneName(result)) {
+			isUnique = false;
+		}
+
+		if (!isUnique) {
+			++sequence;
+
+			char buf[32];
+			sprintf(buf, "%d", sequence);
+			result = name + " ";
+			result += buf;
+		}
+	}
+
+	return result;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // OBS Main Composition
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -155,11 +201,10 @@ StreamElementsObsNativeVideoComposition::GetCompositionInfo(
 		shared_from_this(), listener);
 }
 
-void StreamElementsObsNativeVideoComposition::AddScene(obs_scene_t* scene)
+obs_scene_t *
+StreamElementsObsNativeVideoComposition::AddScene(std::string requestName)
 {
-	// The act of creating a non-private scene is enough to add it to OBS frontend
-	//
-	// TODO: Verify
+	return obs_scene_create(GetUniqueSceneName(requestName).c_str());
 }
 
 bool StreamElementsObsNativeVideoComposition::RemoveScene(
@@ -183,6 +228,9 @@ bool StreamElementsObsNativeVideoComposition::RemoveScene(
 bool StreamElementsObsNativeVideoComposition::SetCurrentScene(
 	obs_scene_t* scene)
 {
+	if (!scene)
+		return false;
+
 	std::vector<obs_scene_t *> scenes;
 
 	GetAllScenes(scenes);
@@ -611,16 +659,16 @@ void StreamElementsCustomVideoComposition::GetAllScenes(
 	}
 }
 
-void StreamElementsCustomVideoComposition::AddScene(obs_scene_t* scene)
+obs_scene_t *
+StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
-	for (auto item : m_scenes) {
-		if (scene == item)
-			return;
-	}
+	auto scene = obs_scene_create_private(GetUniqueSceneName(requestName).c_str());
 
 	m_scenes.push_back(scene);
+
+	return scene;
 }
 
 bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
@@ -640,6 +688,9 @@ bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
 
 bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 {
+	if (!scene)
+		return false;
+
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
 	for (auto item : m_scenes) {

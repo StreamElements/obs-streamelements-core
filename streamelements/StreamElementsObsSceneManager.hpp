@@ -146,8 +146,6 @@ protected:
 
 	std::string ObsGetUniqueSourceName(std::string name);
 
-	std::string ObsGetUniqueSceneName(std::string name);
-
 	std::string ObsGetUniqueSceneCollectionName(std::string name);
 
 	std::string ObsSetUniqueSourceName(obs_source_t *source,
