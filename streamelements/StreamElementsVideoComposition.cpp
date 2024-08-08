@@ -155,6 +155,77 @@ StreamElementsObsNativeVideoComposition::GetCompositionInfo(
 		shared_from_this(), listener);
 }
 
+void StreamElementsObsNativeVideoComposition::AddScene(obs_scene_t* scene)
+{
+	// The act of creating a non-private scene is enough to add it to OBS frontend
+	//
+	// TODO: Verify
+}
+
+bool StreamElementsObsNativeVideoComposition::RemoveScene(
+	obs_scene_t *sceneToRemove)
+{
+	std::vector<obs_scene_t *> scenes;
+
+	GetAllScenes(scenes);
+
+	for (auto item : scenes) {
+		if (item == sceneToRemove) {
+			obs_source_remove(obs_scene_get_source(sceneToRemove));
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool StreamElementsObsNativeVideoComposition::SetCurrentScene(
+	obs_scene_t* scene)
+{
+	std::vector<obs_scene_t *> scenes;
+
+	GetAllScenes(scenes);
+
+	for (auto item : scenes) {
+		if (item == scene) {
+			obs_frontend_set_current_scene(
+				obs_scene_get_source(scene));
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void StreamElementsObsNativeVideoComposition::GetAllScenes(
+	std::vector<obs_scene_t*>& result)
+{
+	result.clear();
+
+	struct obs_frontend_source_list frontendScenes = {};
+
+	obs_frontend_get_scenes(&frontendScenes);
+
+	size_t removedCount = 0;
+
+	for (size_t idx = 0;
+	     idx < frontendScenes.sources.num && removedCount + 1 < frontendScenes.sources.num;
+	     ++idx) {
+		/* Get the scene (a scene is a source) */
+		obs_source_t *source = frontendScenes.sources.array[idx];
+
+		auto scene = obs_scene_from_source(source);
+
+		if (scene) {
+			result.push_back(scene);
+		}
+	}
+
+	obs_frontend_source_list_free(&frontendScenes);
+}
+
 void StreamElementsObsNativeVideoComposition::SerializeComposition(
 	CefRefPtr<CefValue> &output)
 {
@@ -526,4 +597,63 @@ StreamElementsCustomVideoComposition::Create(
 		std::rethrow_exception(exception);
 
 	return result;
+}
+
+void StreamElementsCustomVideoComposition::GetAllScenes(
+	std::vector<obs_scene_t *> &result)
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	result.clear();
+
+	for (auto item : m_scenes) {
+		result.push_back(item);
+	}
+}
+
+void StreamElementsCustomVideoComposition::AddScene(obs_scene_t* scene)
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	for (auto item : m_scenes) {
+		if (scene == item)
+			return;
+	}
+
+	m_scenes.push_back(scene);
+}
+
+bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	for (auto it = m_scenes.begin(); it != m_scenes.end(); ++it) {
+		if (scene == *it) {
+			m_scenes.erase(it);
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	for (auto item : m_scenes) {
+		if (scene == item) {
+			m_currentScene = scene;
+
+			obs_transition_start(
+				m_transition, OBS_TRANSITION_MODE_AUTO,
+				obs_frontend_get_transition_duration(), // TODO: We want to have our own transition duration
+				obs_scene_get_source(m_currentScene));
+
+			return true;
+		}
+	}
+
+	return false;
 }

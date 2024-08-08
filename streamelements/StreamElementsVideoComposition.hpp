@@ -107,6 +107,10 @@ public:
 	virtual void SerializeComposition(CefRefPtr<CefValue> &output) = 0;
 
 	virtual obs_scene_t *GetCurrentScene() = 0;
+	virtual void AddScene(obs_scene_t *scene) = 0;
+	virtual bool RemoveScene(obs_scene_t *scene) = 0;
+	virtual bool SetCurrentScene(obs_scene_t *scene) = 0;
+	virtual void GetAllScenes(std::vector<obs_scene_t *> &scenes) = 0;
 };
 
 // OBS Main Composition
@@ -145,6 +149,11 @@ public:
 	virtual void SerializeComposition(CefRefPtr<CefValue> &output);
 
 	virtual obs_scene_t *GetCurrentScene();
+
+	virtual void AddScene(obs_scene_t *scene);
+	virtual bool RemoveScene(obs_scene_t *scene);
+	virtual bool SetCurrentScene(obs_scene_t *scene);
+	virtual void GetAllScenes(std::vector<obs_scene_t *> &scenes);
 };
 
 // Custom Composition
@@ -204,4 +213,9 @@ public:
 	virtual void SerializeComposition(CefRefPtr<CefValue> &output);
 
 	virtual obs_scene_t *GetCurrentScene();
+
+	virtual void AddScene(obs_scene_t *scene);
+	virtual bool RemoveScene(obs_scene_t *scene);
+	virtual bool SetCurrentScene(obs_scene_t *scene);
+	virtual void GetAllScenes(std::vector<obs_scene_t *> &scenes);
 };
