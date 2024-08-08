@@ -3,6 +3,9 @@
 #include <obs.h>
 #include "cef-headers.hpp"
 
+#include "StreamElementsUtils.hpp"
+#include "StreamElementsScenesListWidgetManager.hpp"
+
 class StreamElementsCompositionEventListener {
 public:
 	StreamElementsCompositionEventListener() {}
@@ -103,11 +106,91 @@ public:
 	std::string GetId() { return m_id; }
 	std::string GetName() { return m_name; }
 
+	std::string GetUniqueSceneName(std::string name);
+
+	obs_scene_t* GetSceneById(std::string id) {
+		std::vector<obs_scene_t *> scenes;
+		GetAllScenes(scenes);
+
+		auto pointer = GetPointerFromId(id.c_str());
+
+		for (auto scene : scenes) {
+			if (pointer == (void *)scene ||
+			    pointer == (void *)obs_scene_get_source(scene))
+				return scene;
+		}
+
+		return nullptr;
+	}
+
+	bool SerializeScene(
+		std::string id,
+		CefRefPtr<CefValue>& result) {
+		return SerializeScene(GetSceneById(id), result);
+	}
+
+	bool SerializeScene(
+		obs_scene_t* scene,
+		CefRefPtr<CefValue>& result) {
+		result->SetNull();
+
+		if (!scene)
+			return false;
+
+		return SerializeScene(obs_scene_get_source(scene), result);
+	}
+
+	bool SerializeScene(obs_source_t* scene, CefRefPtr<CefValue>& result) {
+		result->SetNull();
+
+		if (!scene)
+			return false;
+
+		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+
+		d->SetString("id", GetIdFromPointer(scene));
+		d->SetString("videoCompositionId", GetId());
+		d->SetString("name", obs_source_get_name(scene));
+
+		d->SetBool("active",
+			   GetCurrentScene() == obs_scene_from_source(scene));
+
+#if SE_ENABLE_SCENE_ICONS
+		d->SetValue("icon",
+			    StreamElementsScenesListWidgetManager::GetSceneIcon(
+				    scene)
+				    ->Copy());
+#endif
+
+		d->SetValue("auxiliaryData",
+			    StreamElementsScenesListWidgetManager::
+				    GetSceneAuxiliaryData(scene)
+					    ->Copy());
+
+#if SE_ENABLE_SCENE_DEFAULT_ACTION
+		d->SetValue("defaultAction",
+			    StreamElementsScenesListWidgetManager::
+				    GetSceneDefaultAction(scene)
+					    ->Copy());
+#endif
+
+#if SE_ENABLE_SCENE_CONTEXT_MENU
+		d->SetValue("contextMenu",
+			    StreamElementsScenesListWidgetManager::
+				    GetSceneContextMenu(scene)
+					    ->Copy());
+#endif
+
+		result->SetDictionary(d);
+
+		return true;
+	}
+
 public:
 	virtual void SerializeComposition(CefRefPtr<CefValue> &output) = 0;
 
 	virtual obs_scene_t *GetCurrentScene() = 0;
-	virtual void AddScene(obs_scene_t *scene) = 0;
+	virtual obs_scene_t *AddScene(std::string requestName) = 0;
 	virtual bool RemoveScene(obs_scene_t *scene) = 0;
 	virtual bool SetCurrentScene(obs_scene_t *scene) = 0;
 	virtual void GetAllScenes(std::vector<obs_scene_t *> &scenes) = 0;
@@ -150,7 +233,7 @@ public:
 
 	virtual obs_scene_t *GetCurrentScene();
 
-	virtual void AddScene(obs_scene_t *scene);
+	virtual obs_scene_t *AddScene(std::string requestName);
 	virtual bool RemoveScene(obs_scene_t *scene);
 	virtual bool SetCurrentScene(obs_scene_t *scene);
 	virtual void GetAllScenes(std::vector<obs_scene_t *> &scenes);
@@ -214,7 +297,7 @@ public:
 
 	virtual obs_scene_t *GetCurrentScene();
 
-	virtual void AddScene(obs_scene_t *scene);
+	virtual obs_scene_t *AddScene(std::string requestName);
 	virtual bool RemoveScene(obs_scene_t *scene);
 	virtual bool SetCurrentScene(obs_scene_t *scene);
 	virtual void GetAllScenes(std::vector<obs_scene_t *> &scenes);
