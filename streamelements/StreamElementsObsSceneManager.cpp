@@ -715,43 +715,19 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 	result->SetDictionary(root);
 }
 
-static void SerializeObsScene(obs_source_t *scene, CefRefPtr<CefValue> &result)
+static void SerializeObsScene(obs_source_t *sceneSource, CefRefPtr<CefValue> &result)
 {
-	CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+	result->SetNull();
 
-	d->SetString("id", GetIdFromPointer(scene));
-	d->SetString("name", obs_source_get_name(scene));
+	auto scene = obs_scene_from_source(sceneSource);
 
-	d->SetBool("active", is_active_scene(obs_scene_from_source(scene)));
+	auto videoComposition = StreamElementsGlobalStateManager::GetInstance()
+					->GetVideoCompositionManager()
+					->GetVideoCompositionByScene(scene);
+	if (!videoComposition.get())
+		return;
 
-	#if SE_ENABLE_SCENE_ICONS
-	d->SetValue("icon",
-		    StreamElementsScenesListWidgetManager::GetSceneIcon(scene)
-			    ->Copy());
-	#endif
-
-	d->SetValue(
-		"auxiliaryData",
-		StreamElementsScenesListWidgetManager::GetSceneAuxiliaryData(
-			scene)
-			->Copy());
-
-	#if SE_ENABLE_SCENE_DEFAULT_ACTION
-	d->SetValue(
-		"defaultAction",
-		StreamElementsScenesListWidgetManager::GetSceneDefaultAction(
-			scene)
-			->Copy());
-	#endif
-
-	#if SE_ENABLE_SCENE_CONTEXT_MENU
-	d->SetValue("contextMenu",
-		    StreamElementsScenesListWidgetManager::GetSceneContextMenu(
-			    scene)
-			    ->Copy());
-	#endif
-
-	result->SetDictionary(d);
+	videoComposition->SerializeScene(scene, result);
 }
 
 static void SerializeObsScene(obs_scene_t *scene, CefRefPtr<CefValue> &result)
@@ -950,11 +926,6 @@ static void dispatch_source_event(void *my_data, calldata_t *cd,
 	//});
 }
 
-static void add_scene_signals(obs_source_t *scene, void *data);
-static void add_scene_signals(obs_scene_t *scene, void *data);
-static void remove_scene_signals(obs_source_t *scene, void *data);
-static void remove_scene_signals(obs_scene_t *scene, void *data);
-
 static void handle_scene_item_transform(void *my_data, calldata_t *cd)
 {
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemTransformed",
@@ -1084,7 +1055,7 @@ static void handle_scene_item_add(void *my_data, calldata_t *cd)
 		sceneManager->Update();
 }
 
-static void remove_source_signals(obs_source_t *source, void *data)
+void remove_source_signals(obs_source_t *source, void *data)
 {
 	if (!source)
 		return;
@@ -1098,7 +1069,7 @@ static void remove_source_signals(obs_source_t *source, void *data)
 				  handle_scene_item_source_rename, data);
 }
 
-static void add_source_signals(obs_source_t *source, void *data)
+void add_source_signals(obs_source_t *source, void *data)
 {
 	auto handler = obs_source_get_signal_handler(source);
 
@@ -1109,7 +1080,7 @@ static void add_source_signals(obs_source_t *source, void *data)
 			       handle_scene_item_source_rename, data);
 }
 
-static void remove_scene_signals(obs_scene_t *scene, void *data)
+void remove_scene_signals(obs_scene_t *scene, void *data)
 {
 	if (!scene)
 		return;
@@ -1151,7 +1122,7 @@ static void remove_scene_signals(obs_scene_t *scene, void *data)
 	obs_leave_graphics();
 }
 
-static void remove_scene_signals(obs_source_t *sceneSource, void *data)
+void remove_scene_signals(obs_source_t *sceneSource, void *data)
 {
 	if (!sceneSource)
 		return;
@@ -1164,7 +1135,7 @@ static void remove_scene_signals(obs_source_t *sceneSource, void *data)
 	remove_scene_signals(scene, data);
 }
 
-static void add_scene_signals(obs_scene_t *scene, void *data)
+void add_scene_signals(obs_scene_t *scene, void *data)
 {
 	if (!scene)
 		return;
@@ -1203,7 +1174,7 @@ static void add_scene_signals(obs_scene_t *scene, void *data)
 	obs_leave_graphics();
 }
 
-static void add_scene_signals(obs_source_t *sceneSource, void *data)
+void add_scene_signals(obs_source_t *sceneSource, void *data)
 {
 	if (!sceneSource)
 		return;
