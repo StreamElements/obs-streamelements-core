@@ -1991,17 +1991,31 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAllScenes");
 	{
+		CefRefPtr<CefValue> input = CefValue::Create();
+
+		if (args->GetSize())
+			input = args->GetValue(0);
+		else
+			input->SetNull();
+
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetObsSceneManager()
-			->SerializeObsScenes(result);
+			->SerializeObsScenes(input, result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getCurrentScene");
 	{
+		CefRefPtr<CefValue> input = CefValue::Create();
+
+		if (args->GetSize())
+			input = args->GetValue(0);
+		else
+			input->SetNull();
+
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetObsSceneManager()
-			->SerializeObsCurrentScene(result);
+			->SerializeObsCurrentScene(input, result);
 	}
 	API_HANDLER_END();
 

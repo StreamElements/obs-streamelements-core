@@ -126,6 +126,77 @@ StreamElementsVideoCompositionBase::GetUniqueSceneName(std::string name)
 	return result;
 }
 
+bool StreamElementsVideoCompositionBase::SafeRemoveScene(
+	obs_scene_t *sceneToRemove)
+{
+	if (sceneToRemove == GetCurrentScene()) {
+		std::vector<obs_scene_t *> scenes;
+		GetAllScenes(scenes);
+
+		if (scenes.size() <= 1)
+			return false;
+
+		bool success = false;
+		// Change to first available scene
+		for (auto scene : scenes) {
+			if (scene != sceneToRemove) {
+				success = SetCurrentScene(scene);
+
+				if (success)
+					break;
+			}
+		}
+
+		if (!success)
+			return false;
+	}
+
+	return RemoveScene(sceneToRemove);
+}
+
+obs_sceneitem_t *
+StreamElementsVideoCompositionBase::GetSceneItemById(std::string id,
+						     bool addRef)
+{
+	if (!id.size())
+		return nullptr;
+
+	auto searchPtr = GetPointerFromId(id.c_str());
+
+	if (!searchPtr)
+		return nullptr;
+
+	std::vector<obs_scene_t *> scenes;
+	GetAllScenes(scenes);
+
+	obs_sceneitem_t *result = nullptr;
+
+	for (auto scene : scenes) {
+		ObsSceneEnumAllItems(
+			scene, [&](obs_sceneitem_t *sceneitem) -> bool {
+				if (searchPtr == sceneitem) {
+					result = sceneitem;
+
+					/* Found what we're looking for, stop iteration */
+					return false;
+				}
+
+				/* Continue or stop iteration */
+				return !result;
+			});
+
+		if (result) {
+			break;
+		}
+	}
+
+	if (result && addRef) {
+		obs_sceneitem_addref(result);
+	}
+
+	return result;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // OBS Main Composition
 ////////////////////////////////////////////////////////////////////////////////

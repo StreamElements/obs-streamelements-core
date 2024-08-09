@@ -194,6 +194,9 @@ public:
 	virtual bool RemoveScene(obs_scene_t *scene) = 0;
 	virtual bool SetCurrentScene(obs_scene_t *scene) = 0;
 	virtual void GetAllScenes(std::vector<obs_scene_t *> &scenes) = 0;
+
+	bool SafeRemoveScene(obs_scene_t *sceneToRemove);
+	obs_sceneitem_t *GetSceneItemById(std::string id, bool addRef = false);
 };
 
 // OBS Main Composition
