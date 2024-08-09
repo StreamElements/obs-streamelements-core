@@ -762,6 +762,8 @@ bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
 		if (scene == *it) {
 			m_scenes.erase(it);
 
+			obs_scene_release(scene);
+
 			return true;
 		}
 	}
