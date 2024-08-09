@@ -2,6 +2,7 @@
 
 #include "StreamElementsSceneItemsMonitor.hpp"
 #include "StreamElementsScenesListWidgetManager.hpp"
+#include "StreamElementsVideoComposition.hpp"
 
 #include "cef-headers.hpp"
 
@@ -92,9 +93,11 @@ public:
 
 	/* Scenes */
 
-	void SerializeObsScenes(CefRefPtr<CefValue> &output);
+	void SerializeObsScenes(CefRefPtr<CefValue> input,
+				CefRefPtr<CefValue> &output);
 
-	void SerializeObsCurrentScene(CefRefPtr<CefValue> &output);
+	void SerializeObsCurrentScene(CefRefPtr<CefValue> input,
+				      CefRefPtr<CefValue> &output);
 
 	void DeserializeObsScene(CefRefPtr<CefValue> input,
 				 CefRefPtr<CefValue> &output);
@@ -128,6 +131,8 @@ public:
 
 protected:
 	void DeserializeAuxiliaryObsSceneItemProperties(
+		std::shared_ptr<StreamElementsVideoCompositionBase>
+			videoComposition,
 		obs_sceneitem_t *sceneitem, CefRefPtr<CefDictionaryValue> d);
 
 protected:
