@@ -3,6 +3,7 @@
 #include <util/config-file.h>
 
 #include "StreamElementsUtils.hpp"
+#include "StreamElementsObsSceneManager.hpp"
 
 static CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e)
 {
@@ -738,6 +739,17 @@ StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 	auto scene = obs_scene_create_private(GetUniqueSceneName(requestName).c_str());
 
 	m_scenes.push_back(scene);
+
+	auto source = obs_scene_get_source(scene);
+
+	calldata_t *data = calldata_create();
+
+	calldata_set_ptr(data, "source", source);
+
+	add_source_signals(source, data);
+	add_scene_signals(source, data);
+
+	calldata_destroy(data);
 
 	return scene;
 }

@@ -40,4 +40,22 @@ public:
 
 		return m_videoCompositionsMap[id];
 	}
+
+	std::shared_ptr<StreamElementsVideoCompositionBase>
+	GetVideoCompositionByScene(obs_scene_t *lookupScene)
+	{
+		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+		for (auto kv : m_videoCompositionsMap) {
+			std::vector<obs_scene_t *> scenes;
+			kv.second->GetAllScenes(scenes);
+
+			for (auto scene : scenes) {
+				if (scene == lookupScene)
+					return kv.second;
+			}
+		}
+
+		return nullptr;
+	}
 };

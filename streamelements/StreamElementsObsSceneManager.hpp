@@ -14,6 +14,13 @@
 
 #include <mutex>
 
+void add_scene_signals(obs_source_t *scene, void *data);
+void add_scene_signals(obs_scene_t *scene, void *data);
+void add_source_signals(obs_source_t *source, void *data);
+void remove_scene_signals(obs_source_t *scene, void *data);
+void remove_scene_signals(obs_scene_t *scene, void *data);
+void remove_source_signals(obs_source_t *source, void *data);
+
 class StreamElementsObsSceneManager {
 public:
 	StreamElementsObsSceneManager(QMainWindow *parent);
