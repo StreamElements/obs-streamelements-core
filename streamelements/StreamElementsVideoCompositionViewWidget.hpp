@@ -4,6 +4,7 @@
 #include <QWidget>
 #include <QMouseEvent>
 #include <QEnterEvent>
+#include <QCursor>
 
 #include "canvas-scan.hpp"
 
@@ -23,6 +24,9 @@ public:
 		virtual bool HandleMouseUp(QMouseEvent *event, double worldX, double worldY) { return false; }
 		virtual bool HandleMouseClick(QMouseEvent *event, double worldX, double worldY) { return false; }
 		virtual bool HandleMouseMove(QMouseEvent *event, double worldX, double worldY) { return false; }
+
+		virtual bool SetMouseCursor(QCursor &cursor) { return false; }
+			
 	};
 
 	class VisualElements {
@@ -126,6 +130,16 @@ public:
 
 			return false;
 		}
+
+		bool SetMouseCursor(QCursor &cursor)
+		{
+			for (auto element : m_topLayer) {
+				if (element->SetMouseCursor(cursor))
+					return true;
+			}
+
+			return false;
+		}
 	};
 
 	class VisualElementsStateManager {
@@ -150,6 +164,33 @@ public:
 			std::shared_ptr<StreamElementsVideoCompositionBase::
 						CompositionInfo>
 				videoCompositionInfo);
+
+		bool SetMouseCursor(QCursor &cursor)
+		{
+			bool wasSelected = false;
+
+			for (auto sceneItem :
+			     m_sceneItemsEventProcessingOrder) {
+				if (!obs_sceneitem_selected(sceneItem))
+					continue;
+
+				if (m_sceneItemsVisualElementsMap[sceneItem]
+					    ->SetMouseCursor(cursor))
+					return true;
+			}
+
+			for (auto sceneItem :
+			     m_sceneItemsEventProcessingOrder) {
+				if (obs_sceneitem_selected(sceneItem))
+					continue;
+
+				if (m_sceneItemsVisualElementsMap[sceneItem]
+					    ->SetMouseCursor(cursor))
+					return true;
+			}
+
+			return false;
+		}
 
 		bool HandleMouseDown(QMouseEvent *event, double worldX,
 					     double worldY)

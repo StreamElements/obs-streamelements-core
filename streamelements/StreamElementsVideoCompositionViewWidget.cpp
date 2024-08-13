@@ -105,6 +105,8 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 			StreamElementsVideoCompositionBase::CompositionInfo>
 			videoCompositionInfo)
 {
+	QCursor mouseCursor(Qt::ArrowCursor);
+
 	uint32_t worldWidth;
 	uint32_t worldHeight;
 
@@ -245,6 +247,16 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 	for (auto kv : m_sceneItemsVisualElementsMap) {
 		if (kv.second->HasParent())
 			kv.second->DrawTopLayer();
+	}
+
+	for (auto kv : m_sceneItemsVisualElementsMap) {
+		kv.second->SetMouseCursor(mouseCursor);
+	}
+
+	if (self->cursor() != mouseCursor) {
+		QtPostTask([mouseCursor, self]() -> void {
+			self->setCursor(mouseCursor);
+		});
 	}
 
 	// Draw rulers
