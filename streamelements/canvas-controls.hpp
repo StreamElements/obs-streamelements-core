@@ -1068,6 +1068,17 @@ public:
 
 		return true;
 	}
+
+	virtual bool SetMouseCursor(QCursor& cursor) override
+	{
+		if (m_isMouseOver || m_isDragging) {
+			cursor.setShape(Qt::PointingHandCursor);
+
+			return true;
+		}
+
+		return false;
+	}
 };
 
 class SceneItemStretchControlPoint : public SceneItemControlPoint {
