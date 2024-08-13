@@ -2955,10 +2955,13 @@ void StreamElementsObsSceneManager::OpenSceneItemInteractionById(
 	if (!sceneItem)
 		return;
 
-	obs_frontend_open_source_interaction(
-		obs_sceneitem_get_source(sceneItem));
+	auto source = obs_sceneitem_get_source(sceneItem);
 
-	output->SetBool(true);
+	if (obs_source_get_flags(source) & OBS_SOURCE_INTERACTION) {
+		obs_frontend_open_source_interaction(source);
+
+		output->SetBool(true);
+	}
 }
 
 void StreamElementsObsSceneManager::OpenSceneItemTransformEditorById(
