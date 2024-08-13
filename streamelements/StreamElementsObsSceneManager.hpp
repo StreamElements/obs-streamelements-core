@@ -136,6 +136,15 @@ public:
 	DeserializeObsCurrentSceneCollectionById(CefRefPtr<CefValue> input,
 						 CefRefPtr<CefValue> &output);
 
+	void OpenSceneItemPropertiesById(CefRefPtr<CefValue> input,
+					 CefRefPtr<CefValue> &output);
+	void OpenSceneItemFiltersById(CefRefPtr<CefValue> input,
+				      CefRefPtr<CefValue> &output);
+	void OpenSceneItemInteractionById(CefRefPtr<CefValue> input,
+					  CefRefPtr<CefValue> &output);
+	void OpenSceneItemTransformEditorById(CefRefPtr<CefValue> input,
+					      CefRefPtr<CefValue> &output);
+
 protected:
 	void DeserializeAuxiliaryObsSceneItemProperties(
 		std::shared_ptr<StreamElementsVideoCompositionBase>

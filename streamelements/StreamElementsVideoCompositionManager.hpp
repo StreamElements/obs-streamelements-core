@@ -58,4 +58,21 @@ public:
 
 		return nullptr;
 	}
+
+	obs_sceneitem_t *GetSceneItemById(std::string lookupSceneItemId)
+	{
+		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+		for (auto kv : m_videoCompositionsMap) {
+			std::vector<obs_scene_t *> scenes;
+
+			auto result =
+				kv.second->GetSceneItemById(lookupSceneItemId);
+
+			if (result)
+				return result;
+		}
+
+		return nullptr;
+	}
 };

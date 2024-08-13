@@ -2524,6 +2524,50 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("openSceneItemPropertiesDialogById");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->OpenSceneItemPropertiesById(args->GetValue(0),
+							      result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("openSceneItemFiltersDialogById");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->OpenSceneItemFiltersById(args->GetValue(0),
+							   result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("openSceneItemInteractionDialogById");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->OpenSceneItemInteractionById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("openSceneItemTransformEditorDialogById");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->OpenSceneItemTransformEditorById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("crashProgram");
 	{
 		QtPostTask([]() -> void {

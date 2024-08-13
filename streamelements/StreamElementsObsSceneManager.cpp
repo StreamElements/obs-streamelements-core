@@ -2889,3 +2889,97 @@ void StreamElementsObsSceneManager::SerializeScenesAuxiliaryActions(
 
 	m_scenesWidgetManager->SerializeScenesAuxiliaryActions(output);
 }
+
+void StreamElementsObsSceneManager::OpenSceneItemPropertiesById(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	if (!input.get() || input->GetType() != VTYPE_STRING)
+		return;
+
+	std::string id = input->GetString();
+
+	auto sceneItem = StreamElementsGlobalStateManager::GetInstance()
+		->GetVideoCompositionManager()
+		->GetSceneItemById(id);
+
+	if (!sceneItem)
+		return;
+
+	obs_frontend_open_source_properties(
+		obs_sceneitem_get_source(sceneItem));
+
+	output->SetBool(true);
+}
+
+void StreamElementsObsSceneManager::OpenSceneItemFiltersById(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	if (!input.get() || input->GetType() != VTYPE_STRING)
+		return;
+
+	std::string id = input->GetString();
+
+	auto sceneItem = StreamElementsGlobalStateManager::GetInstance()
+				 ->GetVideoCompositionManager()
+				 ->GetSceneItemById(id);
+
+	if (!sceneItem)
+		return;
+
+	obs_frontend_open_source_filters(obs_sceneitem_get_source(sceneItem));
+
+	output->SetBool(true);
+}
+
+void StreamElementsObsSceneManager::OpenSceneItemInteractionById(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	if (!input.get() || input->GetType() != VTYPE_STRING)
+		return;
+
+	std::string id = input->GetString();
+
+	auto sceneItem = StreamElementsGlobalStateManager::GetInstance()
+				 ->GetVideoCompositionManager()
+				 ->GetSceneItemById(id);
+
+	if (!sceneItem)
+		return;
+
+	obs_frontend_open_source_interaction(
+		obs_sceneitem_get_source(sceneItem));
+
+	output->SetBool(true);
+}
+
+void StreamElementsObsSceneManager::OpenSceneItemTransformEditorById(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	if (!input.get() || input->GetType() != VTYPE_STRING)
+		return;
+
+	std::string id = input->GetString();
+
+	auto sceneItem = StreamElementsGlobalStateManager::GetInstance()
+				 ->GetVideoCompositionManager()
+				 ->GetSceneItemById(id);
+
+	if (!sceneItem)
+		return;
+
+	obs_frontend_open_sceneitem_edit_transform(sceneItem);
+
+	output->SetBool(true);
+}
