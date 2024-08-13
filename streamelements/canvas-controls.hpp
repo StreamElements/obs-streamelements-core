@@ -667,7 +667,7 @@ public:
 		}
 
 		const double thickness = 4.0f * m_view->devicePixelRatioF() *
-					 m_view->m_worldScale.x;
+					 fmax(m_view->m_worldScale.x, m_view->m_worldScale.y);
 
 		matrix4 transform, inv_transform;
 		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
@@ -821,14 +821,13 @@ protected:
 		boxScale.x = fabsf(boxScale.x);
 		boxScale.y = fabsf(boxScale.y);
 
-		auto x1 = m_x - (m_width / boxScale.x * m_view->m_worldScale.x /
-				 2.0f);
-		auto x2 = m_x + (m_width / boxScale.x * m_view->m_worldScale.x /
-				 2.0f);
-		auto y1 = m_y - (m_height / boxScale.y *
-				 m_view->m_worldScale.x / 2.0f);
-		auto y2 = m_y + (m_height / boxScale.y *
-				 m_view->m_worldScale.x / 2.0f);
+		auto scaleFactor =
+			fmax(m_view->m_worldScale.x, m_view->m_worldScale.y);
+
+		auto x1 = m_x - (m_width / boxScale.x * scaleFactor / 2.0f);
+		auto x2 = m_x + (m_width / boxScale.x * scaleFactor / 2.0f);
+		auto y1 = m_y - (m_height / boxScale.y * scaleFactor / 2.0f);
+		auto y2 = m_y + (m_height / boxScale.y * scaleFactor / 2.0f);
 
 		m_isMouseOver =
 			(m_mousePosition.x >= x1 && m_mousePosition.x <= x2 &&
@@ -872,14 +871,13 @@ public:
 		boxScale.x = fabsf(boxScale.x);
 		boxScale.y = fabsf(boxScale.y);
 
-		auto x1 = m_x - (m_width / boxScale.x * m_view->m_worldScale.x /
-				 2.0f);
-		auto x2 = m_x + (m_width / boxScale.x * m_view->m_worldScale.x /
-				 2.0f);
-		auto y1 = m_y - (m_height / boxScale.y *
-				 m_view->m_worldScale.x / 2.0f);
-		auto y2 = m_y + (m_height / boxScale.y *
-				 m_view->m_worldScale.x / 2.0f);
+		auto scaleFactor =
+			fmax(m_view->m_worldScale.x, m_view->m_worldScale.y);
+
+		auto x1 = m_x - (m_width / boxScale.x * scaleFactor / 2.0f);
+		auto x2 = m_x + (m_width / boxScale.x * scaleFactor / 2.0f);
+		auto y1 = m_y - (m_height / boxScale.y * scaleFactor / 2.0f);
+		auto y2 = m_y + (m_height / boxScale.y * scaleFactor / 2.0f);
 
 		gs_matrix_push();
 		gs_matrix_mul(&transform);
@@ -887,8 +885,11 @@ public:
 		fillRect(x1, y1, x2, y2, color);
 
 		if (m_lineTo.get()) {
+			auto scaleFactor = fmax(m_view->m_worldScale.x,
+						m_view->m_worldScale.y);
+
 			double thickness = 2.0f * m_view->devicePixelRatioF() *
-					   m_view->m_worldScale.x;
+					   scaleFactor;
 
 			drawLine(m_x, m_y, m_lineTo.get()->m_x,
 				 m_lineTo.get()->m_y, thickness, boxScale, color);
@@ -1100,10 +1101,6 @@ private:
 		vec2_set(&center, center3.x, center3.y);
 
 		auto degrees = getCircleDegrees(center, pos);
-
-		char buf[512];
-		sprintf(buf, "degrees: %d\n", int(degrees));
-		OutputDebugStringA(buf);
 
 		auto clamp = [degrees](int min, int max) -> bool {
 			if (degrees + 360 >= min + 360 &&
