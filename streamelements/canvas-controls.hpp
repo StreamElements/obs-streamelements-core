@@ -714,6 +714,17 @@ public:
 
 		gs_matrix_pop();
 	}
+
+	virtual bool SetMouseCursor(QCursor &cursor) override
+	{
+		if (m_isMouseOver || m_isDragging) {
+			cursor.setShape(Qt::SizeAllCursor);
+
+			return true;
+		}
+
+		return false;
+	}
 };
 
 class SceneItemOverflowBox : public SceneItemControlBase {
