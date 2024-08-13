@@ -77,7 +77,7 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 
 	auto scale = getSceneItemFinalBoxScale(sceneItem, parentSceneItem);
 
-	double scaledRotationDistance = rotationDistance / abs(scale.y);
+	double scaledRotationDistance = rotationDistance / abs(scale.y) * view->m_worldScale.x;
 
 	// Rotation
 	m_topLayer.push_back(std::make_shared<SceneItemRotationControlPoint>(
@@ -120,6 +120,8 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 	// will occupy the whole size of the display
 	double scaleX = double(viewportWidth) / (viewWidth);
 	double scaleY = double(viewportHeight) / (viewHeight);
+
+	vec2_set(&self->m_worldScale, scaleX, scaleY);
 
 	// Use calculation above to figure out expanded width/height of the world
 	double scaledWorldWidth = double(worldWidth) * scaleX;

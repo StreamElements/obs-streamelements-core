@@ -312,6 +312,8 @@ public: // Used by ControlPoint
 
 	bool m_mouseArmedForClickEvent = false;
 
+	vec2 m_worldScale = {1.0f, 1.0f};
+
 protected:
 
 	void viewportToWorldCoords(uint32_t viewportX, uint32_t viewportY,
