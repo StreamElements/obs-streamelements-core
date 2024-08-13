@@ -1082,6 +1082,55 @@ public:
 };
 
 class SceneItemStretchControlPoint : public SceneItemControlPoint {
+private:
+	Qt::CursorShape m_lastCursorShape = Qt::ArrowCursor;
+
+	void checkMouseCursor(double worldX, double worldY)
+	{
+		matrix4 transform, inv_transform;
+		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
+						 &transform, &inv_transform);
+
+		auto pos3 = getTransformedPosition(m_x, m_y, transform);
+		auto center3 = getTransformedPosition(0.5f, 0.5f, transform);
+
+		vec2 pos, center;
+		//vec2_set(&pos, pos3.x, pos3.y);
+		vec2_set(&pos, worldX, worldY);
+		vec2_set(&center, center3.x, center3.y);
+
+		auto degrees = getCircleDegrees(center, pos);
+
+		char buf[512];
+		sprintf(buf, "degrees: %d\n", int(degrees));
+		OutputDebugStringA(buf);
+
+		auto clamp = [degrees](int min, int max) -> bool {
+			if (degrees + 360 >= min + 360 &&
+			    degrees + 360 <= max + 360)
+				return true;
+			else
+				return false;
+		};
+
+		if (clamp(-20, 20))
+			m_lastCursorShape = Qt::SizeVerCursor; // top
+		else if (clamp(21, 70))
+			m_lastCursorShape = Qt::SizeBDiagCursor; // top right
+		else if (clamp(71, 110))
+			m_lastCursorShape = Qt::SizeHorCursor; // right
+		else if (clamp(111, 160))
+			m_lastCursorShape = Qt::SizeFDiagCursor; // bottom right
+		else if (clamp(161, 200))
+			m_lastCursorShape = Qt::SizeVerCursor; // bottom
+		else if (clamp(201, 250))
+			m_lastCursorShape = Qt::SizeBDiagCursor; // bottom left
+		else if (clamp(251, 290))
+			m_lastCursorShape = Qt::SizeHorCursor; // left
+		else if (clamp(291, 339))
+			m_lastCursorShape = Qt::SizeFDiagCursor; // top left
+	}
+
 public:
 	SceneItemStretchControlPoint(
 		StreamElementsVideoCompositionViewWidget *view,
@@ -1094,6 +1143,17 @@ public:
 	}
 
 	~SceneItemStretchControlPoint() {}
+
+	virtual bool SetMouseCursor(QCursor &cursor) override
+	{
+		if (!m_isMouseOver && !m_isDragging) {
+			return false;
+		}
+
+		cursor.setShape(m_lastCursorShape);
+
+		return true;
+	}
 
 	virtual bool HandleMouseUp(QMouseEvent* event, double worldX,
 		double worldY) override
@@ -1132,6 +1192,8 @@ public:
 				return true;
 			}, true);
 
+		checkMouseCursor(worldX, worldY);
+
 		return true;
 	}
 
@@ -1139,6 +1201,9 @@ public:
 		double worldY) override
 	{
 		checkMouseOver(worldX, worldY);
+
+		if (m_isMouseOver)
+			checkMouseCursor(worldX, worldY);
 
 		if (!m_isDragging)
 			return false;
