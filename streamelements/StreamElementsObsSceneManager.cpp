@@ -2212,10 +2212,6 @@ void StreamElementsObsSceneManager::RemoveObsScenesByIds(
 	if (!input.get() || input->GetType() != VTYPE_LIST)
 		return;
 
-	auto videoComposition = GetVideoComposition(input);
-	if (!videoComposition.get())
-		return;
-
 	CefRefPtr<CefListValue> list = input->GetList();
 
 	if (!list->GetSize())
@@ -2229,34 +2225,21 @@ void StreamElementsObsSceneManager::RemoveObsScenesByIds(
 
 		std::string id = list->GetString(index);
 
-		const void *ptr = videoComposition->GetSceneById(id);
+		auto videoComposition =
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetVideoCompositionManager()
+				->GetVideoCompositionBySceneId(id);
 
-		if (!ptr)
+		if (!videoComposition.get())
 			continue;
 
-		pointer_to_id_map[ptr] = id;
-	}
+		auto scene = videoComposition->GetSceneById(id);
 
-	if (pointer_to_id_map.empty())
-		return;
+		if (!scene)
+			continue;
 
-	std::vector<obs_scene_t *> scenes;
-	videoComposition->GetAllScenes(scenes);
-
-	size_t removedCount = 0;
-
-	for (auto scene : scenes) {
-		/* Get the scene (a scene is a source) */
-
-		if (removedCount >= scenes.size() - 1)
-			break;
-
-		if (pointer_to_id_map.count(scene)) {
-			if (videoComposition->SafeRemoveScene(scene)) {
-				output->SetBool(true);
-			}
-
-			++removedCount;
+		if (videoComposition->SafeRemoveScene(scene)) {
+			output->SetBool(true);
 		}
 	}
 }
@@ -2957,7 +2940,7 @@ void StreamElementsObsSceneManager::OpenSceneItemInteractionById(
 
 	auto source = obs_sceneitem_get_source(sceneItem);
 
-	if (obs_source_get_flags(source) & OBS_SOURCE_INTERACTION) {
+	if (obs_source_get_output_flags(source) & OBS_SOURCE_INTERACTION) {
 		obs_frontend_open_source_interaction(source);
 
 		output->SetBool(true);

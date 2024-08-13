@@ -12,30 +12,6 @@ StreamElementsVideoCompositionManager::StreamElementsVideoCompositionManager()
 	m_nativeVideoComposition = StreamElementsObsNativeVideoComposition::Create();
 
 	m_videoCompositionsMap[m_nativeVideoComposition->GetId()] = m_nativeVideoComposition;
-
-	// TODO: Remove debug code
-	auto testComposition =
-		StreamElementsCustomVideoComposition::Create(
-			"test1", "Test 1", 1920, 1080, "obs_x264",
-			obs_data_create(), obs_data_create());
-
-	m_videoCompositionsMap[testComposition->GetId()] =
-		testComposition;
-
-	//auto composition = m_nativeVideoComposition;
-	auto composition = testComposition;
-
-	auto dlg = new StreamElementsBrowserDialog(
-		nullptr, "https://www.google.com", "", false, "dialog");
-	dlg->setFixedSize(1024, 768);
-
-	auto compositionViewWidget =
-		new StreamElementsVideoCompositionViewWidget(dlg,
-							     composition);
-	compositionViewWidget->setGeometry(256, 192, 512, 384);
-	compositionViewWidget->show();
-
-	dlg->show();
 }
 
 StreamElementsVideoCompositionManager::~StreamElementsVideoCompositionManager()
