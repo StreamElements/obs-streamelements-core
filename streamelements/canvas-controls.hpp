@@ -848,8 +848,9 @@ public:
 		    obs_sceneitem_locked(m_sceneItem))
 			return;
 
-		QColor color(m_isMouseOver ? g_colorHover.get()
-					   : g_colorSelection.get());
+		QColor color((m_isMouseOver || m_isDragging)
+				     ? g_colorHover.get()
+				     : g_colorSelection.get());
 
 		matrix4 transform, inv_tranform;
 		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem, &transform,
