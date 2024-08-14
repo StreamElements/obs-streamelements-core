@@ -1,6 +1,7 @@
 #pragma once
 
 #include <obs.h>
+#include <obs-frontend-api.h>
 #include "cef-headers.hpp"
 
 #include "StreamElementsUtils.hpp"
@@ -195,6 +196,8 @@ public:
 	virtual bool SetCurrentScene(obs_scene_t *scene) = 0;
 	virtual void GetAllScenes(std::vector<obs_scene_t *> &scenes) = 0;
 
+	virtual void TakeScreenshot() = 0;
+
 	bool SafeRemoveScene(obs_scene_t *sceneToRemove);
 	obs_sceneitem_t *GetSceneItemById(std::string id, bool addRef = false);
 };
@@ -240,6 +243,10 @@ public:
 	virtual bool RemoveScene(obs_scene_t *scene);
 	virtual bool SetCurrentScene(obs_scene_t *scene);
 	virtual void GetAllScenes(std::vector<obs_scene_t *> &scenes);
+
+	virtual void TakeScreenshot() override {
+		obs_frontend_take_screenshot();
+	}
 };
 
 // Custom Composition
@@ -304,4 +311,11 @@ public:
 	virtual bool RemoveScene(obs_scene_t *scene);
 	virtual bool SetCurrentScene(obs_scene_t *scene);
 	virtual void GetAllScenes(std::vector<obs_scene_t *> &scenes);
+
+	virtual void TakeScreenshot() override
+	{
+		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+		obs_frontend_take_source_screenshot(m_transition);
+	}
 };

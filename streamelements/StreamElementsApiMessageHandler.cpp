@@ -2568,6 +2568,44 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("takeScreenshot");
+	{
+		if (args->GetSize()) {
+			auto input = args->GetValue(0);
+			if (input->GetType() == VTYPE_DICTIONARY) {
+				auto d = input->GetDictionary();
+
+				auto videoCompositionManager =
+					StreamElementsGlobalStateManager::GetInstance()
+						->GetVideoCompositionManager();
+
+				std::shared_ptr<
+					StreamElementsVideoCompositionBase>
+					videoComposition = nullptr;
+
+				if (d->HasKey("videoCompositionId") &&
+				    d->GetType("videoCompositionId") ==
+					    VTYPE_STRING) {
+					videoComposition =
+						videoCompositionManager->GetVideoCompositionById(
+							d->GetString(
+								"videoCompositionId"));
+				} else {
+					videoComposition =
+						videoCompositionManager
+							->GetObsNativeVideoComposition();
+				}
+
+				if (videoComposition.get()) {
+					videoComposition->TakeScreenshot();
+
+					result->SetBool(true);
+				}
+			}
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("crashProgram");
 	{
 		QtPostTask([]() -> void {
