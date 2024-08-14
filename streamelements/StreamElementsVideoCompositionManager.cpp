@@ -184,3 +184,33 @@ void StreamElementsVideoCompositionManager::SerializeAvailableEncoderClasses(
 
 	output->SetList(root);
 }
+
+void StreamElementsVideoCompositionManager::SerializeAvailableTransitionClasses(
+	CefRefPtr<CefValue>& output)
+{
+	auto list = CefListValue::Create();
+
+	const char *id;
+	for (size_t idx = 0; obs_enum_transition_types(idx, &id); ++idx) {
+		auto d = CefDictionaryValue::Create();
+
+		auto props = obs_get_source_properties(id);
+		auto propsValue = CefValue::Create();
+		SerializeObsProperties(props, propsValue);
+		obs_properties_destroy(props);
+
+		auto defaultsData = obs_get_source_defaults(id);
+		d->SetValue("defaultSettings", SerializeObsData(defaultsData));
+		obs_data_release(defaultsData);
+
+		d->SetString("class", id);
+		d->SetValue("properties", propsValue);
+
+		d->SetString("label", obs_source_get_display_name(id));
+
+
+		list->SetDictionary(list->GetSize(), d);
+	}
+
+	output->SetList(list);
+}

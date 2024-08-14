@@ -2606,6 +2606,15 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("getAvailableTransitionClasses");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->SerializeAvailableTransitionClasses(result);
+	}
+	API_HANDLER_END();
+
+
 	API_HANDLER_BEGIN("crashProgram");
 	{
 		QtPostTask([]() -> void {

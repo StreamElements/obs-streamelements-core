@@ -22,6 +22,8 @@ public:
 	void SerializeAvailableEncoderClasses(obs_encoder_type type,
 					CefRefPtr<CefValue> &output);
 
+	void SerializeAvailableTransitionClasses(CefRefPtr<CefValue> &output);
+
 public:
 	std::shared_ptr<StreamElementsVideoCompositionBase> GetObsNativeVideoComposition()
 	{
