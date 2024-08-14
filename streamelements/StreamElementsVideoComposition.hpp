@@ -202,6 +202,7 @@ public:
 
 protected:
 	virtual bool RemoveScene(obs_scene_t *scene) = 0;
+	virtual void SetTransition(obs_source_t *transition) = 0;
 };
 
 // OBS Main Composition
@@ -251,6 +252,7 @@ public:
 
 protected:
 	virtual bool RemoveScene(obs_scene_t *scene);
+	virtual void SetTransition(obs_source_t *transition);
 };
 
 // Custom Composition
@@ -324,4 +326,5 @@ public:
 
 protected:
 	virtual bool RemoveScene(obs_scene_t *scene);
+	virtual void SetTransition(obs_source_t *transition);
 };

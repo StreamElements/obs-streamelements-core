@@ -297,6 +297,12 @@ bool StreamElementsObsNativeVideoComposition::RemoveScene(
 	return false;
 }
 
+void StreamElementsObsNativeVideoComposition::SetTransition(
+	obs_source_t *transition)
+{
+	obs_frontend_set_current_transition(transition);
+}
+
 bool StreamElementsObsNativeVideoComposition::SetCurrentScene(
 	obs_scene_t* scene)
 {
@@ -694,6 +700,24 @@ bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
 	}
 
 	return false;
+}
+
+void StreamElementsCustomVideoComposition::SetTransition(
+	obs_source_t *transition)
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	obs_enter_graphics();
+
+	auto old_transition = m_transition;
+	m_transition = transition;
+	obs_source_addref(m_transition);
+	obs_source_release(old_transition);
+
+	obs_transition_start(m_transition, OBS_TRANSITION_MODE_AUTO, 0,
+			     obs_scene_get_source(m_currentScene));
+
+	obs_leave_graphics();
 }
 
 bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
