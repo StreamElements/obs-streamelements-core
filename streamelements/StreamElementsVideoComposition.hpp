@@ -192,7 +192,6 @@ public:
 
 	virtual obs_scene_t *GetCurrentScene() = 0;
 	virtual obs_scene_t *AddScene(std::string requestName) = 0;
-	virtual bool RemoveScene(obs_scene_t *scene) = 0;
 	virtual bool SetCurrentScene(obs_scene_t *scene) = 0;
 	virtual void GetAllScenes(std::vector<obs_scene_t *> &scenes) = 0;
 
@@ -200,6 +199,9 @@ public:
 
 	bool SafeRemoveScene(obs_scene_t *sceneToRemove);
 	obs_sceneitem_t *GetSceneItemById(std::string id, bool addRef = false);
+
+protected:
+	virtual bool RemoveScene(obs_scene_t *scene) = 0;
 };
 
 // OBS Main Composition
@@ -240,13 +242,15 @@ public:
 	virtual obs_scene_t *GetCurrentScene();
 
 	virtual obs_scene_t *AddScene(std::string requestName);
-	virtual bool RemoveScene(obs_scene_t *scene);
 	virtual bool SetCurrentScene(obs_scene_t *scene);
 	virtual void GetAllScenes(std::vector<obs_scene_t *> &scenes);
 
 	virtual void TakeScreenshot() override {
 		obs_frontend_take_screenshot();
 	}
+
+protected:
+	virtual bool RemoveScene(obs_scene_t *scene);
 };
 
 // Custom Composition
@@ -308,7 +312,6 @@ public:
 	virtual obs_scene_t *GetCurrentScene();
 
 	virtual obs_scene_t *AddScene(std::string requestName);
-	virtual bool RemoveScene(obs_scene_t *scene);
 	virtual bool SetCurrentScene(obs_scene_t *scene);
 	virtual void GetAllScenes(std::vector<obs_scene_t *> &scenes);
 
@@ -318,4 +321,7 @@ public:
 
 		obs_frontend_take_source_screenshot(m_transition);
 	}
+
+protected:
+	virtual bool RemoveScene(obs_scene_t *scene);
 };
