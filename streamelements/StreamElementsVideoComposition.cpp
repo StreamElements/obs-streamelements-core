@@ -5,6 +5,134 @@
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsObsSceneManager.hpp"
 
+static void SerializeObsTransition(obs_source_t* t, int durationMilliseconds, CefRefPtr<CefValue> &output)
+{
+	output->SetNull();
+
+	if (!t)
+		return;
+
+	auto d = CefDictionaryValue::Create();
+
+	std::string id = obs_source_get_id(t);
+	d->SetString("class", id);
+
+	auto settings = obs_source_get_settings(t);
+
+	auto props = obs_get_source_properties(id.c_str());
+	auto propsValue = CefValue::Create();
+	obs_properties_apply_settings(props, settings);
+	SerializeObsProperties(props, propsValue);
+	obs_properties_destroy(props);
+
+	auto settingsValue = SerializeObsData(settings);
+
+	obs_data_release(settings);
+
+	d->SetValue("properties", propsValue);
+	d->SetValue("settings", settingsValue);
+
+	auto defaultsData = obs_get_source_defaults(id.c_str());
+	d->SetValue("defaultSettings", SerializeObsData(defaultsData));
+	obs_data_release(defaultsData);
+
+	d->SetString("label", obs_source_get_display_name(id.c_str()));
+
+	uint32_t cx, cy;
+	obs_transition_get_size(t, &cx, &cy);
+	d->SetInt("width", cx);
+	d->SetInt("height", cy);
+
+	auto scaleType = obs_transition_get_scale_type(t);
+	switch (scaleType) {
+	case OBS_TRANSITION_SCALE_MAX_ONLY:
+		d->SetString("scaleType", "maxOnly");
+		break;
+	case OBS_TRANSITION_SCALE_ASPECT:
+		d->SetString("scaleType", "aspect");
+		break;
+	case OBS_TRANSITION_SCALE_STRETCH:
+		d->SetString("scaleType", "stretch");
+		break;
+	default:
+		d->SetString("scaleType", "unknown");
+		break;
+	}
+
+	d->SetString("alignment",
+		     GetAlignmentIdFromInt32(obs_transition_get_alignment(t)));
+
+	d->SetInt("durationMilliseconds", durationMilliseconds);
+
+	output->SetDictionary(d);
+}
+
+bool DeserializeObsTransition(CefRefPtr<CefValue> input, obs_source_t **t, int *durationMilliseconds)
+{
+	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
+		return false;
+
+	auto d = input->GetDictionary();
+
+	if (!d->HasKey("class") || d->GetType("class") != VTYPE_STRING)
+		return false;
+
+	std::string id = d->GetString("class");
+
+	auto settings = obs_data_create();
+
+	if (d->HasKey("settings")) {
+		DeserializeObsData(d->GetValue("settings"), settings);
+	}
+	
+	*t = obs_source_create_private(id.c_str(), id.c_str(), settings);
+
+	obs_data_release(settings);
+
+	if (d->HasKey("width") &&
+	    d->GetType("width") == VTYPE_INT && d->HasKey("height") && d->GetType("height") == VTYPE_INT) {
+		int cx = d->GetInt("width");
+		int cy = d->GetInt("height");
+
+		if (cx <= 0 || cy <= 0)
+			return false;
+
+		obs_transition_set_size(*t, cx, cy);
+	}
+
+	if (d->HasKey("scaleType") && d->GetType("scaleType") == VTYPE_STRING) {
+		auto scaleType = d->GetString("scaleType");
+
+		if (scaleType == "maxOnly") {
+			obs_transition_set_scale_type(
+				*t, OBS_TRANSITION_SCALE_MAX_ONLY);
+		} else if (scaleType == "aspect") {
+			obs_transition_set_scale_type(
+				*t, OBS_TRANSITION_SCALE_ASPECT);
+		} else if (scaleType == "stretch") {
+			obs_transition_set_scale_type(
+				*t, OBS_TRANSITION_SCALE_STRETCH);
+		} else {
+			return false;
+		}
+	}
+
+	if (d->HasKey("alignment") && d->GetType("alignment") == VTYPE_STRING) {
+		obs_transition_set_alignment(
+			*t, GetInt32FromAlignmentId(
+				    d->GetString("alignment").c_str()));
+	}
+
+	if (d->HasKey("durationMilliseconds") &&
+	    d->GetType("durationMilliseconds") == VTYPE_INT) {
+		*durationMilliseconds = d->GetInt("durationMilliseconds");
+	} else {
+		*durationMilliseconds = 300; // OBS FE default
+	}
+
+	return true;
+}
+
 static CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e)
 {
 	auto result = CefDictionaryValue::Create();
@@ -198,6 +326,32 @@ StreamElementsVideoCompositionBase::GetSceneItemById(std::string id,
 	return result;
 }
 
+void StreamElementsVideoCompositionBase::SerializeTransition(
+	CefRefPtr<CefValue>& output)
+{
+	SerializeObsTransition(GetTransition(),
+			       GetTransitionDurationMilliseconds(), output);
+}
+
+void StreamElementsVideoCompositionBase::DeserializeTransition(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	output->SetBool(false);
+
+	obs_source_t *transition;
+	int durationMs;
+
+	if (!DeserializeObsTransition(input, &transition, &durationMs))
+		return;
+
+	SetTransition(transition);
+	SetTransitionDurationMilliseconds(durationMs);
+
+	obs_source_release(transition);
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////
 // OBS Main Composition
 ////////////////////////////////////////////////////////////////////////////////
@@ -301,6 +455,15 @@ void StreamElementsObsNativeVideoComposition::SetTransition(
 	obs_source_t *transition)
 {
 	obs_frontend_set_current_transition(transition);
+}
+
+obs_source_t* StreamElementsObsNativeVideoComposition::GetTransition()
+{
+	auto source = obs_frontend_get_current_transition();
+
+	obs_source_release(source);
+
+	return source;
 }
 
 bool StreamElementsObsNativeVideoComposition::SetCurrentScene(
@@ -468,7 +631,8 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	obs_data_t *streamingVideoEncoderHotkeyData)
 	: StreamElementsVideoCompositionBase(id, name),
 	  m_baseWidth(baseWidth),
-	  m_baseHeight(baseHeight)
+	  m_baseHeight(baseHeight),
+	  m_transitionDurationMs(0)
 {
 	obs_video_info ovi;
 
@@ -720,6 +884,15 @@ void StreamElementsCustomVideoComposition::SetTransition(
 	obs_leave_graphics();
 }
 
+obs_source_t *StreamElementsCustomVideoComposition::GetTransition()
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	auto transition = m_transition;
+
+	return transition;
+}
+
 bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 {
 	if (!scene)
@@ -733,7 +906,7 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 
 			obs_transition_start(
 				m_transition, OBS_TRANSITION_MODE_AUTO,
-				obs_frontend_get_transition_duration(), // TODO: We want to have our own transition duration
+				GetTransitionDurationMilliseconds(),
 				obs_scene_get_source(m_currentScene));
 
 			return true;

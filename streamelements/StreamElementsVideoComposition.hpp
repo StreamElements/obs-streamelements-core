@@ -200,9 +200,17 @@ public:
 	bool SafeRemoveScene(obs_scene_t *sceneToRemove);
 	obs_sceneitem_t *GetSceneItemById(std::string id, bool addRef = false);
 
+	void SerializeTransition(CefRefPtr<CefValue> &output);
+	void DeserializeTransition(CefRefPtr<CefValue> input,
+				   CefRefPtr<CefValue> &output);
+
 protected:
 	virtual bool RemoveScene(obs_scene_t *scene) = 0;
 	virtual void SetTransition(obs_source_t *transition) = 0;
+	virtual obs_source_t *GetTransition() = 0;
+
+	virtual int GetTransitionDurationMilliseconds() = 0;
+	virtual void SetTransitionDurationMilliseconds(int duration) = 0;
 };
 
 // OBS Main Composition
@@ -239,7 +247,7 @@ public:
 	virtual bool CanRemove() { return false; }
 
 	virtual void SerializeComposition(CefRefPtr<CefValue> &output);
-
+	
 	virtual obs_scene_t *GetCurrentScene();
 
 	virtual obs_scene_t *AddScene(std::string requestName);
@@ -252,7 +260,18 @@ public:
 
 protected:
 	virtual bool RemoveScene(obs_scene_t *scene);
+
 	virtual void SetTransition(obs_source_t *transition);
+	virtual obs_source_t *GetTransition();
+
+	virtual int GetTransitionDurationMilliseconds()
+	{
+		return obs_frontend_get_transition_duration();
+	}
+
+	virtual void SetTransitionDurationMilliseconds(int duration) {
+		obs_frontend_set_transition_duration(duration);
+	}
 };
 
 // Custom Composition
@@ -300,6 +319,7 @@ private:
 	video_t *m_video = nullptr;
 
 	obs_source_t *m_transition = nullptr;
+	int m_transitionDurationMs = 0;
 
 	std::vector<obs_scene_t *> m_scenes;
 	obs_scene_t *m_currentScene = nullptr;
@@ -327,4 +347,15 @@ public:
 protected:
 	virtual bool RemoveScene(obs_scene_t *scene);
 	virtual void SetTransition(obs_source_t *transition);
+	virtual obs_source_t *GetTransition();
+
+	virtual int GetTransitionDurationMilliseconds()
+	{
+		return m_transitionDurationMs;
+	}
+
+	virtual void SetTransitionDurationMilliseconds(int duration)
+	{
+		m_transitionDurationMs = duration > 0 ? duration : 0;
+	}
 };

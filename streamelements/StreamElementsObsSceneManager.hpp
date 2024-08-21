@@ -136,6 +136,8 @@ public:
 	DeserializeObsCurrentSceneCollectionById(CefRefPtr<CefValue> input,
 						 CefRefPtr<CefValue> &output);
 
+	/* OBS Native Dialogs */
+
 	void OpenSceneItemPropertiesById(CefRefPtr<CefValue> input,
 					 CefRefPtr<CefValue> &output);
 	void OpenSceneItemFiltersById(CefRefPtr<CefValue> input,

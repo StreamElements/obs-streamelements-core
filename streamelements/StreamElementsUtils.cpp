@@ -3457,3 +3457,46 @@ SerializeObsEncoderProperties(std::string id, obs_data_t *settings)
 
 	return result;
 }
+
+uint32_t GetInt32FromAlignmentId(std::string alignment)
+{
+	uint32_t result = 0;
+
+	if (std::regex_search(alignment, std::regex("left")))
+		result |= OBS_ALIGN_LEFT;
+
+	if (std::regex_search(alignment, std::regex("right")))
+		result |= OBS_ALIGN_RIGHT;
+
+	if (std::regex_search(alignment, std::regex("top")))
+		result |= OBS_ALIGN_TOP;
+
+	if (std::regex_search(alignment, std::regex("bottom")))
+		result |= OBS_ALIGN_BOTTOM;
+
+	return result;
+}
+
+std::string GetAlignmentIdFromInt32(uint32_t a)
+{
+	std::string h = "center";
+	std::string v = "center";
+
+	if (a & OBS_ALIGN_LEFT) {
+		h = "left";
+	} else if (a & OBS_ALIGN_RIGHT) {
+		h = "right";
+	}
+
+	if (a & OBS_ALIGN_TOP) {
+		v = "top";
+	} else if (a & OBS_ALIGN_BOTTOM) {
+		v = "bottom";
+	}
+
+	if (h == v) {
+		return "center";
+	} else {
+		return v + "_" + h;
+	}
+}

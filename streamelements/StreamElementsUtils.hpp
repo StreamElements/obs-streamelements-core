@@ -418,3 +418,6 @@ bool DeserializeObsData(CefRefPtr<CefValue> input, obs_data_t *data);
 
 CefRefPtr<CefValue>
 SerializeObsEncoderProperties(std::string id, obs_data_t *settings = nullptr);
+
+uint32_t GetInt32FromAlignmentId(std::string alignment);
+std::string GetAlignmentIdFromInt32(uint32_t a);
