@@ -44,6 +44,27 @@ public:
 	}
 
 	std::shared_ptr<StreamElementsVideoCompositionBase>
+	GetVideoCompositionById(CefRefPtr<CefValue> input)
+	{
+		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+		if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
+			return GetObsNativeVideoComposition();
+
+		auto d = input->GetDictionary();
+
+		if (!d->HasKey("videoCompositionId") || d->GetType("videoCompositionId") != VTYPE_STRING)
+			return GetObsNativeVideoComposition();
+
+		std::string id = d->GetString("videoCompositionId");
+
+		if (!m_videoCompositionsMap.count(id))
+			return nullptr;
+
+		return m_videoCompositionsMap[id];
+	}
+
+	std::shared_ptr<StreamElementsVideoCompositionBase>
 	GetVideoCompositionByScene(obs_scene_t *lookupScene)
 	{
 		std::lock_guard<decltype(m_mutex)> lock(m_mutex);

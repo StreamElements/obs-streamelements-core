@@ -2614,6 +2614,41 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("getVideoCompositionTransition");
+	{
+		if (args->GetSize()) {
+			auto videoComposition =
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetVideoCompositionManager()
+					->GetVideoCompositionById(
+						args->GetValue(0));
+
+			if (videoComposition.get())
+				videoComposition->SerializeTransition(result);
+		} else {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetVideoCompositionManager()
+				->GetObsNativeVideoComposition()
+				->SerializeTransition(result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setVideoCompositionTransition");
+	{
+		if (args->GetSize()) {
+			auto videoComposition =
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetVideoCompositionManager()
+					->GetVideoCompositionById(
+						args->GetValue(0));
+
+			if (videoComposition.get())
+				videoComposition->DeserializeTransition(args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("crashProgram");
 	{
 		QtPostTask([]() -> void {

@@ -14,7 +14,7 @@ public:
 	void operator=(obs_graphics_guard & other) = delete;
 };
 
-static void SerializeObsTransition(obs_source_t* t, int durationMilliseconds, CefRefPtr<CefValue> &output)
+static void SerializeObsTransition(std::string videoCompositionId, obs_source_t* t, int durationMilliseconds, CefRefPtr<CefValue> &output)
 {
 	output->SetNull();
 
@@ -25,6 +25,7 @@ static void SerializeObsTransition(obs_source_t* t, int durationMilliseconds, Ce
 
 	std::string id = obs_source_get_id(t);
 	d->SetString("class", id);
+	d->SetString("videoCompositionId", id);
 
 	auto settings = obs_source_get_settings(t);
 
@@ -340,7 +341,7 @@ void StreamElementsVideoCompositionBase::SerializeTransition(
 {
 	obs_graphics_guard graphics_guard;
 
-	SerializeObsTransition(GetTransition(),
+	SerializeObsTransition(GetId(), GetTransition(),
 			       GetTransitionDurationMilliseconds(), output);
 }
 
@@ -361,7 +362,7 @@ void StreamElementsVideoCompositionBase::DeserializeTransition(
 	SetTransition(transition);
 	SetTransitionDurationMilliseconds(durationMs);
 
-	SerializeObsTransition(transition, durationMs, output);
+	SerializeObsTransition(GetId(), transition, durationMs, output);
 
 	obs_source_release(transition);
 }
