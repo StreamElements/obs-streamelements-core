@@ -77,7 +77,33 @@ static void SerializeObsTransition(std::string videoCompositionId, obs_source_t*
 	output->SetDictionary(d);
 }
 
-bool DeserializeObsTransition(CefRefPtr<CefValue> input, obs_source_t **t, int *durationMilliseconds)
+static obs_source_t* GetExistingObsTransition(std::string lookupId)
+{
+	obs_source_t *result = nullptr;
+
+	obs_frontend_source_list l = {};
+	obs_frontend_get_transitions(&l);
+
+	for (size_t idx = 0; idx < l.sources.num; ++idx) {
+		auto source = l.sources.array[idx];
+
+		std::string id = obs_source_get_id(source);
+
+		if (id == lookupId) {
+			result = source;
+
+			obs_source_addref(result);
+
+			break;
+		}
+	}
+
+	obs_frontend_source_list_free(&l);
+
+	return result;
+}
+
+bool DeserializeObsTransition(CefRefPtr<CefValue> input, obs_source_t **t, int *durationMilliseconds, bool useExisting)
 {
 	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
 		return false;
@@ -89,15 +115,25 @@ bool DeserializeObsTransition(CefRefPtr<CefValue> input, obs_source_t **t, int *
 
 	std::string id = d->GetString("class");
 
-	auto settings = obs_data_create();
+	if (useExisting) {
+		*t = GetExistingObsTransition(id);
+
+		if (!*t)
+			return false;
+	} else {
+		*t = obs_source_create_private(id.c_str(), id.c_str(),
+					       nullptr);
+	}
 
 	if (d->HasKey("settings")) {
-		DeserializeObsData(d->GetValue("settings"), settings);
-	}
-	
-	*t = obs_source_create_private(id.c_str(), id.c_str(), settings);
+		auto settings = obs_data_create();
 
-	obs_data_release(settings);
+		DeserializeObsData(d->GetValue("settings"), settings);
+
+		obs_source_update(*t, settings);
+
+		obs_data_release(settings);
+	}
 
 	if (d->HasKey("width") &&
 	    d->GetType("width") == VTYPE_INT && d->HasKey("height") && d->GetType("height") == VTYPE_INT) {
@@ -354,7 +390,8 @@ void StreamElementsVideoCompositionBase::DeserializeTransition(
 	obs_source_t *transition;
 	int durationMs;
 
-	if (!DeserializeObsTransition(input, &transition, &durationMs))
+	if (!DeserializeObsTransition(input, &transition, &durationMs,
+				      IsObsNativeComposition()))
 		return;
 
 	obs_graphics_guard graphics_guard;

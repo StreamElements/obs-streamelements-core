@@ -188,6 +188,8 @@ public:
 	}
 
 public:
+	virtual bool IsObsNativeComposition() = 0;
+
 	virtual void SerializeComposition(CefRefPtr<CefValue> &output) = 0;
 
 	virtual obs_scene_t *GetCurrentScene() = 0;
@@ -240,6 +242,8 @@ public:
 	}
 
 public:
+	virtual bool IsObsNativeComposition() { return true; }
+
 	virtual std::shared_ptr<
 		StreamElementsVideoCompositionBase::CompositionInfo>
 		GetCompositionInfo(StreamElementsCompositionEventListener* listener);
@@ -325,6 +329,8 @@ private:
 	obs_scene_t *m_currentScene = nullptr;
 
 public:
+	virtual bool IsObsNativeComposition() { return false; }
+
 	virtual std::shared_ptr<
 		StreamElementsVideoCompositionBase::CompositionInfo>
 	GetCompositionInfo(StreamElementsCompositionEventListener *listener);

@@ -190,6 +190,7 @@ void StreamElementsVideoCompositionManager::SerializeAvailableTransitionClasses(
 {
 	auto list = CefListValue::Create();
 
+	/*
 	const char *id;
 	for (size_t idx = 0; obs_enum_transition_types(idx, &id); ++idx) {
 		auto d = CefDictionaryValue::Create();
@@ -211,6 +212,36 @@ void StreamElementsVideoCompositionManager::SerializeAvailableTransitionClasses(
 
 		list->SetDictionary(list->GetSize(), d);
 	}
+	*/
+
+	obs_frontend_source_list l = {};
+	obs_frontend_get_transitions(&l);
+
+	for (size_t idx = 0; idx < l.sources.num; ++idx) {
+		auto source = l.sources.array[idx];
+
+		std::string id = obs_source_get_id(source);
+
+		auto d = CefDictionaryValue::Create();
+
+		auto props = obs_get_source_properties(id.c_str());
+		auto propsValue = CefValue::Create();
+		SerializeObsProperties(props, propsValue);
+		obs_properties_destroy(props);
+
+		auto defaultsData = obs_get_source_defaults(id.c_str());
+		d->SetValue("defaultSettings", SerializeObsData(defaultsData));
+		obs_data_release(defaultsData);
+
+		d->SetString("class", id);
+		d->SetValue("properties", propsValue);
+
+		d->SetString("label", obs_source_get_display_name(id.c_str()));
+
+		list->SetDictionary(list->GetSize(), d);
+	}
+
+	obs_frontend_source_list_free(&l);
 
 	output->SetList(list);
 }
