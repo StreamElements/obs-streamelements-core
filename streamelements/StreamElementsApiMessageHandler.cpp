@@ -1991,17 +1991,31 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAllScenes");
 	{
+		CefRefPtr<CefValue> input = CefValue::Create();
+
+		if (args->GetSize())
+			input = args->GetValue(0);
+		else
+			input->SetNull();
+
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetObsSceneManager()
-			->SerializeObsScenes(result);
+			->SerializeObsScenes(input, result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getCurrentScene");
 	{
+		CefRefPtr<CefValue> input = CefValue::Create();
+
+		if (args->GetSize())
+			input = args->GetValue(0);
+		else
+			input->SetNull();
+
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetObsSceneManager()
-			->SerializeObsCurrentScene(result);
+			->SerializeObsCurrentScene(input, result);
 	}
 	API_HANDLER_END();
 
@@ -2419,6 +2433,218 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			StreamElementsConfig::GetInstance()
 				->ReadScopedJsonFilesList(args->GetValue(0),
 							  result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllAvailableVideoEncoderClasses");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->SerializeAvailableEncoderClasses(OBS_ENCODER_VIDEO,
+							   result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllAvailableAudioEncoderClasses");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->SerializeAvailableEncoderClasses(OBS_ENCODER_AUDIO,
+							   result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllVideoCompositions");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->SerializeAllCompositions(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeVideoCompositionsByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetVideoCompositionManager()
+				->RemoveCompositionsByIds(args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addVideoComposition");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetVideoCompositionManager()
+				->DeserializeComposition(args->GetValue(0),
+							 result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeVideoCompositionViewOverlay");
+	{
+		auto browserWidget = self->GetBrowserWidget();
+
+		if (browserWidget) {
+			browserWidget->RemoveVideoCompositionView();
+
+			result->SetBool(true);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getVideoCompositionViewOverlayProperties");
+	{
+		result->SetNull();
+
+		auto browserWidget = self->GetBrowserWidget();
+
+		if (browserWidget) {
+			browserWidget->SerializeVideoCompositionView(result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setVideoCompositionViewOverlayProperties");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			auto browserWidget = self->GetBrowserWidget();
+
+			if (browserWidget) {
+				browserWidget->DeserializeVideoCompositionView(
+					args->GetValue(0),
+					result);
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("openSceneItemPropertiesDialogById");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->OpenSceneItemPropertiesById(args->GetValue(0),
+							      result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("openSceneItemFiltersDialogById");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->OpenSceneItemFiltersById(args->GetValue(0),
+							   result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("openSceneItemInteractionDialogById");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->OpenSceneItemInteractionById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("openSceneItemTransformEditorDialogById");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->OpenSceneItemTransformEditorById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("takeScreenshot");
+	{
+		if (args->GetSize()) {
+			auto input = args->GetValue(0);
+			if (input->GetType() == VTYPE_DICTIONARY) {
+				auto d = input->GetDictionary();
+
+				auto videoCompositionManager =
+					StreamElementsGlobalStateManager::GetInstance()
+						->GetVideoCompositionManager();
+
+				std::shared_ptr<
+					StreamElementsVideoCompositionBase>
+					videoComposition = nullptr;
+
+				if (d->HasKey("videoCompositionId") &&
+				    d->GetType("videoCompositionId") ==
+					    VTYPE_STRING) {
+					videoComposition =
+						videoCompositionManager->GetVideoCompositionById(
+							d->GetString(
+								"videoCompositionId"));
+				} else {
+					videoComposition =
+						videoCompositionManager
+							->GetObsNativeVideoComposition();
+				}
+
+				if (videoComposition.get()) {
+					videoComposition->TakeScreenshot();
+
+					result->SetBool(true);
+				}
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAvailableTransitionClasses");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->SerializeAvailableTransitionClasses(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getVideoCompositionTransition");
+	{
+		if (args->GetSize()) {
+			auto videoComposition =
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetVideoCompositionManager()
+					->GetVideoCompositionById(
+						args->GetValue(0));
+
+			if (videoComposition.get())
+				videoComposition->SerializeTransition(result);
+		} else {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetVideoCompositionManager()
+				->GetObsNativeVideoComposition()
+				->SerializeTransition(result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setVideoCompositionTransition");
+	{
+		if (args->GetSize()) {
+			auto videoComposition =
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetVideoCompositionManager()
+					->GetVideoCompositionById(
+						args->GetValue(0));
+
+			if (videoComposition.get())
+				videoComposition->DeserializeTransition(args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();

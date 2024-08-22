@@ -2,6 +2,7 @@
 
 #include "StreamElementsSceneItemsMonitor.hpp"
 #include "StreamElementsScenesListWidgetManager.hpp"
+#include "StreamElementsVideoComposition.hpp"
 
 #include "cef-headers.hpp"
 
@@ -12,6 +13,13 @@
 #include <QApplication>
 
 #include <mutex>
+
+void add_scene_signals(obs_source_t *scene, void *data);
+void add_scene_signals(obs_scene_t *scene, void *data);
+void add_source_signals(obs_source_t *source, void *data);
+void remove_scene_signals(obs_source_t *scene, void *data);
+void remove_scene_signals(obs_scene_t *scene, void *data);
+void remove_source_signals(obs_source_t *source, void *data);
 
 class StreamElementsObsSceneManager {
 public:
@@ -92,9 +100,11 @@ public:
 
 	/* Scenes */
 
-	void SerializeObsScenes(CefRefPtr<CefValue> &output);
+	void SerializeObsScenes(CefRefPtr<CefValue> input,
+				CefRefPtr<CefValue> &output);
 
-	void SerializeObsCurrentScene(CefRefPtr<CefValue> &output);
+	void SerializeObsCurrentScene(CefRefPtr<CefValue> input,
+				      CefRefPtr<CefValue> &output);
 
 	void DeserializeObsScene(CefRefPtr<CefValue> input,
 				 CefRefPtr<CefValue> &output);
@@ -126,8 +136,21 @@ public:
 	DeserializeObsCurrentSceneCollectionById(CefRefPtr<CefValue> input,
 						 CefRefPtr<CefValue> &output);
 
+	/* OBS Native Dialogs */
+
+	void OpenSceneItemPropertiesById(CefRefPtr<CefValue> input,
+					 CefRefPtr<CefValue> &output);
+	void OpenSceneItemFiltersById(CefRefPtr<CefValue> input,
+				      CefRefPtr<CefValue> &output);
+	void OpenSceneItemInteractionById(CefRefPtr<CefValue> input,
+					  CefRefPtr<CefValue> &output);
+	void OpenSceneItemTransformEditorById(CefRefPtr<CefValue> input,
+					      CefRefPtr<CefValue> &output);
+
 protected:
 	void DeserializeAuxiliaryObsSceneItemProperties(
+		std::shared_ptr<StreamElementsVideoCompositionBase>
+			videoComposition,
 		obs_sceneitem_t *sceneitem, CefRefPtr<CefDictionaryValue> d);
 
 protected:
@@ -145,8 +168,6 @@ protected:
 	void RefreshObsSceneItemsList();
 
 	std::string ObsGetUniqueSourceName(std::string name);
-
-	std::string ObsGetUniqueSceneName(std::string name);
 
 	std::string ObsGetUniqueSceneCollectionName(std::string name);
 

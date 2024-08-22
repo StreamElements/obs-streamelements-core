@@ -2,6 +2,7 @@
 #include "StreamElementsApiMessageHandler.hpp"
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
+#include "StreamElementsVideoCompositionViewWidget.hpp"
 
 #include "../../obs-browser/panel/browser-panel.hpp"
 #include "../deps/base64/base64.hpp"
@@ -233,6 +234,8 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 			std::make_shared<StreamElementsApiMessageHandler>("unknown");
 	}
 
+	m_requestedApiMessageHandler->SetBrowserWidget(this);
+
 	uint16_t port = StreamElementsGlobalStateManager::GetInstance()
 				->GetWebsocketApiServer()
 				->GetPort();
@@ -409,9 +412,16 @@ StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 {
 	std::lock_guard<decltype(s_mutex)> guard(s_mutex);
 
-	StreamElementsGlobalStateManager::GetInstance()
-		->GetWebsocketApiServer()
-		->UnregisterMessageHandler(m_clientId, m_msgHandler);
+	RemoveVideoCompositionView();
+
+	m_requestedApiMessageHandler->SetBrowserWidget(nullptr);
+
+	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
+				 ->GetWebsocketApiServer();
+
+	if (apiServer) {
+		apiServer->UnregisterMessageHandler(m_clientId, m_msgHandler);
+	}
 
 	if (s_widgets.count(m_clientId)) {
 		s_widgets.erase(m_clientId);
@@ -494,4 +504,117 @@ void StreamElementsBrowserWidget::focusOutEvent(QFocusEvent *event)
 	if (event->reason() != Qt::MenuBarFocusReason && event->reason() != Qt::PopupFocusReason) {
 		m_cefWidget->clearFocus();
 	}
+}
+
+void StreamElementsBrowserWidget::RemoveVideoCompositionView()
+{
+	if (!m_activeVideoCompositionViewWidget)
+		return;
+
+	m_activeVideoCompositionViewWidget->hide();
+	m_activeVideoCompositionViewWidget->deleteLater();
+
+	m_activeVideoCompositionViewWidget = nullptr;
+}
+
+void StreamElementsBrowserWidget::SetVideoCompositionView(
+	std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition, QRect &coords)
+{
+	if (m_activeVideoCompositionViewWidget &&
+	    m_activeVideoCompositionViewWidget->GetVideoComposition().get() !=
+		    videoComposition.get()) {
+		// Existing video composition is not the same as the one being set
+		RemoveVideoCompositionView();
+	}
+
+	if (!m_activeVideoCompositionViewWidget) {
+		m_activeVideoCompositionViewWidget =
+			new StreamElementsVideoCompositionViewWidget(
+				this, videoComposition);
+	}
+
+	m_activeVideoCompositionViewWidget->setGeometry(coords);
+	m_activeVideoCompositionViewWidget->show();
+}
+
+void StreamElementsBrowserWidget::SerializeVideoCompositionView(
+	CefRefPtr<CefValue>&
+	output)
+{
+	output->SetNull();
+
+	if (!m_activeVideoCompositionViewWidget)
+		return;
+
+	auto root = CefDictionaryValue::Create();
+
+	root->SetString("videoCompositionId", m_activeVideoCompositionViewWidget
+						      ->GetVideoComposition()
+						      ->GetName());
+
+	auto geometry = CefDictionaryValue::Create();
+
+	auto rect = m_activeVideoCompositionViewWidget->geometry();
+
+	geometry->SetInt("left", rect.x());
+	geometry->SetInt("top", rect.y());
+	geometry->SetInt("width", rect.width());
+	geometry->SetInt("height", rect.width());
+
+	root->SetDictionary("geometry", geometry);
+
+	output->SetDictionary(root);
+}
+
+void StreamElementsBrowserWidget::DeserializeVideoCompositionView(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	output->SetNull();
+
+	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto root = input->GetDictionary();
+
+	if (!root->HasKey("videoCompositionId") ||
+	    root->GetType("videoCompositionId") != VTYPE_STRING)
+		return;
+
+	if (!root->HasKey("geometry") ||
+	    root->GetType("geometry") != VTYPE_DICTIONARY)
+		return;
+
+	std::string videoCompositionId = root->GetString("videoCompositionId");
+
+	auto videoComposition = StreamElementsGlobalStateManager::GetInstance()
+		->GetVideoCompositionManager()
+		->GetVideoCompositionById(videoCompositionId);
+
+	if (!videoComposition.get())
+		return;
+
+	auto geometry = root->GetDictionary("geometry");
+
+	if (!geometry->HasKey("left") || geometry->GetType("left") != VTYPE_INT)
+		return;
+	if (!geometry->HasKey("top") || geometry->GetType("top") != VTYPE_INT)
+		return;
+	if (!geometry->HasKey("width") || geometry->GetType("width") != VTYPE_INT)
+		return;
+	if (!geometry->HasKey("height") || geometry->GetType("height") != VTYPE_INT)
+		return;
+
+	QRect rect(geometry->GetInt("left"), geometry->GetInt("top"),
+		   geometry->GetInt("width"), geometry->GetInt("height"));
+
+	if (rect.width() <= 1)
+		return;
+
+	if (rect.height() <= 1)
+		return;
+
+	SetVideoCompositionView(videoComposition, rect);
+
+	SerializeVideoCompositionView(output);
 }

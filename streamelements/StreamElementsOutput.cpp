@@ -175,6 +175,19 @@ void StreamElementsOutputBase::handle_obs_frontend_event(
 
 	switch (event) {
 	case OBS_FRONTEND_EVENT_STREAMING_STARTING:
+		//
+		// OBS native output video encoder is already set up at this stage,
+		// so we can start our outputs as well.
+		//
+		// State is important, just in case that we are pulling from the native
+		// OBS video composition: in this case we want to re-use the encoder
+		// which has already been set-up by OBS itself.
+		//
+		// This is *especially* important for audio: at this moment, we are
+		// re-using the OBS native audio encoder for *all* our outputs -
+		// there is no API to mix a different audio stream, or to apply
+		// different encoding to the existing mix.
+		// 
 		self->Start();
 		break;
 	case OBS_FRONTEND_EVENT_STREAMING_STOPPED:
@@ -560,7 +573,7 @@ std::shared_ptr <StreamElementsCustomOutput> StreamElementsCustomOutput::Create(
 
 	std::string id = rootDict->GetString("id");
 	std::string name = rootDict->GetString("name");
-	std::string compositionId =
+	std::string videoCompositionId =
 		(rootDict->HasKey("videoCompositionId") && rootDict->GetType("videoCompositionId") ==
 					       VTYPE_STRING
 			? rootDict->GetString("videoCompositionId")
@@ -585,6 +598,20 @@ std::shared_ptr <StreamElementsCustomOutput> StreamElementsCustomOutput::Create(
 					   ? d->GetString("authPassword")
 					   : "";
 
+	auto videoComposition =
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->GetVideoCompositionById(videoCompositionId);
+
+	if (!videoComposition && !videoCompositionId.size()) {
+		videoComposition =
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetVideoCompositionManager()
+				->GetObsNativeVideoComposition();
+	} else {
+		return nullptr;
+	}
+
 	// Streaming service
 	obs_service_t *service = obs_service_create(
 		"rtmp_custom", "default_service", NULL, NULL);
@@ -607,20 +634,8 @@ std::shared_ptr <StreamElementsCustomOutput> StreamElementsCustomOutput::Create(
 
 	auto bindToIP = "";
 
-	// TODO: Get composition from composition manager
-
-	auto composition = StreamElementsGlobalStateManager::GetInstance()
-		->GetCompositionManager()
-		->GetVideoCompositionById(id);
-
-	if (!composition) {
-		composition = StreamElementsGlobalStateManager::GetInstance()
-				      ->GetCompositionManager()
-				      ->GetObsNativeVideoComposition();
-	}
-
 	auto result = std::make_shared<StreamElementsCustomOutput>(
-		id, name, composition, service, bindToIP, auxData);
+		id, name, videoComposition, service, bindToIP, auxData);
 
 	result->SetEnabled(isEnabled);
 

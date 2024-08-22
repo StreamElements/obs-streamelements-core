@@ -123,6 +123,8 @@ public:
 	}
 };
 
+std::future<void> QtDelayTask(std::function<void()> task, int delayMs);
+
 #define QtPostTask QtAsyncCallFunctor(__FILE__, __LINE__, &__QtPostTask_Impl)
 #define QtExecSync QtAsyncCallFunctor(__FILE__, __LINE__, &__QtExecSync_Impl)
 
@@ -404,3 +406,18 @@ void DispatchClientJSEvent(std::string event, std::string eventArgsJson);
 
 bool SecureJoinPaths(std::string base, std::string subpath,
 			    std::string &result);
+
+/* ========================================================= */
+
+bool SerializeObsProperty(obs_property_t *prop, CefRefPtr<CefValue> &output);
+bool SerializeObsProperties(obs_properties_t *props,
+			    CefRefPtr<CefValue> &output);
+
+CefRefPtr<CefValue> SerializeObsData(obs_data_t *data);
+bool DeserializeObsData(CefRefPtr<CefValue> input, obs_data_t *data);
+
+CefRefPtr<CefValue>
+SerializeObsEncoderProperties(std::string id, obs_data_t *settings = nullptr);
+
+uint32_t GetInt32FromAlignmentId(std::string alignment);
+std::string GetAlignmentIdFromInt32(uint32_t a);

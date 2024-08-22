@@ -45,6 +45,9 @@ void StreamElementsOutputManager::DeserializeOutput(CefRefPtr<CefValue> input,
 
 	auto customOutput = StreamElementsCustomOutput::Create(input);
 
+	if (!customOutput.get())
+		return;
+
 	m_map[customOutput->GetId()] = customOutput;
 
 	customOutput->SerializeOutput(output);

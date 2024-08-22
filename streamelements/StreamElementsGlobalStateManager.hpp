@@ -164,9 +164,9 @@ public:
 	StreamElementsWebsocketApiServer* GetWebsocketApiServer() {
 		return m_websocketApiServer;
 	}
-	std::shared_ptr<StreamElementsVideoCompositionManager> GetCompositionManager()
+	std::shared_ptr<StreamElementsVideoCompositionManager> GetVideoCompositionManager()
 	{
-		return m_compositionManager;
+		return m_videoCompositionManager;
 	}
 	std::shared_ptr<StreamElementsOutputManager> GetOutputManager()
 	{
@@ -238,7 +238,7 @@ private:
 	StreamElementsPreviewManager *m_previewManager = nullptr;
 	StreamElementsWebsocketApiServer *m_websocketApiServer = nullptr;
 	WindowStateChangeEventFilter *m_windowStateEventFilter = nullptr;
-	std::shared_ptr<StreamElementsVideoCompositionManager> m_compositionManager =
+	std::shared_ptr<StreamElementsVideoCompositionManager> m_videoCompositionManager =
 		nullptr;
 	std::shared_ptr<StreamElementsOutputManager> m_outputManager = nullptr;
 
