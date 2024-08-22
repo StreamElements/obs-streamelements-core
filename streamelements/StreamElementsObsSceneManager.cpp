@@ -2177,6 +2177,8 @@ void StreamElementsObsSceneManager::DeserializeObsScene(
 void StreamElementsObsSceneManager::SetCurrentObsSceneById(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
 	output->SetNull();
 
 	if (!input.get() || input->GetType() != VTYPE_STRING)
@@ -2187,9 +2189,11 @@ void StreamElementsObsSceneManager::SetCurrentObsSceneById(
 	if (!id.size())
 		return;
 
-	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+	auto videoComposition =
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->GetVideoCompositionBySceneId(id);
 
-	auto videoComposition = GetVideoComposition(input);
 	if (!videoComposition.get())
 		return;
 

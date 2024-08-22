@@ -116,8 +116,11 @@ public:
 		auto pointer = GetPointerFromId(id.c_str());
 
 		for (auto scene : scenes) {
-			if (pointer == (void *)scene ||
-			    pointer == (void *)obs_scene_get_source(scene))
+			auto id1 = GetIdFromPointer(scene);
+			auto id2 =
+				GetIdFromPointer(obs_scene_get_source(scene));
+
+			if (id == id1 || id == id2)
 				return scene;
 		}
 

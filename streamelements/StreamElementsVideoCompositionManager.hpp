@@ -88,13 +88,8 @@ public:
 		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
 		for (auto kv : m_videoCompositionsMap) {
-			std::vector<obs_scene_t *> scenes;
-			kv.second->GetAllScenes(scenes);
-
-			for (auto scene : scenes) {
-				if (kv.second->GetSceneById(lookupId))
-					return kv.second;
-			}
+			if (kv.second->GetSceneById(lookupId))
+				return kv.second;
 		}
 
 		return nullptr;

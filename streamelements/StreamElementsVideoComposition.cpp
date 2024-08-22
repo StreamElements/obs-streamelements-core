@@ -728,8 +728,7 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	m_currentScene = obs_scene_create_private("Scene 1");
 	m_scenes.push_back(m_currentScene);
 
-	obs_transition_start(m_transition, OBS_TRANSITION_MODE_AUTO, 0,
-			     obs_scene_get_source(m_currentScene));
+	obs_transition_set(m_transition, obs_scene_get_source(m_currentScene));
 }
 
 StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
@@ -758,6 +757,16 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 
 	if (m_scenes.size()) {
 		for (auto scene : m_scenes) {
+			calldata_t *data = calldata_create();
+
+			auto source = obs_scene_get_source(scene);
+
+			calldata_set_ptr(data, "source", source);
+
+			remove_source_signals(source, data);
+			remove_scene_signals(source, data);
+
+			calldata_destroy(data);
 			obs_scene_release(scene);
 		}
 
@@ -895,8 +904,10 @@ StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 
 	auto scene = obs_scene_create_private(GetUniqueSceneName(requestName).c_str());
 
+	obs_scene_addref(scene); // caller will release
 	m_scenes.push_back(scene);
 
+	/*
 	auto source = obs_scene_get_source(scene);
 
 	calldata_t *data = calldata_create();
@@ -907,6 +918,7 @@ StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 	add_scene_signals(source, data);
 
 	calldata_destroy(data);
+	*/
 
 	return scene;
 }
@@ -940,16 +952,17 @@ void StreamElementsCustomVideoComposition::SetTransition(
 
 	obs_source_addref(transition);
 
-	//obs_transition_swap_begin(transition, old_transition);
+	obs_transition_swap_begin(transition, old_transition);
 	obs_view_set_source(m_view, 0, transition);
-	//obs_transition_swap_end(transition, old_transition);
+	obs_transition_swap_end(transition, old_transition);
 
 	m_transition = transition;
 
+	//obs_scene_addref(m_currentScene);
+	obs_transition_clear(old_transition);
 	obs_source_release(old_transition);
 
-	obs_transition_start(m_transition, OBS_TRANSITION_MODE_AUTO, 0,
-			     obs_scene_get_source(m_currentScene));
+	obs_transition_set(m_transition, obs_scene_get_source(m_currentScene));
 }
 
 obs_source_t *StreamElementsCustomVideoComposition::GetTransition()
@@ -972,12 +985,25 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 
 	for (auto item : m_scenes) {
 		if (scene == item) {
+			if (m_currentScene == scene) {
+				return true;
+			}
+
 			m_currentScene = scene;
 
-			obs_transition_start(
-				m_transition, OBS_TRANSITION_MODE_AUTO,
-				GetTransitionDurationMilliseconds(),
-				obs_scene_get_source(m_currentScene));
+			float t = obs_transition_get_time(m_transition);
+			bool stillTransitioning = t < 1.0f && t > 0.0f;
+
+			if (stillTransitioning) {
+				obs_transition_set(
+					m_transition,
+					obs_scene_get_source(m_currentScene));
+			} else {
+				obs_transition_start(
+					m_transition, OBS_TRANSITION_MODE_AUTO,
+					GetTransitionDurationMilliseconds(),
+					obs_scene_get_source(m_currentScene));
+			}
 
 			return true;
 		}
