@@ -19,7 +19,10 @@ StreamElementsBrowserWidgetManager::StreamElementsBrowserWidgetManager(
 {
 }
 
-StreamElementsBrowserWidgetManager::~StreamElementsBrowserWidgetManager() {}
+StreamElementsBrowserWidgetManager::~StreamElementsBrowserWidgetManager()
+{
+	// NOP
+}
 
 static QDockWidget *GetSystemWidgetById(const char *widgetId)
 {

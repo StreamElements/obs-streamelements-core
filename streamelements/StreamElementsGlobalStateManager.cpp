@@ -383,11 +383,11 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 				new WindowStateChangeEventFilter(
 					mainWindow());
 
-			m_compositionManager = std::make_shared<
+			m_videoCompositionManager = std::make_shared<
 				StreamElementsVideoCompositionManager>();
 			m_outputManager =
 				std::make_shared<StreamElementsOutputManager>(
-					m_compositionManager);
+					m_videoCompositionManager);
 
 						m_appStateListener = new ApplicationStateListener();
 			m_themeChangeListener = new ThemeChangeListener();
@@ -578,14 +578,15 @@ void StreamElementsGlobalStateManager::Shutdown()
 			m_themeChangeListener->deleteLater();
 			m_appStateListener->deleteLater();
 
-			m_compositionManager = nullptr;
-			m_outputManager = nullptr;
-
 			delete m_analyticsEventsManager;
 			delete m_performanceHistoryTracker;
 			delete m_outputSettingsManager;
 			delete m_bwTestManager;
 			delete m_widgetManager;
+
+			m_outputManager = nullptr;
+			m_videoCompositionManager = nullptr;
+
 			delete m_menuManager;
 			delete m_hotkeyManager;
 			delete m_obsSceneManager;
@@ -600,6 +601,8 @@ void StreamElementsGlobalStateManager::Shutdown()
 			delete m_websocketApiServer;
 			delete m_windowStateEventFilter;
 			delete m_cefCookieManager;
+
+			m_websocketApiServer = nullptr;
 		});
 #endif
 

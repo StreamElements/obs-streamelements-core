@@ -2959,23 +2959,35 @@ bool IsSafeFileExtension(std::string path)
 
 void DispatchClientMessage(std::string target, CefRefPtr<CefProcessMessage> msg)
 {
-	StreamElementsGlobalStateManager::GetInstance()
-		->GetWebsocketApiServer()
-		->DispatchClientMessage("system", target, msg);
+	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
+				 ->GetWebsocketApiServer();
+
+	if (!apiServer)
+		return;
+
+	apiServer->DispatchClientMessage("system", target, msg);
 }
 
 void DispatchClientJSEvent(std::string event, std::string eventArgsJson)
 {
-	StreamElementsGlobalStateManager::GetInstance()
-		->GetWebsocketApiServer()
-		->DispatchJSEvent("system", event, eventArgsJson);
+	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
+				 ->GetWebsocketApiServer();
+
+	if (!apiServer)
+		return;
+
+	apiServer->DispatchJSEvent("system", event, eventArgsJson);
 }
 
 void DispatchClientJSEvent(std::string target, std::string event, std::string eventArgsJson)
 {
-	StreamElementsGlobalStateManager::GetInstance()
-		->GetWebsocketApiServer()
-		->DispatchJSEvent("system", target, event, eventArgsJson);
+	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
+				 ->GetWebsocketApiServer();
+
+	if (!apiServer)
+		return;
+
+	apiServer->DispatchJSEvent("system", target, event, eventArgsJson);
 }
 
 bool SecureJoinPaths(std::string base, std::string subpath, std::string &result)

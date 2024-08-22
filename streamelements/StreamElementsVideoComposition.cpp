@@ -750,23 +750,13 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 	m_video = nullptr;
 
 	if (m_transition) {
-		obs_transition_clear(m_transition);
+		obs_transition_set(m_transition, nullptr);
 		obs_source_release(m_transition);
 		m_transition = nullptr;
 	}
 
 	if (m_scenes.size()) {
 		for (auto scene : m_scenes) {
-			calldata_t *data = calldata_create();
-
-			auto source = obs_scene_get_source(scene);
-
-			calldata_set_ptr(data, "source", source);
-
-			remove_source_signals(source, data);
-			remove_scene_signals(source, data);
-
-			calldata_destroy(data);
 			obs_scene_release(scene);
 		}
 
@@ -959,7 +949,7 @@ void StreamElementsCustomVideoComposition::SetTransition(
 	m_transition = transition;
 
 	//obs_scene_addref(m_currentScene);
-	obs_transition_clear(old_transition);
+	obs_transition_set(old_transition, nullptr);
 	obs_source_release(old_transition);
 
 	obs_transition_set(m_transition, obs_scene_get_source(m_currentScene));

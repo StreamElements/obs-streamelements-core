@@ -416,9 +416,12 @@ StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 
 	m_requestedApiMessageHandler->SetBrowserWidget(nullptr);
 
-	StreamElementsGlobalStateManager::GetInstance()
-		->GetWebsocketApiServer()
-		->UnregisterMessageHandler(m_clientId, m_msgHandler);
+	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
+				 ->GetWebsocketApiServer();
+
+	if (apiServer) {
+		apiServer->UnregisterMessageHandler(m_clientId, m_msgHandler);
+	}
 
 	if (s_widgets.count(m_clientId)) {
 		s_widgets.erase(m_clientId);

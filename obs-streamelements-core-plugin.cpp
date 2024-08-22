@@ -43,14 +43,17 @@ bool obs_module_load(void)
 
 void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 {
-	if (event != OBS_FRONTEND_EVENT_FINISHED_LOADING)
-		return;
-
-	obs_frontend_remove_event_callback(handle_obs_frontend_event, nullptr);
-
-	// Initialize StreamElements plug-in
-	StreamElementsGlobalStateManager::GetInstance()->Initialize(
-		(QMainWindow *)obs_frontend_get_main_window());
+	switch (event) {
+	case OBS_FRONTEND_EVENT_FINISHED_LOADING:
+		// Initialize StreamElements plug-in
+		StreamElementsGlobalStateManager::GetInstance()->Initialize(
+			(QMainWindow *)obs_frontend_get_main_window());
+		break;
+	case OBS_FRONTEND_EVENT_EXIT:
+		// Shutdown StreamElements plug-in
+		StreamElementsGlobalStateManager::GetInstance()->Shutdown();
+		break;
+	}
 }
 
 void obs_module_post_load(void)
@@ -84,6 +87,5 @@ void obs_module_post_load(void)
 
 void obs_module_unload(void)
 {
-	// Shutdown StreamElements plug-in
-	StreamElementsGlobalStateManager::GetInstance()->Shutdown();
+	obs_frontend_remove_event_callback(handle_obs_frontend_event, nullptr);
 }

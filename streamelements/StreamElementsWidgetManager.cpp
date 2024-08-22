@@ -13,7 +13,12 @@ StreamElementsWidgetManager::StreamElementsWidgetManager(QMainWindow *parent)
 	assert(parent);
 }
 
-StreamElementsWidgetManager::~StreamElementsWidgetManager() {}
+StreamElementsWidgetManager::~StreamElementsWidgetManager()
+{
+	while (DestroyCurrentCentralWidget()) {
+		// NOP
+	}
+}
 
 //
 // The QApplication::sendPostedEvents() and setMinimumSize() black
