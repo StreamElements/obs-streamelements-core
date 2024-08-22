@@ -937,8 +937,15 @@ void StreamElementsCustomVideoComposition::SetTransition(
 	obs_graphics_guard graphics_guard;
 
 	auto old_transition = m_transition;
+
+	obs_source_addref(transition);
+
+	//obs_transition_swap_begin(transition, old_transition);
+	obs_view_set_source(m_view, 0, transition);
+	//obs_transition_swap_end(transition, old_transition);
+
 	m_transition = transition;
-	obs_source_addref(m_transition);
+
 	obs_source_release(old_transition);
 
 	obs_transition_start(m_transition, OBS_TRANSITION_MODE_AUTO, 0,
