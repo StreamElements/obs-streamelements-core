@@ -573,7 +573,7 @@ std::shared_ptr <StreamElementsCustomOutput> StreamElementsCustomOutput::Create(
 
 	std::string id = rootDict->GetString("id");
 	std::string name = rootDict->GetString("name");
-	std::string compositionId =
+	std::string videoCompositionId =
 		(rootDict->HasKey("videoCompositionId") && rootDict->GetType("videoCompositionId") ==
 					       VTYPE_STRING
 			? rootDict->GetString("videoCompositionId")
@@ -598,6 +598,20 @@ std::shared_ptr <StreamElementsCustomOutput> StreamElementsCustomOutput::Create(
 					   ? d->GetString("authPassword")
 					   : "";
 
+	auto videoComposition =
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->GetVideoCompositionById(videoCompositionId);
+
+	if (!videoComposition && !videoCompositionId.size()) {
+		videoComposition =
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetVideoCompositionManager()
+				->GetObsNativeVideoComposition();
+	} else {
+		return nullptr;
+	}
+
 	// Streaming service
 	obs_service_t *service = obs_service_create(
 		"rtmp_custom", "default_service", NULL, NULL);
@@ -620,20 +634,8 @@ std::shared_ptr <StreamElementsCustomOutput> StreamElementsCustomOutput::Create(
 
 	auto bindToIP = "";
 
-	// TODO: Get composition from composition manager
-
-	auto composition = StreamElementsGlobalStateManager::GetInstance()
-		->GetVideoCompositionManager()
-		->GetVideoCompositionById(id);
-
-	if (!composition) {
-		composition = StreamElementsGlobalStateManager::GetInstance()
-				      ->GetVideoCompositionManager()
-				      ->GetObsNativeVideoComposition();
-	}
-
 	auto result = std::make_shared<StreamElementsCustomOutput>(
-		id, name, composition, service, bindToIP, auxData);
+		id, name, videoComposition, service, bindToIP, auxData);
 
 	result->SetEnabled(isEnabled);
 
