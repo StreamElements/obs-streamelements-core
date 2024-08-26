@@ -16,6 +16,11 @@ StreamElementsVideoCompositionManager::StreamElementsVideoCompositionManager()
 
 StreamElementsVideoCompositionManager::~StreamElementsVideoCompositionManager()
 {
+	Reset();
+}
+
+void StreamElementsVideoCompositionManager::Reset()
+{
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
 	m_videoCompositionsMap.clear();

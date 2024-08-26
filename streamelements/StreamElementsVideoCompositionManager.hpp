@@ -24,6 +24,8 @@ public:
 
 	void SerializeAvailableTransitionClasses(CefRefPtr<CefValue> &output);
 
+	void Reset();
+
 public:
 	std::shared_ptr<StreamElementsVideoCompositionBase> GetObsNativeVideoComposition()
 	{

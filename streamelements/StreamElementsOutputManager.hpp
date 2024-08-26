@@ -25,6 +25,8 @@ public:
 	void DisableOutputsByIds(CefRefPtr<CefValue> input,
 				 CefRefPtr<CefValue> &output);
 
+	void Reset();
+
 private:
 	bool GetValidIds(CefRefPtr<CefValue> input,
 			 std::map<std::string, bool> &output, bool testRemove,
