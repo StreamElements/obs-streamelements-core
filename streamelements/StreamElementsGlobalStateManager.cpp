@@ -665,6 +665,8 @@ void StreamElementsGlobalStateManager::StartOnBoardingUI(UiModifier uiModifier)
 
 	QtPostTask([this]() -> void {
 		GetObsSceneManager()->Reset();
+		GetOutputManager()->Reset();
+		GetVideoCompositionManager()->Reset();
 
 		GetMenuManager()->Update();
 
@@ -723,9 +725,9 @@ void StreamElementsGlobalStateManager::SwitchToOBSStudio()
 				StreamElementsConfig::
 					STARTUP_FLAGS_ONBOARDING_MODE);
 
-			StreamElementsGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
-				->Reset();
+			GetObsSceneManager()->Reset();
+			GetOutputManager()->Reset();
+			GetVideoCompositionManager()->Reset();
 
 			GetMenuManager()->Update();
 		}

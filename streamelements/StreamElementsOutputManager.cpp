@@ -14,12 +14,21 @@ StreamElementsOutputManager::StreamElementsOutputManager(
 
 StreamElementsOutputManager::~StreamElementsOutputManager()
 {
+	Reset();
+}
+
+void StreamElementsOutputManager::Reset()
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
 	m_map.clear();
 }
 
 void StreamElementsOutputManager::DeserializeOutput(CefRefPtr<CefValue> input,
 						    CefRefPtr<CefValue> &output)
 {
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
 	output->SetBool(false);
 
 	if (!input.get())
