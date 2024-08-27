@@ -67,11 +67,19 @@ void StreamElementsVideoCompositionManager::DeserializeComposition(
 		return;
 
 	try {
+		auto recordingVideoEncoders = CefValue::Create();
+		recordingVideoEncoders->SetNull();
+
+		if (root->HasKey("recordingVideoEncoders"))
+			recordingVideoEncoders =
+				root->GetValue("recordingVideoEncoders");
+
 		auto composition = StreamElementsCustomVideoComposition::Create(
 			id, root->GetString("name"),
 			videoFrame->GetInt("width"),
 			videoFrame->GetInt("height"),
-			root->GetValue("streamingVideoEncoders"));
+			root->GetValue("streamingVideoEncoders"),
+			recordingVideoEncoders);
 
 		if (!composition)
 			return;
