@@ -1282,6 +1282,16 @@ StreamElementsObsSceneManager::StreamElementsObsSceneManager(QMainWindow *parent
 	signal_handler_connect(handler, "source_remove", handle_source_remove,
 			       this);
 
+	// Add signals to existing scenes
+	obs_enum_scenes(
+		[](void * /*param*/, obs_source_t *scene_source) -> bool {
+			add_source_signals(scene_source, nullptr);
+
+			add_scene_signals(scene_source, nullptr);
+
+		return true;
+	}, nullptr);
+
 	CefRefPtr<CefValue> dummy1 = CefValue::Create();
 	DeserializeSceneItemsAuxiliaryActions(
 		CefParseJSON(StreamElementsConfig::GetInstance()
@@ -1314,6 +1324,17 @@ StreamElementsObsSceneManager::~StreamElementsObsSceneManager()
 
 	signal_handler_disconnect(handler, "source_remove",
 				  handle_source_remove, this);
+
+	// Remove signals from existing scenes
+	obs_enum_scenes(
+		[](void * /*param*/, obs_source_t *scene_source) -> bool {
+			remove_source_signals(scene_source, nullptr);
+
+			remove_scene_signals(scene_source, nullptr);
+
+			return true;
+		},
+		nullptr);
 }
 
 void StreamElementsObsSceneManager::ObsAddSourceInternal(
@@ -2014,17 +2035,19 @@ void StreamElementsObsSceneManager::SerializeObsSceneItems(
 	if (!videoComposition.get())
 		return;
 
-	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
-		return;
+	obs_scene_t *scene = nullptr;
 
-	auto root = input->GetDictionary();
+	if (input.get() && input->GetType() == VTYPE_DICTIONARY) {
+		auto root = input->GetDictionary();
 
-	if (!root->HasKey("id") || root->GetType("id") != VTYPE_STRING)
-		return;
+		if (!root->HasKey("id") || root->GetType("id") != VTYPE_STRING)
+			return;
 
-	// Get scene handle
-	obs_scene_t *scene =
-		videoComposition->GetSceneById(root->GetString("id"));
+		// Get scene handle
+		scene = videoComposition->GetSceneById(root->GetString("id"));
+	} else {
+		scene = videoComposition->GetCurrentScene();
+	}
 
 	if (scene) {
 		struct local_context {

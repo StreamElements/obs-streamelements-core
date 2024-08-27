@@ -81,6 +81,8 @@ public:
 	void Initialize(QMainWindow *obs_main_window);
 	void Shutdown();
 
+	bool IsInitialized() { return m_initialized; }
+
 	void Reset(bool deleteAllCookies = true,
 		   UiModifier uiModifier = Default);
 	void DeleteCookies();

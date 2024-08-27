@@ -31,6 +31,9 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 	std::string source, CefRefPtr<CefProcessMessage> message,
 	const long cefClientId)
 {
+	if (!StreamElementsGlobalStateManager::GetInstance()->IsInitialized())
+		return true;
+
 	const std::string &name = message->GetName();
 
 	if (name == MSG_ON_CONTEXT_CREATED) {
@@ -117,13 +120,16 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 							context->result,
 							JSON_WRITER_DEFAULT));
 
-					StreamElementsGlobalStateManager::
-						GetInstance()
-							->GetWebsocketApiServer()
-							->DispatchClientMessage(
-								"system",
-								context->source,
-								msg);
+					auto apiServer =
+						StreamElementsGlobalStateManager::
+							GetInstance()
+								->GetWebsocketApiServer();
+
+					if (!apiServer)
+						return;
+
+					apiServer->DispatchClientMessage(
+						"system", context->source, msg);
 				}
 
 				delete context;
@@ -148,6 +154,14 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 
 			QtPostTask (
 				[context]() -> void {
+					if (!StreamElementsGlobalStateManager::
+						GetInstance()
+						->IsInitialized())
+					{
+						context->complete();
+						return;
+					}
+
 					if (IsTraceLogLevel()) {
 						blog(LOG_INFO,
 						     "obs-streamelements-core[%s]: API: performing call to '%s', callback id %d",
@@ -181,6 +195,9 @@ void StreamElementsApiMessageHandler::InvokeApiCallHandlerAsync(
 	const long cefClientId,
 	const bool enable_logging)
 {
+	if (!StreamElementsGlobalStateManager::GetInstance()->IsInitialized())
+		return;
+
 	auto runtimeStatus = m_runtimeStatus;
 
 	CefRefPtr<CefValue> result = CefValue::Create();

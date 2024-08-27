@@ -114,6 +114,9 @@ public:
 	std::string GetUniqueSceneName(std::string name);
 
 	obs_scene_t* GetSceneById(std::string id) {
+		if (!id.size())
+			return GetCurrentScene();
+
 		std::vector<obs_scene_t *> scenes;
 		GetAllScenes(scenes);
 
