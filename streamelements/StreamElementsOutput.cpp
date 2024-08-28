@@ -187,10 +187,39 @@ void StreamElementsOutputBase::handle_obs_frontend_event(
 		// re-using the OBS native audio encoder for *all* our outputs -
 		// there is no API to mix a different audio stream, or to apply
 		// different encoding to the existing mix.
-		// 
-		self->Start();
+		//
+		if (self->m_obsStateDependency == Streaming)
+			self->Start();
 		break;
 	case OBS_FRONTEND_EVENT_STREAMING_STOPPED:
+		if (self->m_obsStateDependency == Streaming)
+			self->Stop();
+		break;
+
+
+	case OBS_FRONTEND_EVENT_RECORDING_STARTING:
+		//
+		// OBS native output video encoder is already set up at this stage,
+		// so we can start our outputs as well.
+		//
+		// State is important, just in case that we are pulling from the native
+		// OBS video composition: in this case we want to re-use the encoder
+		// which has already been set-up by OBS itself.
+		//
+		// This is *especially* important for audio: at this moment, we are
+		// re-using the OBS native audio encoder for *all* our outputs -
+		// there is no API to mix a different audio stream, or to apply
+		// different encoding to the existing mix.
+		//
+		if (self->m_obsStateDependency == Recording)
+			self->Start();
+		break;
+
+	case OBS_FRONTEND_EVENT_RECORDING_STOPPED:
+		if (self->m_obsStateDependency == Recording)
+			self->Stop();
+		break;
+
 	case OBS_FRONTEND_EVENT_EXIT:
 		self->Stop();
 		break;
@@ -273,9 +302,10 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 
 StreamElementsOutputBase::StreamElementsOutputBase(
 	std::string id, std::string name,
+	ObsStateDependencyType obsStateDependency,
 	std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition,
 	CefRefPtr<CefDictionaryValue> auxData)
-	: m_id(id), m_name(name), m_videoComposition(videoComposition), m_enabled(false)
+	: m_id(id), m_name(name), m_obsStateDependency(obsStateDependency), m_videoComposition(videoComposition), m_enabled(false)
 {
 	m_auxData = auxData.get() ? auxData : CefDictionaryValue::Create();
 
@@ -442,12 +472,12 @@ void StreamElementsOutputBase::Stop()
 // StreamElementsCustomOutput
 ////////////////////////////////////////////////////////////////////////////////
 
-bool StreamElementsCustomOutput::CanDisable()
+bool StreamElementsCustomStreamingOutput::CanDisable()
 {
 	return true;
 }
 
-bool StreamElementsCustomOutput::StartInternal(
+bool StreamElementsCustomStreamingOutput::StartInternal(
 	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
 		videoCompositionInfo)
 {
@@ -504,7 +534,7 @@ bool StreamElementsCustomOutput::StartInternal(
 	return false;
 }
 
-void StreamElementsCustomOutput::StopInternal()
+void StreamElementsCustomStreamingOutput::StopInternal()
 {
 	if (!m_videoCompositionInfo)
 		return;
@@ -519,7 +549,7 @@ void StreamElementsCustomOutput::StopInternal()
 	m_output = nullptr;
 }
 
-void StreamElementsCustomOutput::SerializeStreamingSettings(
+void StreamElementsCustomStreamingOutput::SerializeStreamingSettings(
 	CefRefPtr<CefValue>& output)
 {
 	auto d = CefDictionaryValue::Create();
@@ -547,7 +577,7 @@ void StreamElementsCustomOutput::SerializeStreamingSettings(
 	output->SetDictionary(d);
 }
 
-std::shared_ptr <StreamElementsCustomOutput> StreamElementsCustomOutput::Create(CefRefPtr<CefValue> input)
+std::shared_ptr <StreamElementsCustomStreamingOutput> StreamElementsCustomStreamingOutput::Create(CefRefPtr<CefValue> input)
 {
 	if (!input.get())
 		return nullptr;
@@ -634,7 +664,7 @@ std::shared_ptr <StreamElementsCustomOutput> StreamElementsCustomOutput::Create(
 
 	auto bindToIP = "";
 
-	auto result = std::make_shared<StreamElementsCustomOutput>(
+	auto result = std::make_shared<StreamElementsCustomStreamingOutput>(
 		id, name, videoComposition, service, bindToIP, auxData);
 
 	result->SetEnabled(isEnabled);
@@ -646,7 +676,7 @@ std::shared_ptr <StreamElementsCustomOutput> StreamElementsCustomOutput::Create(
 // StreamElementsObsNativeOutput
 ////////////////////////////////////////////////////////////////////////////////
 
-bool StreamElementsObsNativeOutput::StartInternal(
+bool StreamElementsObsNativeStreamingOutput::StartInternal(
 	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
 	videoCompositionInfo)
 {
@@ -657,14 +687,14 @@ bool StreamElementsObsNativeOutput::StartInternal(
 	return true;
 }
 
-void StreamElementsObsNativeOutput::StopInternal()
+void StreamElementsObsNativeStreamingOutput::StopInternal()
 {
 	// NOP: This is managed by the OBS front-end
 
 	DisconnectOutputEvents();
 }
 
-void StreamElementsObsNativeOutput::SerializeStreamingSettings(
+void StreamElementsObsNativeStreamingOutput::SerializeStreamingSettings(
 	CefRefPtr<CefValue> &output)
 {
 	auto d = CefDictionaryValue::Create();

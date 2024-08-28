@@ -5,7 +5,7 @@ StreamElementsOutputManager::StreamElementsOutputManager(
 	std::shared_ptr<StreamElementsVideoCompositionManager> compositionManager)
 	: m_compositionManager(compositionManager)
 {
-	auto nativeOutput = std::make_shared<StreamElementsObsNativeOutput>(
+	auto nativeOutput = std::make_shared<StreamElementsObsNativeStreamingOutput>(
 		"native", "OBS Native",
 		m_compositionManager->GetObsNativeVideoComposition());
 
@@ -52,7 +52,7 @@ void StreamElementsOutputManager::DeserializeOutput(CefRefPtr<CefValue> input,
 
 	input->SetDictionary(d);
 
-	auto customOutput = StreamElementsCustomOutput::Create(input);
+	auto customOutput = StreamElementsCustomStreamingOutput::Create(input);
 
 	if (!customOutput.get())
 		return;

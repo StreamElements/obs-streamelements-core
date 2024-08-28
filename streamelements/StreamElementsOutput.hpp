@@ -4,6 +4,13 @@
 #include "StreamElementsVideoComposition.hpp"
 
 class StreamElementsOutputBase : public StreamElementsCompositionEventListener {
+public:
+	enum ObsStateDependencyType {
+		Streaming,
+		Recording,
+		None
+	};
+
 private:
 	std::string m_id;
 	std::string m_name;
@@ -19,10 +26,14 @@ private:
 
 	std::string m_error;
 
+	ObsStateDependencyType m_obsStateDependency = Streaming;
+
 public:
 	StreamElementsOutputBase(
 		std::string id, std::string name,
-		std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition,
+		ObsStateDependencyType obsStateDependency,
+		std::shared_ptr<StreamElementsVideoCompositionBase>
+			videoComposition,
 		CefRefPtr<CefDictionaryValue> auxData);
 	virtual ~StreamElementsOutputBase();
 
@@ -83,7 +94,7 @@ private:
 						    calldata_t *cd);
 };
 
-class StreamElementsCustomOutput
+class StreamElementsCustomStreamingOutput
 	: public StreamElementsOutputBase
 {
 private:
@@ -98,12 +109,12 @@ private:
 	std::string m_bindToIP;
 
 public:
-	StreamElementsCustomOutput(
+	StreamElementsCustomStreamingOutput(
 		std::string id, std::string name,
 		std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition,
 		obs_service_t *service, const char *bindToIP,
 		CefRefPtr<CefDictionaryValue> auxData)
-		: StreamElementsOutputBase(id, name, videoComposition, auxData),
+		: StreamElementsOutputBase(id, name, Streaming, videoComposition, auxData),
 		  m_service(service)
 	{
 		if (bindToIP) {
@@ -113,7 +124,7 @@ public:
 		}
 	}
 
-	virtual ~StreamElementsCustomOutput()
+	virtual ~StreamElementsCustomStreamingOutput()
 	{
 		Stop();
 
@@ -126,7 +137,7 @@ public:
 	virtual void
 	SerializeStreamingSettings(CefRefPtr<CefValue> &output) override;
 
-	static std::shared_ptr<StreamElementsCustomOutput>
+	static std::shared_ptr<StreamElementsCustomStreamingOutput>
 	Create(CefRefPtr<CefValue> input);
 
 	virtual bool IsObsNativeVideoComposition() override { return false; }
@@ -139,16 +150,16 @@ protected:
 	virtual void StopInternal();
 };
 
-class StreamElementsObsNativeOutput : public StreamElementsOutputBase {
+class StreamElementsObsNativeStreamingOutput : public StreamElementsOutputBase {
 public:
-	StreamElementsObsNativeOutput(
+	StreamElementsObsNativeStreamingOutput(
 		std::string id, std::string name,
 		std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition)
-		: StreamElementsOutputBase(id, name, videoComposition, CefDictionaryValue::Create())
+		: StreamElementsOutputBase(id, name, Streaming, videoComposition, CefDictionaryValue::Create())
 	{
 	}
 
-	virtual ~StreamElementsObsNativeOutput()
+	virtual ~StreamElementsObsNativeStreamingOutput()
 	{
 	}
 
