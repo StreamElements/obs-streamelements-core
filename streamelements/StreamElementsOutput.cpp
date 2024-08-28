@@ -293,19 +293,35 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 
 	auto streamingSettings = CefValue::Create();
 
-	SerializeStreamingSettings(streamingSettings);
+	SerializeOutputSettings(streamingSettings);
 
-	d->SetValue("streamingSettings", streamingSettings);
+	switch (m_obsOutputType) {
+	case StreamingOutput:
+		d->SetString("type", "streaming");
+		d->SetValue("streamingSettings", streamingSettings);
+		break;
+	case RecordingOutput:
+		d->SetString("type", "recording");
+		d->SetValue("recordingSettings", streamingSettings);
+		break;
+	default:
+		throw std::invalid_argument("Unknown obsOutputType value");
+	}
 
 	output->SetDictionary(d);
 }
 
 StreamElementsOutputBase::StreamElementsOutputBase(
-	std::string id, std::string name,
+	std::string id, std::string name, ObsOutputType obsOutputType,
 	ObsStateDependencyType obsStateDependency,
 	std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition,
 	CefRefPtr<CefDictionaryValue> auxData)
-	: m_id(id), m_name(name), m_obsStateDependency(obsStateDependency), m_videoComposition(videoComposition), m_enabled(false)
+	: m_id(id),
+	  m_name(name),
+	  m_obsOutputType(obsOutputType),
+	  m_obsStateDependency(obsStateDependency),
+	  m_videoComposition(videoComposition),
+	  m_enabled(false)
 {
 	m_auxData = auxData.get() ? auxData : CefDictionaryValue::Create();
 
@@ -549,7 +565,7 @@ void StreamElementsCustomStreamingOutput::StopInternal()
 	m_output = nullptr;
 }
 
-void StreamElementsCustomStreamingOutput::SerializeStreamingSettings(
+void StreamElementsCustomStreamingOutput::SerializeOutputSettings(
 	CefRefPtr<CefValue>& output)
 {
 	auto d = CefDictionaryValue::Create();
@@ -694,7 +710,7 @@ void StreamElementsObsNativeStreamingOutput::StopInternal()
 	DisconnectOutputEvents();
 }
 
-void StreamElementsObsNativeStreamingOutput::SerializeStreamingSettings(
+void StreamElementsObsNativeStreamingOutput::SerializeOutputSettings(
 	CefRefPtr<CefValue> &output)
 {
 	auto d = CefDictionaryValue::Create();

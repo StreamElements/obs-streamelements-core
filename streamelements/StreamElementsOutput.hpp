@@ -11,6 +11,11 @@ public:
 		None
 	};
 
+	enum ObsOutputType {
+		StreamingOutput,
+		RecordingOutput
+	};
+
 private:
 	std::string m_id;
 	std::string m_name;
@@ -27,10 +32,12 @@ private:
 	std::string m_error;
 
 	ObsStateDependencyType m_obsStateDependency = Streaming;
+	ObsOutputType m_obsOutputType = StreamingOutput;
 
 public:
 	StreamElementsOutputBase(
 		std::string id, std::string name,
+		ObsOutputType obsOutputType,
 		ObsStateDependencyType obsStateDependency,
 		std::shared_ptr<StreamElementsVideoCompositionBase>
 			videoComposition,
@@ -55,7 +62,7 @@ public:
 	void SerializeOutput(CefRefPtr<CefValue> &output);
 
 	virtual void
-	SerializeStreamingSettings(CefRefPtr<CefValue> &output) = 0;
+	SerializeOutputSettings(CefRefPtr<CefValue> &output) = 0;
 
 protected:
 	virtual obs_output_t *GetOutput() = 0;
@@ -114,7 +121,7 @@ public:
 		std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition,
 		obs_service_t *service, const char *bindToIP,
 		CefRefPtr<CefDictionaryValue> auxData)
-		: StreamElementsOutputBase(id, name, Streaming, videoComposition, auxData),
+		: StreamElementsOutputBase(id, name, StreamingOutput, Streaming, videoComposition, auxData),
 		  m_service(service)
 	{
 		if (bindToIP) {
@@ -135,7 +142,7 @@ public:
 	virtual bool CanDisable() override;
 
 	virtual void
-	SerializeStreamingSettings(CefRefPtr<CefValue> &output) override;
+	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
 
 	static std::shared_ptr<StreamElementsCustomStreamingOutput>
 	Create(CefRefPtr<CefValue> input);
@@ -155,7 +162,7 @@ public:
 	StreamElementsObsNativeStreamingOutput(
 		std::string id, std::string name,
 		std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition)
-		: StreamElementsOutputBase(id, name, Streaming, videoComposition, CefDictionaryValue::Create())
+		: StreamElementsOutputBase(id, name, StreamingOutput, Streaming, videoComposition, CefDictionaryValue::Create())
 	{
 	}
 
@@ -180,5 +187,5 @@ protected:
 	virtual void StopInternal() override;
 
 	virtual void
-	SerializeStreamingSettings(CefRefPtr<CefValue> &output) override;
+	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
 };
