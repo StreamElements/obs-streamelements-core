@@ -6,9 +6,12 @@
 
 #include <ctime>
 
-static void dispatch_list_change_event()
+static void dispatch_list_change_event(StreamElementsOutputBase *output)
 {
-	DispatchClientJSEvent("hostStreamingOutputListChanged", "null");
+	if (output->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		DispatchClientJSEvent("hostStreamingOutputListChanged", "null");
+	else
+		DispatchClientJSEvent("hostRecordingOutputListChanged", "null");
 }
 
 static void dispatch_event(
@@ -30,8 +33,12 @@ void StreamElementsOutputBase::handle_output_start(void *my_data,
 {
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	dispatch_event(self, "hostStreamingOutputStarted");
-	dispatch_list_change_event();
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputStarted");
+	else
+		dispatch_event(self, "hostRecordingOutputStarted");
+
+	dispatch_list_change_event(self);
 }
 
 void StreamElementsOutputBase::handle_output_stop(void *my_data,
@@ -88,12 +95,19 @@ void StreamElementsOutputBase::handle_output_stop(void *my_data,
 
 		self->SetError(args->GetString("reason"));
 
-		dispatch_event(self, "hostStreamingOutputError", args);
+		if (self->GetOutputType() ==
+		    StreamElementsOutputBase::StreamingOutput)
+			dispatch_event(self, "hostStreamingOutputError", args);
+		else
+			dispatch_event(self, "hostRecordingOutputError", args);
 	}
 
-	dispatch_event(self, "hostStreamingOutputStopped");
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputStopped");
+	else
+		dispatch_event(self, "hostRecordingOutputStopped");
 
-	dispatch_list_change_event();
+	dispatch_list_change_event(self);
 }
 
 void StreamElementsOutputBase::handle_output_pause(void *my_data,
@@ -101,8 +115,12 @@ void StreamElementsOutputBase::handle_output_pause(void *my_data,
 {
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	dispatch_event(self, "hostStreamingOutputPaused");
-	dispatch_list_change_event();
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputPaused");
+	else
+		dispatch_event(self, "hostRecordingOutputPaused");
+
+	dispatch_list_change_event(self);
 }
 
 void StreamElementsOutputBase::handle_output_unpause(void *my_data,
@@ -110,8 +128,12 @@ void StreamElementsOutputBase::handle_output_unpause(void *my_data,
 {
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	dispatch_event(self, "hostStreamingOutputUnpaused");
-	dispatch_list_change_event();
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputUnpaused");
+	else
+		dispatch_event(self, "hostRecordingOutputUnpaused");
+
+	dispatch_list_change_event(self);
 }
 
 void StreamElementsOutputBase::handle_output_starting(void *my_data,
@@ -119,8 +141,12 @@ void StreamElementsOutputBase::handle_output_starting(void *my_data,
 {
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	dispatch_event(self, "hostStreamingOutputStarting");
-	dispatch_list_change_event();
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputStarting");
+	else
+		dispatch_event(self, "hostRecordingOutputStarting");
+
+	dispatch_list_change_event(self);
 }
 
 void StreamElementsOutputBase::handle_output_stopping(void *my_data,
@@ -128,8 +154,12 @@ void StreamElementsOutputBase::handle_output_stopping(void *my_data,
 {
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	dispatch_event(self, "hostStreamingOutputStopping");
-	dispatch_list_change_event();
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputStopping");
+	else
+		dispatch_event(self, "hostRecordingOutputStopping");
+
+	dispatch_list_change_event(self);
 }
 
 void StreamElementsOutputBase::handle_output_activate(void *my_data,
@@ -137,8 +167,12 @@ void StreamElementsOutputBase::handle_output_activate(void *my_data,
 {
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	dispatch_event(self, "hostStreamingOutputActivated");
-	dispatch_list_change_event();
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputActivated");
+	else
+		dispatch_event(self, "hostRecordingOutputActivated");
+
+	dispatch_list_change_event(self);
 }
 
 void StreamElementsOutputBase::handle_output_deactivate(void *my_data,
@@ -146,8 +180,12 @@ void StreamElementsOutputBase::handle_output_deactivate(void *my_data,
 {
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	dispatch_event(self, "hostStreamingOutputDeactivated");
-	dispatch_list_change_event();
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputDeactivated");
+	else
+		dispatch_event(self, "hostRecordingOutputDeactivated");
+
+	dispatch_list_change_event(self);
 }
 
 void StreamElementsOutputBase::handle_output_reconnect(void *my_data,
@@ -155,8 +193,12 @@ void StreamElementsOutputBase::handle_output_reconnect(void *my_data,
 {
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	dispatch_event(self, "hostStreamingOutputReconnecting");
-	dispatch_list_change_event();
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputReconnecting");
+	else
+		dispatch_event(self, "hostRecordingOutputReconnecting");
+
+	dispatch_list_change_event(self);
 }
 
 void
@@ -165,8 +207,12 @@ StreamElementsOutputBase::handle_output_reconnect_success(void *my_data,
 {
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	dispatch_event(self, "hostStreamingOutputReconnected");
-	dispatch_list_change_event();
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputReconnected");
+	else
+		dispatch_event(self, "hostRecordingOutputReconnected");
+
+	dispatch_list_change_event(self);
 }
 
 void StreamElementsOutputBase::handle_obs_frontend_event(
@@ -332,7 +378,7 @@ StreamElementsOutputBase::StreamElementsOutputBase(
 
 	m_enabled = IsObsNativeOutput();
 
-	dispatch_list_change_event();
+	dispatch_list_change_event(this);
 
 	obs_frontend_add_event_callback(
 		StreamElementsOutputBase::handle_obs_frontend_event, this);
@@ -343,7 +389,7 @@ StreamElementsOutputBase::~StreamElementsOutputBase()
 	obs_frontend_remove_event_callback(
 		StreamElementsOutputBase::handle_obs_frontend_event, this);
 
-	dispatch_list_change_event();
+	dispatch_list_change_event(this);
 }
 
 bool StreamElementsOutputBase::IsEnabled()
@@ -812,7 +858,7 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 		      std::localtime(&time));
 
 	std::string path = basePath + std::string("/SE.Live Recording ") +
-			   std::string(timestampBuf) + ".mkv";
+			   std::string(timestampBuf) + " - " + m_videoComposition->GetName() + " - " + GetName() + ".mkv";
 
 
 	obs_data_t *settings = obs_data_create();

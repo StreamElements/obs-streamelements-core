@@ -233,6 +233,9 @@ class StreamElementsCustomRecordingOutput : public StreamElementsOutputBase {
 private:
 	std::recursive_mutex m_mutex;
 
+	std::shared_ptr<StreamElementsVideoCompositionBase>
+		m_videoComposition = nullptr;
+
 	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
 		m_videoCompositionInfo = nullptr;
 
@@ -245,7 +248,8 @@ public:
 			videoComposition,
 		CefRefPtr<CefDictionaryValue> auxData)
 		: StreamElementsOutputBase(id, name, RecordingOutput, None,
-					   videoComposition, auxData)
+					   videoComposition, auxData),
+		  m_videoComposition(videoComposition)
 	{
 	}
 
