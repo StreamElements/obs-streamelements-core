@@ -784,3 +784,158 @@ void StreamElementsObsNativeRecordingOutput::SerializeOutputSettings(
 
 	output->SetDictionary(d);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// StreamElementsCustomRecordingOutput
+////////////////////////////////////////////////////////////////////////////////
+
+bool StreamElementsCustomRecordingOutput::CanDisable()
+{
+	return true;
+}
+
+bool StreamElementsCustomRecordingOutput::StartInternal(
+	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
+		videoCompositionInfo)
+{
+	if (!videoCompositionInfo)
+		return false;
+
+	std::string output_type = "ffmpeg_muxer";
+
+	obs_data_t *output_settings = obs_data_create();
+
+	m_output = obs_output_create(output_type.c_str(), GetId().c_str(),
+				     output_settings, nullptr);
+
+	if (m_output) {
+		obs_output_set_video_encoder(
+			m_output,
+			videoCompositionInfo->GetStreamingVideoEncoder());
+
+		for (size_t i = 0;; ++i) {
+			auto encoder =
+				videoCompositionInfo->GetStreamingAudioEncoder(
+					i);
+
+			if (!encoder)
+				break;
+
+			obs_output_set_audio_encoder(m_output, encoder, i);
+		}
+
+		ConnectOutputEvents();
+
+		if (obs_output_start(m_output)) {
+			m_videoCompositionInfo = videoCompositionInfo;
+
+			return true;
+		}
+
+		DisconnectOutputEvents();
+
+		obs_output_release(m_output);
+		m_output = nullptr;
+	} else {
+		obs_data_release(output_settings);
+	}
+
+	return false;
+}
+
+void StreamElementsCustomRecordingOutput::StopInternal()
+{
+	if (!m_videoCompositionInfo)
+		return;
+
+	// obs_output_stop(m_output);
+
+	obs_output_force_stop(m_output);
+
+	DisconnectOutputEvents();
+
+	obs_output_release(m_output);
+	m_output = nullptr;
+}
+
+void StreamElementsCustomRecordingOutput::SerializeOutputSettings(
+	CefRefPtr<CefValue> &output)
+{
+	auto d = CefDictionaryValue::Create();
+
+	auto obs_output = GetOutput();
+	auto obs_output_settings = obs_output_get_settings(obs_output);
+
+	d->SetString("type", obs_output_get_id(obs_output));
+	d->SetValue("settings", SerializeObsData(obs_output_settings));
+
+	obs_data_release(obs_output_settings);
+	obs_output_release(obs_output);
+
+	output->SetDictionary(d);
+}
+
+std::shared_ptr<StreamElementsCustomRecordingOutput>
+StreamElementsCustomRecordingOutput::Create(CefRefPtr<CefValue> input)
+{
+	if (!input.get())
+		return nullptr;
+
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return nullptr;
+
+	auto rootDict = input->GetDictionary();
+
+	if (!rootDict->HasKey("id") || !rootDict->HasKey("name"))
+		return nullptr;
+
+	if (rootDict->GetType("id") != VTYPE_STRING ||
+	    rootDict->GetType("name") != VTYPE_STRING)
+		return nullptr;
+
+	if (!rootDict->HasKey("recordingSettings") ||
+	    rootDict->GetType("recordingSettings") != VTYPE_DICTIONARY)
+		return nullptr;
+
+	auto auxData = (rootDict->HasKey("auxiliaryData") &&
+			rootDict->GetType("auxiliaryData") == VTYPE_DICTIONARY)
+			       ? rootDict->GetDictionary("auxiliaryData")
+			       : CefDictionaryValue::Create();
+
+	std::string id = rootDict->GetString("id");
+	std::string name = rootDict->GetString("name");
+	std::string videoCompositionId =
+		(rootDict->HasKey("videoCompositionId") &&
+				 rootDict->GetType("videoCompositionId") ==
+					 VTYPE_STRING
+			 ? rootDict->GetString("videoCompositionId")
+			 : "");
+	bool isEnabled = rootDict->HasKey("isEnabled") &&
+					 rootDict->GetType("isEnabled") ==
+						 VTYPE_BOOL
+				 ? rootDict->GetBool("isEnabled")
+				 : true;
+
+	auto d = rootDict->GetDictionary("recordingSettings");
+
+	auto videoComposition =
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->GetVideoCompositionById(videoCompositionId);
+
+	if (!videoComposition && !videoCompositionId.size()) {
+		videoComposition =
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetVideoCompositionManager()
+				->GetObsNativeVideoComposition();
+	} else {
+		return nullptr;
+	}
+
+	auto result = std::make_shared<StreamElementsCustomRecordingOutput>(
+		id, name, videoComposition, auxData);
+
+	result->SetEnabled(isEnabled);
+
+	return result;
+}

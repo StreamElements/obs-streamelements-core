@@ -228,3 +228,48 @@ protected:
 	virtual void
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
 };
+
+class StreamElementsCustomRecordingOutput : public StreamElementsOutputBase {
+private:
+	std::recursive_mutex m_mutex;
+
+	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
+		m_videoCompositionInfo = nullptr;
+
+	obs_output_t *m_output = nullptr;
+
+public:
+	StreamElementsCustomRecordingOutput(
+		std::string id, std::string name,
+		std::shared_ptr<StreamElementsVideoCompositionBase>
+			videoComposition,
+		CefRefPtr<CefDictionaryValue> auxData)
+		: StreamElementsOutputBase(id, name, RecordingOutput, None,
+					   videoComposition, auxData)
+	{
+	}
+
+	virtual ~StreamElementsCustomRecordingOutput()
+	{
+		Stop();
+	}
+
+	virtual bool CanDisable() override;
+
+	virtual void
+	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
+
+	static std::shared_ptr<StreamElementsCustomRecordingOutput>
+	Create(CefRefPtr<CefValue> input);
+
+	virtual bool IsObsNativeOutput() override { return false; }
+
+protected:
+	virtual obs_output_t *GetOutput() override { return m_output; }
+
+	virtual bool
+	StartInternal(std::shared_ptr<
+		      StreamElementsVideoCompositionBase::CompositionInfo>
+			      videoCompositionInfo);
+	virtual void StopInternal();
+};

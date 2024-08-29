@@ -69,14 +69,29 @@ void StreamElementsOutputManager::DeserializeOutput(
 
 	input->SetDictionary(d);
 
-	auto customOutput = StreamElementsCustomStreamingOutput::Create(input);
+	if (outputType == StreamingOutput) {
+		auto customOutput =
+			StreamElementsCustomStreamingOutput::Create(input);
 
-	if (!customOutput.get())
-		return;
+		if (!customOutput.get())
+			return;
 
-	m_map[outputType][customOutput->GetId()] = customOutput;
+		m_map[outputType][customOutput->GetId()] = customOutput;
 
-	customOutput->SerializeOutput(output);
+		customOutput->SerializeOutput(output);
+	}
+	else
+	{
+		auto customOutput =
+			StreamElementsCustomRecordingOutput::Create(input);
+
+		if (!customOutput.get())
+			return;
+
+		m_map[outputType][customOutput->GetId()] = customOutput;
+
+		customOutput->SerializeOutput(output);
+	}
 }
 
 void StreamElementsOutputManager::SerializeAllOutputs(
