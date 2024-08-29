@@ -843,6 +843,7 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 
 		ConnectOutputEvents();
 
+		// TODO: Apparently we need a SERVICE for this to work
 		if (obs_output_start(m_output)) {
 			m_videoCompositionInfo = videoCompositionInfo;
 
