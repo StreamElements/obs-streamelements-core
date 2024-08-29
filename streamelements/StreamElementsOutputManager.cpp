@@ -9,14 +9,14 @@ StreamElementsOutputManager::StreamElementsOutputManager(
 	: m_compositionManager(compositionManager)
 {
 	auto nativeStreamingOutput = std::make_shared<StreamElementsObsNativeStreamingOutput>(
-		"native", "OBS Native Streaming",
+		"default", "OBS Native Streaming",
 		m_compositionManager->GetObsNativeVideoComposition());
 
 	m_map[StreamingOutput][nativeStreamingOutput->GetId()] = nativeStreamingOutput;
 
 	auto nativeRecordingOutput =
 		std::make_shared<StreamElementsObsNativeRecordingOutput>(
-			"native", "OBS Native Recording",
+			"default", "OBS Native Recording",
 			m_compositionManager->GetObsNativeVideoComposition());
 
 	m_map[RecordingOutput][nativeRecordingOutput->GetId()] = nativeRecordingOutput;
@@ -25,6 +25,8 @@ StreamElementsOutputManager::StreamElementsOutputManager(
 StreamElementsOutputManager::~StreamElementsOutputManager()
 {
 	Reset();
+
+	m_map.clear();
 }
 
 void StreamElementsOutputManager::Reset()

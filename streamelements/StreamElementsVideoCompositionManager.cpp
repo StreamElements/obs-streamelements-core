@@ -17,13 +17,19 @@ StreamElementsVideoCompositionManager::StreamElementsVideoCompositionManager()
 StreamElementsVideoCompositionManager::~StreamElementsVideoCompositionManager()
 {
 	Reset();
+
+	m_videoCompositionsMap.clear();
 }
 
 void StreamElementsVideoCompositionManager::Reset()
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
-	m_videoCompositionsMap.clear();
+	for (auto it = m_videoCompositionsMap.cbegin();
+	     it != m_videoCompositionsMap.cend(); ++it) {
+		if (!it->second->IsObsNativeComposition())
+			m_videoCompositionsMap.erase(it->first);
+	}
 }
 
 void StreamElementsVideoCompositionManager::DeserializeComposition(

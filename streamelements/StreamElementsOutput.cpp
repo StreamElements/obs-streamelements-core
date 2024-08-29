@@ -4,6 +4,8 @@
 #include "StreamElementsOutput.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
 
+#include <ctime>
+
 static void dispatch_list_change_event()
 {
 	DispatchClientJSEvent("hostStreamingOutputListChanged", "null");
@@ -801,12 +803,27 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 	if (!videoCompositionInfo)
 		return false;
 
-	std::string output_type = "ffmpeg_muxer";
+	std::string basePath = config_get_string(
+		obs_frontend_get_profile_config(), "SimpleOutput", "FilePath");
 
-	obs_data_t *output_settings = obs_data_create();
+	char timestampBuf[64];
+	time_t time = std::time(nullptr);
+	std::strftime(timestampBuf, sizeof(timestampBuf), "%Y-%m-%d %H-%M-%S",
+		      std::localtime(&time));
 
-	m_output = obs_output_create(output_type.c_str(), GetId().c_str(),
-				     output_settings, nullptr);
+	std::string path = basePath + std::string("/SE.Live Recording ") +
+			   std::string(timestampBuf) + ".mkv";
+
+
+	obs_data_t *settings = obs_data_create();
+
+	obs_data_set_string(settings, "muxer_settings", "");
+	obs_data_set_string(settings, "path", path.c_str());
+
+	m_output = obs_output_create("ffmpeg_muxer", GetId().c_str(), settings,
+				     nullptr);
+
+	obs_data_release(settings);
 
 	if (m_output) {
 		obs_output_set_video_encoder(
@@ -836,8 +853,6 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 
 		obs_output_release(m_output);
 		m_output = nullptr;
-	} else {
-		obs_data_release(output_settings);
 	}
 
 	return false;
@@ -864,13 +879,16 @@ void StreamElementsCustomRecordingOutput::SerializeOutputSettings(
 	auto d = CefDictionaryValue::Create();
 
 	auto obs_output = GetOutput();
-	auto obs_output_settings = obs_output_get_settings(obs_output);
 
-	d->SetString("type", obs_output_get_id(obs_output));
-	d->SetValue("settings", SerializeObsData(obs_output_settings));
+	if (obs_output) {
+		auto obs_output_settings = obs_output_get_settings(obs_output);
 
-	obs_data_release(obs_output_settings);
-	obs_output_release(obs_output);
+		d->SetString("type", obs_output_get_id(obs_output));
+		d->SetValue("settings", SerializeObsData(obs_output_settings));
+
+		obs_data_release(obs_output_settings);
+		obs_output_release(obs_output);
+	}
 
 	output->SetDictionary(d);
 }
@@ -893,10 +911,6 @@ StreamElementsCustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 	    rootDict->GetType("name") != VTYPE_STRING)
 		return nullptr;
 
-	if (!rootDict->HasKey("recordingSettings") ||
-	    rootDict->GetType("recordingSettings") != VTYPE_DICTIONARY)
-		return nullptr;
-
 	auto auxData = (rootDict->HasKey("auxiliaryData") &&
 			rootDict->GetType("auxiliaryData") == VTYPE_DICTIONARY)
 			       ? rootDict->GetDictionary("auxiliaryData")
@@ -916,8 +930,6 @@ StreamElementsCustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 				 ? rootDict->GetBool("isEnabled")
 				 : true;
 
-	auto d = rootDict->GetDictionary("recordingSettings");
-
 	auto videoComposition =
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetVideoCompositionManager()
@@ -928,8 +940,6 @@ StreamElementsCustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetVideoCompositionManager()
 				->GetObsNativeVideoComposition();
-	} else {
-		return nullptr;
 	}
 
 	auto result = std::make_shared<StreamElementsCustomRecordingOutput>(
