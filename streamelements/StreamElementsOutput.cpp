@@ -828,11 +828,11 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 	if (m_output) {
 		obs_output_set_video_encoder(
 			m_output,
-			videoCompositionInfo->GetStreamingVideoEncoder());
+			videoCompositionInfo->GetRecordingVideoEncoder());
 
 		for (size_t i = 0;; ++i) {
 			auto encoder =
-				videoCompositionInfo->GetStreamingAudioEncoder(
+				videoCompositionInfo->GetRecordingAudioEncoder(
 					i);
 
 			if (!encoder)
@@ -843,7 +843,6 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 
 		ConnectOutputEvents();
 
-		// TODO: Apparently we need a SERVICE for this to work
 		if (obs_output_start(m_output)) {
 			m_videoCompositionInfo = videoCompositionInfo;
 
@@ -888,7 +887,6 @@ void StreamElementsCustomRecordingOutput::SerializeOutputSettings(
 		d->SetValue("settings", SerializeObsData(obs_output_settings));
 
 		obs_data_release(obs_output_settings);
-		obs_output_release(obs_output);
 	}
 
 	output->SetDictionary(d);
