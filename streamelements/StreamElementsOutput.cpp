@@ -240,8 +240,9 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 	d->SetBool("isEnabled", IsEnabled());
 	d->SetBool("isActive", IsActive());
 	d->SetBool("canDisable", CanDisable());
-	d->SetBool("canRemove", !IsObsNativeVideoComposition());
-	d->SetBool("isObsNativeVideoComposition", IsObsNativeVideoComposition());
+	d->SetBool("canRemove", !IsObsNativeOutput());
+	d->SetBool("isObsNativeVideoComposition", m_videoComposition->IsObsNativeComposition());
+	d->SetBool("isObsNativeOutput", IsObsNativeOutput());
 
 	if (m_error.size()) {
 		auto error = CefDictionaryValue::Create();
@@ -327,7 +328,7 @@ StreamElementsOutputBase::StreamElementsOutputBase(
 
 	m_videoCompositionInfo = videoComposition->GetCompositionInfo(this);
 
-	m_enabled = IsObsNativeVideoComposition();
+	m_enabled = IsObsNativeOutput();
 
 	dispatch_list_change_event();
 
@@ -738,6 +739,48 @@ void StreamElementsObsNativeStreamingOutput::SerializeOutputSettings(
 	}
 
 	obs_data_release(service_settings);
+
+	output->SetDictionary(d);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// StreamElementsObsNativeRecordingOutput
+////////////////////////////////////////////////////////////////////////////////
+
+bool StreamElementsObsNativeRecordingOutput::StartInternal(
+	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
+		videoCompositionInfo)
+{
+	// NOP: This is managed by the OBS front-end
+
+	ConnectOutputEvents();
+
+	return true;
+}
+
+void StreamElementsObsNativeRecordingOutput::StopInternal()
+{
+	// NOP: This is managed by the OBS front-end
+
+	DisconnectOutputEvents();
+}
+
+void StreamElementsObsNativeRecordingOutput::SerializeOutputSettings(
+	CefRefPtr<CefValue> &output)
+{
+	auto d = CefDictionaryValue::Create();
+
+	obs_output_t *obs_output =
+		obs_frontend_get_recording_output();
+
+	obs_data_t *obs_output_settings = obs_output_get_settings(obs_output);
+
+	d->SetString("type", obs_output_get_id(obs_output));
+	d->SetValue("settings", SerializeObsData(obs_output_settings));
+
+	obs_data_release(obs_output_settings);
+
+	obs_output_release(obs_output);
 
 	output->SetDictionary(d);
 }

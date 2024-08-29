@@ -46,6 +46,7 @@ public:
 
 	std::string GetId() { return m_id; }
 	std::string GetName() { return m_name; }
+	ObsOutputType GetOutputType() { return m_obsOutputType; }
 
 	virtual bool CanRemove() { return !IsActive(); }
 	virtual bool CanChange() { return !IsActive(); }
@@ -57,7 +58,7 @@ public:
 
 	virtual bool CanDisable() { return false; }
 
-	virtual bool IsObsNativeVideoComposition() { return false; }
+	virtual bool IsObsNativeOutput() { return false; }
 
 	void SerializeOutput(CefRefPtr<CefValue> &output);
 
@@ -147,7 +148,7 @@ public:
 	static std::shared_ptr<StreamElementsCustomStreamingOutput>
 	Create(CefRefPtr<CefValue> input);
 
-	virtual bool IsObsNativeVideoComposition() override { return false; }
+	virtual bool IsObsNativeOutput() override { return false; }
 
 protected:
 	virtual obs_output_t *GetOutput() override { return m_output; }
@@ -174,7 +175,7 @@ public:
 	virtual bool CanChange() override  { return false; }
 	virtual bool CanDisable() override { return false; }
 
-	virtual bool IsObsNativeVideoComposition() override { return true; }
+	virtual bool IsObsNativeOutput() override { return true; }
 
 	virtual bool CanStart() override { return true; }
 
@@ -184,6 +185,44 @@ protected:
 	virtual bool StartInternal(
 		std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
 			videoCompositionInfo) override;
+	virtual void StopInternal() override;
+
+	virtual void
+	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
+};
+
+class StreamElementsObsNativeRecordingOutput : public StreamElementsOutputBase {
+public:
+	StreamElementsObsNativeRecordingOutput(
+		std::string id, std::string name,
+		std::shared_ptr<StreamElementsVideoCompositionBase>
+			videoComposition)
+		: StreamElementsOutputBase(id, name, RecordingOutput, Recording,
+					   videoComposition,
+					   CefDictionaryValue::Create())
+	{
+	}
+
+	virtual ~StreamElementsObsNativeRecordingOutput() {}
+
+	virtual bool CanRemove() override { return false; }
+	virtual bool CanChange() override { return false; }
+	virtual bool CanDisable() override { return false; }
+
+	virtual bool IsObsNativeOutput() override { return true; }
+
+	virtual bool CanStart() override { return true; }
+
+protected:
+	virtual obs_output_t *GetOutput() override
+	{
+		return obs_frontend_get_recording_output();
+	}
+
+	virtual bool
+	StartInternal(std::shared_ptr<
+		      StreamElementsVideoCompositionBase::CompositionInfo>
+			      videoCompositionInfo) override;
 	virtual void StopInternal() override;
 
 	virtual void

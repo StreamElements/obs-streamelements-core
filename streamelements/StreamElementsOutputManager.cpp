@@ -1,15 +1,25 @@
 #include "StreamElementsOutputManager.hpp"
 #include "StreamElementsUtils.hpp"
 
+#define StreamingOutput StreamElementsOutputBase::StreamingOutput
+#define RecordingOutput StreamElementsOutputBase::RecordingOutput
+
 StreamElementsOutputManager::StreamElementsOutputManager(
 	std::shared_ptr<StreamElementsVideoCompositionManager> compositionManager)
 	: m_compositionManager(compositionManager)
 {
-	auto nativeOutput = std::make_shared<StreamElementsObsNativeStreamingOutput>(
-		"native", "OBS Native",
+	auto nativeStreamingOutput = std::make_shared<StreamElementsObsNativeStreamingOutput>(
+		"native", "OBS Native Streaming",
 		m_compositionManager->GetObsNativeVideoComposition());
 
-	m_map[nativeOutput->GetId()] = nativeOutput;
+	m_map[StreamingOutput][nativeStreamingOutput->GetId()] = nativeStreamingOutput;
+
+	auto nativeRecordingOutput =
+		std::make_shared<StreamElementsObsNativeRecordingOutput>(
+			"native", "OBS Native Recording",
+			m_compositionManager->GetObsNativeVideoComposition());
+
+	m_map[RecordingOutput][nativeRecordingOutput->GetId()] = nativeRecordingOutput;
 }
 
 StreamElementsOutputManager::~StreamElementsOutputManager()
@@ -21,11 +31,18 @@ void StreamElementsOutputManager::Reset()
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
-	m_map.clear();
+	for (auto kv : m_map) {
+		for (auto it = m_map[kv.first].cbegin();
+		     it != m_map[kv.first].cend(); ++it) {
+			if (!it->second->IsObsNativeOutput())
+				m_map[kv.first].erase(it);
+		}
+	}
 }
 
-void StreamElementsOutputManager::DeserializeOutput(CefRefPtr<CefValue> input,
-						    CefRefPtr<CefValue> &output)
+void StreamElementsOutputManager::DeserializeOutput(
+	StreamElementsOutputBase::ObsOutputType outputType,
+	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
@@ -39,12 +56,12 @@ void StreamElementsOutputManager::DeserializeOutput(CefRefPtr<CefValue> input,
 
 	auto d = input->GetDictionary();
 
-	std::string id = ""; 
+	std::string id = "";
 	if (d->HasKey("id") && d->GetType("id") == VTYPE_STRING) {
 		id = d->GetString("id");
 	}
 
-	while (!id.size() || m_map.count(id)) {
+	while (!id.size() || m_map[outputType].count(id)) {
 		id = CreateGloballyUniqueIdString();
 	}
 
@@ -57,19 +74,20 @@ void StreamElementsOutputManager::DeserializeOutput(CefRefPtr<CefValue> input,
 	if (!customOutput.get())
 		return;
 
-	m_map[customOutput->GetId()] = customOutput;
+	m_map[outputType][customOutput->GetId()] = customOutput;
 
 	customOutput->SerializeOutput(output);
 }
 
 void StreamElementsOutputManager::SerializeAllOutputs(
+	StreamElementsOutputBase::ObsOutputType outputType,
 	CefRefPtr<CefValue> &output)
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
 	auto d = CefDictionaryValue::Create();
 
-	for (auto kv : m_map) {
+	for (auto kv : m_map[outputType]) {
 		auto serializedOutput = CefValue::Create();
 
 		kv.second->SerializeOutput(serializedOutput);
@@ -81,6 +99,7 @@ void StreamElementsOutputManager::SerializeAllOutputs(
 }
 
 void StreamElementsOutputManager::RemoveOutputsByIds(
+	StreamElementsOutputBase::ObsOutputType outputType,
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
@@ -89,18 +108,19 @@ void StreamElementsOutputManager::RemoveOutputsByIds(
 
 	std::map<std::string, bool> map;
 
-	if (!GetValidIds(input, map, true, false))
+	if (!GetValidIds(outputType, input, map, true, false))
 		return;
 
 	// Remove all valid IDs
 	for (auto kv : map) {
-		m_map.erase(kv.first);
+		m_map[outputType].erase(kv.first);
 	}
 
 	output->SetBool(true);
 }
 
 void StreamElementsOutputManager::EnableOutputsByIds(
+	StreamElementsOutputBase::ObsOutputType outputType,
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
@@ -109,18 +129,19 @@ void StreamElementsOutputManager::EnableOutputsByIds(
 
 	std::map<std::string, bool> map;
 
-	if (!GetValidIds(input, map, false, false))
+	if (!GetValidIds(outputType, input, map, false, false))
 		return;
 
 	// Remove all valid IDs
 	for (auto kv : map) {
-		m_map[kv.first]->SetEnabled(true);
+		m_map[outputType][kv.first]->SetEnabled(true);
 	}
 
 	output->SetBool(true);
 }
 
 void StreamElementsOutputManager::DisableOutputsByIds(
+	StreamElementsOutputBase::ObsOutputType outputType,
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
@@ -129,19 +150,19 @@ void StreamElementsOutputManager::DisableOutputsByIds(
 
 	std::map<std::string, bool> map;
 
-	if (!GetValidIds(input, map, false, true))
+	if (!GetValidIds(outputType, input, map, false, true))
 		return;
 
 	// Remove all valid IDs
 	for (auto kv : map) {
-		m_map[kv.first]->SetEnabled(false);
+		m_map[outputType][kv.first]->SetEnabled(false);
 	}
 
 	output->SetBool(true);
 }
 
 bool StreamElementsOutputManager::GetValidIds(
-	CefRefPtr<CefValue> input,
+	StreamElementsOutputBase::ObsOutputType outputType, CefRefPtr<CefValue> input,
 	std::map<std::string, bool>& output, bool testRemove, bool testDisable)
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
@@ -163,13 +184,13 @@ bool StreamElementsOutputManager::GetValidIds(
 		if (!id.size())
 			return false;
 
-		if (!m_map.count(id))
+		if (!m_map[outputType].count(id))
 			return false;
 
-		if (testRemove && !m_map[id]->CanRemove())
+		if (testRemove && !m_map[outputType][id]->CanRemove())
 			return false;
 
-		if (testDisable && !m_map[id]->CanDisable())
+		if (testDisable && !m_map[outputType][id]->CanDisable())
 			return false;
 
 		output[id] = true;
