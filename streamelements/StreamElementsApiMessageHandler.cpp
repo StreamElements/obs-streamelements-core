@@ -2427,6 +2427,64 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("getAllRecordingOutputs");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetOutputManager()
+			->SerializeAllOutputs(
+				StreamElementsOutputBase::RecordingOutput,
+				result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addRecordingOutput");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->DeserializeOutput(
+					StreamElementsOutputBase::RecordingOutput,
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeRecordingOutputsByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->RemoveOutputsByIds(
+					StreamElementsOutputBase::RecordingOutput,
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("enableRecordingOutputsByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->EnableOutputsByIds(
+					StreamElementsOutputBase::RecordingOutput,
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("disableRecordingOutputsByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->DisableOutputsByIds(
+					StreamElementsOutputBase::RecordingOutput,
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("readScopedStorageJsonItem");
 	{
 		if (args->GetSize()) {
