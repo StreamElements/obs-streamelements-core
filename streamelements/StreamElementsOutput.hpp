@@ -65,6 +65,9 @@ public:
 	virtual void
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) = 0;
 
+	virtual bool CanSplitRecordingOutput() { return false; }
+	virtual bool TriggerSplitRecordingOutput() { return false; }
+
 protected:
 	virtual obs_output_t *GetOutput() = 0;
 
@@ -271,6 +274,9 @@ public:
 	Create(CefRefPtr<CefValue> input);
 
 	virtual bool IsObsNativeOutput() override { return false; }
+
+	virtual bool CanSplitRecordingOutput() { return true; }
+	virtual bool TriggerSplitRecordingOutput();
 
 protected:
 	virtual obs_output_t *GetOutput() override { return m_output; }

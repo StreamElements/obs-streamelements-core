@@ -843,6 +843,29 @@ bool StreamElementsCustomRecordingOutput::CanDisable()
 	return true;
 }
 
+bool StreamElementsCustomRecordingOutput::TriggerSplitRecordingOutput()
+{
+	auto output = GetOutput();
+
+	if (!output)
+		return false;
+
+	if (!obs_output_active(output))
+		return false;
+
+	if (!obs_output_paused(output))
+		return false;
+
+	proc_handler_t *ph = obs_output_get_proc_handler(output);
+	uint8_t stack[128];
+	calldata cd;
+	calldata_init_fixed(&cd, stack, sizeof(stack));
+	proc_handler_call(ph, "split_file", &cd);
+	bool result = calldata_bool(&cd, "split_file_enabled");
+
+	return result;
+}
+
 bool StreamElementsCustomRecordingOutput::StartInternal(
 	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
 		videoCompositionInfo)
@@ -913,6 +936,8 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 					 "AdvOut",
 						 "RecSplitFileSize")
 				: 0;
+
+	splitFile = true; // Always enable file splitting, even if only manual
 
 	//////////////////////////////
 	// m_recordingSettings parse
