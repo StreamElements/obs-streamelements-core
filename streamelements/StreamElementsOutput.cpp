@@ -1,3 +1,4 @@
+#include <obs.hpp>
 #include <obs-frontend-api.h>
 
 #include "StreamElementsUtils.hpp"
@@ -849,27 +850,149 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 	if (!videoCompositionInfo)
 		return false;
 
-	std::string basePath = config_get_string(
-		obs_frontend_get_profile_config(), "SimpleOutput", "FilePath");
+	bool ffmpegOutput =
+		strcmpi(config_get_string(obs_frontend_get_profile_config(),
+					  "AdvOut", "RecType"),
+			"FFmpeg") == 0;
 
-	char timestampBuf[64];
-	time_t time = std::time(nullptr);
-	std::strftime(timestampBuf, sizeof(timestampBuf), "%Y-%m-%d %H-%M-%S",
-		      std::localtime(&time));
+	bool ffmpegRecording =
+		ffmpegOutput &&
+		config_get_bool(obs_frontend_get_profile_config(), "AdvOut",
+				"FFOutputToFile");
 
-	std::string path = basePath + std::string("/SE.Live Recording ") +
-			   std::string(timestampBuf) + " - " + m_videoComposition->GetName() + " - " + GetName() + ".mkv";
+	//////////////////////////////////
+	// Parse OBS settings (defaults)
+	//////////////////////////////////
 
+	std::string basePath = "";
 
-	obs_data_t *settings = obs_data_create();
+	auto advBasePath = config_get_string(
+		obs_frontend_get_profile_config(), "AdvOut",
+		ffmpegRecording ? "FFFilePath" : "RecFilePath");
+	if (advBasePath) {
+		basePath = advBasePath;
+	} else {
+		basePath = config_get_string(obs_frontend_get_profile_config(),
+					     "SimpleOutput", "FilePath");
+	}
+
+	std::string recFormat = config_get_string(
+		obs_frontend_get_profile_config(), "AdvOut",
+		ffmpegRecording ? "FFExtension" : "RecFormat2");
+	std::string filenameFormat =
+		config_get_string(obs_frontend_get_profile_config(), "Output",
+				  "FilenameFormatting");
+	if (!filenameFormat.size())
+		filenameFormat = "%CCYY-%MM-%DD %hh-%mm-%ss";
+
+	filenameFormat = std::string("SE.Live  ") + filenameFormat + GetName() + std::string(".mkv");
+
+	bool overwriteIfExists =
+		config_get_bool(obs_frontend_get_profile_config(), "Output",
+				"OverwriteIfExists");
+	bool noSpace =
+		config_get_bool(obs_frontend_get_profile_config(), "AdvOut",
+				ffmpegRecording ? "FFFileNameWithoutSpace"
+						: "RecFileNameWithoutSpace");
+	bool splitFile = config_get_bool(obs_frontend_get_profile_config(),
+					 "AdvOut", "RecSplitFile");
+
+	auto splitFileType =
+		splitFile ? config_get_string(obs_frontend_get_profile_config(),
+					      "AdvOut", "RecSplitFileType")
+			  : "";
+
+	auto splitFileTime =
+		(strcmpi(splitFileType, "Time") == 0)
+			? config_get_int(obs_frontend_get_profile_config(),
+					 "AdvOut", "RecSplitFileTime")
+			: 0;
+
+	auto splitFileSize = (strcmpi(splitFileType, "Size") == 0)
+			? config_get_int(obs_frontend_get_profile_config(),
+					 "AdvOut",
+						 "RecSplitFileSize")
+				: 0;
+
+	//////////////////////////////
+	// m_recordingSettings parse
+	//////////////////////////////
+
+	if (m_recordingSettings->HasKey("fileNameFormat") &&
+	    m_recordingSettings->GetType("fileNameFormat") == VTYPE_STRING) {
+		filenameFormat =
+			m_recordingSettings->GetString("fileNameFormat");
+	}
+
+	if (m_recordingSettings->HasKey("splitAtMaximumMegabytes") &&
+	    m_recordingSettings->GetType("splitAtMaximumMegabytes") == VTYPE_INT) {
+		splitFileSize =
+			m_recordingSettings->GetInt("splitAtMaximumMegabytes");
+	}
+
+	if (m_recordingSettings->HasKey("splitAtMaximumDurationSeconds") &&
+	    m_recordingSettings->GetType("splitAtMaximumDurationSeconds") ==
+		    VTYPE_INT) {
+		splitFileTime = m_recordingSettings->GetInt(
+			"splitAtMaximumDurationSeconds");
+	}
+
+	if (m_recordingSettings->HasKey("overwriteExistingFiles") &&
+	    m_recordingSettings->GetType("overwriteExistingFiles") ==
+		    VTYPE_BOOL) {
+		overwriteIfExists =
+			m_recordingSettings->GetBool("overwriteExistingFiles");
+	}
+
+	if (m_recordingSettings->HasKey("allowSpacesInFileNames") &&
+	    m_recordingSettings->GetType("allowSpacesInFileNames") ==
+		    VTYPE_BOOL) {
+		noSpace =
+			!m_recordingSettings->GetBool("allowSpacesInFileNames");
+	}
+
+	splitFile = splitFileSize > 0 || splitFileTime > 0;
+
+	////////////////////////////////////////////////
+	// Parse actual filename format and extenstion
+	////////////////////////////////////////////////
+
+	std::string filenameExtension = "mkv";
+	{
+		auto ext = os_get_path_extension(filenameFormat.c_str());
+		if (ext && strlen(ext) > 1) {
+			filenameExtension = (ext + 1);
+
+			filenameFormat = filenameFormat.substr(
+				0, filenameFormat.size() - strlen(ext));
+		}
+	}
+
+	////////////////////////////////////////////////
+	// Setup output settings
+	////////////////////////////////////////////////
+
+	OBSDataAutoRelease settings = obs_data_create();
+
+	std::string formattedFilename = os_generate_formatted_filename(
+		filenameExtension.c_str(), !noSpace, filenameFormat.c_str());
+
+	std::string formattedPath = basePath + "/" + formattedFilename;
 
 	obs_data_set_string(settings, "muxer_settings", "");
-	obs_data_set_string(settings, "path", path.c_str());
+	obs_data_set_string(settings, "path", formattedPath.c_str());
+
+	obs_data_set_string(settings, "directory", basePath.c_str());
+	obs_data_set_string(settings, "format", filenameFormat.c_str());
+	obs_data_set_string(settings, "extension", filenameExtension.c_str());
+	obs_data_set_bool(settings, "allow_spaces", !noSpace);
+	obs_data_set_bool(settings, "allow_overwrite", overwriteIfExists);
+	obs_data_set_bool(settings, "split_file", splitFile);
+	obs_data_set_int(settings, "max_time_sec", splitFileTime);
+	obs_data_set_int(settings, "max_size_mb", splitFileSize);
 
 	m_output = obs_output_create("ffmpeg_muxer", GetId().c_str(), settings,
 				     nullptr);
-
-	obs_data_release(settings);
 
 	if (m_output) {
 		obs_output_set_video_encoder(
@@ -922,6 +1045,7 @@ void StreamElementsCustomRecordingOutput::StopInternal()
 void StreamElementsCustomRecordingOutput::SerializeOutputSettings(
 	CefRefPtr<CefValue> &output)
 {
+	/*
 	auto d = CefDictionaryValue::Create();
 
 	auto obs_output = GetOutput();
@@ -934,8 +1058,9 @@ void StreamElementsCustomRecordingOutput::SerializeOutputSettings(
 
 		obs_data_release(obs_output_settings);
 	}
+	*/
 
-	output->SetDictionary(d);
+	output->SetDictionary(m_recordingSettings);
 }
 
 std::shared_ptr<StreamElementsCustomRecordingOutput>
@@ -980,6 +1105,14 @@ StreamElementsCustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 			->GetVideoCompositionManager()
 			->GetVideoCompositionById(videoCompositionId);
 
+	auto recordingSettings = CefDictionaryValue::Create();
+
+	if (rootDict->HasKey("recordingSettings") &&
+	    rootDict->GetType("recordingSettings") == VTYPE_DICTIONARY) {
+		recordingSettings =
+			rootDict->GetDictionary("recordingSettings");
+	}
+
 	if (!videoComposition && !videoCompositionId.size()) {
 		videoComposition =
 			StreamElementsGlobalStateManager::GetInstance()
@@ -988,7 +1121,7 @@ StreamElementsCustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 	}
 
 	auto result = std::make_shared<StreamElementsCustomRecordingOutput>(
-		id, name, videoComposition, auxData);
+		id, name, recordingSettings, videoComposition, auxData);
 
 	result->SetEnabled(isEnabled);
 

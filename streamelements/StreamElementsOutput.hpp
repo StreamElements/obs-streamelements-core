@@ -241,14 +241,18 @@ private:
 
 	obs_output_t *m_output = nullptr;
 
+	CefRefPtr<CefDictionaryValue> m_recordingSettings = CefDictionaryValue::Create();
+
 public:
 	StreamElementsCustomRecordingOutput(
 		std::string id, std::string name,
+		CefRefPtr<CefDictionaryValue> recordingSettings,
 		std::shared_ptr<StreamElementsVideoCompositionBase>
 			videoComposition,
 		CefRefPtr<CefDictionaryValue> auxData)
 		: StreamElementsOutputBase(id, name, RecordingOutput, None,
 					   videoComposition, auxData),
+		  m_recordingSettings(recordingSettings),
 		  m_videoComposition(videoComposition)
 	{
 	}
