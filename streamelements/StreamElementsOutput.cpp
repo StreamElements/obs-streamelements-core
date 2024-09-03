@@ -960,37 +960,38 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 	// m_recordingSettings parse
 	//////////////////////////////
 
-	if (m_recordingSettings->HasKey("fileNameFormat") &&
-	    m_recordingSettings->GetType("fileNameFormat") == VTYPE_STRING) {
-		filenameFormat =
-			m_recordingSettings->GetString("fileNameFormat");
-	}
+	if (m_recordingSettings->HasKey("settings") &&
+	    m_recordingSettings->GetType("settings") == VTYPE_DICTIONARY) {
+		auto d = m_recordingSettings->GetDictionary("settings");
 
-	if (m_recordingSettings->HasKey("splitAtMaximumMegabytes") &&
-	    m_recordingSettings->GetType("splitAtMaximumMegabytes") == VTYPE_INT) {
-		splitFileSize =
-			m_recordingSettings->GetInt("splitAtMaximumMegabytes");
-	}
+		if (d->HasKey("fileNameFormat") &&
+		    d->GetType("fileNameFormat") == VTYPE_STRING) {
+			filenameFormat = d->GetString("fileNameFormat");
+		}
 
-	if (m_recordingSettings->HasKey("splitAtMaximumDurationSeconds") &&
-	    m_recordingSettings->GetType("splitAtMaximumDurationSeconds") ==
-		    VTYPE_INT) {
-		splitFileTime = m_recordingSettings->GetInt(
-			"splitAtMaximumDurationSeconds");
-	}
+		if (d->HasKey("splitAtMaximumMegabytes") &&
+		    d->GetType("splitAtMaximumMegabytes") == VTYPE_INT) {
+			splitFileSize = d->GetInt("splitAtMaximumMegabytes");
+		}
 
-	if (m_recordingSettings->HasKey("overwriteExistingFiles") &&
-	    m_recordingSettings->GetType("overwriteExistingFiles") ==
-		    VTYPE_BOOL) {
-		overwriteIfExists =
-			m_recordingSettings->GetBool("overwriteExistingFiles");
-	}
+		if (d->HasKey("splitAtMaximumDurationSeconds") &&
+		    d->GetType("splitAtMaximumDurationSeconds") == VTYPE_INT) {
+			splitFileTime =
+				d->GetInt("splitAtMaximumDurationSeconds");
+		}
 
-	if (m_recordingSettings->HasKey("allowSpacesInFileNames") &&
-	    m_recordingSettings->GetType("allowSpacesInFileNames") ==
-		    VTYPE_BOOL) {
-		noSpace =
-			!m_recordingSettings->GetBool("allowSpacesInFileNames");
+		if (d->HasKey("overwriteExistingFiles") &&
+		    d->GetType("overwriteExistingFiles") ==
+			    VTYPE_BOOL) {
+			overwriteIfExists =
+				d->GetBool("overwriteExistingFiles");
+		}
+
+		if (d->HasKey("allowSpacesInFileNames") &&
+		    d->GetType("allowSpacesInFileNames") ==
+			    VTYPE_BOOL) {
+			noSpace = !d->GetBool("allowSpacesInFileNames");
+		}
 	}
 
 	splitFile = splitFileSize > 0 || splitFileTime > 0;
