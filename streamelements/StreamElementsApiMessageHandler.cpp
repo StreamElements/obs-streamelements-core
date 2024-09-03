@@ -31,6 +31,9 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 	std::string source, CefRefPtr<CefProcessMessage> message,
 	const long cefClientId)
 {
+	if (!StreamElementsGlobalStateManager::GetInstance()->IsInitialized())
+		return true;
+
 	const std::string &name = message->GetName();
 
 	if (name == MSG_ON_CONTEXT_CREATED) {
@@ -117,13 +120,16 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 							context->result,
 							JSON_WRITER_DEFAULT));
 
-					StreamElementsGlobalStateManager::
-						GetInstance()
-							->GetWebsocketApiServer()
-							->DispatchClientMessage(
-								"system",
-								context->source,
-								msg);
+					auto apiServer =
+						StreamElementsGlobalStateManager::
+							GetInstance()
+								->GetWebsocketApiServer();
+
+					if (!apiServer)
+						return;
+
+					apiServer->DispatchClientMessage(
+						"system", context->source, msg);
 				}
 
 				delete context;
@@ -148,6 +154,14 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 
 			QtPostTask (
 				[context]() -> void {
+					if (!StreamElementsGlobalStateManager::
+						GetInstance()
+						->IsInitialized())
+					{
+						context->complete();
+						return;
+					}
+
 					if (IsTraceLogLevel()) {
 						blog(LOG_INFO,
 						     "obs-streamelements-core[%s]: API: performing call to '%s', callback id %d",
@@ -181,6 +195,9 @@ void StreamElementsApiMessageHandler::InvokeApiCallHandlerAsync(
 	const long cefClientId,
 	const bool enable_logging)
 {
+	if (!StreamElementsGlobalStateManager::GetInstance()->IsInitialized())
+		return;
+
 	auto runtimeStatus = m_runtimeStatus;
 
 	CefRefPtr<CefValue> result = CefValue::Create();
@@ -2356,7 +2373,9 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetOutputManager()
-			->SerializeAllOutputs(result);
+			->SerializeAllOutputs(
+				StreamElementsOutputBase::StreamingOutput,
+				result);
 	}
 	API_HANDLER_END();
 
@@ -2365,7 +2384,9 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetOutputManager()
-				->DeserializeOutput(args->GetValue(0), result);
+				->DeserializeOutput(
+					StreamElementsOutputBase::StreamingOutput,
+					args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
@@ -2375,7 +2396,9 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetOutputManager()
-				->RemoveOutputsByIds(args->GetValue(0), result);
+				->RemoveOutputsByIds(
+					StreamElementsOutputBase::StreamingOutput,
+					args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
@@ -2385,7 +2408,9 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetOutputManager()
-				->EnableOutputsByIds(args->GetValue(0), result);
+				->EnableOutputsByIds(
+					StreamElementsOutputBase::StreamingOutput,
+					args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
@@ -2395,7 +2420,78 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetOutputManager()
-				->DisableOutputsByIds(args->GetValue(0), result);
+				->DisableOutputsByIds(
+					StreamElementsOutputBase::StreamingOutput,
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllRecordingOutputs");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetOutputManager()
+			->SerializeAllOutputs(
+				StreamElementsOutputBase::RecordingOutput,
+				result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addRecordingOutput");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->DeserializeOutput(
+					StreamElementsOutputBase::RecordingOutput,
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeRecordingOutputsByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->RemoveOutputsByIds(
+					StreamElementsOutputBase::RecordingOutput,
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("enableRecordingOutputsByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->EnableOutputsByIds(
+					StreamElementsOutputBase::RecordingOutput,
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("disableRecordingOutputsByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->DisableOutputsByIds(
+					StreamElementsOutputBase::RecordingOutput,
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("triggerRecordingOutputSplitById");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->TriggerSplitRecordingOutputById(
+					args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();

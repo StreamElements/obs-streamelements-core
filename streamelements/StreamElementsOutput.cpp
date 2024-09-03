@@ -1,12 +1,18 @@
+#include <obs.hpp>
 #include <obs-frontend-api.h>
 
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsOutput.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
 
-static void dispatch_list_change_event()
+#include <ctime>
+
+static void dispatch_list_change_event(StreamElementsOutputBase *output)
 {
-	DispatchClientJSEvent("hostStreamingOutputListChanged", "null");
+	if (output->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		DispatchClientJSEvent("hostStreamingOutputListChanged", "null");
+	else
+		DispatchClientJSEvent("hostRecordingOutputListChanged", "null");
 }
 
 static void dispatch_event(
@@ -28,8 +34,12 @@ void StreamElementsOutputBase::handle_output_start(void *my_data,
 {
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	dispatch_event(self, "hostStreamingOutputStarted");
-	dispatch_list_change_event();
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputStarted");
+	else
+		dispatch_event(self, "hostRecordingOutputStarted");
+
+	dispatch_list_change_event(self);
 }
 
 void StreamElementsOutputBase::handle_output_stop(void *my_data,
@@ -86,12 +96,19 @@ void StreamElementsOutputBase::handle_output_stop(void *my_data,
 
 		self->SetError(args->GetString("reason"));
 
-		dispatch_event(self, "hostStreamingOutputError", args);
+		if (self->GetOutputType() ==
+		    StreamElementsOutputBase::StreamingOutput)
+			dispatch_event(self, "hostStreamingOutputError", args);
+		else
+			dispatch_event(self, "hostRecordingOutputError", args);
 	}
 
-	dispatch_event(self, "hostStreamingOutputStopped");
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputStopped");
+	else
+		dispatch_event(self, "hostRecordingOutputStopped");
 
-	dispatch_list_change_event();
+	dispatch_list_change_event(self);
 }
 
 void StreamElementsOutputBase::handle_output_pause(void *my_data,
@@ -99,8 +116,12 @@ void StreamElementsOutputBase::handle_output_pause(void *my_data,
 {
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	dispatch_event(self, "hostStreamingOutputPaused");
-	dispatch_list_change_event();
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputPaused");
+	else
+		dispatch_event(self, "hostRecordingOutputPaused");
+
+	dispatch_list_change_event(self);
 }
 
 void StreamElementsOutputBase::handle_output_unpause(void *my_data,
@@ -108,8 +129,12 @@ void StreamElementsOutputBase::handle_output_unpause(void *my_data,
 {
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	dispatch_event(self, "hostStreamingOutputUnpaused");
-	dispatch_list_change_event();
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputUnpaused");
+	else
+		dispatch_event(self, "hostRecordingOutputUnpaused");
+
+	dispatch_list_change_event(self);
 }
 
 void StreamElementsOutputBase::handle_output_starting(void *my_data,
@@ -117,8 +142,12 @@ void StreamElementsOutputBase::handle_output_starting(void *my_data,
 {
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	dispatch_event(self, "hostStreamingOutputStarting");
-	dispatch_list_change_event();
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputStarting");
+	else
+		dispatch_event(self, "hostRecordingOutputStarting");
+
+	dispatch_list_change_event(self);
 }
 
 void StreamElementsOutputBase::handle_output_stopping(void *my_data,
@@ -126,8 +155,12 @@ void StreamElementsOutputBase::handle_output_stopping(void *my_data,
 {
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	dispatch_event(self, "hostStreamingOutputStopping");
-	dispatch_list_change_event();
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputStopping");
+	else
+		dispatch_event(self, "hostRecordingOutputStopping");
+
+	dispatch_list_change_event(self);
 }
 
 void StreamElementsOutputBase::handle_output_activate(void *my_data,
@@ -135,8 +168,12 @@ void StreamElementsOutputBase::handle_output_activate(void *my_data,
 {
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	dispatch_event(self, "hostStreamingOutputActivated");
-	dispatch_list_change_event();
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputActivated");
+	else
+		dispatch_event(self, "hostRecordingOutputActivated");
+
+	dispatch_list_change_event(self);
 }
 
 void StreamElementsOutputBase::handle_output_deactivate(void *my_data,
@@ -144,8 +181,12 @@ void StreamElementsOutputBase::handle_output_deactivate(void *my_data,
 {
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	dispatch_event(self, "hostStreamingOutputDeactivated");
-	dispatch_list_change_event();
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputDeactivated");
+	else
+		dispatch_event(self, "hostRecordingOutputDeactivated");
+
+	dispatch_list_change_event(self);
 }
 
 void StreamElementsOutputBase::handle_output_reconnect(void *my_data,
@@ -153,8 +194,12 @@ void StreamElementsOutputBase::handle_output_reconnect(void *my_data,
 {
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	dispatch_event(self, "hostStreamingOutputReconnecting");
-	dispatch_list_change_event();
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputReconnecting");
+	else
+		dispatch_event(self, "hostRecordingOutputReconnecting");
+
+	dispatch_list_change_event(self);
 }
 
 void
@@ -163,8 +208,12 @@ StreamElementsOutputBase::handle_output_reconnect_success(void *my_data,
 {
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	dispatch_event(self, "hostStreamingOutputReconnected");
-	dispatch_list_change_event();
+	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+		dispatch_event(self, "hostStreamingOutputReconnected");
+	else
+		dispatch_event(self, "hostRecordingOutputReconnected");
+
+	dispatch_list_change_event(self);
 }
 
 void StreamElementsOutputBase::handle_obs_frontend_event(
@@ -187,10 +236,39 @@ void StreamElementsOutputBase::handle_obs_frontend_event(
 		// re-using the OBS native audio encoder for *all* our outputs -
 		// there is no API to mix a different audio stream, or to apply
 		// different encoding to the existing mix.
-		// 
-		self->Start();
+		//
+		if (self->m_obsStateDependency == Streaming)
+			self->Start();
 		break;
 	case OBS_FRONTEND_EVENT_STREAMING_STOPPED:
+		if (self->m_obsStateDependency == Streaming)
+			self->Stop();
+		break;
+
+
+	case OBS_FRONTEND_EVENT_RECORDING_STARTING:
+		//
+		// OBS native output video encoder is already set up at this stage,
+		// so we can start our outputs as well.
+		//
+		// State is important, just in case that we are pulling from the native
+		// OBS video composition: in this case we want to re-use the encoder
+		// which has already been set-up by OBS itself.
+		//
+		// This is *especially* important for audio: at this moment, we are
+		// re-using the OBS native audio encoder for *all* our outputs -
+		// there is no API to mix a different audio stream, or to apply
+		// different encoding to the existing mix.
+		//
+		if (self->m_obsStateDependency == Recording)
+			self->Start();
+		break;
+
+	case OBS_FRONTEND_EVENT_RECORDING_STOPPED:
+		if (self->m_obsStateDependency == Recording)
+			self->Stop();
+		break;
+
 	case OBS_FRONTEND_EVENT_EXIT:
 		self->Stop();
 		break;
@@ -211,8 +289,9 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 	d->SetBool("isEnabled", IsEnabled());
 	d->SetBool("isActive", IsActive());
 	d->SetBool("canDisable", CanDisable());
-	d->SetBool("canRemove", !IsObsNativeVideoComposition());
-	d->SetBool("isObsNativeVideoComposition", IsObsNativeVideoComposition());
+	d->SetBool("canRemove", !IsObsNativeOutput());
+	d->SetBool("isObsNativeVideoComposition", m_videoComposition->IsObsNativeComposition());
+	d->SetBool("isObsNativeOutput", IsObsNativeOutput());
 
 	if (m_error.size()) {
 		auto error = CefDictionaryValue::Create();
@@ -264,26 +343,43 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 
 	auto streamingSettings = CefValue::Create();
 
-	SerializeStreamingSettings(streamingSettings);
+	SerializeOutputSettings(streamingSettings);
 
-	d->SetValue("streamingSettings", streamingSettings);
+	switch (m_obsOutputType) {
+	case StreamingOutput:
+		d->SetString("type", "streaming");
+		d->SetValue("streamingSettings", streamingSettings);
+		break;
+	case RecordingOutput:
+		d->SetString("type", "recording");
+		d->SetValue("recordingSettings", streamingSettings);
+		break;
+	default:
+		throw std::invalid_argument("Unknown obsOutputType value");
+	}
 
 	output->SetDictionary(d);
 }
 
 StreamElementsOutputBase::StreamElementsOutputBase(
-	std::string id, std::string name,
+	std::string id, std::string name, ObsOutputType obsOutputType,
+	ObsStateDependencyType obsStateDependency,
 	std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition,
 	CefRefPtr<CefDictionaryValue> auxData)
-	: m_id(id), m_name(name), m_videoComposition(videoComposition), m_enabled(false)
+	: m_id(id),
+	  m_name(name),
+	  m_obsOutputType(obsOutputType),
+	  m_obsStateDependency(obsStateDependency),
+	  m_videoComposition(videoComposition),
+	  m_enabled(false)
 {
 	m_auxData = auxData.get() ? auxData : CefDictionaryValue::Create();
 
 	m_videoCompositionInfo = videoComposition->GetCompositionInfo(this);
 
-	m_enabled = IsObsNativeVideoComposition();
+	m_enabled = IsObsNativeOutput();
 
-	dispatch_list_change_event();
+	dispatch_list_change_event(this);
 
 	obs_frontend_add_event_callback(
 		StreamElementsOutputBase::handle_obs_frontend_event, this);
@@ -294,7 +390,7 @@ StreamElementsOutputBase::~StreamElementsOutputBase()
 	obs_frontend_remove_event_callback(
 		StreamElementsOutputBase::handle_obs_frontend_event, this);
 
-	dispatch_list_change_event();
+	dispatch_list_change_event(this);
 }
 
 bool StreamElementsOutputBase::IsEnabled()
@@ -439,15 +535,15 @@ void StreamElementsOutputBase::Stop()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// StreamElementsCustomOutput
+// StreamElementsCustomStreamingOutput
 ////////////////////////////////////////////////////////////////////////////////
 
-bool StreamElementsCustomOutput::CanDisable()
+bool StreamElementsCustomStreamingOutput::CanDisable()
 {
 	return true;
 }
 
-bool StreamElementsCustomOutput::StartInternal(
+bool StreamElementsCustomStreamingOutput::StartInternal(
 	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
 		videoCompositionInfo)
 {
@@ -504,7 +600,7 @@ bool StreamElementsCustomOutput::StartInternal(
 	return false;
 }
 
-void StreamElementsCustomOutput::StopInternal()
+void StreamElementsCustomStreamingOutput::StopInternal()
 {
 	if (!m_videoCompositionInfo)
 		return;
@@ -519,7 +615,7 @@ void StreamElementsCustomOutput::StopInternal()
 	m_output = nullptr;
 }
 
-void StreamElementsCustomOutput::SerializeStreamingSettings(
+void StreamElementsCustomStreamingOutput::SerializeOutputSettings(
 	CefRefPtr<CefValue>& output)
 {
 	auto d = CefDictionaryValue::Create();
@@ -547,7 +643,7 @@ void StreamElementsCustomOutput::SerializeStreamingSettings(
 	output->SetDictionary(d);
 }
 
-std::shared_ptr <StreamElementsCustomOutput> StreamElementsCustomOutput::Create(CefRefPtr<CefValue> input)
+std::shared_ptr <StreamElementsCustomStreamingOutput> StreamElementsCustomStreamingOutput::Create(CefRefPtr<CefValue> input)
 {
 	if (!input.get())
 		return nullptr;
@@ -634,7 +730,7 @@ std::shared_ptr <StreamElementsCustomOutput> StreamElementsCustomOutput::Create(
 
 	auto bindToIP = "";
 
-	auto result = std::make_shared<StreamElementsCustomOutput>(
+	auto result = std::make_shared<StreamElementsCustomStreamingOutput>(
 		id, name, videoComposition, service, bindToIP, auxData);
 
 	result->SetEnabled(isEnabled);
@@ -643,10 +739,10 @@ std::shared_ptr <StreamElementsCustomOutput> StreamElementsCustomOutput::Create(
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// StreamElementsObsNativeOutput
+// StreamElementsObsNativeStreamingOutput
 ////////////////////////////////////////////////////////////////////////////////
 
-bool StreamElementsObsNativeOutput::StartInternal(
+bool StreamElementsObsNativeStreamingOutput::StartInternal(
 	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
 	videoCompositionInfo)
 {
@@ -657,14 +753,14 @@ bool StreamElementsObsNativeOutput::StartInternal(
 	return true;
 }
 
-void StreamElementsObsNativeOutput::StopInternal()
+void StreamElementsObsNativeStreamingOutput::StopInternal()
 {
 	// NOP: This is managed by the OBS front-end
 
 	DisconnectOutputEvents();
 }
 
-void StreamElementsObsNativeOutput::SerializeStreamingSettings(
+void StreamElementsObsNativeStreamingOutput::SerializeOutputSettings(
 	CefRefPtr<CefValue> &output)
 {
 	auto d = CefDictionaryValue::Create();
@@ -694,4 +790,390 @@ void StreamElementsObsNativeOutput::SerializeStreamingSettings(
 	obs_data_release(service_settings);
 
 	output->SetDictionary(d);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// StreamElementsObsNativeRecordingOutput
+////////////////////////////////////////////////////////////////////////////////
+
+bool StreamElementsObsNativeRecordingOutput::StartInternal(
+	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
+		videoCompositionInfo)
+{
+	// NOP: This is managed by the OBS front-end
+
+	ConnectOutputEvents();
+
+	return true;
+}
+
+void StreamElementsObsNativeRecordingOutput::StopInternal()
+{
+	// NOP: This is managed by the OBS front-end
+
+	DisconnectOutputEvents();
+}
+
+void StreamElementsObsNativeRecordingOutput::SerializeOutputSettings(
+	CefRefPtr<CefValue> &output)
+{
+	auto d = CefDictionaryValue::Create();
+
+	obs_output_t *obs_output =
+		obs_frontend_get_recording_output();
+
+	obs_data_t *obs_output_settings = obs_output_get_settings(obs_output);
+
+	d->SetString("type", obs_output_get_id(obs_output));
+	d->SetValue("settings", SerializeObsData(obs_output_settings));
+
+	obs_data_release(obs_output_settings);
+
+	obs_output_release(obs_output);
+
+	output->SetDictionary(d);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// StreamElementsCustomRecordingOutput
+////////////////////////////////////////////////////////////////////////////////
+
+bool StreamElementsCustomRecordingOutput::CanDisable()
+{
+	return true;
+}
+
+bool StreamElementsCustomRecordingOutput::CanSplitRecordingOutput()
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	auto output = GetOutput();
+
+	if (!output)
+		return false;
+
+	if (!obs_output_active(output))
+		return false;
+
+	if (!obs_output_paused(output))
+		return false;
+
+	return true;
+}
+
+bool StreamElementsCustomRecordingOutput::TriggerSplitRecordingOutput()
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	if (!CanSplitRecordingOutput())
+		return false;
+
+	proc_handler_t *ph = obs_output_get_proc_handler(GetOutput());
+	uint8_t stack[128];
+	calldata cd;
+	calldata_init_fixed(&cd, stack, sizeof(stack));
+	proc_handler_call(ph, "split_file", &cd);
+	bool result = calldata_bool(&cd, "split_file_enabled");
+
+	return result;
+}
+
+bool StreamElementsCustomRecordingOutput::StartInternal(
+	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
+		videoCompositionInfo)
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	if (m_output)
+		return false;
+
+	if (!videoCompositionInfo)
+		return false;
+
+	bool ffmpegOutput =
+		strcmpi(config_get_string(obs_frontend_get_profile_config(),
+					  "AdvOut", "RecType"),
+			"FFmpeg") == 0;
+
+	bool ffmpegRecording =
+		ffmpegOutput &&
+		config_get_bool(obs_frontend_get_profile_config(), "AdvOut",
+				"FFOutputToFile");
+
+	//////////////////////////////////
+	// Parse OBS settings (defaults)
+	//////////////////////////////////
+
+	std::string basePath = "";
+
+	auto advBasePath = config_get_string(
+		obs_frontend_get_profile_config(), "AdvOut",
+		ffmpegRecording ? "FFFilePath" : "RecFilePath");
+	if (advBasePath) {
+		basePath = advBasePath;
+	} else {
+		basePath = config_get_string(obs_frontend_get_profile_config(),
+					     "SimpleOutput", "FilePath");
+	}
+
+	std::string recFormat = config_get_string(
+		obs_frontend_get_profile_config(), "AdvOut",
+		ffmpegRecording ? "FFExtension" : "RecFormat2");
+	std::string filenameFormat =
+		config_get_string(obs_frontend_get_profile_config(), "Output",
+				  "FilenameFormatting");
+	if (!filenameFormat.size())
+		filenameFormat = "%CCYY-%MM-%DD %hh-%mm-%ss";
+
+	filenameFormat = std::string("SE.Live  ") + filenameFormat + std::string(" ") + GetName() + std::string(".mkv");
+
+	bool overwriteIfExists =
+		config_get_bool(obs_frontend_get_profile_config(), "Output",
+				"OverwriteIfExists");
+	bool noSpace =
+		config_get_bool(obs_frontend_get_profile_config(), "AdvOut",
+				ffmpegRecording ? "FFFileNameWithoutSpace"
+						: "RecFileNameWithoutSpace");
+	bool splitFile = config_get_bool(obs_frontend_get_profile_config(),
+					 "AdvOut", "RecSplitFile");
+
+	auto splitFileType =
+		splitFile ? config_get_string(obs_frontend_get_profile_config(),
+					      "AdvOut", "RecSplitFileType")
+			  : "";
+
+	auto splitFileTime =
+		(strcmpi(splitFileType, "Time") == 0)
+			? config_get_int(obs_frontend_get_profile_config(),
+					 "AdvOut", "RecSplitFileTime")
+			: 0;
+
+	auto splitFileSize = (strcmpi(splitFileType, "Size") == 0)
+			? config_get_int(obs_frontend_get_profile_config(),
+					 "AdvOut",
+						 "RecSplitFileSize")
+				: 0;
+
+	splitFile = true; // Always enable file splitting, even if only manual
+
+	//////////////////////////////
+	// m_recordingSettings parse
+	//////////////////////////////
+
+	if (m_recordingSettings->HasKey("settings") &&
+	    m_recordingSettings->GetType("settings") == VTYPE_DICTIONARY) {
+		auto d = m_recordingSettings->GetDictionary("settings");
+
+		if (d->HasKey("fileNameFormat") &&
+		    d->GetType("fileNameFormat") == VTYPE_STRING) {
+			filenameFormat = d->GetString("fileNameFormat");
+		}
+
+		if (d->HasKey("splitAtMaximumMegabytes") &&
+		    d->GetType("splitAtMaximumMegabytes") == VTYPE_INT) {
+			splitFileSize = d->GetInt("splitAtMaximumMegabytes");
+		}
+
+		if (d->HasKey("splitAtMaximumDurationSeconds") &&
+		    d->GetType("splitAtMaximumDurationSeconds") == VTYPE_INT) {
+			splitFileTime =
+				d->GetInt("splitAtMaximumDurationSeconds");
+		}
+
+		if (d->HasKey("overwriteExistingFiles") &&
+		    d->GetType("overwriteExistingFiles") ==
+			    VTYPE_BOOL) {
+			overwriteIfExists =
+				d->GetBool("overwriteExistingFiles");
+		}
+
+		if (d->HasKey("allowSpacesInFileNames") &&
+		    d->GetType("allowSpacesInFileNames") ==
+			    VTYPE_BOOL) {
+			noSpace = !d->GetBool("allowSpacesInFileNames");
+		}
+	}
+
+	splitFile = splitFileSize > 0 || splitFileTime > 0;
+
+	////////////////////////////////////////////////
+	// Parse actual filename format and extenstion
+	////////////////////////////////////////////////
+
+	std::string filenameExtension = "mkv";
+	{
+		auto ext = os_get_path_extension(filenameFormat.c_str());
+		if (ext && strlen(ext) > 1) {
+			filenameExtension = (ext + 1);
+
+			filenameFormat = filenameFormat.substr(
+				0, filenameFormat.size() - strlen(ext));
+		}
+	}
+
+	////////////////////////////////////////////////
+	// Setup output settings
+	////////////////////////////////////////////////
+
+	OBSDataAutoRelease settings = obs_data_create();
+
+	std::string formattedFilename = os_generate_formatted_filename(
+		filenameExtension.c_str(), !noSpace, filenameFormat.c_str());
+
+	std::string formattedPath = basePath + "/" + formattedFilename;
+
+	obs_data_set_string(settings, "muxer_settings", "");
+	obs_data_set_string(settings, "path", formattedPath.c_str());
+
+	obs_data_set_string(settings, "directory", basePath.c_str());
+	obs_data_set_string(settings, "format", filenameFormat.c_str());
+	obs_data_set_string(settings, "extension", filenameExtension.c_str());
+	obs_data_set_bool(settings, "allow_spaces", !noSpace);
+	obs_data_set_bool(settings, "allow_overwrite", overwriteIfExists);
+	obs_data_set_bool(settings, "split_file", true);
+	obs_data_set_int(settings, "max_time_sec", splitFileTime);
+	obs_data_set_int(settings, "max_size_mb", splitFileSize);
+
+	OBSDataAutoRelease hotkeyData = obs_data_create();
+
+	m_output = obs_output_create("ffmpeg_muxer", GetId().c_str(), settings,
+				     hotkeyData);
+
+	if (m_output) {
+		obs_output_set_video_encoder(
+			m_output,
+			videoCompositionInfo->GetRecordingVideoEncoder());
+
+		for (size_t i = 0;; ++i) {
+			auto encoder =
+				videoCompositionInfo->GetRecordingAudioEncoder(
+					i);
+
+			if (!encoder)
+				break;
+
+			obs_output_set_audio_encoder(m_output, encoder, i);
+		}
+
+		ConnectOutputEvents();
+
+		if (obs_output_start(m_output)) {
+			m_videoCompositionInfo = videoCompositionInfo;
+
+			return true;
+		}
+
+		DisconnectOutputEvents();
+
+		obs_output_release(m_output);
+		m_output = nullptr;
+	}
+
+	return false;
+}
+
+void StreamElementsCustomRecordingOutput::StopInternal()
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	if (!m_videoCompositionInfo)
+		return;
+
+	if (!m_output)
+		return;
+
+	// obs_output_stop(m_output);
+
+	obs_output_force_stop(m_output);
+
+	DisconnectOutputEvents();
+
+	obs_output_release(m_output);
+	m_output = nullptr;
+}
+
+void StreamElementsCustomRecordingOutput::SerializeOutputSettings(
+	CefRefPtr<CefValue> &output)
+{
+	/*
+	auto d = CefDictionaryValue::Create();
+
+	auto obs_output = GetOutput();
+
+	if (obs_output) {
+		auto obs_output_settings = obs_output_get_settings(obs_output);
+
+		d->SetString("type", obs_output_get_id(obs_output));
+		d->SetValue("settings", SerializeObsData(obs_output_settings));
+
+		obs_data_release(obs_output_settings);
+	}
+	*/
+
+	output->SetDictionary(m_recordingSettings);
+}
+
+std::shared_ptr<StreamElementsCustomRecordingOutput>
+StreamElementsCustomRecordingOutput::Create(CefRefPtr<CefValue> input)
+{
+	if (!input.get())
+		return nullptr;
+
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return nullptr;
+
+	auto rootDict = input->GetDictionary();
+
+	if (!rootDict->HasKey("id") || !rootDict->HasKey("name"))
+		return nullptr;
+
+	if (rootDict->GetType("id") != VTYPE_STRING ||
+	    rootDict->GetType("name") != VTYPE_STRING)
+		return nullptr;
+
+	auto auxData = (rootDict->HasKey("auxiliaryData") &&
+			rootDict->GetType("auxiliaryData") == VTYPE_DICTIONARY)
+			       ? rootDict->GetDictionary("auxiliaryData")
+			       : CefDictionaryValue::Create();
+
+	std::string id = rootDict->GetString("id");
+	std::string name = rootDict->GetString("name");
+	std::string videoCompositionId =
+		(rootDict->HasKey("videoCompositionId") &&
+				 rootDict->GetType("videoCompositionId") ==
+					 VTYPE_STRING
+			 ? rootDict->GetString("videoCompositionId")
+			 : "");
+	bool isEnabled = rootDict->HasKey("isEnabled") &&
+					 rootDict->GetType("isEnabled") ==
+						 VTYPE_BOOL
+				 ? rootDict->GetBool("isEnabled")
+				 : true;
+
+	auto videoComposition =
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->GetVideoCompositionById(videoCompositionId);
+
+	auto recordingSettings = CefDictionaryValue::Create();
+
+	if (rootDict->HasKey("recordingSettings") &&
+	    rootDict->GetType("recordingSettings") == VTYPE_DICTIONARY) {
+		recordingSettings =
+			rootDict->GetDictionary("recordingSettings");
+	}
+
+	if (!videoComposition && !videoCompositionId.size()) {
+		videoComposition =
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetVideoCompositionManager()
+				->GetObsNativeVideoComposition();
+	}
+
+	auto result = std::make_shared<StreamElementsCustomRecordingOutput>(
+		id, name, recordingSettings, videoComposition, auxData);
+
+	result->SetEnabled(isEnabled);
+
+	return result;
 }

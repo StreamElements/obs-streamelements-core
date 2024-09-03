@@ -51,6 +51,10 @@ public:
 		virtual obs_encoder_t *
 		GetStreamingAudioEncoder(size_t index) = 0;
 
+		virtual obs_encoder_t *GetRecordingVideoEncoder() = 0;
+		virtual obs_encoder_t *
+		GetRecordingAudioEncoder(size_t index) = 0;
+
 		virtual video_t *GetVideo() = 0;
 		virtual audio_t *GetAudio() = 0;
 
@@ -110,6 +114,9 @@ public:
 	std::string GetUniqueSceneName(std::string name);
 
 	obs_scene_t* GetSceneById(std::string id) {
+		if (!id.size())
+			return GetCurrentScene();
+
 		std::vector<obs_scene_t *> scenes;
 		GetAllScenes(scenes);
 
@@ -308,7 +315,7 @@ public:
 	virtual ~StreamElementsCustomVideoComposition();
 
 public:
-	static std::shared_ptr<StreamElementsVideoCompositionBase>
+	static std::shared_ptr<StreamElementsCustomVideoComposition>
 	Create(std::string id, std::string name, uint32_t width,
 	       uint32_t height, std::string streamingVideoEncoderId, obs_data_t* streamingVideoEncoderSettings, obs_data_t* streamingVideoEncoderHotkeyData)
 	{
@@ -316,12 +323,19 @@ public:
 			Private(), id, name, width, height, streamingVideoEncoderId, streamingVideoEncoderSettings, streamingVideoEncoderHotkeyData);
 	}
 
-	static std::shared_ptr<StreamElementsVideoCompositionBase>
+	static std::shared_ptr<StreamElementsCustomVideoComposition>
 	Create(std::string id, std::string name, uint32_t width,
-	       uint32_t height, CefRefPtr<CefValue> streamingVideoEncoders);
+	       uint32_t height, CefRefPtr<CefValue> streamingVideoEncoders,
+	       CefRefPtr<CefValue> recordingVideoEncoders);
+
+private:
+	void SetRecordingEncoder(std::string recordingVideoEncoderId,
+				 obs_data_t *recordingVideoEncoderSettings,
+				 obs_data_t *recordingVideoEncoderHotkeyData);
 
 private:
 	obs_encoder_t *m_streamingVideoEncoder = nullptr;
+	obs_encoder_t *m_recordingVideoEncoder = nullptr;
 	obs_view_t *m_view = nullptr;
 	video_t *m_video = nullptr;
 
