@@ -925,7 +925,7 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 	if (!filenameFormat.size())
 		filenameFormat = "%CCYY-%MM-%DD %hh-%mm-%ss";
 
-	filenameFormat = std::string("SE.Live  ") + filenameFormat + GetName() + std::string(".mkv");
+	filenameFormat = std::string("SE.Live  ") + filenameFormat + std::string(" ") + GetName() + std::string(".mkv");
 
 	bool overwriteIfExists =
 		config_get_bool(obs_frontend_get_profile_config(), "Output",
