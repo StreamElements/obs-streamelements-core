@@ -843,8 +843,10 @@ bool StreamElementsCustomRecordingOutput::CanDisable()
 	return true;
 }
 
-bool StreamElementsCustomRecordingOutput::TriggerSplitRecordingOutput()
+bool StreamElementsCustomRecordingOutput::CanSplitRecordingOutput()
 {
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
 	auto output = GetOutput();
 
 	if (!output)
@@ -856,7 +858,17 @@ bool StreamElementsCustomRecordingOutput::TriggerSplitRecordingOutput()
 	if (!obs_output_paused(output))
 		return false;
 
-	proc_handler_t *ph = obs_output_get_proc_handler(output);
+	return true;
+}
+
+bool StreamElementsCustomRecordingOutput::TriggerSplitRecordingOutput()
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	if (!CanSplitRecordingOutput())
+		return false;
+
+	proc_handler_t *ph = obs_output_get_proc_handler(GetOutput());
 	uint8_t stack[128];
 	calldata cd;
 	calldata_init_fixed(&cd, stack, sizeof(stack));
@@ -870,6 +882,11 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
 		videoCompositionInfo)
 {
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	if (m_output)
+		return false;
+
 	if (!videoCompositionInfo)
 		return false;
 
@@ -1054,7 +1071,12 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 
 void StreamElementsCustomRecordingOutput::StopInternal()
 {
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
 	if (!m_videoCompositionInfo)
+		return;
+
+	if (!m_output)
 		return;
 
 	// obs_output_stop(m_output);
