@@ -1029,12 +1029,14 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 	obs_data_set_string(settings, "extension", filenameExtension.c_str());
 	obs_data_set_bool(settings, "allow_spaces", !noSpace);
 	obs_data_set_bool(settings, "allow_overwrite", overwriteIfExists);
-	obs_data_set_bool(settings, "split_file", splitFile);
+	obs_data_set_bool(settings, "split_file", true);
 	obs_data_set_int(settings, "max_time_sec", splitFileTime);
 	obs_data_set_int(settings, "max_size_mb", splitFileSize);
 
+	OBSDataAutoRelease hotkeyData = obs_data_create();
+
 	m_output = obs_output_create("ffmpeg_muxer", GetId().c_str(), settings,
-				     nullptr);
+				     hotkeyData);
 
 	if (m_output) {
 		obs_output_set_video_encoder(

@@ -2485,6 +2485,17 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("triggerRecordingOutputSplitById");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->TriggerSplitRecordingOutputById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("readScopedStorageJsonItem");
 	{
 		if (args->GetSize()) {

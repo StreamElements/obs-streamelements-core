@@ -35,6 +35,9 @@ public:
 			    CefRefPtr<CefValue> input,
 			    CefRefPtr<CefValue> &output);
 
+	void TriggerSplitRecordingOutputById(CefRefPtr<CefValue> input,
+					     CefRefPtr<CefValue> &output);
+
 	void Reset();
 
 private:

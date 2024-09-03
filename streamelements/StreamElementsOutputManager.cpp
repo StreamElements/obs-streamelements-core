@@ -178,6 +178,26 @@ void StreamElementsOutputManager::DisableOutputsByIds(
 	output->SetBool(true);
 }
 
+void StreamElementsOutputManager::TriggerSplitRecordingOutputById(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	output->SetBool(false);
+
+	if (input->GetType() != VTYPE_STRING)
+		return;
+
+	std::string id = input->GetString();
+
+	if (m_map[RecordingOutput].count(id)) {
+		output->SetBool(m_map[RecordingOutput][id]
+					->TriggerSplitRecordingOutput());
+	}
+}
+
+
 bool StreamElementsOutputManager::GetValidIds(
 	StreamElementsOutputBase::ObsOutputType outputType, CefRefPtr<CefValue> input,
 	std::map<std::string, bool>& output, bool testRemove, bool testDisable)
