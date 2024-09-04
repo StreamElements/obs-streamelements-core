@@ -2,8 +2,115 @@
 #include <obs-frontend-api.h>
 #include <util/config-file.h>
 
+#include "deps/json11/json11.hpp"
+
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsObsSceneManager.hpp"
+#include "StreamElementsMessageBus.hpp"
+#include "StreamElementsGlobalStateManager.hpp"
+
+static void dispatch_external_event(std::string name, std::string args)
+{
+	std::string externalEventName =
+		name.c_str() + 4; /* remove 'host' prefix */
+	externalEventName[0] =
+		tolower(externalEventName[0]); /* lower case first letter */
+
+	StreamElementsMessageBus::GetInstance()->NotifyAllExternalEventListeners(
+		StreamElementsMessageBus::DEST_ALL_EXTERNAL,
+		StreamElementsMessageBus::SOURCE_APPLICATION, "OBS",
+		externalEventName,
+		CefParseJSON(args, JSON_PARSER_ALLOW_TRAILING_COMMAS));
+}
+
+static void dispatch_js_event(std::string name, std::string args)
+{
+	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
+				 ->GetWebsocketApiServer();
+
+	if (!apiServer)
+		return;
+
+	apiServer->DispatchJSEvent("system", name, args);
+}
+
+static void
+dispatch_scene_changed_event(StreamElementsVideoCompositionBase *self,
+			     obs_scene_t *scene)
+{
+	auto source = obs_scene_get_source(scene);
+
+	if (!source)
+		return;
+
+	const char *sourceName = obs_source_get_name(source);
+
+	if (!sourceName)
+		return;
+
+	json11::Json json = json11::Json::object{
+		{"name", sourceName},
+		{"videoCompositionId", self->GetId()},
+		{"width", (int)obs_source_get_width(source)},
+		{"height", (int)obs_source_get_height(source)}};
+
+	std::string name = "hostActiveSceneChanged";
+	std::string args = json.dump();
+
+	dispatch_js_event(name, args);
+	dispatch_external_event(name, args);
+}
+
+static void
+dispatch_scene_list_changed_event(StreamElementsVideoCompositionBase *self,
+				  obs_scene_t *scene)
+{
+	auto source = obs_scene_get_source(scene);
+
+	if (!source)
+		return;
+
+	const char *sourceName = obs_source_get_name(source);
+
+	if (!sourceName)
+		return;
+
+	json11::Json json = json11::Json::object{
+		{"videoCompositionId", self->GetId()},
+	};
+
+	std::string name = "hostSceneListChanged";
+	std::string args = json.dump();
+
+	dispatch_js_event(name, args);
+	dispatch_external_event(name, args);
+}
+
+static void
+dispatch_scene_item_list_changed_event(StreamElementsVideoCompositionBase *self,
+				       obs_scene_t *scene)
+{
+	auto source = obs_scene_get_source(scene);
+
+	if (!source)
+		return;
+
+	const char *sourceName = obs_source_get_name(source);
+
+	if (!sourceName)
+		return;
+
+	json11::Json json = json11::Json::object{
+		{"sceneId", GetIdFromPointer(source)},
+		{"videoCompositionId", self->GetId()},
+	};
+
+	std::string name = "hostSceneItemListChanged";
+	std::string args = json.dump();
+
+	dispatch_js_event(name, args);
+	dispatch_external_event(name, args);
+}
 
 static class obs_graphics_guard {
 public:
@@ -1049,18 +1156,12 @@ StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 	obs_scene_addref(scene); // caller will release
 	m_scenes.push_back(scene);
 
-	/*
 	auto source = obs_scene_get_source(scene);
 
-	calldata_t *data = calldata_create();
+	add_source_signals(source, nullptr);
+	add_scene_signals(source, nullptr);
 
-	calldata_set_ptr(data, "source", source);
-
-	add_source_signals(source, data);
-	add_scene_signals(source, data);
-
-	calldata_destroy(data);
-	*/
+	dispatch_scene_list_changed_event(this, m_currentScene);
 
 	return scene;
 }
@@ -1074,7 +1175,14 @@ bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
 		if (scene == *it) {
 			m_scenes.erase(it);
 
+			auto source = obs_scene_get_source(scene);
+
+			remove_source_signals(source, nullptr);
+			remove_scene_signals(source, nullptr);
+
 			obs_scene_release(scene);
+
+			dispatch_scene_list_changed_event(this, m_currentScene);
 
 			return true;
 		}
@@ -1146,6 +1254,10 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 					GetTransitionDurationMilliseconds(),
 					obs_scene_get_source(m_currentScene));
 			}
+
+			dispatch_scene_changed_event(this, m_currentScene);
+			dispatch_scene_item_list_changed_event(this,
+							       m_currentScene);
 
 			return true;
 		}
