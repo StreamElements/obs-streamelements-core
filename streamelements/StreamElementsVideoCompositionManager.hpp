@@ -97,7 +97,7 @@ public:
 		return nullptr;
 	}
 
-	obs_sceneitem_t *GetSceneItemById(std::string lookupSceneItemId)
+	obs_sceneitem_t *GetSceneItemById(std::string lookupSceneItemId, bool addRef = false)
 	{
 		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
@@ -105,10 +105,24 @@ public:
 			std::vector<obs_scene_t *> scenes;
 
 			auto result =
-				kv.second->GetSceneItemById(lookupSceneItemId);
+				kv.second->GetSceneItemById(lookupSceneItemId, addRef);
 
 			if (result)
 				return result;
+		}
+
+		return nullptr;
+	}
+
+	std::shared_ptr<StreamElementsVideoCompositionBase>
+	GetVideoCompositionBySceneItemId(std::string lookupSceneItemId)
+	{
+		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+		for (auto kv : m_videoCompositionsMap) {
+			if (kv.second->GetSceneItemById(lookupSceneItemId,
+							false))
+				return kv.second;
 		}
 
 		return nullptr;

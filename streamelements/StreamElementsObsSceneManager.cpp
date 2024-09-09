@@ -2351,10 +2351,6 @@ void StreamElementsObsSceneManager::RemoveObsSceneItemsByIds(
 	if (!list->GetSize())
 		return;
 
-	auto videoComposition = GetVideoComposition(input);
-	if (!videoComposition.get())
-		return;
-
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
 	std::list<obs_sceneitem_t *> scene_items_to_remove;
@@ -2365,7 +2361,10 @@ void StreamElementsObsSceneManager::RemoveObsSceneItemsByIds(
 
 		std::string id = list->GetString(index);
 
-		auto item = videoComposition->GetSceneItemById(id, true);
+		auto item =
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetVideoCompositionManager()
+				->GetSceneItemById(id, true);
 
 		if (item) {
 			scene_items_to_remove.push_back(item);
