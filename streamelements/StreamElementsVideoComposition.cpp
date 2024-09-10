@@ -993,7 +993,7 @@ void StreamElementsCustomVideoComposition::SerializeComposition(
 	CefRefPtr<CefValue> &output)
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-	obs_graphics_guard graphics_guard;
+	//obs_graphics_guard graphics_guard;
 
 	auto root = CefDictionaryValue::Create();
 
@@ -1172,7 +1172,7 @@ StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-	obs_graphics_guard graphics_guard;
+	//obs_graphics_guard graphics_guard;
 
 	for (auto it = m_scenes.begin(); it != m_scenes.end(); ++it) {
 		if (scene == *it) {
@@ -1199,7 +1199,7 @@ void StreamElementsCustomVideoComposition::SetTransition(
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
-	obs_graphics_guard graphics_guard;
+	//obs_graphics_guard graphics_guard;
 
 	auto old_transition = m_transition;
 
@@ -1221,7 +1221,7 @@ void StreamElementsCustomVideoComposition::SetTransition(
 obs_source_t *StreamElementsCustomVideoComposition::GetTransition()
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-	obs_graphics_guard graphics_guard;
+	//obs_graphics_guard graphics_guard;
 
 	auto transition = m_transition;
 
@@ -1234,7 +1234,7 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 		return false;
 
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-	obs_graphics_guard graphics_guard;
+	//obs_graphics_guard graphics_guard;
 
 	for (auto item : m_scenes) {
 		if (scene == item) {

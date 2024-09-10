@@ -559,7 +559,7 @@ void StreamElementsBrowserWidget::SerializeVideoCompositionView(
 	geometry->SetInt("left", rect.x());
 	geometry->SetInt("top", rect.y());
 	geometry->SetInt("width", rect.width());
-	geometry->SetInt("height", rect.width());
+	geometry->SetInt("height", rect.height());
 
 	root->SetDictionary("geometry", geometry);
 
