@@ -515,7 +515,7 @@ StreamElementsVideoCompositionBase::GetSceneItemById(std::string id,
 void StreamElementsVideoCompositionBase::SerializeTransition(
 	CefRefPtr<CefValue>& output)
 {
-	obs_graphics_guard graphics_guard;
+	//obs_graphics_guard graphics_guard;
 
 	SerializeObsTransition(GetId(), GetTransition(),
 			       GetTransitionDurationMilliseconds(), output);
@@ -534,7 +534,7 @@ void StreamElementsVideoCompositionBase::DeserializeTransition(
 				      IsObsNativeComposition()))
 		return;
 
-	obs_graphics_guard graphics_guard;
+	//obs_graphics_guard graphics_guard;
 
 	SetTransition(transition);
 	SetTransitionDurationMilliseconds(durationMs);
@@ -738,7 +738,7 @@ void StreamElementsObsNativeVideoComposition::GetAllScenes(
 void StreamElementsObsNativeVideoComposition::SerializeComposition(
 	CefRefPtr<CefValue> &output)
 {
-	obs_graphics_guard graphics_guard;
+	//obs_graphics_guard graphics_guard;
 
 	obs_video_info ovi;
 	vec2 size;
@@ -771,7 +771,7 @@ void StreamElementsObsNativeVideoComposition::SerializeComposition(
 
 obs_scene_t* StreamElementsObsNativeVideoComposition::GetCurrentScene()
 {
-	obs_graphics_guard graphics_guard;
+	//obs_graphics_guard graphics_guard; // can cause a deadlock
 
 	auto source = obs_frontend_get_current_scene();
 	auto scene = obs_scene_from_source(source);
