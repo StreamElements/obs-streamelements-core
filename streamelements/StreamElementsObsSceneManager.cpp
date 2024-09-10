@@ -331,6 +331,18 @@ static CefRefPtr<CefDictionaryValue> SerializeVec2(vec2 &vec)
 	return d;
 }
 
+static double DeserializeDoubleValue(CefRefPtr<CefValue> input,
+				     double defaultValue)
+{
+	if (input->GetType() == VTYPE_DOUBLE)
+		return input->GetDouble();
+
+	if (input->GetType() == VTYPE_INT)
+		return (double)input->GetInt();
+
+	return defaultValue;
+}
+
 static vec2 DeserializeVec2(CefRefPtr<CefValue> input)
 {
 	vec2 result = {0};
@@ -339,8 +351,11 @@ static vec2 DeserializeVec2(CefRefPtr<CefValue> input)
 		CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
 
 		if (d->HasKey("x") && d->HasKey("y")) {
-			result.x = d->GetDouble("x");
-			result.y = d->GetDouble("y");
+			result.x =
+				DeserializeDoubleValue(d->GetValue("x"), 1.0);
+
+			result.y =
+				DeserializeDoubleValue(d->GetValue("y"), 1.0);
 		}
 	}
 
