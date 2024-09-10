@@ -1400,13 +1400,16 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 		obs_source_update(source, sourceSettings);
 	}
 
-	// Wait for dimensions: some sources like video capture source do not
-	// get their dimensions immediately: they are initializing asynchronously
-	// and are not aware of the source dimensions until they do.
-	//
-	// We'll do this for maximum 15 seconds and give up.
-	for (int i = 0; i < 150 && obs_source_get_width(source) == 0; ++i) {
-		os_sleep_ms(100);
+	if (strcmp(sourceId, "game_capture") != 0) {
+		// Wait for dimensions: some sources like video capture source do not
+		// get their dimensions immediately: they are initializing asynchronously
+		// and are not aware of the source dimensions until they do.
+		//
+		// We'll do this for maximum 15 seconds and give up.
+		for (int i = 0; i < 150 && obs_source_get_width(source) == 0;
+		     ++i) {
+			os_sleep_ms(100);
+		}
 	}
 
 	// Does not increment refcount. No obs_scene_release() call is necessary.
