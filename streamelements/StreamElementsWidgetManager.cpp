@@ -245,6 +245,11 @@ bool StreamElementsWidgetManager::AddDockWidget(
 		});
 	});
 
+	// Make effort to display QDockWidget on top of the main window right away
+	dock->raise();
+	dock->activateWindow();
+	dock->raise();
+
 	return true;
 }
 
