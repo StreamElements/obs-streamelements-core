@@ -434,7 +434,8 @@ static bool DeserializeSceneItemComposition(CefRefPtr<CefValue> input,
 		info.scale = {1, 1};
 
 	if (d->HasKey("rotationDegrees"))
-		info.rot = d->GetDouble("rotationDegrees");
+		info.rot = DeserializeDoubleValue(
+			d->GetValue("rotationDegrees"), 0);
 
 	if (d->HasKey("crop") && d->GetType("crop") == VTYPE_DICTIONARY) {
 		CefRefPtr<CefDictionaryValue> c = d->GetDictionary("crop");
