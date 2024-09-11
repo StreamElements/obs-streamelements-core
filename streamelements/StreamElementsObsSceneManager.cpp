@@ -2564,14 +2564,7 @@ void StreamElementsObsSceneManager::SetObsSceneItemPropertiesById(
 
 	std::string id = d->GetString("id");
 
-	std::string sceneId = d->HasKey("sceneId") && d->GetType("sceneId") ==
-							      VTYPE_STRING
-				      ? d->GetString("sceneId").ToString()
-				      : "";
-
 	obs_sceneitem_t *sceneitem = nullptr;
-
-	obs_scene_t *scene = videoComposition->GetSceneById(sceneId);
 
 	sceneitem = videoComposition->GetSceneItemById(id);
 
