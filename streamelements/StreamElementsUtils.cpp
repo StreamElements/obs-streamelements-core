@@ -732,12 +732,14 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output)
 void SerializeExistingInputSources(CefRefPtr<CefValue> &output, uint32_t requireOutputFlagsMask)
 {
 	struct local_context_t {
-		CefRefPtr<CefListValue> list = CefListValue::Create();
-		uint32_t requireOutputFlagsMask = requireOutputFlagsMask;
+		CefRefPtr<CefListValue> list;
+		uint32_t requireOutputFlagsMask;
 	};
 
 	local_context_t local_context;
 
+	local_context.list = CefListValue::Create();
+	local_context.requireOutputFlagsMask = requireOutputFlagsMask;
 
 	// Iterate over all sources
 	obs_enum_sources(
