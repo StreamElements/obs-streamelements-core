@@ -699,12 +699,15 @@ std::shared_ptr <StreamElementsCustomStreamingOutput> StreamElementsCustomStream
 			->GetVideoCompositionManager()
 			->GetVideoCompositionById(videoCompositionId);
 
-	if (!videoComposition && !videoCompositionId.size()) {
+	if (!videoComposition.get() && !videoCompositionId.size()) {
 		videoComposition =
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetVideoCompositionManager()
 				->GetObsNativeVideoComposition();
-	} else {
+	}
+
+
+	if (!videoComposition) {
 		return nullptr;
 	}
 
@@ -1163,11 +1166,15 @@ StreamElementsCustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 			rootDict->GetDictionary("recordingSettings");
 	}
 
-	if (!videoComposition && !videoCompositionId.size()) {
+	if (!videoComposition.get() && !videoCompositionId.size()) {
 		videoComposition =
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetVideoCompositionManager()
 				->GetObsNativeVideoComposition();
+	}
+
+	if (!videoComposition.get()) {
+		return nullptr;
 	}
 
 	auto result = std::make_shared<StreamElementsCustomRecordingOutput>(
