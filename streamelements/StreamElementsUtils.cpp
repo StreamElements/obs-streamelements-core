@@ -23,6 +23,7 @@
 #include <obs-frontend-api.h>
 #include <obs-module.h>
 #include <util/config-file.h>
+#include <obs.hpp>
 
 #include <QUrl>
 #include <QUrlQuery>
@@ -672,6 +673,10 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output)
 
 				// Set codec dictionary properties
 				dic->SetString("id", sourceId);
+				dic->SetString("class", sourceId);
+				dic->SetString(
+					"className",
+					obs_source_get_display_name(sourceId));
 				dic->SetString(
 					"name",
 					obs_source_get_display_name(sourceId));
@@ -699,11 +704,131 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output)
 					     strcmp(sourceId,
 						    "browser_source") == 0);
 
+				OBSDataAutoRelease defaultSettings =
+					obs_get_source_defaults(sourceId);
+
+				dic->SetValue(
+					"defaultSettings",
+					SerializeObsData(defaultSettings));
+
+				auto properties = obs_get_source_properties(
+					sourceId);
+
+				auto propertiesVal = CefValue::Create();
+				SerializeObsProperties(properties,
+						       propertiesVal);
+
+				dic->SetValue("properties", propertiesVal);
+
+				obs_properties_destroy(properties);
+
 				// Append dictionary to response list
 				list->SetDictionary(list->GetSize(), dic);
 			}
 		}
 	}
+}
+
+void SerializeExistingInputSources(CefRefPtr<CefValue> &output, uint32_t requireOutputFlagsMask)
+{
+	struct local_context_t {
+		CefRefPtr<CefListValue> list = CefListValue::Create();
+		uint32_t requireOutputFlagsMask = requireOutputFlagsMask;
+	};
+
+	local_context_t local_context;
+
+
+	// Iterate over all sources
+	obs_enum_sources(
+		[](void *param, obs_source_t *source) -> bool {
+			auto context = (local_context_t *)param;
+
+			// Get source caps
+			uint32_t sourceCaps =
+				obs_source_get_output_flags(source);
+
+			// If source has video
+			if ((sourceCaps & context->requireOutputFlagsMask) ==
+			    context->requireOutputFlagsMask) {
+				// Create source response dictionary
+				CefRefPtr<CefDictionaryValue> dic =
+					CefDictionaryValue::Create();
+
+				std::string sourceId =
+					obs_source_get_id(source);
+
+				// Set codec dictionary properties
+				dic->SetString("class", sourceId);
+				dic->SetString("id", GetIdFromPointer(source));
+				dic->SetString("name",
+					       obs_source_get_name(source));
+
+				dic->SetString("className", obs_source_get_display_name(sourceId.c_str()));
+
+				dic->SetBool("hasVideo",
+					     (sourceCaps & OBS_SOURCE_VIDEO) ==
+						     OBS_SOURCE_VIDEO);
+				dic->SetBool("hasAudio",
+					     (sourceCaps & OBS_SOURCE_AUDIO) ==
+						     OBS_SOURCE_AUDIO);
+
+				// Compare sourceId to known video capture devices
+				dic->SetBool("isVideoCaptureDevice",
+					     sourceId == "dshow_input" ||
+						     sourceId ==
+							     "decklink-input");
+
+				// Compare sourceId to known game capture source
+				dic->SetBool("isGameCaptureDevice",
+					     sourceId == "game_capture");
+
+				// Compare sourceId to known browser source
+				dic->SetBool("isBrowserSource",
+					     sourceId == "browser_source");
+
+				dic->SetBool("isSceneSource",
+					     obs_source_is_scene(source));
+
+				dic->SetBool("isGroupSource",
+					     obs_source_is_group(source));
+
+				OBSDataAutoRelease settings =
+					obs_source_get_settings(source);
+
+				dic->SetValue("settings",
+					      SerializeObsData(settings));
+
+				OBSDataAutoRelease defaultSettings =
+					obs_get_source_defaults(
+						sourceId.c_str());
+
+				dic->SetValue("defaultSettings",
+					SerializeObsData(defaultSettings));
+
+				auto properties = obs_get_source_properties(
+					sourceId.c_str());
+
+				obs_properties_apply_settings(properties, settings);
+
+				auto propertiesVal = CefValue::Create();
+				SerializeObsProperties(properties,
+						       propertiesVal);
+
+				dic->SetValue("properties", propertiesVal);
+
+				obs_properties_destroy(properties);
+
+				// Append dictionary to response list
+				context->list->SetDictionary(context->list->GetSize(), dic);
+			}
+
+			return true;
+		},
+		&local_context);
+
+	// Response codec collection is our root object
+	output->SetList(local_context.list);
 }
 
 std::string SerializeAppStyleSheet()
