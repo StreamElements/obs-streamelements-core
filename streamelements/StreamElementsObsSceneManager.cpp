@@ -1357,7 +1357,8 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 	obs_source_t *parentScene, obs_sceneitem_t *parentGroup,
 	const char *sourceId, const char *sourceName,
 	obs_data_t *sourceSettings, obs_data_t *sourceHotkeyData,
-	bool preferExistingSource, obs_source_t **output_source,
+	bool preferExistingSource, const char *existingSourceId,
+	obs_source_t **output_source,
 	obs_sceneitem_t **output_sceneitem)
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
@@ -1372,7 +1373,38 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 
 	obs_source_t *source = NULL;
 
-	if (preferExistingSource) {
+	if (existingSourceId && !source) {
+		// Look up existing source by ID
+
+		struct enum_sources_args {
+			std::string id;
+			obs_source_t *result;
+		};
+
+		enum_sources_args enum_args = {};
+		enum_args.id = existingSourceId;
+		enum_args.result = NULL;
+
+		obs_enum_sources(
+			[](void *arg, obs_source_t *iterator) {
+				enum_sources_args *args =
+					(enum_sources_args *)arg;
+
+				if (GetIdFromPointer((void*)iterator) == args->id) {
+					args->result =
+						obs_source_get_ref(iterator);
+
+					return false;
+				}
+
+				return true;
+			},
+			&enum_args);
+
+		source = enum_args.result;
+	}
+
+	if (preferExistingSource && !source) {
 		// Try locating existing source of the same type for reuse
 		//
 		// This is especially relevant for video capture sources
@@ -1610,7 +1642,7 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 
 		ObsAddSourceInternal(parent_scene, videoComposition->GetSceneItemById(groupId),
 				     source_class.c_str(), unique_name.c_str(),
-				     settings, nullptr, false, &source,
+				     settings, nullptr, false, nullptr, &source,
 				     &sceneitem);
 
 		//if (parent_scene) {
@@ -1697,7 +1729,7 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 			parent_scene,
 			videoComposition->GetSceneItemById(groupId),
 			source_class.c_str(), unique_name.c_str(), settings,
-			nullptr, false, &source, &sceneitem);
+			nullptr, false, nullptr, &source, &sceneitem);
 
 		//if (parent_scene) {
 		//	obs_source_release(parent_scene);
@@ -1839,7 +1871,7 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 			ObsAddSourceInternal(
 				parent_scene, videoComposition->GetSceneItemById(groupId),
 				source_class.c_str(), unique_name.c_str(),
-				settings, nullptr, true, &source, &sceneitem);
+				settings, nullptr, true, nullptr, &source, &sceneitem);
 
 			//if (parent_scene) {
 			//	obs_source_release(parent_scene);
@@ -1910,9 +1942,19 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 				      : "";
 
 	bool preferExistingSourceReference =
-		root->HasKey("preferExistingSourceReference")
+		root->HasKey("preferExistingSourceReference") &&
+				root->GetType(
+					"preferExistingSourceReference") ==
+					VTYPE_BOOL
 			? root->GetBool("preferExistingSourceReference")
 			: false;
+
+	std::string existingSourceId =
+		root->HasKey("existingSourceId") &&
+				root->GetType("existingSourceId") ==
+					VTYPE_STRING
+			? root->GetString("existingSourceId")
+			: "";
 
 	obs_data_t *settings = obs_data_create();
 
@@ -1934,8 +1976,10 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 			parent_scene,
 			videoComposition->GetSceneItemById(groupId),
 			source_class.c_str(), unique_name.c_str(), settings,
-			nullptr, preferExistingSourceReference, &source,
-			&sceneitem);
+			nullptr, preferExistingSourceReference,
+			existingSourceId.size() ? existingSourceId.c_str()
+						: nullptr,
+			&source, &sceneitem);
 
 		//if (parent_scene) {
 		//	obs_source_release(parent_scene);

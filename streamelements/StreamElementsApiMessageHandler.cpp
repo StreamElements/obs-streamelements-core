@@ -1303,6 +1303,12 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("getAllExistingVideoInputSources");
+	{
+		SerializeExistingInputSources(result, OBS_SOURCE_VIDEO);
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("getAllHotkeyBindings");
 	{
 		StreamElementsGlobalStateManager::GetInstance()
