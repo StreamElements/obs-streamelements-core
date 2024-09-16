@@ -763,17 +763,18 @@ static void dispatch_scene_event(obs_scene_t *scene,
 	//obs_scene_addref(scene);
 
 	//QtPostTask([scene, currentSceneEventName, otherSceneEventName]() {
-	if (is_active_scene(scene)) {
-		DispatchClientJSEvent(currentSceneEventName,
-							 "null");
-	}
-
 	CefRefPtr<CefValue> item = CefValue::Create();
 
 	SerializeObsScene(scene, item);
 
+	auto json = CefWriteJSON(item, JSON_WRITER_DEFAULT);
+
+	if (is_active_scene(scene)) {
+		DispatchClientJSEvent(currentSceneEventName, json);
+	}
+
 	DispatchClientJSEvent(
-		otherSceneEventName, CefWriteJSON(item, JSON_WRITER_DEFAULT));
+		otherSceneEventName, json);
 
 	//obs_scene_release(scene);
 	//});
@@ -799,6 +800,16 @@ static void dispatch_scene_event(void *my_data, calldata_t *cd,
 		return;
 
 	obs_scene_t *scene = (obs_scene_t *)calldata_ptr(cd, "scene");
+
+	if (!scene) {
+		obs_source_t *source =
+			(obs_source_t *)calldata_ptr(cd, "source");
+
+		if (!obs_source_is_scene(source))
+			return;
+
+		scene = obs_scene_from_source(source);
+	}
 
 	if (!scene)
 		return;
@@ -940,6 +951,19 @@ static void dispatch_source_event(void *my_data, calldata_t *cd,
 	//obs_source_release(source);
 	obs_source_release(scene_source);
 	//});
+}
+
+static void handle_scene_rename(void *my_data, calldata_t *cd)
+{
+	dispatch_scene_event(my_data, cd, "hostActiveSceneRenamed",
+			      "hostSceneRenamed");
+}
+
+static void handle_scene_remove(void *my_data, calldata_t *cd)
+{
+	dispatch_scene_event(
+		my_data, cd, "hostActiveSceneRemoved",
+			      "hostSceneRemoved");
 }
 
 static void handle_scene_item_transform(void *my_data, calldata_t *cd)
@@ -1133,6 +1157,11 @@ void remove_scene_signals(obs_scene_t *scene, void *data)
 			signal_handler_disconnect(handler, "item_transform",
 						  handle_scene_item_transform,
 						  data);
+
+			signal_handler_disconnect(handler, "rename",
+					       handle_scene_rename, data);
+			signal_handler_disconnect(handler, "remove",
+					       handle_scene_remove, data);
 		},
 		data);
 	obs_leave_graphics();
@@ -1184,6 +1213,13 @@ void add_scene_signals(obs_scene_t *scene, void *data)
 					       data);
 			signal_handler_connect(handler, "item_transform",
 					       handle_scene_item_transform,
+					       data);
+
+			signal_handler_connect(handler, "rename",
+					       handle_scene_rename,
+					       data);
+			signal_handler_connect(handler, "remove",
+					       handle_scene_remove,
 					       data);
 		},
 		data);
