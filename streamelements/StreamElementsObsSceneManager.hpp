@@ -162,6 +162,7 @@ protected:
 				  obs_data_t *sourceSettings,
 				  obs_data_t *sourceHotkeyData,
 				  bool preferExistingSource,
+				  const char *existingSourceId,
 				  obs_source_t **output_source,
 				  obs_sceneitem_t **output_sceneitem);
 
