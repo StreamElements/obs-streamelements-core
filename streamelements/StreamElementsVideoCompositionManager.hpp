@@ -97,6 +97,19 @@ public:
 		return nullptr;
 	}
 
+	std::shared_ptr<StreamElementsVideoCompositionBase>
+	GetVideoCompositionBySceneName(std::string lookupName)
+	{
+		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+		for (auto kv : m_videoCompositionsMap) {
+			if (kv.second->GetSceneByName(lookupName))
+				return kv.second;
+		}
+
+		return nullptr;
+	}
+
 	obs_sceneitem_t *GetSceneItemById(std::string lookupSceneItemId, bool addRef = false)
 	{
 		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
@@ -136,6 +149,21 @@ public:
 		for (auto kv : m_videoCompositionsMap) {
 			if (kv.second->GetSceneItemById(lookupSceneItemId,
 							result_scene, false))
+				return kv.second;
+		}
+
+		return nullptr;
+	}
+
+	std::shared_ptr<StreamElementsVideoCompositionBase>
+	GetVideoCompositionBySceneItemName(std::string lookupSceneItemName,
+					   obs_scene_t **result_scene)
+	{
+		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+		for (auto kv : m_videoCompositionsMap) {
+			if (kv.second->GetSceneItemByName(lookupSceneItemName,
+							  result_scene, false))
 				return kv.second;
 		}
 

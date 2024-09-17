@@ -134,6 +134,22 @@ public:
 		return nullptr;
 	}
 
+	obs_scene_t *GetSceneByName(std::string name)
+	{
+		if (!name.size())
+			return GetCurrentScene();
+
+		std::vector<obs_scene_t *> scenes;
+		GetAllScenes(scenes);
+
+		for (auto scene : scenes) {
+			if (stricmp(obs_source_get_name(obs_scene_get_source(scene)), name.c_str()) == 0)
+				return scene;
+		}
+
+		return nullptr;
+	}
+
 	bool SerializeScene(
 		std::string id,
 		CefRefPtr<CefValue>& result) {
@@ -212,6 +228,12 @@ public:
 	bool SafeRemoveScene(obs_scene_t *sceneToRemove);
 	obs_sceneitem_t *GetSceneItemById(std::string id, bool addRef = false);
 	obs_sceneitem_t *GetSceneItemById(std::string id, obs_scene_t** result_scene, bool addRef = false);
+
+	obs_sceneitem_t *GetSceneItemByName(std::string name,
+					    obs_scene_t **result_scene,
+					    bool addRef = false);
+	obs_sceneitem_t *GetSceneItemByName(std::string name,
+					    bool addRef = false);
 
 	void SerializeTransition(CefRefPtr<CefValue> &output);
 	void DeserializeTransition(CefRefPtr<CefValue> input,

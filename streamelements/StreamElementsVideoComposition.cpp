@@ -522,6 +522,57 @@ StreamElementsVideoCompositionBase::GetSceneItemById(std::string id,
 	return GetSceneItemById(id, nullptr, addRef);
 }
 
+obs_sceneitem_t *StreamElementsVideoCompositionBase::GetSceneItemByName(
+	std::string name, obs_scene_t **result_scene, bool addRef)
+{
+	if (!name.size())
+		return nullptr;
+
+	std::vector<obs_scene_t *> scenes;
+	GetAllScenes(scenes);
+
+	obs_sceneitem_t *result = nullptr;
+
+	for (auto scene : scenes) {
+		ObsSceneEnumAllItems(
+			scene, [&](obs_sceneitem_t *sceneitem) -> bool {
+				if (stricmp(obs_source_get_name(
+						    obs_sceneitem_get_source(
+							    sceneitem)),
+					    name.c_str()) == 0) {
+					result = sceneitem;
+
+					/* Found what we're looking for, stop iteration */
+					return false;
+				}
+
+				/* Continue or stop iteration */
+				return !result;
+			});
+
+		if (result) {
+			if (result_scene) {
+				*result_scene = scene;
+			}
+
+			break;
+		}
+	}
+
+	if (result && addRef) {
+		obs_sceneitem_addref(result);
+	}
+
+	return result;
+}
+
+obs_sceneitem_t *
+StreamElementsVideoCompositionBase::GetSceneItemByName(std::string name,
+						       bool addRef)
+{
+	return GetSceneItemByName(name, nullptr, addRef);
+}
+
 void StreamElementsVideoCompositionBase::SerializeTransition(
 	CefRefPtr<CefValue>& output)
 {

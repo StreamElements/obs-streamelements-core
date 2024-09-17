@@ -1,3 +1,4 @@
+#include <obs.hpp>
 #include "StreamElementsObsSceneManager.hpp"
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsConfig.hpp"
@@ -1582,23 +1583,42 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 	}
 }
 
+static bool isSourceNameUnique(obs_source_t* source, std::string name) {
+	if (source) {
+		OBSSourceAutoRelease existing =
+			obs_get_source_by_name(name.c_str());
+
+		if (existing && existing == source) {
+			return true;
+		} else if (existing) {
+			return false;
+		}
+	}
+
+	auto videoComposition =
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->GetVideoCompositionBySceneName(name);
+
+	if (videoComposition.get())
+		return false;
+
+	videoComposition =
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->GetVideoCompositionBySceneItemName(name, nullptr);
+
+	if (videoComposition.get())
+		return false;
+
+	return true;
+}
+
 std::string
 StreamElementsObsSceneManager::ObsSetUniqueSourceName(obs_source_t *source,
 						      std::string name)
 {
-	bool mustChange = true;
-
-	obs_source_t *existing = obs_get_source_by_name(name.c_str());
-
-	if (existing) {
-		if (existing == source) {
-			mustChange = false;
-		}
-
-		obs_source_release(existing);
-	}
-
-	if (mustChange) {
+	if (!isSourceNameUnique(source, name)) {
 		std::string unique = ObsGetUniqueSourceName(name);
 
 		obs_source_set_name(source, unique.c_str());
@@ -1617,26 +1637,14 @@ StreamElementsObsSceneManager::ObsGetUniqueSourceName(std::string name)
 	std::string result(name);
 
 	int sequence = 0;
-	bool isUnique = false;
 
-	while (!isUnique) {
-		isUnique = true;
+	while (!isSourceNameUnique(nullptr, result)) {
+		++sequence;
 
-		obs_source_t *source = obs_get_source_by_name(result.c_str());
-		if (source != NULL) {
-			obs_source_release(source);
-
-			isUnique = false;
-		}
-
-		if (!isUnique) {
-			++sequence;
-
-			char buf[32];
-			sprintf(buf, "%d", sequence);
-			result = name + " ";
-			result += buf;
-		}
+		char buf[32];
+		sprintf(buf, "%d", sequence);
+		result = name + " ";
+		result += buf;
 	}
 
 	return result;
