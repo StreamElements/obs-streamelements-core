@@ -2751,6 +2751,19 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("showPopupMenuAtMousePointerPosition");
+	{
+		if (args->GetSize()) {
+			QMenu menu;
+			if (DeserializeMenu(args->GetValue(0), menu)) {
+				menu.exec(QCursor::pos());
+
+				result->SetBool(true);
+			}
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("crashProgram");
 	{
 		QtPostTask([]() -> void {
