@@ -127,4 +127,18 @@ public:
 
 		return nullptr;
 	}
+
+	std::shared_ptr<StreamElementsVideoCompositionBase>
+	GetVideoCompositionBySceneItemId(std::string lookupSceneItemId, obs_scene_t** result_scene)
+	{
+		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+		for (auto kv : m_videoCompositionsMap) {
+			if (kv.second->GetSceneItemById(lookupSceneItemId,
+							result_scene, false))
+				return kv.second;
+		}
+
+		return nullptr;
+	}
 };

@@ -211,6 +211,7 @@ public:
 
 	bool SafeRemoveScene(obs_scene_t *sceneToRemove);
 	obs_sceneitem_t *GetSceneItemById(std::string id, bool addRef = false);
+	obs_sceneitem_t *GetSceneItemById(std::string id, obs_scene_t** result_scene, bool addRef = false);
 
 	void SerializeTransition(CefRefPtr<CefValue> &output);
 	void DeserializeTransition(CefRefPtr<CefValue> input,

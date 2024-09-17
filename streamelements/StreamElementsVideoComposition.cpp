@@ -469,9 +469,8 @@ bool StreamElementsVideoCompositionBase::SafeRemoveScene(
 	return RemoveScene(sceneToRemove);
 }
 
-obs_sceneitem_t *
-StreamElementsVideoCompositionBase::GetSceneItemById(std::string id,
-						     bool addRef)
+obs_sceneitem_t *StreamElementsVideoCompositionBase::GetSceneItemById(
+	std::string id, obs_scene_t **result_scene, bool addRef)
 {
 	if (!id.size())
 		return nullptr;
@@ -487,20 +486,24 @@ StreamElementsVideoCompositionBase::GetSceneItemById(std::string id,
 	obs_sceneitem_t *result = nullptr;
 
 	for (auto scene : scenes) {
-		ObsSceneEnumAllItems(
-			scene, [&](obs_sceneitem_t *sceneitem) -> bool {
-				if (searchPtr == sceneitem) {
-					result = sceneitem;
+		ObsSceneEnumAllItems(scene,
+				     [&](obs_sceneitem_t *sceneitem) -> bool {
+					     if (searchPtr == sceneitem) {
+						     result = sceneitem;
 
-					/* Found what we're looking for, stop iteration */
-					return false;
-				}
+						     /* Found what we're looking for, stop iteration */
+						     return false;
+					     }
 
-				/* Continue or stop iteration */
-				return !result;
-			});
+					     /* Continue or stop iteration */
+					     return !result;
+				     });
 
 		if (result) {
+			if (result_scene) {
+				*result_scene = scene;
+			}
+
 			break;
 		}
 	}
@@ -510,6 +513,13 @@ StreamElementsVideoCompositionBase::GetSceneItemById(std::string id,
 	}
 
 	return result;
+}
+
+obs_sceneitem_t *
+StreamElementsVideoCompositionBase::GetSceneItemById(std::string id,
+						     bool addRef)
+{
+	return GetSceneItemById(id, nullptr, addRef);
 }
 
 void StreamElementsVideoCompositionBase::SerializeTransition(

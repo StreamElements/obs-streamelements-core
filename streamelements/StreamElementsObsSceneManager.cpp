@@ -573,7 +573,24 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 {
 	CefRefPtr<CefDictionaryValue> root = CefDictionaryValue::Create();
 
-	root->SetString("id", GetIdFromPointer(sceneitem));
+	std::string sceneItemId = GetIdFromPointer(sceneitem);
+
+	obs_scene_t *root_scene = nullptr;
+
+	auto videoComposition = StreamElementsGlobalStateManager::GetInstance()
+		->GetVideoCompositionManager()
+		->GetVideoCompositionBySceneItemId(sceneItemId, &root_scene);
+
+	root->SetString("id", sceneItemId);
+
+	if (videoComposition.get()) {
+		root->SetString("videoCompositionId",
+				videoComposition->GetId());
+		root->SetString(
+			"sceneId",
+			GetIdFromPointer(obs_scene_get_source(root_scene)));
+	}
+
 	if (source) {
 		const char *name = obs_source_get_name(source);
 		const char *id = obs_source_get_id(source);
