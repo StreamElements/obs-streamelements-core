@@ -972,7 +972,7 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 
 	obs_encoder_set_video(m_streamingVideoEncoder, m_video);
 
-	m_currentScene = obs_scene_create_private("Scene 1");
+	m_currentScene = obs_scene_create_private(GetUniqueSceneName("Scene").c_str());
 	m_scenes.push_back(m_currentScene);
 
 	add_scene_signals(m_currentScene, nullptr);
