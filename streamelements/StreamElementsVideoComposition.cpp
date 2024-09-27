@@ -399,6 +399,24 @@ static void SerializeObsEncoders(StreamElementsVideoCompositionBase* composition
 // Composition base
 ////////////////////////////////////////////////////////////////////////////////
 
+void StreamElementsVideoCompositionBase::SetName(std::string name)
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	if (m_name == name)
+		return;
+
+	m_name = name;
+
+	auto jsonValue = CefValue::Create();
+	SerializeComposition(jsonValue);
+
+	auto json = CefWriteJSON(jsonValue, JSON_WRITER_DEFAULT);
+
+	dispatch_js_event("hostVideoCompositionChanged", json);
+	dispatch_external_event("hostVideoCompositionChanged", json);
+}
+
 std::string
 StreamElementsVideoCompositionBase::GetUniqueSceneName(std::string name)
 {
@@ -736,6 +754,28 @@ void StreamElementsObsNativeVideoComposition::SetTransition(
 	obs_source_t *transition)
 {
 	obs_frontend_set_current_transition(transition);
+
+	auto jsonValue = CefValue::Create();
+	SerializeComposition(jsonValue);
+
+	auto json = CefWriteJSON(jsonValue, JSON_WRITER_DEFAULT);
+
+	dispatch_js_event("hostVideoCompositionChanged", json);
+	dispatch_external_event("hostVideoCompositionChanged", json);
+}
+
+void StreamElementsObsNativeVideoComposition::SetTransitionDurationMilliseconds(
+	int duration)
+{
+	obs_frontend_set_transition_duration(duration);
+
+	auto jsonValue = CefValue::Create();
+	SerializeComposition(jsonValue);
+
+	auto json = CefWriteJSON(jsonValue, JSON_WRITER_DEFAULT);
+
+	dispatch_js_event("hostVideoCompositionChanged", json);
+	dispatch_external_event("hostVideoCompositionChanged", json);
 }
 
 obs_source_t* StreamElementsObsNativeVideoComposition::GetTransition()
@@ -1277,6 +1317,14 @@ void StreamElementsCustomVideoComposition::SetTransition(
 	obs_source_release(old_transition);
 
 	obs_transition_set(m_transition, obs_scene_get_source(m_currentScene));
+
+	auto jsonValue = CefValue::Create();
+	SerializeComposition(jsonValue);
+
+	auto json = CefWriteJSON(jsonValue, JSON_WRITER_DEFAULT);
+
+	dispatch_js_event("hostVideoCompositionChanged", json);
+	dispatch_external_event("hostVideoCompositionChanged", json);
 }
 
 obs_source_t *StreamElementsCustomVideoComposition::GetTransition()
@@ -1287,6 +1335,20 @@ obs_source_t *StreamElementsCustomVideoComposition::GetTransition()
 	auto transition = m_transition;
 
 	return transition;
+}
+
+void StreamElementsCustomVideoComposition::SetTransitionDurationMilliseconds(
+	int duration)
+{
+	m_transitionDurationMs = duration > 0 ? duration : 0;
+
+	auto jsonValue = CefValue::Create();
+	SerializeComposition(jsonValue);
+
+	auto json = CefWriteJSON(jsonValue, JSON_WRITER_DEFAULT);
+
+	dispatch_js_event("hostVideoCompositionChanged", json);
+	dispatch_external_event("hostVideoCompositionChanged", json);
 }
 
 bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)

@@ -79,6 +79,12 @@ public:
 	virtual bool SetWidgetUrlById(const char *const id,
 				      const char *const url);
 
+	virtual bool SetWidgetTitleById(const char* const id,
+		const char* const title)
+	{
+		return StreamElementsWidgetManager::SetWidgetTitleById(id, title);
+	}
+
 	virtual bool ShowDockWidgetById(const char *const id)
 	{
 		return StreamElementsWidgetManager::ShowWidgetById(id);

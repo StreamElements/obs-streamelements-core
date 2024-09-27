@@ -13,6 +13,9 @@ public:
 	~StreamElementsVideoCompositionManager();
 
 public:
+	void
+	DeserializeExistingCompositionProperties(CefRefPtr<CefValue> input,
+						 CefRefPtr<CefValue> &output);
 	void DeserializeComposition(CefRefPtr<CefValue> input,
 				    CefRefPtr<CefValue> &output);
 	void SerializeAllCompositions(CefRefPtr<CefValue> &output);

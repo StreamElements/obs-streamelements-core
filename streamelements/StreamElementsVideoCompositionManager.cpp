@@ -4,8 +4,34 @@
 #include <QVBoxLayout>
 #include "StreamElementsVideoCompositionViewWidget.hpp"
 #include "StreamElementsUtils.hpp"
+#include "StreamElementsGlobalStateManager.hpp"
 
 #include "StreamElementsBrowserDialog.hpp"
+
+static void dispatch_external_event(std::string name, std::string args)
+{
+	std::string externalEventName =
+		name.c_str() + 4; /* remove 'host' prefix */
+	externalEventName[0] =
+		tolower(externalEventName[0]); /* lower case first letter */
+
+	StreamElementsMessageBus::GetInstance()->NotifyAllExternalEventListeners(
+		StreamElementsMessageBus::DEST_ALL_EXTERNAL,
+		StreamElementsMessageBus::SOURCE_APPLICATION, "OBS",
+		externalEventName,
+		CefParseJSON(args, JSON_PARSER_ALLOW_TRAILING_COMMAS));
+}
+
+static void dispatch_js_event(std::string name, std::string args)
+{
+	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
+				 ->GetWebsocketApiServer();
+
+	if (!apiServer)
+		return;
+
+	apiServer->DispatchJSEvent("system", name, args);
+}
 
 StreamElementsVideoCompositionManager::StreamElementsVideoCompositionManager()
 {
@@ -30,6 +56,37 @@ void StreamElementsVideoCompositionManager::Reset()
 		if (!it->second->IsObsNativeComposition())
 			m_videoCompositionsMap.erase(it->first);
 	}
+
+	dispatch_js_event("hostVideoCompositionListChanged", "null");
+	dispatch_external_event("hostVideoCompositionListChanged", "null");
+}
+
+void StreamElementsVideoCompositionManager::
+DeserializeExistingCompositionProperties(CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	output->SetNull();
+
+	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto root = input->GetDictionary();
+
+	if (!root->HasKey("id") || root->GetType("id") != VTYPE_STRING)
+		return;
+
+	auto videoComposition = GetVideoCompositionById(input);
+
+	if (!videoComposition.get())
+		return;
+
+	if (root->HasKey("name") && root->GetType("name") == VTYPE_STRING) {
+		videoComposition->SetName(root->GetString("name"));
+	}
+
+	videoComposition->SerializeComposition(output);
 }
 
 void StreamElementsVideoCompositionManager::DeserializeComposition(
@@ -39,7 +96,6 @@ void StreamElementsVideoCompositionManager::DeserializeComposition(
 
 	output->SetNull();
 
-	// TODO: Implement
 	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
 		return;
 
@@ -93,6 +149,10 @@ void StreamElementsVideoCompositionManager::DeserializeComposition(
 		m_videoCompositionsMap[id] = composition;
 
 		composition->SerializeComposition(output);
+
+		dispatch_js_event("hostVideoCompositionListChanged", "null");
+		dispatch_external_event("hostVideoCompositionListChanged",
+					"null");
 	} catch (...) {
 		// Creation failed
 		return;
@@ -154,6 +214,9 @@ void StreamElementsVideoCompositionManager::RemoveCompositionsByIds(
 	for (auto kv : map) {
 		m_videoCompositionsMap.erase(kv.first);
 	}
+
+	dispatch_js_event("hostVideoCompositionListChanged", "null");
+	dispatch_external_event("hostVideoCompositionListChanged", "null");
 
 	output->SetBool(true);
 }

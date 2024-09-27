@@ -848,6 +848,31 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("setDockingWidgetTitleById");
+	{
+		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
+		    args->GetType(1) == VTYPE_STRING) {
+			result->SetBool(
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->SetWidgetTitleById(args->GetString(0)
+								     .ToString()
+								     .c_str(),
+							     args->GetString(1)
+								     .ToString()
+								     .c_str()));
+
+			if (result->GetBool()) {
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				StreamElementsGlobalStateManager::GetInstance()
+					->PersistState();
+			}
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("showDockingWidgetById");
 	{
 		if (args->GetSize() >= 1 && args->GetType(0) == VTYPE_STRING) {
@@ -2582,6 +2607,17 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				->GetVideoCompositionManager()
 				->DeserializeComposition(args->GetValue(0),
 							 result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setVideoCompositionProperties");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetVideoCompositionManager()
+				->DeserializeExistingCompositionProperties(
+					args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();

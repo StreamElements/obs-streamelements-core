@@ -99,6 +99,8 @@ private:
 	std::string m_id;
 	std::string m_name;
 
+	std::recursive_mutex m_mutex;
+
 protected:
 	StreamElementsVideoCompositionBase(
 		const std::string id, const std::string name)
@@ -109,7 +111,15 @@ protected:
 
 public:
 	std::string GetId() { return m_id; }
-	std::string GetName() { return m_name; }
+
+	std::string GetName()
+	{
+		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+		return m_name;
+	}
+
+	void SetName(std::string name);
 
 	std::string GetUniqueSceneName(std::string name);
 
@@ -306,9 +316,7 @@ protected:
 		return obs_frontend_get_transition_duration();
 	}
 
-	virtual void SetTransitionDurationMilliseconds(int duration) {
-		obs_frontend_set_transition_duration(duration);
-	}
+	virtual void SetTransitionDurationMilliseconds(int duration);
 };
 
 // Custom Composition
@@ -400,8 +408,5 @@ protected:
 		return m_transitionDurationMs;
 	}
 
-	virtual void SetTransitionDurationMilliseconds(int duration)
-	{
-		m_transitionDurationMs = duration > 0 ? duration : 0;
-	}
+	virtual void SetTransitionDurationMilliseconds(int duration);
 };

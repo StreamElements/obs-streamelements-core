@@ -579,30 +579,46 @@ void StreamElementsGlobalStateManager::Shutdown()
 			m_appStateListener->deleteLater();
 
 			delete m_analyticsEventsManager;
+			m_analyticsEventsManager = nullptr;
 			delete m_performanceHistoryTracker;
+			m_performanceHistoryTracker = nullptr;
 			delete m_outputSettingsManager;
+			m_outputSettingsManager = nullptr;
 			delete m_bwTestManager;
+			m_bwTestManager = nullptr;
 			delete m_widgetManager;
+			m_widgetManager = nullptr;
 
 			m_outputManager = nullptr;
 			m_videoCompositionManager = nullptr;
 
 			delete m_menuManager;
+			m_menuManager = nullptr;
 			delete m_hotkeyManager;
+			m_hotkeyManager = nullptr;
 			delete m_obsSceneManager;
+			m_obsSceneManager = nullptr;
 			delete m_externalSceneDataProviderManager;
+			m_externalSceneDataProviderManager = nullptr;
 			delete m_httpClient;
+			m_httpClient = nullptr;
 			delete m_localFilesystemHttpServer;
+			m_localFilesystemHttpServer = nullptr;
 			// delete m_nativeObsControlsManager; // Singleton
 			delete m_profilesManager;
+			m_profilesManager = nullptr;
 			delete m_backupManager;
+			m_backupManager = nullptr;
 			delete m_cleanupManager;
+			m_cleanupManager = nullptr;
 			delete m_previewManager;
+			m_previewManager = nullptr;
 			delete m_websocketApiServer;
-			delete m_windowStateEventFilter;
-			delete m_cefCookieManager;
-
 			m_websocketApiServer = nullptr;
+			delete m_windowStateEventFilter;
+			m_windowStateEventFilter = nullptr;
+			delete m_cefCookieManager;
+			m_cefCookieManager = nullptr;
 		});
 #endif
 

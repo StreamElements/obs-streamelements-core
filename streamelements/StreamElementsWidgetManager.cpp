@@ -270,6 +270,24 @@ bool StreamElementsWidgetManager::ShowWidgetById(const char *const id)
 	return true;
 }
 
+bool StreamElementsWidgetManager::SetWidgetTitleById(const char* const id,
+	const char* const title)
+{
+	assert(id);
+
+	std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
+	if (!m_dockWidgets.count(id)) {
+		return false;
+	}
+
+	QDockWidget *dock = m_dockWidgets[id];
+
+	dock->setWindowTitle(QString(title));
+
+	return true;
+}
+
 bool StreamElementsWidgetManager::HideWidgetById(const char *const id)
 {
 	assert(id);

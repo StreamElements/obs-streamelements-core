@@ -77,6 +77,8 @@ public:
 
 	virtual bool SetWidgetDimensionsById(const char* const id, const int width, const int height);
 	virtual bool SetWidgetPositionById(const char* const id, const int left, const int top);
+	virtual bool SetWidgetTitleById(const char *const id,
+					const char *const title);
 
 	virtual bool RemoveDockWidget(const char* const id);
 
