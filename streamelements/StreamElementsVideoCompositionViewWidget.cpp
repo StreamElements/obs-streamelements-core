@@ -77,7 +77,9 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 
 	auto scale = getSceneItemFinalBoxScale(sceneItem, parentSceneItem);
 
-	double scaledRotationDistance = rotationDistance / abs(scale.y) * view->m_worldScale.x;
+	double scaledRotationDistance = rotationDistance /
+					minfunc(abs(scale.y), abs(scale.x)) /
+					view->m_worldScale.x;
 
 	// Rotation
 	m_topLayer.push_back(std::make_shared<SceneItemRotationControlPoint>(

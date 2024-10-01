@@ -10,8 +10,18 @@ static FileTexture g_overflowTexture("../../data/obs-studio/images/overflow.png"
 
 static ConfigAccessibilityColor g_colorSelection("SelectRed",
 						 QColor(255, 0, 0));
-static ConfigAccessibilityColor g_colorCrop("SelectGreen", QColor(255, 0, 0));
+static ConfigAccessibilityColor g_colorCrop("SelectGreen", QColor(0, 255, 0));
 static ConfigAccessibilityColor g_colorHover("SelectBlue", QColor(0, 0, 255));
+
+static float maxfunc(float x, float y)
+{
+	return x > y ? x : y;
+}
+
+static float minfunc(float x, float y)
+{
+	return x < y ? x : y;
+}
 
 static inline bool isCropped(const obs_sceneitem_crop *crop)
 {
@@ -662,8 +672,13 @@ public:
 
 			if (info.bounds_type != OBS_BOUNDS_NONE)
 				return;
+		}
 
-			return;
+		bool altDown = (QGuiApplication::keyboardModifiers() &
+				Qt::AltModifier);
+
+		if (altDown) {
+			color = g_colorCrop.get();
 		}
 
 		const double thickness = 4.0f * m_view->devicePixelRatioF() *
@@ -679,6 +694,8 @@ public:
 		gs_matrix_push();
 		gs_matrix_mul(&transform);
 
+		// Normal frame
+
 		if (isSelected || m_isMouseOver) {
 			drawLine(0.0f, 0.0f, 1.0f, 0.0f, thickness, boxScale,
 				 color);
@@ -688,29 +705,33 @@ public:
 				 color);
 			drawLine(1.0f, 0.0f, 1.0f, 1.0f, thickness, boxScale,
 				 color);
-		} else {
-			QColor cropMarkerColor = g_colorCrop.get();
-
-			if (crop.top > 0)
-				drawStripedLine(0.0f, 0.0f, 1.0f, 0.0f,
-						thickness, boxScale,
-						cropMarkerColor);
-
-			if (crop.bottom > 0)
-				drawStripedLine(0.0f, 1.0f, 1.0f, 1.0f,
-						thickness, boxScale,
-						cropMarkerColor);
-
-			if (crop.left > 0)
-				drawStripedLine(0.0f, 0.0f, 0.0f, 1.0f,
-						thickness, boxScale,
-						cropMarkerColor);
-
-			if (crop.right > 0)
-				drawStripedLine(1.0f, 0.0f, 1.0f, 1.0f,
-						thickness, boxScale,
-						cropMarkerColor);
 		}
+
+		// Cropping frame edges
+
+		QColor cropMarkerColor = g_colorCrop.get();
+
+		const double cropThickness = thickness;
+
+		if (crop.top > 0)
+			drawStripedLine(0.0f, 0.0f, 1.0f, 0.0f,
+					cropThickness, boxScale,
+					cropMarkerColor);
+
+		if (crop.bottom > 0)
+			drawStripedLine(0.0f, 1.0f, 1.0f, 1.0f,
+					cropThickness, boxScale,
+					cropMarkerColor);
+
+		if (crop.left > 0)
+			drawStripedLine(0.0f, 0.0f, 0.0f, 1.0f,
+					cropThickness, boxScale,
+					cropMarkerColor);
+
+		if (crop.right > 0)
+			drawStripedLine(1.0f, 0.0f, 1.0f, 1.0f,
+					cropThickness, boxScale,
+					cropMarkerColor);
 
 		gs_matrix_pop();
 	}
@@ -1360,6 +1381,214 @@ private:
 	}
 
 	void process() {
+		bool altDown = (QGuiApplication::keyboardModifiers() &
+				Qt::AltModifier);
+
+		if (altDown) {
+			process_crop();
+		} else {
+			process_stretch();
+		}
+	}
+
+	void process_crop() {
+		auto pos = m_worldMousePosition;
+		if (m_parentSceneItem) {
+			matrix4 invGroupTransform;
+			obs_sceneitem_get_draw_transform(m_parentSceneItem,
+							 &invGroupTransform);
+			matrix4_inv(&invGroupTransform, &invGroupTransform);
+
+			vec3 group_pos;
+			vec3_set(&group_pos, pos.x, pos.y, 0.0f);
+			vec3_transform(&group_pos, &group_pos,
+				       &invGroupTransform);
+			pos.x = group_pos.x;
+			pos.y = group_pos.y;
+		}
+
+				matrix4 boxTransform;
+		vec3 itemUL;
+		float itemRot;
+
+		auto stretchItemSize = getSceneItemSize();
+
+		obs_sceneitem_get_box_transform(m_sceneItem, &boxTransform);
+		itemRot = obs_sceneitem_get_rot(m_sceneItem);
+		vec3_from_vec4(&itemUL, &boxTransform.t);
+
+		/* build the item space conversion matrices */
+		matrix4 itemToScreen;
+		matrix4_identity(&itemToScreen);
+		matrix4_rotate_aa4f(&itemToScreen, &itemToScreen, 0.0f, 0.0f,
+				    1.0f, degreesToRadians(itemRot));
+		matrix4_translate3f(&itemToScreen, &itemToScreen, itemUL.x,
+				    itemUL.y, 0.0f);
+
+		matrix4 screenToItem;
+		matrix4_identity(&screenToItem);
+		matrix4_translate3f(&screenToItem, &screenToItem, -itemUL.x,
+				    -itemUL.y, 0.0f);
+		matrix4_rotate_aa4f(&screenToItem, &screenToItem, 0.0f, 0.0f,
+				    1.0f, degreesToRadians(-itemRot));
+
+		obs_sceneitem_crop startCrop;
+		obs_sceneitem_get_crop(m_sceneItem, &startCrop);
+		vec2 startItemPos;
+		obs_sceneitem_get_pos(m_sceneItem, &startItemPos);
+
+		obs_source_t *source = obs_sceneitem_get_source(m_sceneItem);
+		vec2 cropSize;
+		vec2_zero(&cropSize);
+		cropSize.x = float(obs_source_get_width(source) -
+				   startCrop.left - startCrop.right);
+		cropSize.y = float(obs_source_get_height(source) -
+				   startCrop.top - startCrop.bottom);
+
+		if (m_parentSceneItem) {
+			matrix4 invGroupTransform;
+			obs_sceneitem_get_draw_transform(m_parentSceneItem,
+							 &invGroupTransform);
+			matrix4_inv(&invGroupTransform, &invGroupTransform);
+			obs_sceneitem_defer_group_resize_begin(
+				m_parentSceneItem);
+		}
+
+		///////////////////////////////////////////////////////////////////////////////
+
+		obs_bounds_type boundsType =
+			obs_sceneitem_get_bounds_type(m_sceneItem);
+		uint32_t align = obs_sceneitem_get_alignment(m_sceneItem);
+		vec3 tl, br, pos3;
+
+		vec3_zero(&tl);
+		vec3_set(&br, stretchItemSize.x, stretchItemSize.y, 0.0f);
+
+		vec3_set(&pos3, pos.x, pos.y, 0.0f);
+		vec3_transform(&pos3, &pos3, &screenToItem);
+
+		obs_sceneitem_crop crop = startCrop;
+		vec2 scale;
+
+		obs_sceneitem_get_scale(m_sceneItem, &scale);
+
+		vec2 max_tl;
+		vec2 max_br;
+
+		vec2_set(&max_tl, float(-crop.left) * scale.x,
+			 float(-crop.top) * scale.y);
+		vec2_set(&max_br, stretchItemSize.x + crop.right * scale.x,
+			 stretchItemSize.y + crop.bottom * scale.y);
+
+		typedef std::function<float(float, float)> minmax_func_t;
+
+		minmax_func_t min_x = scale.x < 0.0f ? maxfunc : minfunc;
+		minmax_func_t min_y = scale.y < 0.0f ? maxfunc : minfunc;
+		minmax_func_t max_x = scale.x < 0.0f ? minfunc : maxfunc;
+		minmax_func_t max_y = scale.y < 0.0f ? minfunc : maxfunc;
+
+		pos3.x = min_x(pos3.x, max_br.x);
+		pos3.x = max_x(pos3.x, max_tl.x);
+		pos3.y = min_y(pos3.y, max_br.y);
+		pos3.y = max_y(pos3.y, max_tl.y);
+
+		if (m_x == 0.0f) {
+			float maxX = stretchItemSize.x - (2.0 * scale.x);
+			pos3.x = tl.x = min_x(pos3.x, maxX);
+
+		} else if (m_x == 1.0f) {
+			float minX = (2.0 * scale.x);
+			pos3.x = br.x = max_x(pos3.x, minX);
+		}
+
+		if (m_y == 0.0f) {
+			float maxY = stretchItemSize.y - (2.0 * scale.y);
+			pos3.y = tl.y = min_y(pos3.y, maxY);
+
+		} else if (m_y == 1.0f) {
+			float minY = (2.0 * scale.y);
+			pos3.y = br.y = max_y(pos3.y, minY);
+		}
+
+		///////////////////////////////////////////////////////////////////////
+
+		static const uint32_t ITEM_LEFT = (1 << 0);
+		static const uint32_t ITEM_RIGHT = (1 << 1);
+		static const uint32_t ITEM_TOP = (1 << 2);
+		static const uint32_t ITEM_BOTTOM = (1 << 3);
+
+		static const uint32_t ALIGN_X = (ITEM_LEFT | ITEM_RIGHT);
+		static const uint32_t ALIGN_Y = (ITEM_TOP | ITEM_BOTTOM);
+
+		uint32_t stretchFlags = 0L;
+		if (m_x == 0.0f)
+			stretchFlags |= ITEM_LEFT;
+		if (m_y == 0.0f)
+			stretchFlags |= ITEM_TOP;
+		if (m_x == 1.0f)
+			stretchFlags |= ITEM_RIGHT;
+		if (m_y == 1.0f)
+			stretchFlags |= ITEM_BOTTOM;
+
+		vec3 newPos;
+		vec3_zero(&newPos);
+
+		uint32_t align_x = (align & ALIGN_X);
+		uint32_t align_y = (align & ALIGN_Y);
+		if (align_x == (stretchFlags & ALIGN_X) && align_x != 0)
+			newPos.x = pos3.x;
+		else if (align & ITEM_RIGHT)
+			newPos.x = stretchItemSize.x;
+		else if (!(align & ITEM_LEFT))
+			newPos.x = stretchItemSize.x * 0.5f;
+
+		if (align_y == (stretchFlags & ALIGN_Y) && align_y != 0)
+			newPos.y = pos3.y;
+		else if (align & ITEM_BOTTOM)
+			newPos.y = stretchItemSize.y;
+		else if (!(align & ITEM_TOP))
+			newPos.y = stretchItemSize.y * 0.5f;
+
+		///////////////////////////////////////////////////////////////////////
+
+		crop = startCrop;
+
+		if (m_x == 0.0f)
+			crop.left += int(std::round(tl.x / scale.x));
+		else if (m_x == 1.0f)
+			crop.right += int(std::round(
+				(stretchItemSize.x - br.x) / scale.x));
+
+		if (m_y == 0.0f)
+			crop.top += int(std::round(tl.y / scale.y));
+		else if (m_y == 1.0f)
+			crop.bottom += int(std::round(
+				(stretchItemSize.y - br.y) / scale.y));
+
+		vec3_transform(&newPos, &newPos, &itemToScreen);
+		newPos.x = std::round(newPos.x);
+		newPos.y = std::round(newPos.y);
+
+#if 0
+	vec3 curPos;
+	vec3_zero(&curPos);
+	obs_sceneitem_get_pos(m_sceneItem, (vec2*)&curPos);
+	blog(LOG_DEBUG, "curPos {%d, %d} - newPos {%d, %d}",
+			int(curPos.x), int(curPos.y),
+			int(newPos.x), int(newPos.y));
+	blog(LOG_DEBUG, "crop {%d, %d, %d, %d}",
+			crop.left, crop.top,
+			crop.right, crop.bottom);
+#endif
+
+		obs_sceneitem_defer_update_begin(m_sceneItem);
+		obs_sceneitem_set_crop(m_sceneItem, &crop);
+		if (boundsType == OBS_BOUNDS_NONE)
+			obs_sceneitem_set_pos(m_sceneItem, (vec2 *)&newPos);
+		obs_sceneitem_defer_update_end(m_sceneItem);
+	}
+
+	void process_stretch() {
 		auto pos = m_worldMousePosition;
 		if (m_parentSceneItem) {
 			matrix4 invGroupTransform;

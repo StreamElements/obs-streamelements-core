@@ -1015,8 +1015,9 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	m_currentScene = obs_scene_create_private(GetUniqueSceneName("Scene").c_str());
 	m_scenes.push_back(m_currentScene);
 
-	add_scene_signals(m_currentScene, nullptr);
-	add_source_signals(obs_scene_get_source(m_currentScene), nullptr);
+	add_scene_signals(m_currentScene, this);
+	add_source_signals(obs_scene_get_source(m_currentScene),
+			   this);
 
 	obs_transition_set(m_transition, obs_scene_get_source(m_currentScene));
 }
@@ -1281,8 +1282,8 @@ bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
 
 			auto source = obs_scene_get_source(scene);
 
-			remove_source_signals(source, nullptr);
-			remove_scene_signals(scene, nullptr);
+			remove_source_signals(source, this);
+			remove_scene_signals(scene, this);
 
 			obs_scene_release(scene);
 

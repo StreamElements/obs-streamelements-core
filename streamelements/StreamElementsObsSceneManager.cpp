@@ -570,7 +570,7 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 					obs_source_t *source,
 					obs_sceneitem_t *sceneitem,
 					const int order = -1,
-					bool serializeDetails = true)
+					bool serializeDetails = true, void *my_data = nullptr)
 {
 	CefRefPtr<CefDictionaryValue> root = CefDictionaryValue::Create();
 
@@ -578,13 +578,23 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 
 	obs_scene_t *root_scene = nullptr;
 
-	auto videoComposition = StreamElementsGlobalStateManager::GetInstance()
-		->GetVideoCompositionManager()
-		->GetVideoCompositionBySceneItemId(sceneItemId, &root_scene);
+	StreamElementsVideoCompositionBase* videoComposition =
+		nullptr;
+
+	if (my_data) {
+		videoComposition =
+			((StreamElementsVideoCompositionBase *)my_data);
+	} else {
+		videoComposition =
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetVideoCompositionManager()
+				->GetVideoCompositionBySceneItemId(sceneItemId,
+								   &root_scene).get();
+	}
 
 	root->SetString("id", sceneItemId);
 
-	if (videoComposition.get()) {
+	if (videoComposition) {
 		root->SetString("videoCompositionId",
 				videoComposition->GetId());
 		root->SetString(
@@ -683,7 +693,7 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 				SerializeSourceAndSceneItem(
 					item, source, group_sceneitem,
 					context.list->GetSize(),
-					serializeDetails);
+					serializeDetails, my_data);
 
 				context.list->SetValue(context.list->GetSize(),
 						       item);
@@ -849,7 +859,7 @@ static void dispatch_scene_update(void *my_data, calldata_t *cd)
 			     "hostSceneItemListChanged");
 }
 
-static void dispatch_sceneitem_event(obs_sceneitem_t *sceneitem,
+static void dispatch_sceneitem_event(void *my_data, obs_sceneitem_t *sceneitem,
 				     std::string eventName,
 				     bool serializeDetails = true)
 {
@@ -870,7 +880,7 @@ static void dispatch_sceneitem_event(obs_sceneitem_t *sceneitem,
 
 		// this can deadlock due to full_lock(obs_scene) in obs_sceneitem_get_group
 		SerializeSourceAndSceneItem(item, sceneitem_source, sceneitem,
-					    -1, serializeDetails);
+					    -1, serializeDetails, my_data);
 
 		std::string json =
 			CefWriteJSON(item, JSON_WRITER_DEFAULT).ToString();
@@ -884,7 +894,7 @@ static void dispatch_sceneitem_event(obs_sceneitem_t *sceneitem,
 	}
 }
 
-static void dispatch_sceneitem_event(obs_sceneitem_t *sceneitem,
+static void dispatch_sceneitem_event(void *my_data, obs_sceneitem_t *sceneitem,
 				     std::string currentSceneEventName,
 				     std::string otherSceneEventName,
 				     bool serializeDetails = true)
@@ -900,13 +910,14 @@ static void dispatch_sceneitem_event(obs_sceneitem_t *sceneitem,
 	//QtPostTask([sceneitem, currentSceneEventName, otherSceneEventName,
 	//	    serializeDetails]() {
 	if (is_active_scene(sceneitem)) {
-		dispatch_sceneitem_event(sceneitem, currentSceneEventName,
+		dispatch_sceneitem_event(my_data, sceneitem,
+					 currentSceneEventName,
 					 serializeDetails);
 	}
 
 	//obs_sceneitem_release(sceneitem);
 
-	dispatch_sceneitem_event(sceneitem, otherSceneEventName,
+	dispatch_sceneitem_event(my_data, sceneitem, otherSceneEventName,
 				 serializeDetails);
 	//});
 }
@@ -919,7 +930,7 @@ static void dispatch_sceneitem_event(void *my_data, calldata_t *cd,
 	obs_sceneitem_t *sceneitem =
 		(obs_sceneitem_t *)calldata_ptr(cd, "item");
 
-	dispatch_sceneitem_event(sceneitem, currentSceneEventName,
+	dispatch_sceneitem_event(my_data, sceneitem, currentSceneEventName,
 				 otherSceneEventName, serializeDetails);
 }
 
@@ -958,7 +969,7 @@ static void dispatch_source_event(void *my_data, calldata_t *cd,
 			sceneitem); // does not increase refcount
 
 		if (sceneitem_source == source) {
-			dispatch_sceneitem_event(sceneitem,
+			dispatch_sceneitem_event(my_data, sceneitem,
 						 currentSceneEventName,
 						 otherSceneEventName, false);
 		}
@@ -1725,7 +1736,7 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 
 			// Result
 			SerializeSourceAndSceneItem(output, source, sceneitem,
-						    true);
+						    true, videoComposition.get());
 
 			obs_sceneitem_release(sceneitem);
 		}
@@ -1811,7 +1822,7 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 
 			// Result
 			SerializeSourceAndSceneItem(output, source, sceneitem,
-						    true);
+						    true, videoComposition.get());
 
 			obs_sceneitem_release(sceneitem);
 		}
@@ -1954,8 +1965,9 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 					videoComposition, sceneitem, root);
 
 				// Result
-				SerializeSourceAndSceneItem(output, source,
-							    sceneitem, true);
+				SerializeSourceAndSceneItem(
+					output, source, sceneitem, true,
+					videoComposition.get());
 
 				obs_sceneitem_release(sceneitem);
 			}
@@ -2061,7 +2073,7 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 
 			// Result
 			SerializeSourceAndSceneItem(output, source, sceneitem,
-						    true);
+						    true, videoComposition.get());
 
 			obs_sceneitem_release(sceneitem);
 		}
@@ -2140,7 +2152,7 @@ void StreamElementsObsSceneManager::DeserializeObsSceneItemGroup(
 		// Result
 		SerializeSourceAndSceneItem(
 			output, obs_sceneitem_get_source(args.sceneitem),
-			args.sceneitem);
+			args.sceneitem, true, videoComposition.get());
 
 		//obs_sceneitem_release(args.sceneitem); // obs_scene_add_group() does not return an incremented reference
 	}
@@ -2176,11 +2188,13 @@ void StreamElementsObsSceneManager::SerializeObsSceneItems(
 	if (scene) {
 		struct local_context {
 			CefRefPtr<CefListValue> list;
+			decltype(videoComposition) videoComposition;
 		};
 
 		local_context context;
 
 		context.list = CefListValue::Create();
+		context.videoComposition = videoComposition;
 
 		// For each scene item
 		obs_scene_enum_items(
@@ -2196,7 +2210,8 @@ void StreamElementsObsSceneManager::SerializeObsSceneItems(
 
 				SerializeSourceAndSceneItem(
 					item, source, sceneitem,
-					context->list->GetSize());
+					context->list->GetSize(), true,
+					context->videoComposition.get());
 
 				context->list->SetValue(
 					context->list->GetSize(), item);
@@ -2715,7 +2730,8 @@ void StreamElementsObsSceneManager::SetObsSceneItemPropertiesById(
 			videoComposition, sceneitem, d);
 
 		// Result
-		SerializeSourceAndSceneItem(output, source, sceneitem);
+		SerializeSourceAndSceneItem(output, source, sceneitem, true,
+					    videoComposition.get());
 	}
 }
 
