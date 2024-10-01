@@ -1513,6 +1513,7 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 		obs_source_update(source, sourceSettings);
 	}
 
+	/*
 	if (strcmp(sourceId, "game_capture") != 0) {
 		// Wait for dimensions: some sources like video capture source do not
 		// get their dimensions immediately: they are initializing asynchronously
@@ -1524,6 +1525,7 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 			os_sleep_ms(100);
 		}
 	}
+	*/
 
 	// Does not increment refcount. No obs_scene_release() call is necessary.
 	obs_scene_t *scene = obs_scene_from_source(parentScene);
