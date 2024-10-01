@@ -77,7 +77,9 @@ DeserializeExistingCompositionProperties(CefRefPtr<CefValue> input,
 	if (!root->HasKey("id") || root->GetType("id") != VTYPE_STRING)
 		return;
 
-	auto videoComposition = GetVideoCompositionById(input);
+	std::string id = root->GetString("id");
+
+	auto videoComposition = GetVideoCompositionById(id);
 
 	if (!videoComposition.get())
 		return;
