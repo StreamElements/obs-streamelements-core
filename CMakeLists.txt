@@ -231,6 +231,8 @@ set(obs-streamelements-core_SOURCES
 	streamelements/StreamElementsVideoComposition.cpp
 	streamelements/StreamElementsVideoCompositionManager.cpp
 	streamelements/StreamElementsVideoCompositionViewWidget.cpp
+	streamelements/StreamElementsAudioComposition.cpp
+	streamelements/StreamElementsAudioCompositionManager.cpp
 	streamelements/StreamElementsOutput.cpp
 	streamelements/StreamElementsOutputManager.cpp
 	streamelements/deps/StackWalker/StackWalker.cpp
@@ -317,6 +319,8 @@ set(obs-streamelements-core_HEADERS
 	streamelements/StreamElementsVideoComposition.hpp
 	streamelements/StreamElementsVideoCompositionManager.hpp
 	streamelements/StreamElementsVideoCompositionViewWidget.hpp
+	streamelements/StreamElementsAudioComposition.hpp
+	streamelements/StreamElementsAudioCompositionManager.hpp
 	streamelements/StreamElementsOutput.hpp
 	streamelements/StreamElementsOutputManager.hpp
 	streamelements/canvas-config.hpp
