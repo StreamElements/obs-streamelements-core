@@ -1638,6 +1638,8 @@ StreamElementsObsSceneManager::ObsSetUniqueSourceName(obs_source_t *source,
 
 		return unique;
 	} else {
+		obs_source_set_name(source, name.c_str());
+
 		return name;
 	}
 }
