@@ -121,219 +121,6 @@ public:
 	void operator=(obs_graphics_guard & other) = delete;
 };
 
-static void SerializeObsTransition(std::string videoCompositionId, obs_source_t* t, int durationMilliseconds, CefRefPtr<CefValue> &output)
-{
-	output->SetNull();
-
-	if (!t)
-		return;
-
-	auto d = CefDictionaryValue::Create();
-
-	std::string id = obs_source_get_id(t);
-	d->SetString("class", id);
-	d->SetString("videoCompositionId", id);
-
-	auto settings = obs_source_get_settings(t);
-
-	auto props = obs_get_source_properties(id.c_str());
-	auto propsValue = CefValue::Create();
-	obs_properties_apply_settings(props, settings);
-	SerializeObsProperties(props, propsValue);
-	obs_properties_destroy(props);
-
-	auto settingsValue = SerializeObsData(settings);
-
-	obs_data_release(settings);
-
-	d->SetValue("properties", propsValue);
-	d->SetValue("settings", settingsValue);
-
-	auto defaultsData = obs_get_source_defaults(id.c_str());
-	d->SetValue("defaultSettings", SerializeObsData(defaultsData));
-	obs_data_release(defaultsData);
-
-	d->SetString("label", obs_source_get_display_name(id.c_str()));
-
-	uint32_t cx, cy;
-	obs_transition_get_size(t, &cx, &cy);
-	d->SetInt("width", cx);
-	d->SetInt("height", cy);
-
-	auto scaleType = obs_transition_get_scale_type(t);
-	switch (scaleType) {
-	case OBS_TRANSITION_SCALE_MAX_ONLY:
-		d->SetString("scaleType", "maxOnly");
-		break;
-	case OBS_TRANSITION_SCALE_ASPECT:
-		d->SetString("scaleType", "aspect");
-		break;
-	case OBS_TRANSITION_SCALE_STRETCH:
-		d->SetString("scaleType", "stretch");
-		break;
-	default:
-		d->SetString("scaleType", "unknown");
-		break;
-	}
-
-	d->SetString("alignment",
-		     GetAlignmentIdFromInt32(obs_transition_get_alignment(t)));
-
-	d->SetInt("durationMilliseconds", durationMilliseconds);
-
-	output->SetDictionary(d);
-}
-
-static obs_source_t* GetExistingObsTransition(std::string lookupId)
-{
-	obs_source_t *result = nullptr;
-
-	obs_frontend_source_list l = {};
-	obs_frontend_get_transitions(&l);
-
-	for (size_t idx = 0; idx < l.sources.num; ++idx) {
-		auto source = l.sources.array[idx];
-
-		std::string id = obs_source_get_id(source);
-
-		if (id == lookupId) {
-			result = source;
-
-			obs_source_addref(result);
-
-			break;
-		}
-	}
-
-	obs_frontend_source_list_free(&l);
-
-	return result;
-}
-
-bool DeserializeObsTransition(CefRefPtr<CefValue> input, obs_source_t **t, int *durationMilliseconds, bool useExisting)
-{
-	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
-		return false;
-
-	auto d = input->GetDictionary();
-
-	if (!d->HasKey("class") || d->GetType("class") != VTYPE_STRING)
-		return false;
-
-	std::string id = d->GetString("class");
-
-	if (useExisting) {
-		*t = GetExistingObsTransition(id);
-
-		if (!*t)
-			return false;
-	} else {
-		*t = obs_source_create_private(id.c_str(), id.c_str(),
-					       nullptr);
-	}
-
-	if (d->HasKey("settings")) {
-		auto settings = obs_data_create();
-
-		DeserializeObsData(d->GetValue("settings"), settings);
-
-		obs_source_update(*t, settings);
-
-		obs_data_release(settings);
-	}
-
-	if (d->HasKey("width") &&
-	    d->GetType("width") == VTYPE_INT && d->HasKey("height") && d->GetType("height") == VTYPE_INT) {
-		int cx = d->GetInt("width");
-		int cy = d->GetInt("height");
-
-		if (cx <= 0 || cy <= 0)
-			return false;
-
-		obs_transition_set_size(*t, cx, cy);
-	}
-
-	if (d->HasKey("scaleType") && d->GetType("scaleType") == VTYPE_STRING) {
-		auto scaleType = d->GetString("scaleType");
-
-		if (scaleType == "maxOnly") {
-			obs_transition_set_scale_type(
-				*t, OBS_TRANSITION_SCALE_MAX_ONLY);
-		} else if (scaleType == "aspect") {
-			obs_transition_set_scale_type(
-				*t, OBS_TRANSITION_SCALE_ASPECT);
-		} else if (scaleType == "stretch") {
-			obs_transition_set_scale_type(
-				*t, OBS_TRANSITION_SCALE_STRETCH);
-		} else {
-			return false;
-		}
-	}
-
-	if (d->HasKey("alignment") && d->GetType("alignment") == VTYPE_STRING) {
-		obs_transition_set_alignment(
-			*t, GetInt32FromAlignmentId(
-				    d->GetString("alignment").c_str()));
-	}
-
-	if (d->HasKey("durationMilliseconds") &&
-	    d->GetType("durationMilliseconds") == VTYPE_INT) {
-		*durationMilliseconds = d->GetInt("durationMilliseconds");
-	} else {
-		*durationMilliseconds = 300; // OBS FE default
-	}
-
-	return true;
-}
-
-static CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e)
-{
-	auto result = CefDictionaryValue::Create();
-
-	auto id = obs_encoder_get_id(e);
-	result->SetString("class", id);
-
-	auto name = obs_encoder_get_name(e);
-	result->SetString("name", name ? name : id);
-
-	auto displayName = obs_encoder_get_display_name(obs_encoder_get_id(e));
-	result->SetString("label",
-			  displayName ? displayName : (name ? name : id));
-
-	auto codec = obs_encoder_get_codec(e);
-
-	if (codec)
-		result->SetString("codec", obs_encoder_get_codec(e));
-	else
-		result->SetNull("codec");
-
-	if (obs_encoder_get_type(e) == OBS_ENCODER_VIDEO) {
-		result->SetInt("width", obs_encoder_get_width(e));
-		result->SetInt("height", obs_encoder_get_height(e));
-	}
-
-	auto settings = obs_encoder_get_settings(e);
-
-	result->SetValue("settings",
-			 CefParseJSON(obs_data_get_json(settings),
-				      JSON_PARSER_ALLOW_TRAILING_COMMAS));
-
-	result->SetValue("properties", SerializeObsEncoderProperties(obs_encoder_get_id(e), settings));
-
-	auto defaultSettings = obs_encoder_get_defaults(e);
-
-	if (defaultSettings) {
-		result->SetValue("defaultSettings",
-			    SerializeObsData(defaultSettings));
-
-		obs_data_release(defaultSettings);
-	}
-
-	obs_data_release(settings);
-
-	return result;
-}
-
 static void SerializeObsEncoders(StreamElementsVideoCompositionBase* composition, CefRefPtr<CefDictionaryValue>& root)
 {
 	auto info = composition->GetCompositionInfo(nullptr);
@@ -631,12 +418,12 @@ void StreamElementsVideoCompositionBase::DeserializeTransition(
 class StreamElementsDefaultVideoCompositionInfo
 	: public StreamElementsVideoCompositionBase::CompositionInfo {
 private:
-	StreamElementsCompositionEventListener *m_listener;
+	StreamElementsVideoCompositionEventListener *m_listener;
 
 public:
 	StreamElementsDefaultVideoCompositionInfo(
 		std::shared_ptr<StreamElementsVideoCompositionBase> owner,
-		StreamElementsCompositionEventListener* listener)
+		StreamElementsVideoCompositionEventListener* listener)
 		: StreamElementsVideoCompositionBase::CompositionInfo(
 			  owner, listener),
 		  m_listener(listener)
@@ -720,7 +507,7 @@ public:
 std::shared_ptr<
 	StreamElementsVideoCompositionBase::CompositionInfo>
 StreamElementsObsNativeVideoComposition::GetCompositionInfo(
-	StreamElementsCompositionEventListener* listener)
+	StreamElementsVideoCompositionEventListener* listener)
 {
 	return std::make_shared<StreamElementsDefaultVideoCompositionInfo>(
 		shared_from_this(), listener);
@@ -889,7 +676,7 @@ obs_scene_t* StreamElementsObsNativeVideoComposition::GetCurrentScene()
 class StreamElementsCustomVideoCompositionInfo
 	: public StreamElementsVideoCompositionBase::CompositionInfo {
 private:
-	StreamElementsCompositionEventListener *m_listener;
+	StreamElementsVideoCompositionEventListener *m_listener;
 
 	video_t *m_video = nullptr;
 	obs_encoder_t *m_streamingVideoEncoder = nullptr;
@@ -901,7 +688,7 @@ private:
 public:
 	StreamElementsCustomVideoCompositionInfo(
 		std::shared_ptr<StreamElementsVideoCompositionBase> owner,
-		StreamElementsCompositionEventListener *listener,
+		StreamElementsVideoCompositionEventListener *listener,
 		video_t *video, uint32_t baseWidth, uint32_t baseHeight,
 		obs_encoder_t *streamingVideoEncoder,
 		obs_encoder_t *recordingVideoEncoder, obs_view_t *videoView)
@@ -1076,7 +863,7 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 
 std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
 StreamElementsCustomVideoComposition::GetCompositionInfo(
-	StreamElementsCompositionEventListener *listener)
+	StreamElementsVideoCompositionEventListener *listener)
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
@@ -1209,9 +996,8 @@ StreamElementsCustomVideoComposition::Create(
 
 			recordingVideoEncoderSettings = obs_data_create();
 
-			if (DeserializeObsData(
-				    encoderRoot->GetValue("settings"),
-				    streamingVideoEncoderSettings)) {
+			if (DeserializeObsData(encoderRoot->GetValue("settings"),
+					       recordingVideoEncoderSettings)) {
 				try {
 					result->SetRecordingEncoder(
 						recordingVideoEncoderId,

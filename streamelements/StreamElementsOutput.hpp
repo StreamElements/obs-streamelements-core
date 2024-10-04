@@ -3,7 +3,7 @@
 #include <obs-frontend-api.h>
 #include "StreamElementsVideoComposition.hpp"
 
-class StreamElementsOutputBase : public StreamElementsCompositionEventListener {
+class StreamElementsOutputBase : public StreamElementsVideoCompositionEventListener {
 public:
 	enum ObsStateDependencyType {
 		Streaming,
