@@ -286,11 +286,15 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 	d->SetString("id", GetId());
 	d->SetString("name", GetName());
 	d->SetString("videoCompositionId", m_videoComposition->GetId());
+	d->SetString("audioCompositionId", m_audioComposition->GetId());
 	d->SetBool("isEnabled", IsEnabled());
 	d->SetBool("isActive", IsActive());
 	d->SetBool("canDisable", CanDisable());
 	d->SetBool("canRemove", !IsObsNativeOutput());
-	d->SetBool("isObsNativeVideoComposition", m_videoComposition->IsObsNativeComposition());
+	d->SetBool("isObsNativeVideoComposition",
+		   m_videoComposition->IsObsNativeComposition());
+	d->SetBool("isObsNativeAudioComposition",
+		   m_audioComposition->IsObsNativeComposition());
 	d->SetBool("isObsNativeOutput", IsObsNativeOutput());
 
 	if (m_error.size()) {
