@@ -48,15 +48,10 @@ public:
 		virtual bool IsObsNative() = 0;
 
 		virtual obs_encoder_t *GetStreamingVideoEncoder() = 0;
-		virtual obs_encoder_t *
-		GetStreamingAudioEncoder(size_t index) = 0;
 
 		virtual obs_encoder_t *GetRecordingVideoEncoder() = 0;
-		virtual obs_encoder_t *
-		GetRecordingAudioEncoder(size_t index) = 0;
 
 		virtual video_t *GetVideo() = 0;
-		virtual audio_t *GetAudio() = 0;
 
 		virtual void GetVideoBaseDimensions(uint32_t *videoWidth,
 						    uint32_t *videoHeight) = 0;

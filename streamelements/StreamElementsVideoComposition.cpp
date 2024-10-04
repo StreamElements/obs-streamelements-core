@@ -136,19 +136,6 @@ static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* compos
 		0, SerializeObsEncoder(streamingVideoEncoder));
 	root->SetList("streamingVideoEncoders", streamingVideoEncoders);
 
-	auto streamingAudioEncoders = CefListValue::Create();
-	for (size_t i = 0;; ++i) {
-		auto encoder = info->GetStreamingAudioEncoder(i);
-
-		if (!encoder)
-			break;
-
-		streamingAudioEncoders->SetDictionary(
-			i, SerializeObsEncoder(encoder));
-	}
-
-	root->SetList("streamingAudioEncoders", streamingAudioEncoders);
-
 	// Recording
 
 	auto recordingVideoEncoder = info->GetRecordingVideoEncoder();
@@ -162,24 +149,6 @@ static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* compos
 
 		root->SetList("recordingVideoEncoders", recordingVideoEncoders);
 	}
-
-	bool hasDifferentAudioEncoder = false;
-	auto recordingAudioEncoders = CefListValue::Create();
-	for (size_t i = 0;; ++i) {
-		auto encoder = info->GetRecordingAudioEncoder(i);
-
-		if (!encoder)
-			break;
-
-		if (encoder != info->GetStreamingAudioEncoder(i))
-			hasDifferentAudioEncoder = true;
-
-		recordingAudioEncoders->SetDictionary(
-			i, SerializeObsEncoder(encoder));
-	}
-
-	if (hasDifferentAudioEncoder)
-		root->SetList("recordingAudioEncoders", recordingAudioEncoders);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -445,16 +414,6 @@ public:
 		return result;
 	}
 
-	virtual obs_encoder_t *GetStreamingAudioEncoder(size_t index) {
-		auto output = obs_frontend_get_streaming_output();
-
-		auto result = obs_output_get_audio_encoder(output, index);
-
-		obs_output_release(output);
-
-		return result;
-	}
-
 	virtual obs_encoder_t* GetRecordingVideoEncoder() {
 		auto output = obs_frontend_get_recording_output();
 
@@ -472,18 +431,7 @@ public:
 		return result;
 	}
 
-	virtual obs_encoder_t* GetRecordingAudioEncoder(size_t index) {
-		auto output = obs_frontend_get_recording_output();
-
-		auto result = obs_output_get_audio_encoder(output, index);
-
-		obs_output_release(output);
-
-		return result;
-	}
-
 	virtual video_t *GetVideo() { return obs_get_video(); }
-	virtual audio_t *GetAudio() { return obs_get_audio(); }
 
 	virtual void GetVideoBaseDimensions(uint32_t *videoWidth,
 					    uint32_t *videoHeight)
@@ -714,35 +662,12 @@ public:
 		return m_streamingVideoEncoder;
 	}
 
-	virtual obs_encoder_t *GetStreamingAudioEncoder(size_t index)
-	{
-		auto output = obs_frontend_get_streaming_output();
-
-		auto result = obs_output_get_audio_encoder(output, index);
-
-		obs_output_release(output);
-
-		return result;
-	}
-
 	virtual obs_encoder_t *GetRecordingVideoEncoder()
 	{
 		return m_recordingVideoEncoder ? m_recordingVideoEncoder : m_streamingVideoEncoder;
 	}
 
-	virtual obs_encoder_t *GetRecordingAudioEncoder(size_t index)
-	{
-		auto output = obs_frontend_get_streaming_output();
-
-		auto result = obs_output_get_audio_encoder(output, index);
-
-		obs_output_release(output);
-
-		return result;
-	}
-
 	virtual video_t *GetVideo() { return m_video; }
-	virtual audio_t *GetAudio() { return obs_get_audio(); }
 
 	virtual void GetVideoBaseDimensions(uint32_t *videoWidth,
 					    uint32_t *videoHeight)

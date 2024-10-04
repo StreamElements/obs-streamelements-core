@@ -5,19 +5,25 @@
 #define RecordingOutput StreamElementsOutputBase::RecordingOutput
 
 StreamElementsOutputManager::StreamElementsOutputManager(
-	std::shared_ptr<StreamElementsVideoCompositionManager> compositionManager)
-	: m_compositionManager(compositionManager)
+	std::shared_ptr<StreamElementsVideoCompositionManager>
+		videoCompositionManager,
+	std::shared_ptr<StreamElementsAudioCompositionManager>
+		audioCompositionManager)
+	: m_videoCompositionManager(videoCompositionManager), m_audioCompositionManager(audioCompositionManager)
 {
-	auto nativeStreamingOutput = std::make_shared<StreamElementsObsNativeStreamingOutput>(
+	auto nativeStreamingOutput = std::make_shared<
+		StreamElementsObsNativeStreamingOutput>(
 		"default", "OBS Native Streaming",
-		m_compositionManager->GetObsNativeVideoComposition());
+		m_videoCompositionManager->GetObsNativeVideoComposition(),
+		m_audioCompositionManager->GetObsNativeAudioComposition());
 
 	m_map[StreamingOutput][nativeStreamingOutput->GetId()] = nativeStreamingOutput;
 
 	auto nativeRecordingOutput =
 		std::make_shared<StreamElementsObsNativeRecordingOutput>(
 			"default", "OBS Native Recording",
-			m_compositionManager->GetObsNativeVideoComposition());
+		m_videoCompositionManager->GetObsNativeVideoComposition(),
+		m_audioCompositionManager->GetObsNativeAudioComposition());
 
 	m_map[RecordingOutput][nativeRecordingOutput->GetId()] = nativeRecordingOutput;
 }
