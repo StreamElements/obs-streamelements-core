@@ -121,7 +121,7 @@ public:
 	void operator=(obs_graphics_guard & other) = delete;
 };
 
-static void SerializeObsEncoders(StreamElementsVideoCompositionBase* composition, CefRefPtr<CefDictionaryValue>& root)
+static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* composition, CefRefPtr<CefDictionaryValue>& root)
 {
 	auto info = composition->GetCompositionInfo(nullptr);
 
@@ -652,7 +652,7 @@ void StreamElementsObsNativeVideoComposition::SerializeComposition(
 
 	root->SetDictionary("videoFrame", videoFrame);
 
-	SerializeObsEncoders(this, root);
+	SerializeObsVideoEncoders(this, root);
 
 	output->SetDictionary(root);
 }
@@ -899,7 +899,7 @@ void StreamElementsCustomVideoComposition::SerializeComposition(
 
 	root->SetDictionary("videoFrame", videoFrame);
 
-	SerializeObsEncoders(this, root);
+	SerializeObsVideoEncoders(this, root);
 
 	output->SetDictionary(root);
 }

@@ -8,6 +8,46 @@
 #include "StreamElementsMessageBus.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
 
+static void
+SerializeObsAudioEncoders(StreamElementsAudioCompositionBase *composition,
+			  CefRefPtr<CefDictionaryValue> &root)
+{
+	auto info = composition->GetCompositionInfo(nullptr);
+
+	auto streamingAudioEncoders = CefListValue::Create();
+	for (size_t i = 0;; ++i) {
+		auto encoder = info->GetStreamingAudioEncoder(i);
+
+		if (!encoder)
+			break;
+
+		streamingAudioEncoders->SetDictionary(
+			i, SerializeObsEncoder(encoder));
+	}
+
+	root->SetList("streamingAudioEncoders", streamingAudioEncoders);
+
+	// Recording
+
+	bool hasDifferentAudioEncoder = false;
+	auto recordingAudioEncoders = CefListValue::Create();
+	for (size_t i = 0;; ++i) {
+		auto encoder = info->GetRecordingAudioEncoder(i);
+
+		if (!encoder)
+			break;
+
+		if (encoder != info->GetStreamingAudioEncoder(i))
+			hasDifferentAudioEncoder = true;
+
+		recordingAudioEncoders->SetDictionary(
+			i, SerializeObsEncoder(encoder));
+	}
+
+	if (hasDifferentAudioEncoder)
+		root->SetList("recordingAudioEncoders", recordingAudioEncoders);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Composition base
 ////////////////////////////////////////////////////////////////////////////////
@@ -95,7 +135,7 @@ void StreamElementsObsNativeAudioComposition::SerializeComposition(
 	root->SetBool("isObsNativeComposition", true);
 	root->SetBool("canRemove", CanRemove());
 
-	SerializeObsEncoders(this, root);
+	SerializeObsAudioEncoders(this, root);
 
 	output->SetDictionary(root);
 }
@@ -261,7 +301,7 @@ void StreamElementsCustomAudioComposition::SerializeComposition(
 	root->SetBool("isObsNativeComposition", false);
 	root->SetBool("canRemove", this->CanRemove());
 
-	SerializeObsEncoders(this, root);
+	SerializeObsAudioEncoders(this, root);
 
 	output->SetDictionary(root);
 }
