@@ -7,6 +7,45 @@
 
 #include <ctime>
 
+static std::vector<uint32_t> DeserializeAudioTracks(CefRefPtr<CefDictionaryValue> rootDict)
+{
+	std::vector<uint32_t> result;
+
+	if (rootDict->HasKey("audioTracks") &&
+	    rootDict->GetType("audioTracks") == VTYPE_LIST) {
+		auto list = rootDict->GetList("audioTracks");
+
+		for (size_t i = 0; i < list->GetSize(); ++i) {
+			if (list->GetType(i) != VTYPE_INT)
+				continue;
+
+			auto trackIndex = list->GetInt(i);
+
+			if (trackIndex >= 0 && trackIndex < MAX_AUDIO_MIXES) {
+				bool hasValue = false;
+
+				for (auto it = result.cbegin();
+				     it != result.cend(); ++it) {
+					if (*it == trackIndex) {
+						hasValue = true;
+						break;
+					}
+				}
+
+				if (!hasValue) {
+					result.push_back(trackIndex);
+				}
+			}
+		}
+	}
+
+	if (!result.size()) {
+		result.push_back(0);
+	}
+
+	return result;
+}
+
 static void dispatch_list_change_event(StreamElementsOutputBase *output)
 {
 	if (output->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
@@ -309,7 +348,7 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 
 	auto obs_output = GetOutput();
 
-	if (output && IsActive()) {
+	if (obs_output && IsActive()) {
 		auto stats = CefDictionaryValue::Create();
 
 		stats->SetBool("canPause", obs_output_can_pause(obs_output));
@@ -345,18 +384,24 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 
 	d->SetDictionary("auxiliaryData", m_auxData);
 
-	auto streamingSettings = CefValue::Create();
+	auto audioTracks = CefListValue::Create();
+	for (auto audioTrackIndex : GetAudioTracks()) {
+		audioTracks->SetInt(audioTracks->GetSize(), audioTrackIndex);
+	}
+	d->SetList("audioTracks", audioTracks);
 
-	SerializeOutputSettings(streamingSettings);
+	auto outputSettings = CefValue::Create();
+
+	SerializeOutputSettings(outputSettings);
 
 	switch (m_obsOutputType) {
 	case StreamingOutput:
 		d->SetString("type", "streaming");
-		d->SetValue("streamingSettings", streamingSettings);
+		d->SetValue("streamingSettings", outputSettings);
 		break;
 	case RecordingOutput:
 		d->SetString("type", "recording");
-		d->SetValue("recordingSettings", streamingSettings);
+		d->SetValue("recordingSettings", outputSettings);
 		break;
 	default:
 		throw std::invalid_argument("Unknown obsOutputType value");
@@ -578,9 +623,10 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 			m_output,
 			videoCompositionInfo->GetStreamingVideoEncoder());
 
-		for (size_t i = 0;; ++i) {
+		for (size_t i = 0; i < m_audioTracks.size(); ++i) {
 			auto encoder =
-				audioCompositionInfo->GetStreamingAudioEncoder(i);
+				audioCompositionInfo->GetStreamingAudioEncoder(
+					m_audioTracks[i]);
 
 			if (!encoder)
 				break;
@@ -761,8 +807,11 @@ std::shared_ptr <StreamElementsCustomStreamingOutput> StreamElementsCustomStream
 
 	auto bindToIP = "";
 
+	auto audioTracks = DeserializeAudioTracks(rootDict);
+
 	auto result = std::make_shared<StreamElementsCustomStreamingOutput>(
-		id, name, videoComposition, audioComposition, service, bindToIP, auxData);
+		id, name, videoComposition, audioComposition, audioTracks,
+		service, bindToIP, auxData);
 
 	result->SetEnabled(isEnabled);
 
@@ -825,6 +874,30 @@ void StreamElementsObsNativeStreamingOutput::SerializeOutputSettings(
 	output->SetDictionary(d);
 }
 
+std::vector<uint32_t> StreamElementsObsNativeStreamingOutput::GetAudioTracks()
+{
+	std::vector<uint32_t> result;
+
+	const char *mode = config_get_string(obs_frontend_get_profile_config(),
+					     "Output", "Mode");
+	bool advOut = stricmp(mode, "Advanced") == 0;
+
+	if (advOut) {
+		int streamTrack =
+			config_get_int(obs_frontend_get_profile_config(),
+				       "AdvOut", "TrackIndex") -
+			1;
+
+		result.push_back(streamTrack);
+
+	} else {
+		result.push_back(0);
+	}
+
+
+	return result;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // StreamElementsObsNativeRecordingOutput
 ////////////////////////////////////////////////////////////////////////////////
@@ -867,6 +940,23 @@ void StreamElementsObsNativeRecordingOutput::SerializeOutputSettings(
 	obs_output_release(obs_output);
 
 	output->SetDictionary(d);
+}
+
+std::vector<uint32_t> StreamElementsObsNativeRecordingOutput::GetAudioTracks()
+{
+	std::vector<uint32_t> result;
+
+	const char *mode = config_get_string(obs_frontend_get_profile_config(),
+					     "Output", "Mode");
+	bool advOut = stricmp(mode, "Advanced") == 0;
+
+	int tracks = config_get_int(obs_frontend_get_profile_config(),
+				    advOut ? "AdvOut" : "SimpleOutput",
+				    "RecTracks");
+
+	result.push_back(tracks);
+
+	return result;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1081,10 +1171,10 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 			m_output,
 			videoCompositionInfo->GetRecordingVideoEncoder());
 
-		for (size_t i = 0;; ++i) {
+		for (size_t i = 0; i < m_audioTracks.size(); ++i) {
 			auto encoder =
 				audioCompositionInfo->GetRecordingAudioEncoder(
-					i);
+					m_audioTracks[i]);
 
 			if (!encoder)
 				break;
@@ -1233,8 +1323,11 @@ StreamElementsCustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 		return nullptr;
 	}
 
+	auto audioTracks = DeserializeAudioTracks(rootDict);
+
 	auto result = std::make_shared<StreamElementsCustomRecordingOutput>(
 		id, name, recordingSettings, videoComposition, audioComposition,
+		audioTracks,
 		auxData);
 
 	result->SetEnabled(isEnabled);

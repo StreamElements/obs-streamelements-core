@@ -73,6 +73,8 @@ public:
 	virtual void
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) = 0;
 
+	virtual std::vector<uint32_t> GetAudioTracks() = 0;
+
 	virtual bool CanSplitRecordingOutput() { return false; }
 	virtual bool TriggerSplitRecordingOutput() { return false; }
 
@@ -130,16 +132,22 @@ private:
 
 	std::string m_bindToIP;
 
+	std::vector<uint32_t> m_audioTracks = {0};
+
 public:
 	StreamElementsCustomStreamingOutput(
 		std::string id, std::string name,
-		std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition,
+		std::shared_ptr<StreamElementsVideoCompositionBase>
+			videoComposition,
 		std::shared_ptr<StreamElementsAudioCompositionBase>
 			audioComposition,
-		obs_service_t *service, const char *bindToIP,
-		CefRefPtr<CefDictionaryValue> auxData)
-		: StreamElementsOutputBase(id, name, StreamingOutput, Streaming, videoComposition, audioComposition, auxData),
-		  m_service(service)
+		std::vector<uint32_t> audioTracks, obs_service_t *service,
+		const char *bindToIP, CefRefPtr<CefDictionaryValue> auxData)
+		: StreamElementsOutputBase(id, name, StreamingOutput, Streaming,
+					   videoComposition, audioComposition,
+					   auxData),
+		  m_service(service),
+		  m_audioTracks(audioTracks)
 	{
 		if (bindToIP) {
 			m_bindToIP = bindToIP;
@@ -160,6 +168,11 @@ public:
 
 	virtual void
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
+
+	virtual std::vector<uint32_t> GetAudioTracks() override
+	{
+		return m_audioTracks;
+	}
 
 	static std::shared_ptr<StreamElementsCustomStreamingOutput>
 	Create(CefRefPtr<CefValue> input);
@@ -216,6 +229,8 @@ protected:
 
 	virtual void
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
+
+	virtual std::vector<uint32_t> GetAudioTracks() override;
 };
 
 class StreamElementsObsNativeRecordingOutput : public StreamElementsOutputBase {
@@ -259,14 +274,13 @@ protected:
 
 	virtual void
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
+
+	virtual std::vector<uint32_t> GetAudioTracks() override;
 };
 
 class StreamElementsCustomRecordingOutput : public StreamElementsOutputBase {
 private:
 	std::recursive_mutex m_mutex;
-
-	std::shared_ptr<StreamElementsVideoCompositionBase>
-		m_videoComposition = nullptr;
 
 	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
 		m_videoCompositionInfo = nullptr;
@@ -274,6 +288,8 @@ private:
 	obs_output_t *m_output = nullptr;
 
 	CefRefPtr<CefDictionaryValue> m_recordingSettings = CefDictionaryValue::Create();
+
+	std::vector<uint32_t> m_audioTracks;
 
 public:
 	StreamElementsCustomRecordingOutput(
@@ -283,12 +299,12 @@ public:
 			videoComposition,
 		std::shared_ptr<StreamElementsAudioCompositionBase>
 			audioComposition,
+		std::vector<uint32_t> audioTracks,
 		CefRefPtr<CefDictionaryValue> auxData)
 		: StreamElementsOutputBase(id, name, RecordingOutput, None,
 					   videoComposition, audioComposition,
 					   auxData),
-		  m_recordingSettings(recordingSettings),
-		  m_videoComposition(videoComposition)
+		  m_recordingSettings(recordingSettings)
 	{
 	}
 
@@ -301,6 +317,11 @@ public:
 
 	virtual void
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
+
+	virtual std::vector<uint32_t> GetAudioTracks() override
+	{
+		return m_audioTracks;
+	}
 
 	static std::shared_ptr<StreamElementsCustomRecordingOutput>
 	Create(CefRefPtr<CefValue> input);
