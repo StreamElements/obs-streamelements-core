@@ -65,6 +65,7 @@ SerializeObsAudioTracks(StreamElementsAudioCompositionBase *composition,
 
 		sprintf(stringBuffer, "Track%dName", i + 1);
 
+		// This might apply not for "SimpleOutput", but we have a default fallback below
 		auto nameStr = config_get_string(obs_frontend_get_profile_config(),
 					    advOut ? "AdvOut" : "SimpleOutput",
 					    stringBuffer);
