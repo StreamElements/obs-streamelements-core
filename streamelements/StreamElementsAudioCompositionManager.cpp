@@ -104,7 +104,7 @@ void StreamElementsAudioCompositionManager::DeserializeComposition(
 	if (!root->HasKey("name") || root->GetType("name") != VTYPE_STRING)
 		return;
 
-	if (!root->HasKey("streamingAudioEncoders"))
+	if (!root->HasKey("streamingAudioEncoder"))
 		return;
 
 	std::string id = root->GetString("id");
@@ -116,13 +116,13 @@ void StreamElementsAudioCompositionManager::DeserializeComposition(
 		auto recordingAudioEncoders = CefValue::Create();
 		recordingAudioEncoders->SetNull();
 
-		if (root->HasKey("recordingAudioEncoders"))
+		if (root->HasKey("recordingAudioEncoder"))
 			recordingAudioEncoders =
-				root->GetValue("recordingAudioEncoders");
+				root->GetValue("recordingAudioEncoder");
 
 		auto composition = StreamElementsCustomAudioComposition::Create(
 			id, root->GetString("name"),
-			root->GetValue("streamingAudioEncoders"),
+			root->GetValue("streamingAudioEncoder"),
 			recordingAudioEncoders);
 
 		if (!composition)

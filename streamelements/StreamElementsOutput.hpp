@@ -154,6 +154,7 @@ public:
 		} else {
 			m_bindToIP = "";
 		}
+
 	}
 
 	virtual ~StreamElementsCustomStreamingOutput()
@@ -304,7 +305,8 @@ public:
 		: StreamElementsOutputBase(id, name, RecordingOutput, None,
 					   videoComposition, audioComposition,
 					   auxData),
-		  m_recordingSettings(recordingSettings)
+		  m_recordingSettings(recordingSettings),
+		  m_audioTracks(audioTracks)
 	{
 	}
 

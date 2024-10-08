@@ -14,6 +14,7 @@ SerializeObsAudioEncoders(StreamElementsAudioCompositionBase *composition,
 {
 	auto info = composition->GetCompositionInfo(nullptr);
 
+	/*
 	auto streamingAudioEncoders = CefListValue::Create();
 	for (size_t i = 0;; ++i) {
 		auto encoder = info->GetStreamingAudioEncoder(i);
@@ -26,9 +27,19 @@ SerializeObsAudioEncoders(StreamElementsAudioCompositionBase *composition,
 	}
 
 	root->SetList("streamingAudioEncoders", streamingAudioEncoders);
+	*/
+
+	if (info->GetStreamingAudioEncoder(0)) {
+		root->SetDictionary(
+			"streamingAudioEncoder",
+			SerializeObsEncoder(info->GetStreamingAudioEncoder(0)));
+	} else {
+		root->SetNull("streamingAudioEncoder");
+	}
 
 	// Recording
 
+	/*
 	bool hasDifferentAudioEncoder = false;
 	auto recordingAudioEncoders = CefListValue::Create();
 	for (size_t i = 0;; ++i) {
@@ -46,6 +57,15 @@ SerializeObsAudioEncoders(StreamElementsAudioCompositionBase *composition,
 
 	if (hasDifferentAudioEncoder)
 		root->SetList("recordingAudioEncoders", recordingAudioEncoders);
+	*/
+
+	if (info->GetRecordingAudioEncoder(0)) {
+		root->SetDictionary(
+			"recordingAudioEncoder",
+			SerializeObsEncoder(info->GetRecordingAudioEncoder(0)));
+	} else {
+		root->SetNull("recordingAudioEncoder");
+	}
 }
 
 static void

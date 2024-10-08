@@ -785,6 +785,10 @@ std::shared_ptr <StreamElementsCustomStreamingOutput> StreamElementsCustomStream
 		return nullptr;
 	}
 
+	if (!audioComposition) {
+		return nullptr;
+	}
+
 	// Streaming service
 	obs_service_t *service = obs_service_create(
 		"rtmp_custom", "default_service", NULL, NULL);
