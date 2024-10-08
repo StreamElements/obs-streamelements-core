@@ -48,6 +48,43 @@ SerializeObsAudioEncoders(StreamElementsAudioCompositionBase *composition,
 		root->SetList("recordingAudioEncoders", recordingAudioEncoders);
 }
 
+static void
+SerializeObsAudioTracks(StreamElementsAudioCompositionBase *composition,
+			CefRefPtr<CefDictionaryValue> &root)
+{
+	const char *mode = config_get_string(obs_frontend_get_profile_config(),
+					     "Output", "Mode");
+	bool advOut = stricmp(mode, "Advanced") == 0;
+
+	auto audioTracks = CefListValue::Create();
+
+	char stringBuffer[128];
+
+	for (int i = 0; i < MAX_AUDIO_MIXES; ++i) {
+		auto track = CefDictionaryValue::Create();
+
+		sprintf(stringBuffer, "Track%dName", i + 1);
+
+		auto nameStr = config_get_string(obs_frontend_get_profile_config(),
+					    advOut ? "AdvOut" : "SimpleOutput",
+					    stringBuffer);
+
+		track->SetInt("id", i);
+
+		if (nameStr && strlen(nameStr) > 0) {
+			track->SetString("name", nameStr);
+		} else {
+			sprintf(stringBuffer, "Track %d", i + 1);
+
+			track->SetString("name", stringBuffer);
+		}
+
+		audioTracks->SetDictionary(audioTracks->GetSize(), track);
+	}
+
+	root->SetList("audioTracks", audioTracks);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Composition base
 ////////////////////////////////////////////////////////////////////////////////
@@ -136,6 +173,7 @@ void StreamElementsObsNativeAudioComposition::SerializeComposition(
 	root->SetBool("canRemove", CanRemove());
 
 	SerializeObsAudioEncoders(this, root);
+	SerializeObsAudioTracks(this, root);
 
 	output->SetDictionary(root);
 }
@@ -302,6 +340,7 @@ void StreamElementsCustomAudioComposition::SerializeComposition(
 	root->SetBool("canRemove", this->CanRemove());
 
 	SerializeObsAudioEncoders(this, root);
+	SerializeObsAudioTracks(this, root);
 
 	output->SetDictionary(root);
 }

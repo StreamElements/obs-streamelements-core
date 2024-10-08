@@ -889,7 +889,6 @@ std::vector<uint32_t> StreamElementsObsNativeStreamingOutput::GetAudioTracks()
 			1;
 
 		result.push_back(streamTrack);
-
 	} else {
 		result.push_back(0);
 	}
@@ -954,7 +953,11 @@ std::vector<uint32_t> StreamElementsObsNativeRecordingOutput::GetAudioTracks()
 				    advOut ? "AdvOut" : "SimpleOutput",
 				    "RecTracks");
 
-	result.push_back(tracks);
+	for (size_t i = 0; i < MAX_AUDIO_MIXES; ++i) {
+		if (tracks & (1 << i)) {
+			result.push_back(i);
+		}
+	}
 
 	return result;
 }
