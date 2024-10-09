@@ -2590,12 +2590,31 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("getAllAudioCompositions");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetAudioCompositionManager()
+			->SerializeAllCompositions(result);
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("removeVideoCompositionsByIds");
 	{
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetVideoCompositionManager()
 				->RemoveCompositionsByIds(args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeAudioCompositionsByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetAudioCompositionManager()
+				->RemoveCompositionsByIds(args->GetValue(0),
+							  result);
 		}
 	}
 	API_HANDLER_END();
@@ -2611,11 +2630,33 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("addAudioComposition");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetAudioCompositionManager()
+				->DeserializeComposition(args->GetValue(0),
+							 result);
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("setVideoCompositionProperties");
 	{
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetVideoCompositionManager()
+				->DeserializeExistingCompositionProperties(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setAudioCompositionProperties");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetAudioCompositionManager()
 				->DeserializeExistingCompositionProperties(
 					args->GetValue(0), result);
 		}

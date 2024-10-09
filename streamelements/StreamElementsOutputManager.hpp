@@ -2,6 +2,7 @@
 
 #include "StreamElementsOutput.hpp"
 #include "StreamElementsVideoCompositionManager.hpp"
+#include "StreamElementsAudioCompositionManager.hpp"
 
 class StreamElementsOutputManager {
 private:
@@ -9,11 +10,17 @@ private:
 	std::map<StreamElementsOutputBase::ObsOutputType,
 		 std::map<std::string, std::shared_ptr<StreamElementsOutputBase>>>
 		m_map;
-	std::shared_ptr<StreamElementsVideoCompositionManager> m_compositionManager;
+	std::shared_ptr<StreamElementsVideoCompositionManager>
+		m_videoCompositionManager;
+	std::shared_ptr<StreamElementsAudioCompositionManager>
+		m_audioCompositionManager;
 
 public:
 	StreamElementsOutputManager(
-		std::shared_ptr<StreamElementsVideoCompositionManager> compositionManager);
+		std::shared_ptr<StreamElementsVideoCompositionManager>
+			videoCompositionManager,
+		std::shared_ptr<StreamElementsAudioCompositionManager>
+			audioCompositionManager);
 	~StreamElementsOutputManager();
 
 public:

@@ -7,10 +7,10 @@
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsScenesListWidgetManager.hpp"
 
-class StreamElementsCompositionEventListener {
+class StreamElementsVideoCompositionEventListener {
 public:
-	StreamElementsCompositionEventListener() {}
-	~StreamElementsCompositionEventListener() {}
+	StreamElementsVideoCompositionEventListener() {}
+	~StreamElementsVideoCompositionEventListener() {}
 
 public:
 	//virtual void StopOutputRequested();
@@ -21,12 +21,12 @@ public:
 	class CompositionInfo {
 	private:
 		std::shared_ptr<StreamElementsVideoCompositionBase> m_owner;
-		StreamElementsCompositionEventListener *m_listener;
+		StreamElementsVideoCompositionEventListener *m_listener;
 
 	public:
 		CompositionInfo(
 			std::shared_ptr<StreamElementsVideoCompositionBase> owner,
-			StreamElementsCompositionEventListener* listener)
+			StreamElementsVideoCompositionEventListener* listener)
 			: m_owner(owner), m_listener(listener)
 		{
 			m_owner->AddRef();
@@ -48,15 +48,10 @@ public:
 		virtual bool IsObsNative() = 0;
 
 		virtual obs_encoder_t *GetStreamingVideoEncoder() = 0;
-		virtual obs_encoder_t *
-		GetStreamingAudioEncoder(size_t index) = 0;
 
 		virtual obs_encoder_t *GetRecordingVideoEncoder() = 0;
-		virtual obs_encoder_t *
-		GetRecordingAudioEncoder(size_t index) = 0;
 
 		virtual video_t *GetVideo() = 0;
-		virtual audio_t *GetAudio() = 0;
 
 		virtual void GetVideoBaseDimensions(uint32_t *videoWidth,
 						    uint32_t *videoHeight) = 0;
@@ -93,7 +88,7 @@ public:
 	}
 
 	virtual std::shared_ptr<CompositionInfo>
-		GetCompositionInfo(StreamElementsCompositionEventListener* listener) = 0;
+		GetCompositionInfo(StreamElementsVideoCompositionEventListener* listener) = 0;
 
 private:
 	std::string m_id;
@@ -289,7 +284,7 @@ public:
 
 	virtual std::shared_ptr<
 		StreamElementsVideoCompositionBase::CompositionInfo>
-		GetCompositionInfo(StreamElementsCompositionEventListener* listener);
+		GetCompositionInfo(StreamElementsVideoCompositionEventListener* listener);
 
 	virtual bool CanRemove() { return false; }
 
@@ -381,7 +376,7 @@ public:
 
 	virtual std::shared_ptr<
 		StreamElementsVideoCompositionBase::CompositionInfo>
-	GetCompositionInfo(StreamElementsCompositionEventListener *listener);
+	GetCompositionInfo(StreamElementsVideoCompositionEventListener *listener);
 
 	virtual void SerializeComposition(CefRefPtr<CefValue> &output);
 

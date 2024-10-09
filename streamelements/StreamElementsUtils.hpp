@@ -423,3 +423,16 @@ SerializeObsEncoderProperties(std::string id, obs_data_t *settings = nullptr);
 
 uint32_t GetInt32FromAlignmentId(std::string alignment);
 std::string GetAlignmentIdFromInt32(uint32_t a);
+
+/* ========================================================= */
+
+void SerializeObsTransition(std::string videoCompositionId, obs_source_t *t,
+			    int durationMilliseconds,
+			    CefRefPtr<CefValue> &output);
+
+obs_source_t *GetExistingObsTransition(std::string lookupId);
+
+bool DeserializeObsTransition(CefRefPtr<CefValue> input, obs_source_t **t,
+			      int *durationMilliseconds, bool useExisting);
+
+CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e);

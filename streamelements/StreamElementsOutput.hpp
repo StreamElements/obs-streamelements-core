@@ -2,8 +2,11 @@
 
 #include <obs-frontend-api.h>
 #include "StreamElementsVideoComposition.hpp"
+#include "StreamElementsAudioComposition.hpp"
 
-class StreamElementsOutputBase : public StreamElementsCompositionEventListener {
+class StreamElementsOutputBase
+	: public StreamElementsVideoCompositionEventListener,
+	  public StreamElementsAudioCompositionEventListener {
 public:
 	enum ObsStateDependencyType {
 		Streaming,
@@ -23,6 +26,9 @@ private:
 	std::shared_ptr<StreamElementsVideoCompositionBase> m_videoComposition;
 	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
 		m_videoCompositionInfo;
+	std::shared_ptr<StreamElementsAudioCompositionBase> m_audioComposition;
+	std::shared_ptr<StreamElementsAudioCompositionBase::CompositionInfo>
+		m_audioCompositionInfo;
 	std::recursive_mutex m_mutex;
 
 	CefRefPtr<CefDictionaryValue> m_auxData;
@@ -41,6 +47,8 @@ public:
 		ObsStateDependencyType obsStateDependency,
 		std::shared_ptr<StreamElementsVideoCompositionBase>
 			videoComposition,
+		std::shared_ptr<StreamElementsAudioCompositionBase>
+			audioComposition,
 		CefRefPtr<CefDictionaryValue> auxData);
 	virtual ~StreamElementsOutputBase();
 
@@ -65,6 +73,8 @@ public:
 	virtual void
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) = 0;
 
+	virtual std::vector<uint32_t> GetAudioTracks() = 0;
+
 	virtual bool CanSplitRecordingOutput() { return false; }
 	virtual bool TriggerSplitRecordingOutput() { return false; }
 
@@ -75,7 +85,10 @@ protected:
 
 	virtual bool StartInternal(
 		std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
-			videoCompositionInfo) = 0;
+			videoCompositionInfo,
+		std::shared_ptr<
+			StreamElementsAudioCompositionBase::CompositionInfo>
+			audioCompositionInfo) = 0;
 	virtual void StopInternal() = 0;
 
 protected:
@@ -119,20 +132,29 @@ private:
 
 	std::string m_bindToIP;
 
+	std::vector<uint32_t> m_audioTracks = {0};
+
 public:
 	StreamElementsCustomStreamingOutput(
 		std::string id, std::string name,
-		std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition,
-		obs_service_t *service, const char *bindToIP,
-		CefRefPtr<CefDictionaryValue> auxData)
-		: StreamElementsOutputBase(id, name, StreamingOutput, Streaming, videoComposition, auxData),
-		  m_service(service)
+		std::shared_ptr<StreamElementsVideoCompositionBase>
+			videoComposition,
+		std::shared_ptr<StreamElementsAudioCompositionBase>
+			audioComposition,
+		std::vector<uint32_t> audioTracks, obs_service_t *service,
+		const char *bindToIP, CefRefPtr<CefDictionaryValue> auxData)
+		: StreamElementsOutputBase(id, name, StreamingOutput, Streaming,
+					   videoComposition, audioComposition,
+					   auxData),
+		  m_service(service),
+		  m_audioTracks(audioTracks)
 	{
 		if (bindToIP) {
 			m_bindToIP = bindToIP;
 		} else {
 			m_bindToIP = "";
 		}
+
 	}
 
 	virtual ~StreamElementsCustomStreamingOutput()
@@ -148,6 +170,11 @@ public:
 	virtual void
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
 
+	virtual std::vector<uint32_t> GetAudioTracks() override
+	{
+		return m_audioTracks;
+	}
+
 	static std::shared_ptr<StreamElementsCustomStreamingOutput>
 	Create(CefRefPtr<CefValue> input);
 
@@ -156,8 +183,13 @@ public:
 protected:
 	virtual obs_output_t *GetOutput() override { return m_output; }
 
-	virtual bool
-		StartInternal(std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo> videoCompositionInfo);
+	virtual bool StartInternal(
+		std::shared_ptr<
+			StreamElementsVideoCompositionBase::CompositionInfo>
+			videoCompositionInfo,
+		std::shared_ptr<
+			StreamElementsAudioCompositionBase::CompositionInfo>
+			audioCompositionInfo);
 	virtual void StopInternal();
 };
 
@@ -165,8 +197,11 @@ class StreamElementsObsNativeStreamingOutput : public StreamElementsOutputBase {
 public:
 	StreamElementsObsNativeStreamingOutput(
 		std::string id, std::string name,
-		std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition)
-		: StreamElementsOutputBase(id, name, StreamingOutput, Streaming, videoComposition, CefDictionaryValue::Create())
+		std::shared_ptr<StreamElementsVideoCompositionBase>
+			videoComposition,
+		std::shared_ptr<StreamElementsAudioCompositionBase>
+			audioComposition)
+		: StreamElementsOutputBase(id, name, StreamingOutput, Streaming, videoComposition, audioComposition, CefDictionaryValue::Create())
 	{
 	}
 
@@ -187,11 +222,16 @@ protected:
 
 	virtual bool StartInternal(
 		std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
-			videoCompositionInfo) override;
+			videoCompositionInfo,
+		std::shared_ptr<
+			StreamElementsAudioCompositionBase::CompositionInfo>
+			audioCompositionInfo) override;
 	virtual void StopInternal() override;
 
 	virtual void
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
+
+	virtual std::vector<uint32_t> GetAudioTracks() override;
 };
 
 class StreamElementsObsNativeRecordingOutput : public StreamElementsOutputBase {
@@ -199,9 +239,11 @@ public:
 	StreamElementsObsNativeRecordingOutput(
 		std::string id, std::string name,
 		std::shared_ptr<StreamElementsVideoCompositionBase>
-			videoComposition)
+			videoComposition,
+		std::shared_ptr<StreamElementsAudioCompositionBase>
+			audioComposition)
 		: StreamElementsOutputBase(id, name, RecordingOutput, Recording,
-					   videoComposition,
+					   videoComposition, audioComposition,
 					   CefDictionaryValue::Create())
 	{
 	}
@@ -225,19 +267,21 @@ protected:
 	virtual bool
 	StartInternal(std::shared_ptr<
 		      StreamElementsVideoCompositionBase::CompositionInfo>
-			      videoCompositionInfo) override;
+			videoCompositionInfo,
+		std::shared_ptr<
+			StreamElementsAudioCompositionBase::CompositionInfo>
+			audioCompositionInfo) override;
 	virtual void StopInternal() override;
 
 	virtual void
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
+
+	virtual std::vector<uint32_t> GetAudioTracks() override;
 };
 
 class StreamElementsCustomRecordingOutput : public StreamElementsOutputBase {
 private:
 	std::recursive_mutex m_mutex;
-
-	std::shared_ptr<StreamElementsVideoCompositionBase>
-		m_videoComposition = nullptr;
 
 	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
 		m_videoCompositionInfo = nullptr;
@@ -246,17 +290,23 @@ private:
 
 	CefRefPtr<CefDictionaryValue> m_recordingSettings = CefDictionaryValue::Create();
 
+	std::vector<uint32_t> m_audioTracks;
+
 public:
 	StreamElementsCustomRecordingOutput(
 		std::string id, std::string name,
 		CefRefPtr<CefDictionaryValue> recordingSettings,
 		std::shared_ptr<StreamElementsVideoCompositionBase>
 			videoComposition,
+		std::shared_ptr<StreamElementsAudioCompositionBase>
+			audioComposition,
+		std::vector<uint32_t> audioTracks,
 		CefRefPtr<CefDictionaryValue> auxData)
 		: StreamElementsOutputBase(id, name, RecordingOutput, None,
-					   videoComposition, auxData),
+					   videoComposition, audioComposition,
+					   auxData),
 		  m_recordingSettings(recordingSettings),
-		  m_videoComposition(videoComposition)
+		  m_audioTracks(audioTracks)
 	{
 	}
 
@@ -269,6 +319,11 @@ public:
 
 	virtual void
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
+
+	virtual std::vector<uint32_t> GetAudioTracks() override
+	{
+		return m_audioTracks;
+	}
 
 	static std::shared_ptr<StreamElementsCustomRecordingOutput>
 	Create(CefRefPtr<CefValue> input);
@@ -284,6 +339,9 @@ protected:
 	virtual bool
 	StartInternal(std::shared_ptr<
 		      StreamElementsVideoCompositionBase::CompositionInfo>
-			      videoCompositionInfo);
+			videoCompositionInfo,
+		std::shared_ptr<
+			StreamElementsAudioCompositionBase::CompositionInfo>
+			audioCompositionInfo);
 	virtual void StopInternal();
 };

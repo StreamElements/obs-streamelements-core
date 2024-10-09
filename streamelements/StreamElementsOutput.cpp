@@ -7,6 +7,45 @@
 
 #include <ctime>
 
+static std::vector<uint32_t> DeserializeAudioTracks(CefRefPtr<CefDictionaryValue> rootDict)
+{
+	std::vector<uint32_t> result;
+
+	if (rootDict->HasKey("audioTracks") &&
+	    rootDict->GetType("audioTracks") == VTYPE_LIST) {
+		auto list = rootDict->GetList("audioTracks");
+
+		for (size_t i = 0; i < list->GetSize(); ++i) {
+			if (list->GetType(i) != VTYPE_INT)
+				continue;
+
+			auto trackIndex = list->GetInt(i);
+
+			if (trackIndex >= 0 && trackIndex < MAX_AUDIO_MIXES) {
+				bool hasValue = false;
+
+				for (auto it = result.cbegin();
+				     it != result.cend(); ++it) {
+					if (*it == trackIndex) {
+						hasValue = true;
+						break;
+					}
+				}
+
+				if (!hasValue) {
+					result.push_back(trackIndex);
+				}
+			}
+		}
+	}
+
+	if (!result.size()) {
+		result.push_back(0);
+	}
+
+	return result;
+}
+
 static void dispatch_list_change_event(StreamElementsOutputBase *output)
 {
 	if (output->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
@@ -286,11 +325,15 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 	d->SetString("id", GetId());
 	d->SetString("name", GetName());
 	d->SetString("videoCompositionId", m_videoComposition->GetId());
+	d->SetString("audioCompositionId", m_audioComposition->GetId());
 	d->SetBool("isEnabled", IsEnabled());
 	d->SetBool("isActive", IsActive());
 	d->SetBool("canDisable", CanDisable());
 	d->SetBool("canRemove", !IsObsNativeOutput());
-	d->SetBool("isObsNativeVideoComposition", m_videoComposition->IsObsNativeComposition());
+	d->SetBool("isObsNativeVideoComposition",
+		   m_videoComposition->IsObsNativeComposition());
+	d->SetBool("isObsNativeAudioComposition",
+		   m_audioComposition->IsObsNativeComposition());
 	d->SetBool("isObsNativeOutput", IsObsNativeOutput());
 
 	if (m_error.size()) {
@@ -305,7 +348,7 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 
 	auto obs_output = GetOutput();
 
-	if (output && IsActive()) {
+	if (obs_output && IsActive()) {
 		auto stats = CefDictionaryValue::Create();
 
 		stats->SetBool("canPause", obs_output_can_pause(obs_output));
@@ -341,18 +384,24 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 
 	d->SetDictionary("auxiliaryData", m_auxData);
 
-	auto streamingSettings = CefValue::Create();
+	auto audioTracks = CefListValue::Create();
+	for (auto audioTrackIndex : GetAudioTracks()) {
+		audioTracks->SetInt(audioTracks->GetSize(), audioTrackIndex);
+	}
+	d->SetList("audioTracks", audioTracks);
 
-	SerializeOutputSettings(streamingSettings);
+	auto outputSettings = CefValue::Create();
+
+	SerializeOutputSettings(outputSettings);
 
 	switch (m_obsOutputType) {
 	case StreamingOutput:
 		d->SetString("type", "streaming");
-		d->SetValue("streamingSettings", streamingSettings);
+		d->SetValue("streamingSettings", outputSettings);
 		break;
 	case RecordingOutput:
 		d->SetString("type", "recording");
-		d->SetValue("recordingSettings", streamingSettings);
+		d->SetValue("recordingSettings", outputSettings);
 		break;
 	default:
 		throw std::invalid_argument("Unknown obsOutputType value");
@@ -365,17 +414,20 @@ StreamElementsOutputBase::StreamElementsOutputBase(
 	std::string id, std::string name, ObsOutputType obsOutputType,
 	ObsStateDependencyType obsStateDependency,
 	std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition,
+	std::shared_ptr<StreamElementsAudioCompositionBase> audioComposition,
 	CefRefPtr<CefDictionaryValue> auxData)
 	: m_id(id),
 	  m_name(name),
 	  m_obsOutputType(obsOutputType),
 	  m_obsStateDependency(obsStateDependency),
 	  m_videoComposition(videoComposition),
+	  m_audioComposition(audioComposition),
 	  m_enabled(false)
 {
 	m_auxData = auxData.get() ? auxData : CefDictionaryValue::Create();
 
 	m_videoCompositionInfo = videoComposition->GetCompositionInfo(this);
+	m_audioCompositionInfo = audioComposition->GetCompositionInfo(this);
 
 	m_enabled = IsObsNativeOutput();
 
@@ -463,7 +515,7 @@ bool StreamElementsOutputBase::Start()
 	if (!CanStart())
 		return false;
 
-	return StartInternal(m_videoCompositionInfo);
+	return StartInternal(m_videoCompositionInfo, m_audioCompositionInfo);
 }
 
 void StreamElementsOutputBase::ConnectOutputEvents()
@@ -545,7 +597,9 @@ bool StreamElementsCustomStreamingOutput::CanDisable()
 
 bool StreamElementsCustomStreamingOutput::StartInternal(
 	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
-		videoCompositionInfo)
+		videoCompositionInfo,
+	std::shared_ptr<StreamElementsAudioCompositionBase::CompositionInfo>
+		audioCompositionInfo)
 {
 	if (!videoCompositionInfo)
 		return false;
@@ -569,9 +623,10 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 			m_output,
 			videoCompositionInfo->GetStreamingVideoEncoder());
 
-		for (size_t i = 0;; ++i) {
+		for (size_t i = 0; i < m_audioTracks.size(); ++i) {
 			auto encoder =
-				videoCompositionInfo->GetStreamingAudioEncoder(i);
+				audioCompositionInfo->GetStreamingAudioEncoder(
+					m_audioTracks[i]);
 
 			if (!encoder)
 				break;
@@ -674,7 +729,15 @@ std::shared_ptr <StreamElementsCustomStreamingOutput> StreamElementsCustomStream
 					       VTYPE_STRING
 			? rootDict->GetString("videoCompositionId")
 			: "");
-	bool isEnabled = rootDict->HasKey("isEnabled") && rootDict->GetType("isEnabled") == VTYPE_BOOL
+	std::string audioCompositionId =
+		(rootDict->HasKey("audioCompositionId") &&
+				 rootDict->GetType("audioCompositionId") ==
+					 VTYPE_STRING
+			 ? rootDict->GetString("audioCompositionId")
+			 : "");
+	bool isEnabled = rootDict->HasKey("isEnabled") &&
+					 rootDict->GetType("isEnabled") ==
+						 VTYPE_BOOL
 				 ? rootDict->GetBool("isEnabled")
 				 : true;
 
@@ -699,6 +762,11 @@ std::shared_ptr <StreamElementsCustomStreamingOutput> StreamElementsCustomStream
 			->GetVideoCompositionManager()
 			->GetVideoCompositionById(videoCompositionId);
 
+	auto audioComposition =
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetAudioCompositionManager()
+			->GetAudioCompositionById(audioCompositionId);
+
 	if (!videoComposition.get() && !videoCompositionId.size()) {
 		videoComposition =
 			StreamElementsGlobalStateManager::GetInstance()
@@ -706,8 +774,18 @@ std::shared_ptr <StreamElementsCustomStreamingOutput> StreamElementsCustomStream
 				->GetObsNativeVideoComposition();
 	}
 
+	if (!audioComposition.get() && !audioCompositionId.size()) {
+		audioComposition =
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetAudioCompositionManager()
+				->GetObsNativeAudioComposition();
+	}
 
 	if (!videoComposition) {
+		return nullptr;
+	}
+
+	if (!audioComposition) {
 		return nullptr;
 	}
 
@@ -733,8 +811,11 @@ std::shared_ptr <StreamElementsCustomStreamingOutput> StreamElementsCustomStream
 
 	auto bindToIP = "";
 
+	auto audioTracks = DeserializeAudioTracks(rootDict);
+
 	auto result = std::make_shared<StreamElementsCustomStreamingOutput>(
-		id, name, videoComposition, service, bindToIP, auxData);
+		id, name, videoComposition, audioComposition, audioTracks,
+		service, bindToIP, auxData);
 
 	result->SetEnabled(isEnabled);
 
@@ -747,7 +828,9 @@ std::shared_ptr <StreamElementsCustomStreamingOutput> StreamElementsCustomStream
 
 bool StreamElementsObsNativeStreamingOutput::StartInternal(
 	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
-	videoCompositionInfo)
+		videoCompositionInfo,
+	std::shared_ptr<StreamElementsAudioCompositionBase::CompositionInfo>
+		audioCompositionInfo)
 {
 	// NOP: This is managed by the OBS front-end
 
@@ -795,13 +878,38 @@ void StreamElementsObsNativeStreamingOutput::SerializeOutputSettings(
 	output->SetDictionary(d);
 }
 
+std::vector<uint32_t> StreamElementsObsNativeStreamingOutput::GetAudioTracks()
+{
+	std::vector<uint32_t> result;
+
+	const char *mode = config_get_string(obs_frontend_get_profile_config(),
+					     "Output", "Mode");
+	bool advOut = stricmp(mode, "Advanced") == 0;
+
+	if (advOut) {
+		int streamTrack =
+			config_get_int(obs_frontend_get_profile_config(),
+				       "AdvOut", "TrackIndex") -
+			1;
+
+		result.push_back(streamTrack);
+	} else {
+		result.push_back(0);
+	}
+
+
+	return result;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // StreamElementsObsNativeRecordingOutput
 ////////////////////////////////////////////////////////////////////////////////
 
 bool StreamElementsObsNativeRecordingOutput::StartInternal(
 	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
-		videoCompositionInfo)
+		videoCompositionInfo,
+	std::shared_ptr<StreamElementsAudioCompositionBase::CompositionInfo>
+		audioCompositionInfo)
 {
 	// NOP: This is managed by the OBS front-end
 
@@ -835,6 +943,27 @@ void StreamElementsObsNativeRecordingOutput::SerializeOutputSettings(
 	obs_output_release(obs_output);
 
 	output->SetDictionary(d);
+}
+
+std::vector<uint32_t> StreamElementsObsNativeRecordingOutput::GetAudioTracks()
+{
+	std::vector<uint32_t> result;
+
+	const char *mode = config_get_string(obs_frontend_get_profile_config(),
+					     "Output", "Mode");
+	bool advOut = stricmp(mode, "Advanced") == 0;
+
+	int tracks = config_get_int(obs_frontend_get_profile_config(),
+				    advOut ? "AdvOut" : "SimpleOutput",
+				    "RecTracks");
+
+	for (size_t i = 0; i < MAX_AUDIO_MIXES; ++i) {
+		if (tracks & (1 << i)) {
+			result.push_back(i);
+		}
+	}
+
+	return result;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -883,7 +1012,9 @@ bool StreamElementsCustomRecordingOutput::TriggerSplitRecordingOutput()
 
 bool StreamElementsCustomRecordingOutput::StartInternal(
 	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
-		videoCompositionInfo)
+		videoCompositionInfo,
+	std::shared_ptr<StreamElementsAudioCompositionBase::CompositionInfo>
+		audioCompositionInfo)
 {
 	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
 
@@ -1047,10 +1178,10 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 			m_output,
 			videoCompositionInfo->GetRecordingVideoEncoder());
 
-		for (size_t i = 0;; ++i) {
+		for (size_t i = 0; i < m_audioTracks.size(); ++i) {
 			auto encoder =
-				videoCompositionInfo->GetRecordingAudioEncoder(
-					i);
+				audioCompositionInfo->GetRecordingAudioEncoder(
+					m_audioTracks[i]);
 
 			if (!encoder)
 				break;
@@ -1147,6 +1278,12 @@ StreamElementsCustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 					 VTYPE_STRING
 			 ? rootDict->GetString("videoCompositionId")
 			 : "");
+	std::string audioCompositionId =
+		(rootDict->HasKey("audioCompositionId") &&
+				 rootDict->GetType("audioCompositionId") ==
+					 VTYPE_STRING
+			 ? rootDict->GetString("audioCompositionId")
+			 : "");
 	bool isEnabled = rootDict->HasKey("isEnabled") &&
 					 rootDict->GetType("isEnabled") ==
 						 VTYPE_BOOL
@@ -1157,6 +1294,11 @@ StreamElementsCustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetVideoCompositionManager()
 			->GetVideoCompositionById(videoCompositionId);
+
+	auto audioComposition =
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetAudioCompositionManager()
+			->GetAudioCompositionById(audioCompositionId);
 
 	auto recordingSettings = CefDictionaryValue::Create();
 
@@ -1173,12 +1315,27 @@ StreamElementsCustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 				->GetObsNativeVideoComposition();
 	}
 
+	if (!audioComposition.get() && !audioCompositionId.size()) {
+		audioComposition =
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetAudioCompositionManager()
+				->GetObsNativeAudioComposition();
+	}
+
 	if (!videoComposition.get()) {
 		return nullptr;
 	}
 
+	if (!audioComposition.get()) {
+		return nullptr;
+	}
+
+	auto audioTracks = DeserializeAudioTracks(rootDict);
+
 	auto result = std::make_shared<StreamElementsCustomRecordingOutput>(
-		id, name, recordingSettings, videoComposition, auxData);
+		id, name, recordingSettings, videoComposition, audioComposition,
+		audioTracks,
+		auxData);
 
 	result->SetEnabled(isEnabled);
 

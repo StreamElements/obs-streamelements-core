@@ -8,7 +8,7 @@
 
 #include "canvas-scan.hpp"
 
-class StreamElementsVideoCompositionViewWidget : public QWidget, public StreamElementsCompositionEventListener
+class StreamElementsVideoCompositionViewWidget : public QWidget, public StreamElementsVideoCompositionEventListener
 {
 public:
 	class VisualElementBase {

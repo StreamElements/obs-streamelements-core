@@ -385,9 +385,11 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 			m_videoCompositionManager = std::make_shared<
 				StreamElementsVideoCompositionManager>();
+			m_audioCompositionManager = std::make_shared<
+				StreamElementsAudioCompositionManager>();
 			m_outputManager =
 				std::make_shared<StreamElementsOutputManager>(
-					m_videoCompositionManager);
+					m_videoCompositionManager, m_audioCompositionManager);
 
 						m_appStateListener = new ApplicationStateListener();
 			m_themeChangeListener = new ThemeChangeListener();
@@ -591,6 +593,7 @@ void StreamElementsGlobalStateManager::Shutdown()
 
 			m_outputManager = nullptr;
 			m_videoCompositionManager = nullptr;
+			m_audioCompositionManager = nullptr;
 
 			delete m_menuManager;
 			m_menuManager = nullptr;
