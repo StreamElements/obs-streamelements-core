@@ -80,6 +80,7 @@ public:
 		//////////////////////////////////////////////////////
 
 		modulesOfInterest.push_back("obs-streamelements-core");
+		modulesOfInterest.push_back("obs-streamelements");
 
 		auto httpResponseReceivedCallback = [&](char *data,
 							void *userdata,
@@ -1001,7 +1002,14 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
 		L"OBS_Live", L"obs-streamelements-core", plugin_version.c_str(),
 		app_id.c_str(),
 		MDSF_CUSTOMEXCEPTIONFILTER | MDSF_USEGUARDMEMORY |
-			MDSF_LOGFILE | MDSF_LOG_VERBOSE | MDSF_NONINTERACTIVE);
+			MDSF_LOGFILE | MDSF_LOG_VERBOSE | MDSF_NONINTERACTIVE |
+			MDSF_DETECTHANGS);
+
+	// The following calls add support for collecting crashes for abort(), vectored exceptions, out of memory,
+	// pure virtual function calls, and for invalid parameters for OS functions.
+	// These calls should be used for each module that links with a separate copy of the CRT.
+	SetGlobalCRTExceptionBehavior();
+	SetPerThreadCRTExceptionBehavior(); // This call needed in each thread of your app
 
 	// Set optional default values for user, email, and user description of the crash.
 	s_mdSender->setDefaultUserName(L"Unknown");

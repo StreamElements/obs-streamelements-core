@@ -2851,6 +2851,26 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		UNUSED_PARAMETER(result);
 	}
 	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("deadlockProgram");
+	{
+		QtPostTask([]() -> void {
+			// Deadlock
+			os_event_t *event = nullptr;
+			os_event_init(&event, OS_EVENT_TYPE_AUTO);
+
+			os_event_wait(event);
+			os_event_wait(event);
+			os_event_wait(event);
+			os_event_wait(event);
+			os_event_wait(event);
+
+			os_event_destroy(event);
+		});
+
+		UNUSED_PARAMETER(result);
+	}
+	API_HANDLER_END();
 }
 
 bool StreamElementsApiMessageHandler::InvokeHandler::InvokeApiCallAsync(
