@@ -190,7 +190,7 @@ protected:
 
 		if (!hasMatchModuleOfInterest) {
 			for (auto filter : modulesOfInterest) {
-				if (stricmp(filter.c_str(), entry.moduleName)) {
+				if (stricmp(filter.c_str(), entry.moduleName) == 0) {
 					hasMatchModuleOfInterest = true;
 
 					break;
@@ -937,29 +937,13 @@ static LONG CALLBACK CustomExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
 				     pExceptionInfo->ContextRecord);
 
 	if (InterlockedIncrement(&s_insideExceptionFilter) == 1L) {
-		if (s_prevExceptionFilter) {
-			s_prevExceptionFilter(pExceptionInfo);
-		}
-
 		if (s_mdSender && (s_stackWalker->hasMatchModuleOfInterest)) {
 			s_mdSender->unhandledExceptionHandler(pExceptionInfo);
 		}
 
-		int ret = MessageBoxA(NULL, CRASH_MESSAGE, "OBS has crashed!",
-				      MB_YESNO | MB_ICONERROR | MB_TASKMODAL);
-
-		if (ret == IDYES) {
-			size_t len = s_crashDumpFromObs.size();
-
-			HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE, len);
-			memcpy(GlobalLock(mem), s_crashDumpFromObs.c_str(),
-			       len);
-			GlobalUnlock(mem);
-
-			OpenClipboard(0);
-			EmptyClipboard();
-			SetClipboardData(CF_TEXT, mem);
-			CloseClipboard();
+		if (s_prevExceptionFilter) {
+			// This will exit(0)
+			s_prevExceptionFilter(pExceptionInfo);
 		}
 
 		exit(-1);
@@ -1008,8 +992,8 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
 	// The following calls add support for collecting crashes for abort(), vectored exceptions, out of memory,
 	// pure virtual function calls, and for invalid parameters for OS functions.
 	// These calls should be used for each module that links with a separate copy of the CRT.
-	SetGlobalCRTExceptionBehavior();
-	SetPerThreadCRTExceptionBehavior(); // This call needed in each thread of your app
+	//SetGlobalCRTExceptionBehavior();
+	//SetPerThreadCRTExceptionBehavior(); // This call needed in each thread of your app
 
 	// Set optional default values for user, email, and user description of the crash.
 	s_mdSender->setDefaultUserName(L"Unknown");
