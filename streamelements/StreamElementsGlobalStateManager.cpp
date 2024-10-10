@@ -346,6 +346,12 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			m_widgetManager =
 				new StreamElementsBrowserWidgetManager(
 					obs_main_window);
+
+			m_videoCompositionManager = std::make_shared<
+				StreamElementsVideoCompositionManager>();
+			m_audioCompositionManager = std::make_shared<
+				StreamElementsAudioCompositionManager>();
+
 			m_obsSceneManager =
 				new StreamElementsObsSceneManager(
 					obs_main_window);
@@ -383,10 +389,6 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 				new WindowStateChangeEventFilter(
 					mainWindow());
 
-			m_videoCompositionManager = std::make_shared<
-				StreamElementsVideoCompositionManager>();
-			m_audioCompositionManager = std::make_shared<
-				StreamElementsAudioCompositionManager>();
 			m_outputManager =
 				std::make_shared<StreamElementsOutputManager>(
 					m_videoCompositionManager, m_audioCompositionManager);
@@ -591,6 +593,9 @@ void StreamElementsGlobalStateManager::Shutdown()
 			delete m_widgetManager;
 			m_widgetManager = nullptr;
 
+			delete m_obsSceneManager;
+			m_obsSceneManager = nullptr;
+
 			m_outputManager = nullptr;
 			m_videoCompositionManager = nullptr;
 			m_audioCompositionManager = nullptr;
@@ -599,8 +604,6 @@ void StreamElementsGlobalStateManager::Shutdown()
 			m_menuManager = nullptr;
 			delete m_hotkeyManager;
 			m_hotkeyManager = nullptr;
-			delete m_obsSceneManager;
-			m_obsSceneManager = nullptr;
 			delete m_externalSceneDataProviderManager;
 			m_externalSceneDataProviderManager = nullptr;
 			delete m_httpClient;
