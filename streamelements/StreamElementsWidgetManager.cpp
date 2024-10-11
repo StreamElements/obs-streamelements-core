@@ -237,9 +237,13 @@ bool StreamElementsWidgetManager::AddDockWidget(
 		std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
 		QtPostTask([]() -> void {
-			StreamElementsGlobalStateManager::GetInstance()
-				->GetMenuManager()
-				->Update();
+			auto menuManager =
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetMenuManager();
+
+			if (!menuManager)
+				return;
+
 			StreamElementsGlobalStateManager::GetInstance()
 				->PersistState();
 		});
