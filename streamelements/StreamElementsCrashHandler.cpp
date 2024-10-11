@@ -986,19 +986,20 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
 		L"OBS_Live", L"obs-streamelements-core", plugin_version.c_str(),
 		app_id.c_str(),
 		MDSF_CUSTOMEXCEPTIONFILTER | MDSF_USEGUARDMEMORY |
-			MDSF_LOGFILE | MDSF_LOG_VERBOSE | MDSF_NONINTERACTIVE |
+			MDSF_LOGFILE | MDSF_LOG_VERBOSE |
+			/* MDSF_NONINTERACTIVE |*/ // Doing this interactively apparently adds more reliability to actually delivering the crash reports to bugsplat...
 			MDSF_DETECTHANGS);
 
 	// The following calls add support for collecting crashes for abort(), vectored exceptions, out of memory,
 	// pure virtual function calls, and for invalid parameters for OS functions.
 	// These calls should be used for each module that links with a separate copy of the CRT.
-	//SetGlobalCRTExceptionBehavior();
-	//SetPerThreadCRTExceptionBehavior(); // This call needed in each thread of your app
+	SetGlobalCRTExceptionBehavior();
+	SetPerThreadCRTExceptionBehavior(); // This call needed in each thread of your app
 
 	// Set optional default values for user, email, and user description of the crash.
-	s_mdSender->setDefaultUserName(L"Unknown");
-	s_mdSender->setDefaultUserEmail(L"anonymous@user.com");
-	s_mdSender->setDefaultUserDescription(L"");
+	s_mdSender->setDefaultUserName(L"Anonymous");
+	s_mdSender->setDefaultUserEmail(L"");
+	s_mdSender->setDefaultUserDescription(L"OBS crashed. Please provide any additional information you might have here. What were you doing just before this happened?");
 	s_mdSender->setGuardByteBufferSize(1024 * 1024); // Allocate 1MB of guard buffer
 
 	s_mdSender->setCallback(BugSplatExceptionCallback);
