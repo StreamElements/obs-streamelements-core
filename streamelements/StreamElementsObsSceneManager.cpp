@@ -572,6 +572,8 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 					const int order = -1,
 					bool serializeDetails = true, void *my_data = nullptr)
 {
+	result->SetNull();
+
 	CefRefPtr<CefDictionaryValue> root = CefDictionaryValue::Create();
 
 	std::string sceneItemId = GetIdFromPointer(sceneitem);
@@ -581,13 +583,17 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 	StreamElementsVideoCompositionBase* videoComposition =
 		nullptr;
 
+	auto videoCompositionManager = StreamElementsGlobalStateManager::GetInstance()
+			   ->GetVideoCompositionManager();
+
+	if (!videoCompositionManager.get())
+		return;
+
 	if (my_data) {
 		videoComposition =
 			((StreamElementsVideoCompositionBase *)my_data);
 	} else {
-		videoComposition =
-			StreamElementsGlobalStateManager::GetInstance()
-				->GetVideoCompositionManager()
+		videoComposition = videoCompositionManager
 				->GetVideoCompositionBySceneItemId(sceneItemId,
 								   &root_scene).get();
 	}
@@ -845,7 +851,7 @@ static void dispatch_scene_event(void *my_data, calldata_t *cd,
 	dispatch_scene_event(scene, currentSceneEventName, otherSceneEventName);
 }
 
-static void dispatch_scene_update(void *my_data, calldata_t *cd)
+static void dispatch_scene_update(void *my_data, calldata_t *cd, bool shouldDelay)
 {
 	if (s_shutdown)
 		return;
@@ -855,8 +861,22 @@ static void dispatch_scene_update(void *my_data, calldata_t *cd)
 	if (!scene)
 		return;
 
-	dispatch_scene_event(scene, "hostActiveSceneItemListChanged",
-			     "hostSceneItemListChanged");
+	if (shouldDelay) {
+		QtDelayTask(
+			[=]() -> void {
+				dispatch_scene_event(
+					scene, "hostActiveSceneItemListChanged",
+					"hostSceneItemListChanged");
+			},
+			1);
+	} else {
+		dispatch_scene_event(scene, "hostActiveSceneItemListChanged",
+				     "hostSceneItemListChanged");
+	}
+}
+
+static void dispatch_scene_update(void* my_data, calldata_t* cd) {
+	dispatch_scene_update(my_data, cd, false);
 }
 
 static void dispatch_sceneitem_event(void *my_data, obs_sceneitem_t *sceneitem,
@@ -925,13 +945,27 @@ static void dispatch_sceneitem_event(void *my_data, obs_sceneitem_t *sceneitem,
 static void dispatch_sceneitem_event(void *my_data, calldata_t *cd,
 				     std::string currentSceneEventName,
 				     std::string otherSceneEventName,
-				     bool serializeDetails = true)
+				     bool serializeDetails = true, bool shouldDelay = false)
 {
 	obs_sceneitem_t *sceneitem =
 		(obs_sceneitem_t *)calldata_ptr(cd, "item");
 
-	dispatch_sceneitem_event(my_data, sceneitem, currentSceneEventName,
-				 otherSceneEventName, serializeDetails);
+	if (shouldDelay) {
+		obs_sceneitem_addref(sceneitem);
+		QtDelayTask(
+			[=]() -> void {
+				dispatch_sceneitem_event(my_data, sceneitem,
+							 currentSceneEventName,
+							 otherSceneEventName,
+							 serializeDetails);
+				obs_sceneitem_release(sceneitem);
+			},
+			1);
+	} else {
+		dispatch_sceneitem_event(my_data, sceneitem,
+					 currentSceneEventName,
+					 otherSceneEventName, serializeDetails);
+	}
 }
 
 static void dispatch_source_event(void *my_data, calldata_t *cd,
@@ -998,8 +1032,8 @@ static void handle_scene_remove(void *my_data, calldata_t *cd)
 static void handle_scene_item_transform(void *my_data, calldata_t *cd)
 {
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemTransformed",
-				 "hostSceneItemTransformed", false);
-	dispatch_scene_update(my_data, cd);
+				 "hostSceneItemTransformed", false, true);
+	dispatch_scene_update(my_data, cd, true);
 }
 
 static void handle_scene_item_select(void *my_data, calldata_t *cd)
