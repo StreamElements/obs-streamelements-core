@@ -655,31 +655,8 @@ public:
 
 		bool isSelected = obs_sceneitem_selected(m_sceneItem);
 
-		obs_sceneitem_crop crop = {0, 0, 0, 0};
-
-		if (isSelected) {
-			color = g_colorSelection.get();
-		} else if (m_isMouseOver) {
-			color = g_colorHover.get();
-		} else {
-			obs_sceneitem_get_crop(m_sceneItem, &crop);
-
-			if (!isCropped(&crop))
-				return;
-
-			obs_transform_info info;
-			obs_sceneitem_get_info(m_sceneItem, &info);
-
-			if (info.bounds_type != OBS_BOUNDS_NONE)
-				return;
-		}
-
 		bool altDown = (QGuiApplication::keyboardModifiers() &
 				Qt::AltModifier);
-
-		if (altDown) {
-			color = g_colorCrop.get();
-		}
 
 		const double thickness = 4.0f * m_view->devicePixelRatioF() *
 					 fmax(m_view->m_worldScale.x, m_view->m_worldScale.y);
@@ -696,7 +673,50 @@ public:
 
 		// Normal frame
 
-		if (isSelected || m_isMouseOver) {
+		if (isSelected) {
+			// Cropping frame edges
+			obs_sceneitem_crop crop = {0, 0, 0, 0};
+			obs_sceneitem_get_crop(m_sceneItem, &crop);
+
+			auto color = g_colorSelection.get();
+			auto cropMarkerColor = g_colorCrop.get();
+
+			const double cropThickness = thickness;
+
+			if (crop.top > 0)
+				drawStripedLine(0.0f, 0.0f, 1.0f, 0.0f,
+						cropThickness, boxScale,
+						cropMarkerColor);
+			else
+				drawLine(0.0f, 0.0f, 1.0f, 0.0f, thickness,
+					 boxScale, color);
+
+			if (crop.bottom > 0)
+				drawStripedLine(0.0f, 1.0f, 1.0f, 1.0f,
+						cropThickness, boxScale,
+						cropMarkerColor);
+			else
+				drawLine(0.0f, 1.0f, 1.0f, 1.0f, thickness,
+					 boxScale, color);
+
+			if (crop.left > 0)
+				drawStripedLine(0.0f, 0.0f, 0.0f, 1.0f,
+						cropThickness, boxScale,
+						cropMarkerColor);
+			else
+				drawLine(0.0f, 0.0f, 0.0f, 1.0f, thickness,
+					 boxScale, color);
+
+			if (crop.right > 0)
+				drawStripedLine(1.0f, 0.0f, 1.0f, 1.0f,
+						cropThickness, boxScale,
+						cropMarkerColor);
+			else
+				drawLine(1.0f, 0.0f, 1.0f, 1.0f, thickness,
+					 boxScale, color);
+		} else if (m_isMouseOver) {
+			auto color = g_colorHover.get();
+
 			drawLine(0.0f, 0.0f, 1.0f, 0.0f, thickness, boxScale,
 				 color);
 			drawLine(0.0f, 1.0f, 1.0f, 1.0f, thickness, boxScale,
@@ -706,32 +726,6 @@ public:
 			drawLine(1.0f, 0.0f, 1.0f, 1.0f, thickness, boxScale,
 				 color);
 		}
-
-		// Cropping frame edges
-
-		QColor cropMarkerColor = g_colorCrop.get();
-
-		const double cropThickness = thickness;
-
-		if (crop.top > 0)
-			drawStripedLine(0.0f, 0.0f, 1.0f, 0.0f,
-					cropThickness, boxScale,
-					cropMarkerColor);
-
-		if (crop.bottom > 0)
-			drawStripedLine(0.0f, 1.0f, 1.0f, 1.0f,
-					cropThickness, boxScale,
-					cropMarkerColor);
-
-		if (crop.left > 0)
-			drawStripedLine(0.0f, 0.0f, 0.0f, 1.0f,
-					cropThickness, boxScale,
-					cropMarkerColor);
-
-		if (crop.right > 0)
-			drawStripedLine(1.0f, 0.0f, 1.0f, 1.0f,
-					cropThickness, boxScale,
-					cropMarkerColor);
 
 		gs_matrix_pop();
 	}
