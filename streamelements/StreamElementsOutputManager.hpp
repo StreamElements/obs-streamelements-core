@@ -4,9 +4,11 @@
 #include "StreamElementsVideoCompositionManager.hpp"
 #include "StreamElementsAudioCompositionManager.hpp"
 
+#include <shared_mutex>
+
 class StreamElementsOutputManager {
 private:
-	std::recursive_mutex m_mutex;
+	std::shared_mutex m_mutex;
 	std::map<StreamElementsOutputBase::ObsOutputType,
 		 std::map<std::string, std::shared_ptr<StreamElementsOutputBase>>>
 		m_map;

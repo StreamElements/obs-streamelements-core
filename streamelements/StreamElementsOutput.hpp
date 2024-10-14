@@ -4,6 +4,8 @@
 #include "StreamElementsVideoComposition.hpp"
 #include "StreamElementsAudioComposition.hpp"
 
+#include <shared_mutex>
+
 class StreamElementsOutputBase
 	: public StreamElementsVideoCompositionEventListener,
 	  public StreamElementsAudioCompositionEventListener {
@@ -29,7 +31,7 @@ private:
 	std::shared_ptr<StreamElementsAudioCompositionBase> m_audioComposition;
 	std::shared_ptr<StreamElementsAudioCompositionBase::CompositionInfo>
 		m_audioCompositionInfo;
-	std::recursive_mutex m_mutex;
+	std::shared_mutex m_mutex;
 
 	CefRefPtr<CefDictionaryValue> m_auxData;
 
@@ -122,8 +124,6 @@ class StreamElementsCustomStreamingOutput
 	: public StreamElementsOutputBase
 {
 private:
-	std::recursive_mutex m_mutex;
-
 	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
 		m_videoCompositionInfo = nullptr;
 
@@ -281,7 +281,7 @@ protected:
 
 class StreamElementsCustomRecordingOutput : public StreamElementsOutputBase {
 private:
-	std::recursive_mutex m_mutex;
+	std::shared_mutex m_mutex;
 
 	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
 		m_videoCompositionInfo = nullptr;

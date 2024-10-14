@@ -318,7 +318,7 @@ void StreamElementsOutputBase::handle_obs_frontend_event(
 
 void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	auto d = CefDictionaryValue::Create();
 
@@ -447,14 +447,12 @@ StreamElementsOutputBase::~StreamElementsOutputBase()
 
 bool StreamElementsOutputBase::IsEnabled()
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-
 	return m_enabled;
 }
 
 bool StreamElementsOutputBase::IsActive()
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	auto output = GetOutput();
 
@@ -466,20 +464,20 @@ bool StreamElementsOutputBase::IsActive()
 
 void StreamElementsOutputBase::SetEnabled(bool enabled)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-
 	if (!enabled && !CanDisable())
 		return;
 
-	if (enabled == m_enabled)
-		return;
+	{
+		std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
-	m_enabled = enabled;
+		if (enabled == m_enabled)
+			return;
 
-	if (m_enabled) {
-		if (CanStart()) {
-			Start();
-		}
+		m_enabled = enabled;
+	}
+
+	if (enabled) {
+		Start();
 	} else {
 		Stop();
 	}
@@ -508,20 +506,18 @@ bool StreamElementsOutputBase::CanStart()
 
 bool StreamElementsOutputBase::Start()
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-
 	SetError("");
 
 	if (!CanStart())
 		return false;
+
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	return StartInternal(m_videoCompositionInfo, m_audioCompositionInfo);
 }
 
 void StreamElementsOutputBase::ConnectOutputEvents()
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-
 	if (m_outputEventsConnected)
 		return;
 
@@ -549,8 +545,6 @@ void StreamElementsOutputBase::ConnectOutputEvents()
 
 void StreamElementsOutputBase::DisconnectOutputEvents()
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-
 	if (!m_outputEventsConnected)
 		return;
 
@@ -579,7 +573,7 @@ void StreamElementsOutputBase::DisconnectOutputEvents()
 
 void StreamElementsOutputBase::Stop()
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	StopInternal();
 
@@ -977,8 +971,6 @@ bool StreamElementsCustomRecordingOutput::CanDisable()
 
 bool StreamElementsCustomRecordingOutput::CanSplitRecordingOutput()
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-
 	auto output = GetOutput();
 
 	if (!output)
@@ -995,7 +987,7 @@ bool StreamElementsCustomRecordingOutput::CanSplitRecordingOutput()
 
 bool StreamElementsCustomRecordingOutput::TriggerSplitRecordingOutput()
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	if (!CanSplitRecordingOutput())
 		return false;
@@ -1016,8 +1008,6 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 	std::shared_ptr<StreamElementsAudioCompositionBase::CompositionInfo>
 		audioCompositionInfo)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-
 	if (m_output)
 		return false;
 
@@ -1208,8 +1198,6 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 
 void StreamElementsCustomRecordingOutput::StopInternal()
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-
 	if (!m_videoCompositionInfo)
 		return;
 

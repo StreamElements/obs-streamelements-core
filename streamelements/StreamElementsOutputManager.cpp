@@ -37,7 +37,7 @@ StreamElementsOutputManager::~StreamElementsOutputManager()
 
 void StreamElementsOutputManager::Reset()
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	for (auto kv : m_map) {
 		for (auto it = m_map[kv.first].cbegin();
@@ -52,7 +52,7 @@ void StreamElementsOutputManager::DeserializeOutput(
 	StreamElementsOutputBase::ObsOutputType outputType,
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	output->SetBool(false);
 
@@ -106,7 +106,7 @@ void StreamElementsOutputManager::SerializeAllOutputs(
 	StreamElementsOutputBase::ObsOutputType outputType,
 	CefRefPtr<CefValue> &output)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	auto d = CefDictionaryValue::Create();
 
@@ -125,7 +125,7 @@ void StreamElementsOutputManager::RemoveOutputsByIds(
 	StreamElementsOutputBase::ObsOutputType outputType,
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	output->SetBool(false);
 
@@ -146,7 +146,7 @@ void StreamElementsOutputManager::EnableOutputsByIds(
 	StreamElementsOutputBase::ObsOutputType outputType,
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	output->SetBool(false);
 
@@ -167,7 +167,7 @@ void StreamElementsOutputManager::DisableOutputsByIds(
 	StreamElementsOutputBase::ObsOutputType outputType,
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	output->SetBool(false);
 
@@ -188,7 +188,7 @@ void StreamElementsOutputManager::TriggerSplitRecordingOutputById(
 	CefRefPtr<CefValue> input,
 	CefRefPtr<CefValue>& output)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	output->SetBool(false);
 
@@ -208,8 +208,6 @@ bool StreamElementsOutputManager::GetValidIds(
 	StreamElementsOutputBase::ObsOutputType outputType, CefRefPtr<CefValue> input,
 	std::map<std::string, bool>& output, bool testRemove, bool testDisable)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-
 	if (input->GetType() != VTYPE_LIST)
 		return false;
 
