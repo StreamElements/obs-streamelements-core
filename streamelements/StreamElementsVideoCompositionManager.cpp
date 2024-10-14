@@ -49,7 +49,7 @@ StreamElementsVideoCompositionManager::~StreamElementsVideoCompositionManager()
 
 void StreamElementsVideoCompositionManager::Reset()
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	for (auto it = m_videoCompositionsMap.cbegin();
 	     it != m_videoCompositionsMap.cend(); ++it) {
@@ -65,8 +65,6 @@ void StreamElementsVideoCompositionManager::
 DeserializeExistingCompositionProperties(CefRefPtr<CefValue> input,
 	CefRefPtr<CefValue>& output)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-
 	output->SetNull();
 
 	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
@@ -94,7 +92,7 @@ DeserializeExistingCompositionProperties(CefRefPtr<CefValue> input,
 void StreamElementsVideoCompositionManager::DeserializeComposition(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	output->SetNull();
 
@@ -164,7 +162,7 @@ void StreamElementsVideoCompositionManager::DeserializeComposition(
 void StreamElementsVideoCompositionManager::SerializeAllCompositions(
 	CefRefPtr<CefValue>& output)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
 
@@ -182,7 +180,7 @@ void StreamElementsVideoCompositionManager::SerializeAllCompositions(
 void StreamElementsVideoCompositionManager::RemoveCompositionsByIds(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	output->SetBool(false);
 

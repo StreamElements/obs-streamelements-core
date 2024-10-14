@@ -7,6 +7,8 @@
 
 #include "StreamElementsUtils.hpp"
 
+#include <shared_mutex>
+
 class StreamElementsAudioCompositionEventListener {
 public:
 	StreamElementsAudioCompositionEventListener() {}
@@ -92,7 +94,7 @@ private:
 	std::string m_id;
 	std::string m_name;
 
-	std::recursive_mutex m_mutex;
+	std::shared_mutex m_mutex;
 
 protected:
 	StreamElementsAudioCompositionBase(const std::string id,
@@ -107,7 +109,7 @@ public:
 
 	std::string GetName()
 	{
-		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		return m_name;
 	}
@@ -170,7 +172,7 @@ private:
 	};
 
 private:
-	std::recursive_mutex m_mutex;
+	std::shared_mutex m_mutex;
 
 public:
 	// ctor only usable by this class

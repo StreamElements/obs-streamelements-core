@@ -44,7 +44,7 @@ StreamElementsAudioCompositionManager::~StreamElementsAudioCompositionManager()
 
 void StreamElementsAudioCompositionManager::Reset()
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	for (auto it = m_audioCompositionsMap.cbegin();
 	     it != m_audioCompositionsMap.cend(); ++it) {
@@ -60,8 +60,6 @@ void StreamElementsAudioCompositionManager::
 	DeserializeExistingCompositionProperties(CefRefPtr<CefValue> input,
 						 CefRefPtr<CefValue> &output)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-
 	output->SetNull();
 
 	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
@@ -89,7 +87,7 @@ void StreamElementsAudioCompositionManager::
 void StreamElementsAudioCompositionManager::DeserializeComposition(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	output->SetNull();
 
@@ -144,7 +142,7 @@ void StreamElementsAudioCompositionManager::DeserializeComposition(
 void StreamElementsAudioCompositionManager::SerializeAllCompositions(
 	CefRefPtr<CefValue> &output)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
 
@@ -162,7 +160,7 @@ void StreamElementsAudioCompositionManager::SerializeAllCompositions(
 void StreamElementsAudioCompositionManager::RemoveCompositionsByIds(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	output->SetBool(false);
 

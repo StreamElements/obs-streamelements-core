@@ -7,6 +7,8 @@
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsScenesListWidgetManager.hpp"
 
+#include <shared_mutex>
+
 class StreamElementsVideoCompositionEventListener {
 public:
 	StreamElementsVideoCompositionEventListener() {}
@@ -94,7 +96,7 @@ private:
 	std::string m_id;
 	std::string m_name;
 
-	std::recursive_mutex m_mutex;
+	std::shared_mutex m_mutex;
 
 protected:
 	StreamElementsVideoCompositionBase(
@@ -109,7 +111,7 @@ public:
 
 	std::string GetName()
 	{
-		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		return m_name;
 	}
@@ -325,7 +327,7 @@ private:
 	};
 
 private:
-	std::recursive_mutex m_mutex;
+	std::shared_mutex m_mutex;
 
 	uint32_t m_baseWidth;
 	uint32_t m_baseHeight;
@@ -388,7 +390,7 @@ public:
 
 	virtual void TakeScreenshot() override
 	{
-		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		obs_frontend_take_source_screenshot(m_transition);
 	}

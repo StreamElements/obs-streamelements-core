@@ -112,15 +112,6 @@ dispatch_scene_item_list_changed_event(StreamElementsVideoCompositionBase *self,
 	dispatch_external_event(name, args);
 }
 
-static class obs_graphics_guard {
-public:
-	obs_graphics_guard() { obs_enter_graphics(); }
-	~obs_graphics_guard() { obs_leave_graphics(); }
-
-	obs_graphics_guard(obs_graphics_guard &other) = delete;
-	void operator=(obs_graphics_guard & other) = delete;
-};
-
 static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* composition, CefRefPtr<CefDictionaryValue>& root)
 {
 	auto info = composition->GetCompositionInfo(nullptr);
@@ -157,12 +148,14 @@ static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* compos
 
 void StreamElementsVideoCompositionBase::SetName(std::string name)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	{
+		std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
-	if (m_name == name)
-		return;
+		if (m_name == name)
+			return;
 
-	m_name = name;
+		m_name = name;
+	}
 
 	auto jsonValue = CefValue::Create();
 	SerializeComposition(jsonValue);
@@ -350,8 +343,6 @@ StreamElementsVideoCompositionBase::GetSceneItemByName(std::string name,
 void StreamElementsVideoCompositionBase::SerializeTransition(
 	CefRefPtr<CefValue>& output)
 {
-	//obs_graphics_guard graphics_guard;
-
 	SerializeObsTransition(GetId(), GetTransition(),
 			       GetTransitionDurationMilliseconds(), output);
 }
@@ -368,8 +359,6 @@ void StreamElementsVideoCompositionBase::DeserializeTransition(
 	if (!DeserializeObsTransition(input, &transition, &durationMs,
 				      IsObsNativeComposition()))
 		return;
-
-	//obs_graphics_guard graphics_guard;
 
 	SetTransition(transition);
 	SetTransitionDurationMilliseconds(durationMs);
@@ -574,8 +563,6 @@ void StreamElementsObsNativeVideoComposition::GetAllScenes(
 void StreamElementsObsNativeVideoComposition::SerializeComposition(
 	CefRefPtr<CefValue> &output)
 {
-	//obs_graphics_guard graphics_guard;
-
 	obs_video_info ovi;
 	vec2 size;
 	vec2_zero(&size);
@@ -607,8 +594,6 @@ void StreamElementsObsNativeVideoComposition::SerializeComposition(
 
 obs_scene_t* StreamElementsObsNativeVideoComposition::GetCurrentScene()
 {
-	//obs_graphics_guard graphics_guard; // can cause a deadlock
-
 	auto source = obs_frontend_get_current_scene();
 	auto scene = obs_scene_from_source(source);
 
@@ -690,8 +675,6 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	  m_baseHeight(baseHeight),
 	  m_transitionDurationMs(0)
 {
-	obs_graphics_guard graphics_guard;
-
 	obs_video_info ovi;
 
 	if (!obs_get_video_info(&ovi))
@@ -739,8 +722,7 @@ void StreamElementsCustomVideoComposition::SetRecordingEncoder(
 	obs_data_t *recordingVideoEncoderSettings,
 	obs_data_t *recordingVideoEncoderHotkeyData)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-	obs_graphics_guard graphics_guard;
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	m_recordingVideoEncoder = obs_video_encoder_create(
 		recordingVideoEncoderId.c_str(),
@@ -750,8 +732,7 @@ void StreamElementsCustomVideoComposition::SetRecordingEncoder(
 
 StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-	obs_graphics_guard graphics_guard;
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	if (m_streamingVideoEncoder) {
 		obs_encoder_release(m_streamingVideoEncoder);
@@ -790,7 +771,7 @@ std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
 StreamElementsCustomVideoComposition::GetCompositionInfo(
 	StreamElementsVideoCompositionEventListener *listener)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	return std::make_shared<StreamElementsCustomVideoCompositionInfo>(
 		shared_from_this(), listener, m_video, m_baseWidth, m_baseHeight, m_streamingVideoEncoder, m_recordingVideoEncoder, m_view);
@@ -798,7 +779,7 @@ StreamElementsCustomVideoComposition::GetCompositionInfo(
 
 obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentScene()
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	return m_currentScene;
 }
@@ -806,8 +787,7 @@ obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentScene()
 void StreamElementsCustomVideoComposition::SerializeComposition(
 	CefRefPtr<CefValue> &output)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-	//obs_graphics_guard graphics_guard;
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	auto root = CefDictionaryValue::Create();
 
@@ -952,7 +932,7 @@ StreamElementsCustomVideoComposition::Create(
 void StreamElementsCustomVideoComposition::GetAllScenes(
 	std::vector<obs_scene_t *> &result)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	result.clear();
 
@@ -964,8 +944,7 @@ void StreamElementsCustomVideoComposition::GetAllScenes(
 obs_scene_t *
 StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-	obs_graphics_guard graphics_guard;
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	auto scene = obs_scene_create_private(GetUniqueSceneName(requestName).c_str());
 
@@ -984,8 +963,7 @@ StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 
 bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-	//obs_graphics_guard graphics_guard;
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	for (auto it = m_scenes.begin(); it != m_scenes.end(); ++it) {
 		if (scene == *it) {
@@ -1010,9 +988,7 @@ bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
 void StreamElementsCustomVideoComposition::SetTransition(
 	obs_source_t *transition)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-
-	//obs_graphics_guard graphics_guard;
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	auto old_transition = m_transition;
 
@@ -1041,8 +1017,7 @@ void StreamElementsCustomVideoComposition::SetTransition(
 
 obs_source_t *StreamElementsCustomVideoComposition::GetTransition()
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-	//obs_graphics_guard graphics_guard;
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	auto transition = m_transition;
 
@@ -1068,8 +1043,7 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 	if (!scene)
 		return false;
 
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
-	//obs_graphics_guard graphics_guard;
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	for (auto item : m_scenes) {
 		if (scene == item) {

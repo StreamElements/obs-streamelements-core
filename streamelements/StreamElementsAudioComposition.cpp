@@ -137,12 +137,14 @@ SerializeObsAudioTracks(StreamElementsAudioCompositionBase *composition,
 
 void StreamElementsAudioCompositionBase::SetName(std::string name)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	{
+		std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
-	if (m_name == name)
-		return;
+		if (m_name == name)
+			return;
 
-	m_name = name;
+		m_name = name;
+	}
 
 	auto jsonValue = CefValue::Create();
 	SerializeComposition(jsonValue);
@@ -319,7 +321,7 @@ void StreamElementsCustomAudioComposition::SetRecordingEncoder(
 	obs_data_t *recordingAudioEncoderSettings,
 	obs_data_t *recordingAudioEncoderHotkeyData)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	for (size_t i = 0; i < MAX_AUDIO_MIXES; ++i) {
 		m_recordingAudioEncoders[i] = obs_audio_encoder_create(
@@ -347,7 +349,7 @@ void StreamElementsCustomAudioComposition::SetRecordingEncoder(
 
 StreamElementsCustomAudioComposition::~StreamElementsCustomAudioComposition()
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	for (size_t i = 0; i < MAX_AUDIO_MIXES; ++i) {
 		if (m_streamingAudioEncoders[i]) {
@@ -368,7 +370,7 @@ std::shared_ptr<StreamElementsAudioCompositionBase::CompositionInfo>
 StreamElementsCustomAudioComposition::GetCompositionInfo(
 	StreamElementsAudioCompositionEventListener *listener)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	return std::make_shared<StreamElementsCustomAudioCompositionInfo>(
 		shared_from_this(), listener, m_audio, m_streamingAudioEncoders,
@@ -378,7 +380,7 @@ StreamElementsCustomAudioComposition::GetCompositionInfo(
 void StreamElementsCustomAudioComposition::SerializeComposition(
 	CefRefPtr<CefValue> &output)
 {
-	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	auto root = CefDictionaryValue::Create();
 

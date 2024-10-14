@@ -7,9 +7,11 @@
 #include <obs-frontend-api.h>
 #include "StreamElementsUtils.hpp"
 
+#include <shared_mutex>
+
 class StreamElementsAudioCompositionManager {
 private:
-	std::recursive_mutex m_mutex;
+	std::shared_mutex m_mutex;
 	std::map<std::string,
 		 std::shared_ptr<StreamElementsAudioCompositionBase>>
 		m_audioCompositionsMap;
@@ -41,7 +43,7 @@ public:
 	std::shared_ptr<StreamElementsAudioCompositionBase>
 	GetObsNativeAudioComposition()
 	{
-		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		return m_nativeAudioComposition;
 	}
@@ -49,7 +51,7 @@ public:
 	std::shared_ptr<StreamElementsAudioCompositionBase>
 	GetAudioCompositionById(std::string id)
 	{
-		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		if (!m_audioCompositionsMap.count(id))
 			return nullptr;
@@ -60,7 +62,7 @@ public:
 	std::shared_ptr<StreamElementsAudioCompositionBase>
 	GetAudioCompositionById(CefRefPtr<CefValue> input)
 	{
-		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
 			return GetObsNativeAudioComposition();

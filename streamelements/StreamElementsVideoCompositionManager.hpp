@@ -1,10 +1,11 @@
 #pragma once
 
 #include "StreamElementsVideoComposition.hpp"
+#include <shared_mutex>
 
 class StreamElementsVideoCompositionManager {
 private:
-	std::recursive_mutex m_mutex;
+	std::shared_mutex m_mutex;
 	std::map<std::string, std::shared_ptr<StreamElementsVideoCompositionBase>> m_videoCompositionsMap;
 	std::shared_ptr<StreamElementsVideoCompositionBase> m_nativeVideoComposition;
 
@@ -32,7 +33,7 @@ public:
 public:
 	std::shared_ptr<StreamElementsVideoCompositionBase> GetObsNativeVideoComposition()
 	{
-		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		return m_nativeVideoComposition;
 	}
@@ -40,7 +41,7 @@ public:
 	std::shared_ptr<StreamElementsVideoCompositionBase>
 	GetVideoCompositionById(std::string id)
 	{
-		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		if (!m_videoCompositionsMap.count(id))
 			return nullptr;
@@ -51,7 +52,7 @@ public:
 	std::shared_ptr<StreamElementsVideoCompositionBase>
 	GetVideoCompositionById(CefRefPtr<CefValue> input)
 	{
-		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
 			return GetObsNativeVideoComposition();
@@ -72,7 +73,7 @@ public:
 	std::shared_ptr<StreamElementsVideoCompositionBase>
 	GetVideoCompositionByScene(obs_scene_t *lookupScene)
 	{
-		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		for (auto kv : m_videoCompositionsMap) {
 			std::vector<obs_scene_t *> scenes;
@@ -90,7 +91,7 @@ public:
 	std::shared_ptr<StreamElementsVideoCompositionBase>
 	GetVideoCompositionBySceneId(std::string lookupId)
 	{
-		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		for (auto kv : m_videoCompositionsMap) {
 			if (kv.second->GetSceneById(lookupId))
@@ -103,7 +104,7 @@ public:
 	std::shared_ptr<StreamElementsVideoCompositionBase>
 	GetVideoCompositionBySceneName(std::string lookupName)
 	{
-		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		for (auto kv : m_videoCompositionsMap) {
 			if (kv.second->GetSceneByName(lookupName))
@@ -115,7 +116,7 @@ public:
 
 	obs_sceneitem_t *GetSceneItemById(std::string lookupSceneItemId, bool addRef = false)
 	{
-		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		for (auto kv : m_videoCompositionsMap) {
 			std::vector<obs_scene_t *> scenes;
@@ -133,7 +134,7 @@ public:
 	std::shared_ptr<StreamElementsVideoCompositionBase>
 	GetVideoCompositionBySceneItemId(std::string lookupSceneItemId)
 	{
-		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		for (auto kv : m_videoCompositionsMap) {
 			if (kv.second->GetSceneItemById(lookupSceneItemId,
@@ -147,7 +148,7 @@ public:
 	std::shared_ptr<StreamElementsVideoCompositionBase>
 	GetVideoCompositionBySceneItemId(std::string lookupSceneItemId, obs_scene_t** result_scene)
 	{
-		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		for (auto kv : m_videoCompositionsMap) {
 			if (kv.second->GetSceneItemById(lookupSceneItemId,
@@ -162,7 +163,7 @@ public:
 	GetVideoCompositionBySceneItemName(std::string lookupSceneItemName,
 					   obs_scene_t **result_scene)
 	{
-		std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		for (auto kv : m_videoCompositionsMap) {
 			if (kv.second->GetSceneItemByName(lookupSceneItemName,
