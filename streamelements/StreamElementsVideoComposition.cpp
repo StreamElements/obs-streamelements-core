@@ -925,9 +925,9 @@ StreamElementsCustomVideoComposition::Create(
 void StreamElementsCustomVideoComposition::GetAllScenes(
 	std::vector<obs_scene_t *> &result)
 {
-	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
-
 	result.clear();
+
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	for (auto item : m_scenes) {
 		result.push_back(item);
@@ -937,19 +937,26 @@ void StreamElementsCustomVideoComposition::GetAllScenes(
 obs_scene_t *
 StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 {
-	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
-
 	auto scene = obs_scene_create_private(GetUniqueSceneName(requestName).c_str());
 
 	obs_scene_addref(scene); // caller will release
-	m_scenes.push_back(scene);
+
+	{
+		std::unique_lock<decltype(m_mutex)> lock(m_mutex);
+
+		m_scenes.push_back(scene);
+	}
 
 	auto source = obs_scene_get_source(scene);
 
 	add_source_signals(source, nullptr);
 	add_scene_signals(scene, nullptr);
 
-	dispatch_scene_list_changed_event(this, m_currentScene);
+	{
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+
+		dispatch_scene_list_changed_event(this, m_currentScene);
+	}
 
 	return scene;
 }
@@ -958,7 +965,7 @@ bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
 {
 	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
-	for (auto it = m_scenes.begin(); it != m_scenes.end(); ++it) {
+	for (auto it = m_scenes.cbegin(); it != m_scenes.cend(); ++it) {
 		if (scene == *it) {
 			m_scenes.erase(it);
 
@@ -981,9 +988,13 @@ bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
 void StreamElementsCustomVideoComposition::SetTransition(
 	obs_source_t *transition)
 {
-	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
+	obs_source_t *old_transition = nullptr;
+	{
+		std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
-	auto old_transition = m_transition;
+		old_transition = m_transition;
+		m_transition = transition;
+	}
 
 	obs_source_addref(transition);
 
@@ -991,13 +1002,11 @@ void StreamElementsCustomVideoComposition::SetTransition(
 	obs_view_set_source(m_view, 0, transition);
 	obs_transition_swap_end(transition, old_transition);
 
-	m_transition = transition;
-
 	//obs_scene_addref(m_currentScene);
 	obs_transition_set(old_transition, nullptr);
 	obs_source_release(old_transition);
 
-	obs_transition_set(m_transition, obs_scene_get_source(m_currentScene));
+	obs_transition_set(transition, obs_scene_get_source(m_currentScene));
 
 	auto jsonValue = CefValue::Create();
 	SerializeComposition(jsonValue);
