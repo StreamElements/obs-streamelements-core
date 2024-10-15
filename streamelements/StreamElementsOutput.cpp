@@ -276,10 +276,14 @@ void StreamElementsOutputBase::handle_obs_frontend_event(
 		// there is no API to mix a different audio stream, or to apply
 		// different encoding to the existing mix.
 		//
+		self->m_isObsStreaming = true;
+
 		if (self->m_obsStateDependency == Streaming)
 			self->Start();
 		break;
 	case OBS_FRONTEND_EVENT_STREAMING_STOPPED:
+		self->m_isObsStreaming = false;
+
 		if (self->m_obsStateDependency == Streaming)
 			self->Stop();
 		break;
@@ -495,9 +499,6 @@ bool StreamElementsOutputBase::CanStart()
 	if (!IsEnabled())
 		return false;
 
-	//if (!obs_frontend_streaming_active())
-	//	return false;
-
 	if (IsActive())
 		return false;
 
@@ -607,6 +608,7 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 
 		dispatch_event(this, "hostStreamingOutputError", args);
 		dispatch_event(this, "hostStreamingOutputStopped");
+		dispatch_list_change_event(this);
 
 		return false;
 	}
@@ -1039,6 +1041,7 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 
 		dispatch_event(this, "hostRecordingOutputError", args);
 		dispatch_event(this, "hostRecordingOutputStopped");
+		dispatch_list_change_event(this);
 
 		return false;
 	}

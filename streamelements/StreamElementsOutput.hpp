@@ -21,6 +21,9 @@ public:
 		RecordingOutput
 	};
 
+protected:
+	bool m_isObsStreaming = false;
+
 private:
 	std::string m_id;
 	std::string m_name;
@@ -166,6 +169,17 @@ public:
 	}
 
 	virtual bool CanDisable() override;
+
+	virtual bool CanStart() override
+	{
+		if (!StreamElementsOutputBase::CanStart())
+			return false;
+
+		if (!m_isObsStreaming)
+			return false;
+
+		return true;
+	}
 
 	virtual void
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
