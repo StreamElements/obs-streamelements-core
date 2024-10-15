@@ -407,13 +407,6 @@ public:
 		auto output = obs_frontend_get_recording_output();
 
 		auto result = obs_output_get_video_encoder(output);
-		if (!result) {
-			// This is a hack to make sure OBS has a defined recording encoder
-			obs_frontend_recording_start();
-			obs_frontend_recording_stop();
-
-			result = obs_output_get_video_encoder(output);
-		}
 
 		obs_output_release(output);
 

@@ -100,7 +100,7 @@ protected:
 	void ConnectOutputEvents();
 	void DisconnectOutputEvents();
 
-private:
+protected:
 	void SetError(std::string error) { m_error = error; }
 
 private:

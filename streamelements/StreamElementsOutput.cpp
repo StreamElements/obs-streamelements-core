@@ -598,6 +598,19 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 	if (!videoCompositionInfo)
 		return false;
 
+	if (!videoCompositionInfo->GetStreamingVideoEncoder() && videoCompositionInfo->IsObsNative()) {
+		SetError(
+			"OBS Native streaming video encoder does not exist yet");
+
+		auto args = CefDictionaryValue::Create();
+		args->SetString("reason", "OBS Native streaming video encoder does not exist yet");
+
+		dispatch_event(this, "hostStreamingOutputError", args);
+		dispatch_event(this, "hostStreamingOutputStopped");
+
+		return false;
+	}
+
 	const char *output_type = obs_service_get_output_type(m_service);
 
 	if (!output_type)
@@ -1013,6 +1026,22 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 
 	if (!videoCompositionInfo)
 		return false;
+
+	if (!videoCompositionInfo->GetRecordingVideoEncoder() &&
+	    videoCompositionInfo->IsObsNative()) {
+		SetError(
+			"OBS Native recording video encoder does not exist yet");
+
+		auto args = CefDictionaryValue::Create();
+		args->SetString(
+			"reason",
+			"OBS Native recording video encoder does not exist yet");
+
+		dispatch_event(this, "hostRecordingOutputError", args);
+		dispatch_event(this, "hostRecordingOutputStopped");
+
+		return false;
+	}
 
 	bool ffmpegOutput =
 		strcmpi(config_get_string(obs_frontend_get_profile_config(),
