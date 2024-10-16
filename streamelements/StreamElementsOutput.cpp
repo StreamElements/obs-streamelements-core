@@ -434,6 +434,7 @@ StreamElementsOutputBase::StreamElementsOutputBase(
 	m_audioCompositionInfo = audioComposition->GetCompositionInfo(this);
 
 	m_enabled = IsObsNativeOutput();
+	m_isObsStreaming = obs_frontend_streaming_active();
 
 	dispatch_list_change_event(this);
 
