@@ -3653,7 +3653,7 @@ void SerializeObsTransition(std::string videoCompositionId, obs_source_t *t,
 
 	std::string id = obs_source_get_id(t);
 	d->SetString("class", id);
-	d->SetString("videoCompositionId", id);
+	d->SetString("videoCompositionId", videoCompositionId);
 
 	auto settings = obs_source_get_settings(t);
 

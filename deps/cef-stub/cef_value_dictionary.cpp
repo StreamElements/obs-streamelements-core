@@ -44,8 +44,24 @@ public:
     virtual bool SetBool(const CefString& key, bool value) { m_map[key] = CefValue::Create(); m_map[key]->SetBool(value); return true; }
     virtual bool SetInt(const CefString& key, int value) { m_map[key] = CefValue::Create(); m_map[key]->SetInt(value); return true; }
     virtual bool SetDouble(const CefString& key, double value) { m_map[key] = CefValue::Create(); m_map[key]->SetDouble(value); return true; }
-    virtual bool SetString(const CefString& key, const CefString& value) { m_map[key] = CefValue::Create(); m_map[key]->SetString(value); return true; }
-    virtual bool SetBinary(const CefString& key,
+
+    virtual bool SetString(const CefString &key, const CefString &value)
+    {
+	    m_map[key] = CefValue::Create();
+	    m_map[key]->SetString(value);
+	    return true;
+    }
+    virtual bool SetString(const char *key, const char *value)
+    {
+	    if (!key || !value)
+		    return false;
+
+	    m_map[key] = CefValue::Create();
+	    m_map[key]->SetString(value);
+	    return true;
+    }
+
+    virtual bool SetBinary(const CefString &key,
                            CefRefPtr<CefBinaryValue> value) { m_map[key] = CefValue::Create(); m_map[key]->SetBinary(value); return true; }
     virtual bool SetDictionary(const CefString& key,
                                CefRefPtr<CefDictionaryValue> value) { m_map[key] = CefValue::Create(); m_map[key]->SetDictionary(value); return true; }
