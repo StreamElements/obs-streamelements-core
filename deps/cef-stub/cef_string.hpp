@@ -17,11 +17,11 @@ public:
     CefString() {}
     CefString(const CefString& src): m_string(src.m_string) {}
     CefString(const std::string& src): m_string(src) {}
-    CefString(const char* src): m_string(src) {}
+    CefString(const char *src) : m_string(src ? src : "") {}
     CefString(const std::wstring& src) {
         InitFromWString(src);
     }
-    CefString(const wchar_t* src): CefString(std::wstring(src)) {}
+    CefString(const wchar_t *src) : CefString(std::wstring(src ? src : L"")) {}
 
     ~CefString() {}
     

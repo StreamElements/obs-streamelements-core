@@ -174,7 +174,6 @@ public:
     virtual bool SetInt(const CefString& key, int value) = 0;
     virtual bool SetDouble(const CefString& key, double value) = 0;
     virtual bool SetString(const CefString &key, const CefString &value) = 0;
-    virtual bool SetString(const char *key, const char *value) = 0;
     virtual bool SetBinary(const CefString &key,
                            CefRefPtr<CefBinaryValue> value) = 0;
     virtual bool SetDictionary(const CefString& key,
