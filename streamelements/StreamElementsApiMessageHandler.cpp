@@ -1093,6 +1093,17 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("getEncoderProperties");
+	{
+		if (args->GetSize() > 0) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputSettingsManager()
+				->GetEncoderProperties(args->GetValue(0),
+						       result);
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("getAvailableEncoders");
 	{
 		StreamElementsGlobalStateManager::GetInstance()

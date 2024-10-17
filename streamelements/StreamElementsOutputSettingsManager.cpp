@@ -19,6 +19,53 @@ StreamElementsOutputSettingsManager::~StreamElementsOutputSettingsManager()
 {
 }
 
+void StreamElementsOutputSettingsManager::GetEncoderProperties(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	output->SetNull();
+
+	if (!input.get())
+		return;
+
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto d = input->GetDictionary();
+
+	if (!d->HasKey("id") || !d->HasKey("type"))
+		return;
+
+	if (d->GetType("id") != VTYPE_STRING ||
+	    d->GetType("type") != VTYPE_STRING)
+		return;
+
+	std::string id = d->GetString("id");
+
+	if (!id.size())
+		return;
+
+	std::string type = d->GetString("type");
+
+	if (type != "video" && type != "audio")
+		return;
+
+	obs_encoder_t *encoder =
+		type == "video"
+			? obs_video_encoder_create(id.c_str(), "temporary",
+						   nullptr, nullptr)
+			: obs_audio_encoder_create(id.c_str(), "temporary",
+						   nullptr, 0, nullptr);
+
+	if (!encoder)
+		return;
+
+
+	output->SetDictionary(SerializeObsEncoder(encoder));
+
+	obs_encoder_release(encoder);
+}
+
 void StreamElementsOutputSettingsManager::GetAvailableEncoders(CefRefPtr<CefValue>& result, obs_encoder_type* encoder_type)
 {
 	SYNC_ACCESS();

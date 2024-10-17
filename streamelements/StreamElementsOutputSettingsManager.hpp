@@ -17,6 +17,9 @@ public:
 	bool SetEncodingSettings(CefRefPtr<CefValue> input);
 	bool GetEncodingSettings(CefRefPtr<CefValue>& output);
 
+	void GetEncoderProperties(CefRefPtr<CefValue> input,
+				  CefRefPtr<CefValue> &output);
+
 private:
 	void StopAllOutputs();
 };
