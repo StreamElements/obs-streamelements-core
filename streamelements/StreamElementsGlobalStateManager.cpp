@@ -132,14 +132,25 @@ void StreamElementsGlobalStateManager::ThemeChangeListener::changeEvent(
 				{"name", newTheme},
 			};
 
-			StreamElementsGlobalStateManager::GetInstance()
-				->GetWebsocketApiServer()
-				->DispatchJSEvent("system",
+			auto apiServer =
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetWebsocketApiServer();
+
+			if (!apiServer)
+				return;
+
+			apiServer->DispatchJSEvent(
+				"system",
 						  "hostUIThemeChanged",
 						  json.dump());
 
-			StreamElementsMessageBus::GetInstance()
-				->NotifyAllExternalEventListeners(
+			auto externalServer =
+				StreamElementsMessageBus::GetInstance();
+
+			if (!externalServer)
+				return;
+
+			externalServer->NotifyAllExternalEventListeners(
 					StreamElementsMessageBus::
 						DEST_ALL_EXTERNAL,
 					StreamElementsMessageBus::
@@ -245,22 +256,29 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 	}
 
 	if (name.size()) {
-		StreamElementsGlobalStateManager::GetInstance()
-			->GetWebsocketApiServer()
-			->DispatchJSEvent("system", name, args);
+		auto apiServer = StreamElementsGlobalStateManager::GetInstance()
+					 ->GetWebsocketApiServer();
+
+		if (!apiServer)
+			return;
+
+		apiServer->DispatchJSEvent("system", name, args);
 
 		std::string externalEventName =
 			name.c_str() + 4; /* remove 'host' prefix */
 		externalEventName[0] = tolower(
 			externalEventName[0]); /* lower case first letter */
 
-		StreamElementsMessageBus::GetInstance()
-			->NotifyAllExternalEventListeners(
-				StreamElementsMessageBus::DEST_ALL_EXTERNAL,
-				StreamElementsMessageBus::SOURCE_APPLICATION,
-				"OBS", externalEventName,
-				CefParseJSON(args,
-					     JSON_PARSER_ALLOW_TRAILING_COMMAS));
+		auto msgBus = StreamElementsMessageBus::GetInstance();
+
+		if (!msgBus)
+			return;
+
+		msgBus->NotifyAllExternalEventListeners(
+			StreamElementsMessageBus::DEST_ALL_EXTERNAL,
+			StreamElementsMessageBus::SOURCE_APPLICATION, "OBS",
+			externalEventName,
+			CefParseJSON(args, JSON_PARSER_ALLOW_TRAILING_COMMAS));
 	}
 }
 
@@ -775,9 +793,13 @@ void StreamElementsGlobalStateManager::DeleteCookies()
 static void DispatchJSEventAllBrowsers(const char *eventName,
 				       const char *jsonString)
 {
-	StreamElementsGlobalStateManager::GetInstance()
-		->GetWebsocketApiServer()
-		->DispatchJSEvent("system", eventName, jsonString);
+	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
+				 ->GetWebsocketApiServer();
+
+	if (!apiServer)
+		return;
+
+	apiServer->DispatchJSEvent("system", eventName, jsonString);
 }
 
 void StreamElementsGlobalStateManager::Reset(bool deleteAllCookies,

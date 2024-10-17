@@ -313,9 +313,13 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlersInternal(
 	msg->GetArgumentList()->SetString(0, "host");
 	msg->GetArgumentList()->SetString(1, jsonString);
 
-	StreamElementsGlobalStateManager::GetInstance()
-		->GetWebsocketApiServer()
-		->DispatchClientMessage("system", target, msg);
+	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
+				 ->GetWebsocketApiServer();
+
+	if (!apiServer)
+		return;
+
+	apiServer->DispatchClientMessage("system", target, msg);
 }
 
 CefRefPtr<CefDictionaryValue>
@@ -350,9 +354,13 @@ void StreamElementsApiMessageHandler::RegisterApiPropsInternal(
 	msg->GetArgumentList()->SetString(0, "host");
 	msg->GetArgumentList()->SetString(1, jsonString);
 
-	StreamElementsGlobalStateManager::GetInstance()
-		->GetWebsocketApiServer()
-		->DispatchClientMessage("system", target, msg);
+	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
+				 ->GetWebsocketApiServer();
+
+	if (!apiServer)
+		return;
+
+	apiServer->DispatchClientMessage("system", target, msg);
 }
 
 void StreamElementsApiMessageHandler::DispatchHostReadyEventInternal(
@@ -365,9 +373,13 @@ void StreamElementsApiMessageHandler::DispatchEventInternal(
 	std::string target, std::string event,
 	std::string eventArgsJson)
 {
-	StreamElementsGlobalStateManager::GetInstance()
-		->GetWebsocketApiServer()
-		->DispatchJSEvent("system", target, event, eventArgsJson);
+	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
+				 ->GetWebsocketApiServer();
+
+	if (!apiServer)
+		return;
+
+	apiServer->DispatchJSEvent("system", target, event, eventArgsJson);
 }
 
 void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandler(
