@@ -200,10 +200,10 @@ std::string StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 				    reloadPolicy.c_str(), dockingArea)) {
 				QDockWidget *widget = GetDockWidget(id.c_str());
 
-				widget->setVisible(!visible);
-				QApplication::sendPostedEvents();
-				widget->setVisible(visible);
-				QApplication::sendPostedEvents();
+				//widget->setVisible(!visible);
+				//QApplication::sendPostedEvents();
+				//widget->setVisible(visible);
+				//QApplication::sendPostedEvents();
 
 				//widget->setSizePolicy(sizePolicy);
 				widget->widget()->setSizePolicy(sizePolicy);
@@ -212,7 +212,7 @@ std::string StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 				widget->widget()->setMinimumSize(requestWidth,
 								 requestHeight);
 
-				QApplication::sendPostedEvents();
+				//QApplication::sendPostedEvents();
 
 				//widget->setMinimumSize(minWidth, minHeight);
 				widget->widget()->setMinimumSize(minWidth,
@@ -222,7 +222,11 @@ std::string StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 					widget->move(left, top);
 				}
 
-				QApplication::sendPostedEvents();
+				//QApplication::sendPostedEvents();
+
+				QtPostTask([widget, visible] {
+					widget->setVisible(visible);
+				});
 			}
 
 			return id;
@@ -241,8 +245,9 @@ bool StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
-	QMainWindow *main = new QMainWindow(nullptr);
+	//QMainWindow *main = new QMainWindow(nullptr);
 
+	/*
 	QAction *reloadAction =
 		new QAction(QIcon(QPixmap(":/images/toolbar/reload.png")), "");
 	QAction *floatAction =
@@ -256,14 +261,16 @@ bool StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 	reloadAction->setFont(font);
 	floatAction->setFont(font);
 	closeAction->setFont(font);
+	*/
 
 	StreamElementsBrowserWidget *widget = new StreamElementsBrowserWidget(
 		nullptr, StreamElementsMessageBus::DEST_UI, url, executeJavaScriptCodeOnLoad, reloadPolicy,
 		DockWidgetAreaToString(area).c_str(), id,
 		std::make_shared<StreamElementsApiMessageHandler>("dockingWidget"));
 
-	main->setCentralWidget(widget);
+	//main->setCentralWidget(widget);
 
+	/*
 	std::string reloadPolicyCopy = reloadPolicy;
 
 	reloadAction->connect(reloadAction, &QAction::triggered,
@@ -274,14 +281,17 @@ bool StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 					      widget->BrowserReload(true);
 				      }
 			      });
+	*/
 
-	if (AddDockWidget(id, title, main, area, allowedAreas, features)) {
+	if (AddDockWidget(id, title, widget, area, allowedAreas, features)) {
 		m_browserWidgets[id] = widget;
 
 		QDockWidget *dock = GetDockWidget(id);
 
 		return true;
 	} else {
+		widget->deleteLater();
+
 		return false;
 	}
 }
