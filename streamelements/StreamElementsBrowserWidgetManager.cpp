@@ -225,7 +225,14 @@ std::string StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 				//QApplication::sendPostedEvents();
 
 				QtPostTask([widget, visible] {
-					widget->setVisible(visible);
+					//widget->setVisible(visible);
+
+					if (visible) {
+						widget->show();
+						widget->raise();
+					}
+					else
+						widget->hide();
 				});
 			}
 

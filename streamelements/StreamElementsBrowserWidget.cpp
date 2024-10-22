@@ -242,7 +242,7 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 
 	m_msgHandler = [this](std::string source,
 			      CefRefPtr<CefProcessMessage> msg) {
-		std::lock_guard<decltype(s_mutex)> guard(s_mutex);
+		// std::lock_guard<decltype(s_mutex)> guard(s_mutex);
 
 		if (!m_requestedApiMessageHandler.get())
 			return;

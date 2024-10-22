@@ -11,6 +11,7 @@
 #include <map>
 #include <vector>
 #include <mutex>
+#include <shared_mutex>
 
 #include "cef-headers.hpp"
 
@@ -53,7 +54,8 @@ private:
 					  CefRefPtr<CefDictionaryValue> root);
 
 private:
-	std::recursive_mutex m_mutex;
+	std::shared_mutex m_mutex;
+	std::shared_mutex m_dispatch_handlers_map_mutex;
 
 	uint16_t m_port = 27952;
 	server_t m_endpoint;

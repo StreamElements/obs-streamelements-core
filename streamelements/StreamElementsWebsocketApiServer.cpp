@@ -13,6 +13,7 @@ StreamElementsWebsocketApiServer::StreamElementsWebsocketApiServer()
 
 	m_endpoint.init_asio();
 
+	/*
 	m_endpoint.set_open_handler(
 		[this](websocketpp::connection_hdl con_hdl) {
 			std::lock_guard<decltype(m_mutex)> guard(m_mutex);
@@ -22,10 +23,11 @@ StreamElementsWebsocketApiServer::StreamElementsWebsocketApiServer()
 
 			//connection->send("test on open");
 		});
+	*/
 
 	m_endpoint.set_close_handler(
 		[this](websocketpp::connection_hdl con_hdl) {
-			std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+			std::unique_lock<decltype(m_mutex)> guard(m_mutex);
 
 			// Disconnect
 			if (!m_connection_map.count(con_hdl))
@@ -85,8 +87,6 @@ StreamElementsWebsocketApiServer::~StreamElementsWebsocketApiServer()
 void StreamElementsWebsocketApiServer::ParseIncomingMessage(
 	connection_hdl_t con_hdl, std::string payload)
 {
-	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
-
 	CefRefPtr<CefValue> val =
 		CefParseJSON(payload, JSON_PARSER_ALLOW_TRAILING_COMMAS);
 
@@ -111,8 +111,6 @@ void StreamElementsWebsocketApiServer::ParseIncomingRegisterMessage(
 	connection_hdl_t con_hdl,
 				CefRefPtr<CefDictionaryValue> root)
 {
-	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
-
 	if (root->GetType("payload") != VTYPE_DICTIONARY)
 		return;
 
@@ -123,11 +121,20 @@ void StreamElementsWebsocketApiServer::ParseIncomingRegisterMessage(
 
 	std::string id = payload->GetString("id");
 
-	if (!m_dispatch_handlers_map.count(id))
-		return;
+	{
+		std::shared_lock<decltype(m_dispatch_handlers_map_mutex)>
+			lock(m_dispatch_handlers_map_mutex);
 
-	m_client_connection_map[id] = con_hdl;
-	m_connection_map[con_hdl] = id;
+		if (!m_dispatch_handlers_map.count(id))
+			return;
+	}
+
+	{
+		std::unique_lock<decltype(m_mutex)> guard(m_mutex);
+
+		m_client_connection_map[id] = con_hdl;
+		m_connection_map[con_hdl] = id;
+	}
 
 	auto response = CefValue::Create();
 	auto responseDict = CefDictionaryValue::Create();
@@ -140,8 +147,6 @@ void StreamElementsWebsocketApiServer::ParseIncomingRegisterMessage(
 bool StreamElementsWebsocketApiServer::DispatchClientMessage(
 	std::string source, std::string target, CefRefPtr<CefProcessMessage> msg)
 {
-	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
-
 	auto payload = CefDictionaryValue::Create();
 
 	payload->SetString("name", msg->GetName());
@@ -157,11 +162,6 @@ bool StreamElementsWebsocketApiServer::DispatchClientMessage(
 	std::string source, std::string target,
 		std::string type, CefRefPtr<CefValue> payload)
 {
-	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
-
-	if (!m_client_connection_map.count(target))
-		return false;
-
 	auto root = CefDictionaryValue::Create();
 
 	root->SetString("type", type);
@@ -176,6 +176,11 @@ bool StreamElementsWebsocketApiServer::DispatchClientMessage(
 
 	std::string json = CefWriteJSON(rootVal, JSON_WRITER_DEFAULT);
 
+	std::shared_lock<decltype(m_mutex)> guard(m_mutex);
+
+	if (!m_client_connection_map.count(target))
+		return false;
+
 	auto con_hdl = m_client_connection_map[target];
 	auto connection = m_endpoint.get_con_from_hdl(con_hdl);
 
@@ -188,7 +193,8 @@ bool StreamElementsWebsocketApiServer::DispatchClientMessage(
 bool StreamElementsWebsocketApiServer::RegisterMessageHandler(
 	std::string target, message_handler_t handler)
 {
-	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+	std::unique_lock<decltype(m_dispatch_handlers_map_mutex)> guard(
+		m_dispatch_handlers_map_mutex);
 
 	if (m_dispatch_handlers_map.count(target))
 		return false;
@@ -201,7 +207,8 @@ bool StreamElementsWebsocketApiServer::RegisterMessageHandler(
 bool StreamElementsWebsocketApiServer::UnregisterMessageHandler(
 	std::string target, message_handler_t handler)
 {
-	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+	std::unique_lock<decltype(m_dispatch_handlers_map_mutex)> guard(
+		m_dispatch_handlers_map_mutex);
 
 	if (m_dispatch_handlers_map.count(target)) {
 		m_dispatch_handlers_map.erase(target);
@@ -222,10 +229,6 @@ void StreamElementsWebsocketApiServer::ParseIncomingDispatchMessage(
 	// Get msg source from connection
 	std::string source = m_connection_map[con_hdl];
 
-	// Check if handlers are registered
-	if (!m_dispatch_handlers_map.count(source))
-		return;
-
 	if (root->GetType("payload") != VTYPE_DICTIONARY)
 		return;
 
@@ -245,6 +248,13 @@ void StreamElementsWebsocketApiServer::ParseIncomingDispatchMessage(
 		msgArgs->SetValue(i, args->GetValue(i));
 	}
 
+	std::shared_lock<decltype(m_dispatch_handlers_map_mutex)>
+		lock(m_dispatch_handlers_map_mutex);
+
+	// Check if handlers are registered
+	if (!m_dispatch_handlers_map.count(source))
+		return;
+
 	m_dispatch_handlers_map[source](source, msg);
 }
 
@@ -253,8 +263,6 @@ bool StreamElementsWebsocketApiServer::DispatchJSEvent(std::string source,
 						       std::string event,
 						       std::string json)
 {
-	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
-
 	auto msg = CefProcessMessage::Create("DispatchJSEvent");
 	CefRefPtr<CefListValue> args = msg->GetArgumentList();
 
@@ -267,16 +275,24 @@ bool StreamElementsWebsocketApiServer::DispatchJSEvent(std::string source,
 bool StreamElementsWebsocketApiServer::DispatchJSEvent(std::string source, std::string event,
 						       std::string json)
 {
-	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
-
 	auto msg = CefProcessMessage::Create("DispatchJSEvent");
 	CefRefPtr<CefListValue> args = msg->GetArgumentList();
 
 	args->SetString(0, event);
 	args->SetString(1, json);
 
-	for (auto it : m_client_connection_map) {
-		DispatchClientMessage(source, it.first, msg);
+	std::vector<std::string> targets;
+
+	{
+		std::shared_lock<decltype(m_mutex)> guard(m_mutex);
+
+		for (auto it : m_client_connection_map) {
+			targets.push_back(it.first);
+		}
+	}
+
+	for (auto target : targets) {
+		DispatchClientMessage(source, target, msg);
 	}
 
 	return true;
