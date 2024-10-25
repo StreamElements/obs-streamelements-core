@@ -262,7 +262,7 @@ void StreamElementsOutputBase::handle_obs_frontend_event(
 	StreamElementsOutputBase *self = (StreamElementsOutputBase *)data;
 
 	switch (event) {
-	case OBS_FRONTEND_EVENT_STREAMING_STARTING:
+	case OBS_FRONTEND_EVENT_STREAMING_STARTED:
 		//
 		// OBS native output video encoder is already set up at this stage,
 		// so we can start our outputs as well.
