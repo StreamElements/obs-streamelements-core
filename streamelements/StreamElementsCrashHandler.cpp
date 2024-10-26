@@ -990,6 +990,10 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
 			/* MDSF_NONINTERACTIVE |*/ // Doing this interactively apparently adds more reliability to actually delivering the crash reports to bugsplat...
 			MDSF_DETECTHANGS);
 
+	// Enable full memory dumps
+	s_mdSender->setMiniDumpType(
+		MiniDmpSender::BS_MINIDUMP_TYPE::MiniDumpWithFullMemory); 
+
 	// The following calls add support for collecting crashes for abort(), vectored exceptions, out of memory,
 	// pure virtual function calls, and for invalid parameters for OS functions.
 	// These calls should be used for each module that links with a separate copy of the CRT.

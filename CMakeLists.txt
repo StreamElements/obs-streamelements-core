@@ -65,7 +65,7 @@ endif(APPLE)
 # ----------------------------------------------------------------------------
 
 if (ENABLE_BUGSPLAT)
-	set(BUGSPLAT_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/BugSplat")
+	set(BUGSPLAT_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/BugSplat/BugSplat")
 	set(BUGSPLAT_INCLUDE_DIR "${BUGSPLAT_ROOT_DIR}/inc")
 
 	include_directories(SYSTEM ${BUGSPLAT_INCLUDE_DIR})
@@ -73,9 +73,9 @@ if (ENABLE_BUGSPLAT)
 	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 		find_library(BUGSPLAT_LIBRARY
 			NAMES BugSplat64.lib "BugSplat"
-			PATHS ${BUGSPLAT_ROOT_DIR} ${BUGSPLAT_ROOT_DIR}/lib64)
+			PATHS ${BUGSPLAT_ROOT_DIR} ${BUGSPLAT_ROOT_DIR}/x64/Release)
 
-		set(BUGSPLAT_BIN_DIR "${BUGSPLAT_ROOT_DIR}/bin64")
+		set(BUGSPLAT_BIN_DIR "${BUGSPLAT_ROOT_DIR}/x64/Release")
 		set(BUGSPLAT_BIN_FILES
 			${BUGSPLAT_BIN_DIR}/BsSndRpt64.exe
 			${BUGSPLAT_BIN_DIR}/BugSplat64.dll
@@ -84,10 +84,10 @@ if (ENABLE_BUGSPLAT)
 		)
 	elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
 		find_library(BUGSPLAT_LIBRARY
-			NAMES BugSplat64.lib "BugSplat"
-			PATHS ${BUGSPLAT_ROOT_DIR} ${BUGSPLAT_ROOT_DIR}/lib)
+			NAMES BugSplat.lib "BugSplat"
+			PATHS ${BUGSPLAT_ROOT_DIR} ${BUGSPLAT_ROOT_DIR}/Win32/Release)
 
-		set(BUGSPLAT_BIN_DIR "${BUGSPLAT_ROOT_DIR}/bin")
+		set(BUGSPLAT_BIN_DIR "${BUGSPLAT_ROOT_DIR}/Win32/Release")
 		set(BUGSPLAT_BIN_FILES
 			${BUGSPLAT_BIN_DIR}/BsSndRpt.exe
 			${BUGSPLAT_BIN_DIR}/BugSplat.dll
