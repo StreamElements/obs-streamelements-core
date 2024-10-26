@@ -1,19 +1,22 @@
-//
+﻿//
 //        This sample project illustrates how to capture crashes (unhandled exceptions) in native Windows applications using BugSplat.
 //
-//        The shared sample database 'Fred' is used in this example.
-//        You may view crashes for the Fred account by logging in at https://www.bugsplat.com:
-//        Account (Email Address): Fred 
-//                       Password: Flintstone
-//
+//		  To build this sample:
+//		  1. Edit myConsoleCrasher.h and provide your own value for BUGSPLAT_DATABASE.  (The database can be managed by logging into
+//           the BugSplat web application.)
+//	      2. Create a Client ID and Client Secret pair for your BugSplat database at https://app.bugsplat.com/v2/database/integrations#oauth
+//        3. Create a file MyConsoleCrasher\Scripts\env.ps1 and populate it with the following (being sure to subsitute your {{id}} and {{secret}} 
+//           values from the previous step):
+//                                             $BUGSPLAT_CLIENT_ID = "{{id}}"
+//                                             $BUGSPLAT_CLIENT_SECRET = "{{secret}}"
+//		  4. Build the project
+//    
 //        In order to assure that crashes sent to the BugSplat website yield exception stack traces with file/line # information, 
-//        just rebuild this project.  A Visual Studio post build event is configured to send the resulting .exe and .pdb files
-//        to BugSplat via the SendPdbs utility.  If you wish to use your own account and database, you will need to modify the post build
-//        event accordingly.  If you do not care about file/line # info or for any reason you do not want  to send these files, 
+//        a Visual Studio post build event is configured to send the resulting .exe and .pdb files to BugSplat using the SendPdbs utility. 
+//        If you do not care about file/line # info or for any reason you do not want to send these files, 
 //        simply disable the post build event.
 //
 //        More information is available online at https://www.bugsplat.com
-
 
 #pragma optimize( "", off) // prevent optimizer from interfering with our crash-producing code
 
@@ -21,6 +24,16 @@
 #include <vector>
 #include <new.h>
 #include <windows.h>
+#include <iostream>
+#include <chrono>
+#include <thread>
+
+#ifdef ASAN
+// Enabling Asan error reports requires changes to the build settings, including the compiler option /fsanitize=address
+#include "sanitizer/asan_interface.h"
+#endif
+
+#include "myConsoleCrasher.h"
 #include "BugSplat.h"
 
 void MemoryException();
@@ -28,12 +41,13 @@ void StackOverflow(void *p);
 void DivideByZero();
 void ExhaustMemory(); 
 void ThrowByUser();
-void ThreadException();
+void ThreadException(int nthreads);
 void CallAbort();
 void InvalidParameters();
 void OutOfBoundsVectorCrash();
 void VirtualFunctionCallCrash();
 void CustomSEHException();
+void HeapCorruption();
 void CreateReport();
 bool ExceptionCallback(UINT nCode, LPVOID lpVal1, LPVOID lpVal2);
 MiniDmpSender *mpSender;
@@ -48,7 +62,7 @@ int wmain(int argc, wchar_t **argv)
 	}
 
 	// BugSplat initialization.  Post crash reports to the "Fred" database for application "myConsoleCrasher" version "1.0"
-	mpSender = new MiniDmpSender(L"Fred", L"myConsoleCrasher", L"1.0", NULL, MDSF_USEGUARDMEMORY | MDSF_LOGFILE | MDSF_PREVENTHIJACKING);
+	mpSender = new MiniDmpSender(BUGSPLAT_DATABASE, APPLICATION_NAME, APPLICATION_VERSION, NULL, MDSF_USEGUARDMEMORY | MDSF_LOGFILE | MDSF_LOG_VERBOSE );
 
 	// The following calls add support for collecting crashes for abort(), vectored exceptions, out of memory,
 	// pure virtual function calls, and for invalid parameters for OS functions.
@@ -60,9 +74,16 @@ int wmain(int argc, wchar_t **argv)
 	mpSender->setGuardByteBufferSize(20*1024*1024);
 
 	// Set optional default values for user, email, and user description of the crash.
-	mpSender->setDefaultUserName(_T("Fred"));
-	mpSender->setDefaultUserEmail(_T("fred@bedrock.com"));
-	mpSender->setDefaultUserDescription(_T("This is the default user crash description."));
+	mpSender->setDefaultUserName(L"Fred");
+	mpSender->setDefaultUserEmail(L"fred@bugsplat.com");
+	mpSender->setDefaultUserDescription(L"This is the default user crash description.");
+
+	// Set optional notes field
+	mpSender->setNotes(L"Additional 'notes' data supplied through API");
+
+	// Set optional custom crash attributes
+	mpSender->setAttribute(L"GPU", L"GeForce '{}!@#45(じみー です。)678()<>,./?[] RTX 4060 Ti");
+	mpSender->setAttribute(L"Region", L"Europe");
 
 	// Process command line args that we need prior to crashing
 	for (int i = 1; i < argc; i++) {
@@ -102,11 +123,19 @@ int wmain(int argc, wchar_t **argv)
 		}
 
 		else if (!_wcsicmp(argv[i], L"/Thread")) {
-			ThreadException();
+			ThreadException(1);
+		}
+
+		else if (!_wcsicmp(argv[i], L"/MultipleThreads")) {
+			ThreadException(10);
 		}
 
 		else if (!_wcsicmp(argv[i], L"/Abort")) {
 			CallAbort();
+		}
+
+		else if (!_wcsicmp(argv[i], L"/Asan")) {
+			HeapCorruption();	// / Generally this error goes undetected if Asan is not enabled
 		}
 
 		else if (!_wcsicmp(argv[i], L"/VectorOutOfBounds")) {
@@ -188,21 +217,25 @@ void ThrowByUser()
 	throw("User generated exception!");
 }
 
+
 DWORD WINAPI MyThreadCrasher( LPVOID )
 {
-	wprintf(L"MyThreadCrasher!\n");
+	int msec = 2000;
+	Sleep(msec);
+
+	wprintf(L"MyThreadCrasher creating memory exception after %d milliseconds!\n", msec);
 	MemoryException();
 	return 0;
 }
 
-void ThreadException()
+void ThreadException( int max_threads)
 {
-#define MAX_THREADS 1
-	DWORD   dwThreadIdArray[MAX_THREADS];
-	HANDLE  hThreadArray[MAX_THREADS];
+	DWORD   dwThreadIdArray[100];
+	HANDLE  hThreadArray[100];
+	if (max_threads > 100) max_threads = 100;
 
-	// Create MAX_THREADS worker threads.
-	for (int i = 0; i < MAX_THREADS; i++)
+	// Create worker threads.
+	for (int i = 0; i<max_threads; i++)
 	{
 		// Create the thread to begin execution on its own.
 		hThreadArray[i] = CreateThread(
@@ -218,10 +251,10 @@ void ThreadException()
 			wprintf(L"CreateThread failed");
 			ExitProcess(3);
 		}
-	} // End of main thread creation loop.
+	}
 
 	// Wait until all threads have terminated.
-	WaitForMultipleObjects(MAX_THREADS, hThreadArray, TRUE, INFINITE);
+	WaitForMultipleObjects(max_threads, hThreadArray, TRUE, INFINITE);
 }
 
 void CallAbort()
@@ -292,13 +325,71 @@ void CustomSEHException()
 	}
 }
 
+
+// Address sanitizer test
+void asanCallback(const char* message)
+{
+	mpSender->createAsanReport(message);
+}
+
+
+// Generally this error goes undetected if Asan is not enabled
+void HeapCorruption() 
+{
+	void* pointerArray[20];
+	struct simple_struct {
+		double b;
+		double c;
+		char d;
+	};
+
+#ifdef ASAN
+	__asan_set_error_report_callback(asanCallback);
+#endif
+
+	{
+		auto a = new simple_struct;
+		auto b = new simple_struct;
+
+		pointerArray[0] = a;
+		pointerArray[1] = b;
+	}
+
+	// Function attempts to use pointer from array.
+	// Encounters an error and deletes the pointer without removing it from array
+	{
+		auto item = reinterpret_cast<simple_struct*>(pointerArray[1]);
+		delete item;
+	}
+
+	// Program continues, address is reused
+	constexpr auto numInts = 40;
+	auto intArray = reinterpret_cast<int*>(pointerArray[1]);
+	for (int i = 0; i < numInts; i++) {
+		intArray[i] = 10;
+	}
+
+	// Function called again, encounters the same error and tries to delete the same memory again
+	{
+		auto item = reinterpret_cast<simple_struct*>(pointerArray[1]);
+
+		__try {
+			delete item;
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER) {
+			wprintf(L"exception handling test successful.\n");
+
+		}
+	}
+}
+
 void CreateReport()
 {
 	const __wchar_t  *xml = L"<report><process>"
 		"<exception>"
 			"<code>FATAL ERROR</code>"
 			"<explanation>This is an error code explanation</explanation>"
-			"<func>myConsoleCrasher!MemoryException</func>"
+			"<func><![CDATA[myConsoleCrasher!MemoryException]]></func>"
 			"<file>/www/bugsplatAutomation/myConsoleCrasher/myConsoleCrasher.cpp</file>"
 			"<line>143</line>"
 			"<registers>"
@@ -340,19 +431,19 @@ void CreateReport()
 		"<threads count=\"2\">"
 		"<thread id=\"0\" current=\"yes\" event=\"yes\" framecount=\"3\">"
 			"<frame>"
-				"<symbol>myConsoleCrasher!MemoryException</symbol>"
+				"<symbol><![CDATA[myConsoleCrasher!MemoryException]]></symbol>"
 				"<file>/www/bugsplatAutomation/myConsoleCrasher/myConsoleCrasher.cpp</file>"
 				"<line>143</line>"
 				"<offset>0x35</offset>"
 			"</frame>"
 			"<frame>"
-				"<symbol>myConsoleCrasher!wmain</symbol>"
+				"<symbol><![CDATA[myConsoleCrasher!wmain]]></symbol>"
 				"<file>C:/www/BugsplatAutomation/BugsplatAutomation/BugSplat/samples/myConsoleCrasher/myConsoleCrasher.cpp</file>"
 				"<line>83</line>"
 				"<offset>0x239</offset>"
 			"</frame>"
 			"<frame>"
-				"<symbol>myConsoleCrasher!__scrt_wide_environment_policy::initialize_environment</symbol>"
+				"<symbol><![CDATA[myConsoleCrasher!__scrt_wide_environment_policy::initialize_environment]]></symbol>"
 				"<file>d:/agent/_work/4/s/src/vctools/crt/vcstartup/src/startup/exe_common.inl</file>"
 				"<line>90</line>"
 				"<offset>0x43</offset>"
@@ -360,19 +451,19 @@ void CreateReport()
 		"</thread>"
 		"<thread id=\"1\" current=\"no\" event=\"no\" framecount=\"3\">"
 			"<frame>"
-				"<symbol>my2ConsoleCrasher!MemoryException</symbol>"
+				"<symbol><![CDATA[my2ConsoleCrasher!MemoryException]]></symbol>"
 				"<file>/www/bugsplatAutomation/myConsoleCrasher/myConsoleCrasher.cpp</file>"
 				"<line>143</line>"
 				"<offset>0x35</offset>"
 			"</frame>"
 			"<frame>"
-				"<symbol>my2ConsoleCrasher!wmain</symbol>"
+				"<symbol><![CDATA[my2ConsoleCrasher!wmain]]></symbol>"
 				"<file>C:/www/BugsplatAutomation/BugsplatAutomation/BugSplat/samples/myConsoleCrasher/myConsoleCrasher.cpp</file>"
 				"<line>83</line>"
 				"<offset>0x239</offset>"
 			"</frame>"
 			"<frame>"
-				"<symbol>my2ConsoleCrasher!__scrt_wide_environment_policy::initialize_environment</symbol>"
+				"<symbol><![CDATA[my2ConsoleCrasher!__scrt_wide_environment_policy::initialize_environment]]></symbol>"
 				"<file>d:/agent/_work/4/s/src/vctools/crt/vcstartup/src/startup/exe_common.inl</file>"
 				"<line>90</line>"
 				"<offset>0x43</offset>"
