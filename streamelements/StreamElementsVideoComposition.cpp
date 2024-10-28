@@ -708,6 +708,12 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 			   this);
 
 	obs_transition_set(m_transition, obs_scene_get_source(m_currentScene));
+
+	auto source = obs_scene_get_source(m_currentScene);
+	if (source) {
+		obs_source_inc_showing(source);
+		obs_source_inc_active(source);
+	}
 }
 
 void StreamElementsCustomVideoComposition::SetRecordingEncoder(
@@ -1053,6 +1059,16 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 				return true;
 			}
 
+			{
+				auto source =
+					obs_scene_get_source(m_currentScene);
+				if (source) {
+					obs_source_dec_active(source);
+					obs_source_dec_showing(source);
+				}
+			}
+
+
 			m_currentScene = scene;
 
 			float t = obs_transition_get_time(m_transition);
@@ -1067,6 +1083,12 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 					m_transition, OBS_TRANSITION_MODE_AUTO,
 					GetTransitionDurationMilliseconds(),
 					obs_scene_get_source(m_currentScene));
+			}
+
+			auto source = obs_scene_get_source(m_currentScene);
+			if (source) {
+				obs_source_inc_showing(source);
+				obs_source_inc_active(source);
 			}
 
 			dispatch_scene_changed_event(this, m_currentScene);
