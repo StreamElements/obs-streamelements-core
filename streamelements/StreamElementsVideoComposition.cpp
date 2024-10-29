@@ -945,7 +945,7 @@ StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 {
 	auto scene = obs_scene_create_private(GetUniqueSceneName(requestName).c_str());
 
-	obs_scene_addref(scene); // caller will release
+	obs_scene_get_ref(scene); // caller will release
 
 	{
 		std::unique_lock<decltype(m_mutex)> lock(m_mutex);
@@ -1002,13 +1002,13 @@ void StreamElementsCustomVideoComposition::SetTransition(
 		m_transition = transition;
 	}
 
-	obs_source_addref(transition);
+	obs_source_get_ref(transition);
 
 	obs_transition_swap_begin(transition, old_transition);
 	obs_view_set_source(m_view, 0, transition);
 	obs_transition_swap_end(transition, old_transition);
 
-	//obs_scene_addref(m_currentScene);
+	//obs_scene_get_ref(m_currentScene);
 	obs_transition_set(old_transition, nullptr);
 	obs_source_release(old_transition);
 

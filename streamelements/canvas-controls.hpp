@@ -98,7 +98,7 @@ public:
 		  m_sceneItem(sceneItem),
 		  m_parentSceneItem(parentSceneItem)
 	{
-		obs_scene_addref(m_scene);
+		obs_scene_get_ref(m_scene);
 		obs_sceneitem_addref(m_sceneItem);
 	}
 	SceneItemControlBase(SceneItemControlBase &) = delete;
