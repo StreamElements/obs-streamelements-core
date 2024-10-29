@@ -614,7 +614,8 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 		return false;
 	}
 
-	const char *output_type = obs_service_get_output_type(m_service);
+	const char *output_type =
+		obs_service_get_preferred_output_type(m_service);
 
 	if (!output_type)
 		output_type = "rtmp_output";

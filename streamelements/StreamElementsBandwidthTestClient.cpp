@@ -80,7 +80,8 @@ void StreamElementsBandwidthTestClient::TestServerBitsPerSecond(
 
 	// Configure output
 
-	const char *output_type = obs_service_get_output_type(service);
+	const char *output_type =
+		obs_service_get_preferred_output_type(service);
 
 	if (!output_type)
 		output_type = "rtmp_output";
