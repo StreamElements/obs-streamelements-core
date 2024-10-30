@@ -601,6 +601,10 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 		return false;
 
 	if (!videoCompositionInfo->GetStreamingVideoEncoder() && videoCompositionInfo->IsObsNative()) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: OBS Native streaming video encoder does not exist yet on streaming output '%s'",
+		     GetId().c_str());
+
 		SetError(
 			"OBS Native streaming video encoder does not exist yet");
 
@@ -629,30 +633,52 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 	m_output = obs_output_create(output_type, GetId().c_str(),
 						 output_settings, nullptr);
 
+	obs_data_release(output_settings);
+
 	if (m_output) {
 		obs_output_set_video_encoder(
 			m_output,
 			videoCompositionInfo->GetStreamingVideoEncoder());
+
+		size_t audioEncodersCount = 0;
 
 		for (size_t i = 0; i < m_audioTracks.size(); ++i) {
 			auto encoder =
 				audioCompositionInfo->GetStreamingAudioEncoder(
 					m_audioTracks[i]);
 
-			if (!encoder)
+			if (!encoder) {
+				blog(LOG_WARNING,
+				     "obs-streamelements-core: audio encoder for audio track %d does not exist on streaming output '%s'",
+				     m_audioTracks[i], GetId().c_str());
+
 				break;
+			}
 
 			obs_output_set_audio_encoder(m_output, encoder, i);
+
+			++audioEncodersCount;
 		}
 
-		obs_output_set_service(m_output, m_service);
+		if (audioEncodersCount) {
+			obs_output_set_service(m_output, m_service);
 
-		ConnectOutputEvents();
+			ConnectOutputEvents();
 
-		if (obs_output_start(m_output)) {
-			m_videoCompositionInfo = videoCompositionInfo;
+			if (obs_output_start(m_output)) {
+				m_videoCompositionInfo = videoCompositionInfo;
 
-			return true;
+				return true;
+			} else {
+				SetErrorIfEmpty("Failed to start output");
+			}
+		} else {
+			blog(LOG_ERROR,
+			     "obs-streamelements-core: no audio encoders were set up on streaming output '%s'",
+			     GetId().c_str());
+
+			SetError(
+				"No audio encoders were set up for requested audio tracks");
 		}
 
 		DisconnectOutputEvents();
@@ -660,7 +686,12 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 		obs_output_release(m_output);
 		m_output = nullptr;
 	} else {
-		obs_data_release(output_settings);
+		blog(LOG_ERROR,
+		     "obs-streamelements-core: failed to create streaming output '%s' of type '%s'",
+		     GetId().c_str(), output_type);
+
+		SetError(
+			"Failed to create output");
 	}
 
 	return false;
@@ -1033,6 +1064,10 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 
 	if (!videoCompositionInfo->GetRecordingVideoEncoder() &&
 	    videoCompositionInfo->IsObsNative()) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: OBS Native streaming video encoder does not exist yet on recording output '%s'",
+		     GetId().c_str());
+
 		SetError(
 			"OBS Native recording video encoder does not exist yet");
 
@@ -1194,7 +1229,9 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 
 	OBSDataAutoRelease hotkeyData = obs_data_create();
 
-	m_output = obs_output_create("ffmpeg_muxer", GetId().c_str(), settings,
+	const char *output_type = "ffmpeg_muxer";
+
+	m_output = obs_output_create(output_type, GetId().c_str(), settings,
 				     hotkeyData);
 
 	if (m_output) {
@@ -1202,29 +1239,55 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 			m_output,
 			videoCompositionInfo->GetRecordingVideoEncoder());
 
+		size_t audioEncodersCount = 0;
+
 		for (size_t i = 0; i < m_audioTracks.size(); ++i) {
 			auto encoder =
 				audioCompositionInfo->GetRecordingAudioEncoder(
 					m_audioTracks[i]);
 
-			if (!encoder)
+			if (!encoder) {
+				blog(LOG_WARNING,
+				     "obs-streamelements-core: audio encoder for audio track %d does not exist on recording output '%s'",
+				     m_audioTracks[i], GetId().c_str());
+
 				break;
+			}
 
 			obs_output_set_audio_encoder(m_output, encoder, i);
+
+			++audioEncodersCount;
 		}
 
-		ConnectOutputEvents();
+		if (audioEncodersCount) {
+			ConnectOutputEvents();
 
-		if (obs_output_start(m_output)) {
-			m_videoCompositionInfo = videoCompositionInfo;
+			if (obs_output_start(m_output)) {
+				m_videoCompositionInfo = videoCompositionInfo;
 
-			return true;
+				return true;
+			} else {
+				SetErrorIfEmpty("Failed to start output");
+			}
+		} else {
+			blog(LOG_ERROR,
+			     "obs-streamelements-core: no audio encoders were set up on recording output '%s'",
+			     GetId().c_str());
+
+			SetError(
+				"No audio encoders were set up for requested audio tracks");
 		}
 
 		DisconnectOutputEvents();
 
 		obs_output_release(m_output);
 		m_output = nullptr;
+	} else {
+		blog(LOG_ERROR,
+		     "obs-streamelements-core: failed to create recording output '%s' of type '%s'",
+		     GetId().c_str(), output_type);
+
+		SetError("Failed to create output");
 	}
 
 	return false;

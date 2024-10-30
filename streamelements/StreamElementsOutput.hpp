@@ -105,6 +105,11 @@ protected:
 
 protected:
 	void SetError(std::string error) { m_error = error; }
+	void SetErrorIfEmpty(std::string error)
+	{
+		if (!m_error.size())
+			m_error = error;
+	}
 
 private:
 	static void handle_obs_frontend_event(enum obs_frontend_event event,
