@@ -57,10 +57,6 @@ void StreamElementsHttpClient::DeserializeHttpRequestText(
 
 		std::transform(method.begin(), method.end(), method.begin(), ::toupper);
 
-		if (url.size() && method.size()) {
-
-		}
-
 		auto cb = [&](char* data, void* userdata, char* error_msg, int http_code)
 		{
 			if (http_code != 0) {
@@ -82,14 +78,15 @@ void StreamElementsHttpClient::DeserializeHttpRequestText(
 			}
 		};
 
-		if (method == "GET") {
+		if (method == "GET" || method == "DELETE" || method == "OPTIONS") {
 			success = HttpGetString(
+				method,
 				url.c_str(),
 				request_headers,
 				cb,
 				nullptr);
 		}
-		else if (method == "POST") {
+		else {
 			std::string post_data;
 
 			if (d->HasKey("body") && d->GetType("body") == VTYPE_STRING) {
@@ -98,6 +95,7 @@ void StreamElementsHttpClient::DeserializeHttpRequestText(
 			}
 
 			success = HttpPostString(
+				method,
 				url.c_str(),
 				request_headers,
 				post_data.c_str(),

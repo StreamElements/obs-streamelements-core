@@ -176,15 +176,32 @@ typedef std::multimap<std::string, std::string> http_client_headers_t;
 bool HttpGet(const char *url, http_client_headers_t request_headers,
 	     http_client_callback_t callback, void *userdata);
 
+bool HttpGet(std::string method, const char *url,
+	     http_client_headers_t request_headers,
+	     http_client_callback_t callback, void *userdata);
+
+bool HttpPost(std::string method, const char *url,
+	      http_client_headers_t request_headers, void *buffer,
+	      size_t buffer_len, http_client_callback_t callback,
+	      void *userdata);
+
 bool HttpPost(const char *url, http_client_headers_t request_headers,
 	      void *buffer, size_t buffer_len, http_client_callback_t callback,
 	      void *userdata);
+
+bool HttpGetString(std::string method, const char *url,
+		   http_client_headers_t request_headers,
+		   http_client_string_callback_t callback, void *userdata);
 
 bool HttpGetString(const char *url, http_client_headers_t request_headers,
 		   http_client_string_callback_t callback, void *userdata);
 
 bool HttpGetBuffer(const char *url, http_client_headers_t request_headers,
 		   http_client_buffer_callback_t callback, void *userdata);
+
+bool HttpPostString(std::string method, const char *url,
+		    http_client_headers_t request_headers, const char *postData,
+		    http_client_string_callback_t callback, void *userdata);
 
 bool HttpPostString(const char *url, http_client_headers_t request_headers,
 		    const char *postData,

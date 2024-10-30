@@ -1099,14 +1099,22 @@ static size_t http_write_callback(char *ptr, size_t size, size_t nmemb,
 	}
 };
 
-bool HttpGet(const char *url, http_client_headers_t request_headers,
+bool HttpGet(std::string method, const char *url, http_client_headers_t request_headers,
 	     http_client_callback_t callback, void *userdata)
 {
 	bool result = false;
 
 	CURL *curl = curl_easy_init();
 
+	std::transform(method.begin(), method.end(), method.begin(), ::toupper);
+
 	if (curl) {
+		if (method == "GET") {
+			// NOP
+		} else if (method == "DELETE" || method == "OPTIONS") {
+			curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method.c_str());
+		}
+
 		SetGlobalCURLOptions(curl, url);
 
 		curl_easy_setopt(curl, CURLOPT_URL, url);
@@ -1166,7 +1174,13 @@ bool HttpGet(const char *url, http_client_headers_t request_headers,
 	return result;
 }
 
-bool HttpPost(const char *url, http_client_headers_t request_headers,
+bool HttpGet(const char* url, http_client_headers_t request_headers,
+	http_client_callback_t callback, void* userdata)
+{
+	return HttpGet("GET", url, request_headers, callback, userdata);
+}
+
+bool HttpPost(std::string method, const char *url, http_client_headers_t request_headers,
 	      void *buffer, size_t buffer_len, http_client_callback_t callback,
 	      void *userdata)
 {
@@ -1176,6 +1190,23 @@ bool HttpPost(const char *url, http_client_headers_t request_headers,
 
 	if (curl) {
 		SetGlobalCURLOptions(curl, url);
+
+		std::transform(method.begin(), method.end(), method.begin(),
+			       ::toupper);
+
+		if (method == "POST") {
+			curl_easy_setopt(curl, CURLOPT_POST, 1L);
+		} else if (method == "PUT") {
+			curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L); // implies PUT
+		} else if (method == "PATCH") {
+			curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method.c_str());
+		} else {
+			// Unknown method
+			curl_easy_cleanup(curl);
+
+			return false;
+		}
+
 
 		curl_easy_setopt(curl, CURLOPT_URL, url);
 
@@ -1194,7 +1225,6 @@ bool HttpPost(const char *url, http_client_headers_t request_headers,
 				 http_write_callback);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &context);
 
-		curl_easy_setopt(curl, CURLOPT_POST, 1L);
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)buffer_len);
 		curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, buffer);
 
@@ -1238,9 +1268,18 @@ bool HttpPost(const char *url, http_client_headers_t request_headers,
 	return result;
 }
 
+bool HttpPost(const char* url, http_client_headers_t request_headers,
+	void* buffer, size_t buffer_len, http_client_callback_t callback,
+	void* userdata)
+{
+	return HttpPost("POST", url, request_headers, buffer, buffer_len, callback,
+		 userdata);
+}
+
 static const size_t MAX_HTTP_STRING_RESPONSE_LENGTH = 1024 * 1024 * 100;
 
-bool HttpGetString(const char *url, http_client_headers_t request_headers,
+bool HttpGetString(std::string method, const char *url,
+		   http_client_headers_t request_headers,
 		   http_client_string_callback_t callback, void *userdata)
 {
 	std::vector<char> buffer;
@@ -1266,7 +1305,7 @@ bool HttpGetString(const char *url, http_client_headers_t request_headers,
 		return buffer.size() < MAX_HTTP_STRING_RESPONSE_LENGTH;
 	};
 
-	bool success = HttpGet(url, request_headers, cb, nullptr);
+	bool success = HttpGet(method, url, request_headers, cb, nullptr);
 
 	buffer.push_back(0);
 
@@ -1275,6 +1314,12 @@ bool HttpGetString(const char *url, http_client_headers_t request_headers,
 		 http_status_code);
 
 	return success;
+}
+
+bool HttpGetString(const char* url, http_client_headers_t request_headers,
+	http_client_string_callback_t callback, void* userdata)
+{
+	return HttpGetString("GET", url, request_headers, callback, userdata);
 }
 
 bool HttpGetBuffer(
@@ -1315,8 +1360,8 @@ bool HttpGetBuffer(
 	return success;
 }
 
-bool HttpPostString(const char *url, http_client_headers_t request_headers,
-		    const char *postData,
+bool HttpPostString(std::string method, const char *url,
+		    http_client_headers_t request_headers, const char *postData,
 		    http_client_string_callback_t callback, void *userdata)
 {
 	std::vector<char> buffer;
@@ -1342,7 +1387,7 @@ bool HttpPostString(const char *url, http_client_headers_t request_headers,
 		return buffer.size() < MAX_HTTP_STRING_RESPONSE_LENGTH;
 	};
 
-	bool success = HttpPost(url, request_headers, (void *)postData,
+	bool success = HttpPost(method, url, request_headers, (void *)postData,
 				strlen(postData), cb, nullptr);
 
 	buffer.push_back(0);
@@ -1352,6 +1397,14 @@ bool HttpPostString(const char *url, http_client_headers_t request_headers,
 		 http_status_code);
 
 	return success;
+}
+
+bool HttpPostString(const char* url, http_client_headers_t request_headers,
+	const char* postData,
+	http_client_string_callback_t callback, void* userdata)
+{
+	return HttpPostString("POST", url, request_headers, postData, callback,
+			      userdata);
 }
 
 /* ========================================================= */
