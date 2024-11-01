@@ -16,6 +16,9 @@
 #include "obs-websocket-api/obs-websocket-api.h"
 #include "cef-headers.hpp"
 
+#include "streamelements/audio-wrapper-source.h"
+#include "streamelements/Version.generated.hpp"
+
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("obs-streamelements-core", "en-US")
 MODULE_EXPORT const char *obs_module_description(void)
@@ -36,7 +39,10 @@ using namespace json11;
 
 bool obs_module_load(void)
 {
-	blog(LOG_INFO, "[obs-streamelements-core]: Version %s", "unknown");
+	blog(LOG_INFO, "[obs-streamelements-core]: Version %lu",
+	     STREAMELEMENTS_PLUGIN_VERSION);
+
+	obs_register_source(&audio_wrapper_source);
 
 	return true;
 }

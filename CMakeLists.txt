@@ -188,6 +188,7 @@ set(obs-streamelements-core_SOURCES
 	deps/cef-stub/cef_value_json.cpp
 	deps/cef-stub/cef_value_list.cpp
 	streamelements/Version.cpp
+	streamelements/audio-wrapper-source.c
 	streamelements/StreamElementsAsyncTaskQueue.cpp
 	streamelements/StreamElementsBrowserWidget.cpp
 	streamelements/StreamElementsBrowserWidgetManager.cpp
@@ -273,6 +274,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/deps/utf8/cpp17.h
 	streamelements/Version.hpp
 	streamelements/Version.generated.hpp
+	streamelements/audio-wrapper-source.h
 	streamelements/StreamElementsUtils.hpp
 	streamelements/StreamElementsAsyncTaskQueue.hpp
 	streamelements/StreamElementsBrowserWidget.hpp
