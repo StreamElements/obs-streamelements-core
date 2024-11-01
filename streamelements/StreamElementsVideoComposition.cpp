@@ -9,6 +9,8 @@
 #include "StreamElementsMessageBus.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
 
+#include "audio-wrapper-source.h"
+
 static void dispatch_external_event(std::string name, std::string args)
 {
 	std::string externalEventName =
@@ -714,6 +716,35 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 		obs_source_inc_showing(source);
 		obs_source_inc_active(source);
 	}
+
+	m_audioWrapperSource = obs_source_create_private(
+		AUDIO_WRAPPER_SOURCE_ID, AUDIO_WRAPPER_SOURCE_ID, nullptr);
+
+	auto aw = (struct audio_wrapper_info *)obs_obj_get_data(
+		m_audioWrapperSource);
+
+	aw->param = this;
+	aw->target = [](void *param) {
+		StreamElementsCustomVideoComposition *composition =
+			reinterpret_cast<StreamElementsCustomVideoComposition *>(
+				param);
+
+		// This will always return the most up-to-date value of transition which is always the root of our video composition
+		return obs_source_get_ref(composition->GetTransition());
+	};
+
+	// Assign audio wrapper source to first free audio channel
+	for (uint32_t channel = 0; channel < MAX_CHANNELS; ++channel) {
+		auto source = obs_get_output_source(channel);
+
+		if (!source) {
+			obs_set_output_source(channel, m_audioWrapperSource);
+
+			break;
+		} else {
+			obs_source_release(source);
+		}
+	}
 }
 
 void StreamElementsCustomVideoComposition::SetRecordingEncoder(
@@ -750,6 +781,24 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 	}
 
 	m_video = nullptr;
+
+	if (m_audioWrapperSource) {
+		// Release output channel
+		for (uint32_t channel = 0; channel < MAX_CHANNELS; ++channel) {
+			auto source = obs_get_output_source(channel);
+
+			if (source) {
+				if (source == m_audioWrapperSource) {
+					obs_set_output_source(channel, nullptr);
+				}
+
+				obs_source_release(source);
+			}
+		}
+
+		obs_source_release(m_audioWrapperSource);
+		m_audioWrapperSource = nullptr;
+	}
 
 	if (m_transition) {
 		obs_transition_set(m_transition, nullptr);

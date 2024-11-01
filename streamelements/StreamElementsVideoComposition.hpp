@@ -332,6 +332,8 @@ private:
 	uint32_t m_baseWidth;
 	uint32_t m_baseHeight;
 
+	obs_source_t *m_audioWrapperSource = nullptr;
+
 public:
 	// ctor only usable by this class
 	StreamElementsCustomVideoComposition(
