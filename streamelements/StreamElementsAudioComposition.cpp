@@ -349,8 +349,6 @@ void StreamElementsCustomAudioComposition::SetRecordingEncoder(
 
 StreamElementsCustomAudioComposition::~StreamElementsCustomAudioComposition()
 {
-	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
-
 	for (size_t i = 0; i < MAX_AUDIO_MIXES; ++i) {
 		if (m_streamingAudioEncoders[i]) {
 			obs_encoder_release(m_streamingAudioEncoders[i]);

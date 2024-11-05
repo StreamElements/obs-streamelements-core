@@ -724,13 +724,18 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 		m_audioWrapperSource);
 
 	aw->param = this;
-	aw->target = [](void *param) {
-		StreamElementsCustomVideoComposition *composition =
+	aw->target = [](void *param) -> obs_source_t* {
+		StreamElementsCustomVideoComposition *self =
 			reinterpret_cast<StreamElementsCustomVideoComposition *>(
 				param);
 
+		std::shared_lock<decltype(self->m_mutex)> lock(self->m_mutex);
+
+		if (!self->m_transition)
+			return nullptr;
+
 		// This will always return the most up-to-date value of transition which is always the root of our video composition
-		return obs_source_get_ref(composition->GetTransition());
+		return obs_source_get_ref(self->m_transition);
 	};
 
 	// Assign audio wrapper source to first free audio channel
@@ -762,8 +767,6 @@ void StreamElementsCustomVideoComposition::SetRecordingEncoder(
 
 StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 {
-	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
-
 	if (m_streamingVideoEncoder) {
 		obs_encoder_release(m_streamingVideoEncoder);
 		m_streamingVideoEncoder = nullptr;
