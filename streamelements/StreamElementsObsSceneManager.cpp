@@ -1165,6 +1165,10 @@ void remove_source_signals(obs_source_t *source, void *data)
 
 	auto handler = obs_source_get_signal_handler(source);
 
+	signal_handler_disconnect(handler, "update",
+				  handle_scene_item_source_update_settings,
+				  data);
+
 	signal_handler_disconnect(handler, "update_properties",
 				  handle_scene_item_source_update_props, data);
 
@@ -1175,6 +1179,9 @@ void remove_source_signals(obs_source_t *source, void *data)
 void add_source_signals(obs_source_t *source, void *data)
 {
 	auto handler = obs_source_get_signal_handler(source);
+
+	signal_handler_connect(handler, "update",
+			       handle_scene_item_source_update_settings, data);
 
 	signal_handler_connect(handler, "update_properties",
 			       handle_scene_item_source_update_props, data);
