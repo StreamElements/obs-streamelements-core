@@ -1005,6 +1005,7 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
 	s_mdSender->setDefaultUserEmail(L"");
 	s_mdSender->setDefaultUserDescription(L"OBS crashed. Please provide any additional information you might have here. What were you doing just before this happened?");
 	s_mdSender->setGuardByteBufferSize(1024 * 1024); // Allocate 1MB of guard buffer
+	s_mdSender->setHangDetectionTimeout(10000);
 
 	s_mdSender->setCallback(BugSplatExceptionCallback);
 
