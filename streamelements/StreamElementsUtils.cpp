@@ -711,8 +711,16 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output)
 					"defaultSettings",
 					SerializeObsData(defaultSettings));
 
-				auto properties = obs_get_source_properties(
-					sourceId);
+				// We need all of this create-release dance since some 3rd party sources do not support obs_get_source_properties :(
+				auto settings = obs_data_create();
+				auto source = obs_source_create_private(
+					sourceId,
+					CreateGloballyUniqueIdString().c_str(),
+					settings);
+				auto properties = obs_source_properties(
+					source);
+				obs_source_release(source);
+				obs_data_release(settings);
 
 				auto propertiesVal = CefValue::Create();
 				SerializeObsProperties(properties,
@@ -729,17 +737,21 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output)
 	}
 }
 
-void SerializeExistingInputSources(CefRefPtr<CefValue> &output, uint32_t requireOutputFlagsMask)
+void SerializeExistingInputSources(
+	CefRefPtr<CefValue> &output, uint32_t requireOutputFlagsMask,
+	std::vector<obs_source_type> requireSourceTypes)
 {
 	struct local_context_t {
 		CefRefPtr<CefListValue> list;
 		uint32_t requireOutputFlagsMask;
+		std::vector<obs_source_type> requireSourceTypes;
 	};
 
 	local_context_t local_context;
 
 	local_context.list = CefListValue::Create();
 	local_context.requireOutputFlagsMask = requireOutputFlagsMask;
+	local_context.requireSourceTypes = requireSourceTypes;
 
 	// Iterate over all sources
 	obs_enum_sources(
@@ -750,9 +762,19 @@ void SerializeExistingInputSources(CefRefPtr<CefValue> &output, uint32_t require
 			uint32_t sourceCaps =
 				obs_source_get_output_flags(source);
 
+			obs_source_type type = obs_source_get_type(source);
+
+			bool hasRequiredSourceType = false;
+			for (auto requireType : context->requireSourceTypes) {
+				if (requireType == type) {
+					hasRequiredSourceType = true;
+					break;
+				}
+			}
+
 			// If source has video
 			if ((sourceCaps & context->requireOutputFlagsMask) ==
-			    context->requireOutputFlagsMask) {
+			    context->requireOutputFlagsMask && hasRequiredSourceType) {
 				// Create source response dictionary
 				CefRefPtr<CefDictionaryValue> dic =
 					CefDictionaryValue::Create();
@@ -808,18 +830,23 @@ void SerializeExistingInputSources(CefRefPtr<CefValue> &output, uint32_t require
 				dic->SetValue("defaultSettings",
 					SerializeObsData(defaultSettings));
 
-				auto properties = obs_get_source_properties(
-					sourceId.c_str());
+				auto properties = obs_source_properties(source);
 
-				obs_properties_apply_settings(properties, settings);
+				if (properties) {
+					obs_properties_apply_settings(
+						properties, settings);
 
-				auto propertiesVal = CefValue::Create();
-				SerializeObsProperties(properties,
-						       propertiesVal);
+					auto propertiesVal = CefValue::Create();
+					SerializeObsProperties(properties,
+							       propertiesVal);
 
-				dic->SetValue("properties", propertiesVal);
+					dic->SetValue("properties",
+						      propertiesVal);
 
-				obs_properties_destroy(properties);
+					obs_properties_destroy(properties);
+				} else {
+					dic->SetList("properties", CefListValue::Create());
+				}
 
 				// Append dictionary to response list
 				context->list->SetDictionary(context->list->GetSize(), dic);

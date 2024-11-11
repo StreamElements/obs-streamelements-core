@@ -2815,7 +2815,13 @@ void StreamElementsObsSceneManager::SerializeSourceClassProperties(
 
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
-	obs_properties_t *props = obs_get_source_properties(id.c_str());
+	// We need all of this create-destroy dance since some 3rd party source types just do not support obs_get_source_properties :(
+	obs_data_t *settings = obs_data_create();
+	auto source = obs_source_create_private(
+		id.c_str(), CreateGloballyUniqueIdString().c_str(), settings);
+	obs_properties_t *props = obs_source_properties(source);
+	obs_source_release(source);
+	obs_data_release(settings);
 
 	if (!props)
 		return;
