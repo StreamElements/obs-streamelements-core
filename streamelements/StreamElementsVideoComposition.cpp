@@ -1007,8 +1007,8 @@ StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 
 	auto source = obs_scene_get_source(scene);
 
-	add_source_signals(source, nullptr);
-	add_scene_signals(scene, nullptr);
+	add_source_signals(source, this);
+	add_scene_signals(scene, this);
 
 	{
 		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
