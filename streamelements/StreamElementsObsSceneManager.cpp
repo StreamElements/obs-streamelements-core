@@ -1428,7 +1428,11 @@ StreamElementsObsSceneManager::StreamElementsObsSceneManager(QMainWindow *parent
 	m_scenesWidgetManager =
 		new StreamElementsScenesListWidgetManager(m_parent);
 
-	m_signalHandlerData = new SESignalHandlerData(this, nullptr);
+	m_signalHandlerData = new SESignalHandlerData(
+		this, StreamElementsGlobalStateManager::GetInstance()
+			      ->GetVideoCompositionManager()
+			      ->GetObsNativeVideoComposition()
+			      .get());
 	m_signalHandlerData->AddRef();
 
 	obs_enter_graphics();
