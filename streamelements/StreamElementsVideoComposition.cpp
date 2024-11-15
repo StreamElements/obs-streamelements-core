@@ -11,6 +11,8 @@
 
 #include "audio-wrapper-source.h"
 
+#include "StreamElementsObsSceneManager.hpp"
+
 static void dispatch_external_event(std::string name, std::string args)
 {
 	std::string externalEventName =
@@ -705,9 +707,12 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	m_currentScene = obs_scene_create_private(GetUniqueSceneName("Scene").c_str());
 	m_scenes.push_back(m_currentScene);
 
-	add_scene_signals(m_currentScene, this);
+	m_signalHandlerData = new SESignalHandlerData(nullptr, this);
+	m_signalHandlerData->AddRef();
+
+	add_scene_signals(m_currentScene, m_signalHandlerData);
 	add_source_signals(obs_scene_get_source(m_currentScene),
-			   this);
+			   m_signalHandlerData);
 
 	obs_transition_set(m_transition, obs_scene_get_source(m_currentScene));
 
@@ -809,13 +814,14 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 		m_transition = nullptr;
 	}
 
-	if (m_scenes.size()) {
-		for (auto scene : m_scenes) {
-			obs_scene_release(scene);
-		}
+	while (m_scenes.size()) {
+		RemoveScene(m_scenes[0]);
 
 		m_scenes.clear();
 	}
+
+	m_signalHandlerData->Release();
+	m_signalHandlerData = nullptr;
 }
 
 std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
@@ -1007,8 +1013,8 @@ StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 
 	auto source = obs_scene_get_source(scene);
 
-	add_source_signals(source, this);
-	add_scene_signals(scene, this);
+	add_source_signals(source, m_signalHandlerData);
+	add_scene_signals(scene, m_signalHandlerData);
 
 	{
 		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
@@ -1029,8 +1035,8 @@ bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
 
 			auto source = obs_scene_get_source(scene);
 
-			remove_source_signals(source, this);
-			remove_scene_signals(scene, this);
+			remove_source_signals(source, m_signalHandlerData);
+			remove_scene_signals(scene, m_signalHandlerData);
 
 			obs_scene_release(scene);
 

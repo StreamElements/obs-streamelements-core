@@ -316,6 +316,8 @@ protected:
 	virtual void SetTransitionDurationMilliseconds(int duration);
 };
 
+class SESignalHandlerData;
+
 // Custom Composition
 class StreamElementsCustomVideoComposition
 	: public StreamElementsVideoCompositionBase,
@@ -325,6 +327,8 @@ private:
 	struct Private {
 		explicit Private() = default;
 	};
+
+	SESignalHandlerData *m_signalHandlerData = nullptr;
 
 private:
 	std::shared_mutex m_mutex;

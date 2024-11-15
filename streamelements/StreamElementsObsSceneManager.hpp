@@ -14,14 +14,12 @@
 
 #include <mutex>
 
-void add_scene_signals(obs_source_t *scene, void *data);
-void add_scene_signals(obs_scene_t *scene, void *data);
-void add_source_signals(obs_source_t *source, void *data);
-void remove_scene_signals(obs_source_t *scene, void *data);
-void remove_scene_signals(obs_scene_t *scene, void *data);
-void remove_source_signals(obs_source_t *source, void *data);
+class SESignalHandlerData;
 
 class StreamElementsObsSceneManager {
+private:
+	SESignalHandlerData *m_signalHandlerData = nullptr;
+
 public:
 	StreamElementsObsSceneManager(QMainWindow *parent);
 	virtual ~StreamElementsObsSceneManager();
@@ -187,3 +185,39 @@ private:
 	StreamElementsSceneItemsMonitor *m_sceneItemsMonitor = nullptr;
 	StreamElementsScenesListWidgetManager *m_scenesWidgetManager = nullptr;
 };
+
+class SESignalHandlerData {
+public:
+	SESignalHandlerData(
+		StreamElementsObsSceneManager *obsSceneManager,
+		StreamElementsVideoCompositionBase *videoCompositionBase)
+		: m_obsSceneManager(obsSceneManager),
+		  m_videoCompositionBase(videoCompositionBase)
+	{
+	}
+
+	~SESignalHandlerData() {}
+
+public:
+	void AddRef() { os_atomic_inc_long(&m_refCount); }
+	void Release()
+	{
+		if (os_atomic_dec_long(&m_refCount) == 0) {
+			delete this;
+		}
+	}
+
+public:
+	StreamElementsObsSceneManager *m_obsSceneManager = nullptr;
+	StreamElementsVideoCompositionBase *m_videoCompositionBase = nullptr;
+
+private:
+	volatile long m_refCount = 0;
+};
+
+void add_scene_signals(obs_source_t *scene, SESignalHandlerData *data);
+void add_scene_signals(obs_scene_t *scene, SESignalHandlerData *data);
+void add_source_signals(obs_source_t *source, SESignalHandlerData *data);
+void remove_scene_signals(obs_source_t *scene, SESignalHandlerData *data);
+void remove_scene_signals(obs_scene_t *scene, SESignalHandlerData *data);
+void remove_source_signals(obs_source_t *source, SESignalHandlerData *data);
