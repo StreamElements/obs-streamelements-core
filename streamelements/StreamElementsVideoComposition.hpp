@@ -19,6 +19,10 @@ public:
 };
 
 class StreamElementsVideoCompositionBase {
+private:
+	char m_header[7] = "header";
+	std::string m_internal_type = "";
+
 public:
 	class CompositionInfo {
 	private:
@@ -62,31 +66,21 @@ public:
 	};
 
 private:
-	size_t m_refCounter = 0;
-	std::mutex m_refCounterMutex;
+	long m_refCounter = 0;
 
 	void AddRef()
 	{
-		std::lock_guard<decltype(m_refCounterMutex)> lock(
-			m_refCounterMutex);
-
-		++m_refCounter;
+		os_atomic_inc_long(&m_refCounter);
 	}
 
 	void RemoveRef() {
-		std::lock_guard<decltype(m_refCounterMutex)> lock(
-			m_refCounterMutex);
-
-		--m_refCounter;
+		os_atomic_dec_long(&m_refCounter);
 	}
 
 public:
 	virtual bool CanRemove()
 	{
-		std::lock_guard<decltype(m_refCounterMutex)> lock(
-			m_refCounterMutex);
-
-		return m_refCounter == 0;
+		return os_atomic_load_long(&m_refCounter) == 0;
 	}
 
 	virtual std::shared_ptr<CompositionInfo>
@@ -99,9 +93,10 @@ private:
 	std::shared_mutex m_mutex;
 
 protected:
-	StreamElementsVideoCompositionBase(
-		const std::string id, const std::string name)
-		: m_id(id), m_name(name)
+	StreamElementsVideoCompositionBase(const std::string internal_type,
+					   const std::string id,
+					   const std::string name)
+		: m_internal_type(internal_type), m_id(id), m_name(name)
 	{
 	}
 	virtual ~StreamElementsVideoCompositionBase() {}
@@ -266,7 +261,7 @@ private:
 public:
 	// ctor only usable by this class
 	StreamElementsObsNativeVideoComposition(Private)
-		: StreamElementsVideoCompositionBase("default", "Default")
+		: StreamElementsVideoCompositionBase("obs_native_video_composition", "default", "Default")
 	{
 
 	}

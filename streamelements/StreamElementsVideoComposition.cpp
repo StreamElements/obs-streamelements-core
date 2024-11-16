@@ -667,7 +667,7 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	std::string name, uint32_t baseWidth, uint32_t baseHeight,
 	std::string streamingVideoEncoderId, obs_data_t *streamingVideoEncoderSettings,
 	obs_data_t *streamingVideoEncoderHotkeyData)
-	: StreamElementsVideoCompositionBase(id, name),
+	: StreamElementsVideoCompositionBase("custom_video_composition",  id, name),
 	  m_baseWidth(baseWidth),
 	  m_baseHeight(baseHeight),
 	  m_transitionDurationMs(0)
@@ -820,6 +820,7 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 		m_scenes.clear();
 	}
 
+	m_signalHandlerData->Clear();
 	m_signalHandlerData->Release();
 	m_signalHandlerData = nullptr;
 }
