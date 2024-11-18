@@ -207,9 +207,16 @@ public:
 		}
 	}
 
+	void Clear() {
+		m_videoCompositionBase = nullptr;
+		m_obsSceneManager = nullptr;
+	}
+
 public:
+	char m_header[7] = "header"; // TODO: Remvoe debug marker
 	StreamElementsObsSceneManager *m_obsSceneManager = nullptr;
 	StreamElementsVideoCompositionBase *m_videoCompositionBase = nullptr;
+	char m_footer[7] = "footer"; // TODO: Remvoe debug marker
 
 private:
 	volatile long m_refCount = 0;

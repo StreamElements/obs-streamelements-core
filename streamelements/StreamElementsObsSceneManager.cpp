@@ -1100,6 +1100,8 @@ static void handle_scene_item_remove(void *my_data, calldata_t *cd)
 
 		if (sceneManager)
 			sceneManager->Update();
+
+		((SESignalHandlerData *)my_data)->Release();
 	}
 }
 
@@ -1149,6 +1151,10 @@ static void handle_scene_item_add(void *my_data, calldata_t *cd)
 
 	if (!sceneitem)
 		return;
+
+	if (my_data) {
+		((SESignalHandlerData *)my_data)->AddRef();
+	}
 
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemAdded",
 				 "hostSceneItemAdded", false);
@@ -1506,7 +1512,9 @@ StreamElementsObsSceneManager::~StreamElementsObsSceneManager()
 		},
 		m_signalHandlerData);
 
+	m_signalHandlerData->Clear();
 	m_signalHandlerData->Release();
+	m_signalHandlerData = nullptr;
 }
 
 void StreamElementsObsSceneManager::ObsAddSourceInternal(
