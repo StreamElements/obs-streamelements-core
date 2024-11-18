@@ -234,8 +234,6 @@ bool StreamElementsWidgetManager::AddDockWidget(
 		});
 
 	QObject::connect(dock, &QDockWidget::visibilityChanged, [this]() {
-		std::lock_guard<std::recursive_mutex> guard(m_mutex);
-
 		QtPostTask([]() -> void {
 			auto menuManager =
 				StreamElementsGlobalStateManager::GetInstance()
