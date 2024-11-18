@@ -66,19 +66,8 @@ dispatch_scene_changed_event(StreamElementsVideoCompositionBase *self,
 }
 
 static void
-dispatch_scene_list_changed_event(StreamElementsVideoCompositionBase *self,
-				  obs_scene_t *scene)
+dispatch_scene_list_changed_event(StreamElementsVideoCompositionBase *self)
 {
-	auto source = obs_scene_get_source(scene);
-
-	if (!source)
-		return;
-
-	const char *sourceName = obs_source_get_name(source);
-
-	if (!sourceName)
-		return;
-
 	json11::Json json = json11::Json::object{
 		{"videoCompositionId", self->GetId()},
 	};
@@ -854,13 +843,17 @@ StreamElementsCustomVideoComposition::GetCompositionInfo(
 
 obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentScene()
 {
-	obs_scene_t* result = nullptr;
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
-	auto source = obs_transition_get_active_source(m_transition);
-	if (source) {
-		result = obs_scene_from_source(source);
+	obs_scene_t *result = nullptr;
 
-		obs_source_release(source);
+	if (m_transition) {
+		auto source = obs_transition_get_active_source(m_transition);
+		if (source) {
+			result = obs_scene_from_source(source);
+
+			obs_source_release(source);
+		}
 	}
 
 	return result;
@@ -1044,7 +1037,7 @@ StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 	{
 		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
-		dispatch_scene_list_changed_event(this, GetCurrentScene());
+		dispatch_scene_list_changed_event(this);
 	}
 
 	return scene;
@@ -1065,7 +1058,7 @@ bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
 
 			obs_scene_release(scene);
 
-			dispatch_scene_list_changed_event(this, GetCurrentScene());
+			dispatch_scene_list_changed_event(this);
 
 			return true;
 		}
@@ -1134,16 +1127,16 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 	if (!scene)
 		return false;
 
-	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
-
 	auto currentScene = GetCurrentScene();
+
+	if (currentScene == scene) {
+		return true;
+	}
+
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	for (auto item : m_scenes) {
 		if (scene == item) {
-			if (currentScene == scene) {
-				return true;
-			}
-
 			{
 				auto source =
 					obs_scene_get_source(currentScene);
@@ -1153,31 +1146,28 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 				}
 			}
 
-			currentScene = scene;
-
 			float t = obs_transition_get_time(m_transition);
 			bool stillTransitioning = t < 1.0f && t > 0.0f;
 
 			if (stillTransitioning) {
 				obs_transition_set(
 					m_transition,
-					obs_scene_get_source(currentScene));
+						   obs_scene_get_source(scene));
 			} else {
 				obs_transition_start(
 					m_transition, OBS_TRANSITION_MODE_AUTO,
 					GetTransitionDurationMilliseconds(),
-					obs_scene_get_source(currentScene));
+					obs_scene_get_source(scene));
 			}
 
-			auto source = obs_scene_get_source(currentScene);
+			auto source = obs_scene_get_source(scene);
 			if (source) {
 				obs_source_inc_showing(source);
 				obs_source_inc_active(source);
 			}
 
-			dispatch_scene_changed_event(this, currentScene);
-			dispatch_scene_item_list_changed_event(this,
-							       currentScene);
+			dispatch_scene_changed_event(this, scene);
+			dispatch_scene_item_list_changed_event(this, scene);
 
 			return true;
 		}
@@ -1186,7 +1176,6 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 	return false;
 }
 
-// TODO: Implement
 void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
@@ -1222,7 +1211,7 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 	// Clean all owned scenes here
 
 	// Clear current transition
-	obs_transition_set(m_transition, (obs_source_t *)nullptr);
+	// obs_transition_set(m_transition, (obs_source_t *)nullptr);
 
 	for (auto scene : m_scenes) {
 		auto source = obs_scene_get_source(scene);
@@ -1252,6 +1241,6 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 	add_source_signals(obs_scene_get_source(currentScene),
 			   m_signalHandlerData);
 
-	dispatch_scene_list_changed_event(this, currentScene);
+	dispatch_scene_list_changed_event(this);
 	dispatch_scene_changed_event(this, currentScene);
 }
