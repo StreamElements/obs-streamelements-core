@@ -590,11 +590,15 @@ void StreamElementsGlobalStateManager::Shutdown()
 
 	obs_frontend_remove_event_callback(handle_obs_frontend_event, nullptr);
 
-#ifdef WIN32
-    // Shutdown on the main thread
-    delete m_crashHandler;
+	PersistState(false);
 
-    QtExecSync(
+	m_persistStateEnabled = false;
+
+#ifdef WIN32
+	// Shutdown on the main thread
+	// delete m_crashHandler; // TODO: Shutting down the crash handler might be contributing to us missing some exceptions during shutdown
+
+	QtExecSync(
 		[this]() -> void {
 			//mainWindow()->removeDockWidget(m_themeChangeListener);
 			m_themeChangeListener->deleteLater();

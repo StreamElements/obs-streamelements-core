@@ -767,9 +767,15 @@ static void SerializeObsScene(obs_source_t *sceneSource, CefRefPtr<CefValue> &re
 
 	auto scene = obs_scene_from_source(sceneSource);
 
-	auto videoComposition = StreamElementsGlobalStateManager::GetInstance()
-					->GetVideoCompositionManager()
-					->GetVideoCompositionByScene(scene);
+	auto videoCompositionManager =
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager();
+
+	if (!videoCompositionManager.get())
+		return;
+
+	auto videoComposition = videoCompositionManager->GetVideoCompositionByScene(scene);
+
 	if (!videoComposition.get())
 		return;
 
@@ -1401,9 +1407,15 @@ static void handle_source_remove(void *data, calldata_t *cd)
 static std::shared_ptr<StreamElementsVideoCompositionBase>
 GetVideoComposition(CefRefPtr<CefValue> input)
 {
-	auto result = StreamElementsGlobalStateManager::GetInstance()
-			      ->GetVideoCompositionManager()
-			      ->GetObsNativeVideoComposition();
+	auto videoCompositionManager =
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager();
+
+	if (!videoCompositionManager.get())
+		return std::shared_ptr<StreamElementsVideoCompositionBase>(
+			nullptr);
+
+	auto result = videoCompositionManager->GetObsNativeVideoComposition();
 
 	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
 		return result;
@@ -1416,9 +1428,8 @@ GetVideoComposition(CefRefPtr<CefValue> input)
 
 	std::string videoCompositionId = root->GetString("videoCompositionId");
 
-	result = StreamElementsGlobalStateManager::GetInstance()
-			 ->GetVideoCompositionManager()
-			 ->GetVideoCompositionById(videoCompositionId);
+	result = videoCompositionManager->GetVideoCompositionById(
+		videoCompositionId);
 
 	return result;
 }
