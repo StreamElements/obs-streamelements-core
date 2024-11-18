@@ -235,16 +235,23 @@ bool StreamElementsWidgetManager::AddDockWidget(
 
 	QObject::connect(dock, &QDockWidget::visibilityChanged, [this]() {
 		QtPostTask([]() -> void {
-			auto menuManager =
-				StreamElementsGlobalStateManager::GetInstance()
-					->GetMenuManager();
-
-			if (!menuManager)
-				return;
-
 			StreamElementsGlobalStateManager::GetInstance()
 				->PersistState();
 		});
+
+		QtDelayTask(
+			[]() -> void {
+				auto menuManager =
+					StreamElementsGlobalStateManager::
+						GetInstance()
+							->GetMenuManager();
+
+				if (!menuManager)
+					return;
+
+				menuManager->Update();
+			},
+			1);
 	});
 
 	// Make effort to display QDockWidget on top of the main window right away
