@@ -241,6 +241,11 @@ bool StreamElementsWidgetManager::AddDockWidget(
 
 		QtDelayTask(
 			[]() -> void {
+				if (!StreamElementsGlobalStateManager::
+					     GetInstance()
+						     ->IsInitialized())
+					return;
+
 				auto menuManager =
 					StreamElementsGlobalStateManager::
 						GetInstance()

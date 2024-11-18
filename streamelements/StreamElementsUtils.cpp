@@ -2429,24 +2429,29 @@ private:
 
 bool DeserializeDocksMenu(QMenu& menu)
 {
-	StreamElementsGlobalStateManager::GetInstance()
-		->GetWidgetManager()
-		->EnterCriticalSection();
+	auto widgetManager = StreamElementsGlobalStateManager::GetInstance()
+				     ->GetWidgetManager();
+
+	if (!widgetManager)
+		return true;
+
+	widgetManager->EnterCriticalSection();
 
 	std::vector<std::string> widgetIds;
-	StreamElementsGlobalStateManager::GetInstance()
-		->GetWidgetManager()
-		->GetDockBrowserWidgetIdentifiers(widgetIds);
+	
+	widgetManager->GetDockBrowserWidgetIdentifiers(widgetIds);
 
 	std::vector<StreamElementsBrowserWidgetManager::DockBrowserWidgetInfo *>
 		widgets;
-	for (auto id : widgetIds) {
-		auto info = StreamElementsGlobalStateManager::GetInstance()
-				    ->GetWidgetManager()
-				    ->GetDockBrowserWidgetInfo(id.c_str());
 
-		if (info) {
-			widgets.push_back(info);
+	if (widgetManager) {
+		for (auto id : widgetIds) {
+			auto info = widgetManager->GetDockBrowserWidgetInfo(
+				id.c_str());
+
+			if (info) {
+				widgets.push_back(info);
+			}
 		}
 	}
 
@@ -2469,14 +2474,18 @@ bool DeserializeDocksMenu(QMenu& menu)
 		widget_action->setChecked(isVisible);
 
 		QObject::connect(widget_action, &QAction::triggered, [id, isVisible, widget_action] {
-			StreamElementsGlobalStateManager::GetInstance()
-				->GetWidgetManager()
-				->EnterCriticalSection();
+			auto widgetManager =
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetWidgetManager();
+
+			if (!widgetManager)
+				return;
+
+
+			widgetManager->EnterCriticalSection();
 
 			QDockWidget *dock =
-				StreamElementsGlobalStateManager::GetInstance()
-					->GetWidgetManager()
-					->GetDockWidget(id.c_str());
+				widgetManager->GetDockWidget(id.c_str());
 
 			if (dock) {
 				if (isVisible) {
@@ -2517,9 +2526,7 @@ bool DeserializeDocksMenu(QMenu& menu)
 					->GetMenuManager()->Update();
 			}
 
-			StreamElementsGlobalStateManager::GetInstance()
-				->GetWidgetManager()
-				->LeaveCriticalSection();
+			widgetManager->LeaveCriticalSection();
 		});
 	}
 
@@ -2527,9 +2534,7 @@ bool DeserializeDocksMenu(QMenu& menu)
 		delete widget;
 	}
 
-	StreamElementsGlobalStateManager::GetInstance()
-		->GetWidgetManager()
-		->LeaveCriticalSection();
+	widgetManager->LeaveCriticalSection();
 
 	return true;
 }
