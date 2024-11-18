@@ -23,6 +23,9 @@ private:
 	char m_header[7] = "header";
 	std::string m_internal_type = "";
 
+	static void handle_obs_frontend_event(enum obs_frontend_event event,
+					      void *data);
+
 public:
 	class CompositionInfo {
 	private:
@@ -98,8 +101,22 @@ protected:
 					   const std::string name)
 		: m_internal_type(internal_type), m_id(id), m_name(name)
 	{
+		obs_frontend_add_event_callback(
+			StreamElementsVideoCompositionBase::
+				handle_obs_frontend_event,
+			this);
 	}
-	virtual ~StreamElementsVideoCompositionBase() {}
+	virtual ~StreamElementsVideoCompositionBase() {
+		obs_frontend_remove_event_callback(
+			StreamElementsVideoCompositionBase::
+				handle_obs_frontend_event,
+			this);
+
+		// Make sure we clean up when canvas is destroyed
+		HandleObsSceneCollectionCleanup();
+	}
+
+	virtual void HandleObsSceneCollectionCleanup() {}
 
 public:
 	std::string GetId() { return m_id; }
@@ -372,7 +389,6 @@ private:
 	int m_transitionDurationMs = 0;
 
 	std::vector<obs_scene_t *> m_scenes;
-	obs_scene_t *m_currentScene = nullptr;
 
 public:
 	virtual bool IsObsNativeComposition() { return false; }
@@ -407,4 +423,6 @@ protected:
 	}
 
 	virtual void SetTransitionDurationMilliseconds(int duration);
+
+	virtual void HandleObsSceneCollectionCleanup() override;
 };
