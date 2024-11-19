@@ -80,6 +80,34 @@ dispatch_scene_list_changed_event(StreamElementsVideoCompositionBase *self)
 }
 
 static void
+dispatch_scenes_reset_begin_event(StreamElementsVideoCompositionBase *self)
+{
+	json11::Json json = json11::Json::object{
+		{"videoCompositionId", self->GetId()},
+	};
+
+	std::string name = "hostVideoCompositionBeforeScenesReset";
+	std::string args = json.dump();
+
+	dispatch_js_event(name, args);
+	dispatch_external_event(name, args);
+}
+
+static void
+dispatch_scenes_reset_end_event(StreamElementsVideoCompositionBase *self)
+{
+	json11::Json json = json11::Json::object{
+		{"videoCompositionId", self->GetId()},
+	};
+
+	std::string name = "hostVideoCompositionAfterScenesReset";
+	std::string args = json.dump();
+
+	dispatch_js_event(name, args);
+	dispatch_external_event(name, args);
+}
+
+static void
 dispatch_scene_item_list_changed_event(StreamElementsVideoCompositionBase *self,
 				       obs_scene_t *scene)
 {
@@ -1194,6 +1222,8 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
+	dispatch_scenes_reset_begin_event(this);
+
 	// Clean all owned sources here
 
 	for (auto scene : m_scenes) {
@@ -1267,4 +1297,6 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 
 	dispatch_scene_list_changed_event(this);
 	dispatch_scene_changed_event(this, currentScene);
+
+	dispatch_scenes_reset_end_event(this);
 }
