@@ -221,6 +221,9 @@ StreamElementsVideoCompositionBase::GetUniqueSceneName(std::string name)
 bool StreamElementsVideoCompositionBase::SafeRemoveScene(
 	obs_scene_t *sceneToRemove)
 {
+	if (!sceneToRemove)
+		return false;
+
 	if (sceneToRemove == GetCurrentScene()) {
 		std::vector<obs_scene_t *> scenes;
 		GetAllScenes(scenes);
@@ -711,6 +714,7 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	obs_encoder_set_video(m_streamingVideoEncoder, m_video);
 
 	auto currentScene = obs_scene_create_private(GetUniqueSceneName("Scene").c_str());
+	m_currentScene = obs_scene_get_ref(currentScene);
 	m_scenes.push_back(currentScene);
 
 	m_signalHandlerData = new SESignalHandlerData(nullptr, this);
@@ -826,6 +830,11 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 		m_scenes.clear();
 	}
 
+	if (m_currentScene) {
+		obs_scene_release(m_currentScene);
+		m_currentScene = nullptr;
+	}
+
 	m_signalHandlerData->Clear();
 	m_signalHandlerData->Release();
 	m_signalHandlerData = nullptr;
@@ -843,20 +852,10 @@ StreamElementsCustomVideoComposition::GetCompositionInfo(
 
 obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentScene()
 {
-	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+	//std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+	std::shared_lock<decltype(m_currentSceneMutex)> currentSceneLock;
 
-	obs_scene_t *result = nullptr;
-
-	if (m_transition) {
-		auto source = obs_transition_get_active_source(m_transition);
-		if (source) {
-			result = obs_scene_from_source(source);
-
-			obs_source_release(source);
-		}
-	}
-
-	return result;
+	return m_currentScene;
 }
 
 void StreamElementsCustomVideoComposition::SerializeComposition(
@@ -1075,10 +1074,8 @@ void StreamElementsCustomVideoComposition::SetTransition(
 		std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 		old_transition = m_transition;
-		m_transition = transition;
+		m_transition = obs_source_get_ref(transition);
 	}
-
-	obs_source_get_ref(transition);
 
 	obs_transition_swap_begin(transition, old_transition);
 	obs_view_set_source(m_view, 0, transition);
@@ -1088,7 +1085,12 @@ void StreamElementsCustomVideoComposition::SetTransition(
 	obs_transition_set(old_transition, nullptr);
 	obs_source_release(old_transition);
 
-	obs_transition_set(transition, obs_scene_get_source(GetCurrentScene()));
+	{
+		std::shared_lock<decltype(m_currentSceneMutex)> currentSceneLock(
+			m_currentSceneMutex);
+		obs_transition_set(transition,
+				   obs_scene_get_source(m_currentScene));
+	}
 
 	auto jsonValue = CefValue::Create();
 	SerializeComposition(jsonValue);
@@ -1127,43 +1129,55 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 	if (!scene)
 		return false;
 
-	auto currentScene = GetCurrentScene();
-
-	if (currentScene == scene) {
-		return true;
-	}
-
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	for (auto item : m_scenes) {
 		if (scene == item) {
+			obs_scene_t *oldCurrentScene = nullptr;
+
 			{
-				auto source =
-					obs_scene_get_source(currentScene);
-				if (source) {
-					obs_source_dec_active(source);
-					obs_source_dec_showing(source);
+				std::unique_lock<decltype(m_currentSceneMutex)>
+					currentSceneLock;
+
+				if (m_currentScene == scene)
+					return true;
+
+				{
+					auto source = obs_scene_get_source(
+						m_currentScene);
+					if (source) {
+						obs_source_dec_active(source);
+						obs_source_dec_showing(source);
+					}
 				}
+
+				float t = obs_transition_get_time(m_transition);
+				bool stillTransitioning = t < 1.0f && t > 0.0f;
+
+				if (stillTransitioning) {
+					obs_transition_set(
+						m_transition,
+						obs_scene_get_source(scene));
+				} else {
+					obs_transition_start(
+						m_transition,
+						OBS_TRANSITION_MODE_AUTO,
+						GetTransitionDurationMilliseconds(),
+						obs_scene_get_source(scene));
+				}
+
+				auto source = obs_scene_get_source(scene);
+				if (source) {
+					obs_source_inc_showing(source);
+					obs_source_inc_active(source);
+				}
+
+				oldCurrentScene = m_currentScene;
+				m_currentScene = obs_scene_get_ref(scene);
 			}
 
-			float t = obs_transition_get_time(m_transition);
-			bool stillTransitioning = t < 1.0f && t > 0.0f;
-
-			if (stillTransitioning) {
-				obs_transition_set(
-					m_transition,
-						   obs_scene_get_source(scene));
-			} else {
-				obs_transition_start(
-					m_transition, OBS_TRANSITION_MODE_AUTO,
-					GetTransitionDurationMilliseconds(),
-					obs_scene_get_source(scene));
-			}
-
-			auto source = obs_scene_get_source(scene);
-			if (source) {
-				obs_source_inc_showing(source);
-				obs_source_inc_active(source);
+			if (oldCurrentScene) {
+				obs_scene_release(oldCurrentScene);
 			}
 
 			dispatch_scene_changed_event(this, scene);
@@ -1228,6 +1242,16 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 	auto currentScene = obs_scene_create_private(
 		GetUniqueSceneNameInternal("Scene", m_scenes).c_str());
 	m_scenes.push_back(currentScene);
+
+	{
+		std::unique_lock<decltype(m_currentSceneMutex)> currentSceneLock;
+
+		if (m_currentScene) {
+			obs_scene_release(m_currentScene);
+		}
+
+		m_currentScene = obs_scene_get_ref(currentScene);
+	}
 
 	obs_transition_set(m_transition, obs_scene_get_source(currentScene));
 

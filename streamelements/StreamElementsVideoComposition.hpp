@@ -350,6 +350,9 @@ private:
 
 	obs_source_t *m_audioWrapperSource = nullptr;
 
+	std::shared_mutex m_currentSceneMutex;
+	obs_scene_t *m_currentScene = nullptr;
+
 public:
 	// ctor only usable by this class
 	StreamElementsCustomVideoComposition(

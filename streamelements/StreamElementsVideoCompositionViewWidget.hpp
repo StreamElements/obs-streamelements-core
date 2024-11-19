@@ -322,7 +322,10 @@ public:
 
 	obs_scene_t *GetCurrentScene()
 	{
-		return m_videoComposition->GetCurrentScene();
+		if (m_videoComposition.get())
+			return m_videoComposition->GetCurrentScene();
+		else
+			return nullptr;
 	}
 
 private:

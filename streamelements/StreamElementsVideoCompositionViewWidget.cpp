@@ -591,10 +591,12 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 			data);
 
 
+	auto currentScene = self->m_videoComposition->GetCurrentScene();
+
 	// Update visual elements state and draw them on screen
 	self->m_visualElementsState.UpdateAndDraw(
 		self,
-		self->m_videoComposition->GetCurrentScene(), viewportWidth,
+		currentScene, viewportWidth,
 		viewportHeight, self->m_videoCompositionInfo);
 
 	/*
@@ -624,5 +626,5 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 	}
 	*/
 
-	endProjectionRegion();
+	// endProjectionRegion();
 }

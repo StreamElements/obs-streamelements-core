@@ -2348,8 +2348,13 @@ void StreamElementsObsSceneManager::SerializeObsCurrentScene(
 	if (!videoComposition.get())
 		return;
 
-	videoComposition->SerializeScene(videoComposition->GetCurrentScene(),
-					 output);
+	auto scene = videoComposition->GetCurrentScene();
+
+	if (scene) {
+		videoComposition->SerializeScene(scene, output);
+	} else {
+		output->SetNull();
+	}
 }
 
 void StreamElementsObsSceneManager::SerializeObsScenes(
