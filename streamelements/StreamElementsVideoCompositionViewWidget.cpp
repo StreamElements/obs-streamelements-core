@@ -2,6 +2,8 @@
 #include <util/platform.h>
 #include "graphics/matrix4.h"
 
+#include <obs.hpp>
+
 #include "StreamElementsVideoCompositionViewWidget.hpp"
 #include <QWindow>
 #include <QScreen>
@@ -591,7 +593,7 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 			data);
 
 
-	auto currentScene = self->m_videoComposition->GetCurrentScene();
+	OBSSceneAutoRelease currentScene = self->m_videoComposition->GetCurrentSceneRef();
 
 	// Update visual elements state and draw them on screen
 	self->m_visualElementsState.UpdateAndDraw(

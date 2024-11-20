@@ -76,13 +76,8 @@ public:
 		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		for (auto kv : m_videoCompositionsMap) {
-			std::vector<obs_scene_t *> scenes;
-			kv.second->GetAllScenes(scenes);
-
-			for (auto scene : scenes) {
-				if (scene == lookupScene)
-					return kv.second;
-			}
+			if (kv.second->HasScene(lookupScene))
+				return kv.second;
 		}
 
 		return nullptr;
@@ -94,7 +89,7 @@ public:
 		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		for (auto kv : m_videoCompositionsMap) {
-			if (kv.second->GetSceneById(lookupId))
+			if (kv.second->HasSceneId(lookupId))
 				return kv.second;
 		}
 
@@ -107,7 +102,7 @@ public:
 		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		for (auto kv : m_videoCompositionsMap) {
-			if (kv.second->GetSceneByName(lookupName))
+			if (kv.second->HasSceneName(lookupName))
 				return kv.second;
 		}
 

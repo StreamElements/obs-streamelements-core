@@ -197,15 +197,55 @@ void StreamElementsVideoCompositionBase::SetName(std::string name)
 	dispatch_external_event("hostVideoCompositionChanged", json);
 }
 
-static std::string GetUniqueSceneNameInternal(std::string name, std::vector<obs_scene_t*>& scenes)
+static std::string GetUniqueSceneNameInternal(std::string name, StreamElementsVideoCompositionBase::scenes_t& scenes)
 {
 	std::string result(name);
 
 		auto hasSceneName = [&](std::string name) -> bool {
-		for (auto scene : scenes) {
+		for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
 			if (stricmp(name.c_str(),
 				    obs_source_get_name(
-					    obs_scene_get_source(scene))) == 0)
+					    obs_scene_get_source(*it))) == 0)
+				return true;
+		}
+
+		return false;
+	};
+
+	int sequence = 0;
+	bool isUnique = false;
+
+	while (!isUnique) {
+		isUnique = true;
+
+		if (hasSceneName(result)) {
+			isUnique = false;
+		}
+
+		if (!isUnique) {
+			++sequence;
+
+			char buf[32];
+			sprintf(buf, "%d", sequence);
+			result = name + " ";
+			result += buf;
+		}
+	}
+
+	return result;
+}
+
+static std::string
+GetUniqueSceneNameInternal(std::string name,
+			   std::vector<obs_scene_t*> &scenes)
+{
+	std::string result(name);
+
+	auto hasSceneName = [&](std::string name) -> bool {
+		for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
+			if (stricmp(name.c_str(),
+				    obs_source_get_name(
+					    obs_scene_get_source(*it))) == 0)
 				return true;
 		}
 
@@ -240,8 +280,12 @@ StreamElementsVideoCompositionBase::GetUniqueSceneName(std::string name)
 {
 	std::string result(name);
 
-	std::vector<obs_scene_t *> scenes;
-	GetAllScenes(scenes);
+	scenes_t scenes;
+	{
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+
+		GetAllScenesInternal(scenes);
+	}
 
 	return GetUniqueSceneNameInternal(name, scenes);
 }
@@ -253,17 +297,17 @@ bool StreamElementsVideoCompositionBase::SafeRemoveScene(
 		return false;
 
 	if (sceneToRemove == GetCurrentScene()) {
-		std::vector<obs_scene_t *> scenes;
-		GetAllScenes(scenes);
+		scenes_t scenes;
+		GetAllScenesInternal(scenes);
 
 		if (scenes.size() <= 1)
 			return false;
 
 		bool success = false;
 		// Change to first available scene
-		for (auto scene : scenes) {
-			if (scene != sceneToRemove) {
-				success = SetCurrentScene(scene);
+		for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
+			if (*it != sceneToRemove) {
+				success = SetCurrentScene(*it);
 
 				if (success)
 					break;
@@ -288,13 +332,17 @@ obs_sceneitem_t *StreamElementsVideoCompositionBase::GetSceneItemById(
 	if (!searchPtr)
 		return nullptr;
 
-	std::vector<obs_scene_t *> scenes;
-	GetAllScenes(scenes);
+	scenes_t scenes;
+	{
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+
+		GetAllScenesInternal(scenes);
+	}
 
 	obs_sceneitem_t *result = nullptr;
 
-	for (auto scene : scenes) {
-		ObsSceneEnumAllItems(scene,
+	for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
+		ObsSceneEnumAllItems(*it,
 				     [&](obs_sceneitem_t *sceneitem) -> bool {
 					     if (searchPtr == sceneitem) {
 						     result = sceneitem;
@@ -309,7 +357,7 @@ obs_sceneitem_t *StreamElementsVideoCompositionBase::GetSceneItemById(
 
 		if (result) {
 			if (result_scene) {
-				*result_scene = scene;
+				*result_scene = *it;
 			}
 
 			break;
@@ -336,14 +384,18 @@ obs_sceneitem_t *StreamElementsVideoCompositionBase::GetSceneItemByName(
 	if (!name.size())
 		return nullptr;
 
-	std::vector<obs_scene_t *> scenes;
-	GetAllScenes(scenes);
+	scenes_t scenes;
+	{
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+
+		GetAllScenesInternal(scenes);
+	}
 
 	obs_sceneitem_t *result = nullptr;
 
-	for (auto scene : scenes) {
+	for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
 		ObsSceneEnumAllItems(
-			scene, [&](obs_sceneitem_t *sceneitem) -> bool {
+			*it, [&](obs_sceneitem_t *sceneitem) -> bool {
 				if (stricmp(obs_source_get_name(
 						    obs_sceneitem_get_source(
 							    sceneitem)),
@@ -360,7 +412,7 @@ obs_sceneitem_t *StreamElementsVideoCompositionBase::GetSceneItemByName(
 
 		if (result) {
 			if (result_scene) {
-				*result_scene = scene;
+				*result_scene = *it;
 			}
 
 			break;
@@ -493,12 +545,12 @@ StreamElementsObsNativeVideoComposition::AddScene(std::string requestName)
 bool StreamElementsObsNativeVideoComposition::RemoveScene(
 	obs_scene_t *sceneToRemove)
 {
-	std::vector<obs_scene_t *> scenes;
+	scenes_t scenes;
 
-	GetAllScenes(scenes);
+	GetAllScenesInternal(scenes);
 
-	for (auto item : scenes) {
-		if (item == sceneToRemove) {
+	for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
+		if (*it == sceneToRemove) {
 			obs_source_remove(obs_scene_get_source(sceneToRemove));
 
 			return true;
@@ -551,12 +603,12 @@ bool StreamElementsObsNativeVideoComposition::SetCurrentScene(
 	if (!scene)
 		return false;
 
-	std::vector<obs_scene_t *> scenes;
+	scenes_t scenes;
 
-	GetAllScenes(scenes);
+	GetAllScenesInternal(scenes);
 
-	for (auto item : scenes) {
-		if (item == scene) {
+	for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
+		if (*it == scene) {
 			obs_frontend_set_current_scene(
 				obs_scene_get_source(scene));
 
@@ -567,8 +619,8 @@ bool StreamElementsObsNativeVideoComposition::SetCurrentScene(
 	return false;
 }
 
-void StreamElementsObsNativeVideoComposition::GetAllScenes(
-	std::vector<obs_scene_t*>& result)
+void StreamElementsObsNativeVideoComposition::GetAllScenesInternal(
+	scenes_t &result)
 {
 	result.clear();
 
@@ -587,7 +639,7 @@ void StreamElementsObsNativeVideoComposition::GetAllScenes(
 		auto scene = obs_scene_from_source(source);
 
 		if (scene) {
-			result.push_back(scene);
+			result.push_back(obs_scene_get_ref(scene));
 		}
 	}
 
@@ -632,6 +684,14 @@ obs_scene_t* StreamElementsObsNativeVideoComposition::GetCurrentScene()
 	auto scene = obs_scene_from_source(source);
 
 	obs_source_release(source);
+
+	return scene;
+}
+
+obs_scene_t *StreamElementsObsNativeVideoComposition::GetCurrentSceneRef()
+{
+	auto source = obs_frontend_get_current_scene();
+	auto scene = obs_scene_from_source(source);
 
 	return scene;
 }
@@ -886,6 +946,17 @@ obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentScene()
 	return m_currentScene;
 }
 
+obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentSceneRef()
+{
+	//std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+	std::shared_lock<decltype(m_currentSceneMutex)> currentSceneLock;
+
+	if (m_currentScene)
+		return obs_scene_get_ref(m_currentScene);
+	else
+		return nullptr;
+}
+
 void StreamElementsCustomVideoComposition::SerializeComposition(
 	CefRefPtr<CefValue> &output)
 {
@@ -1031,15 +1102,12 @@ StreamElementsCustomVideoComposition::Create(
 	return result;
 }
 
-void StreamElementsCustomVideoComposition::GetAllScenes(
-	std::vector<obs_scene_t *> &result)
+void StreamElementsCustomVideoComposition::GetAllScenesInternal(scenes_t &result)
 {
 	result.clear();
 
-	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
-
 	for (auto item : m_scenes) {
-		result.push_back(item);
+		result.push_back(obs_scene_get_ref(item));
 	}
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <obs.h>
+#include <obs.hpp>
 #include <obs-frontend-api.h>
 #include "cef-headers.hpp"
 
@@ -19,6 +20,9 @@ public:
 };
 
 class StreamElementsVideoCompositionBase {
+public:
+	typedef std::vector<OBSSceneAutoRelease> scenes_t;
+
 private:
 	char m_header[7] = "header";
 	std::string m_internal_type = "";
@@ -132,47 +136,115 @@ public:
 
 	std::string GetUniqueSceneName(std::string name);
 
-	obs_scene_t* GetSceneById(std::string id) {
+	bool HasSceneId(std::string id) {
 		if (!id.size())
-			return GetCurrentScene();
+			return true;
 
-		std::vector<obs_scene_t *> scenes;
-		GetAllScenes(scenes);
+		scenes_t scenes;
+		{
+			std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+			GetAllScenesInternal(scenes);
+		}
+
+		for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
+			auto id1 = GetIdFromPointer(*it);
+			auto id2 =
+				GetIdFromPointer(obs_scene_get_source(*it));
+
+			if (id == id1 || id == id2)
+				return true;
+		}
+
+		return false;
+	}
+
+	obs_scene_t* GetSceneByIdRef(std::string id) {
+		if (!id.size())
+			return GetCurrentSceneRef();
+
+		scenes_t scenes;
+		{
+			std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+			GetAllScenesInternal(scenes);
+		}
 
 		auto pointer = GetPointerFromId(id.c_str());
 
-		for (auto scene : scenes) {
-			auto id1 = GetIdFromPointer(scene);
+		for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
+			auto id1 = GetIdFromPointer(*it);
 			auto id2 =
-				GetIdFromPointer(obs_scene_get_source(scene));
+				GetIdFromPointer(obs_scene_get_source(*it));
 
 			if (id == id1 || id == id2)
-				return scene;
+				return obs_scene_get_ref(*it);
 		}
 
 		return nullptr;
 	}
 
-	obs_scene_t *GetSceneByName(std::string name)
+	bool HasSceneName(std::string name)
 	{
 		if (!name.size())
-			return GetCurrentScene();
+			return true;
 
-		std::vector<obs_scene_t *> scenes;
-		GetAllScenes(scenes);
+		scenes_t scenes;
+		{
+			std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+			GetAllScenesInternal(scenes);
+		}
 
-		for (auto scene : scenes) {
-			if (stricmp(obs_source_get_name(obs_scene_get_source(scene)), name.c_str()) == 0)
-				return scene;
+		for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
+			if (stricmp(obs_source_get_name(
+					    obs_scene_get_source(*it)),
+				    name.c_str()) == 0)
+				return true;
+		}
+
+		return false;
+	}
+
+	obs_scene_t *GetSceneByNameRef(std::string name)
+	{
+		if (!name.size())
+			return GetCurrentSceneRef();
+
+		scenes_t scenes;
+		{
+			std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+			GetAllScenesInternal(scenes);
+		}
+
+		for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
+			if (stricmp(obs_source_get_name(
+					    obs_scene_get_source(*it)),
+				    name.c_str()) == 0)
+				return obs_scene_get_ref(*it);
 		}
 
 		return nullptr;
+	}
+
+	bool HasScene(obs_scene_t *scene)
+	{
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+
+		scenes_t scenes;
+		GetAllScenesInternal(scenes);
+
+		for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
+			if (*it == scene)
+				return true;
+		}
+
+		return false;
 	}
 
 	bool SerializeScene(
 		std::string id,
 		CefRefPtr<CefValue>& result) {
-		return SerializeScene(GetSceneById(id), result);
+		OBSSceneAutoRelease scene = GetSceneByIdRef(id);
+
+		return SerializeScene(scene, result);
 	}
 
 	bool SerializeScene(
@@ -232,15 +304,18 @@ public:
 		return true;
 	}
 
+protected:
+	virtual obs_scene_t *GetCurrentScene() = 0;
+	virtual void GetAllScenesInternal(scenes_t &scenes) = 0;
+
 public:
 	virtual bool IsObsNativeComposition() = 0;
 
 	virtual void SerializeComposition(CefRefPtr<CefValue> &output) = 0;
 
-	virtual obs_scene_t *GetCurrentScene() = 0;
+	virtual obs_scene_t *GetCurrentSceneRef() = 0;
 	virtual obs_scene_t *AddScene(std::string requestName) = 0;
 	virtual bool SetCurrentScene(obs_scene_t *scene) = 0;
-	virtual void GetAllScenes(std::vector<obs_scene_t *> &scenes) = 0;
 
 	virtual void TakeScreenshot() = 0;
 
@@ -257,6 +332,13 @@ public:
 	void SerializeTransition(CefRefPtr<CefValue> &output);
 	void DeserializeTransition(CefRefPtr<CefValue> input,
 				   CefRefPtr<CefValue> &output);
+
+	void GetAllScenes(scenes_t &scenes)
+	{
+		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+
+		GetAllScenesInternal(scenes);
+	}
 
 protected:
 	virtual bool RemoveScene(obs_scene_t *scene) = 0;
@@ -293,6 +375,10 @@ public:
 			Private());
 	}
 
+protected:
+	virtual obs_scene_t *GetCurrentScene();
+	virtual void GetAllScenesInternal(scenes_t &scenes);
+
 public:
 	virtual bool IsObsNativeComposition() { return true; }
 
@@ -304,11 +390,10 @@ public:
 
 	virtual void SerializeComposition(CefRefPtr<CefValue> &output);
 	
-	virtual obs_scene_t *GetCurrentScene();
+	virtual obs_scene_t *GetCurrentSceneRef();
 
 	virtual obs_scene_t *AddScene(std::string requestName);
 	virtual bool SetCurrentScene(obs_scene_t *scene);
-	virtual void GetAllScenes(std::vector<obs_scene_t *> &scenes);
 
 	virtual void TakeScreenshot() override {
 		obs_frontend_take_screenshot();
@@ -393,6 +478,10 @@ private:
 
 	std::vector<obs_scene_t *> m_scenes;
 
+protected:
+	virtual obs_scene_t *GetCurrentScene();
+	virtual void GetAllScenesInternal(scenes_t &scenes);
+
 public:
 	virtual bool IsObsNativeComposition() { return false; }
 
@@ -402,11 +491,10 @@ public:
 
 	virtual void SerializeComposition(CefRefPtr<CefValue> &output);
 
-	virtual obs_scene_t *GetCurrentScene();
+	virtual obs_scene_t *GetCurrentSceneRef();
 
 	virtual obs_scene_t *AddScene(std::string requestName);
 	virtual bool SetCurrentScene(obs_scene_t *scene);
-	virtual void GetAllScenes(std::vector<obs_scene_t *> &scenes);
 
 	virtual void TakeScreenshot() override
 	{

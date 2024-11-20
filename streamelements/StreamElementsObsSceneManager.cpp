@@ -1820,13 +1820,15 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 	if (parsed) {
 		// Add browser source
 
-		obs_source_t *parent_scene = obs_scene_get_source(
-			videoComposition->GetSceneById(sceneId));
+		OBSSceneAutoRelease parent_scene =
+			videoComposition->GetSceneByIdRef(sceneId);
+
+		obs_source_t *parent_scene_source = obs_scene_get_source(parent_scene);
 
 		obs_source_t *source;
 		obs_sceneitem_t *sceneitem;
 
-		ObsAddSourceInternal(parent_scene, videoComposition->GetSceneItemById(groupId),
+		ObsAddSourceInternal(parent_scene_source, videoComposition->GetSceneItemById(groupId),
 				     source_class.c_str(), unique_name.c_str(),
 				     settings, nullptr, false, nullptr, &source,
 				     &sceneitem);
@@ -1905,14 +1907,16 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 	if (parsed) {
 		// Add game capture source
 
-		obs_source_t *parent_scene = obs_scene_get_source(
-			videoComposition->GetSceneById(sceneId));
+		OBSSceneAutoRelease parent_scene =
+			videoComposition->GetSceneByIdRef(sceneId);
+		obs_source_t *parent_scene_source = obs_scene_get_source(
+			parent_scene);
 
 		obs_source_t *source;
 		obs_sceneitem_t *sceneitem;
 
 		ObsAddSourceInternal(
-			parent_scene,
+			parent_scene_source,
 			videoComposition->GetSceneItemById(groupId),
 			source_class.c_str(), unique_name.c_str(), settings,
 			nullptr, false, nullptr, &source, &sceneitem);
@@ -2048,14 +2052,16 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 		if (obs_data_has_user_value(settings, VIDEO_DEVICE_ID)) {
 			// Add game capture source
 
-			obs_source_t *parent_scene = obs_scene_get_source(
-				videoComposition->GetSceneById(sceneId));
+			OBSSceneAutoRelease parent_scene =
+				videoComposition->GetSceneByIdRef(sceneId);
+			obs_source_t *parent_scene_source = obs_scene_get_source(
+				parent_scene);
 
 			obs_source_t *source;
 			obs_sceneitem_t *sceneitem;
 
 			ObsAddSourceInternal(
-				parent_scene, videoComposition->GetSceneItemById(groupId),
+				parent_scene_source, videoComposition->GetSceneItemById(groupId),
 				source_class.c_str(), unique_name.c_str(),
 				settings, nullptr, true, nullptr, &source, &sceneitem);
 
@@ -2153,14 +2159,16 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 	if (parsed) {
 		// Add game capture source
 
-		obs_source_t *parent_scene = obs_scene_get_source(
-			videoComposition->GetSceneById(sceneId));
+		OBSSceneAutoRelease parent_scene =
+			videoComposition->GetSceneByIdRef(sceneId);
+		obs_source_t *parent_scene_source = obs_scene_get_source(
+			parent_scene);
 
 		obs_source_t *source;
 		obs_sceneitem_t *sceneitem;
 
 		ObsAddSourceInternal(
-			parent_scene,
+			parent_scene_source,
 			videoComposition->GetSceneItemById(groupId),
 			source_class.c_str(), unique_name.c_str(), settings,
 			nullptr, preferExistingSourceReference,
@@ -2230,26 +2238,30 @@ void StreamElementsObsSceneManager::DeserializeObsSceneItemGroup(
 				      ? root->GetString("sceneId").ToString()
 				      : "";
 
-	obs_scene_t *scene = videoComposition->GetSceneById(sceneId);
+	OBSSceneAutoRelease scene =
+		videoComposition->GetSceneByIdRef(sceneId);
 
-	obs_enter_graphics();
-	obs_scene_atomic_update(
-		scene,
-		[](void *data, obs_scene_t *scene) {
-			atomic_update_args *args = (atomic_update_args *)data;
+	if (scene) {
+		obs_enter_graphics();
+		obs_scene_atomic_update(
+			scene,
+			[](void *data, obs_scene_t *scene) {
+				atomic_update_args *args =
+					(atomic_update_args *)data;
 
-			args->sceneitem = obs_scene_add_group(
-				scene, args->unique_name.c_str());
+				args->sceneitem = obs_scene_add_group(
+					scene, args->unique_name.c_str());
 
-			if (args->sceneitem) {
-				obs_sceneitem_addref(args->sceneitem);
+				if (args->sceneitem) {
+					obs_sceneitem_addref(args->sceneitem);
 
-				obs_sceneitem_set_visible(args->sceneitem,
-							  true);
-			}
-		},
-		&args);
-	obs_leave_graphics();
+					obs_sceneitem_set_visible(
+						args->sceneitem, true);
+				}
+			},
+			&args);
+		obs_leave_graphics();
+	}
 
 	if (args.sceneitem) {
 		obs_transform_info info;
@@ -2285,7 +2297,7 @@ void StreamElementsObsSceneManager::SerializeObsSceneItems(
 	if (!videoComposition.get())
 		return;
 
-	obs_scene_t *scene = nullptr;
+	OBSSceneAutoRelease scene = nullptr;
 
 	if (input.get() && input->GetType() == VTYPE_DICTIONARY) {
 		auto root = input->GetDictionary();
@@ -2294,9 +2306,9 @@ void StreamElementsObsSceneManager::SerializeObsSceneItems(
 			return;
 
 		// Get scene handle
-		scene = videoComposition->GetSceneById(root->GetString("id"));
+		scene = videoComposition->GetSceneByIdRef(root->GetString("id"));
 	} else {
-		scene = videoComposition->GetCurrentScene();
+		scene = videoComposition->GetCurrentSceneRef();
 	}
 
 	if (scene) {
@@ -2348,7 +2360,7 @@ void StreamElementsObsSceneManager::SerializeObsCurrentScene(
 	if (!videoComposition.get())
 		return;
 
-	auto scene = videoComposition->GetCurrentScene();
+	OBSSceneAutoRelease scene = videoComposition->GetCurrentSceneRef();
 
 	if (scene) {
 		videoComposition->SerializeScene(scene, output);
@@ -2369,14 +2381,14 @@ void StreamElementsObsSceneManager::SerializeObsScenes(
 	if (!videoComposition.get())
 		return;
 
-	std::vector<obs_scene_t *> scenes;
+	StreamElementsVideoCompositionBase::scenes_t scenes;
 	videoComposition->GetAllScenes(scenes);
 
-	for (auto scene : scenes) {
+	for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
 		/* Get the scene (a scene is a source) */
 		CefRefPtr<CefValue> item = CefValue::Create();
 
-		videoComposition->SerializeScene(scene, item);
+		videoComposition->SerializeScene(*it, item);
 
 		list->SetValue(list->GetSize(), item);
 	}
@@ -2470,15 +2482,20 @@ void StreamElementsObsSceneManager::SetCurrentObsSceneById(
 	if (!id.size())
 		return;
 
-	auto videoComposition =
+	auto videoCompositionManager =
 		StreamElementsGlobalStateManager::GetInstance()
-			->GetVideoCompositionManager()
-			->GetVideoCompositionBySceneId(id);
+			->GetVideoCompositionManager();
+
+	if (!videoCompositionManager.get())
+		return;
+
+	auto videoComposition =
+		videoCompositionManager->GetVideoCompositionBySceneId(id);
 
 	if (!videoComposition.get())
 		return;
 
-	auto scene = videoComposition->GetSceneById(id);
+	OBSSceneAutoRelease scene = videoComposition->GetSceneByIdRef(id);
 
 	if (!scene)
 		return;
@@ -2518,7 +2535,7 @@ void StreamElementsObsSceneManager::RemoveObsScenesByIds(
 		if (!videoComposition.get())
 			continue;
 
-		auto scene = videoComposition->GetSceneById(id);
+		OBSSceneAutoRelease scene = videoComposition->GetSceneByIdRef(id);
 
 		if (!scene)
 			continue;
@@ -2547,7 +2564,7 @@ void StreamElementsObsSceneManager::SetObsScenePropertiesById(
 		return;
 
 	std::string id = d->GetString("id");
-	auto scene = videoComposition->GetSceneById(id);
+	OBSSceneAutoRelease scene = videoComposition->GetSceneByIdRef(id);
 	if (!scene)
 		return;
 

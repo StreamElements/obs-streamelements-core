@@ -320,10 +320,10 @@ public:
 		return m_videoComposition;
 	}
 
-	obs_scene_t *GetCurrentScene()
+	obs_scene_t *GetCurrentSceneRef()
 	{
 		if (m_videoComposition.get())
-			return m_videoComposition->GetCurrentScene();
+			return m_videoComposition->GetCurrentSceneRef();
 		else
 			return nullptr;
 	}
