@@ -137,7 +137,7 @@ static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* compos
 {
 	auto info = composition->GetCompositionInfo(nullptr);
 
-	auto streamingVideoEncoder = info->GetStreamingVideoEncoder();
+	OBSEncoderAutoRelease streamingVideoEncoder = info->GetStreamingVideoEncoderRef();
 
 	// OBS Native composition doesn't have an encoder until we start streaming
 	if (!streamingVideoEncoder)
@@ -150,7 +150,7 @@ static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* compos
 
 	// Recording
 
-	auto recordingVideoEncoder = info->GetRecordingVideoEncoder();
+	OBSEncoderAutoRelease recordingVideoEncoder = info->GetRecordingVideoEncoderRef();
 
 	if (recordingVideoEncoder &&
 	    recordingVideoEncoder != streamingVideoEncoder) {
@@ -483,9 +483,7 @@ public:
 
 	virtual ~StreamElementsDefaultVideoCompositionInfo() {}
 
-public:
-	virtual bool IsObsNative() { return true; }
-
+protected:
 	virtual obs_encoder_t *GetStreamingVideoEncoder() {
 		auto output = obs_frontend_get_streaming_output();
 
@@ -505,6 +503,9 @@ public:
 
 		return result;
 	}
+
+public:
+	virtual bool IsObsNative() { return true; }
 
 	virtual video_t *GetVideo() { return obs_get_video(); }
 
@@ -729,13 +730,17 @@ public:
 		  m_videoView(videoView),
 		  m_listener(listener)
 	{
+		obs_encoder_addref(m_streamingVideoEncoder);
+		obs_encoder_addref(m_recordingVideoEncoder);
 	}
 
-	virtual ~StreamElementsCustomVideoCompositionInfo() {}
+	virtual ~StreamElementsCustomVideoCompositionInfo()
+	{
+		obs_encoder_release(m_streamingVideoEncoder);
+		obs_encoder_release(m_recordingVideoEncoder);
+	}
 
-public:
-	virtual bool IsObsNative() { return false; }
-
+protected:
 	virtual obs_encoder_t *GetStreamingVideoEncoder()
 	{
 		return m_streamingVideoEncoder;
@@ -743,8 +748,12 @@ public:
 
 	virtual obs_encoder_t *GetRecordingVideoEncoder()
 	{
-		return m_recordingVideoEncoder ? m_recordingVideoEncoder : m_streamingVideoEncoder;
+		return m_recordingVideoEncoder ? m_recordingVideoEncoder
+					       : m_streamingVideoEncoder;
 	}
+
+public:
+	virtual bool IsObsNative() { return false; }
 
 	virtual video_t *GetVideo() { return m_video; }
 

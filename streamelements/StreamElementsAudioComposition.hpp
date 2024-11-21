@@ -44,18 +44,44 @@ public:
 			return m_owner;
 		}
 
-	public:
-		// When true, consumers probably want to opt-in to streaming
-		// only when OBS main streaming output is active.
-		virtual bool IsObsNative() = 0;
-
+	protected:
 		virtual obs_encoder_t *
 		GetStreamingAudioEncoder(size_t index) = 0;
 
 		virtual obs_encoder_t *
 		GetRecordingAudioEncoder(size_t index) = 0;
 
+	public:
+		// When true, consumers probably want to opt-in to streaming
+		// only when OBS main streaming output is active.
+		virtual bool IsObsNative() = 0;
+
 		virtual audio_t *GetAudio() = 0;
+
+		obs_encoder_t *
+			GetStreamingAudioEncoderRef(size_t index)
+		{
+			auto result = GetStreamingAudioEncoder(index);
+
+			if (result) {
+				obs_encoder_addref(result);
+			}
+
+			return result;
+		}
+
+		obs_encoder_t *
+			GetRecordingAudioEncoderRef(size_t index)
+		{
+			auto result = GetRecordingAudioEncoder(index);
+
+			if (result) {
+				obs_encoder_addref(result);
+			}
+
+			return result;
+
+		}
 	};
 
 private:

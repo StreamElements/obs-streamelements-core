@@ -60,16 +60,36 @@ public:
 		// only when OBS main streaming output is active.
 		virtual bool IsObsNative() = 0;
 
-		virtual obs_encoder_t *GetStreamingVideoEncoder() = 0;
-
-		virtual obs_encoder_t *GetRecordingVideoEncoder() = 0;
-
 		virtual video_t *GetVideo() = 0;
 
 		virtual void GetVideoBaseDimensions(uint32_t *videoWidth,
 						    uint32_t *videoHeight) = 0;
 
 		virtual void Render() = 0;
+
+		obs_encoder_t* GetStreamingVideoEncoderRef() {
+			auto result = GetStreamingVideoEncoder();
+
+			if (result) {
+				obs_encoder_addref(result);
+			}
+
+			return result;
+		}
+
+		obs_encoder_t* GetRecordingVideoEncoderRef() {
+			auto result = GetRecordingVideoEncoder();
+
+			if (result) {
+				obs_encoder_addref(result);
+			}
+
+			return result;
+		}
+
+	protected:
+		virtual obs_encoder_t *GetStreamingVideoEncoder() = 0;
+		virtual obs_encoder_t *GetRecordingVideoEncoder() = 0;
 	};
 
 private:

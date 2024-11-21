@@ -54,10 +54,12 @@ SerializeObsAudioEncoders(StreamElementsAudioCompositionBase *composition,
 	root->SetList("streamingAudioEncoders", streamingAudioEncoders);
 	*/
 
-	if (info->GetStreamingAudioEncoder(0)) {
+	OBSEncoderAutoRelease streamingAudioEncoder =
+		info->GetStreamingAudioEncoderRef(0);
+	if (streamingAudioEncoder) {
 		root->SetDictionary(
 			"streamingAudioEncoder",
-			SerializeObsEncoder(info->GetStreamingAudioEncoder(0)));
+				    SerializeObsEncoder(streamingAudioEncoder));
 	} else {
 		root->SetNull("streamingAudioEncoder");
 	}
@@ -84,10 +86,13 @@ SerializeObsAudioEncoders(StreamElementsAudioCompositionBase *composition,
 		root->SetList("recordingAudioEncoders", recordingAudioEncoders);
 	*/
 
-	if (info->GetRecordingAudioEncoder(0)) {
+	OBSEncoderAutoRelease recordingAudioEncoder =
+		info->GetRecordingAudioEncoderRef(0);
+
+	if (recordingAudioEncoder) {
 		root->SetDictionary(
 			"recordingAudioEncoder",
-			SerializeObsEncoder(info->GetRecordingAudioEncoder(0)));
+				    SerializeObsEncoder(recordingAudioEncoder));
 	} else {
 		root->SetNull("recordingAudioEncoder");
 	}
@@ -176,9 +181,7 @@ public:
 
 	virtual ~StreamElementsDefaultAudioCompositionInfo() {}
 
-public:
-	virtual bool IsObsNative() { return true; }
-
+protected:
 	virtual obs_encoder_t *GetStreamingAudioEncoder(size_t index)
 	{
 		auto output = obs_frontend_get_streaming_output();
@@ -200,6 +203,9 @@ public:
 
 		return result;
 	}
+
+public:
+	virtual bool IsObsNative() { return true; }
 
 	virtual audio_t *GetAudio() { return obs_get_audio(); }
 };
@@ -257,14 +263,21 @@ public:
 		for (size_t i = 0; i < MAX_AUDIO_MIXES; ++i) {
 			m_streamingAudioEncoders[i] = streamingAudioEncoders[i];
 			m_recordingAudioEncoders[i] = recordingAudioEncoders[i];
+
+			obs_encoder_addref(m_streamingAudioEncoders[i]);
+			obs_encoder_addref(m_recordingAudioEncoders[i]);
 		}
 	}
 
-	virtual ~StreamElementsCustomAudioCompositionInfo() {}
+	virtual ~StreamElementsCustomAudioCompositionInfo()
+	{
+		for (size_t i = 0; i < MAX_AUDIO_MIXES; ++i) {
+			obs_encoder_release(m_streamingAudioEncoders[i]);
+			obs_encoder_release(m_recordingAudioEncoders[i]);
+		}
+	}
 
-public:
-	virtual bool IsObsNative() { return false; }
-
+protected:
 	virtual obs_encoder_t *GetStreamingAudioEncoder(size_t index)
 	{
 		if (index > MAX_AUDIO_MIXES)
@@ -280,6 +293,9 @@ public:
 
 		return m_recordingAudioEncoders[index];
 	}
+
+public:
+	virtual bool IsObsNative() { return false; }
 
 	virtual audio_t *GetAudio() { return m_audio; }
 };

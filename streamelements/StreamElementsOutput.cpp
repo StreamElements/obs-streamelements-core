@@ -600,7 +600,10 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 	if (!videoCompositionInfo)
 		return false;
 
-	if (!videoCompositionInfo->GetStreamingVideoEncoder() && videoCompositionInfo->IsObsNative()) {
+	OBSEncoderAutoRelease streamingVideoEncoder =
+		videoCompositionInfo->GetStreamingVideoEncoderRef();
+
+	if (!streamingVideoEncoder && videoCompositionInfo->IsObsNative()) {
 		blog(LOG_WARNING,
 		     "obs-streamelements-core: OBS Native streaming video encoder does not exist yet on streaming output '%s'",
 		     GetId().c_str());
@@ -636,16 +639,19 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 	obs_data_release(output_settings);
 
 	if (m_output) {
+		OBSEncoderAutoRelease streamingVideoEncoder =
+			videoCompositionInfo->GetStreamingVideoEncoderRef();
+
 		obs_output_set_video_encoder(
-			m_output,
-			videoCompositionInfo->GetStreamingVideoEncoder());
+			m_output, streamingVideoEncoder);
 
 		size_t audioEncodersCount = 0;
 
 		for (size_t i = 0; i < m_audioTracks.size(); ++i) {
-			auto encoder =
-				audioCompositionInfo->GetStreamingAudioEncoder(
-					m_audioTracks[i]);
+			OBSEncoderAutoRelease encoder =
+				audioCompositionInfo
+					->GetStreamingAudioEncoderRef(
+						m_audioTracks[i]);
 
 			if (!encoder) {
 				blog(LOG_WARNING,
@@ -1062,7 +1068,10 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 	if (!videoCompositionInfo)
 		return false;
 
-	if (!videoCompositionInfo->GetRecordingVideoEncoder() &&
+	OBSEncoderAutoRelease recordingVideoEncoder =
+		videoCompositionInfo->GetRecordingVideoEncoderRef();
+
+	if (!recordingVideoEncoder &&
 	    videoCompositionInfo->IsObsNative()) {
 		blog(LOG_WARNING,
 		     "obs-streamelements-core: OBS Native streaming video encoder does not exist yet on recording output '%s'",
@@ -1235,16 +1244,19 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 				     hotkeyData);
 
 	if (m_output) {
+		OBSEncoderAutoRelease recordingVideoEncoder =
+			videoCompositionInfo->GetRecordingVideoEncoderRef();
+
 		obs_output_set_video_encoder(
-			m_output,
-			videoCompositionInfo->GetRecordingVideoEncoder());
+			m_output, recordingVideoEncoder);
 
 		size_t audioEncodersCount = 0;
 
 		for (size_t i = 0; i < m_audioTracks.size(); ++i) {
-			auto encoder =
-				audioCompositionInfo->GetRecordingAudioEncoder(
-					m_audioTracks[i]);
+			OBSEncoderAutoRelease encoder =
+				audioCompositionInfo
+					->GetRecordingAudioEncoderRef(
+						m_audioTracks[i]);
 
 			if (!encoder) {
 				blog(LOG_WARNING,
