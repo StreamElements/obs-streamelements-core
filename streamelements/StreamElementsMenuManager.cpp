@@ -125,7 +125,7 @@ void StreamElementsMenuManager::UpdateInternal()
 				"streamelements_request_check_for_updates",
 				cd);
 
-			calldata_free(cd);
+			calldata_destroy(cd);
 		});
 
 	QMenu *helpMenu = new QMenu(
