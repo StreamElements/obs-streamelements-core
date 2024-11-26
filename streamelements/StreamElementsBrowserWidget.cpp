@@ -512,6 +512,7 @@ void StreamElementsBrowserWidget::RemoveVideoCompositionView()
 		return;
 
 	m_activeVideoCompositionViewWidget->hide();
+	m_activeVideoCompositionViewWidget->Destroy();
 	m_activeVideoCompositionViewWidget->deleteLater();
 
 	m_activeVideoCompositionViewWidget = nullptr;

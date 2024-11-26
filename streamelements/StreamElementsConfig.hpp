@@ -30,6 +30,14 @@ public:
 		return s_instance;
 	}
 
+	static void Destroy()
+	{
+		if (s_instance) {
+			delete s_instance;
+			s_instance = nullptr;
+		}
+	}
+
 public:
 	config_t* GetConfig();
 	void SaveConfig();

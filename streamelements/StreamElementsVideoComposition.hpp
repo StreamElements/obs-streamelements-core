@@ -524,16 +524,16 @@ public:
 	}
 
 protected:
-	virtual bool RemoveScene(obs_scene_t *scene);
-	virtual void SetTransition(obs_source_t *transition);
-	virtual obs_source_t *GetTransition();
+	virtual bool RemoveScene(obs_scene_t *scene) override;
+	virtual void SetTransition(obs_source_t *transition) override;
+	virtual obs_source_t *GetTransition() override;
 
-	virtual int GetTransitionDurationMilliseconds()
+	virtual int GetTransitionDurationMilliseconds() override
 	{
 		return m_transitionDurationMs;
 	}
 
-	virtual void SetTransitionDurationMilliseconds(int duration);
+	virtual void SetTransitionDurationMilliseconds(int duration) override;
 
 	virtual void HandleObsSceneCollectionCleanup() override;
 };

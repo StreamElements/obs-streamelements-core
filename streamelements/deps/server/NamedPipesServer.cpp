@@ -46,13 +46,31 @@ void NamedPipesServer::Start()
 
 void NamedPipesServer::Stop()
 {
-	std::lock_guard<std::recursive_mutex> guard(m_mutex);
+	{
+		std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
-	if (!m_running) {
-		return;
+		if (!m_running) {
+			return;
+		}
+
+		m_running = false;
 	}
 
-	m_running = false;
+	{
+		// Attempt to connect to release the server thread
+		HANDLE hPipe = ::CreateFileA(m_pipeName.c_str(),
+					     GENERIC_READ | GENERIC_WRITE, 0,
+					     NULL, OPEN_EXISTING, 0, NULL);
+
+		if (hPipe != INVALID_HANDLE_VALUE) {
+			DWORD dwMode = PIPE_READMODE_MESSAGE |
+				       PIPE_TYPE_MESSAGE;
+
+			::SetNamedPipeHandleState(hPipe, &dwMode, NULL, NULL);
+
+			::CloseHandle(hPipe);
+		}
+	}
 
 	if (m_thread.joinable()) {
 		m_thread.join();

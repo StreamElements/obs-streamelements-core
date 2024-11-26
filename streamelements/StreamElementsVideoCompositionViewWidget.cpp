@@ -406,9 +406,14 @@ StreamElementsVideoCompositionViewWidget::StreamElementsVideoCompositionViewWidg
 	//CreateDisplay();
 }
 
-StreamElementsVideoCompositionViewWidget::
-~StreamElementsVideoCompositionViewWidget()
+void StreamElementsVideoCompositionViewWidget::Destroy()
 {
+	os_atomic_store_bool(&m_destroyed, true);
+
+	if (m_destroy_event && m_display) {
+		os_event_timedwait(m_destroy_event, 1000);
+	}
+
 	if (m_display) {
 		obs_enter_graphics();
 		obs_display_remove_draw_callback(
@@ -420,11 +425,32 @@ StreamElementsVideoCompositionViewWidget::
 		m_display = nullptr;
 	}
 
+	obs_enter_graphics();
+	if (m_destroy_event) {
+		os_event_destroy(m_destroy_event);
+		m_destroy_event = nullptr;
+	}
+	obs_leave_graphics();
+
+	m_visualElementsState.Clear();
+
 	m_videoCompositionInfo = nullptr;
+}
+
+StreamElementsVideoCompositionViewWidget::
+~StreamElementsVideoCompositionViewWidget()
+{
+	Destroy();
 }
 
 void StreamElementsVideoCompositionViewWidget::CreateDisplay()
 {
+	if (!m_videoComposition.get())
+		return;
+
+	if (!m_videoCompositionInfo.get())
+		return;
+
 	if (m_display)
 		return;
 
@@ -446,6 +472,11 @@ void StreamElementsVideoCompositionViewWidget::CreateDisplay()
 		return;
 
 	obs_enter_graphics();
+
+	if (!m_destroy_event) {
+		os_event_init(&m_destroy_event, OS_EVENT_TYPE_MANUAL);
+	}
+
 	m_display = obs_display_create(&info, 0x303030L);
 
 	obs_display_add_draw_callback(m_display, obs_display_draw_callback, this);
@@ -592,41 +623,19 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 		reinterpret_cast<StreamElementsVideoCompositionViewWidget *>(
 			data);
 
+	if (os_atomic_load_bool(&self->m_destroyed)) {
+		self->m_overflowTexture = nullptr;
 
-	OBSSceneAutoRelease currentScene = self->m_videoComposition->GetCurrentSceneRef();
+		if (self->m_destroy_event) {
+			os_event_signal(self->m_destroy_event);
+		}
+	} else {
+		OBSSceneAutoRelease currentScene =
+			self->m_videoComposition->GetCurrentSceneRef();
 
-	// Update visual elements state and draw them on screen
-	self->m_visualElementsState.UpdateAndDraw(
-		self,
-		currentScene, viewportWidth,
-		viewportHeight, self->m_videoCompositionInfo);
-
-	/*
-	if (self->m_currUnderMouse) {
-		// Temporary mouse tracking debugger
-		fillRect(self->m_currMouseWorldX, self->m_currMouseWorldY,
-			 self->m_currMouseWorldX + 50,
-			 self->m_currMouseWorldY + 50,
-			 QColor(255, 255, 0, 175));
-
-		drawRect(self->m_currMouseWorldX, self->m_currMouseWorldY,
-			 self->m_currMouseWorldX + 50,
-			 self->m_currMouseWorldY + 50, 5.0f,
-			 QColor(255, 0, 0, 175));
-
-		drawLine(0, 0, self->m_currMouseWorldX, self->m_currMouseWorldY,
-			 5.0f, QColor(0, 255, 0, 175));
-
-		drawLine(0, worldHeight, self->m_currMouseWorldX,
-			 self->m_currMouseWorldY, 5.0f, QColor(0, 255, 0, 175));
-
-		drawLine(worldWidth, worldHeight, self->m_currMouseWorldX,
-			 self->m_currMouseWorldY, 5.0f, QColor(0, 255, 0, 175));
-
-		drawLine(worldWidth, 0, self->m_currMouseWorldX,
-			 self->m_currMouseWorldY, 5.0f, QColor(0, 255, 0, 175));
+		// Update visual elements state and draw them on screen
+		self->m_visualElementsState.UpdateAndDraw(
+			self, currentScene, viewportWidth, viewportHeight,
+			self->m_videoCompositionInfo);
 	}
-	*/
-
-	// endProjectionRegion();
 }

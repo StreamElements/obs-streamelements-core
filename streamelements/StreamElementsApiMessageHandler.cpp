@@ -1937,7 +1937,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			"streamelements_request_check_for_updates_silent",
 			cd);
 
-		calldata_free(cd);
+		calldata_destroy(cd);
 
 		result->SetBool(true);
 	}

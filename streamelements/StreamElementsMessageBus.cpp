@@ -2,7 +2,7 @@
 #include "StreamElementsConfig.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
 
-StreamElementsMessageBus* StreamElementsMessageBus::s_instance = nullptr;
+std::shared_ptr<StreamElementsMessageBus> StreamElementsMessageBus::s_instance = nullptr;
 
 const StreamElementsMessageBus::message_destination_filter_flags_t StreamElementsMessageBus::DEST_ALL = 0xFFFFFFFFUL;
 
@@ -18,7 +18,7 @@ const char* const StreamElementsMessageBus::SOURCE_APPLICATION = "application";
 const char* const StreamElementsMessageBus::SOURCE_WEB = "web";
 const char* const StreamElementsMessageBus::SOURCE_EXTERNAL = "external";
 
-StreamElementsMessageBus::StreamElementsMessageBus() :
+StreamElementsMessageBus::StreamElementsMessageBus(Private) :
 	m_external_controller_server(this)
 {
 
@@ -29,13 +29,18 @@ StreamElementsMessageBus::~StreamElementsMessageBus()
 
 }
 
-StreamElementsMessageBus* StreamElementsMessageBus::GetInstance()
+std::shared_ptr<StreamElementsMessageBus> StreamElementsMessageBus::GetInstance()
 {
 	if (!s_instance) {
-		s_instance = new StreamElementsMessageBus();
+		s_instance = std::make_shared<StreamElementsMessageBus>(Private());
 	}
 
 	return s_instance;
+}
+
+void StreamElementsMessageBus::Destroy()
+{
+	s_instance = nullptr;
 }
 
 void StreamElementsMessageBus::AddListener(std::string target, message_destination_filter_flags_t type)

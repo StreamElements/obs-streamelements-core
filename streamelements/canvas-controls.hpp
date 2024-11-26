@@ -6,7 +6,7 @@
 #include "canvas-math.hpp"
 #include "canvas-draw.hpp"
 
-static FileTexture g_overflowTexture("../../data/obs-studio/images/overflow.png");
+//static FileTexture g_overflowTexture("../../data/obs-studio/images/overflow.png");
 
 static ConfigAccessibilityColor g_colorSelection("SelectRed",
 						 QColor(255, 0, 0));
@@ -781,7 +781,7 @@ public:
 
 		gs_eparam_t *const param =
 			gs_effect_get_param_by_name(solid, "image");
-		gs_effect_set_texture_srgb(param, g_overflowTexture.get());
+		gs_effect_set_texture_srgb(param, m_view->m_overflowTexture->get());
 
 		vec2 s;
 		// Black magic copied from OBS code. This keeps the output scale of the texture
@@ -789,10 +789,10 @@ public:
 		// has stripes of the same visual size.
 		vec2_set(&s, transform.x.x / 96, transform.y.y / 96);
 		gs_effect_set_vec2(scale, &s);
-		gs_effect_set_texture(image, g_overflowTexture.get());
+		gs_effect_set_texture(image, m_view->m_overflowTexture->get());
 
 		while (gs_effect_loop(solid, "Draw")) {
-			gs_draw_sprite(g_overflowTexture.get(), 0, 1,
+			gs_draw_sprite(m_view->m_overflowTexture->get(), 0, 1,
 				       1); // Output width & height
 		}
 

@@ -12,6 +12,12 @@ StreamElementsConfig::StreamElementsConfig():
 StreamElementsConfig::~StreamElementsConfig()
 {
 	SaveConfig();
+
+	if (m_config) {
+		config_close(m_config);
+
+		m_config = nullptr;
+	}
 }
 
 

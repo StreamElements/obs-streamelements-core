@@ -27,6 +27,11 @@ class StreamElementsNativeOBSControlsManager : public QObject
 	Q_OBJECT
 
 private:
+	struct Private {
+		explicit Private() = default;
+	};
+
+private:
 	class WidgetVisibilityChangeTracker : public QObject {
 	public:
 		typedef std::function<void(bool)> callback_t;
@@ -80,10 +85,11 @@ public:
 	};
 
 public:
-	static StreamElementsNativeOBSControlsManager* GetInstance();
+	static std::shared_ptr<StreamElementsNativeOBSControlsManager> GetInstance();
+	static void Destroy();
 
-private:
-	StreamElementsNativeOBSControlsManager(QMainWindow* mainWindow);
+	StreamElementsNativeOBSControlsManager(Private,
+					       QMainWindow *mainWindow);
 	virtual ~StreamElementsNativeOBSControlsManager();
 
 public:

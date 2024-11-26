@@ -200,7 +200,10 @@ public:
 	virtual bool IsObsNativeOutput() override { return false; }
 
 protected:
-	virtual obs_output_t *GetOutput() override { return m_output; }
+	virtual obs_output_t *GetOutput() override
+	{
+		return m_output ? obs_output_get_ref(m_output) : nullptr;
+	}
 
 	virtual bool StartInternal(
 		std::shared_ptr<
@@ -353,7 +356,10 @@ public:
 	virtual bool TriggerSplitRecordingOutput();
 
 protected:
-	virtual obs_output_t *GetOutput() override { return m_output; }
+	virtual obs_output_t *GetOutput() override
+	{
+		return m_output ? obs_output_get_ref(m_output) : nullptr;
+	}
 
 	virtual bool
 	StartInternal(std::shared_ptr<

@@ -1106,8 +1106,6 @@ static void handle_scene_item_remove(void *my_data, calldata_t *cd)
 
 		if (sceneManager)
 			sceneManager->Update();
-
-		((SESignalHandlerData *)my_data)->Release();
 	}
 }
 
@@ -1158,10 +1156,6 @@ static void handle_scene_item_add(void *my_data, calldata_t *cd)
 	if (!sceneitem)
 		return;
 
-	if (my_data) {
-		((SESignalHandlerData *)my_data)->AddRef();
-	}
-
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemAdded",
 				 "hostSceneItemAdded", false);
 	dispatch_scene_update(my_data, cd);
@@ -1198,18 +1192,10 @@ void remove_source_signals(obs_source_t *source, SESignalHandlerData *data)
 
 	signal_handler_disconnect(handler, "rename",
 				  handle_scene_item_source_rename, data);
-
-	if (data) {
-		data->Release();
-	}
 }
 
 void add_source_signals(obs_source_t *source, SESignalHandlerData *data)
 {
-	if (data) {
-		data->AddRef();
-	}
-
 	auto handler = obs_source_get_signal_handler(source);
 
 	signal_handler_connect(handler, "update",
@@ -1267,10 +1253,6 @@ void remove_scene_signals(obs_scene_t *scene, SESignalHandlerData *data)
 		},
 		data);
 	obs_leave_graphics();
-
-	if (data) {
-		data->Release();
-	}
 }
 
 void remove_scene_signals(obs_source_t *sceneSource, SESignalHandlerData *data)
@@ -1284,20 +1266,12 @@ void remove_scene_signals(obs_source_t *sceneSource, SESignalHandlerData *data)
 	obs_scene_t *scene = obs_scene_from_source(sceneSource);
 
 	remove_scene_signals(scene, data);
-
-	if (data) {
-		data->Release();
-	}
 }
 
 void add_scene_signals(obs_scene_t *scene, SESignalHandlerData *data)
 {
 	if (!scene)
 		return;
-
-	if (data) {
-		data->AddRef();
-	}
 
 	obs_enter_graphics();
 	obs_scene_atomic_update(
@@ -1347,10 +1321,6 @@ void add_scene_signals(obs_source_t *sceneSource, SESignalHandlerData *data)
 
 	if (obs_source_is_group(sceneSource))
 		return;
-
-	if (data) {
-		data->AddRef();
-	}
 
 	obs_scene_t *scene = obs_scene_from_source(sceneSource);
 
@@ -1450,7 +1420,6 @@ StreamElementsObsSceneManager::StreamElementsObsSceneManager(QMainWindow *parent
 			      ->GetVideoCompositionManager()
 			      ->GetObsNativeVideoComposition()
 			      .get());
-	m_signalHandlerData->AddRef();
 
 	obs_enter_graphics();
 	obs_frontend_add_event_callback(handle_obs_frontend_event, this);
@@ -1496,40 +1465,54 @@ StreamElementsObsSceneManager::~StreamElementsObsSceneManager()
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
-	delete m_sceneItemsMonitor;
+	if (m_scenesWidgetManager) {
+		delete m_scenesWidgetManager;
+		m_scenesWidgetManager = nullptr;
+	}
+
+	if (m_sceneItemsMonitor) {
+		delete m_sceneItemsMonitor;
+		m_sceneItemsMonitor = nullptr;
+	}
 
 	obs_enter_graphics();
 	obs_frontend_remove_event_callback(handle_obs_frontend_event, this);
 	obs_leave_graphics();
 
-	auto handler = obs_get_signal_handler();
+	if (m_signalHandlerData) {
+		auto handler = obs_get_signal_handler();
 
-	signal_handler_disconnect(handler, "source_create",
-				  handle_source_create, m_signalHandlerData);
+		signal_handler_disconnect(handler, "source_create",
+					  handle_source_create,
+					  m_signalHandlerData);
 
-	signal_handler_disconnect(handler, "source_remove",
-				  handle_source_remove, m_signalHandlerData);
+		signal_handler_disconnect(handler, "source_remove",
+					  handle_source_remove,
+					  m_signalHandlerData);
 
-	// Remove signals from existing scenes
-	obs_enum_scenes(
-		[](void *data, obs_source_t *scene_source) -> bool {
-			remove_source_signals(scene_source,
-					      (SESignalHandlerData *)data);
+		// Remove signals from existing scenes
+		obs_enum_scenes(
+			[](void *data, obs_source_t *scene_source) -> bool {
+				remove_source_signals(
+					scene_source,
+					(SESignalHandlerData *)data);
 
-			remove_scene_signals(scene_source,
-					     (SESignalHandlerData *)data);
+				remove_scene_signals(
+					scene_source,
+					(SESignalHandlerData *)data);
 
-			return true;
-		},
-		m_signalHandlerData);
+				return true;
+			},
+			m_signalHandlerData);
 
-	m_signalHandlerData->Clear();
-	m_signalHandlerData->Release();
-	m_signalHandlerData = nullptr;
+		m_signalHandlerData->Clear();
+		delete m_signalHandlerData;
+		m_signalHandlerData = nullptr;
+	}
 }
 
 void StreamElementsObsSceneManager::ObsAddSourceInternal(
-	obs_source_t *parentScene, obs_sceneitem_t *parentGroup,
+	obs_source_t *inputParentScene, obs_sceneitem_t *parentGroup,
 	const char *sourceId, const char *sourceName,
 	obs_data_t *sourceSettings, obs_data_t *sourceHotkeyData,
 	bool preferExistingSource, const char *existingSourceId,
@@ -1538,15 +1521,15 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 	
-	bool releaseParentScene = false;
+	OBSSourceAutoRelease parentScene = nullptr;
 
-	if (parentScene == NULL) {
+	if (inputParentScene == NULL) {
 		parentScene = obs_frontend_get_current_scene();
-
-		releaseParentScene = true;
+	} else {
+		parentScene = obs_source_get_ref(inputParentScene);
 	}
 
-	obs_source_t *source = NULL;
+	OBSSourceAutoRelease source = NULL;
 
 	if (existingSourceId && !source) {
 		// Look up existing source by ID
@@ -1565,7 +1548,9 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 				enum_sources_args *args =
 					(enum_sources_args *)arg;
 
-				if (GetIdFromPointer((void*)iterator) == args->id) {
+				if (GetIdFromPointer((void *)iterator) ==
+					    args->id &&
+				    !args->result) {
 					args->result =
 						obs_source_get_ref(iterator);
 
@@ -1686,23 +1671,15 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 		}
 
 		if (output_sceneitem != NULL) {
-			obs_sceneitem_addref(args.sceneitem);
-
 			*output_sceneitem = args.sceneitem;
+		} else {
+			obs_sceneitem_release(
+				args.sceneitem); // was allocated in atomic_scene_update
 		}
 
-		obs_sceneitem_release(
-			args.sceneitem); // was allocated in atomic_scene_update
-	}
-
-	if (output_source != NULL) {
-		*output_source = source;
-	} else {
-		obs_source_release(source);
-	}
-
-	if (releaseParentScene) {
-		obs_source_release(parentScene);
+		if (output_source != NULL) {
+			*output_source = obs_source_get_ref(source);
+		}
 	}
 }
 
@@ -1810,7 +1787,7 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 				      ? root->GetString("sceneId").ToString()
 				      : "";
 
-	obs_data_t *settings = obs_data_create();
+	OBSDataAutoRelease settings = obs_data_create();
 
 	bool parsed =
 		root->HasKey("settings")
@@ -1823,19 +1800,16 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 		OBSSceneAutoRelease parent_scene =
 			videoComposition->GetSceneByIdRef(sceneId);
 
-		obs_source_t *parent_scene_source = obs_scene_get_source(parent_scene);
+		obs_source_t *parent_scene_source = obs_scene_get_source(parent_scene); // no addref
 
-		obs_source_t *source;
-		obs_sceneitem_t *sceneitem;
+		obs_source_t *source = nullptr;
+		obs_sceneitem_t *sceneitem = nullptr;
 
-		ObsAddSourceInternal(parent_scene_source, videoComposition->GetSceneItemById(groupId),
-				     source_class.c_str(), unique_name.c_str(),
-				     settings, nullptr, false, nullptr, &source,
-				     &sceneitem);
-
-		//if (parent_scene) {
-		//	obs_source_release(parent_scene);
-		//}
+		ObsAddSourceInternal(
+			parent_scene_source,
+			videoComposition->GetSceneItemById(groupId),
+			source_class.c_str(), unique_name.c_str(), settings,
+			nullptr, false, nullptr, &source, &sceneitem);
 
 		if (sceneitem) {
 			obs_transform_info info;
@@ -1859,8 +1833,6 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 
 		obs_source_release(source);
 	}
-
-	obs_data_release(settings);
 }
 
 void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
@@ -1912,8 +1884,8 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 		obs_source_t *parent_scene_source = obs_scene_get_source(
 			parent_scene);
 
-		obs_source_t *source;
-		obs_sceneitem_t *sceneitem;
+		obs_source_t *source = nullptr;
+		obs_sceneitem_t *sceneitem = nullptr;
 
 		ObsAddSourceInternal(
 			parent_scene_source,
@@ -2057,8 +2029,8 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 			obs_source_t *parent_scene_source = obs_scene_get_source(
 				parent_scene);
 
-			obs_source_t *source;
-			obs_sceneitem_t *sceneitem;
+			obs_source_t *source = nullptr;
+			obs_sceneitem_t *sceneitem = nullptr;
 
 			ObsAddSourceInternal(
 				parent_scene_source, videoComposition->GetSceneItemById(groupId),
@@ -2164,8 +2136,8 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 		obs_source_t *parent_scene_source = obs_scene_get_source(
 			parent_scene);
 
-		obs_source_t *source;
-		obs_sceneitem_t *sceneitem;
+		obs_source_t *source = nullptr;
+		obs_sceneitem_t *sceneitem = nullptr;
 
 		ObsAddSourceInternal(
 			parent_scene_source,

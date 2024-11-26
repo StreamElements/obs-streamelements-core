@@ -2,6 +2,8 @@
 
 #include <util/config-file.h>
 
+#include <string>
+
 class ConfigAccessibilityColor {
 	std::string m_name;
 	QColor m_defaultValue;
