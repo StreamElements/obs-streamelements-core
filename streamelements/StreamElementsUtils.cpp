@@ -651,88 +651,97 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output)
 
 	// Iterate over all input sources
 	bool continue_iteration = true;
-	for (size_t idx = 0; continue_iteration; ++idx) {
+	for (size_t idx = 0; ; ++idx) {
 		// Filled by obs_enum_input_types() call below
 		const char *sourceId;
+		const char *unversioned_id;
 
 		// Get next input source type, obs_enum_input_types() returns true as long as
 		// there is data at the specified index
-		continue_iteration = obs_enum_input_types(idx, &sourceId);
+		if (!obs_enum_input_types2(idx, &sourceId, &unversioned_id))
+			break;
 
-		if (continue_iteration) {
-			// Get source caps
-			uint32_t sourceCaps =
-				obs_get_source_output_flags(sourceId);
+		// Get source caps
+		uint32_t sourceCaps =
+			obs_get_source_output_flags(sourceId);
 
-			// If source has video
-			if ((sourceCaps & OBS_SOURCE_VIDEO) ==
-			    OBS_SOURCE_VIDEO) {
-				// Create source response dictionary
-				CefRefPtr<CefDictionaryValue> dic =
-					CefDictionaryValue::Create();
+		// Check if the source is disabled, if so - skip it
+		if ((sourceCaps & OBS_SOURCE_CAP_DISABLED) != 0)
+			continue;
 
-				// Set codec dictionary properties
-				dic->SetString("id", sourceId);
-				dic->SetString("class", sourceId);
-				dic->SetString(
-					"className",
-					obs_source_get_display_name(sourceId));
-				dic->SetString(
-					"name",
-					obs_source_get_display_name(sourceId));
-				dic->SetBool("hasVideo",
-					     (sourceCaps & OBS_SOURCE_VIDEO) ==
-						     OBS_SOURCE_VIDEO);
-				dic->SetBool("hasAudio",
-					     (sourceCaps & OBS_SOURCE_AUDIO) ==
-						     OBS_SOURCE_AUDIO);
+		// If source has video
+		if ((sourceCaps & OBS_SOURCE_VIDEO) ==
+			OBS_SOURCE_VIDEO) {
+			// Create source response dictionary
+			CefRefPtr<CefDictionaryValue> dic =
+				CefDictionaryValue::Create();
 
-				// Compare sourceId to known video capture devices
-				dic->SetBool(
-					"isVideoCaptureDevice",
-					strcmp(sourceId, "dshow_input") == 0 ||
-						strcmp(sourceId,
-						       "decklink-input") == 0);
+			// Set source dictionary properties
+			dic->SetString("id", sourceId);
+			dic->SetString("class", sourceId);
 
-				// Compare sourceId to known game capture source
-				dic->SetBool("isGameCaptureDevice",
-					     strcmp(sourceId, "game_capture") ==
-						     0);
+			dic->SetString("unversionedClass", unversioned_id);
+			dic->SetBool("isDeprecated",
+				     (sourceCaps & OBS_SOURCE_DEPRECATED) != 0);
 
-				// Compare sourceId to known browser source
-				dic->SetBool("isBrowserSource",
-					     strcmp(sourceId,
-						    "browser_source") == 0);
+			dic->SetString(
+				"className",
+				obs_source_get_display_name(sourceId));
+			dic->SetString(
+				"name",
+				obs_source_get_display_name(sourceId));
+			dic->SetBool("hasVideo",
+					(sourceCaps & OBS_SOURCE_VIDEO) ==
+						OBS_SOURCE_VIDEO);
+			dic->SetBool("hasAudio",
+					(sourceCaps & OBS_SOURCE_AUDIO) ==
+						OBS_SOURCE_AUDIO);
 
-				OBSDataAutoRelease defaultSettings =
-					obs_get_source_defaults(sourceId);
+			// Compare sourceId to known video capture devices
+			dic->SetBool(
+				"isVideoCaptureDevice",
+				strcmp(sourceId, "dshow_input") == 0 ||
+					strcmp(sourceId,
+						"decklink-input") == 0);
 
-				dic->SetValue(
-					"defaultSettings",
-					SerializeObsData(defaultSettings));
+			// Compare sourceId to known game capture source
+			dic->SetBool("isGameCaptureDevice",
+					strcmp(sourceId, "game_capture") ==
+						0);
 
-				// We need all of this create-release dance since some 3rd party sources do not support obs_get_source_properties :(
-				auto settings = obs_data_create();
-				auto source = obs_source_create_private(
-					sourceId,
-					CreateGloballyUniqueIdString().c_str(),
-					settings);
-				auto properties = obs_source_properties(
-					source);
-				obs_source_release(source);
-				obs_data_release(settings);
+			// Compare sourceId to known browser source
+			dic->SetBool("isBrowserSource",
+					strcmp(sourceId,
+						"browser_source") == 0);
 
-				auto propertiesVal = CefValue::Create();
-				SerializeObsProperties(properties,
-						       propertiesVal);
+			OBSDataAutoRelease defaultSettings =
+				obs_get_source_defaults(sourceId);
 
-				dic->SetValue("properties", propertiesVal);
+			dic->SetValue(
+				"defaultSettings",
+				SerializeObsData(defaultSettings));
 
-				obs_properties_destroy(properties);
+			// We need all of this create-release dance since some 3rd party sources do not support obs_get_source_properties :(
+			auto settings = obs_data_create();
+			auto source = obs_source_create_private(
+				sourceId,
+				CreateGloballyUniqueIdString().c_str(),
+				settings);
+			auto properties = obs_source_properties(
+				source);
+			obs_source_release(source);
+			obs_data_release(settings);
 
-				// Append dictionary to response list
-				list->SetDictionary(list->GetSize(), dic);
-			}
+			auto propertiesVal = CefValue::Create();
+			SerializeObsProperties(properties,
+						propertiesVal);
+
+			dic->SetValue("properties", propertiesVal);
+
+			obs_properties_destroy(properties);
+
+			// Append dictionary to response list
+			list->SetDictionary(list->GetSize(), dic);
 		}
 	}
 }
@@ -781,9 +790,21 @@ void SerializeExistingInputSources(
 
 				std::string sourceId =
 					obs_source_get_id(source);
+				std::string unversioned_id =
+					obs_source_get_unversioned_id(source);
+
+				uint32_t caps =
+					obs_get_source_output_flags(sourceId.c_str());
 
 				// Set codec dictionary properties
 				dic->SetString("class", sourceId);
+
+				dic->SetString("unversionedClass",
+					       unversioned_id);
+				dic->SetBool("isDeprecated",
+					     (caps & OBS_SOURCE_DEPRECATED) !=
+						     0);
+
 				dic->SetString("id", GetIdFromPointer(source));
 				dic->SetString("name",
 					       obs_source_get_name(source));
