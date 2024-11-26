@@ -22,6 +22,11 @@
 //
 class StreamElementsMessageBus
 {
+private:
+	struct Private {
+		explicit Private() = default;
+	};
+
 public:
 	typedef uint32_t message_destination_filter_flags_t;
 
@@ -39,12 +44,13 @@ public:
 	static const char* const SOURCE_WEB;
 	static const char* const SOURCE_EXTERNAL;
 
-protected:
-	StreamElementsMessageBus();
+public:
+	StreamElementsMessageBus(Private);
 	virtual ~StreamElementsMessageBus();
 
 public:
-	static StreamElementsMessageBus* GetInstance();
+	static std::shared_ptr<StreamElementsMessageBus> GetInstance();
+	static void Destroy();
 
 public:
 	void AddListener(std::string target, message_destination_filter_flags_t type);
@@ -186,5 +192,5 @@ private:
 	StreamElementsControllerServer m_external_controller_server;
 
 private:
-	static StreamElementsMessageBus* s_instance;
+	static std::shared_ptr<StreamElementsMessageBus> s_instance;
 };

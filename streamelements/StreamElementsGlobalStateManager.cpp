@@ -284,25 +284,35 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 
 /* ========================================================================= */
 
-StreamElementsGlobalStateManager *StreamElementsGlobalStateManager::s_instance =
+std::shared_ptr<StreamElementsGlobalStateManager> StreamElementsGlobalStateManager::s_instance =
 	nullptr;
 
-StreamElementsGlobalStateManager::StreamElementsGlobalStateManager() {}
+StreamElementsGlobalStateManager::StreamElementsGlobalStateManager(
+	StreamElementsGlobalStateManager::Private)
+{
+}
 
 StreamElementsGlobalStateManager::~StreamElementsGlobalStateManager()
 {
 	Shutdown();
 }
 
-StreamElementsGlobalStateManager *
+std::shared_ptr<StreamElementsGlobalStateManager>
 StreamElementsGlobalStateManager::GetInstance()
 {
 	if (!s_instance) {
-		s_instance = new StreamElementsGlobalStateManager();
+		s_instance = std::make_shared<StreamElementsGlobalStateManager>(
+			StreamElementsGlobalStateManager::Private());
 	}
 
 	return s_instance;
 }
+
+void StreamElementsGlobalStateManager::Destroy()
+{
+	s_instance = nullptr;
+}
+
 
 #include <QWindow>
 #include <QObjectList>
@@ -314,268 +324,267 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	// Initialize on the main thread
 	m_crashHandler = new StreamElementsCrashHandler();
 
+	/*
 	struct local_context {
 		StreamElementsGlobalStateManager *self;
 		QMainWindow *obs_main_window;
 	};
+	*/
 
-	QtExecSync(
-		[this, obs_main_window]() -> void {
-			// http://doc.qt.io/qt-5/qmainwindow.html#DockOption-enum
-			obs_main_window->setDockOptions(
-				QMainWindow::AnimatedDocks |
-				QMainWindow::AllowNestedDocks |
-				QMainWindow::AllowTabbedDocks);
+	// http://doc.qt.io/qt-5/qmainwindow.html#DockOption-enum
+	obs_main_window->setDockOptions(
+		QMainWindow::AnimatedDocks |
+		QMainWindow::AllowNestedDocks |
+		QMainWindow::AllowTabbedDocks);
 
-			std::string storagePath = std::string("../obs-browser/") + GetCefVersionString();
-			std::string fullStoragePath;
-			{
-				auto rpath = obs_module_config_path(
-					storagePath.c_str());
+	std::string storagePath = std::string("../obs-browser/") + GetCefVersionString();
+	std::string fullStoragePath;
+	{
+		auto rpath = obs_module_config_path(
+			storagePath.c_str());
 
-				auto path = os_get_abs_path_ptr(rpath);
+		auto path = os_get_abs_path_ptr(rpath);
 
-				fullStoragePath = path;
+		fullStoragePath = path;
 
-				bfree(path);
-				bfree(rpath);
-			}
-			int os_mkdirs_ret = os_mkdirs(fullStoragePath.c_str());
+		bfree(path);
+		bfree(rpath);
+	}
+	int os_mkdirs_ret = os_mkdirs(fullStoragePath.c_str());
 
-			m_cef = obs_browser_init_panel();
-			if (!m_cef) {
-				blog(LOG_ERROR,
-				     "obs-streamelements-core: obs_browser_init_panel() failed");
-				return;
-			}
-			if (!m_cef->initialized()) {
-				m_cef->init_browser();
-				m_cef->wait_for_browser_init();
-			}
+	m_cef = obs_browser_init_panel();
+	if (!m_cef) {
+		blog(LOG_ERROR,
+			"obs-streamelements-core: obs_browser_init_panel() failed");
+		return;
+	}
+	if (!m_cef->initialized()) {
+		m_cef->init_browser();
+		m_cef->wait_for_browser_init();
+	}
 
-			m_cefCookieManager = m_cef->create_cookie_manager(storagePath, true);
+	m_cefCookieManager = m_cef->create_cookie_manager(storagePath, true);
 
-			m_httpClient =
-				new StreamElementsHttpClient();
-			m_localFilesystemHttpServer =
-				new StreamElementsLocalFilesystemHttpServer();
-			m_analyticsEventsManager =
-				new StreamElementsAnalyticsEventsManager();
-			m_widgetManager =
-				new StreamElementsBrowserWidgetManager(
-					obs_main_window);
+	m_httpClient =
+		std::make_shared<StreamElementsHttpClient>();
+	m_localFilesystemHttpServer = std::make_shared<
+		StreamElementsLocalFilesystemHttpServer>();
+	m_analyticsEventsManager = std::make_shared<
+		StreamElementsAnalyticsEventsManager>();
+	m_widgetManager = std::make_shared<
+		StreamElementsBrowserWidgetManager>(
+		obs_main_window);
 
-			m_videoCompositionManager = std::make_shared<
-				StreamElementsVideoCompositionManager>();
-			m_audioCompositionManager = std::make_shared<
-				StreamElementsAudioCompositionManager>();
+	m_videoCompositionManager = std::make_shared<
+		StreamElementsVideoCompositionManager>();
+	m_audioCompositionManager = std::make_shared<
+		StreamElementsAudioCompositionManager>();
 
-			m_obsSceneManager =
-				new StreamElementsObsSceneManager(
-					obs_main_window);
-			m_menuManager =
-				new StreamElementsMenuManager(
-					obs_main_window);
-			m_bwTestManager =
-				new StreamElementsBandwidthTestManager();
-			m_outputSettingsManager =
-				new StreamElementsOutputSettingsManager();
-			m_workerManager =
-				new StreamElementsWorkerManager();
-			m_hotkeyManager =
-				new StreamElementsHotkeyManager();
-			m_performanceHistoryTracker =
-				new StreamElementsPerformanceHistoryTracker();
-			m_externalSceneDataProviderManager =
-				new StreamElementsExternalSceneDataProviderManager();
-			m_nativeObsControlsManager =
-				StreamElementsNativeOBSControlsManager::
-					GetInstance();
-			m_profilesManager =
-				new StreamElementsProfilesManager();
-			m_backupManager =
-				new StreamElementsBackupManager();
-			m_cleanupManager =
-				new StreamElementsCleanupManager();
-			m_previewManager =
-				new StreamElementsPreviewManager(
-					mainWindow());
+	m_obsSceneManager =
+		std::make_shared<StreamElementsObsSceneManager>(
+			obs_main_window);
+	m_menuManager =
+		std::make_shared<StreamElementsMenuManager>(
+			obs_main_window);
+	m_bwTestManager = std::make_shared<
+		StreamElementsBandwidthTestManager>();
+	m_outputSettingsManager = std::make_shared<
+		StreamElementsOutputSettingsManager>();
+	m_workerManager =
+		std::make_shared<StreamElementsWorkerManager>();
+	m_hotkeyManager =
+		std::make_shared<StreamElementsHotkeyManager>();
+	m_performanceHistoryTracker = std::make_shared<
+		StreamElementsPerformanceHistoryTracker>();
+	m_externalSceneDataProviderManager = std::make_shared<
+		StreamElementsExternalSceneDataProviderManager>();
+	m_nativeObsControlsManager =
+		StreamElementsNativeOBSControlsManager::
+			GetInstance();
+	m_profilesManager =
+		std::make_shared<StreamElementsProfilesManager>();
+	m_backupManager =
+		std::make_shared<StreamElementsBackupManager>();
+	m_cleanupManager =
+		std::make_shared<StreamElementsCleanupManager>();
+	m_previewManager =
+		std::make_shared<StreamElementsPreviewManager>(
+			mainWindow());
 
-			m_websocketApiServer =
-				new StreamElementsWebsocketApiServer();
-			m_windowStateEventFilter =
-				new WindowStateChangeEventFilter(
-					mainWindow());
+	m_websocketApiServer = std::make_shared<
+		StreamElementsWebsocketApiServer>();
+	m_windowStateEventFilter =
+		std::make_shared<WindowStateChangeEventFilter>(
+			mainWindow());
 
-			m_outputManager =
-				std::make_shared<StreamElementsOutputManager>(
-					m_videoCompositionManager, m_audioCompositionManager);
+	m_outputManager =
+		std::make_shared<StreamElementsOutputManager>(
+			m_videoCompositionManager, m_audioCompositionManager);
 
-						m_appStateListener = new ApplicationStateListener();
-			m_themeChangeListener = new ThemeChangeListener();
+	m_appStateListener = new ApplicationStateListener();
+	m_themeChangeListener = new ThemeChangeListener();
 #ifdef WIN32
-			mainWindow()->addDockWidget(Qt::NoDockWidgetArea,
-						    m_themeChangeListener);
+	mainWindow()->addDockWidget(Qt::NoDockWidgetArea,
+					m_themeChangeListener);
 #else
-			mainWindow()->addDockWidget(Qt::BottomDockWidgetArea,
-						    m_themeChangeListener);
+	mainWindow()->addDockWidget(Qt::BottomDockWidgetArea,
+					m_themeChangeListener);
 #endif
 
-			{
-				// Set up "Live Support" button
-				/*QPushButton* liveSupport = new QPushButton(
-				QIcon(QPixmap(QString(":/images/icon.png"))),
-				obs_module_text("StreamElements.Action.LiveSupport"));*/
+	{
+		// Set up "Live Support" button
+		/*QPushButton* liveSupport = new QPushButton(
+		QIcon(QPixmap(QString(":/images/icon.png"))),
+		obs_module_text("StreamElements.Action.LiveSupport"));*/
 
-				QPushButton *liveSupport =
-					new QPushButton(obs_module_text(
-						"StreamElements.Action.LiveSupport"));
+		QPushButton *liveSupport =
+			new QPushButton(obs_module_text(
+				"StreamElements.Action.LiveSupport"));
 
-				liveSupport->setStyleSheet(QString(
-					"QPushButton { background-color: #d9dded; border: 1px solid #546ac8; color: #032ee1; padding: 2px; border-radius: 0px; } "
-					"QPushButton:hover { background-color: #99aaec; border: 1px solid #546ac8; color: #ffffff; } "
-					"QPushButton:pressed { background-color: #808dc0; border: 1px solid #546ac8; color: #ffffff; } "));
+		liveSupport->setStyleSheet(QString(
+			"QPushButton { background-color: #d9dded; border: 1px solid #546ac8; color: #032ee1; padding: 2px; border-radius: 0px; } "
+			"QPushButton:hover { background-color: #99aaec; border: 1px solid #546ac8; color: #ffffff; } "
+			"QPushButton:pressed { background-color: #808dc0; border: 1px solid #546ac8; color: #ffffff; } "));
 
-				QDockWidget *controlsDock =
-					(QDockWidget *)obs_main_window
-						->findChild<QDockWidget *>(
-							"controlsDock");
-				QVBoxLayout *buttonsVLayout =
-					(QVBoxLayout *)controlsDock
-						->findChild<QVBoxLayout *>(
-							"buttonsVLayout");
-				buttonsVLayout->addWidget(liveSupport);
+		QDockWidget *controlsDock =
+			(QDockWidget *)obs_main_window
+				->findChild<QDockWidget *>(
+					"controlsDock");
+		QVBoxLayout *buttonsVLayout =
+			(QVBoxLayout *)controlsDock
+				->findChild<QVBoxLayout *>(
+					"buttonsVLayout");
+		buttonsVLayout->addWidget(liveSupport);
 
-				QObject::connect(
-					liveSupport, &QPushButton::clicked,
-					[]() {
-						StreamElementsGlobalStateManager::GetInstance()
-							->GetAnalyticsEventsManager()
-							->trackEvent(
-								"live_support_click",
-								json11::Json::object{
-									{"type",
-									 "button_click"},
-									{"placement",
-									 "live_support_button"}});
+		QObject::connect(
+			liveSupport, &QPushButton::clicked,
+			[]() {
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetAnalyticsEventsManager()
+					->trackEvent(
+						"live_support_click",
+						json11::Json::object{
+							{"type",
+								"button_click"},
+							{"placement",
+								"live_support_button"}});
 
-						QUrl navigate_url = QUrl(
-							obs_module_text(
-								"StreamElements.Action.LiveSupport.URL"),
-							QUrl::TolerantMode);
-						QDesktopServices::openUrl(
-							navigate_url);
-					});
-			}
+				QUrl navigate_url = QUrl(
+					obs_module_text(
+						"StreamElements.Action.LiveSupport.URL"),
+					QUrl::TolerantMode);
+				QDesktopServices::openUrl(
+					navigate_url);
+			});
+	}
 
-			{
-				// Set up status bar
-				QWidget *container = new QWidget();
-				QHBoxLayout *layout = new QHBoxLayout();
+	{
+		// Set up status bar
+		QWidget *container = new QWidget();
+		QHBoxLayout *layout = new QHBoxLayout();
 
-				layout->setContentsMargins(5, 0, 5, 0);
+		layout->setContentsMargins(5, 0, 5, 0);
 
-				container->setLayout(layout);
+		container->setLayout(layout);
 
-				char version_buf[512];
-				sprintf(version_buf,
+		char version_buf[512];
+		sprintf(version_buf,
 #ifdef __APPLE__
-                    "SE.Live for Mac version %s powered by StreamElements",
+        "SE.Live for Mac version %s powered by StreamElements",
 #else
-					"SE.Live Core ver. %s powered by StreamElements",
+			"SE.Live Core ver. %s powered by StreamElements",
 #endif
-					GetStreamElementsPluginVersionString()
-						.c_str());
+			GetStreamElementsPluginVersionString()
+				.c_str());
 
-				container->layout()->addWidget(
-					new QLabel(version_buf, container));
+		container->layout()->addWidget(
+			new QLabel(version_buf, container));
 
-				obs_main_window->statusBar()
-					->addPermanentWidget(container);
-			}
+		obs_main_window->statusBar()
+			->addPermanentWidget(container);
+	}
 
-			std::string onBoardingReason = "";
+	std::string onBoardingReason = "";
 
-			bool isOnBoarding = false;
+	bool isOnBoarding = false;
 
-			if (MKDIR_ERROR == os_mkdirs_ret) {
-				blog(LOG_WARNING,
-				     "obs-streamelements-core: init: set on-boarding mode due to error creating new cookie storage path: %s",
-				     fullStoragePath.c_str());
+	if (MKDIR_ERROR == os_mkdirs_ret) {
+		blog(LOG_WARNING,
+			"obs-streamelements-core: init: set on-boarding mode due to error creating new cookie storage path: %s",
+			fullStoragePath.c_str());
 
-				isOnBoarding = true;
-				onBoardingReason =
-					"Failed creating new cookie storage folder";
-			} else if (MKDIR_SUCCESS == os_mkdirs_ret) {
-				blog(LOG_INFO,
-				     "obs-streamelements-core: init: set on-boarding mode due to new cookie storage path: %s",
-				     fullStoragePath.c_str());
+		isOnBoarding = true;
+		onBoardingReason =
+			"Failed creating new cookie storage folder";
+	} else if (MKDIR_SUCCESS == os_mkdirs_ret) {
+		blog(LOG_INFO,
+			"obs-streamelements-core: init: set on-boarding mode due to new cookie storage path: %s",
+			fullStoragePath.c_str());
 
-				isOnBoarding = true;
-				onBoardingReason = "New cookie storage folder";
-			} else if (StreamElementsConfig::GetInstance()
-					   ->GetStreamElementsPluginVersion() !=
-				   STREAMELEMENTS_PLUGIN_VERSION) {
-				blog(LOG_INFO,
-				     "obs-streamelements-core: init: set on-boarding mode due to configuration version mismatch");
+		isOnBoarding = true;
+		onBoardingReason = "New cookie storage folder";
+	} else if (StreamElementsConfig::GetInstance()
+				->GetStreamElementsPluginVersion() !=
+			STREAMELEMENTS_PLUGIN_VERSION) {
+		blog(LOG_INFO,
+			"obs-streamelements-core: init: set on-boarding mode due to configuration version mismatch");
 
-				isOnBoarding = true;
-				onBoardingReason =
-					"State saved by other version of the plug-in";
-			} else if (StreamElementsConfig::GetInstance()
-					   ->GetStartupFlags() &
-				   StreamElementsConfig::
-					   STARTUP_FLAGS_ONBOARDING_MODE) {
-				blog(LOG_INFO,
-				     "obs-streamelements-core: init: set on-boarding mode due to start-up flags");
+		isOnBoarding = true;
+		onBoardingReason =
+			"State saved by other version of the plug-in";
+	} else if (StreamElementsConfig::GetInstance()
+				->GetStartupFlags() &
+			StreamElementsConfig::
+				STARTUP_FLAGS_ONBOARDING_MODE) {
+		blog(LOG_INFO,
+			"obs-streamelements-core: init: set on-boarding mode due to start-up flags");
 
-				isOnBoarding = true;
-				onBoardingReason =
-					"Start-up flags indicate on-boarding mode";
-			}
+		isOnBoarding = true;
+		onBoardingReason =
+			"Start-up flags indicate on-boarding mode";
+	}
 
-			if (isOnBoarding) {
-				// On-boarding
+	if (isOnBoarding) {
+		// On-boarding
 
-				// Reset state but don't erase all cookies
-				Reset(false);
-			} else {
-				// Regular
+		// Reset state but don't erase all cookies
+		Reset(false);
+	} else {
+		// Regular
 
-				RestoreState();
-			}
+		RestoreState();
+	}
 
-			QApplication::sendPostedEvents();
+	QApplication::sendPostedEvents();
 
-			m_menuManager->Update();
+	m_menuManager->Update();
 
-			{
-				json11::Json::object eventProps;
-				json11::Json::array fields =
-					json11::Json::array{};
-				fields.push_back(json11::Json::array{
-					"is_onboarding",
-					isOnBoarding ? "true" : "false"});
-				if (isOnBoarding) {
-					fields.push_back(json11::Json::array{
-						"onboarding_reason",
-						onBoardingReason});
-				}
+	{
+		json11::Json::object eventProps;
+		json11::Json::array fields =
+			json11::Json::array{};
+		fields.push_back(json11::Json::array{
+			"is_onboarding",
+			isOnBoarding ? "true" : "false"});
+		if (isOnBoarding) {
+			fields.push_back(json11::Json::array{
+				"onboarding_reason",
+				onBoardingReason});
+		}
 
-				GetAnalyticsEventsManager()
-					->trackEvent("se_live_initialized", eventProps, fields);
-			}
-		});
+		GetAnalyticsEventsManager()
+			->trackEvent("se_live_initialized", eventProps, fields);
+	}
 
-	QtPostTask([]() {
+	//QtPostTask([]() {
 		// Update visible state
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetMenuManager()
 			->Update();
-	});
+	//});
 
-	m_initialized = true;
 	m_persistStateEnabled = true;
+	m_initialized = true;
 
 	obs_frontend_add_event_callback(handle_obs_frontend_event, nullptr);
 }
@@ -598,57 +607,58 @@ void StreamElementsGlobalStateManager::Shutdown()
 	// Shutdown on the main thread
 	// delete m_crashHandler; // TODO: Shutting down the crash handler might be contributing to us missing some exceptions during shutdown
 
-	QtExecSync(
-		[this]() -> void {
-			//mainWindow()->removeDockWidget(m_themeChangeListener);
-			m_themeChangeListener->deleteLater();
-			m_appStateListener->deleteLater();
+	//mainWindow()->removeDockWidget(m_themeChangeListener);
+	if (m_themeChangeListener) {
+		m_themeChangeListener->deleteLater();
+		m_themeChangeListener = nullptr;
+	}
+	if (m_appStateListener) {
+		m_appStateListener->deleteLater();
+		m_appStateListener = nullptr;
+	}
 
-			delete m_analyticsEventsManager;
-			m_analyticsEventsManager = nullptr;
-			delete m_performanceHistoryTracker;
-			m_performanceHistoryTracker = nullptr;
-			delete m_outputSettingsManager;
-			m_outputSettingsManager = nullptr;
-			delete m_bwTestManager;
-			m_bwTestManager = nullptr;
-			delete m_widgetManager;
-			m_widgetManager = nullptr;
+	m_analyticsEventsManager = nullptr;
+	m_performanceHistoryTracker = nullptr;
+	m_outputSettingsManager = nullptr;
+	m_bwTestManager = nullptr;
+	m_widgetManager = nullptr;
 
-			delete m_obsSceneManager;
-			m_obsSceneManager = nullptr;
+	m_obsSceneManager = nullptr;
 
-			m_outputManager = nullptr;
-			m_videoCompositionManager = nullptr;
-			m_audioCompositionManager = nullptr;
+	m_outputManager = nullptr;
+	m_videoCompositionManager = nullptr;
+	m_audioCompositionManager = nullptr;
 
-			delete m_menuManager;
-			m_menuManager = nullptr;
-			delete m_hotkeyManager;
-			m_hotkeyManager = nullptr;
-			delete m_externalSceneDataProviderManager;
-			m_externalSceneDataProviderManager = nullptr;
-			delete m_httpClient;
-			m_httpClient = nullptr;
-			delete m_localFilesystemHttpServer;
-			m_localFilesystemHttpServer = nullptr;
-			// delete m_nativeObsControlsManager; // Singleton
-			delete m_profilesManager;
-			m_profilesManager = nullptr;
-			delete m_backupManager;
-			m_backupManager = nullptr;
-			delete m_cleanupManager;
-			m_cleanupManager = nullptr;
-			delete m_previewManager;
-			m_previewManager = nullptr;
-			delete m_websocketApiServer;
-			m_websocketApiServer = nullptr;
-			delete m_windowStateEventFilter;
-			m_windowStateEventFilter = nullptr;
-			delete m_cefCookieManager;
-			m_cefCookieManager = nullptr;
-		});
+	m_menuManager = nullptr;
+	m_hotkeyManager = nullptr;
+	m_externalSceneDataProviderManager = nullptr;
+	m_httpClient = nullptr;
+	m_localFilesystemHttpServer = nullptr;
+
+	m_nativeObsControlsManager = nullptr; // Singleton
+	StreamElementsNativeOBSControlsManager::Destroy();
+
+	m_profilesManager = nullptr;
+	m_backupManager = nullptr;
+	m_cleanupManager = nullptr;
+	m_previewManager = nullptr;
+	m_websocketApiServer = nullptr;
+	m_windowStateEventFilter = nullptr;
+
+	if (m_cefCookieManager) {
+		delete m_cefCookieManager;
+		m_cefCookieManager = nullptr;
+	}
+
+	if (m_cef) {
+		delete m_cef;
+		m_cef = nullptr;
+	}
+
+	StreamElementsMessageBus::Destroy();
 #endif
+
+	StreamElementsConfig::Destroy();
 
 	m_initialized = false;
 }
@@ -945,10 +955,21 @@ void StreamElementsGlobalStateManager::PersistState(bool sendEventToGuest)
 	CefRefPtr<CefValue> outputPreviewFrameState = CefValue::Create();
 	#endif
 
-	GetWidgetManager()->SerializeDockingWidgets(dockingWidgetsState);
-	GetWidgetManager()->SerializeNotificationBar(notificationBarState);
-	GetWorkerManager()->Serialize(workersState);
-	GetHotkeyManager()->SerializeHotkeyBindings(hotkeysState, true);
+	auto widgetManager = GetWidgetManager();
+	if (widgetManager) {
+		widgetManager->SerializeDockingWidgets(dockingWidgetsState);
+		widgetManager->SerializeNotificationBar(notificationBarState);
+	}
+
+	auto workerManager = GetWorkerManager();
+	if (workerManager) {
+		workerManager->Serialize(workersState);
+	}
+
+	auto hotkeyManager = GetHotkeyManager();
+	if (hotkeyManager) {
+		hotkeyManager->SerializeHotkeyBindings(hotkeysState, true);
+	}
 	SerializeUserInterfaceState(userInterfaceState);
 
 	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS

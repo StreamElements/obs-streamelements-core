@@ -6,10 +6,19 @@
 #include <QEnterEvent>
 #include <QCursor>
 
+#include "canvas-config.hpp"
 #include "canvas-scan.hpp"
 
 class StreamElementsVideoCompositionViewWidget : public QWidget, public StreamElementsVideoCompositionEventListener
 {
+public:
+	bool m_destroyed = false;
+	os_event_t *m_destroy_event = nullptr;
+
+	std::shared_ptr<FileTexture> m_overflowTexture =
+		std::make_shared<FileTexture>(
+			"../../data/obs-studio/images/overflow.png");
+
 public:
 	class VisualElementBase {
 	public:
@@ -157,6 +166,11 @@ public:
 		}
 		~VisualElementsStateManager() {}
 
+		void Clear() {
+			m_sceneItemsVisualElementsMap.clear();
+			m_sceneItemsEventProcessingOrder.clear();
+		}
+
 		void UpdateAndDraw(
 			StreamElementsVideoCompositionViewWidget *self,
 			obs_scene_t *scene, uint32_t viewportWidth,
@@ -297,6 +311,8 @@ public:
 		std::shared_ptr<StreamElementsVideoCompositionBase>
 			videoComposition);
 	~StreamElementsVideoCompositionViewWidget();
+
+	void Destroy();
 
 	void GetVideoBaseDimensions(uint32_t *videoWidth, uint32_t *videoHeight)
 	{

@@ -51,14 +51,24 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 {
 	switch (event) {
 	case OBS_FRONTEND_EVENT_FINISHED_LOADING:
-		// Initialize StreamElements plug-in
-		StreamElementsGlobalStateManager::GetInstance()->Initialize(
-			(QMainWindow *)obs_frontend_get_main_window());
+		StreamElementsGlobalStateManager::GetInstance();
+
+		QtExecSync([] {
+			// Initialize StreamElements plug-in
+			StreamElementsGlobalStateManager::GetInstance()
+				->Initialize(
+					(QMainWindow *)
+						obs_frontend_get_main_window());
+		});
 		break;
 	case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
 	case OBS_FRONTEND_EVENT_EXIT:
 		// Shutdown StreamElements plug-in
-		StreamElementsGlobalStateManager::GetInstance()->Shutdown();
+		QtExecSync([] {
+			StreamElementsGlobalStateManager::GetInstance()
+				->Shutdown();
+			StreamElementsGlobalStateManager::Destroy();
+		});
 
 		obs_frontend_remove_event_callback(handle_obs_frontend_event,
 						   nullptr);

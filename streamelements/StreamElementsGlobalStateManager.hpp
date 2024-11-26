@@ -34,8 +34,13 @@ struct QCefCookieManager;
 
 class StreamElementsGlobalStateManager : public StreamElementsObsAppMonitor {
 private:
-	QCef* m_cef;
-	QCefCookieManager* m_cefCookieManager;
+	struct Private {
+		explicit Private() = default;
+	};
+
+private:
+	QCef* m_cef = nullptr;
+	QCefCookieManager* m_cefCookieManager = nullptr;
 
 private:
 	class WindowStateChangeEventFilter : public QObject {
@@ -69,12 +74,13 @@ private:
 		}
 	};
 
-private:
-	StreamElementsGlobalStateManager();
+public:
+	StreamElementsGlobalStateManager(Private);
 	virtual ~StreamElementsGlobalStateManager();
 
 public:
-	static StreamElementsGlobalStateManager *GetInstance();
+	static std::shared_ptr<StreamElementsGlobalStateManager> GetInstance();
+	static void  Destroy();
 
 public:
 	enum UiModifier { Default = 0, OnBoarding = 1, Import = 2 };
@@ -96,51 +102,63 @@ public:
 
 	QCef *GetCef() { return m_cef; }
 
-	StreamElementsBrowserWidgetManager *GetWidgetManager()
+	std::shared_ptr<StreamElementsBrowserWidgetManager> GetWidgetManager()
 	{
 		return m_widgetManager;
 	}
-	StreamElementsObsSceneManager *GetObsSceneManager()
+	std::shared_ptr<StreamElementsObsSceneManager> GetObsSceneManager()
 	{
 		return m_obsSceneManager;
 	}
-	StreamElementsMenuManager *GetMenuManager() { return m_menuManager; }
-	StreamElementsBandwidthTestManager *GetBandwidthTestManager()
+	std::shared_ptr<StreamElementsMenuManager> GetMenuManager()
+	{
+		return m_menuManager;
+	}
+	std::shared_ptr<StreamElementsBandwidthTestManager>
+	GetBandwidthTestManager()
 	{
 		return m_bwTestManager;
 	}
-	StreamElementsOutputSettingsManager *GetOutputSettingsManager()
+	std::shared_ptr<StreamElementsOutputSettingsManager>
+	GetOutputSettingsManager()
 	{
 		return m_outputSettingsManager;
 	}
-	StreamElementsWorkerManager *GetWorkerManager()
+	std::shared_ptr<StreamElementsWorkerManager> GetWorkerManager()
 	{
 		return m_workerManager;
 	}
-	StreamElementsHotkeyManager *GetHotkeyManager()
+	std::shared_ptr<StreamElementsHotkeyManager> GetHotkeyManager()
 	{
 		return m_hotkeyManager;
 	}
-	StreamElementsPerformanceHistoryTracker *GetPerformanceHistoryTracker()
+	std::shared_ptr<StreamElementsPerformanceHistoryTracker>
+	GetPerformanceHistoryTracker()
 	{
 		return m_performanceHistoryTracker;
 	}
-	StreamElementsAnalyticsEventsManager *GetAnalyticsEventsManager()
+	std::shared_ptr<StreamElementsAnalyticsEventsManager>
+	GetAnalyticsEventsManager()
 	{
 		return m_analyticsEventsManager;
 	}
-	StreamElementsExternalSceneDataProviderManager *
+	std::shared_ptr<StreamElementsExternalSceneDataProviderManager>
 	GetExternalSceneDataProviderManager()
 	{
 		return m_externalSceneDataProviderManager;
 	}
-	StreamElementsHttpClient *GetHttpClient() { return m_httpClient; }
-	StreamElementsLocalFilesystemHttpServer *GetLocalFilesystemHttpServer()
+	std::shared_ptr<StreamElementsHttpClient> GetHttpClient()
+	{
+		return m_httpClient;
+	}
+	std::shared_ptr<StreamElementsLocalFilesystemHttpServer>
+	GetLocalFilesystemHttpServer()
 	{
 		return m_localFilesystemHttpServer;
 	}
 
-	StreamElementsNativeOBSControlsManager *GetNativeOBSControlsManager()
+	std::shared_ptr<StreamElementsNativeOBSControlsManager>
+	GetNativeOBSControlsManager()
 	{
 		return m_nativeObsControlsManager;
 	}
@@ -148,23 +166,25 @@ public:
 	{
 		return m_cefCookieManager;
 	}
-	StreamElementsProfilesManager *GetProfilesManager()
+	std::shared_ptr<StreamElementsProfilesManager> GetProfilesManager()
 	{
 		return m_profilesManager;
 	}
-	StreamElementsBackupManager *GetBackupManager()
+	std::shared_ptr<StreamElementsBackupManager> GetBackupManager()
 	{
 		return m_backupManager;
 	}
-	StreamElementsCleanupManager *GetCleanupManager()
+	std::shared_ptr<StreamElementsCleanupManager> GetCleanupManager()
 	{
 		return m_cleanupManager;
 	}
-	StreamElementsPreviewManager* GetPreviewManager()
+	std::shared_ptr<StreamElementsPreviewManager> GetPreviewManager()
 	{
 		return m_previewManager;
 	}
-	StreamElementsWebsocketApiServer* GetWebsocketApiServer() {
+	std::shared_ptr<StreamElementsWebsocketApiServer>
+	GetWebsocketApiServer()
+	{
 		return m_websocketApiServer;
 	}
 	std::shared_ptr<StreamElementsVideoCompositionManager> GetVideoCompositionManager()
@@ -222,30 +242,40 @@ private:
 	bool m_initialized = false;
 	QMainWindow *m_mainWindow = nullptr;
 	QWidget *m_nativeCentralWidget = nullptr;
-	StreamElementsBrowserWidgetManager *m_widgetManager = nullptr;
-	StreamElementsObsSceneManager *m_obsSceneManager = nullptr;
-	StreamElementsMenuManager *m_menuManager = nullptr;
-	StreamElementsBandwidthTestManager *m_bwTestManager = nullptr;
-	StreamElementsOutputSettingsManager *m_outputSettingsManager = nullptr;
-	StreamElementsWorkerManager *m_workerManager = nullptr;
-	StreamElementsHotkeyManager *m_hotkeyManager = nullptr;
-	StreamElementsPerformanceHistoryTracker *m_performanceHistoryTracker =
+	std::shared_ptr<StreamElementsBrowserWidgetManager> m_widgetManager =
 		nullptr;
-	StreamElementsAnalyticsEventsManager *m_analyticsEventsManager =
+	std::shared_ptr<StreamElementsObsSceneManager> m_obsSceneManager =
 		nullptr;
+	std::shared_ptr<StreamElementsMenuManager> m_menuManager = nullptr;
+	std::shared_ptr<StreamElementsBandwidthTestManager> m_bwTestManager =
+		nullptr;
+	std::shared_ptr<StreamElementsOutputSettingsManager>
+		m_outputSettingsManager = nullptr;
+	std::shared_ptr<StreamElementsWorkerManager> m_workerManager = nullptr;
+	std::shared_ptr<StreamElementsHotkeyManager> m_hotkeyManager = nullptr;
+	std::shared_ptr<StreamElementsPerformanceHistoryTracker>
+		m_performanceHistoryTracker = nullptr;
+	std::shared_ptr<StreamElementsAnalyticsEventsManager>
+		m_analyticsEventsManager = nullptr;
 	StreamElementsCrashHandler *m_crashHandler = nullptr;
-	StreamElementsExternalSceneDataProviderManager
-		*m_externalSceneDataProviderManager = nullptr;
-	StreamElementsHttpClient *m_httpClient = nullptr;
-	StreamElementsLocalFilesystemHttpServer *m_localFilesystemHttpServer;
-	StreamElementsNativeOBSControlsManager *m_nativeObsControlsManager =
+	std::shared_ptr<StreamElementsExternalSceneDataProviderManager>
+		m_externalSceneDataProviderManager = nullptr;
+	std::shared_ptr<StreamElementsHttpClient> m_httpClient = nullptr;
+	std::shared_ptr<StreamElementsLocalFilesystemHttpServer>
+		m_localFilesystemHttpServer;
+	std::shared_ptr<StreamElementsNativeOBSControlsManager>
+		m_nativeObsControlsManager = nullptr;
+	std::shared_ptr<StreamElementsProfilesManager> m_profilesManager =
 		nullptr;
-	StreamElementsProfilesManager *m_profilesManager = nullptr;
-	StreamElementsBackupManager *m_backupManager = nullptr;
-	StreamElementsCleanupManager *m_cleanupManager = nullptr;
-	StreamElementsPreviewManager *m_previewManager = nullptr;
-	StreamElementsWebsocketApiServer *m_websocketApiServer = nullptr;
-	WindowStateChangeEventFilter *m_windowStateEventFilter = nullptr;
+	std::shared_ptr<StreamElementsBackupManager> m_backupManager = nullptr;
+	std::shared_ptr<StreamElementsCleanupManager> m_cleanupManager =
+		nullptr;
+	std::shared_ptr<StreamElementsPreviewManager> m_previewManager =
+		nullptr;
+	std::shared_ptr<StreamElementsWebsocketApiServer> m_websocketApiServer =
+		nullptr;
+	std::shared_ptr<WindowStateChangeEventFilter> m_windowStateEventFilter =
+		nullptr;
 	std::shared_ptr<StreamElementsVideoCompositionManager>
 		m_videoCompositionManager = nullptr;
 	std::shared_ptr<StreamElementsAudioCompositionManager>
@@ -253,7 +283,8 @@ private:
 	std::shared_ptr<StreamElementsOutputManager> m_outputManager = nullptr;
 
 private:
-	static StreamElementsGlobalStateManager *s_instance;
+	static std::shared_ptr<
+		StreamElementsGlobalStateManager> s_instance;
 
 private:
 	class ThemeChangeListener : public QDockWidget {
@@ -278,6 +309,6 @@ private:
 		QTimer m_timer;
 	};
 
-	QDockWidget *m_themeChangeListener;
-	ApplicationStateListener *m_appStateListener;
+	QDockWidget *m_themeChangeListener = nullptr;
+	ApplicationStateListener *m_appStateListener = nullptr;
 };
