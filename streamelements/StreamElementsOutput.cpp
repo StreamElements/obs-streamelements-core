@@ -350,7 +350,7 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 		d->SetNull("error");
 	}
 
-	auto obs_output = GetOutput();
+	OBSOutputAutoRelease obs_output = GetOutput();
 
 	if (obs_output && IsActive()) {
 		auto stats = CefDictionaryValue::Create();
@@ -459,7 +459,7 @@ bool StreamElementsOutputBase::IsActive()
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
-	auto output = GetOutput();
+	OBSOutputAutoRelease output = GetOutput();
 
 	if (!output)
 		return false;
@@ -523,7 +523,12 @@ void StreamElementsOutputBase::ConnectOutputEvents()
 	if (m_outputEventsConnected)
 		return;
 
-	auto handler = obs_output_get_signal_handler(GetOutput());
+	OBSOutputAutoRelease output = GetOutput();
+
+	if (!output)
+		return;
+
+	auto handler = obs_output_get_signal_handler(output);
 
 	signal_handler_connect(handler, "start", handle_output_start, this);
 	signal_handler_connect(handler, "stop", handle_output_stop, this);
@@ -550,7 +555,12 @@ void StreamElementsOutputBase::DisconnectOutputEvents()
 	if (!m_outputEventsConnected)
 		return;
 
-	auto handler = obs_output_get_signal_handler(GetOutput());
+	OBSOutputAutoRelease output = GetOutput();
+
+	if (!output)
+		return;
+
+	auto handler = obs_output_get_signal_handler(output);
 
 	signal_handler_disconnect(handler, "start", handle_output_start, this);
 	signal_handler_disconnect(handler, "stop", handle_output_stop, this);
@@ -1025,7 +1035,7 @@ bool StreamElementsCustomRecordingOutput::CanDisable()
 
 bool StreamElementsCustomRecordingOutput::CanSplitRecordingOutput()
 {
-	auto output = GetOutput();
+	OBSOutputAutoRelease output = GetOutput();
 
 	if (!output)
 		return false;
@@ -1046,7 +1056,9 @@ bool StreamElementsCustomRecordingOutput::TriggerSplitRecordingOutput()
 	if (!CanSplitRecordingOutput())
 		return false;
 
-	proc_handler_t *ph = obs_output_get_proc_handler(GetOutput());
+	OBSOutputAutoRelease output = GetOutput();
+
+	proc_handler_t *ph = obs_output_get_proc_handler(output);
 	uint8_t stack[128];
 	calldata cd;
 	calldata_init_fixed(&cd, stack, sizeof(stack));
@@ -1326,21 +1338,6 @@ void StreamElementsCustomRecordingOutput::StopInternal()
 void StreamElementsCustomRecordingOutput::SerializeOutputSettings(
 	CefRefPtr<CefValue> &output)
 {
-	/*
-	auto d = CefDictionaryValue::Create();
-
-	auto obs_output = GetOutput();
-
-	if (obs_output) {
-		auto obs_output_settings = obs_output_get_settings(obs_output);
-
-		d->SetString("type", obs_output_get_id(obs_output));
-		d->SetValue("settings", SerializeObsData(obs_output_settings));
-
-		obs_data_release(obs_output_settings);
-	}
-	*/
-
 	output->SetDictionary(m_recordingSettings);
 }
 
