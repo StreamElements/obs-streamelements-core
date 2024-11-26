@@ -1106,8 +1106,6 @@ static void handle_scene_item_remove(void *my_data, calldata_t *cd)
 
 		if (sceneManager)
 			sceneManager->Update();
-
-		((SESignalHandlerData *)my_data)->Release();
 	}
 }
 
@@ -1158,10 +1156,6 @@ static void handle_scene_item_add(void *my_data, calldata_t *cd)
 	if (!sceneitem)
 		return;
 
-	if (my_data) {
-		((SESignalHandlerData *)my_data)->AddRef();
-	}
-
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemAdded",
 				 "hostSceneItemAdded", false);
 	dispatch_scene_update(my_data, cd);
@@ -1198,18 +1192,10 @@ void remove_source_signals(obs_source_t *source, SESignalHandlerData *data)
 
 	signal_handler_disconnect(handler, "rename",
 				  handle_scene_item_source_rename, data);
-
-	if (data) {
-		data->Release();
-	}
 }
 
 void add_source_signals(obs_source_t *source, SESignalHandlerData *data)
 {
-	if (data) {
-		data->AddRef();
-	}
-
 	auto handler = obs_source_get_signal_handler(source);
 
 	signal_handler_connect(handler, "update",
@@ -1267,10 +1253,6 @@ void remove_scene_signals(obs_scene_t *scene, SESignalHandlerData *data)
 		},
 		data);
 	obs_leave_graphics();
-
-	if (data) {
-		data->Release();
-	}
 }
 
 void remove_scene_signals(obs_source_t *sceneSource, SESignalHandlerData *data)
@@ -1284,20 +1266,12 @@ void remove_scene_signals(obs_source_t *sceneSource, SESignalHandlerData *data)
 	obs_scene_t *scene = obs_scene_from_source(sceneSource);
 
 	remove_scene_signals(scene, data);
-
-	if (data) {
-		data->Release();
-	}
 }
 
 void add_scene_signals(obs_scene_t *scene, SESignalHandlerData *data)
 {
 	if (!scene)
 		return;
-
-	if (data) {
-		data->AddRef();
-	}
 
 	obs_enter_graphics();
 	obs_scene_atomic_update(
@@ -1347,10 +1321,6 @@ void add_scene_signals(obs_source_t *sceneSource, SESignalHandlerData *data)
 
 	if (obs_source_is_group(sceneSource))
 		return;
-
-	if (data) {
-		data->AddRef();
-	}
 
 	obs_scene_t *scene = obs_scene_from_source(sceneSource);
 
@@ -1450,7 +1420,6 @@ StreamElementsObsSceneManager::StreamElementsObsSceneManager(QMainWindow *parent
 			      ->GetVideoCompositionManager()
 			      ->GetObsNativeVideoComposition()
 			      .get());
-	m_signalHandlerData->AddRef();
 
 	obs_enter_graphics();
 	obs_frontend_add_event_callback(handle_obs_frontend_event, this);
@@ -1537,7 +1506,7 @@ StreamElementsObsSceneManager::~StreamElementsObsSceneManager()
 			m_signalHandlerData);
 
 		m_signalHandlerData->Clear();
-		m_signalHandlerData->Release();
+		delete m_signalHandlerData;
 		m_signalHandlerData = nullptr;
 	}
 }

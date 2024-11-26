@@ -199,14 +199,6 @@ public:
 	~SESignalHandlerData() {}
 
 public:
-	void AddRef() { os_atomic_inc_long(&m_refCount); }
-	void Release()
-	{
-		if (os_atomic_dec_long(&m_refCount) == 0) {
-			delete this;
-		}
-	}
-
 	void Clear() {
 		m_videoCompositionBase = nullptr;
 		m_obsSceneManager = nullptr;
@@ -217,9 +209,6 @@ public:
 	StreamElementsObsSceneManager *m_obsSceneManager = nullptr;
 	StreamElementsVideoCompositionBase *m_videoCompositionBase = nullptr;
 	char m_footer[7] = "footer"; // TODO: Remvoe debug marker
-
-private:
-	volatile long m_refCount = 0;
 };
 
 void add_scene_signals(obs_source_t *scene, SESignalHandlerData *data);

@@ -815,7 +815,6 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	m_scenes.push_back(currentScene);
 
 	m_signalHandlerData = new SESignalHandlerData(nullptr, this);
-	m_signalHandlerData->AddRef();
 
 	add_scene_signals(currentScene, m_signalHandlerData);
 	add_source_signals(obs_scene_get_source(currentScene),
@@ -923,9 +922,8 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 
 	while (m_scenes.size()) {
 		RemoveScene(m_scenes[0]);
-
-		m_scenes.clear();
 	}
+	m_scenes.clear();
 
 	if (m_currentScene) {
 		obs_scene_release(m_currentScene);
@@ -933,7 +931,7 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 	}
 
 	m_signalHandlerData->Clear();
-	m_signalHandlerData->Release();
+	delete m_signalHandlerData;
 	m_signalHandlerData = nullptr;
 }
 
