@@ -107,7 +107,7 @@ void audio_wrapper_enum_all_sources(void *data,
 
 struct obs_source_info audio_wrapper_source = {
 	.id = AUDIO_WRAPPER_SOURCE_ID,
-	.type = OBS_SOURCE_TYPE_SCENE,
+	.type = OBS_SOURCE_TYPE_INPUT, //OBS_SOURCE_TYPE_SCENE,
 	.output_flags = OBS_SOURCE_COMPOSITE | OBS_SOURCE_CAP_DISABLED,
 	.get_name = audio_wrapper_get_name,
 	.create = audio_wrapper_create,
