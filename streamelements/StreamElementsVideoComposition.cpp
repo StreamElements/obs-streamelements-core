@@ -725,13 +725,13 @@ public:
 		  m_video(video),
 		  m_baseWidth(baseWidth),
 		  m_baseHeight(baseHeight),
-		  m_streamingVideoEncoder(streamingVideoEncoder),
-		  m_recordingVideoEncoder(recordingVideoEncoder),
+		  m_streamingVideoEncoder(
+			  obs_encoder_get_ref(streamingVideoEncoder)),
+		  m_recordingVideoEncoder(
+			  obs_encoder_get_ref(recordingVideoEncoder)),
 		  m_videoView(videoView),
 		  m_listener(listener)
 	{
-		obs_encoder_addref(m_streamingVideoEncoder);
-		obs_encoder_addref(m_recordingVideoEncoder);
 	}
 
 	virtual ~StreamElementsCustomVideoCompositionInfo()

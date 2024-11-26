@@ -71,7 +71,7 @@ public:
 			auto result = GetStreamingVideoEncoder();
 
 			if (result) {
-				obs_encoder_addref(result);
+				result = obs_encoder_get_ref(result);
 			}
 
 			return result;
@@ -81,7 +81,7 @@ public:
 			auto result = GetRecordingVideoEncoder();
 
 			if (result) {
-				obs_encoder_addref(result);
+				result = obs_encoder_get_ref(result);
 			}
 
 			return result;

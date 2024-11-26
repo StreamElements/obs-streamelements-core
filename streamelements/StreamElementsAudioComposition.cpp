@@ -261,11 +261,10 @@ public:
 		  m_listener(listener)
 	{
 		for (size_t i = 0; i < MAX_AUDIO_MIXES; ++i) {
-			m_streamingAudioEncoders[i] = streamingAudioEncoders[i];
-			m_recordingAudioEncoders[i] = recordingAudioEncoders[i];
-
-			obs_encoder_addref(m_streamingAudioEncoders[i]);
-			obs_encoder_addref(m_recordingAudioEncoders[i]);
+			m_streamingAudioEncoders[i] =
+				obs_encoder_get_ref(streamingAudioEncoders[i]);
+			m_recordingAudioEncoders[i] =
+				obs_encoder_get_ref(recordingAudioEncoders[i]);
 		}
 	}
 
