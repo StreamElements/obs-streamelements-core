@@ -929,6 +929,26 @@ bool StreamElementsGlobalStateManager::DeserializeUserInterfaceState(
 		}
 	}
 
+	auto screenGeometry = mainWindow()->screen()->availableSize();
+
+	if (mainWindow()->frameGeometry().height() > screenGeometry.height()) {
+		auto minHeight = mainWindow()->minimumHeight();
+
+		// https://doc.qt.io/qt-6/application-windows.html#window-geometry
+		auto titleBarHeight = mainWindow()->frameGeometry().height() -
+				      mainWindow()->height();
+
+		mainWindow()->setFixedHeight(screenGeometry.height() - titleBarHeight);
+		mainWindow()->move(mainWindow()->x(), 0);
+
+		QtPostTask([minHeight, this]() {
+			mainWindow()->setMinimumHeight(minHeight);
+
+			mainWindow()->setMaximumHeight(
+				16777215); // default according to Qt docs
+		});
+	}
+
 	return result;
 }
 
