@@ -4,6 +4,8 @@
 #include <util/config-file.h>
 
 #include <string>
+#include <mutex>
+#include <shared_mutex>
 
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsMessageBus.hpp"
@@ -23,6 +25,19 @@ private:
 
 public:
 	static StreamElementsConfig* GetInstance() {
+		if (s_destroyed)
+			return nullptr;
+
+		{
+			std::shared_lock<decltype(s_mutex)> lock(s_mutex);
+
+			if (s_instance) {
+				return s_instance;
+			}
+		}
+
+		std::unique_lock<decltype(s_mutex)> lock(s_mutex);
+
 		if (!s_instance) {
 			s_instance = new StreamElementsConfig();
 		}
@@ -32,15 +47,21 @@ public:
 
 	static void Destroy()
 	{
+		std::unique_lock<decltype(s_mutex)> lock(s_mutex);
+
 		if (s_instance) {
 			delete s_instance;
 			s_instance = nullptr;
 		}
+
+		s_destroyed = true;
 	}
 
 public:
 	config_t* GetConfig();
 	void SaveConfig();
+
+	config_t* GetObsGlobalConfig() { return m_obsGlobalConfig; }
 
 public:
 	std::string GetScopedConfigStorageRootPath();
@@ -234,8 +255,11 @@ public:
 
 private:
 	config_t* m_config = nullptr;
+	config_t *m_obsGlobalConfig = nullptr;
 
 private:
 	static StreamElementsConfig* s_instance;
+	static bool s_destroyed;
+	static std::shared_mutex s_mutex;
 };
 

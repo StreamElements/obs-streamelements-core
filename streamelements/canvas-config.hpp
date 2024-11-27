@@ -4,6 +4,8 @@
 
 #include <string>
 
+#include "StreamElementsConfig.hpp"
+
 class ConfigAccessibilityColor {
 	std::string m_name;
 	QColor m_defaultValue;
@@ -17,11 +19,21 @@ public:
 	~ConfigAccessibilityColor() {}
 
 	QColor get() {
-		if (config_get_bool(obs_frontend_get_global_config(),
+		auto config = StreamElementsConfig::GetInstance();
+
+		if (!config)
+			return m_defaultValue;
+
+		auto fe_config = config->GetObsGlobalConfig();
+
+		if (!fe_config)
+			return m_defaultValue;
+
+		if (config_get_bool(fe_config,
 				    "Accessibility",
 				    "OverrideColors")) {
 			return color_from_int(config_get_int(
-				obs_frontend_get_global_config(),
+				fe_config,
 				"Accessibility", m_name.c_str()));
 		} else {
 			return m_defaultValue;
@@ -47,8 +59,16 @@ public:
 
 	~FileTexture()
 	{
-		if (m_texture)
+		Destroy();
+	}
+
+	void Destroy()
+	{
+		if (m_texture) {
 			gs_texture_destroy(m_texture);
+
+			m_texture = nullptr;
+		}
 	}
 
 	gs_texture_t *get()

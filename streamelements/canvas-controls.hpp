@@ -6,6 +6,18 @@
 #include "canvas-math.hpp"
 #include "canvas-draw.hpp"
 
+#include "StreamElementsConfig.hpp"
+
+static config_t* obs_fe_global_config() {
+	auto config = StreamElementsConfig::GetInstance();
+
+	if (config) {
+		return config->GetObsGlobalConfig();
+	}
+
+	return nullptr;
+}
+
 //static FileTexture g_overflowTexture("../../data/obs-studio/images/overflow.png");
 
 static ConfigAccessibilityColor g_colorSelection("SelectRed",
@@ -35,21 +47,24 @@ static vec3 getSnapOffset(const vec3 &tl, const vec3 &br, double worldWidth, dou
 	vec2_set(&screenSize, worldWidth, worldHeight);
 
 	vec3 clampOffset;
-
 	vec3_zero(&clampOffset);
 
-	const bool snap = config_get_bool(obs_frontend_get_global_config(), "BasicWindow",
+	auto fe_config = obs_fe_global_config();
+
+	if (!fe_config)
+		return clampOffset;
+
+	const bool snap = config_get_bool(fe_config, "BasicWindow",
 					  "SnappingEnabled");
 	if (snap == false)
 		return clampOffset;
 
-	const bool screenSnap = config_get_bool(obs_frontend_get_global_config(), "BasicWindow",
+	const bool screenSnap = config_get_bool(fe_config, "BasicWindow",
 				"ScreenSnapping");
-	const bool centerSnap = config_get_bool(obs_frontend_get_global_config(), "BasicWindow",
+	const bool centerSnap = config_get_bool(fe_config, "BasicWindow",
 				"CenterSnapping");
 
-	const float clampDist =
-		config_get_double(obs_frontend_get_global_config(),
+	const float clampDist = config_get_double(fe_config,
 				  "BasicWindow", "SnapDistance");
 	const float centerX = br.x - (br.x - tl.x) / 2.0f;
 	const float centerY = br.y - (br.y - tl.y) / 2.0f;
@@ -257,23 +272,25 @@ private:
 
 	void addWorldSnapPoints(std::vector<vec2> &result)
 	{
-		const bool isSnapEnabled =
-			config_get_bool(obs_frontend_get_global_config(),
-					"BasicWindow", "SnappingEnabled");
+		auto fe_config = obs_fe_global_config();
+
+		if (!fe_config)
+			return;
+
+		const bool isSnapEnabled = config_get_bool(
+			fe_config, "BasicWindow", "SnappingEnabled");
 
 		if (!isSnapEnabled)
 			return;
 
-		const bool snapToSources =
-			config_get_bool(obs_frontend_get_global_config(),
-					"BasicWindow", "SourceSnapping");
+		const bool snapToSources = config_get_bool(
+			fe_config, "BasicWindow", "SourceSnapping");
 
-		const bool snapToScreen =
-			config_get_bool(obs_frontend_get_global_config(),
-					"BasicWindow", "ScreenSnapping");
-		const bool snapToScreenCenter =
-			config_get_bool(obs_frontend_get_global_config(),
-					"BasicWindow", "CenterSnapping");
+		const bool snapToScreen = config_get_bool(
+			fe_config, "BasicWindow", "ScreenSnapping");
+
+		const bool snapToScreenCenter = config_get_bool(
+			fe_config, "BasicWindow", "CenterSnapping");
 
 		uint32_t worldWidth, worldHeight;
 		m_view->GetVideoBaseDimensions(&worldWidth, &worldHeight);
@@ -411,6 +428,11 @@ private:
 		vec2_zero(&result);
 		vec2_set(&snapWorldCoords, -1.0f, -1.0f);
 
+		auto fe_config = obs_fe_global_config();
+
+		if (!fe_config)
+			return;
+
 		std::vector<vec2> selectedSceneItemsPoints, worldSnapPoints;
 
 		addSelectedSceneItemsWorldCoordsSnapPoints(
@@ -419,9 +441,8 @@ private:
 
 		vec2 targetPoint, sourcePoint;
 
-		const float snapDistance =
-			config_get_double(obs_frontend_get_global_config(),
-					  "BasicWindow", "SnapDistance");
+		const float snapDistance = config_get_double(
+			fe_config, "BasicWindow", "SnapDistance");
 
 		bool hasXSnapPoint, hasYSnapPoint;
 		if (!getClosestSnapPoint(selectedSceneItemsPoints, worldSnapPoints, snapDistance,

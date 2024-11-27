@@ -33,6 +33,7 @@
 
 #include "StreamElementsGlobalStateManager.hpp"
 #include "StreamElementsUtils.hpp"
+#include "StreamElementsConfig.hpp"
 #include "deps/StackWalker/StackWalker.h"
 #include <util/base.h>
 #include <util/platform.h>
@@ -52,6 +53,21 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <io.h>
+
+static config_t *obs_fe_global_config()
+{
+	auto config = StreamElementsConfig::GetInstance();
+
+	if (config) {
+		return config->GetObsGlobalConfig();
+	}
+
+	return nullptr;
+}
+
+/* ================================================================= */
+
+unsigned int s_maxRemainingLogFilesCount = 7;
 
 /* ================================================================= */
 
@@ -253,9 +269,6 @@ static void delete_oldest_file(bool has_prefix, const char *location)
 	time_t oldest_ts = (time_t)-1;
 	struct os_dirent *entry;
 
-	unsigned int maxLogs = (unsigned int)config_get_uint(
-		obs_frontend_get_global_config(), "General", "MaxLogs");
-
 	os_dir_t *dir = os_opendir(logDir.c_str());
 	if (dir) {
 		unsigned int count = 0;
@@ -283,7 +296,7 @@ static void delete_oldest_file(bool has_prefix, const char *location)
 
 		os_closedir(dir);
 
-		if (count > maxLogs) {
+		if (count > s_maxRemainingLogFilesCount) {
 			os_unlink(oldestLog.c_str());
 		}
 	}
@@ -962,6 +975,13 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
 
 	if (IsDebuggerPresent()) {
 		return;
+	}
+
+	auto fe_config = obs_fe_global_config();
+
+	if (fe_config) {
+		s_maxRemainingLogFilesCount = (unsigned int)config_get_uint(
+			fe_config, "General", "MaxLogs");
 	}
 
 	s_crashDumpFromObs.reserve(1024 * 16);

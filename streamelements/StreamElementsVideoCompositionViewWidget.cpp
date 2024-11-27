@@ -624,6 +624,7 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 			data);
 
 	if (os_atomic_load_bool(&self->m_destroyed)) {
+		self->m_overflowTexture->Destroy();
 		self->m_overflowTexture = nullptr;
 
 		if (self->m_destroy_event) {

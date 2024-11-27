@@ -56,6 +56,8 @@
 	typedef unsigned char BYTE;
 #endif
 
+/* ================================================================= */
+
 static std::string get_newest_file(const char *location)
 {
 	char *basePathPtr = os_get_config_path_ptr(location);
@@ -65,9 +67,6 @@ static std::string get_newest_file(const char *location)
 	std::string newestLog;
 	time_t newest_ts = 0;
 	struct os_dirent *entry;
-
-	unsigned int maxLogs = (unsigned int)config_get_uint(
-		obs_frontend_get_global_config(), "General", "MaxLogs");
 
 	os_dir_t *dir = os_opendir(logDir.c_str());
 	if (dir) {

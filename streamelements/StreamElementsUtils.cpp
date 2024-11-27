@@ -69,6 +69,19 @@ static const char *ENV_PRODUCT_NAME = "OBS.Live";
 
 /* ========================================================= */
 
+static config_t *obs_fe_global_config()
+{
+	auto config = StreamElementsConfig::GetInstance();
+
+	if (config) {
+		return config->GetObsGlobalConfig();
+	}
+
+	return nullptr;
+}
+
+/* ========================================================= */
+
 bool IsTraceLogLevel() {
 	static bool has_result = false;
 	static bool result = false;
@@ -924,21 +937,24 @@ std::string GetAppStyleSheetSelectorContent(std::string selector)
 
 std::string GetCurrentThemeName()
 {
-	std::string result;
+	std::string result = "Default";
 
 	config_t *globalConfig =
-		obs_frontend_get_global_config(); // does not increase refcount
+		obs_fe_global_config(); // does not increase refcount
 
-	const char *themeName =
-		config_get_string(globalConfig, "General", "CurrentTheme");
-	if (!themeName) {
-		/* Use deprecated "Theme" value if available */
-		themeName = config_get_string(globalConfig, "General", "Theme");
+	if (globalConfig) {
+		const char *themeName = config_get_string(
+			globalConfig, "General", "CurrentTheme");
 		if (!themeName) {
-			themeName = "Default";
-		}
+			/* Use deprecated "Theme" value if available */
+			themeName = config_get_string(globalConfig, "General",
+						      "Theme");
+			if (!themeName) {
+				themeName = "Default";
+			}
 
-		result = themeName;
+			result = themeName;
+		}
 	}
 
 	std::string appStyle = qApp->styleSheet().toStdString();
