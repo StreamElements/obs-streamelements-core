@@ -361,7 +361,8 @@ StreamElementsVideoCompositionViewWidget::StreamElementsVideoCompositionViewWidg
 
 	setMouseTracking(true);
 
-	m_videoCompositionInfo = m_videoComposition->GetCompositionInfo(this);
+	m_videoCompositionInfo = m_videoComposition->GetCompositionInfo(
+		this, std::string("StreamElementsVideoCompositionViewWidget"));
 
 	auto windowVisible = [this](bool visible) {
 		if (!visible) {

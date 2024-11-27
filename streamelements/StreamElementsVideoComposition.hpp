@@ -35,18 +35,19 @@ public:
 	private:
 		std::shared_ptr<StreamElementsVideoCompositionBase> m_owner;
 		StreamElementsVideoCompositionEventListener *m_listener;
+		std::string m_holder;
 
 	public:
 		CompositionInfo(
 			std::shared_ptr<StreamElementsVideoCompositionBase> owner,
-			StreamElementsVideoCompositionEventListener* listener)
-			: m_owner(owner), m_listener(listener)
+			StreamElementsVideoCompositionEventListener* listener,
+			std::string holder)
+			: m_owner(owner), m_listener(listener), m_holder(holder)
 		{
-			m_owner->AddRef();
+			m_owner->AddRef(m_holder);
 		}
 
-		virtual ~CompositionInfo() {
-			m_owner->RemoveRef();
+		virtual ~CompositionInfo() { m_owner->RemoveRef(m_holder);
 		}
 
 	public:
@@ -94,14 +95,75 @@ public:
 
 private:
 	long m_refCounter = 0;
+	std::map<std::string,int> m_holders;
+	std::shared_mutex m_holders_mutex;
 
-	void AddRef()
+	void AddRef(std::string holder)
 	{
 		os_atomic_inc_long(&m_refCounter);
+
+		std::unique_lock<decltype(m_holders_mutex)> lock(
+			m_holders_mutex);
+
+		if (!m_holders.count(holder))
+			m_holders[holder] = 1;
+		else
+			m_holders[holder]++;
+
+		if (IsTraceLogLevel()) {
+			std::string str = "";
+			for (auto pair : m_holders) {
+				if (str.size())
+					str += ", ";
+
+				str += pair.first;
+				str += " = ";
+				char buf[32];
+				str += itoa(pair.second, buf, 10);
+			}
+
+			blog(LOG_ERROR,
+			     "[obs-streamelements-core]: videoComposition('%s').addRef('%s'); refcount: %ld; ref holders: %s",
+			     m_id.c_str(), holder.c_str(), m_refCounter,
+			     str.c_str());
+		}
 	}
 
-	void RemoveRef() {
+	void RemoveRef(std::string holder) {
 		os_atomic_dec_long(&m_refCounter);
+
+		std::unique_lock<decltype(m_holders_mutex)> lock(
+			m_holders_mutex);
+
+		if (!m_holders.count(holder)) {
+			blog(LOG_ERROR,
+			     "[obs-streamelements-core]: invalid holder value '%s' when removing reference from video composition '%s'",
+			     holder.c_str(), m_id.c_str());
+		} else {
+			m_holders[holder]--;
+
+			if (m_holders[holder] <= 0) {
+				m_holders.erase(holder);
+			}
+		}
+
+		if (IsTraceLogLevel()) {
+			std::string str = "";
+			for (auto pair : m_holders) {
+				if (str.size())
+					str += ", ";
+
+				str += pair.first;
+				str += " = ";
+				char buf[32];
+				str += itoa(pair.second, buf, 10);
+			}
+
+			blog(LOG_ERROR,
+			     "[obs-streamelements-core]: videoComposition('%s').removeRef('%s'); remaining refs: %ld; ref holders: %s",
+			     m_id.c_str(), holder.c_str(), m_refCounter,
+			     str.c_str());
+		}
 	}
 
 public:
@@ -111,7 +173,7 @@ public:
 	}
 
 	virtual std::shared_ptr<CompositionInfo>
-		GetCompositionInfo(StreamElementsVideoCompositionEventListener* listener) = 0;
+		GetCompositionInfo(StreamElementsVideoCompositionEventListener* listener, std::string holder) = 0;
 
 private:
 	std::string m_id;
@@ -404,7 +466,7 @@ public:
 
 	virtual std::shared_ptr<
 		StreamElementsVideoCompositionBase::CompositionInfo>
-		GetCompositionInfo(StreamElementsVideoCompositionEventListener* listener);
+		GetCompositionInfo(StreamElementsVideoCompositionEventListener* listener, std::string holder);
 
 	virtual bool CanRemove() { return false; }
 
@@ -507,7 +569,7 @@ public:
 
 	virtual std::shared_ptr<
 		StreamElementsVideoCompositionBase::CompositionInfo>
-	GetCompositionInfo(StreamElementsVideoCompositionEventListener *listener);
+	GetCompositionInfo(StreamElementsVideoCompositionEventListener *listener, std::string holder);
 
 	virtual void SerializeComposition(CefRefPtr<CefValue> &output);
 

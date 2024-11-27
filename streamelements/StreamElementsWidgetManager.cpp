@@ -18,6 +18,21 @@ StreamElementsWidgetManager::~StreamElementsWidgetManager()
 	while (DestroyCurrentCentralWidget()) {
 		// NOP
 	}
+
+	for (auto pair : m_dockWidgets) {
+		blog(LOG_INFO,
+		     "[obs-streamelements-core]: destroying dock widget '%s'",
+		     pair.first.c_str());
+
+		m_parent->removeDockWidget(pair.second);
+		pair.second->deleteLater();
+
+		// Drain event queue
+		QApplication::sendPostedEvents();
+	}
+
+	m_dockWidgets.clear();
+	m_dockWidgetAreas.clear();
 }
 
 //

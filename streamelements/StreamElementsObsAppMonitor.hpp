@@ -26,9 +26,9 @@ private:
 
 	void Disconnect()
 	{
-		obs_frontend_remove_event_callback(obs_frontend_event_handler, this);
+		obs_frontend_remove_event_callback(obs_frontend_event_handler,
+						   this);
 	}
-
 
 	static void obs_frontend_event_handler(enum obs_frontend_event event, void *data)
 	{

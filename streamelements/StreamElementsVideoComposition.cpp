@@ -135,7 +135,7 @@ dispatch_scene_item_list_changed_event(StreamElementsVideoCompositionBase *self,
 
 static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* composition, CefRefPtr<CefDictionaryValue>& root)
 {
-	auto info = composition->GetCompositionInfo(nullptr);
+	auto info = composition->GetCompositionInfo(nullptr, "SerializeObsVideoEncoders");
 
 	OBSEncoderAutoRelease streamingVideoEncoder = info->GetStreamingVideoEncoderRef();
 
@@ -474,9 +474,10 @@ private:
 public:
 	StreamElementsDefaultVideoCompositionInfo(
 		std::shared_ptr<StreamElementsVideoCompositionBase> owner,
-		StreamElementsVideoCompositionEventListener* listener)
+		StreamElementsVideoCompositionEventListener *listener,
+		std::string holder)
 		: StreamElementsVideoCompositionBase::CompositionInfo(
-			  owner, listener),
+			  owner, listener, holder),
 		  m_listener(listener)
 	{
 	}
@@ -531,10 +532,10 @@ public:
 std::shared_ptr<
 	StreamElementsVideoCompositionBase::CompositionInfo>
 StreamElementsObsNativeVideoComposition::GetCompositionInfo(
-	StreamElementsVideoCompositionEventListener* listener)
+	StreamElementsVideoCompositionEventListener* listener, std::string holder)
 {
 	return std::make_shared<StreamElementsDefaultVideoCompositionInfo>(
-		shared_from_this(), listener);
+		shared_from_this(), listener, holder);
 }
 
 obs_scene_t *
@@ -717,11 +718,12 @@ public:
 	StreamElementsCustomVideoCompositionInfo(
 		std::shared_ptr<StreamElementsVideoCompositionBase> owner,
 		StreamElementsVideoCompositionEventListener *listener,
+		std::string holder,
 		video_t *video, uint32_t baseWidth, uint32_t baseHeight,
 		obs_encoder_t *streamingVideoEncoder,
 		obs_encoder_t *recordingVideoEncoder, obs_view_t *videoView)
-		: StreamElementsVideoCompositionBase::CompositionInfo(owner,
-								      listener),
+		: StreamElementsVideoCompositionBase::CompositionInfo(
+			  owner, listener, holder),
 		  m_video(video),
 		  m_baseWidth(baseWidth),
 		  m_baseHeight(baseHeight),
@@ -937,12 +939,13 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 
 std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
 StreamElementsCustomVideoComposition::GetCompositionInfo(
-	StreamElementsVideoCompositionEventListener *listener)
+	StreamElementsVideoCompositionEventListener *listener,
+	std::string holder)
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	return std::make_shared<StreamElementsCustomVideoCompositionInfo>(
-		shared_from_this(), listener, m_video, m_baseWidth, m_baseHeight, m_streamingVideoEncoder, m_recordingVideoEncoder, m_view);
+		shared_from_this(), listener, holder, m_video, m_baseWidth, m_baseHeight, m_streamingVideoEncoder, m_recordingVideoEncoder, m_view);
 }
 
 obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentScene()

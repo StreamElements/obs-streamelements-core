@@ -430,7 +430,7 @@ StreamElementsOutputBase::StreamElementsOutputBase(
 {
 	m_auxData = auxData.get() ? auxData : CefDictionaryValue::Create();
 
-	m_videoCompositionInfo = videoComposition->GetCompositionInfo(this);
+	m_videoCompositionInfo = videoComposition->GetCompositionInfo(this, std::string("StreamElementsOutputBase(") + m_id + std::string(")"));
 	m_audioCompositionInfo = audioComposition->GetCompositionInfo(this);
 
 	m_enabled = IsObsNativeOutput();
