@@ -1,7 +1,7 @@
 version: '{build}'
 branches:
   only:
-  - master
+  - production_patch
 image: Visual Studio 2022
 configuration: RelWithDebInfo
 clone_folder: c:\local\source
@@ -237,6 +237,6 @@ deploy:
   artifact: build32,build64,version.generated.hpp
   max_error_retry: 5
   on:
-    branch: master
+    branch: production_patch
 on_success:
 - cmd: echo.All done.
