@@ -125,7 +125,7 @@ get_scene_source_by_id_addref(std::string id, bool getCurrentIfNoId = false)
 	}
 
 	if (result) {
-		obs_source_addref(result);
+		result = obs_source_get_ref(result);
 	} else if (getCurrentIfNoId) {
 		result = obs_frontend_get_current_scene();
 	}
@@ -953,7 +953,7 @@ static void dispatch_scene_event(obs_scene_t *scene,
 	if (s_shutdown)
 		return;
 
-	//obs_scene_addref(scene);
+	//scene = obs_scene_get_ref(scene);
 
 	//QtPostTask([scene, currentSceneEventName, otherSceneEventName]() {
 	if (is_active_scene(scene)) {
@@ -1112,7 +1112,7 @@ static void dispatch_source_event(void *my_data, calldata_t *cd,
 		return;
 	}
 
-	//obs_source_addref(source);
+	//source = obs_source_get_ref(source);
 
 	//QtPostTask([scene, scene_source, source, currentSceneEventName,
 	//	    otherSceneEventName]() {

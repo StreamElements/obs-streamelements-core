@@ -2743,7 +2743,7 @@ void ObsEnumAllScenes(std::function < bool(obs_source_t * scene)> func)
 
 			
 			if (!obs_source_is_group(scene)) {
-				obs_source_addref(scene);
+				scene = obs_source_get_ref(scene);
 
 				context->list.push_back(scene);
 			}
