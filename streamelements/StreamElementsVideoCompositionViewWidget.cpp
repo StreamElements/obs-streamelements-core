@@ -17,10 +17,11 @@
 #include "canvas-draw.hpp"
 #include "canvas-controls.hpp"
 
-std::shared_mutex s_widgetRegistryMutex;
-std::map<StreamElementsVideoCompositionViewWidget *, bool> s_widgetRegistry;
+static std::shared_mutex s_widgetRegistryMutex;
+static std::map<StreamElementsVideoCompositionViewWidget *, bool>
+	s_widgetRegistry;
 
-inline static bool
+static inline bool
 hasWidgetInRegistry(StreamElementsVideoCompositionViewWidget *widget)
 {
 	std::shared_lock<decltype(s_widgetRegistryMutex)> lock;

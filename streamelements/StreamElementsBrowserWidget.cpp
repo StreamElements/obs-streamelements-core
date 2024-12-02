@@ -15,7 +15,13 @@ extern "C" int getpid(void);
 
 #include <functional>
 #include <mutex>
+#include <shared_mutex>
 #include <regex>
+
+/* ========================================================================= */
+
+static std::shared_mutex s_widgetRegistryMutex;
+static std::map<StreamElementsBrowserWidget *, bool> s_widgetRegistry;
 
 /* ========================================================================= */
 
@@ -242,7 +248,10 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 
 	m_msgHandler = [this](std::string source,
 			      CefRefPtr<CefProcessMessage> msg) {
-		// std::lock_guard<decltype(s_mutex)> guard(s_mutex);
+		std::shared_lock<decltype(s_widgetRegistryMutex)> lock;
+
+		if (!s_widgetRegistry.count(this))
+			return;
 
 		if (!m_requestedApiMessageHandler.get())
 			return;
@@ -394,6 +403,13 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 	m_cefWidget->setContentsMargins(0, 0, 0, 0);
 
 	setContentsMargins(0, 0, 0, 0);
+
+	{
+		std::unique_lock<decltype(s_widgetRegistryMutex)> lock(
+			s_widgetRegistryMutex);
+
+		s_widgetRegistry[this] = true;
+	}
 }
 
 StreamElementsBrowserWidget*
@@ -410,11 +426,18 @@ StreamElementsBrowserWidget::GetWidgetByMessageTargetId(std::string target)
 
 StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 {
+	{
+		std::unique_lock<decltype(s_widgetRegistryMutex)> lock(
+			s_widgetRegistryMutex);
+
+		if (s_widgetRegistry.count(this) > 0) {
+			s_widgetRegistry.erase(this);
+		}
+	}
+
 	std::lock_guard<decltype(s_mutex)> guard(s_mutex);
 
 	RemoveVideoCompositionView();
-
-	m_requestedApiMessageHandler->SetBrowserWidget(nullptr);
 
 	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
 				 ->GetWebsocketApiServer();
@@ -422,6 +445,8 @@ StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 	if (apiServer) {
 		apiServer->UnregisterMessageHandler(m_clientId, m_msgHandler);
 	}
+
+	m_requestedApiMessageHandler->SetBrowserWidget(nullptr);
 
 	if (s_widgets.count(m_clientId)) {
 		s_widgets.erase(m_clientId);
