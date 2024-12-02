@@ -622,6 +622,7 @@ void StreamElementsGlobalStateManager::Shutdown()
 	m_outputSettingsManager = nullptr;
 	m_bwTestManager = nullptr;
 	m_widgetManager = nullptr;
+	m_workerManager = nullptr;
 
 	m_obsSceneManager = nullptr;
 
@@ -659,6 +660,8 @@ void StreamElementsGlobalStateManager::Shutdown()
 #endif
 
 	StreamElementsConfig::Destroy();
+
+	QApplication::sendPostedEvents();
 
 	m_initialized = false;
 }

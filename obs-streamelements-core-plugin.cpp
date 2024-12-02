@@ -75,8 +75,8 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 			blog(LOG_INFO,
 			     "[obs-streamelements-core]: shutting down");
 
-			StreamElementsGlobalStateManager::GetInstance()
-				->Shutdown();
+			//StreamElementsGlobalStateManager::GetInstance()
+			//	->Shutdown();
 			StreamElementsGlobalStateManager::Destroy();
 
 			blog(LOG_INFO,

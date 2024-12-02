@@ -17,6 +17,17 @@
 #include "canvas-draw.hpp"
 #include "canvas-controls.hpp"
 
+std::shared_mutex s_widgetRegistryMutex;
+std::map<StreamElementsVideoCompositionViewWidget *, bool> s_widgetRegistry;
+
+inline static bool
+hasWidgetInRegistry(StreamElementsVideoCompositionViewWidget *widget)
+{
+	std::shared_lock<decltype(s_widgetRegistryMutex)> lock;
+
+	return s_widgetRegistry.count(widget) > 0;
+}
+
 StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 	StreamElementsVideoCompositionViewWidget *view, obs_scene_t *scene,
 	obs_sceneitem_t *sceneItem, obs_sceneitem_t *parentSceneItem)
@@ -259,7 +270,9 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 
 	if (self->cursor() != mouseCursor) {
 		QtPostTask([mouseCursor, self]() -> void {
-			self->setCursor(mouseCursor);
+			if (hasWidgetInRegistry(self)) {
+				self->setCursor(mouseCursor);
+			}
 		});
 	}
 
@@ -405,6 +418,12 @@ StreamElementsVideoCompositionViewWidget::StreamElementsVideoCompositionViewWidg
 #endif
 
 	//CreateDisplay();
+
+	{
+		std::unique_lock<decltype(s_widgetRegistryMutex)> lock;
+
+		s_widgetRegistry[this] = true;
+	}
 }
 
 void StreamElementsVideoCompositionViewWidget::Destroy()
@@ -417,6 +436,7 @@ void StreamElementsVideoCompositionViewWidget::Destroy()
 
 	if (m_display) {
 		obs_enter_graphics();
+		obs_display_set_enabled(m_display, false);
 		obs_display_remove_draw_callback(
 			m_display, obs_display_draw_callback, this);
 
@@ -441,6 +461,12 @@ void StreamElementsVideoCompositionViewWidget::Destroy()
 StreamElementsVideoCompositionViewWidget::
 ~StreamElementsVideoCompositionViewWidget()
 {
+	{
+		std::unique_lock<decltype(s_widgetRegistryMutex)> lock;
+
+		s_widgetRegistry.erase(this);
+	}
+
 	Destroy();
 }
 
@@ -631,7 +657,7 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 		if (self->m_destroy_event) {
 			os_event_signal(self->m_destroy_event);
 		}
-	} else {
+	} else if (hasWidgetInRegistry(self)) {
 		OBSSceneAutoRelease currentScene =
 			self->m_videoComposition->GetCurrentSceneRef();
 

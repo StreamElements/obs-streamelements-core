@@ -41,5 +41,5 @@ protected:
 private:
 	std::recursive_mutex m_mutex;
 
-	std::map<std::string, StreamElementsWorker*> m_items;
+	std::map<std::string, std::shared_ptr<StreamElementsWorker>> m_items;
 };

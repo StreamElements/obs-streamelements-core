@@ -64,12 +64,13 @@ public:
 	}
 
 	~StreamElementsWorker() {
-		auto mainWindow =
-			StreamElementsGlobalStateManager::GetInstance()
-				->mainWindow();
+		auto mainWindow = static_cast<QMainWindow *>(
+			obs_frontend_get_main_window());
 
 		mainWindow->removeDockWidget(m_dockWidget);
 		m_dockWidget->deleteLater();
+
+		QApplication::sendPostedEvents();
 	}
 
 	std::string GetUrl() { return m_url; }
@@ -83,7 +84,9 @@ private:
 
 StreamElementsWorkerManager::StreamElementsWorkerManager() {}
 
-StreamElementsWorkerManager::~StreamElementsWorkerManager() {}
+StreamElementsWorkerManager::~StreamElementsWorkerManager() {
+	RemoveAll();
+}
 
 void StreamElementsWorkerManager::OnObsExit() {}
 
@@ -91,9 +94,7 @@ void StreamElementsWorkerManager::RemoveAll()
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
-	while (m_items.begin() != m_items.end()) {
-		Remove(m_items.begin()->first);
-	}
+	m_items.clear();
 }
 
 std::string
@@ -109,7 +110,7 @@ StreamElementsWorkerManager::Add(std::string requestedId,
 		id = QUuid::createUuid().toString().toStdString();
 	}
 
-	m_items[id] = new StreamElementsWorker(id, url,
+	m_items[id] = std::make_shared<StreamElementsWorker>(id, url,
 					       executeJavascriptOnLoad);
 
 	return id;
@@ -120,11 +121,7 @@ void StreamElementsWorkerManager::Remove(std::string id)
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
 	if (m_items.count(id)) {
-		StreamElementsWorker *item = m_items[id];
-
 		m_items.erase(id);
-
-		delete item;
 	}
 }
 
