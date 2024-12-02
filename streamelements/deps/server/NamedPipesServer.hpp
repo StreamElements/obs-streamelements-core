@@ -9,6 +9,8 @@
 #include <list>
 #include <functional>
 
+#include <util/threading.h>
+
 #include "NamedPipesServerClientHandler.hpp"
 
 // Multi-threaded named pipes server.
@@ -51,6 +53,8 @@ private:
 	NamedPipesServerClientHandler::msg_handler_t m_msgHandler;
 
 	std::list<NamedPipesServerClientHandler*> m_clients;
+
+	os_event_t *m_done_event = nullptr;
 };
 
 #endif

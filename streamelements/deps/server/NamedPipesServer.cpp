@@ -22,22 +22,28 @@ NamedPipesServer::NamedPipesServer(
 	m_maxClients(maxClients),
 	m_running(false)
 {
+	os_event_init(&m_done_event, OS_EVENT_TYPE_MANUAL);
 }
 
 NamedPipesServer::~NamedPipesServer()
 {
 	Stop();
+
+	os_event_destroy(m_done_event);
+
+	m_done_event = nullptr;
 }
 
 void NamedPipesServer::Start()
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
-	if (m_running) {
+	if (IsRunning()) {
 		return;
 	}
 
-	m_running = true;
+	os_atomic_store_bool(&m_running, true);
+	os_event_reset(m_done_event);
 
 	m_thread = std::thread([this]() {
 		ThreadProc();
@@ -49,13 +55,14 @@ void NamedPipesServer::Stop()
 	{
 		std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
-		if (!m_running) {
+		if (!IsRunning()) {
 			return;
 		}
 
-		m_running = false;
+		os_atomic_store_bool(&m_running, false);
 	}
 
+	while (os_event_timedwait(m_done_event, 100) != 0)
 	{
 		// Attempt to connect to release the server thread
 		HANDLE hPipe = ::CreateFileA(m_pipeName.c_str(),
@@ -63,12 +70,9 @@ void NamedPipesServer::Stop()
 					     NULL, OPEN_EXISTING, 0, NULL);
 
 		if (hPipe != INVALID_HANDLE_VALUE) {
-			DWORD dwMode = PIPE_READMODE_MESSAGE |
-				       PIPE_TYPE_MESSAGE;
-
-			::SetNamedPipeHandleState(hPipe, &dwMode, NULL, NULL);
-
 			::CloseHandle(hPipe);
+		} else {
+			break;
 		}
 	}
 
@@ -79,7 +83,7 @@ void NamedPipesServer::Stop()
 
 bool NamedPipesServer::IsRunning()
 {
-	return m_running;
+	return os_atomic_load_bool(&m_running);
 }
 
 bool NamedPipesServer::CanAddHandler()
@@ -130,10 +134,10 @@ void NamedPipesServer::WriteMessage(const char* const buffer, const size_t lengt
 
 void NamedPipesServer::ThreadProc()
 {
-	while (m_running || !m_clients.empty()) {
+	while (IsRunning() || !m_clients.empty()) {
 		RemoveDisconnectedClients();
 
-		if (!m_running) {
+		if (!IsRunning()) {
 			DisconnectAllClients();
 			RemoveDisconnectedClients();
 
@@ -205,24 +209,35 @@ void NamedPipesServer::ThreadProc()
 				blog(LOG_ERROR, "obs-streamelements-core: NamedPipesServer: CreateNamedPipe failed: %d", GetLastError());
 
 				Sleep(CLIENT_TIMEOUT_MS);
-			}
+			} else {
+				const bool isConnected =
+					ConnectNamedPipe(hPipe, NULL)
+						? TRUE
+						: (GetLastError() ==
+						   ERROR_PIPE_CONNECTED);
 
-			const bool isConnected =
-				ConnectNamedPipe(hPipe, NULL) ?
-				TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
+				if (isConnected) {
+					if (IsRunning()) {
+						blog(LOG_INFO,
+						     "obs-streamelements-core: NamedPipesServer: ConnectNamedPipe: client connected");
 
-			if (isConnected) {
-				blog(LOG_INFO, "obs-streamelements-core: NamedPipesServer: ConnectNamedPipe: client connected");
-
-				m_clients.push_back(new NamedPipesServerClientHandler(hPipe, m_msgHandler));
-			}
-			else {
-				CloseHandle(hPipe);
+						m_clients.push_back(
+							new NamedPipesServerClientHandler(
+								hPipe,
+								m_msgHandler));
+					} else {
+						CloseHandle(hPipe);
+					}
+				} else {
+					CloseHandle(hPipe);
+				}
 			}
 		}
 	}
 
-	m_running = false;
+	os_atomic_store_bool(&m_running, false);
+
+	os_event_signal(m_done_event);
 }
 
 #endif
