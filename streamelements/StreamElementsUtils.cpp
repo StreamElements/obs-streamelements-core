@@ -772,120 +772,127 @@ void SerializeExistingInputSources(
 	local_context.requireOutputFlagsMask = requireOutputFlagsMask;
 	local_context.requireSourceTypes = requireSourceTypes;
 
+	auto process = [](void *param, obs_source_t *source) -> bool {
+		auto context = (local_context_t *)param;
+
+		// Get source caps
+		uint32_t sourceCaps = obs_source_get_output_flags(source);
+
+		obs_source_type type = obs_source_get_type(source);
+
+		bool hasRequiredSourceType = false;
+		for (auto requireType : context->requireSourceTypes) {
+			if (requireType == type) {
+				hasRequiredSourceType = true;
+				break;
+			}
+		}
+
+		// If source has video
+		if ((sourceCaps & context->requireOutputFlagsMask) ==
+			    context->requireOutputFlagsMask &&
+		    hasRequiredSourceType) {
+			// Create source response dictionary
+			CefRefPtr<CefDictionaryValue> dic =
+				CefDictionaryValue::Create();
+
+			std::string sourceId = obs_source_get_id(source);
+			std::string unversioned_id =
+				obs_source_get_unversioned_id(source);
+
+			uint32_t caps =
+				obs_get_source_output_flags(sourceId.c_str());
+
+			// Set codec dictionary properties
+			dic->SetString("class", sourceId);
+
+			dic->SetString("unversionedClass", unversioned_id);
+			dic->SetBool("isDeprecated",
+				     (caps & OBS_SOURCE_DEPRECATED) != 0);
+
+			dic->SetString("id", GetIdFromPointer(source));
+			dic->SetString("name", obs_source_get_name(source));
+
+			dic->SetString("className", obs_source_get_display_name(
+							    sourceId.c_str()));
+
+			dic->SetBool("hasVideo",
+				     (sourceCaps & OBS_SOURCE_VIDEO) ==
+					     OBS_SOURCE_VIDEO);
+			dic->SetBool("hasAudio",
+				     (sourceCaps & OBS_SOURCE_AUDIO) ==
+					     OBS_SOURCE_AUDIO);
+
+			// Compare sourceId to known video capture devices
+			dic->SetBool("isVideoCaptureDevice",
+				     sourceId == "dshow_input" ||
+					     sourceId == "decklink-input");
+
+			// Compare sourceId to known game capture source
+			dic->SetBool("isGameCaptureDevice",
+				     sourceId == "game_capture");
+
+			// Compare sourceId to known browser source
+			dic->SetBool("isBrowserSource",
+				     sourceId == "browser_source");
+
+			dic->SetBool("isSceneSource",
+				     obs_source_is_scene(source));
+
+			dic->SetBool("isGroupSource",
+				     obs_source_is_group(source));
+
+			OBSDataAutoRelease settings =
+				obs_source_get_settings(source);
+
+			dic->SetValue("settings", SerializeObsData(settings));
+
+			OBSDataAutoRelease defaultSettings =
+				obs_get_source_defaults(sourceId.c_str());
+
+			dic->SetValue("defaultSettings",
+				      SerializeObsData(defaultSettings));
+
+			auto properties = obs_source_properties(source);
+
+			if (properties) {
+				obs_properties_apply_settings(properties,
+							      settings);
+
+				auto propertiesVal = CefValue::Create();
+				SerializeObsProperties(properties,
+						       propertiesVal);
+
+				dic->SetValue("properties", propertiesVal);
+
+				obs_properties_destroy(properties);
+			} else {
+				dic->SetList("properties",
+					     CefListValue::Create());
+			}
+
+			// Append dictionary to response list
+			context->list->SetDictionary(context->list->GetSize(),
+						     dic);
+		} else {
+			blog(LOG_INFO, "Skipping source '%s' ('%s')",
+			     obs_source_get_id(source),
+			     obs_source_get_unversioned_id(source));
+		}
+
+		return true;
+	};
+
+	for (auto sourceType : local_context.requireSourceTypes) {
+		switch (sourceType) {
+		case OBS_SOURCE_TYPE_SCENE:
+			obs_enum_scenes(process, &local_context);
+			break;
+		}
+	}
+
 	// Iterate over all sources
-	obs_enum_sources(
-		[](void *param, obs_source_t *source) -> bool {
-			auto context = (local_context_t *)param;
-
-			// Get source caps
-			uint32_t sourceCaps =
-				obs_source_get_output_flags(source);
-
-			obs_source_type type = obs_source_get_type(source);
-
-			bool hasRequiredSourceType = false;
-			for (auto requireType : context->requireSourceTypes) {
-				if (requireType == type) {
-					hasRequiredSourceType = true;
-					break;
-				}
-			}
-
-			// If source has video
-			if ((sourceCaps & context->requireOutputFlagsMask) ==
-			    context->requireOutputFlagsMask && hasRequiredSourceType) {
-				// Create source response dictionary
-				CefRefPtr<CefDictionaryValue> dic =
-					CefDictionaryValue::Create();
-
-				std::string sourceId =
-					obs_source_get_id(source);
-				std::string unversioned_id =
-					obs_source_get_unversioned_id(source);
-
-				uint32_t caps =
-					obs_get_source_output_flags(sourceId.c_str());
-
-				// Set codec dictionary properties
-				dic->SetString("class", sourceId);
-
-				dic->SetString("unversionedClass",
-					       unversioned_id);
-				dic->SetBool("isDeprecated",
-					     (caps & OBS_SOURCE_DEPRECATED) !=
-						     0);
-
-				dic->SetString("id", GetIdFromPointer(source));
-				dic->SetString("name",
-					       obs_source_get_name(source));
-
-				dic->SetString("className", obs_source_get_display_name(sourceId.c_str()));
-
-				dic->SetBool("hasVideo",
-					     (sourceCaps & OBS_SOURCE_VIDEO) ==
-						     OBS_SOURCE_VIDEO);
-				dic->SetBool("hasAudio",
-					     (sourceCaps & OBS_SOURCE_AUDIO) ==
-						     OBS_SOURCE_AUDIO);
-
-				// Compare sourceId to known video capture devices
-				dic->SetBool("isVideoCaptureDevice",
-					     sourceId == "dshow_input" ||
-						     sourceId ==
-							     "decklink-input");
-
-				// Compare sourceId to known game capture source
-				dic->SetBool("isGameCaptureDevice",
-					     sourceId == "game_capture");
-
-				// Compare sourceId to known browser source
-				dic->SetBool("isBrowserSource",
-					     sourceId == "browser_source");
-
-				dic->SetBool("isSceneSource",
-					     obs_source_is_scene(source));
-
-				dic->SetBool("isGroupSource",
-					     obs_source_is_group(source));
-
-				OBSDataAutoRelease settings =
-					obs_source_get_settings(source);
-
-				dic->SetValue("settings",
-					      SerializeObsData(settings));
-
-				OBSDataAutoRelease defaultSettings =
-					obs_get_source_defaults(
-						sourceId.c_str());
-
-				dic->SetValue("defaultSettings",
-					SerializeObsData(defaultSettings));
-
-				auto properties = obs_source_properties(source);
-
-				if (properties) {
-					obs_properties_apply_settings(
-						properties, settings);
-
-					auto propertiesVal = CefValue::Create();
-					SerializeObsProperties(properties,
-							       propertiesVal);
-
-					dic->SetValue("properties",
-						      propertiesVal);
-
-					obs_properties_destroy(properties);
-				} else {
-					dic->SetList("properties", CefListValue::Create());
-				}
-
-				// Append dictionary to response list
-				context->list->SetDictionary(context->list->GetSize(), dic);
-			}
-
-			return true;
-		},
-		&local_context);
+	obs_enum_sources(process, &local_context);
 
 	// Response codec collection is our root object
 	output->SetList(local_context.list);

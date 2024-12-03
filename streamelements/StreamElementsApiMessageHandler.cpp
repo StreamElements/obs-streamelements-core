@@ -1354,7 +1354,8 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getAllExistingVideoInputSources");
 	{
 		SerializeExistingInputSources(result, OBS_SOURCE_VIDEO,
-					      {OBS_SOURCE_TYPE_INPUT});
+					      {OBS_SOURCE_TYPE_INPUT,
+					       OBS_SOURCE_TYPE_SCENE});
 	}
 	API_HANDLER_END();
 
