@@ -659,7 +659,7 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 			/* Serialize group */
 			struct local_context {
 				CefRefPtr<CefListValue> list;
-				std::vector<obs_sceneitem_t *> groupItems;
+				std::vector<OBSSceneItemAutoRelease> groupItems;
 			};
 
 			local_context context;
@@ -686,22 +686,20 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 				},
 				&context);
 
-			for (auto group_sceneitem : context.groupItems) {
+			for (auto it = context.groupItems.cbegin();
+			     it != context.groupItems.cend(); ++it) {
 				obs_source_t *source = obs_sceneitem_get_source(
-					group_sceneitem); // does not increase refcount
+					*it); // does not increase refcount
 
 				CefRefPtr<CefValue> item = CefValue::Create();
 
 				SerializeSourceAndSceneItem(
-					item, source, group_sceneitem,
+					item, source, *it,
 					context.list->GetSize(),
 					serializeDetails, videoComposition);
 
 				context.list->SetValue(context.list->GetSize(),
 						       item);
-
-				obs_sceneitem_release(
-					group_sceneitem); /* addref above in obs_sceneitem_group_enum_items callback */
 			}
 
 			/* Group items */
@@ -2287,12 +2285,13 @@ void StreamElementsObsSceneManager::SerializeObsSceneItems(
 		struct local_context {
 			CefRefPtr<CefListValue> list;
 			decltype(videoComposition) videoComposition;
+			std::vector<OBSSceneItemAutoRelease> sceneItems;
 		};
 
 		local_context context;
 
 		context.list = CefListValue::Create();
-		context.videoComposition = videoComposition;
+		context.videoComposition = videoComposition;	
 
 		// For each scene item
 		obs_scene_enum_items(
@@ -2301,23 +2300,29 @@ void StreamElementsObsSceneManager::SerializeObsSceneItems(
 			   void *param) {
 				local_context *context = (local_context *)param;
 
-				obs_source_t *source = obs_sceneitem_get_source(
-					sceneitem); // does not increase refcount
+				obs_sceneitem_addref(sceneitem); // Will be auto-released
 
-				CefRefPtr<CefValue> item = CefValue::Create();
-
-				SerializeSourceAndSceneItem(
-					item, source, sceneitem,
-					context->list->GetSize(), true,
-					context->videoComposition.get());
-
-				context->list->SetValue(
-					context->list->GetSize(), item);
+				context->sceneItems.push_back(sceneitem);
 
 				// Continue iteration
 				return true;
 			},
 			&context);
+
+		for (auto it = context.sceneItems.cbegin();
+		     it != context.sceneItems.cend(); ++it) {
+			obs_source_t *source = obs_sceneitem_get_source(
+				*it); // does not increase refcount
+
+			CefRefPtr<CefValue> item = CefValue::Create();
+
+			SerializeSourceAndSceneItem(
+				item, source, *it,
+				context.list->GetSize(), true,
+				context.videoComposition.get());
+
+			context.list->SetValue(context.list->GetSize(), item);
+		}
 
 		output->SetList(context.list);
 	}
