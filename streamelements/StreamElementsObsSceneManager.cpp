@@ -1541,23 +1541,21 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 		enum_args.id = existingSourceId;
 		enum_args.result = NULL;
 
-		obs_enum_sources(
-			[](void *arg, obs_source_t *iterator) {
-				enum_sources_args *args =
-					(enum_sources_args *)arg;
+		auto process = [](void *arg, obs_source_t *iterator) {
+			enum_sources_args *args = (enum_sources_args *)arg;
 
-				if (GetIdFromPointer((void *)iterator) ==
-					    args->id &&
-				    !args->result) {
-					args->result =
-						obs_source_get_ref(iterator);
+			if (GetIdFromPointer((void *)iterator) == args->id &&
+			    !args->result) {
+				args->result = obs_source_get_ref(iterator);
 
-					return false;
-				}
+				return false;
+			}
 
-				return true;
-			},
-			&enum_args);
+			return true;
+		};
+
+		obs_enum_sources(process, &enum_args);
+		obs_enum_scenes(process, &enum_args);
 
 		source = enum_args.result;
 	}
