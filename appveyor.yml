@@ -14,20 +14,9 @@ environment:
   matrix:
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
       QT_VERSION: 6
-      QT_DIR: C:\Qt\6.3.1
-      QT5_DIR:
-      QT6_DIR: C:\Qt\6.3.1
-      CHECKOUT: 29.1.3
+      CHECKOUT: 31.0.0-rc1
       GENERATOR: Visual Studio 17 2022
-      OBS_DEPS_VERSION: 2023-01-06
-      WindowsDepsVersion: 2023-01-06
-#    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
-#      QT_VERSION: 5
-#      QT_DIR: c:\Qt\5.15.2
-#      QT5_DIR: c:\Qt\5.15.2
-#      GENERATOR: Visual Studio 16 2019
-#      CHECKOUT: 5fd4339c1d32f57e0e510881e1321cb8c3b5f1ba
-#      OBS_DEPS_VERSION: 2022-05-23
+      #WindowsDepsVersion: 2023-01-06
 install:
 - cmd: >-
     if not exist c:\local md c:\local
@@ -46,7 +35,7 @@ install:
 
     cd /d c:\local\obs-studio
 
-    echo add_subdirectory(obs-streamelements-core) >c:\local\obs-studio\plugins\CMakeLists.txt
+    echo add_obs_plugin(obs-streamelements-core) >c:\local\obs-studio\plugins\CMakeLists.txt
 
 cache:
 - c:\local\obs-build-dependencies
@@ -67,151 +56,47 @@ build_script:
 
     cd /d c:\local\obs-studio
 
-    echo 64-bit
 
-    powershell -file .\CI\windows\01_install_dependencies.ps1 -Verbose -BuildArch x64
 
-    echo 32-bit
 
-    powershell -file .\CI\windows\01_install_dependencies.ps1 -Verbose -BuildArch x86
+    echo Setting up CMAKE build projects
 
-- cmd: >-
+    cmake --preset=windows-x64
+
+    
+    
+    
+    echo Building 64bit ...
+
+    cd /d c:\local\obs-studio\build_x64
+
+    msbuild obs-studio.sln -p:Configuration=RelWithDebInfo
+
+    
+    
+    
+    echo Building 32bit ...
+
+    cd /d c:\local\obs-studio\build_x86
+
+    msbuild obs-studio.sln -p:Configuration=RelWithDebInfo
+
+
+
     cd /d c:\local\obs-studio
-
-- ps: >-
-    $CmakeCommand = @(
-      "-S . -B `"build64_qt${Env:QT_VERSION}`"",
-      "-G `"${Env:GENERATOR}`"",
-      "-DCMAKE_GENERATOR_PLATFORM=`"x64`"",
-      "-DCMAKE_SYSTEM_VERSION=`"10.0.22000.0`"",
-      "-DCEF_ROOT_DIR=`"c:/local/obs-build-dependencies/cef_binary_4638_windows_x64`"",
-      "-DVLC_PATH=`"c:/local/obs-build-dependencies/vlc-3.0.0-git`"",
-      "-DCMAKE_INSTALL_PREFIX=`"build64_qt${Env:QT_VERSION}/install`"",
-      "-DCOPIED_DEPENDENCIES=OFF",
-      "-DCOPY_DEPENDENCIES=ON",
-      "-DBUILD_FOR_DISTRIBUTION=`"OFF`"",
-      "-DDepsPath64=c:/local/obs-build-dependencies/windows-deps-${Env:OBS_DEPS_VERSION}-x64",
-      "-Wno-error=dev -Wno-dev -Wno-deprecated",
-      "-DENABLE_AJA=OFF",
-      "-DENABLE_BROWSER=OFF",
-      "-DENABLE_COREAUDIO_ENCODER=OFF",
-      "-DENABLE_DECKLINK=OFF",
-      "-DENABLE_FFMPEG_LOGGING=OFF",
-      "-DENABLE_FFMPEG_MUX_DEBUG=OFF",
-      "-DENABLE_FREETYPE=OFF",
-      "-DENABLE_HEVC=OFF",
-      "-DENABLE_IVCAM=OFF",
-      "-DENABLE_LIBFDK=OFF",
-      "-DENABLE_NVAFX=OFF",
-      "-DENABLE_QSV11=OFF",
-      "-DENABLE_RNNOISE=OFF",
-      "-DENABLE_RTMPS=OFF",
-      "-DENABLE_SCRIPTING=OFF",
-      "-DENABLE_SCRIPTING_LUA=OFF",
-      "-DENABLE_SCRIPTING_PYTHON=OFF",
-      "-DENABLE_SERVICE_UPDATES=OFF",
-      "-DENABLE_SIMDE=OFF",
-      "-DENABLE_SPEEXDSP=OFF",
-      "-DENABLE_UI=OFF",
-      "-DENABLE_UPDATER=OFF",
-      "-DENABLE_VIRTUALCAM=OFF",
-      "-DENABLE_VLC=OFF",
-      "-DENABLE_VST=OFF",
-      "-DQT_VERSION=${Env:QT_VERSION}",
-      "-DQTDIR=${Env:QTDIR}",
-      "-DQt5_DIR=`"${Env:QT5_DIR}`"",
-      "-DQt6_DIR=`"${Env:QT6_DIR}`"",
-      "-DVIRTUALCAM_GUID=`"A3FCE0F5-3493-419F-958A-ABA1250EC20B`"",
-      "-DTHREADS_HAVE_PTHREAD_ARG=OFF"
-    )
-
-    Invoke-Expression "cmake ${CmakeCommand}"
-
-    Invoke-Expression "cmake --build build64_qt${Env:QT_VERSION} --config RelWithDebInfo"
 
 - cmd: >-
     echo.Upload PDBs to BugSplat in case this is a commit to master branch (64bit. QT%QT_VERSION%).
 
-    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\Tools\symbol-upload-windows.exe -u "%BUGSPLAT_USERNAME%" -p "%BUGSPLAT_PASSWORD%" -a obs-streamelements-core -v "%STREAMELEMENTS_PLUGIN_VERSION%" -b OBS_Live -d "c:\local\obs-studio\build64_qt%QT_VERSION%\rundir\RelWithDebInfo\obs-plugins\64bit" -f obs-streamelements*.pdb
+    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\Tools\symbol-upload-windows.exe -u "%BUGSPLAT_USERNAME%" -p "%BUGSPLAT_PASSWORD%" -a obs-streamelements-core -v "%STREAMELEMENTS_PLUGIN_VERSION%" -b OBS_Live -d "c:\local\obs-studio\build_x64\rundir\RelWithDebInfo\obs-plugins\64bit" -f obs-streamelements*.pdb
 
 
 
     echo.Pack 64bit, QT%QT_VERSION% artifacts...
 
-    cd /d c:\local\obs-studio\build64_qt%QT_VERSION%\rundir\RelWithDebInfo
+    cd /d c:\local\obs-studio\build_x64\rundir\RelWithDebInfo
 
     7z a c:\local\source\build64_qt%QT_VERSION%.zip .
-
-- cmd: >-
-    cd /d c:\local\obs-studio
-
-- ps: >-
-    $CmakeCommand = @(
-      "-S . -B `"build32_qt${Env:QT_VERSION}`"",
-      "-G `"${Env:GENERATOR}`"",
-      "-DCMAKE_GENERATOR_PLATFORM=`"Win32`"",
-      "-DCMAKE_SYSTEM_VERSION=`"10.0.22000.0`"",
-      "-DCMAKE_PREFIX_PATH=`"build32_qt${Env:QT_VERSION}`"",
-      "-DCEF_ROOT_DIR=`"c:/local/obs-build-dependencies/cef_binary_4638_windows_x86`"",
-      "-DVLC_PATH=`"c:/local/obs-build-dependencies/vlc-3.0.0-git`"",
-      "-DCMAKE_INSTALL_PREFIX=`"build32/install`"",
-      "-DCOPIED_DEPENDENCIES=OFF",
-      "-DCOPY_DEPENDENCIES=ON",
-      "-DBUILD_FOR_DISTRIBUTION=`"OFF`"",
-      "-DDepsPath32=c:/local/obs-build-dependencies/windows-deps-${Env:OBS_DEPS_VERSION}-x86",
-      "-Wno-error=dev -Wno-dev -Wno-deprecated",
-      "-DENABLE_AJA=OFF",
-      "-DENABLE_BROWSER=OFF",
-      "-DENABLE_COREAUDIO_ENCODER=OFF",
-      "-DENABLE_DECKLINK=OFF",
-      "-DENABLE_FFMPEG_LOGGING=OFF",
-      "-DENABLE_FFMPEG_MUX_DEBUG=OFF",
-      "-DENABLE_FREETYPE=OFF",
-      "-DENABLE_HEVC=OFF",
-      "-DENABLE_IVCAM=OFF",
-      "-DENABLE_LIBFDK=OFF",
-      "-DENABLE_NVAFX=OFF",
-      "-DENABLE_QSV11=OFF",
-      "-DENABLE_RNNOISE=OFF",
-      "-DENABLE_RTMPS=OFF",
-      "-DENABLE_SCRIPTING=OFF",
-      "-DENABLE_SCRIPTING_LUA=OFF",
-      "-DENABLE_SCRIPTING_PYTHON=OFF",
-      "-DENABLE_SERVICE_UPDATES=OFF",
-      "-DENABLE_SIMDE=OFF",
-      "-DENABLE_SPEEXDSP=OFF",
-      "-DENABLE_UI=OFF",
-      "-DENABLE_UPDATER=OFF",
-      "-DENABLE_VIRTUALCAM=OFF",
-      "-DENABLE_VLC=OFF",
-      "-DENABLE_VST=OFF",
-      "-DQT_VERSION=${Env:QT_VERSION}",
-      "-DQTDIR=${Env:QTDIR}",
-      "-DQt5_DIR=`"${Env:QT5_DIR}`"",
-      "-DQt6_DIR=`"${Env:QT6_DIR}`"",
-      "-DVIRTUALCAM_GUID=`"A3FCE0F5-3493-419F-958A-ABA1250EC20B`"",
-      "-DTHREADS_HAVE_PTHREAD_ARG=OFF"
-    )
-
-    Invoke-Expression "cmake ${CmakeCommand}"
-
-    Invoke-Expression "cmake --build build32_qt${Env:QT_VERSION} --config RelWithDebInfo"
-
-- cmd: >-
-    cd /d c:\local\obs-studio
-
-- cmd: >-
-    echo.Upload PDBs to BugSplat in case this is a commit to master branch (32bit. QT%QT_VERSION%).
-
-    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\Tools\symbol-upload-windows.exe -u "%BUGSPLAT_USERNAME%" -p "%BUGSPLAT_PASSWORD%" -a obs-streamelements-core -v "%STREAMELEMENTS_PLUGIN_VERSION%" -b OBS_Live -d "c:\local\obs-studio\build32_qt%QT_VERSION%\rundir\RelWithDebInfo\obs-plugins\32bit" -f obs-streamelements*.pdb
-
-
-
-    echo.Pack 32bit, QT%QT_VERSION% artifacts...
-
-    cd /d c:\local\obs-studio\build32_qt%QT_VERSION%\rundir\RelWithDebInfo
-
-    7z a c:\local\source\build32_qt%QT_VERSION%.zip .
 
 
 
@@ -219,10 +104,10 @@ build_script:
 
     copy /Y c:\local\obs-studio\plugins\obs-streamelements-core\streamelements\Version.generated.hpp c:\local\source\streamelements\Version.generated.hpp
 
+    cd /d c:\local\obs-studio
+
 test: off
 artifacts:
-- path: build32_qt*.zip
-  name: build32
 - path: build64_qt*.zip
   name: build64
 - path: streamelements\Version.generated.hpp
@@ -234,7 +119,7 @@ deploy:
     secure: lhOyqT4/E0Oqv8BOQR81rx/SweOIbDELTYW7iJTqRz5shmkZ8eXMCgFzcIuXyvpB
   bucket: obs-builds
   folder: obs-streamelements-core/latest/windows
-  artifact: build32,build64,version.generated.hpp
+  artifact: build64,version.generated.hpp
   max_error_retry: 5
   on:
     branch: master

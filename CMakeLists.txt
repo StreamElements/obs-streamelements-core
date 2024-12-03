@@ -1,3 +1,11 @@
+if(CMAKE_PROJECT_NAME STREQUAL "obs-studio")
+  #find_qt is replaced with find_package
+  #install_obs_plugin_with_data is replaced with set_target_properties_obs
+  set(BUILD_OUT_OF_TREE OFF)
+else()
+  set(BUILD_OUT_OF_TREE ON)
+endif()
+
 project(obs-streamelements-core)
 
 if(NOT QT_VERSION)
@@ -7,8 +15,12 @@ if(NOT QT_VERSION)
   set_property(CACHE QT_VERSION PROPERTY STRINGS 5 6)
 endif()
 
-#find_qt(VERSION ${QT_VERSION} COMPONENTS Core Widgets)
-find_qt(VERSION ${QT_VERSION} COMPONENTS Widgets)
+if(BUILD_OUT_OF_TREE)
+	#find_qt(VERSION ${QT_VERSION} COMPONENTS Core Widgets)
+	find_qt(VERSION ${QT_VERSION} COMPONENTS Widgets)
+else()
+  find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
+endif()
 
 if (WIN32)
 	set(ENABLE_BUGSPLAT TRUE)
@@ -356,7 +368,7 @@ if (APPLE)
 endif()
 
 if (${QT_VERSION} EQUAL "5")
-	qt5_add_resources(obs-streamelements-core-streamelements_QRC_SOURCES "streamelements/streamelements.qrc")
+#	qt5_add_resources(obs-streamelements-core-streamelements_QRC_SOURCES "streamelements/streamelements.qrc")
 endif()
 
 add_library(obs-streamelements-core MODULE
@@ -549,8 +561,17 @@ if (WIN32)
 	endif()
 endif()
 
-install_obs_plugin_with_data(obs-streamelements-core data)
+
+if(BUILD_OUT_OF_TREE)
+	install_obs_plugin_with_data(obs-streamelements-core data)
+else()
+	set_target_properties_obs(obs-streamelements-core PROPERTIES FOLDER "plugins/streamelements" PREFIX "")
+endif()
 
 if (ENABLE_ANGELSCRIPT)
-	install_obs_plugin(obs-streamelements-core-streamelements-restore-script-host)
+	if(BUILD_OUT_OF_TREE)
+		install_obs_plugin(obs-streamelements-core-streamelements-restore-script-host)
+	else()
+		set_target_properties_obs(obs-streamelements-core-streamelements-restore-script-host PROPERTIES FOLDER "plugins/streamelements" PREFIX "")
+	endif()
 endif()
