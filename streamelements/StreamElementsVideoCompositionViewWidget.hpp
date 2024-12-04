@@ -179,118 +179,152 @@ public:
 						CompositionInfo>
 				videoCompositionInfo);
 
-		bool SetMouseCursor(QCursor &cursor)
+		bool ExecProcessingOrder(
+			std::function<bool(obs_sceneitem_t *)> callback, bool processAllSelected, bool processAllUnselected)
 		{
-			bool wasSelected = false;
+			bool wasProcessed = false;
 
 			for (auto sceneItem :
 			     m_sceneItemsEventProcessingOrder) {
 				if (!obs_sceneitem_selected(sceneItem))
 					continue;
 
-				if (m_sceneItemsVisualElementsMap[sceneItem]
-					    ->SetMouseCursor(cursor))
-					return true;
+				wasProcessed |= callback(sceneItem);
+
+				if (!processAllSelected && wasProcessed)
+					break;
 			}
+
+			if (wasProcessed)
+				return true;
 
 			for (auto sceneItem :
 			     m_sceneItemsEventProcessingOrder) {
 				if (obs_sceneitem_selected(sceneItem))
 					continue;
 
-				if (m_sceneItemsVisualElementsMap[sceneItem]
-					    ->SetMouseCursor(cursor))
-					return true;
+				wasProcessed |= callback(sceneItem);
+
+				if (!processAllUnselected && wasProcessed)
+					break;
 			}
 
-			return false;
+			return wasProcessed;
+		}
+
+		bool ExecProcessingOrderUnselectedFirst(
+			std::function<bool(obs_sceneitem_t *)> callback,
+			bool processAllSelected, bool processAllUnselected)
+		{
+			bool wasProcessed = false;
+
+			for (auto sceneItem :
+			     m_sceneItemsEventProcessingOrder) {
+				if (obs_sceneitem_selected(sceneItem))
+					continue;
+
+				wasProcessed |= callback(sceneItem);
+
+				if (!processAllUnselected && wasProcessed)
+					break;
+			}
+
+			if (wasProcessed)
+				return true;
+
+			for (auto sceneItem :
+			     m_sceneItemsEventProcessingOrder) {
+				if (!obs_sceneitem_selected(sceneItem))
+					continue;
+
+				wasProcessed |= callback(sceneItem);
+
+				if (!processAllSelected && wasProcessed)
+					break;
+			}
+
+			return wasProcessed;
+		}
+
+		bool SetMouseCursor(QCursor &cursor)
+		{
+			return ExecProcessingOrder(
+				[&](obs_sceneitem_t *sceneItem) -> bool {
+					return m_sceneItemsVisualElementsMap
+						[sceneItem]
+							->SetMouseCursor(
+								cursor);
+				},
+				false, false);
 		}
 
 		bool HandleMouseDown(QMouseEvent *event, double worldX,
 					     double worldY)
 		{
-			bool wasSelected = false;
+			bool wasProcessed = ExecProcessingOrder(
+				[&](obs_sceneitem_t *sceneItem) -> bool {
+					return m_sceneItemsVisualElementsMap
+						[sceneItem]
+							->HandleMouseDown(
+								event, worldX,
+								worldY);
+				},
+				true, true);
 
-			for (auto sceneItem :
-			     m_sceneItemsEventProcessingOrder) {
-				if (!obs_sceneitem_selected(sceneItem))
-					continue;
+			if (!wasProcessed) {
+				// Nothing selected
+				for (auto sceneItem :
+				     m_sceneItemsEventProcessingOrder) {
+					if (!obs_sceneitem_selected(sceneItem))
+						continue;
 
-				wasSelected |=
-					m_sceneItemsVisualElementsMap[sceneItem]
-						->HandleMouseDown(event, worldX,
-								  worldY);
+					obs_sceneitem_select(sceneItem, false);
+				}
 			}
 
-			if (wasSelected)
-				return true;
-
-			for (auto sceneItem :
-			     m_sceneItemsEventProcessingOrder) {
-				if (obs_sceneitem_selected(sceneItem))
-					continue;
-
-				wasSelected |=
-					m_sceneItemsVisualElementsMap[sceneItem]
-						->HandleMouseDown(event, worldX,
-								  worldY);
-			}
-
-			if (wasSelected)
-				return true;
-
-			// Nothing selected
-			for (auto sceneItem :
-			     m_sceneItemsEventProcessingOrder) {
-				if (!obs_sceneitem_selected(sceneItem))
-					continue;
-
-				obs_sceneitem_select(sceneItem, false);
-			}
-
-			return false;
+			return wasProcessed;
 		}
 
 		bool HandleMouseUp(QMouseEvent *event, double worldX,
 					   double worldY)
 		{
-			for (auto sceneItem :
-			     m_sceneItemsEventProcessingOrder) {
-				if (m_sceneItemsVisualElementsMap[sceneItem]
-					    ->HandleMouseUp(event, worldX,
-							    worldY))
-					return true;
-			}
-
-			return false;
+			return ExecProcessingOrder(
+				[&](obs_sceneitem_t *sceneItem) -> bool {
+					return m_sceneItemsVisualElementsMap
+						[sceneItem]
+							->HandleMouseUp(
+								event, worldX,
+								worldY);
+				},
+				true, true);
 		}
 
 		bool HandleMouseClick(QMouseEvent *event, double worldX,
 					      double worldY)
 		{
-			for (auto sceneItem :
-			     m_sceneItemsEventProcessingOrder) {
-				if (m_sceneItemsVisualElementsMap[sceneItem]
-					    ->HandleMouseClick(event, worldX,
-								worldY))
-					return true;
-			}
-
-			return false;
+			return ExecProcessingOrderUnselectedFirst(
+				[&](obs_sceneitem_t *sceneItem) -> bool {
+					return m_sceneItemsVisualElementsMap
+						[sceneItem]
+							->HandleMouseClick(
+								event, worldX,
+								worldY);
+				},
+				false, false);
 		}
 
 		bool HandleMouseMove(QMouseEvent *event, double worldX,
 					     double worldY)
 		{
-			for (auto sceneItem :
-			     m_sceneItemsEventProcessingOrder) {
-				if (m_sceneItemsVisualElementsMap[sceneItem]
-					    ->HandleMouseMove(event, worldX,
-							       worldY))
-					return true;
-			}
-
-			return false;
+			return ExecProcessingOrder(
+				[&](obs_sceneitem_t *sceneItem) -> bool {
+					return m_sceneItemsVisualElementsMap
+						[sceneItem]
+							->HandleMouseMove(
+								event, worldX,
+								worldY);
+				},
+				false, false);
 		}
 	};
 
