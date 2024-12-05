@@ -54,6 +54,41 @@
 #include <fcntl.h>
 #include <io.h>
 
+const static DWORD g_dwBugSplatBaseFlags =
+	MDSF_CUSTOMEXCEPTIONFILTER | MDSF_USEGUARDMEMORY | MDSF_LOGFILE |
+	MDSF_LOG_VERBOSE |
+	// MDSF_SUSPENDALLTHREADS |
+	/* MDSF_NONINTERACTIVE |*/ // Doing this interactively apparently adds more reliability to actually delivering the crash reports to bugsplat...
+	0;
+
+static void CreateMessageWindow()
+{
+	auto mainWindowHandle = (HWND)obs_frontend_get_main_window_handle();
+
+	if (!mainWindowHandle)
+		return;
+
+	RECT r;
+	GetWindowRect(mainWindowHandle, &r);
+
+	const int width = 600;
+	const int height = 85;
+	const int x = (r.left + r.right) / 2 - (width / 2);
+	const int y = (r.top + r.bottom) / 2 - (height / 2);
+
+	HWND hDlg = CreateWindowA("Button", "Oops, something is not right. Please wait while a crash report is being prepared...", 0, x, y, width,
+				  height, mainWindowHandle, NULL,
+				  GetModuleHandle(0), NULL);
+
+	if (!hDlg)
+		return;
+
+	SetWindowLong(hDlg, GWL_STYLE, WS_VISIBLE);
+	EnableWindow(hDlg, FALSE);
+	ShowWindow(hDlg, SW_SHOWNORMAL);
+	UpdateWindow(hDlg);
+}
+
 static config_t *obs_fe_global_config()
 {
 	auto config = StreamElementsConfig::GetInstance();
@@ -950,6 +985,11 @@ static LONG CALLBACK CustomExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
 				     pExceptionInfo->ContextRecord);
 
 	if (InterlockedIncrement(&s_insideExceptionFilter) == 1L) {
+		s_mdSender->setFlags(
+			g_dwBugSplatBaseFlags); // Turn off hang detection so it doesn't pop up during minidump collection
+
+		CreateMessageWindow();
+
 		if (s_mdSender && (s_stackWalker->hasMatchModuleOfInterest)) {
 			s_mdSender->unhandledExceptionHandler(pExceptionInfo);
 		}
@@ -1002,13 +1042,9 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
 					  StackWalker::RetrieveLine |
 					  StackWalker::RetrieveModuleInfo);
 
-	s_mdSender = new MiniDmpSender(
-		L"OBS_Live", L"obs-streamelements-core", plugin_version.c_str(),
-		app_id.c_str(),
-		MDSF_CUSTOMEXCEPTIONFILTER | MDSF_USEGUARDMEMORY |
-			MDSF_LOGFILE | MDSF_LOG_VERBOSE |
-			/* MDSF_NONINTERACTIVE |*/ // Doing this interactively apparently adds more reliability to actually delivering the crash reports to bugsplat...
-			MDSF_DETECTHANGS);
+	s_mdSender = new MiniDmpSender(L"OBS_Live", L"obs-streamelements-core",
+				       plugin_version.c_str(), app_id.c_str(),
+				       g_dwBugSplatBaseFlags | MDSF_DETECTHANGS);
 
 	// Enable full memory dumps
 	s_mdSender->setMiniDumpType(
@@ -1025,7 +1061,7 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
 	s_mdSender->setDefaultUserEmail(L"");
 	s_mdSender->setDefaultUserDescription(L"OBS crashed. Please provide any additional information you might have here. What were you doing just before this happened?");
 	s_mdSender->setGuardByteBufferSize(1024 * 1024); // Allocate 1MB of guard buffer
-	s_mdSender->setHangDetectionTimeout(15000);
+	s_mdSender->setHangDetectionTimeout(30000);
 
 	s_mdSender->setCallback(BugSplatExceptionCallback);
 
