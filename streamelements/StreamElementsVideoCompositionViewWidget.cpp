@@ -240,17 +240,32 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 		kv.second->DrawBottomLayer();
 	}
 
-	// Fill video viewport background with black color
-	fillRect(0, 0, worldWidth, worldHeight, QColor(0, 0, 0, 255));
 
 	// We need a clipped projection region for the video part of the rendering
+	const bool previous_linear_srgb_value = gs_set_linear_srgb(true);
+	const bool previous_framebuffer_srgb_enabled = gs_framebuffer_srgb_enabled();
+	gs_enable_framebuffer_srgb(true);
+	//gs_viewport_push();
+	//gs_projection_push();
+	//gs_set_viewport(viewX, viewY, viewWidth, viewHeight);
+	//gs_ortho(0, worldWidth, 0, worldHeight, -100.0f, 100.0f);
 	startProjectionRegion(viewX, viewY, viewWidth, viewHeight, 0, 0,
 			      double(worldWidth), double(worldHeight));
+
+	// Fill video viewport background with black color
+	fillRect(0, 0, worldWidth, worldHeight, QColor(0, 0, 0, 255));
 
 	// Render the view into the region set above
 	m_view->m_videoCompositionInfo->Render();
 
+	drawRect(0, 0, worldWidth, worldHeight, 2.0f * float(scaleX),
+		 QColor(255, 255, 255, 25));
+
 	// Return to the clipped projection region set above to draw the top layer graphics
+	//gs_projection_pop();
+	//gs_viewport_pop();
+	gs_set_linear_srgb(previous_linear_srgb_value);
+	gs_enable_framebuffer_srgb(previous_framebuffer_srgb_enabled);
 	endProjectionRegion();
 
 	// Draw groups first
@@ -490,7 +505,7 @@ void StreamElementsVideoCompositionViewWidget::CreateDisplay()
 
 	QSize size = GetPixelSize(this);
 
-	gs_init_data info = {};
+	gs_init_data info = {0};
 	info.cx = size.width();
 	info.cy = size.height();
 	info.format = GS_BGRA;
@@ -506,6 +521,7 @@ void StreamElementsVideoCompositionViewWidget::CreateDisplay()
 	}
 
 	m_display = obs_display_create(&info, 0x303030L);
+	obs_display_resize(m_display, size.width(), size.height());
 
 	obs_display_add_draw_callback(m_display, obs_display_draw_callback, this);
 	obs_leave_graphics();
