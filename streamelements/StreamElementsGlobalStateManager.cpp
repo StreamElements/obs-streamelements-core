@@ -605,7 +605,12 @@ void StreamElementsGlobalStateManager::Shutdown()
 
 #ifdef WIN32
 	// Shutdown on the main thread
-	// delete m_crashHandler; // TODO: Shutting down the crash handler might be contributing to us missing some exceptions during shutdown
+	if (m_crashHandler) {
+		m_crashHandler->StopAsyncHangDetection();
+
+		//delete m_crashHandler; // TODO: Shutting down the crash handler might be contributing to us missing some exceptions during shutdown
+		//m_crashHandler = nullptr;
+	}
 
 	//mainWindow()->removeDockWidget(m_themeChangeListener);
 	if (m_themeChangeListener) {

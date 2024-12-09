@@ -53,6 +53,11 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <io.h>
+#include <condition_variable>
+
+#define STATUS_HANG_DETECTED 0xE0000001
+
+/* ================================================================= */
 
 const static DWORD g_dwBugSplatBaseFlags =
 	MDSF_CUSTOMEXCEPTIONFILTER | MDSF_USEGUARDMEMORY | MDSF_LOGFILE |
@@ -60,49 +65,6 @@ const static DWORD g_dwBugSplatBaseFlags =
 	// MDSF_SUSPENDALLTHREADS |
 	/* MDSF_NONINTERACTIVE |*/ // Doing this interactively apparently adds more reliability to actually delivering the crash reports to bugsplat...
 	0;
-
-static void CreateMessageWindow()
-{
-	auto mainWindowHandle = (HWND)obs_frontend_get_main_window_handle();
-
-	if (!mainWindowHandle)
-		return;
-
-	RECT r;
-	GetWindowRect(mainWindowHandle, &r);
-
-	const int width = 600;
-	const int height = 85;
-	const int x = (r.left + r.right) / 2 - (width / 2);
-	const int y = (r.top + r.bottom) / 2 - (height / 2);
-
-	HWND hDlg = CreateWindowA("Button", "Oops, something is not right. Please wait while a crash report is being prepared...", 0, x, y, width,
-				  height, mainWindowHandle, NULL,
-				  GetModuleHandle(0), NULL);
-
-	if (!hDlg)
-		return;
-
-	SetWindowLong(hDlg, GWL_STYLE, WS_VISIBLE);
-	EnableWindow(hDlg, FALSE);
-	ShowWindow(hDlg, SW_SHOWNORMAL);
-	UpdateWindow(hDlg);
-}
-
-static config_t *obs_fe_global_config()
-{
-	auto config = StreamElementsConfig::GetInstance();
-
-	if (config) {
-		return config->GetObsGlobalConfig();
-	}
-
-	return nullptr;
-}
-
-/* ================================================================= */
-
-unsigned int s_maxRemainingLogFilesCount = 7;
 
 /* ================================================================= */
 
@@ -241,7 +203,8 @@ protected:
 
 		if (!hasMatchModuleOfInterest) {
 			for (auto filter : modulesOfInterest) {
-				if (stricmp(filter.c_str(), entry.moduleName) == 0) {
+				if (stricmp(filter.c_str(), entry.moduleName) ==
+				    0) {
 					hasMatchModuleOfInterest = true;
 
 					break;
@@ -264,6 +227,222 @@ static LPTOP_LEVEL_EXCEPTION_FILTER s_prevExceptionFilter = nullptr;
 static DWORD s_insideExceptionFilter = 0L;
 static std::string s_crashDumpFromObs;
 static std::string s_crashDumpFromStackWalker;
+
+static HWND hMessageWindow = NULL;
+
+static void CreateMessageWindow(bool hang)
+{
+	if (hMessageWindow)
+		return;
+
+	auto mainWindowHandle = (HWND)obs_frontend_get_main_window_handle();
+
+	if (!mainWindowHandle)
+		return;
+
+	RECT r;
+	GetWindowRect(mainWindowHandle, &r);
+
+	const int width = 600;
+	const int height = 85;
+	const int x = (r.left + r.right) / 2 - (width / 2);
+	const int y = (r.top + r.bottom) / 2 - (height / 2);
+
+	hMessageWindow = CreateWindowA(
+		"Button",
+		hang ? "Oops, something is not right. Please wait while a hang report is being prepared..."
+		     : "Oops, something is not right. Please wait while a crash report is being prepared...",
+		0, x, y, width, height, mainWindowHandle, NULL,
+		GetModuleHandle(0), NULL);
+
+	if (!hMessageWindow)
+		return;
+
+	SetWindowLong(hMessageWindow, GWL_STYLE, WS_VISIBLE);
+	SetWindowLong(hMessageWindow, GWL_EXSTYLE, WS_EX_TOPMOST);
+	EnableWindow(hMessageWindow, FALSE);
+	ShowWindow(hMessageWindow, SW_SHOWNORMAL);
+	UpdateWindow(hMessageWindow);
+}
+
+static void DestroyMessageWindow()
+{
+	if (!hMessageWindow)
+		return;
+
+	DestroyWindow(hMessageWindow);
+
+	hMessageWindow = NULL;
+}
+
+/* ================================================================= */
+
+LONG CALLBACK CustomExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo);
+
+static std::condition_variable s_eventHangDetectionStop;
+static std::mutex s_hangDetectionMutex;
+static std::shared_ptr<std::thread> s_threadHangDetection = nullptr;
+static bool s_isNotesSet = false;
+
+static void HangDetectionThread()
+{
+	bool isHanged = false;
+
+	while (true) {
+		{
+			std::unique_lock lock(s_hangDetectionMutex);
+			if (s_eventHangDetectionStop.wait_for(
+				    lock, std::chrono::milliseconds(1000)) ==
+			    std::cv_status::no_timeout) {
+				// We've been signalled to stop
+				break;
+			}
+		}
+
+		HWND hWnd = (HWND)obs_frontend_get_main_window_handle();
+
+		if (!hWnd)
+			continue;
+
+		if (!IsWindow(hWnd))
+			continue;
+
+		if (IsHungAppWindow(hWnd)) {
+			if (isHanged)
+				continue;
+
+			isHanged = true;
+
+			blog(LOG_ERROR,
+			     "[obs-streamelements-core]: main app window hang detected");
+
+			CreateMessageWindow(true);
+
+			std::wstring notes =
+					L"HANG on main app window detected";
+
+			auto asyncCallContextStack = GetAsyncCallContextStack();
+			if (asyncCallContextStack->size()) {
+				notes += L" ---- Asynchronous call context:";
+
+				for (auto item : *asyncCallContextStack) {
+					char buf[32];
+					notes += std::wstring(L" ---- ") +
+						 utf8_to_wstring(item->file)
+							 .c_str() +
+						 utf8_to_wstring(" (line: ") +
+						 utf8_to_wstring(itoa(
+							 item->line, buf, 10)) +
+						 L")\r\n";
+				}
+			}
+
+			// Set report parameters
+			s_mdSender->setDefaultUserDescription(
+				L"OBS main window appears to have stopped responding. Please provide any additional information you might have here. What were you doing just before this happened?");
+			s_mdSender->setNotes(
+				notes.c_str());
+
+			s_isNotesSet = true;
+
+			DWORD tid = GetWindowThreadProcessId(hWnd, NULL);
+			HANDLE hThread =
+				OpenThread(THREAD_ALL_ACCESS, TRUE, tid);
+			if (hThread != INVALID_HANDLE_VALUE) {
+				SuspendThread(hThread);
+
+				CONTEXT context;
+				context.ContextFlags = CONTEXT_FULL;
+
+				if (GetThreadContext(hThread,
+							&context)) {
+					EXCEPTION_RECORD
+					exceptionRecord = {};
+					exceptionRecord.ExceptionCode =
+						STATUS_HANG_DETECTED;
+					exceptionRecord.ExceptionFlags =
+						0;
+					exceptionRecord
+						.ExceptionAddress =
+						reinterpret_cast<void *>(
+							context.Rip);
+					exceptionRecord
+						.NumberParameters = 0;
+
+					EXCEPTION_POINTERS
+						exceptionPointers = {};
+					exceptionPointers
+						.ExceptionRecord =
+						&exceptionRecord;
+					exceptionPointers.ContextRecord =
+						&context;
+
+					s_mdSender->setMiniDumpType(
+						MiniDmpSender::BS_MINIDUMP_TYPE::
+							MiniDumpWithFullMemory);
+
+					s_mdSender->createReport(
+						&exceptionPointers);
+
+					DestroyMessageWindow();
+				} else {
+					s_mdSender->createReportAndExit();
+				}
+
+				CloseHandle(hThread);
+			}
+
+			abort();
+		} else {
+			isHanged = false;
+		}
+	}
+}
+
+static void StopHangDetection()
+{
+	{
+		std::lock_guard<decltype(s_hangDetectionMutex)> lock(
+			s_hangDetectionMutex);
+
+		if (!s_threadHangDetection.get())
+			return;
+	}
+
+	// Ask thread to stop
+	s_eventHangDetectionStop.notify_one();
+
+	s_threadHangDetection->join();
+	s_threadHangDetection = nullptr;
+}
+
+static void StartHangDetection()
+{
+	StopHangDetection();
+
+	std::lock_guard<decltype(s_hangDetectionMutex)> lock(
+		s_hangDetectionMutex);
+
+	s_threadHangDetection =
+		std::make_shared<std::thread>(HangDetectionThread);
+}
+
+/* ================================================================= */
+
+static config_t *obs_fe_global_config()
+{
+	auto config = StreamElementsConfig::GetInstance();
+
+	if (config) {
+		return config->GetObsGlobalConfig();
+	}
+
+	return nullptr;
+}
+
+/* ================================================================= */
+
+unsigned int s_maxRemainingLogFilesCount = 7;
 
 /* ================================================================= */
 
@@ -935,6 +1114,46 @@ static inline void AddObsConfigurationFiles()
 		}
 	}
 
+	auto asyncCallContextStack = GetAsyncCallContextStack();
+
+	if (asyncCallContextStack->size()) {
+		std::vector<std::string> lines;
+
+		lines.push_back("Asynchronous call context:");
+		lines.push_back("");
+
+		for (auto item : *asyncCallContextStack) {
+			char buf[32];
+			lines.push_back(
+				item->file.c_str() + std::string(" (line: ") +
+				std::string(itoa(item->line, buf, 10)) + ")");
+		}
+
+		addLinesBufferToZip(lines, L"async_context.txt");
+
+		// Fill in async call details notes
+
+		if (!s_isNotesSet) {
+			std::wstring notes = L"ASYNC";
+
+			notes += L" ---- Asynchronous call context:";
+
+			for (auto item : *asyncCallContextStack) {
+				char buf[32];
+				notes += std::wstring(L" ---- ") +
+					 utf8_to_wstring(item->file).c_str() +
+					 utf8_to_wstring(" (line: ") +
+					 utf8_to_wstring(
+						 itoa(item->line, buf, 10)) +
+					 L")\r\n";
+			}
+
+			s_mdSender->setNotes(notes.c_str());
+
+			s_isNotesSet = true;
+		}
+	}
+
 	zip_close(zip);
 
 	s_mdSender->sendAdditionalFile(wtempBufPath.c_str());
@@ -985,10 +1204,11 @@ static LONG CALLBACK CustomExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
 				     pExceptionInfo->ContextRecord);
 
 	if (InterlockedIncrement(&s_insideExceptionFilter) == 1L) {
-		s_mdSender->setFlags(
-			g_dwBugSplatBaseFlags); // Turn off hang detection so it doesn't pop up during minidump collection
+		// Turn off hang detection so it doesn't pop up during minidump collection
+		// s_mdSender->setFlags(g_dwBugSplatBaseFlags);
+		StopHangDetection();
 
-		CreateMessageWindow();
+		CreateMessageWindow(false);
 
 		if (s_mdSender && (s_stackWalker->hasMatchModuleOfInterest)) {
 			s_mdSender->unhandledExceptionHandler(pExceptionInfo);
@@ -999,7 +1219,9 @@ static LONG CALLBACK CustomExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
 			s_prevExceptionFilter(pExceptionInfo);
 		}
 
-		exit(-1);
+		// exit(-1); // <-- calling exit() may cause normal shutdown code to run, and we definitely do not want that in an exception handler
+		TerminateProcess(GetCurrentProcess(), 1);
+		abort();
 	}
 
 	InterlockedDecrement(&s_insideExceptionFilter);
@@ -1043,8 +1265,7 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
 					  StackWalker::RetrieveModuleInfo);
 
 	s_mdSender = new MiniDmpSender(L"OBS_Live", L"obs-streamelements-core",
-				       plugin_version.c_str(), app_id.c_str(),
-				       g_dwBugSplatBaseFlags | MDSF_DETECTHANGS);
+				       plugin_version.c_str(), app_id.c_str(), g_dwBugSplatBaseFlags /* | MDSF_DETECTHANGS*/);
 
 	// Enable full memory dumps
 	s_mdSender->setMiniDumpType(
@@ -1057,20 +1278,29 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
 	SetPerThreadCRTExceptionBehavior(); // This call needed in each thread of your app
 
 	// Set optional default values for user, email, and user description of the crash.
-	s_mdSender->setDefaultUserName(L"Anonymous");
-	s_mdSender->setDefaultUserEmail(L"");
+	//s_mdSender->setDefaultUserName(L"Anonymous");
+	//s_mdSender->setDefaultUserEmail(L"");
 	s_mdSender->setDefaultUserDescription(L"OBS crashed. Please provide any additional information you might have here. What were you doing just before this happened?");
 	s_mdSender->setGuardByteBufferSize(1024 * 1024); // Allocate 1MB of guard buffer
-	s_mdSender->setHangDetectionTimeout(30000);
+	//s_mdSender->setHangDetectionTimeout(30000);
 
 	s_mdSender->setCallback(BugSplatExceptionCallback);
 
 	s_prevExceptionFilter =
 		SetUnhandledExceptionFilter(CustomExceptionFilter);
+
+	StartHangDetection();
+}
+
+void StreamElementsCrashHandler::StopAsyncHangDetection()
+{
+	StopHangDetection();
 }
 
 StreamElementsCrashHandler::~StreamElementsCrashHandler()
 {
+	StopAsyncHangDetection();
+
 	if (s_prevExceptionFilter) {
 		// Unbind our exception filter
 		SetUnhandledExceptionFilter(s_prevExceptionFilter);

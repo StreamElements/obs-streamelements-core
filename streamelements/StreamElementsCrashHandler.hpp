@@ -4,5 +4,8 @@ class StreamElementsCrashHandler
 {
 public:
 	StreamElementsCrashHandler();
-    ~StreamElementsCrashHandler();
+	~StreamElementsCrashHandler();
+
+public:
+	void StopAsyncHangDetection();
 };
