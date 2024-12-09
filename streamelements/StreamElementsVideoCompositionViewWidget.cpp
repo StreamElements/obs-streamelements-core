@@ -38,7 +38,7 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 
 	auto pixelDensity = (double)view->devicePixelRatioF();
 
-	const float thickness = 20.0f * pixelDensity;
+	const float thickness = 8.0f * pixelDensity;
 
 	// Overflow box
 	m_bottomLayer.push_back(std::make_shared<SceneItemOverflowBox>(
@@ -78,27 +78,9 @@ StreamElementsVideoCompositionViewWidget::VisualElements::VisualElements(
 	m_topLayer.push_back(std::make_shared<SceneItemStretchControlPoint>(
 		view, scene, sceneItem, parentSceneItem, 1.0f, 0.5f, thickness, thickness));
 
-	//
-	// Calculate the distance of the rotation handle from the source in _source_ coordinates (0.0 - 1.0)
-	// We do this by calculating the scene item box final scale (ratio between world coordinates and source coordinates),
-	// and then dividing the rotation control point distance in world coordinates, by that ratio.
-	//
-	// We have to perform this complex transformation since control point coordinates are relative to the _source_
-	// coordinate system, but the visible distance is in _world_ coordinate space:
-	// this way we can supply the distance in the same coord space as the rest of the control points.
-	//
-	const float rotationDistance = 60.0f * pixelDensity;
-
-	auto scale = getSceneItemFinalBoxScale(sceneItem, parentSceneItem);
-
-	double scaledRotationDistance = rotationDistance /
-					minfunc(abs(scale.y), abs(scale.x)) /
-					view->m_worldScale.x;
-
 	// Rotation
 	m_topLayer.push_back(std::make_shared<SceneItemRotationControlPoint>(
-		view, scene, sceneItem, parentSceneItem, 0.5f,
-		0.0f - scaledRotationDistance,
+		view, scene, sceneItem, parentSceneItem,
 		thickness, thickness, topPoint));
 
 	// Drag Box
@@ -178,6 +160,9 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 				  viewWidth * worldWidth;
 	self->m_currMouseWorldY = (double)(self->m_currMouseWidgetY - viewY) /
 				  viewWidth * worldWidth;
+
+	vec2_set(&self->m_worldPixelDensity, worldWidth / viewWidth,
+		 worldHeight / viewHeight);
 
 	///////////////////////////////////////////
 

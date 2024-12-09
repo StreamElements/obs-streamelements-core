@@ -442,7 +442,7 @@ private:
 		vec2 targetPoint, sourcePoint;
 
 		const float snapDistance = config_get_double(
-			fe_config, "BasicWindow", "SnapDistance");
+			fe_config, "BasicWindow", "SnapDistance") * m_view->m_worldPixelDensity.x;
 
 		bool hasXSnapPoint, hasYSnapPoint;
 		if (!getClosestSnapPoint(selectedSceneItemsPoints, worldSnapPoints, snapDistance,
@@ -679,8 +679,8 @@ public:
 		bool altDown = (QGuiApplication::keyboardModifiers() &
 				Qt::AltModifier);
 
-		const double thickness = 4.0f * m_view->devicePixelRatioF() *
-					 fmax(m_view->m_worldScale.x, m_view->m_worldScale.y);
+		const double thickness = 1.0f * m_view->devicePixelRatioF() *
+					 fmax(m_view->m_worldPixelDensity.x, m_view->m_worldPixelDensity.y);
 
 		matrix4 transform, inv_transform;
 		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
@@ -753,6 +753,9 @@ public:
 
 	virtual bool SetMouseCursor(QCursor &cursor) override
 	{
+		if (!obs_sceneitem_selected(m_sceneItem))
+			return false;
+
 		if (m_isMouseOver || m_isDragging) {
 			cursor.setShape(Qt::SizeAllCursor);
 
@@ -831,6 +834,8 @@ public:
 	double m_y;
 	double m_width;
 	double m_height;
+	double m_pixelWidth;
+	double m_pixelHeight;
 
 	std::shared_ptr<SceneItemControlPoint> m_lineTo;
 
@@ -851,23 +856,28 @@ protected:
 		m_mousePosition =
 			getTransformedPosition(worldX, worldY, inv_transform);
 
-		auto boxScale = getSceneItemFinalBoxScale(m_sceneItem,
-							  m_parentSceneItem);
-
-		boxScale.x = fabsf(boxScale.x);
-		boxScale.y = fabsf(boxScale.y);
-
-		auto scaleFactor =
-			fmax(m_view->m_worldScale.x, m_view->m_worldScale.y);
-
-		auto x1 = m_x - (m_width / boxScale.x * scaleFactor / 2.0f);
-		auto x2 = m_x + (m_width / boxScale.x * scaleFactor / 2.0f);
-		auto y1 = m_y - (m_height / boxScale.y * scaleFactor / 2.0f);
-		auto y2 = m_y + (m_height / boxScale.y * scaleFactor / 2.0f);
+		auto x1 = m_x - (m_width / 2.0f);
+		auto x2 = m_x + (m_width / 2.0f);
+		auto y1 = m_y - (m_height / 2.0f);
+		auto y2 = m_y + (m_height / 2.0f);
 
 		m_isMouseOver =
 			(m_mousePosition.x >= x1 && m_mousePosition.x <= x2 &&
 			 m_mousePosition.y >= y1 && m_mousePosition.y <= y2);
+	}
+
+private:
+	void calcDimensions() {
+		auto screenPixelDensity = (double)m_view->devicePixelRatioF();
+
+		auto scale1ToDims = getSceneItemFinalBoxScale(
+			m_sceneItem, m_parentSceneItem);
+
+		m_width = fabs(1.0f / scale1ToDims.x * screenPixelDensity *
+			       m_pixelWidth * m_view->m_worldPixelDensity.x);
+
+		m_height = fabs(1.0f / scale1ToDims.y * screenPixelDensity *
+				m_pixelHeight * m_view->m_worldPixelDensity.y);
 	}
 
 public:
@@ -880,10 +890,13 @@ public:
 		: SceneItemControlBase(view, scene, sceneItem, parentSceneItem),
 		  m_x(x),
 		  m_y(y),
+		  m_pixelWidth(width),
+		  m_pixelHeight(height),
 		  m_width(width),
 		  m_height(height),
 		  m_lineTo(lineTo)
 	{
+		calcDimensions();
 	}
 
 	~SceneItemControlPoint() {}
@@ -893,6 +906,8 @@ public:
 		if (!obs_sceneitem_selected(m_sceneItem) ||
 		    obs_sceneitem_locked(m_sceneItem))
 			return;
+
+		calcDimensions();
 
 		QColor color((m_isMouseOver || m_isDragging)
 				     ? g_colorHover.get()
@@ -907,13 +922,10 @@ public:
 		boxScale.x = fabsf(boxScale.x);
 		boxScale.y = fabsf(boxScale.y);
 
-		auto scaleFactor =
-			fmax(m_view->m_worldScale.x, m_view->m_worldScale.y);
-
-		auto x1 = m_x - (m_width / boxScale.x * scaleFactor / 2.0f);
-		auto x2 = m_x + (m_width / boxScale.x * scaleFactor / 2.0f);
-		auto y1 = m_y - (m_height / boxScale.y * scaleFactor / 2.0f);
-		auto y2 = m_y + (m_height / boxScale.y * scaleFactor / 2.0f);
+		auto x1 = m_x - (m_width / 2.0f);
+		auto x2 = m_x + (m_width / 2.0f);
+		auto y1 = m_y - (m_height / 2.0f);
+		auto y2 = m_y + (m_height / 2.0f);
 
 		gs_matrix_push();
 		gs_matrix_mul(&transform);
@@ -921,10 +933,10 @@ public:
 		fillRect(x1, y1, x2, y2, color);
 
 		if (m_lineTo.get()) {
-			auto scaleFactor = fmax(m_view->m_worldScale.x,
-						m_view->m_worldScale.y);
+			auto scaleFactor = fmax(m_view->m_worldPixelDensity.x,
+						m_view->m_worldPixelDensity.y);
 
-			double thickness = 2.0f * m_view->devicePixelRatioF() *
+			double thickness = 1.0f * m_view->devicePixelRatioF() *
 					   scaleFactor;
 
 			drawLine(m_x, m_y, m_lineTo.get()->m_x,
@@ -940,12 +952,13 @@ public:
 	SceneItemRotationControlPoint(
 		StreamElementsVideoCompositionViewWidget *view,
 		obs_scene_t *scene, obs_sceneitem_t *sceneItem,
-		obs_sceneitem_t *parentSceneItem, double x, double y,
+		obs_sceneitem_t *parentSceneItem,
 		double width, double height,
 		std::shared_ptr<SceneItemControlPoint> lineTo)
 		: SceneItemControlPoint(view, scene, sceneItem,
-					parentSceneItem, x, y, width, height, lineTo)
+					parentSceneItem, lineTo->m_x, lineTo->m_y, width, height, lineTo)
 	{
+		calcDisplayPosition();
 	}
 
 	~SceneItemRotationControlPoint() {}
@@ -983,9 +996,29 @@ private:
 		vec2_copy(pos, &newPos);
 	}
 
+	void calcDisplayPosition() {
+		double screenRotationDistance = 15.0f;
+
+		auto screenPixelDensity = (double)m_view->devicePixelRatioF();
+
+		auto scale1ToDims = getSceneItemFinalBoxScale(
+			m_sceneItem, m_parentSceneItem);
+
+		auto rotationDistance =
+			(1.0f / scale1ToDims.y) * screenPixelDensity *
+			screenRotationDistance * m_view->m_worldPixelDensity.y;
+
+		if (scale1ToDims.y >= 0)
+			m_y = -rotationDistance;
+		else
+			m_y = rotationDistance;
+	}
+
 public:
 	virtual void Tick() override
 	{
+		calcDisplayPosition();
+
 		if (!m_isDragging)
 			return;
 
@@ -1179,6 +1212,9 @@ public:
 
 	virtual bool SetMouseCursor(QCursor &cursor) override
 	{
+		if (!obs_sceneitem_selected(m_sceneItem))
+			return false;
+
 		if (!m_isMouseOver && !m_isDragging) {
 			return false;
 		}

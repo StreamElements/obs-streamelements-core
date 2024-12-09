@@ -407,6 +407,7 @@ public: // Used by ControlPoint
 	bool m_mouseArmedForClickEvent = false;
 
 	vec2 m_worldScale = {1.0f, 1.0f};
+	vec2 m_worldPixelDensity = {1.0f, 1.0f};
 
 protected:
 
