@@ -136,7 +136,11 @@ private:
 
 	vec3 m_dragStartMouseParentPosition = {0, 0, 0};
 	vec2 m_dragStartSceneItemTranslatePos = {0, 0};
+
 	vec2 m_mouseWorldPosition = {0, 0};
+
+	vec3 m_dragStartMouseWorldPosition = {0, 0, 0};
+	vec3 m_dragStartTopLeftWorldPosition = {0, 0, 0};
 
 private:
 	void checkMouseOver(double worldX, double worldY)
@@ -403,28 +407,24 @@ private:
 		result.push_back(center);
 	}
 
-	void addSelectedSceneItemsWorldCoordsSnapPoints(std::vector<vec2>& result)
+	void addBoxCoordinatesSnapPoints(vec2 &tl, vec2 &br,
+					 std::vector<vec2> &result)
 	{
-		scanSceneItems(
-			m_scene,
-			[&](obs_sceneitem_t *sceneItem,
-			    obs_sceneitem_t *parentSceneItem) -> bool {
-				if (!obs_sceneitem_selected(sceneItem))
-					return true;
+		auto add = [&](double x, double y) {
+			vec2 v;
+			vec2_set(&v, x, y);
+			result.push_back(v);
+		};
 
-				if (obs_sceneitem_locked(sceneItem))
-					return true;
-
-				addSceneItemWorldPointsOfInterest(
-					sceneItem, parentSceneItem,
-					result);
-
-				return true;
-			},
-			true);
+		add(tl.x, tl.y);
+		add(br.x, tl.y);
+		add(br.x, br.y);
+		add(tl.x, br.y);
+		add((tl.x + br.x) / 2.0f, (tl.y + br.y) / 2.0f);
 	}
 
-	void getParentCoordsSnapOffset(vec2 &result, vec2 &snapWorldCoords) {
+	void getWorldCoordsSnapOffset(vec2 &box_tl, vec2 &box_tr, vec2 &result, vec2 &snapWorldCoords)
+	{
 		vec2_zero(&result);
 		vec2_set(&snapWorldCoords, -1.0f, -1.0f);
 
@@ -435,38 +435,32 @@ private:
 
 		std::vector<vec2> selectedSceneItemsPoints, worldSnapPoints;
 
-		addSelectedSceneItemsWorldCoordsSnapPoints(
+		addBoxCoordinatesSnapPoints(
+			box_tl, box_tr,
 			selectedSceneItemsPoints);
 		addWorldSnapPoints(worldSnapPoints);
 
 		vec2 targetPoint, sourcePoint;
 
-		const float snapDistance = config_get_double(
-			fe_config, "BasicWindow", "SnapDistance") * m_view->m_worldPixelDensity.x;
+		const float snapDistance = config_get_double(fe_config,
+							     "BasicWindow",
+							     "SnapDistance") *
+					   m_view->m_worldPixelDensity.x;
 
 		bool hasXSnapPoint, hasYSnapPoint;
-		if (!getClosestSnapPoint(selectedSceneItemsPoints, worldSnapPoints, snapDistance,
+		if (!getClosestSnapPoint(selectedSceneItemsPoints,
+					 worldSnapPoints, snapDistance,
 					 targetPoint, sourcePoint,
 					 hasXSnapPoint, hasYSnapPoint))
 			return;
-
-		matrix4 parentTransform, parentInvTransform;
-
-		getSceneItemParentDrawTransformMatrices(m_sceneItem,
-							m_parentSceneItem,
-							&parentTransform,
-							&parentInvTransform);
-
-		auto parentSourcePoint = getTransformedPosition(
-			sourcePoint.x, sourcePoint.y, parentInvTransform);
-		auto parentTargetPoint = getTransformedPosition(
-			targetPoint.x, targetPoint.y, parentInvTransform);
 
 		if (hasXSnapPoint) {
 			//result.x = parentTargetPoint.x - parentSourcePoint.x;
 			result.x = targetPoint.x - sourcePoint.x;
 
 			snapWorldCoords.x = targetPoint.x;
+
+			m_rulersX.push_back(targetPoint.x);
 		}
 
 		if (hasYSnapPoint) {
@@ -474,6 +468,8 @@ private:
 			result.y = targetPoint.y - sourcePoint.y;
 
 			snapWorldCoords.y = targetPoint.y;
+
+			m_rulersY.push_back(targetPoint.y);
 		}
 
 		/*
@@ -482,6 +478,76 @@ private:
 			m_rulersY.push_back(point.y);
 		}
 		*/
+	}
+
+	void
+		getSelectedSceneItemsWorldCoordsTopLeftPosition(vec3 *result)
+	{
+		vec2 tl, br;
+		getSelectedSceneItemsWorldCoordsBox(&tl, &br);
+
+		vec3_set(result, tl.x, tl.y, 0.0f);
+	}
+
+	bool getSelectedSceneItemsWorldCoordsBox(vec2* tl, vec2* br) {
+		bool isFirst = true;
+
+		vec2_set(tl, m_view->m_worldDimensions.x,
+			 m_view->m_worldDimensions.y);
+		vec2_set(br, 0.0f, 0.0f);
+
+		scanSceneItems(
+			m_scene,
+			[&](obs_sceneitem_t *sceneItem,
+			    obs_sceneitem_t *parentSceneItem) -> bool {
+				if (obs_sceneitem_locked(sceneItem) ||
+				    !obs_sceneitem_selected(sceneItem))
+					return true;
+
+				matrix4 transform, inv_transform;
+				getSceneItemBoxTransformMatrices(
+					sceneItem, parentSceneItem, &transform,
+					&inv_transform);
+
+				auto check = [&](double x, double y) {
+					auto pos = getTransformedPosition(
+						x, y,
+						transform); // To world coords				
+
+					if (isFirst || pos.x < tl->x)
+						tl->x = pos.x;
+					if (isFirst || pos.y < tl->y)
+						tl->y = pos.y;
+					if (isFirst || pos.x > br->x)
+						br->x = pos.x;
+					if (isFirst || pos.y > br->y)
+						br->y = pos.y;
+
+					isFirst = false;
+				};
+
+				check(0.0f, 0.0f);
+				check(1.0f, 0.0f);
+				check(1.0f, 1.0f);
+				check(0.0f, 1.0f);
+
+				return true;
+			},
+			true);
+
+		if (tl->x > br->x) {
+			auto tmp = br->x;
+			br->x = tl->x;
+			tl->x = tmp;
+		}
+
+		if (tl->y > br->y) {
+			auto tmp = br->y;
+			br->y = tl->y;
+			tl->y = tmp;
+		}
+
+		return !isFirst;
 	}
 
 public:
@@ -524,59 +590,99 @@ public:
 			return false;
 
 		// Actual dragging here
-		matrix4 parentTransform, parentInvTransform;
+		vec2 worldMoveOffset;
+		vec2_set(&worldMoveOffset,
+			 m_mouseWorldPosition.x -
+				 m_dragStartMouseWorldPosition.x,
+			 m_mouseWorldPosition.y -
+				 m_dragStartMouseWorldPosition.y);
 
-		getSceneItemParentDrawTransformMatrices(m_sceneItem,
-							m_parentSceneItem,
-							&parentTransform,
-							&parentInvTransform);
+		vec2 box_tl, box_br;
+		if (!getSelectedSceneItemsWorldCoordsBox(&box_tl, &box_br))
+			return true;
 
-		auto currMouseParentPosition = getTransformedPosition(
-			m_mouseWorldPosition.x, m_mouseWorldPosition.y,
-			parentInvTransform);
+		auto box_width = box_br.x - box_tl.x;
+		auto box_height = box_br.y - box_tl.y;
 
-		vec2 moveOffset;
-		vec2_set(&moveOffset,
-			 currMouseParentPosition.x -
-				 m_dragStartMouseParentPosition.x,
-			 currMouseParentPosition.y -
-				 m_dragStartMouseParentPosition.y);
-
-		vec2 newPos;
-		vec2_set(&newPos,
-			 m_dragStartSceneItemTranslatePos.x + moveOffset.x,
-			 m_dragStartSceneItemTranslatePos.y + moveOffset.y);
-
-		obs_sceneitem_set_pos(m_sceneItem, &newPos);
+		vec2 dst_box_tl, dst_box_br;
+		vec2_set(&dst_box_tl,
+			 m_dragStartTopLeftWorldPosition.x + worldMoveOffset.x,
+			 m_dragStartTopLeftWorldPosition.y + worldMoveOffset.y);
+		vec2_set(&dst_box_br,
+			 m_dragStartTopLeftWorldPosition.x + box_width +
+				 worldMoveOffset.x,
+			 m_dragStartTopLeftWorldPosition.y + box_height +
+				 worldMoveOffset.y);
 
 		if (!(QGuiApplication::keyboardModifiers() &
 		      Qt::ControlModifier)) {
-			// TODO: Somewhere in the future, we want to make sure that child items coordinates
-			//       are treated properly. The current state is jumpy, so we'll disable snapping
-			//       for group child items until we can properly figure out why is it not behaving
-			//       100% properly.
-			if (!m_parentSceneItem) {
-				// SNAP
-				vec2 snapParentMoveOffset, snapWorldCoords;
-				getParentCoordsSnapOffset(snapParentMoveOffset,
-							  snapWorldCoords);
+			// SNAP
+			vec2 snapMoveOffset, snapWorldCoords;
+			getWorldCoordsSnapOffset(dst_box_tl, dst_box_br,
+						 snapMoveOffset,
+						 snapWorldCoords);
 
-				newPos.x += snapParentMoveOffset.x;
-				newPos.y += snapParentMoveOffset.y;
-
-				obs_sceneitem_set_pos(m_sceneItem, &newPos);
-
-				if (snapWorldCoords.x >= 0) {
-					//m_rulersX.push_back(snapWorldCoords.x);
-				}
-
-				if (snapWorldCoords.y >= 0) {
-					//m_rulersY.push_back(snapWorldCoords.x);
-				}
-			}
+			dst_box_tl.x += snapMoveOffset.x;
+			dst_box_br.x += snapMoveOffset.x;
+			dst_box_tl.y += snapMoveOffset.y;
+			dst_box_br.y += snapMoveOffset.y;
 		}
 
-		return false;
+		// Apply movement to all the selected scene items
+		scanSceneItems(
+			m_scene,
+			[&](obs_sceneitem_t *sceneItem,
+			    obs_sceneitem_t *parentSceneItem) -> bool {
+				if (obs_sceneitem_locked(sceneItem) ||
+				    !obs_sceneitem_selected(sceneItem))
+					return true;
+
+				vec2 move_delta;
+
+				// Calculate move delta, applying parent transformation if necessary
+				if (parentSceneItem) {
+					matrix4 parentTransform,
+						invParentTransform;
+					obs_sceneitem_get_draw_transform(
+						parentSceneItem,
+						&parentTransform);
+
+					matrix4_inv(&invParentTransform,
+						    &parentTransform);
+
+					vec3 parent_box_tl =
+						getTransformedPosition(
+							box_tl.x, box_tl.y,
+							invParentTransform);
+
+					vec3 parent_dst_box_tl =
+						getTransformedPosition(
+							dst_box_tl.x,
+							dst_box_tl.y,
+							invParentTransform);
+
+					vec2_set(&move_delta,
+						 parent_dst_box_tl.x -
+							 parent_box_tl.x,
+						 parent_dst_box_tl.y -
+							 parent_box_tl.y);
+				} else {
+					vec2_set(&move_delta,
+						 dst_box_tl.x - box_tl.x,
+						 dst_box_tl.y - box_tl.y);
+				}
+
+				vec2 pos;
+				obs_sceneitem_get_pos(sceneItem, &pos);
+				pos.x += move_delta.x;
+				pos.y += move_delta.y;
+				obs_sceneitem_set_pos(sceneItem, &pos);
+
+				return true;
+			},
+			true);
+
+		return true;
 	}
 
 	virtual bool HandleMouseUp(QMouseEvent *event, double worldX,
@@ -650,6 +756,15 @@ public:
 				true);
 
 			// Begin drag and select the scene item if it hasn't been selected yet
+			{
+				vec3_set(&m_dragStartMouseWorldPosition, worldX,
+					 worldY, 0.0f);
+
+				getSelectedSceneItemsWorldCoordsTopLeftPosition(
+					&m_dragStartTopLeftWorldPosition);
+			}
+
+
 			matrix4 parentTransform, parentInvTransform;
 
 			getSceneItemParentDrawTransformMatrices(
@@ -672,6 +787,35 @@ public:
 
 	virtual void Draw() override
 	{
+		if (m_isDragging) {
+			vec2 box_tl, box_br;
+			if (getSelectedSceneItemsWorldCoordsBox(&box_tl,
+								&box_br)) {
+				QColor boxColor = g_colorSelection.get();
+
+				boxColor.setAlpha(50);
+
+				const double thickness =
+					1.0f * m_view->devicePixelRatioF() *
+					fmax(m_view->m_worldPixelDensity.x,
+					     m_view->m_worldPixelDensity.y);
+
+				drawLine(box_tl.x, box_tl.y, box_br.x,
+						box_tl.y, thickness,
+						boxColor);
+				drawLine(box_br.x, box_tl.y, box_br.x,
+						box_br.y, thickness,
+						boxColor);
+				drawLine(box_tl.x, box_br.y, box_br.x,
+						box_br.y, thickness,
+						boxColor);
+				drawLine(box_tl.x, box_tl.y, box_tl.x,
+						box_br.y, thickness,
+						boxColor);
+			}
+		}
+
+
 		QColor color;
 
 		bool isSelected = obs_sceneitem_selected(m_sceneItem);

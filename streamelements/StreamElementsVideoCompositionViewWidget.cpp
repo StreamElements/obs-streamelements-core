@@ -110,6 +110,8 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 
 	videoCompositionInfo->GetVideoBaseDimensions(&worldWidth, &worldHeight);
 
+	vec2_set(&self->m_worldDimensions, worldWidth, worldHeight);
+
 	double viewX, viewY, viewWidth, viewHeight;
 	calculateVideoViewportPositionAndSize(self, worldWidth, worldHeight,
 					      viewportWidth, viewportHeight,
@@ -280,15 +282,19 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 	// Draw rulers
 	vec2 boxScale;
 	vec2_set(&boxScale, worldWidth, worldHeight);
-	const double thickness = 2.0f;
 
-	QColor rulerColor(125, 125, 125);
+	QColor rulerColor(150, 150, 150);
+	
 
 	for (auto x : m_view->m_worldVerticalRulersX) {
+		const double thickness = 1.0f * m_view->m_worldPixelDensity.x;
+
 		drawLine(x, 0.0f, x, worldHeight, thickness, rulerColor);
 	}
 
 	for (auto y : m_view->m_worldHorizontalRulersY) {
+		const double thickness = 1.0f * m_view->m_worldPixelDensity.y;
+
 		drawLine(0.0f, y, worldWidth, y, thickness, rulerColor);
 	}
 

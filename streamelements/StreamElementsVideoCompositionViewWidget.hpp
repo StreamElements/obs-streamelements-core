@@ -408,6 +408,7 @@ public: // Used by ControlPoint
 
 	vec2 m_worldScale = {1.0f, 1.0f};
 	vec2 m_worldPixelDensity = {1.0f, 1.0f};
+	vec2 m_worldDimensions = {0.0f, 0.0f};
 
 protected:
 
