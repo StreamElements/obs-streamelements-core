@@ -1,5 +1,6 @@
 #include "HttpServer.hpp"
 
+#include <QApplication>
 
 HttpServer::HttpServer(request_handler_t requestHandler) : m_requestHandler(requestHandler)
 {
@@ -75,6 +76,12 @@ int HttpServer::Start(int bindToPort /*= 0*/,
 	m_running = true;
 
 	m_thread = std::thread([this]() {
+		//m_server.set_read_timeout(0, 0);
+		//m_server.set_write_timeout(0, 0);
+		//m_server.set_idle_interval(0, 0);
+		m_server.set_keep_alive_timeout(1);
+		m_server.set_keep_alive_max_count(15);
+
 		m_server.listen_after_bind();
 
 		m_running = false;
