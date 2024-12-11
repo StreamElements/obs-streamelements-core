@@ -288,6 +288,12 @@ static void HangDetectionThread()
 {
 	bool isHanged = false;
 
+	int consecutiveHangDetectionsCount = 0;
+
+	const int MIN_CONSECUTIVE_HANG_DETECTIONS = 20;
+
+	std::time_t startTimestamp = std::time(nullptr);
+
 	while (true) {
 		{
 			std::unique_lock lock(s_hangDetectionMutex);
@@ -308,6 +314,13 @@ static void HangDetectionThread()
 			continue;
 
 		if (IsHungAppWindow(hWnd)) {
+			++consecutiveHangDetectionsCount;
+		} else {
+			consecutiveHangDetectionsCount = 0;
+		}
+
+		if (consecutiveHangDetectionsCount >=
+		    MIN_CONSECUTIVE_HANG_DETECTIONS) {
 			if (isHanged)
 				continue;
 
@@ -318,11 +331,19 @@ static void HangDetectionThread()
 
 			CreateMessageWindow(true);
 
+			std::time_t hangTimestamp = std::time(nullptr);
+			auto secondsSinceStartup = unsigned long(std::chrono::seconds(hangTimestamp - startTimestamp).count());
+			wchar_t secondsSinceStartupString[64];
+			wsprintf(secondsSinceStartupString, L"%lu",
+				 secondsSinceStartup);
+
 			std::wstring notes =
-					L"HANG on main app window detected";
+				L"HANG on main app window detected " +
+				std::wstring(secondsSinceStartupString) + L" seconds since startup";
 
 			auto asyncCallContextStack = GetAsyncCallContextStack();
 			if (asyncCallContextStack->size()) {
+
 				notes += L" ---- Asynchronous call context:";
 
 				for (auto item : *asyncCallContextStack) {
