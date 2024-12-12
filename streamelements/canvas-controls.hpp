@@ -575,6 +575,92 @@ public:
 
 	}
 
+	virtual bool HandleKeyPressEvent(QKeyEvent *event)
+	{
+		if (obs_sceneitem_locked(m_sceneItem) || !obs_sceneitem_selected(m_sceneItem))
+			return false;
+
+		float step = 1.0f;
+
+		if (QGuiApplication::keyboardModifiers() & Qt::ShiftModifier) {
+			step = 10.0f;
+		}
+
+		float moveX = 0.0f;
+		float moveY = 0.0f;
+
+		switch (event->key()) {
+		case Qt::Key_Left:
+			moveX = -step;
+			break;
+		case Qt::Key_Right:
+			moveX = step;
+			break;
+		case Qt::Key_Up:
+			moveY = -step;
+			break;
+		case Qt::Key_Down:
+			moveY = step;
+			break;
+		default:
+			return false;
+		}
+
+		// Apply movement to all the selected scene items
+		scanSceneItems(
+			m_scene,
+			[&](obs_sceneitem_t *sceneItem,
+			    obs_sceneitem_t *parentSceneItem) -> bool {
+				if (obs_sceneitem_locked(sceneItem) ||
+				    !obs_sceneitem_selected(sceneItem))
+					return true;
+
+				vec2 move_delta;
+
+				// Calculate move delta, applying parent transformation if necessary
+				if (parentSceneItem) {
+					matrix4 parentTransform,
+						invParentTransform;
+					obs_sceneitem_get_draw_transform(
+						parentSceneItem,
+						&parentTransform);
+
+					matrix4_inv(&invParentTransform,
+						    &parentTransform);
+
+					vec3 parent_box_tl =
+						getTransformedPosition(
+							0.0f, 0.0f,
+							invParentTransform);
+
+					vec3 parent_dst_box_tl =
+						getTransformedPosition(
+							moveX,
+							moveY,
+							invParentTransform);
+
+					vec2_set(&move_delta,
+						 parent_dst_box_tl.x -
+							 parent_box_tl.x,
+						 parent_dst_box_tl.y -
+							 parent_box_tl.y);
+				} else {
+					vec2_set(&move_delta, moveX, moveY);
+				}
+
+				vec2 pos;
+				obs_sceneitem_get_pos(sceneItem, &pos);
+				pos.x += move_delta.x;
+				pos.y += move_delta.y;
+				obs_sceneitem_set_pos(sceneItem, &pos);
+
+				return true;
+			},
+			true);
+
+		return true;
+	}
+
 	virtual bool HandleMouseMove(QMouseEvent *event, double worldX,
 				     double worldY) override
 	{
@@ -879,7 +965,7 @@ public:
 			else
 				drawLine(1.0f, 0.0f, 1.0f, 1.0f, thickness,
 					 boxScale, color);
-		} else if (m_isMouseOver) {
+		} else if (m_isMouseOver && m_view->m_currUnderMouse) {
 			auto color = g_colorHover.get();
 
 			drawLine(0.0f, 0.0f, 1.0f, 0.0f, thickness, boxScale,

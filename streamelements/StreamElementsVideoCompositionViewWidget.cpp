@@ -326,6 +326,40 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 	*/
 
 	endProjectionRegion();
+
+	//
+	// Lets paint our focus / hover state here
+	//
+
+	QColor color(0, 0, 0, 0);
+
+	if (self->hasFocus())
+		color = g_colorSelection.get();
+	else if (self->m_currUnderMouse)
+		color = g_colorHover.get();
+
+	if (color.alpha() != 0) {
+		startProjectionRegion(0, 0, viewportWidth, viewportHeight, 0.0f,
+				      0.0f, viewportWidth, viewportHeight);
+
+		vec3 size;
+		vec3_set(&size, viewportWidth, viewportHeight, 1.0f);
+		gs_matrix_push();
+		gs_matrix_scale(&size);
+
+		vec2 scale;
+		vec2_set(&scale, viewportWidth, viewportHeight);
+
+		double thickness = 1.5f;
+		drawLine(0.0f, 0.0f, 1.0f, 0.0f, thickness, scale, color);
+		drawLine(0.0f, 1.0f, 1.0f, 1.0f, thickness, scale, color);
+		drawLine(0.0f, 0.0f, 0.0f, 1.0f, thickness, scale, color);
+		drawLine(1.0f, 0.0f, 1.0f, 1.0f, thickness, scale, color);
+
+		gs_matrix_pop();
+
+		endProjectionRegion();
+	}
 }
 
 static inline QSize GetPixelSize(QWidget *widget)
@@ -366,7 +400,7 @@ static bool QTToGSWindow(QWindow *window, gs_window &gswindow)
 }
 
 StreamElementsVideoCompositionViewWidget::StreamElementsVideoCompositionViewWidget(
-	QWidget* parent,
+	QWidget *parent,
 	std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition)
 	: m_videoComposition(videoComposition),
 	  QWidget(parent),
@@ -378,6 +412,8 @@ StreamElementsVideoCompositionViewWidget::StreamElementsVideoCompositionViewWidg
 	setAttribute(Qt::WA_OpaquePaintEvent);
 	setAttribute(Qt::WA_DontCreateNativeAncestors);
 	setAttribute(Qt::WA_NativeWindow);
+
+	setFocusPolicy(Qt::ClickFocus);
 
 	setMouseTracking(true);
 
@@ -603,6 +639,12 @@ void StreamElementsVideoCompositionViewWidget::viewportToWorldCoords(
 
 	*worldX = (uint32_t)((double)viewportX / widthRatio);
 	*worldY = (uint32_t)((double)viewportY / heightRatio);
+}
+
+void StreamElementsVideoCompositionViewWidget::keyPressEvent(
+	QKeyEvent* event)
+{
+	m_visualElementsState.HandleKeyPressEvent(event);
 }
 
 void StreamElementsVideoCompositionViewWidget::mouseMoveEvent(QMouseEvent *event)

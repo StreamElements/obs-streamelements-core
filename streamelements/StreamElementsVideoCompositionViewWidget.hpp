@@ -34,6 +34,8 @@ public:
 		virtual bool HandleMouseClick(QMouseEvent *event, double worldX, double worldY) { return false; }
 		virtual bool HandleMouseMove(QMouseEvent *event, double worldX, double worldY) { return false; }
 
+		virtual bool HandleKeyPressEvent(QKeyEvent *event) { return false; }
+
 		virtual bool SetMouseCursor(QCursor &cursor) { return false; }
 			
 	};
@@ -134,6 +136,16 @@ public:
 			for (auto element : m_topLayer) {
 				if (element->HandleMouseMove(event, worldX,
 							     worldY))
+					return true;
+			}
+
+			return false;
+		}
+
+		bool HandleKeyPressEvent(QKeyEvent* event)
+		{
+			for (auto element : m_topLayer) {
+				if (element->HandleKeyPressEvent(event))
 					return true;
 			}
 
@@ -326,6 +338,18 @@ public:
 				},
 				false, false);
 		}
+
+		bool HandleKeyPressEvent(QKeyEvent* event)
+		{
+			return ExecProcessingOrder(
+				[&](obs_sceneitem_t *sceneItem) -> bool {
+					return m_sceneItemsVisualElementsMap
+						[sceneItem]
+							->HandleKeyPressEvent(
+								event);
+				},
+				true, true);
+		}
 	};
 
 private:
@@ -433,6 +457,7 @@ protected:
 		viewportToWorldCoords(event->localPos(), worldX, worldY);
 	}
 
+	virtual void keyPressEvent(QKeyEvent *event) override;
 	virtual void mouseMoveEvent(QMouseEvent *event) override;
 	virtual void mousePressEvent(QMouseEvent *event) override;
 	virtual void mouseReleaseEvent(QMouseEvent *event) override;
