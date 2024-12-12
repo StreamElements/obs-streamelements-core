@@ -3976,8 +3976,11 @@ CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e)
 		result->SetNull("codec");
 
 	if (obs_encoder_get_type(e) == OBS_ENCODER_VIDEO) {
-		result->SetInt("width", obs_encoder_get_width(e));
-		result->SetInt("height", obs_encoder_get_height(e));
+		if (obs_encoder_parent_video(e) ||
+		    obs_encoder_scaling_enabled(e)) {
+			result->SetInt("width", obs_encoder_get_width(e));
+			result->SetInt("height", obs_encoder_get_height(e));
+		}
 	}
 
 	auto settings = obs_encoder_get_settings(e);

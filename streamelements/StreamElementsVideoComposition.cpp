@@ -792,6 +792,13 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	if (!m_streamingVideoEncoder)
 		throw std::exception("obs_video_encoder_create() failed", 2);
 
+	//
+	// This will prevent obs_encoder_get_width & obs_encoder_get_height from crashing due to video output being improperly initialized for SOME REASON
+	// https://app.bugsplat.com/v2/crash?database=OBS_Live&id=1488897
+	//
+	obs_encoder_set_scaled_size(m_streamingVideoEncoder, m_baseWidth,
+				    m_baseHeight);
+
 	m_transition = obs_source_create_private(
 		"cut_transition", (name + ": transition").c_str(), nullptr);
 
@@ -876,6 +883,15 @@ void StreamElementsCustomVideoComposition::SetRecordingEncoder(
 		recordingVideoEncoderId.c_str(),
 		(GetName() + ": recording video encoder").c_str(),
 		recordingVideoEncoderSettings, recordingVideoEncoderHotkeyData);
+
+	//
+	// This will prevent obs_encoder_get_width & obs_encoder_get_height from crashing due to video output being improperly initialized for SOME REASON
+	// https://app.bugsplat.com/v2/crash?database=OBS_Live&id=1488897
+	//
+	obs_encoder_set_scaled_size(m_recordingVideoEncoder, m_baseWidth,
+				    m_baseHeight);
+
+	obs_encoder_set_video(m_recordingVideoEncoder, m_video);
 }
 
 StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
