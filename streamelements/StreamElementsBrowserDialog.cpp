@@ -157,7 +157,9 @@ StreamElementsBrowserDialog::StreamElementsBrowserDialog(
 	bool isIncognito, std::string containerType)
 	: QDialog(parent), m_url(url), m_executeJavaScriptOnLoad(executeJavaScriptOnLoad), m_isIncognito(isIncognito)
 {
+	setContentsMargins(0, 0, 0, 0);
 	setLayout(new QVBoxLayout());
+	layout()->setContentsMargins(0, 0, 0, 0);
 
 	this->setWindowFlags((
 		(windowFlags() | Qt::CustomizeWindowHint)

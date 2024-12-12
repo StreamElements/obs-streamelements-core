@@ -1228,7 +1228,20 @@ bool StreamElementsGlobalStateManager::DeserializeModalDialog(
 				d->GetString("title").ToString().c_str()));
 		}
 
-		dialog.setFixedSize(width, height);
+		if (d->HasKey("isResizable") &&
+		    d->GetType("isResizable") == VTYPE_BOOL &&
+		    d->GetBool("isResizable")) {
+			auto savedMaxSize = dialog.maximumSize();
+
+			dialog.setFixedSize(width, height);
+
+			QApplication::sendPostedEvents();
+
+			dialog.setMinimumSize(width, height);
+			dialog.setMaximumSize(savedMaxSize);
+		} else {
+			dialog.setFixedSize(width, height);
+		}
 
 		if (dialog.exec() == QDialog::Accepted) {
 			output =
@@ -1436,7 +1449,20 @@ std::shared_ptr<std::promise<CefRefPtr<CefValue>>> StreamElementsGlobalStateMana
 				d->GetString("title").ToString().c_str()));
 		}
 
-		dialog->setFixedSize(width, height);
+		if (d->HasKey("isResizable") &&
+		    d->GetType("isResizable") == VTYPE_BOOL &&
+		    d->GetBool("isResizable")) {
+			auto savedMaxSize = dialog->maximumSize();
+
+			dialog->setFixedSize(width, height);
+
+			QApplication::sendPostedEvents();
+
+			dialog->setMinimumSize(width, height);
+			dialog->setMaximumSize(savedMaxSize);
+		} else {
+			dialog->setFixedSize(width, height);
+		}
 
 		m_nonModalDialogs[id] = dialog;
 

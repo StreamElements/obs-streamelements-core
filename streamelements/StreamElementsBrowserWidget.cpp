@@ -226,7 +226,9 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 	//setMinimumWidth(200);
 	//setMinimumHeight(200);
 
+	setContentsMargins(0, 0, 0, 0);
 	setLayout(new QVBoxLayout());
+	layout()->setContentsMargins(0, 0, 0, 0);
 
 	QSizePolicy policy;
 	policy.setHorizontalPolicy(QSizePolicy::MinimumExpanding);
