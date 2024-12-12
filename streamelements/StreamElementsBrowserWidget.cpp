@@ -375,9 +375,10 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 	script += "	window.addEventListener('keydown', e => {\n";
 	script += "		if (e.repeat) return;\n";
 	script += "		const key = parseKeyEvent(e);\n";
+	script += "		const keyId = key.description || key.keySymbol;\n";
 	script +=
-		"		if (key.description == pressed) return;\n";
-	script += "		pressed = key.description;\n";
+		"		if (keyId == pressed) return;\n";
+	script += "		pressed = keyId;\n";
 	script +=
 		"		window.dispatchEvent(new CustomEvent('hostContainerKeyCombinationPressed', { detail: key }));\n";
 	script += "	});\n";
