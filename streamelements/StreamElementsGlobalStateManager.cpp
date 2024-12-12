@@ -313,6 +313,11 @@ void StreamElementsGlobalStateManager::Destroy()
 	s_instance = nullptr;
 }
 
+bool StreamElementsGlobalStateManager::IsInstanceAvailable()
+{
+	return (!!s_instance.get());
+}
+
 
 #include <QWindow>
 #include <QObjectList>

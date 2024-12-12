@@ -27,11 +27,25 @@ const char *MSG_BIND_JAVASCRIPT_FUNCTIONS =
 const char *MSG_BIND_JAVASCRIPT_PROPS =
 	"CefRenderProcessHandler::BindJavaScriptProperties";
 
+static bool IsPluginInitialized()
+{
+	if (!obs_initialized())
+		return false;
+
+	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+		return false;
+
+	if (!StreamElementsGlobalStateManager::GetInstance()->IsInitialized())
+		return false;
+
+	return true;
+}
+
 bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 	std::string source, CefRefPtr<CefProcessMessage> message,
 	const long cefClientId)
 {
-	if (!StreamElementsGlobalStateManager::GetInstance()->IsInitialized())
+	if (!IsPluginInitialized())
 		return true;
 
 	const std::string &name = message->GetName();
@@ -95,6 +109,18 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 			context->cefClientId = cefClientId;
 			context->source = source;
 			context->complete = [context]() {
+				if (!IsPluginInitialized()) {
+					blog(LOG_ERROR,
+					     "obs-streamelements-core[%s]: API: plugin is no longer initialized while completing call to '%s', callback id %d",
+					     context->target.c_str(),
+					     context->id.c_str(),
+					     context->cef_app_callback_id);
+
+					delete context;
+
+					return;
+				}
+
 				if (IsTraceLogLevel()) {
 					blog(LOG_INFO,
 					     "obs-streamelements-core[%s]: API: completed call to '%s', callback id %d",
@@ -154,10 +180,14 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 
 			QtPostTask (
 				[context]() -> void {
-					if (!StreamElementsGlobalStateManager::
-						GetInstance()
-						->IsInitialized())
+					if (!IsPluginInitialized())
 					{
+						blog(LOG_ERROR,
+						     "obs-streamelements-core[%s]: API: plugin is no longer initialized while performing call to '%s', callback id %d",
+						     context->target.c_str(),
+						     context->id.c_str(),
+						     context->cef_app_callback_id);
+
 						context->complete();
 						return;
 					}

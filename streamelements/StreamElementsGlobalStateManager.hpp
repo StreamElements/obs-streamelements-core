@@ -80,7 +80,8 @@ public:
 
 public:
 	static std::shared_ptr<StreamElementsGlobalStateManager> GetInstance();
-	static void  Destroy();
+	static void Destroy();
+	static bool IsInstanceAvailable();
 
 public:
 	enum UiModifier { Default = 0, OnBoarding = 1, Import = 2 };
