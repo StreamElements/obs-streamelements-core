@@ -1212,44 +1212,35 @@ void remove_scene_signals(obs_scene_t *scene, SESignalHandlerData *data)
 		return;
 
 	obs_enter_graphics();
-	obs_scene_atomic_update(
-		scene,
-		[](void *data, obs_scene_t *scene) {
-			obs_source_t *source = obs_scene_get_source(scene);
 
-			if (!source)
-				return;
+	obs_source_t *source = obs_scene_get_source(scene);
 
-			auto handler = obs_source_get_signal_handler(source);
+	if (source) {
+		auto handler = obs_source_get_signal_handler(source);
 
-			signal_handler_disconnect(handler, "item_add",
-						  handle_scene_item_add, data);
-			signal_handler_disconnect(handler, "item_remove",
-						  handle_scene_item_remove,
-						  data);
-			signal_handler_disconnect(handler, "reorder",
-						  handle_scene_item_reorder,
-						  data);
-			signal_handler_disconnect(handler, "item_visible",
-						  dispatch_scene_update, data);
-			signal_handler_disconnect(handler, "item_locked",
-						  dispatch_scene_update, data);
-			signal_handler_disconnect(handler, "item_select",
-						  handle_scene_item_select,
-						  data);
-			signal_handler_disconnect(handler, "item_deselect",
-						  handle_scene_item_deselect,
-						  data);
-			signal_handler_disconnect(handler, "item_transform",
-						  handle_scene_item_transform,
-						  data);
+		signal_handler_disconnect(handler, "item_add",
+					  handle_scene_item_add, data);
+		signal_handler_disconnect(handler, "item_remove",
+					  handle_scene_item_remove, data);
+		signal_handler_disconnect(handler, "reorder",
+					  handle_scene_item_reorder, data);
+		signal_handler_disconnect(handler, "item_visible",
+					  dispatch_scene_update, data);
+		signal_handler_disconnect(handler, "item_locked",
+					  dispatch_scene_update, data);
+		signal_handler_disconnect(handler, "item_select",
+					  handle_scene_item_select, data);
+		signal_handler_disconnect(handler, "item_deselect",
+					  handle_scene_item_deselect, data);
+		signal_handler_disconnect(handler, "item_transform",
+					  handle_scene_item_transform, data);
 
-			signal_handler_disconnect(handler, "rename",
-					       handle_scene_rename, data);
-			signal_handler_disconnect(handler, "remove",
-					       handle_scene_remove, data);
-		},
-		data);
+		signal_handler_disconnect(handler, "rename",
+					  handle_scene_rename, data);
+		signal_handler_disconnect(handler, "remove",
+					  handle_scene_remove, data);
+	}
+
 	obs_leave_graphics();
 }
 
@@ -1272,43 +1263,39 @@ void add_scene_signals(obs_scene_t *scene, SESignalHandlerData *data)
 		return;
 
 	obs_enter_graphics();
-	obs_scene_atomic_update(
-		scene,
-		[](void *data, obs_scene_t *scene) {
-			obs_source_t *source = obs_scene_get_source(scene);
 
-			if (!source)
-				return;
+	obs_source_t *source = obs_scene_get_source(scene);
 
-			auto handler = obs_source_get_signal_handler(source);
+	if (source) {
+		auto handler = obs_source_get_signal_handler(source);
 
-			signal_handler_connect(handler, "item_add",
-					       handle_scene_item_add, data);
-			signal_handler_connect(handler, "item_remove",
-					       handle_scene_item_remove, data);
-			signal_handler_connect(handler, "reorder",
-					       handle_scene_item_reorder, data);
-			signal_handler_connect(handler, "item_visible",
-					       dispatch_scene_update, data);
-			signal_handler_connect(handler, "item_locked",
-					       dispatch_scene_update, data);
-			signal_handler_connect(handler, "item_select",
-					       handle_scene_item_select, data);
-			signal_handler_connect(handler, "item_deselect",
-					       handle_scene_item_deselect,
-					       data);
-			signal_handler_connect(handler, "item_transform",
-					       handle_scene_item_transform,
-					       data);
+		signal_handler_connect(handler, "item_add",
+					handle_scene_item_add, data);
+		signal_handler_connect(handler, "item_remove",
+					handle_scene_item_remove, data);
+		signal_handler_connect(handler, "reorder",
+					handle_scene_item_reorder, data);
+		signal_handler_connect(handler, "item_visible",
+					dispatch_scene_update, data);
+		signal_handler_connect(handler, "item_locked",
+					dispatch_scene_update, data);
+		signal_handler_connect(handler, "item_select",
+					handle_scene_item_select, data);
+		signal_handler_connect(handler, "item_deselect",
+					handle_scene_item_deselect,
+					data);
+		signal_handler_connect(handler, "item_transform",
+					handle_scene_item_transform,
+					data);
 
-			signal_handler_connect(handler, "rename",
-					       handle_scene_rename,
-					       data);
-			signal_handler_connect(handler, "remove",
-					       handle_scene_remove,
-					       data);
-		},
-		data);
+		signal_handler_connect(handler, "rename",
+					handle_scene_rename,
+					data);
+		signal_handler_connect(handler, "remove",
+					handle_scene_remove,
+					data);
+	}
+
 	obs_leave_graphics();
 }
 
