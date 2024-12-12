@@ -116,6 +116,8 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 					     context->id.c_str(),
 					     context->cef_app_callback_id);
 
+					PopApiContext();
+
 					delete context;
 
 					return;
@@ -158,6 +160,8 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 						"system", context->source, msg);
 				}
 
+				PopApiContext();
+
 				delete context;
 			};
 
@@ -199,6 +203,9 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 						     context->id.c_str(),
 						     context->cef_app_callback_id);
 					}
+
+					PushApiContext(context->id,
+						       context->callArgs);
 
 					context->self
 						->m_apiCallHandlers[context->id](
@@ -2898,10 +2905,8 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("crashProgram");
 	{
-		QtPostTask([]() -> void {
-			// Crash
-			*((int *)0x133713337) = 12345; // exception
-		});
+		// Crash
+		*((int *)0x133713337) = 12345; // exception
         
 		UNUSED_PARAMETER(result);
 	}
@@ -2909,19 +2914,17 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("deadlockProgram");
 	{
-		QtPostTask([]() -> void {
-			// Deadlock
-			os_event_t *event = nullptr;
-			os_event_init(&event, OS_EVENT_TYPE_AUTO);
+		// Deadlock
+		os_event_t *event = nullptr;
+		os_event_init(&event, OS_EVENT_TYPE_AUTO);
 
-			os_event_wait(event);
-			os_event_wait(event);
-			os_event_wait(event);
-			os_event_wait(event);
-			os_event_wait(event);
+		os_event_wait(event);
+		os_event_wait(event);
+		os_event_wait(event);
+		os_event_wait(event);
+		os_event_wait(event);
 
-			os_event_destroy(event);
-		});
+		os_event_destroy(event);
 
 		UNUSED_PARAMETER(result);
 	}

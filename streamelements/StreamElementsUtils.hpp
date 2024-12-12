@@ -69,6 +69,35 @@ template<typename... Args> std::string FormatString(const char *format, ...)
 
 /* ========================================================= */
 
+class StreamElementsApiContextItem {
+public:
+	StreamElementsApiContextItem(CefString method_,
+				     CefRefPtr<CefListValue> args_)
+		: method(method_), args(args_)
+	{
+	}
+
+public:
+	CefString method;
+	CefRefPtr<CefListValue> args;
+};
+
+class StreamElementsApiContext_t
+	: public std::vector<std::shared_ptr<StreamElementsApiContextItem>> {
+public:
+	StreamElementsApiContext_t() {}
+	~StreamElementsApiContext_t()
+	{
+		clear();
+	}
+};
+
+StreamElementsApiContext_t* GetApiContext();
+void PushApiContext(CefString method, CefRefPtr<CefListValue> args);
+void PopApiContext();
+
+/* ========================================================= */
+
 class StreamElementsAsyncCallContextItem {
 public:
 	StreamElementsAsyncCallContextItem(std::string& file_, int line_)

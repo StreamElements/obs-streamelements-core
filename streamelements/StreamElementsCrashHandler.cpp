@@ -31,6 +31,7 @@
 
 #include "StreamElementsCrashHandler.hpp"
 
+#include "cef-headers.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsConfig.hpp"
@@ -54,6 +55,7 @@
 #include <fcntl.h>
 #include <io.h>
 #include <condition_variable>
+#include <QUrl>
 
 #define STATUS_HANG_DETECTED 0xE0000001
 
@@ -1178,6 +1180,55 @@ static inline void AddObsConfigurationFiles()
 	zip_close(zip);
 
 	s_mdSender->sendAdditionalFile(wtempBufPath.c_str());
+
+	////////////////////////////////////////////////////////////////////
+	// Process ApiContext
+	////////////////////////////////////////////////////////////////////
+
+	auto apiContext = GetApiContext();
+
+	s_mdSender->setAttribute(L"product", L"SE.Live");
+
+	{
+		wchar_t buf[64];
+		wsprintf(buf, L"%d", int(apiContext->size()));
+		s_mdSender->setAttribute(L"selive.api.calls", buf);
+	}
+
+	int apiContextIndex = 0;
+	for (auto api : *apiContext) {
+		wchar_t buf[64];
+		wsprintf(buf, L"selive.api.%d", apiContextIndex);
+		std::wstring attrPrefix = buf;
+
+		s_mdSender->setAttribute((attrPrefix + L".method").c_str(),
+					 api.get()->method.ToWString().c_str());
+
+		///////////////////////////////////////////////////////////////////////////
+		//
+		// BugSplat generates invalid XML report with long string atrribute values
+		//
+		// We'll disable the following section until it is fixed in a future
+		// version of their SDK.
+		// 
+		///////////////////////////////////////////////////////////////////////////
+
+		/*
+		auto argsValue = CefValue::Create();
+		argsValue->SetList(api.get()->args);
+
+		auto ba = QUrl::toPercentEncoding(
+			CefWriteJSON(argsValue, JSON_WRITER_DEFAULT)
+				.ToString()
+				.c_str(),
+			"", "[](){}\n\r\t");
+
+		s_mdSender->setAttribute((attrPrefix + L".args").c_str(),
+					 utf8_to_wstring(ba.constData()).c_str());
+		*/
+
+		++apiContextIndex;
+	}
 }
 
 /* ================================================================= */
@@ -1234,6 +1285,11 @@ static LONG CALLBACK CustomExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
 		if (s_mdSender && (s_stackWalker->hasMatchModuleOfInterest)) {
 			s_mdSender->unhandledExceptionHandler(pExceptionInfo);
 		}
+
+		atexit([](void) {
+			TerminateProcess(GetCurrentProcess(), 2);
+			abort();
+		});
 
 		if (s_prevExceptionFilter) {
 			// This will exit(0)

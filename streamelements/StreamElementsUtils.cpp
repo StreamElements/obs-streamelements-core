@@ -167,6 +167,27 @@ static std::vector<std::string> tokenizeString(const std::string &str,
 
 /* ========================================================= */
 
+StreamElementsApiContext_t s_apiContext;
+
+StreamElementsApiContext_t* GetApiContext()
+{
+	return &s_apiContext;
+}
+
+void PushApiContext(CefString method, CefRefPtr<CefListValue> args)
+{
+	s_apiContext.push_back(
+		std::make_shared<StreamElementsApiContextItem>(method, args));
+}
+
+void PopApiContext()
+{
+	if (s_apiContext.size())
+		s_apiContext.pop_back();
+}
+
+/* ========================================================= */
+
 static StreamElementsAsyncCallContextStack_t s_asyncCallContextStack;
 
 const StreamElementsAsyncCallContextStack_t* GetAsyncCallContextStack()
