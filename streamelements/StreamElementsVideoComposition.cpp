@@ -173,8 +173,12 @@ void StreamElementsVideoCompositionBase::handle_obs_frontend_event(
 	StreamElementsVideoCompositionBase *self =
 		static_cast < StreamElementsVideoCompositionBase*>(data);
 
-	if (event == OBS_FRONTEND_EVENT_SCENE_COLLECTION_CLEANUP)
+	switch (event) {
+	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CLEANUP:
+	case OBS_FRONTEND_EVENT_PROFILE_CHANGING:
 		self->HandleObsSceneCollectionCleanup();
+		break;
+	}
 }
 
 void StreamElementsVideoCompositionBase::SetName(std::string name)
