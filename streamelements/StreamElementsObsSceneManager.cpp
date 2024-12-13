@@ -1211,8 +1211,6 @@ void remove_scene_signals(obs_scene_t *scene, SESignalHandlerData *data)
 	if (!scene)
 		return;
 
-	obs_enter_graphics();
-
 	obs_source_t *source = obs_scene_get_source(scene);
 
 	if (source) {
@@ -1240,8 +1238,6 @@ void remove_scene_signals(obs_scene_t *scene, SESignalHandlerData *data)
 		signal_handler_disconnect(handler, "remove",
 					  handle_scene_remove, data);
 	}
-
-	obs_leave_graphics();
 }
 
 void remove_scene_signals(obs_source_t *sceneSource, SESignalHandlerData *data)
@@ -1261,8 +1257,6 @@ void add_scene_signals(obs_scene_t *scene, SESignalHandlerData *data)
 {
 	if (!scene)
 		return;
-
-	obs_enter_graphics();
 
 	obs_source_t *source = obs_scene_get_source(scene);
 
@@ -1295,8 +1289,6 @@ void add_scene_signals(obs_scene_t *scene, SESignalHandlerData *data)
 					handle_scene_remove,
 					data);
 	}
-
-	obs_leave_graphics();
 }
 
 void add_scene_signals(obs_source_t *sceneSource, SESignalHandlerData *data)
@@ -1406,9 +1398,7 @@ StreamElementsObsSceneManager::StreamElementsObsSceneManager(QMainWindow *parent
 			      ->GetObsNativeVideoComposition()
 			      .get());
 
-	obs_enter_graphics();
 	obs_frontend_add_event_callback(handle_obs_frontend_event, this);
-	obs_leave_graphics();
 
 	auto handler = obs_get_signal_handler();
 
@@ -1460,9 +1450,7 @@ StreamElementsObsSceneManager::~StreamElementsObsSceneManager()
 		m_sceneItemsMonitor = nullptr;
 	}
 
-	obs_enter_graphics();
 	obs_frontend_remove_event_callback(handle_obs_frontend_event, this);
-	obs_leave_graphics();
 
 	if (m_signalHandlerData) {
 		auto handler = obs_get_signal_handler();
@@ -1620,7 +1608,6 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 	args.sceneitem = NULL;
 	args.group = parentGroup;
 
-	obs_enter_graphics();
 	obs_scene_atomic_update(
 		scene,
 		[](void *data, obs_scene_t *scene) {
@@ -1646,7 +1633,6 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 			}
 		},
 		&args);
-	obs_leave_graphics();
 
 	if (args.sceneitem) {
 		if (!!args.group) {
@@ -2197,7 +2183,6 @@ void StreamElementsObsSceneManager::DeserializeObsSceneItemGroup(
 		videoComposition->GetSceneByIdRef(sceneId);
 
 	if (scene) {
-		obs_enter_graphics();
 		obs_scene_atomic_update(
 			scene,
 			[](void *data, obs_scene_t *scene) {
@@ -2215,7 +2200,6 @@ void StreamElementsObsSceneManager::DeserializeObsSceneItemGroup(
 				}
 			},
 			&args);
-		obs_leave_graphics();
 	}
 
 	if (args.sceneitem) {
@@ -2698,8 +2682,6 @@ void StreamElementsObsSceneManager::DeserializeAuxiliaryObsSceneItemProperties(
 			obs_sceneitem_get_group(obs_sceneitem_get_scene(sceneitem), sceneitem);
 
 		if (args.group != args.current_group) {
-			obs_enter_graphics();
-
 			obs_scene_atomic_update(
 				obs_sceneitem_get_scene(sceneitem),
 				[](void *data, obs_scene_t *scene) {
@@ -2721,8 +2703,6 @@ void StreamElementsObsSceneManager::DeserializeAuxiliaryObsSceneItemProperties(
 				},
 				&args);
 
-			obs_leave_graphics();
-
 			RefreshObsSceneItemsList();
 		}
 	}
@@ -2741,14 +2721,12 @@ void StreamElementsObsSceneManager::DeserializeAuxiliaryObsSceneItemProperties(
 
 		using update_t = decltype(update);
 
-		obs_enter_graphics();
 		obs_scene_atomic_update(
 			obs_sceneitem_get_scene(sceneitem),
 			[](void *data, obs_scene_t *) {
 				(*reinterpret_cast<update_t *>(data))();
 			},
 			&update);
-		obs_leave_graphics();
 	}
 
 	if (d->HasKey("visible") && d->GetType("visible") == VTYPE_BOOL) {

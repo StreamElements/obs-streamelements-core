@@ -432,10 +432,9 @@ StreamElementsVideoCompositionViewWidget::StreamElementsVideoCompositionViewWidg
 			//CreateDisplay();
 		} else {
 			QSize size = GetPixelSize(this);
-			obs_enter_graphics();
+
 			obs_display_resize(m_display, size.width(),
 					   size.height());
-			obs_leave_graphics();
 		}
 	};
 
@@ -446,9 +445,8 @@ StreamElementsVideoCompositionViewWidget::StreamElementsVideoCompositionViewWidg
 			return;
 
 		QSize size = GetPixelSize(this);
-		obs_enter_graphics();
+
 		obs_display_resize(m_display, size.width(), size.height());
-		obs_leave_graphics();
 	};
 
 	connect(windowHandle(), &QWindow::visibleChanged, windowVisible);
@@ -478,13 +476,12 @@ void StreamElementsVideoCompositionViewWidget::Destroy()
 	}
 
 	if (m_display) {
-		obs_enter_graphics();
 		obs_display_set_enabled(m_display, false);
+
 		obs_display_remove_draw_callback(
 			m_display, obs_display_draw_callback, this);
 
 		obs_display_destroy(m_display);
-		obs_leave_graphics();
 
 		m_display = nullptr;
 	}
@@ -542,16 +539,16 @@ void StreamElementsVideoCompositionViewWidget::CreateDisplay()
 		return;
 
 	obs_enter_graphics();
-
 	if (!m_destroy_event) {
 		os_event_init(&m_destroy_event, OS_EVENT_TYPE_MANUAL);
 	}
+	obs_leave_graphics();
 
 	m_display = obs_display_create(&info, 0x303030L);
+
 	obs_display_resize(m_display, size.width(), size.height());
 
 	obs_display_add_draw_callback(m_display, obs_display_draw_callback, this);
-	obs_leave_graphics();
 }
 
 void StreamElementsVideoCompositionViewWidget::paintEvent(QPaintEvent *event)
