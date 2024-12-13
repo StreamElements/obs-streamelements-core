@@ -780,6 +780,10 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	  m_baseHeight(baseHeight),
 	  m_transitionDurationMs(0)
 {
+	/* align to multiple-of-two and SSE alignment sizes */
+	m_baseWidth &= 0xFFFFFFFC;
+	m_baseHeight &= 0xFFFFFFFE;
+
 	obs_video_info ovi;
 
 	if (!obs_get_video_info(&ovi))
