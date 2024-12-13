@@ -675,7 +675,8 @@ void SerializeSystemHardwareProperties(CefRefPtr<CefValue> &output)
 
 /* ========================================================= */
 
-void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output)
+void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
+					uint32_t requireAnyOfOutputFlagsMask)
 {
 	// Response codec collection (array)
 	CefRefPtr<CefListValue> list = CefListValue::Create();
@@ -693,7 +694,8 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output)
 			return;
 
 		// If source has video
-		if ((sourceCaps & OBS_SOURCE_VIDEO) == OBS_SOURCE_VIDEO) {
+		if ((sourceCaps & requireAnyOfOutputFlagsMask) !=
+		    0L) {
 			// Create source response dictionary
 			CefRefPtr<CefDictionaryValue> dic =
 				CefDictionaryValue::Create();
@@ -774,15 +776,20 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output)
 		add(sourceId, unversioned_id);
 	}
 
-	add("scene", "scene");
+	if ((requireAnyOfOutputFlagsMask & OBS_SOURCE_VIDEO) ==
+	    OBS_SOURCE_VIDEO) {
+		add("scene", "scene");
+	}
 }
 
 void SerializeExistingInputSources(
-	CefRefPtr<CefValue> &output, uint32_t requireOutputFlagsMask,
+	CefRefPtr<CefValue> &output, uint32_t requireAnyOfOutputFlagsMask,
+	uint32_t requireOutputFlagsMask,
 	std::vector<obs_source_type> requireSourceTypes)
 {
 	struct local_context_t {
 		CefRefPtr<CefListValue> list;
+		uint32_t requireAnyOfOutputFlagsMask;
 		uint32_t requireOutputFlagsMask;
 		std::vector<obs_source_type> requireSourceTypes;
 	};
@@ -790,6 +797,7 @@ void SerializeExistingInputSources(
 	local_context_t local_context;
 
 	local_context.list = CefListValue::Create();
+	local_context.requireAnyOfOutputFlagsMask = requireAnyOfOutputFlagsMask;
 	local_context.requireOutputFlagsMask = requireOutputFlagsMask;
 	local_context.requireSourceTypes = requireSourceTypes;
 
@@ -812,6 +820,7 @@ void SerializeExistingInputSources(
 		// If source has video
 		if ((sourceCaps & context->requireOutputFlagsMask) ==
 			    context->requireOutputFlagsMask &&
+		    (sourceCaps & context->requireAnyOfOutputFlagsMask) != 0L &&
 		    hasRequiredSourceType) {
 			// Create source response dictionary
 			CefRefPtr<CefDictionaryValue> dic =
