@@ -292,7 +292,7 @@ static void HangDetectionThread()
 
 	int consecutiveHangDetectionsCount = 0;
 
-	const int MIN_CONSECUTIVE_HANG_DETECTIONS = 20;
+	const int MIN_CONSECUTIVE_HANG_DETECTIONS = 30;
 
 	std::time_t startTimestamp = std::time(nullptr);
 
