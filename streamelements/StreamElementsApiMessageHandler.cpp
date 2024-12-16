@@ -2839,6 +2839,50 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("getSceneItemRotationInViewport");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SerializeSceneItemViewportRotation(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setSceneItemRotationInViewport");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeSceneItemViewportRotation(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getSceneItemBoundingBoxInViewport");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SerializeSceneItemViewportBoundingRectangle(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setSceneItemPositionInViewport");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeSceneItemViewportPosition(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("takeScreenshot");
 	{
 		if (args->GetSize()) {

@@ -341,6 +341,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/canvas-scan.hpp
 	streamelements/canvas-math.hpp
 	streamelements/canvas-draw.hpp
+	streamelements/canvas-mutate.hpp
 	streamelements/canvas-controls.hpp
 	streamelements/deps/StackWalker/StackWalker.h
 	streamelements/deps/zip/zip.h

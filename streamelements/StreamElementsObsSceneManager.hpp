@@ -145,6 +145,19 @@ public:
 	void OpenSceneItemTransformEditorById(CefRefPtr<CefValue> input,
 					      CefRefPtr<CefValue> &output);
 
+	/* Viewport Coords */
+
+	void SerializeSceneItemViewportRotation(CefRefPtr<CefValue> input,
+						CefRefPtr<CefValue> &output);
+	void DeserializeSceneItemViewportRotation(CefRefPtr<CefValue> input,
+						  CefRefPtr<CefValue> &output);
+
+	void SerializeSceneItemViewportBoundingRectangle(
+		CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output);
+
+	void DeserializeSceneItemViewportPosition(CefRefPtr<CefValue> input,
+						  CefRefPtr<CefValue> &output);
+
 protected:
 	void DeserializeAuxiliaryObsSceneItemProperties(
 		std::shared_ptr<StreamElementsVideoCompositionBase>

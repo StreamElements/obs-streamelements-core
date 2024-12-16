@@ -18,6 +18,8 @@
 
 #include "StreamElementsGlobalStateManager.hpp"
 
+#include "canvas-mutate.hpp"
+
 #ifndef WIN32
 #define stricmp strcasecmp
 #endif
@@ -340,6 +342,17 @@ static double DeserializeDoubleValue(CefRefPtr<CefValue> input,
 
 	if (input->GetType() == VTYPE_INT)
 		return (double)input->GetInt();
+
+	return defaultValue;
+}
+
+static int DeserializeIntValue(CefRefPtr<CefValue> input, int defaultValue)
+{
+	if (input->GetType() == VTYPE_DOUBLE)
+		return int(std::round(input->GetDouble()));
+
+	if (input->GetType() == VTYPE_INT)
+		return input->GetInt();
 
 	return defaultValue;
 }
@@ -3209,4 +3222,180 @@ void StreamElementsObsSceneManager::OpenSceneItemTransformEditorById(
 	obs_frontend_open_sceneitem_edit_transform(sceneItem);
 
 	output->SetBool(true);
+}
+
+void StreamElementsObsSceneManager::SerializeSceneItemViewportRotation(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto root = input->GetDictionary();
+
+	if (!root->HasKey("id") || root->GetType("id") != VTYPE_STRING)
+		return;
+
+	std::string id = root->GetString("id");
+
+	auto videoComposition = GetVideoComposition(input);
+
+	if (!videoComposition)
+		return;
+
+	auto sceneItem = videoComposition->GetSceneItemById(id);
+
+	if (!sceneItem)
+		return;
+
+	auto scene = obs_sceneitem_get_scene(sceneItem);
+
+	if (!scene)
+		return;
+
+	auto d = CefDictionaryValue::Create();
+
+	d->SetString("id", GetIdFromPointer(sceneItem));
+	d->SetString("videoCompositionId", videoComposition->GetId());
+	d->SetDouble("viewportRotationDegrees",
+		     getSceneItemViewportRotationDegrees(scene, sceneItem));
+
+	output->SetDictionary(d);
+}
+
+void StreamElementsObsSceneManager::DeserializeSceneItemViewportRotation(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto root = input->GetDictionary();
+
+	if (!root->HasKey("id") || root->GetType("id") != VTYPE_STRING)
+		return;
+
+	if (!root->HasKey("viewportRotationDegrees") ||
+	    (root->GetType("viewportRotationDegrees") != VTYPE_INT &&
+	     root->GetType("viewportRotationDegrees") != VTYPE_DOUBLE))
+		return;
+
+	std::string id = root->GetString("id");
+
+	auto videoComposition = GetVideoComposition(input);
+
+	if (!videoComposition)
+		return;
+
+	auto sceneItem = videoComposition->GetSceneItemById(id);
+
+	if (!sceneItem)
+		return;
+
+	auto scene = obs_sceneitem_get_scene(sceneItem);
+
+	if (!scene)
+		return;
+
+	auto newAngle = DeserializeIntValue(
+		root->GetValue("viewportRotationDegrees"), 0);
+
+	setSceneItemViewportRotationDegrees(scene, sceneItem, newAngle);
+
+	SerializeSceneItemViewportRotation(input, output);
+}
+
+void StreamElementsObsSceneManager::SerializeSceneItemViewportBoundingRectangle(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto root = input->GetDictionary();
+
+	if (!root->HasKey("id") || root->GetType("id") != VTYPE_STRING)
+		return;
+
+	std::string id = root->GetString("id");
+
+	auto videoComposition = GetVideoComposition(input);
+
+	if (!videoComposition)
+		return;
+
+	auto sceneItem = videoComposition->GetSceneItemById(id);
+
+	if (!sceneItem)
+		return;
+
+	auto scene = obs_sceneitem_get_scene(sceneItem);
+
+	if (!scene)
+		return;
+
+	auto d = CefDictionaryValue::Create();
+
+	d->SetString("id", GetIdFromPointer(sceneItem));
+	d->SetString("videoCompositionId", videoComposition->GetId());
+
+	vec2 tl, br;
+	getSceneItemViewportBoundingBoxCoords(scene, sceneItem, &tl, &br);
+
+	d->SetDouble("left", tl.x);
+	d->SetDouble("top", tl.y);
+	d->SetDouble("right", br.x);
+	d->SetDouble("bottom", br.y);
+
+	output->SetDictionary(d);
+}
+
+void StreamElementsObsSceneManager::DeserializeSceneItemViewportPosition(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	std::lock_guard<decltype(m_mutex)> lock(m_mutex);
+
+	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto root = input->GetDictionary();
+
+	if (!root->HasKey("id") || root->GetType("id") != VTYPE_STRING)
+		return;
+
+	std::string id = root->GetString("id");
+
+	auto videoComposition = GetVideoComposition(input);
+
+	if (!videoComposition)
+		return;
+
+	auto sceneItem = videoComposition->GetSceneItemById(id);
+
+	if (!sceneItem)
+		return;
+
+	auto scene = obs_sceneitem_get_scene(sceneItem);
+
+	if (!scene)
+		return;
+
+	vec2 tl, br;
+	getSceneItemViewportBoundingBoxCoords(scene, sceneItem, &tl, &br);
+
+	if (root->HasKey("left"))
+		tl.x = DeserializeDoubleValue(root->GetValue("left"), tl.x);
+	if (root->HasKey("top"))
+		tl.y = DeserializeDoubleValue(root->GetValue("top"), tl.y);
+
+	setSceneItemViewportBoundingBoxPosition(scene, sceneItem, tl.x, tl.y);
+
+	SerializeSceneItemViewportBoundingRectangle(input, output);
 }
