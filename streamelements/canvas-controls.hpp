@@ -19,6 +19,15 @@ static config_t* obs_fe_global_config() {
 	return nullptr;
 }
 
+static inline void setNoFocus(QColor& color)
+{
+	int h, s, l, a;
+
+	color.getHsl(&h, &s, &l, &a);
+	l = (l * 3) / 4;
+	color.setHsl(h, s, l, a);
+}
+
 //static FileTexture g_overflowTexture("../../data/obs-studio/images/overflow.png");
 
 static ConfigAccessibilityColor g_colorSelection("SelectRed",
@@ -926,6 +935,11 @@ public:
 			auto color = g_colorSelection.get();
 			auto cropMarkerColor = g_colorCrop.get();
 
+			if (!m_view->hasFocus()) {
+				setNoFocus(color);
+				setNoFocus(cropMarkerColor);
+			}
+
 			const double cropThickness = thickness;
 
 			if (crop.top > 0)
@@ -961,6 +975,10 @@ public:
 					 boxScale, color);
 		} else if (m_isMouseOver && m_view->m_currUnderMouse) {
 			auto color = g_colorHover.get();
+
+			if (!m_view->hasFocus()) {
+				setNoFocus(color);
+			}
 
 			drawLine(0.0f, 0.0f, 1.0f, 0.0f, thickness, boxScale,
 				 color);
@@ -1136,6 +1154,10 @@ public:
 		QColor color((m_isMouseOver || m_isDragging)
 				     ? g_colorHover.get()
 				     : g_colorSelection.get());
+
+		if (!m_view->hasFocus()) {
+			setNoFocus(color);
+		}
 
 		matrix4 transform, inv_tranform;
 		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem, &transform,

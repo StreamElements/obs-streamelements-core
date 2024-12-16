@@ -327,6 +327,8 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 
 	endProjectionRegion();
 
+	/*
+
 	//
 	// Lets paint our focus / hover state here
 	//
@@ -360,6 +362,7 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 
 		endProjectionRegion();
 	}
+	*/
 }
 
 static inline QSize GetPixelSize(QWidget *widget)
