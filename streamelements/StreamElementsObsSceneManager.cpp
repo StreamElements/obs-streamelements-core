@@ -580,6 +580,7 @@ SerializeObsSceneItemCompositionSettings(obs_source_t *source,
 }
 
 static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
+					obs_scene_t* root_scene,
 					obs_source_t *source,
 					obs_sceneitem_t *sceneitem,
 					const int order = -1,
@@ -591,8 +592,6 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 	CefRefPtr<CefDictionaryValue> root = CefDictionaryValue::Create();
 
 	std::string sceneItemId = GetIdFromPointer(sceneitem);
-
-	obs_scene_t *root_scene = nullptr;
 
 	if (!videoComposition) {
 		auto videoCompositionManager =
@@ -707,7 +706,7 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 				CefRefPtr<CefValue> item = CefValue::Create();
 
 				SerializeSourceAndSceneItem(
-					item, source, *it,
+					item, root_scene, source, *it,
 					context.list->GetSize(),
 					serializeDetails, videoComposition);
 
@@ -768,6 +767,8 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 				->Copy());
 		#endif
 	}
+
+	root->SetList("filters", SerializeObsSourceFilters(source));
 
 	result->SetDictionary(root);
 }
@@ -912,9 +913,13 @@ static void dispatch_sceneitem_event(void *my_data, obs_sceneitem_t *sceneitem,
 			obs_sceneitem_get_source(sceneitem);
 
 		// this can deadlock due to full_lock(obs_scene) in obs_sceneitem_get_group
-		SerializeSourceAndSceneItem(item, sceneitem_source, sceneitem,
-					    -1, serializeDetails,
-					    my_data ? ((SESignalHandlerData *)my_data)->m_videoCompositionBase : nullptr);
+		SerializeSourceAndSceneItem(
+			item, obs_sceneitem_get_scene(sceneitem),
+			sceneitem_source, sceneitem, -1,
+			serializeDetails,
+			my_data ? ((SESignalHandlerData *)my_data)
+					  ->m_videoCompositionBase
+				: nullptr);
 
 		std::string json =
 			CefWriteJSON(item, JSON_WRITER_DEFAULT).ToString();
@@ -1807,8 +1812,10 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 				videoComposition, sceneitem, root);
 
 			// Result
-			SerializeSourceAndSceneItem(output, source, sceneitem,
-						    true, videoComposition.get());
+			SerializeSourceAndSceneItem(
+				output, obs_sceneitem_get_scene(sceneitem),
+				source, sceneitem, true,
+				videoComposition.get());
 
 			obs_sceneitem_release(sceneitem);
 		}
@@ -1893,8 +1900,10 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 				videoComposition, sceneitem, root);
 
 			// Result
-			SerializeSourceAndSceneItem(output, source, sceneitem,
-						    true, videoComposition.get());
+			SerializeSourceAndSceneItem(
+				output, obs_sceneitem_get_scene(sceneitem),
+				source, sceneitem, true,
+				videoComposition.get());
 
 			obs_sceneitem_release(sceneitem);
 		}
@@ -2040,7 +2049,9 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 
 				// Result
 				SerializeSourceAndSceneItem(
-					output, source, sceneitem, true,
+					output,
+					obs_sceneitem_get_scene(sceneitem),
+					source, sceneitem, true,
 					videoComposition.get());
 
 				obs_sceneitem_release(sceneitem);
@@ -2148,8 +2159,10 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 				videoComposition, sceneitem, root);
 
 			// Result
-			SerializeSourceAndSceneItem(output, source, sceneitem,
-						    true, videoComposition.get());
+			SerializeSourceAndSceneItem(
+				output, obs_sceneitem_get_scene(sceneitem),
+				source, sceneitem, true,
+				videoComposition.get());
 
 			obs_sceneitem_release(sceneitem);
 		}
@@ -2229,7 +2242,8 @@ void StreamElementsObsSceneManager::DeserializeObsSceneItemGroup(
 
 		// Result
 		SerializeSourceAndSceneItem(
-			output, obs_sceneitem_get_source(args.sceneitem),
+			output, obs_sceneitem_get_scene(args.sceneitem),
+			obs_sceneitem_get_source(args.sceneitem),
 			args.sceneitem, true, videoComposition.get());
 
 		//obs_sceneitem_release(args.sceneitem); // obs_scene_add_group() does not return an incremented reference
@@ -2299,7 +2313,7 @@ void StreamElementsObsSceneManager::SerializeObsSceneItems(
 			CefRefPtr<CefValue> item = CefValue::Create();
 
 			SerializeSourceAndSceneItem(
-				item, source, *it,
+				item, scene, source, *it,
 				context.list->GetSize(), true,
 				context.videoComposition.get());
 
@@ -2819,7 +2833,9 @@ void StreamElementsObsSceneManager::SetObsSceneItemPropertiesById(
 			videoComposition, sceneitem, d);
 
 		// Result
-		SerializeSourceAndSceneItem(output, source, sceneitem, true,
+		SerializeSourceAndSceneItem(output,
+					    obs_sceneitem_get_scene(sceneitem),
+					    source, sceneitem, true,
 					    videoComposition.get());
 	}
 }
