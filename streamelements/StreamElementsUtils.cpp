@@ -680,8 +680,7 @@ CefRefPtr<CefListValue> SerializeObsSourceFilters(obs_source_t* source)
 	if (!source) return CefListValue::Create();
 
 	struct local_filters_context_t {
-		int count = 0;
-		std::map<int, OBSSourceAutoRelease> items;
+		CefRefPtr<CefListValue> items = CefListValue::Create();
 	};
 
 	local_filters_context_t context;
@@ -692,24 +691,16 @@ CefRefPtr<CefListValue> SerializeObsSourceFilters(obs_source_t* source)
 			auto context =
 				static_cast<local_filters_context_t *>(params);
 
-			context->items[context->count] =
-				obs_source_get_ref(filter);
+			auto d = CefDictionaryValue::Create();
 
-			++context->count;
+			SerializeObsSource(filter, d, true);
+
+			context->items->SetDictionary(context->items->GetSize(),
+						      d);
 		},
 		&context);
 
-	auto result = CefListValue::Create();
-
-	for (int i = 0; i < context.count; ++i) {
-		auto d = CefDictionaryValue::Create();
-
-		SerializeObsSource(context.items[i], d, true);
-
-		result->SetDictionary(result->GetSize(), d);
-	}
-
-	return result;
+	return context.items;
 }
 
 void SerializeObsSource(obs_source_t* source, CefRefPtr<CefDictionaryValue> dic, bool isExistingSource)
