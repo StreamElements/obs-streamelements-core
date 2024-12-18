@@ -1037,12 +1037,16 @@ static void dispatch_source_event(void *my_data, calldata_t *cd,
 
 static void handle_scene_rename(void *my_data, calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	dispatch_scene_event(my_data, cd, "hostActiveSceneRenamed",
 			      "hostSceneRenamed");
 }
 
 static void handle_scene_remove(void *my_data, calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	dispatch_scene_event(
 		my_data, cd, "hostActiveSceneRemoved",
 			      "hostSceneRemoved");
@@ -1050,6 +1054,8 @@ static void handle_scene_remove(void *my_data, calldata_t *cd)
 
 static void handle_scene_item_transform(void *my_data, calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemTransformed",
 				 "hostSceneItemTransformed", false, true);
 	dispatch_scene_update(my_data, cd, true);
@@ -1057,6 +1063,8 @@ static void handle_scene_item_transform(void *my_data, calldata_t *cd)
 
 static void handle_scene_item_select(void *my_data, calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	obs_sceneitem_t *sceneitem =
 		(obs_sceneitem_t *)calldata_ptr(cd, "item");
 
@@ -1084,6 +1092,8 @@ static void handle_scene_item_select(void *my_data, calldata_t *cd)
 
 static void handle_scene_item_deselect(void *my_data, calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemUnselected",
 				 "hostSceneItemUnselected", false);
 	dispatch_scene_update(my_data, cd);
@@ -1099,6 +1109,8 @@ static void handle_scene_item_deselect(void *my_data, calldata_t *cd)
 
 static void handle_scene_item_remove(void *my_data, calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	obs_sceneitem_t *sceneitem =
 		(obs_sceneitem_t *)calldata_ptr(cd, "item");
 
@@ -1127,6 +1139,8 @@ static void handle_scene_item_remove(void *my_data, calldata_t *cd)
 
 static void handle_scene_item_reorder(void *my_data, calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	dispatch_scene_event(my_data, cd, "hostActiveSceneItemsOrderChanged",
 			     "hostSceneItemOrderChanged");
 
@@ -1143,6 +1157,8 @@ static void handle_scene_item_reorder(void *my_data, calldata_t *cd)
 
 static void handle_scene_item_source_update_props(void *my_data, calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	dispatch_source_event(my_data, cd,
 			      "hostActiveSceneItemPropertiesChanged",
 			      "hostSceneItemPropertiesChanged");
@@ -1152,6 +1168,8 @@ static void handle_scene_item_source_update_props(void *my_data, calldata_t *cd)
 static void handle_scene_item_source_update_settings(void *my_data,
 						     calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	dispatch_source_event(my_data, cd, "hostActiveSceneItemSettingsChanged",
 			      "hostSceneItemSettingsChanged");
 	dispatch_scene_update(my_data, cd);
@@ -1159,6 +1177,8 @@ static void handle_scene_item_source_update_settings(void *my_data,
 
 static void handle_scene_item_source_rename(void *my_data, calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	dispatch_source_event(my_data, cd, "hostActiveSceneItemRenamed",
 			      "hostSceneItemRenamed");
 	dispatch_scene_update(my_data, cd);
@@ -1166,6 +1186,8 @@ static void handle_scene_item_source_rename(void *my_data, calldata_t *cd)
 
 static void handle_scene_item_add(void *my_data, calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	obs_sceneitem_t *sceneitem =
 		(obs_sceneitem_t *)calldata_ptr(cd, "item");
 
@@ -1325,6 +1347,8 @@ void add_scene_signals(obs_source_t *sceneSource, SESignalHandlerData *data)
 void StreamElementsObsSceneManager::handle_obs_frontend_event(
 	enum obs_frontend_event event, void *data)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	if (event == OBS_FRONTEND_EVENT_EXIT) {
 		s_shutdown = true;
 	}
@@ -1345,6 +1369,8 @@ void StreamElementsObsSceneManager::handle_obs_frontend_event(
 
 static void handle_source_create(void *data, calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	obs_source_t *source = (obs_source_t *)calldata_ptr(cd, "source");
 
 	if (!source)
@@ -1357,6 +1383,8 @@ static void handle_source_create(void *data, calldata_t *cd)
 
 static void handle_source_remove(void *data, calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	obs_source_t *source = (obs_source_t *)calldata_ptr(cd, "source");
 
 	if (!source)

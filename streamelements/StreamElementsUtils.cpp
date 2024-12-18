@@ -168,50 +168,69 @@ static std::vector<std::string> tokenizeString(const std::string &str,
 /* ========================================================= */
 
 StreamElementsApiContext_t s_apiContext;
+std::shared_mutex s_apiContextMutex;
 
-StreamElementsApiContext_t* GetApiContext()
+void GetApiContext(std::function<void(StreamElementsApiContext_t*)> callback)
 {
-	return &s_apiContext;
+	std::shared_lock lock(s_apiContextMutex);
+
+	callback(&s_apiContext);
 }
 
-void PushApiContext(CefString method, CefRefPtr<CefListValue> args)
+std::shared_ptr<StreamElementsApiContextItem> PushApiContext(CefString method, CefRefPtr<CefListValue> args)
 {
-	s_apiContext.push_back(
-		std::make_shared<StreamElementsApiContextItem>(method, args));
+	std::unique_lock lock(s_apiContextMutex);
+
+	auto item =
+		std::make_shared<StreamElementsApiContextItem>(method, args, GetCurrentThreadId());
+
+	s_apiContext.push_back(item);
+
+	return item;
 }
 
-void PopApiContext()
+void RemoveApiContext(std::shared_ptr<StreamElementsApiContextItem> item)
 {
-	if (s_apiContext.size())
-		s_apiContext.pop_back();
+	std::unique_lock lock(s_apiContextMutex);
+
+	s_apiContext.remove(item);
 }
 
 /* ========================================================= */
 
 static StreamElementsAsyncCallContextStack_t s_asyncCallContextStack;
+static std::shared_mutex s_asyncCallContextStackMutex;
 
-const StreamElementsAsyncCallContextStack_t* GetAsyncCallContextStack()
+void GetAsyncCallContextStack(std::function<void(const StreamElementsAsyncCallContextStack_t *)> callback)
 {
-	return &s_asyncCallContextStack;
+	std::shared_lock lock(s_asyncCallContextStackMutex);
+
+	callback(&s_asyncCallContextStack);
 }
 
-static void AsyncCallContextPush(std::string file, int line)
+std::shared_ptr<StreamElementsAsyncCallContextItem>
+AsyncCallContextPush(std::string file, int line)
 {
-	s_asyncCallContextStack.push_back(
-		new StreamElementsAsyncCallContextItem(file, line));
+	std::unique_lock lock(s_asyncCallContextStackMutex);
+
+	auto item = std::make_shared<StreamElementsAsyncCallContextItem>(file,
+									 line);
+
+	s_asyncCallContextStack.push_back(item);
+
+	return item;
 }
 
-static void AsyncCallContextPop()
+void AsyncCallContextRemove(
+	std::shared_ptr<StreamElementsAsyncCallContextItem> item)
 {
-	StreamElementsAsyncCallContextItem *last =
-		s_asyncCallContextStack.back();
+	std::unique_lock lock(s_asyncCallContextStackMutex);
 
-	s_asyncCallContextStack.pop_back();
-
-	delete last;
+	s_asyncCallContextStack.remove(item);
 }
 
-std::future<void> QtDelayTask(std::function<void()> task, int delayMs)
+std::future<void> __QtDelayTask_Impl(std::function<void()> task, int delayMs,
+				     const char *file, const int line)
 {
 	auto promise = std::make_shared<std::promise<void>>();
 
@@ -220,10 +239,14 @@ std::future<void> QtDelayTask(std::function<void()> task, int delayMs)
 	t->moveToThread(qApp->thread());
 	t->setSingleShot(true);
 
+	auto item = AsyncCallContextPush(file, line);
+
 	QObject::connect(t, &QTimer::timeout, [=]() {
 		t->deleteLater();
 
 		task();
+
+		AsyncCallContextRemove(item);
 
 		promise->set_value();
 	});
@@ -240,12 +263,12 @@ std::future<void> __QtPostTask_Impl(std::function<void()> task,
 	std::shared_ptr<std::promise<void>> promise =
 		std::make_shared<std::promise<void>>();
 
-	auto executor = [=]() {
-		AsyncCallContextPush(file, line);
+	auto item = AsyncCallContextPush(file, line);
 
+	auto executor = [=]() {
 		task();
 
-		AsyncCallContextPop();
+		AsyncCallContextRemove(item);
 
 		promise->set_value();
 	};

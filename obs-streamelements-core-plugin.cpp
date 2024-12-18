@@ -49,6 +49,8 @@ bool obs_module_load(void)
 
 void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	switch (event) {
 	case OBS_FRONTEND_EVENT_FINISHED_LOADING:
 		QtExecSync([] {

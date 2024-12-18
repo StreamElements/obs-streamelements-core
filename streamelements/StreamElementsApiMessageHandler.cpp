@@ -92,6 +92,9 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 				int cef_app_callback_id;
 				long cefClientId;
 				std::string source;
+
+				std::shared_ptr<StreamElementsApiContextItem>
+					apiContextHandle;
 			};
 
 			local_context *context = new local_context();
@@ -116,7 +119,8 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 					     context->id.c_str(),
 					     context->cef_app_callback_id);
 
-					PopApiContext();
+					RemoveApiContext(
+						context->apiContextHandle);
 
 					delete context;
 
@@ -160,7 +164,7 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 						"system", context->source, msg);
 				}
 
-				PopApiContext();
+				RemoveApiContext(context->apiContextHandle);
 
 				delete context;
 			};
@@ -204,8 +208,8 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 						     context->cef_app_callback_id);
 					}
 
-					PushApiContext(context->id,
-						       context->callArgs);
+					context->apiContextHandle = PushApiContext(
+						context->id, context->callArgs);
 
 					context->self
 						->m_apiCallHandlers[context->id](

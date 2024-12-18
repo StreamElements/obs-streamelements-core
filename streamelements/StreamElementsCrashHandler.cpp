@@ -285,6 +285,7 @@ static std::condition_variable s_eventHangDetectionStop;
 static std::mutex s_hangDetectionMutex;
 static std::shared_ptr<std::thread> s_threadHangDetection = nullptr;
 static bool s_isNotesSet = false;
+static bool s_isQtResponsive = true;
 
 static void HangDetectionThread()
 {
@@ -293,6 +294,7 @@ static void HangDetectionThread()
 	int consecutiveHangDetectionsCount = 0;
 
 	const int MIN_CONSECUTIVE_HANG_DETECTIONS = 30;
+	const int CHECK_INTERVAL_MS = 1000;
 
 	std::time_t startTimestamp = std::time(nullptr);
 
@@ -300,7 +302,8 @@ static void HangDetectionThread()
 		{
 			std::unique_lock lock(s_hangDetectionMutex);
 			if (s_eventHangDetectionStop.wait_for(
-				    lock, std::chrono::milliseconds(1000)) ==
+				    lock, std::chrono::milliseconds(
+						  CHECK_INTERVAL_MS)) ==
 			    std::cv_status::no_timeout) {
 				// We've been signalled to stop
 				break;
@@ -316,7 +319,16 @@ static void HangDetectionThread()
 			continue;
 
 		if (IsHungAppWindow(hWnd)) {
-			++consecutiveHangDetectionsCount;
+			if (s_isQtResponsive) {
+				consecutiveHangDetectionsCount = 0;
+
+				s_isQtResponsive = false;
+
+				QtDelayTask([&]() { s_isQtResponsive = true; },
+					    CHECK_INTERVAL_MS);
+			} else {
+				++consecutiveHangDetectionsCount;
+			}
 		} else {
 			consecutiveHangDetectionsCount = 0;
 		}
@@ -343,22 +355,31 @@ static void HangDetectionThread()
 				L"HANG on main app window detected " +
 				std::wstring(secondsSinceStartupString) + L" seconds since startup";
 
-			auto asyncCallContextStack = GetAsyncCallContextStack();
-			if (asyncCallContextStack->size()) {
+			GetAsyncCallContextStack(
+				[&](const StreamElementsAsyncCallContextStack_t
+					    *asyncCallContextStack) {
+					if (!asyncCallContextStack->size())
+						return;
 
-				notes += L" ---- Asynchronous call context:";
+					notes +=
+						L" ---- Asynchronous call context:";
 
-				for (auto item : *asyncCallContextStack) {
-					char buf[32];
-					notes += std::wstring(L" ---- ") +
-						 utf8_to_wstring(item->file)
-							 .c_str() +
-						 utf8_to_wstring(" (line: ") +
-						 utf8_to_wstring(itoa(
-							 item->line, buf, 10)) +
-						 L")\r\n";
-				}
-			}
+					for (auto item :
+					     *asyncCallContextStack) {
+						char buf[32];
+						notes += std::wstring(
+								 L" ---- ") +
+							 utf8_to_wstring(
+								 item->file)
+								 .c_str() +
+							 utf8_to_wstring(
+								 " (line: ") +
+							 utf8_to_wstring(itoa(
+								 item->line,
+								 buf, 10)) +
+							 L")\r\n";
+					}
+				});
 
 			// Set report parameters
 			s_mdSender->setDefaultUserDescription(
@@ -593,9 +614,11 @@ static void main_crash_handler(const char *format, va_list args, void *param)
 
 	s_crashDumpFromObs = text;
 
-	auto asyncCallContextStack = GetAsyncCallContextStack();
+	GetAsyncCallContextStack([&](const StreamElementsAsyncCallContextStack_t
+					     *asyncCallContextStack) {
+		if (!asyncCallContextStack->size())
+			return;
 
-	if (asyncCallContextStack->size()) {
 		s_crashDumpFromStackWalker +=
 			"\n======================================================================\n";
 		"\n======================================================================\n";
@@ -610,7 +633,7 @@ static void main_crash_handler(const char *format, va_list args, void *param)
 			s_crashDumpFromStackWalker += itoa(item->line, buf, 10);
 			s_crashDumpFromStackWalker += ")\n";
 		}
-	}
+	});
 
 	s_crashDumpFromStackWalker +=
 		"\n======================================================================\n";
@@ -702,27 +725,40 @@ static void main_crash_handler(const char *format, va_list args, void *param)
 
 /* ================================================================= */
 
+static inline bool GetTemporaryFilePath(const wchar_t *basename,
+					const wchar_t *ext,
+					std::wstring &wtempBufPath)
+{
+	const size_t BUF_LEN = 2048;
+
+	std::vector<wchar_t> pathBuffer;
+	pathBuffer.reserve(BUF_LEN);
+
+	if (!::GetTempPathW(BUF_LEN, pathBuffer.data())) {
+		return false;
+	}
+
+	wtempBufPath = pathBuffer.data();
+
+	if (0 == ::GetTempFileNameW(wtempBufPath.c_str(), L"selive-api-context",
+				    0, pathBuffer.data())) {
+		return false;
+	}
+
+	wtempBufPath = pathBuffer.data();
+	wtempBufPath += ext;
+
+	return true;
+}
+
 static inline void AddObsConfigurationFiles()
 {
 	const size_t BUF_LEN = 2048;
-	wchar_t *pathBuffer = new wchar_t[BUF_LEN];
 
-	if (!::GetTempPathW(BUF_LEN, pathBuffer)) {
-		delete[] pathBuffer;
+	std::wstring wtempBufPath;
+	if (!GetTemporaryFilePath(L"selive-error-report-data", L".zip",
+				  wtempBufPath))
 		return;
-	}
-
-	std::wstring wtempBufPath(pathBuffer);
-
-	if (0 == ::GetTempFileNameW(wtempBufPath.c_str(),
-				    L"obs-live-error-report-data", 0,
-				    pathBuffer)) {
-		delete[] pathBuffer;
-		return;
-	}
-
-	wtempBufPath = pathBuffer;
-	wtempBufPath += L".zip";
 
 	std::string tempBufPath = wstring_to_utf8(wtempBufPath);
 
@@ -730,12 +766,8 @@ static inline void AddObsConfigurationFiles()
 	int ret = os_get_config_path(programDataPathBuf, BUF_LEN, "obs-studio");
 
 	if (ret <= 0) {
-		delete[] pathBuffer;
 		return;
 	}
-
-	delete[] pathBuffer;
-	pathBuffer = nullptr;
 
 	std::wstring obsDataPath = QString(programDataPathBuf).toStdWString();
 
@@ -1137,9 +1169,11 @@ static inline void AddObsConfigurationFiles()
 		}
 	}
 
-	auto asyncCallContextStack = GetAsyncCallContextStack();
+	GetAsyncCallContextStack([&](const StreamElementsAsyncCallContextStack_t
+					     *asyncCallContextStack) {
+		if (!asyncCallContextStack->size())
+			return;
 
-	if (asyncCallContextStack->size()) {
 		std::vector<std::string> lines;
 
 		lines.push_back("Asynchronous call context:");
@@ -1156,6 +1190,8 @@ static inline void AddObsConfigurationFiles()
 
 		// Fill in async call details notes
 
+		auto asyncContextList = CefListValue::Create();
+
 		if (!s_isNotesSet) {
 			std::wstring notes = L"ASYNC";
 
@@ -1169,13 +1205,41 @@ static inline void AddObsConfigurationFiles()
 					 utf8_to_wstring(
 						 itoa(item->line, buf, 10)) +
 					 L")\r\n";
+
+				auto d = CefDictionaryValue::Create();
+
+				d->SetString("file", item->file);
+				d->SetInt("line", item->line);
+				d->SetInt("thread", item->thread);
+
+				asyncContextList->SetDictionary(
+					asyncContextList->GetSize(), d);
 			}
 
 			s_mdSender->setNotes(notes.c_str());
 
 			s_isNotesSet = true;
 		}
-	}
+
+				// Retrieve temporary path
+		std::wstring wtempBufPath;
+		if (!GetTemporaryFilePath(L"async-context", L".json",
+					  wtempBufPath))
+			return;
+
+		auto asyncContextListValue = CefValue::Create();
+
+		asyncContextListValue->SetList(asyncContextList);
+
+		auto json = CefWriteJSON(asyncContextListValue,
+					 JSON_WRITER_PRETTY_PRINT)
+				    .ToString();
+
+		os_quick_write_utf8_file(wstring_to_utf8(wtempBufPath).c_str(),
+					 json.c_str(), json.size(), false);
+
+		s_mdSender->sendAdditionalFile(wtempBufPath.c_str());
+	});
 
 	zip_close(zip);
 
@@ -1185,49 +1249,96 @@ static inline void AddObsConfigurationFiles()
 	// Process ApiContext
 	////////////////////////////////////////////////////////////////////
 
-	auto apiContext = GetApiContext();
-
 	s_mdSender->setAttribute(L"product", L"SE.Live");
 
-	{
-		wchar_t buf[64];
-		wsprintf(buf, L"%d", int(apiContext->size()));
-		s_mdSender->setAttribute(L"selive.api.calls", buf);
-	}
+	GetApiContext([](StreamElementsApiContext_t *apiContext) {
+		auto apiContextList = CefListValue::Create();
 
-	int apiContextIndex = 0;
-	for (auto api : *apiContext) {
-		wchar_t buf[64];
-		wsprintf(buf, L"selive.api.%d", apiContextIndex);
-		std::wstring attrPrefix = buf;
+		{
+			wchar_t buf[64];
+			wsprintf(buf, L"%d", int(apiContext->size()));
+			s_mdSender->setAttribute(L"selive.api.calls", buf);
+		}
 
-		s_mdSender->setAttribute((attrPrefix + L".method").c_str(),
-					 api.get()->method.ToWString().c_str());
+		int apiContextIndex = 0;
+		for (auto api : *apiContext) {
+			wchar_t buf[64];
+			wsprintf(buf, L"selive.api.%d", apiContextIndex);
+			std::wstring attrPrefix = buf;
 
-		///////////////////////////////////////////////////////////////////////////
-		//
-		// BugSplat generates invalid XML report with long string atrribute values
-		//
-		// We'll disable the following section until it is fixed in a future
-		// version of their SDK.
-		// 
-		///////////////////////////////////////////////////////////////////////////
+			s_mdSender->setAttribute(
+				(attrPrefix + L".method").c_str(),
+				api.get()->method.ToWString().c_str());
 
-		/*
-		auto argsValue = CefValue::Create();
-		argsValue->SetList(api.get()->args);
+			///////////////////////////////////////////////////////////////////////////
+			//
+			// BugSplat generates invalid XML report with long string atrribute values
+			//
+			// We'll disable the following section until it is fixed in a future
+			// version of their SDK.
+			//
+			///////////////////////////////////////////////////////////////////////////
 
-		auto ba = QUrl::toPercentEncoding(
-			CefWriteJSON(argsValue, JSON_WRITER_DEFAULT)
-				.ToString()
-				.c_str(),
-			"", "[](){}\n\r\t");
+			/*
+			auto argsValue = CefValue::Create();
+			argsValue->SetList(api.get()->args);
 
-		s_mdSender->setAttribute((attrPrefix + L".args").c_str(),
-					 utf8_to_wstring(ba.constData()).c_str());
-		*/
+			auto ba = QUrl::toPercentEncoding(
+				CefWriteJSON(argsValue, JSON_WRITER_DEFAULT)
+					.ToString()
+					.c_str(),
+				"", "[](){}\n\r\t");
 
-		++apiContextIndex;
+			s_mdSender->setAttribute((attrPrefix + L".args").c_str(),
+						 utf8_to_wstring(ba.constData()).c_str());
+			*/
+
+			auto apiContextListItem = CefDictionaryValue::Create();
+
+			apiContextListItem->SetString("invoke",
+						      api.get()->method);
+			apiContextListItem->SetList("invokeArgs",
+						    api.get()->args);
+			apiContextListItem->SetInt("thread", api.get()->thread);
+
+			apiContextList->SetDictionary(apiContextList->GetSize(),
+						      apiContextListItem);
+
+			++apiContextIndex;
+		}
+
+		// Retrieve temporary path
+		std::wstring wtempBufPath;
+		if (!GetTemporaryFilePath(L"api-context", L".json",
+					  wtempBufPath))
+			return;
+
+		auto apiContextListValue = CefValue::Create();
+
+		apiContextListValue->SetList(apiContextList);
+
+		auto json = CefWriteJSON(apiContextListValue,
+					 JSON_WRITER_PRETTY_PRINT)
+				    .ToString();
+
+		os_quick_write_utf8_file(wstring_to_utf8(wtempBufPath).c_str(),
+					 json.c_str(), json.size(), false);
+
+		s_mdSender->sendAdditionalFile(wtempBufPath.c_str());
+	});
+
+	if (s_stackWalker && s_stackWalker->output.size()) {
+		// Retrieve temporary path
+		std::wstring wtempBufPath;
+		if (!GetTemporaryFilePath(L"stack", L".txt",
+					  wtempBufPath))
+			return;
+
+		os_quick_write_utf8_file(wstring_to_utf8(wtempBufPath).c_str(),
+					 s_stackWalker->output.c_str(),
+					 s_stackWalker->output.size(), false);
+
+		s_mdSender->sendAdditionalFile(wtempBufPath.c_str());
 	}
 }
 

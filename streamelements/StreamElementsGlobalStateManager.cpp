@@ -169,6 +169,8 @@ void StreamElementsGlobalStateManager::ThemeChangeListener::changeEvent(
 
 static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	UNUSED_PARAMETER(data);
 
 	std::string name;

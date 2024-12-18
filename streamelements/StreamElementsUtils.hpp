@@ -72,18 +72,20 @@ template<typename... Args> std::string FormatString(const char *format, ...)
 class StreamElementsApiContextItem {
 public:
 	StreamElementsApiContextItem(CefString method_,
-				     CefRefPtr<CefListValue> args_)
-		: method(method_), args(args_)
+				     CefRefPtr<CefListValue> args_,
+				     DWORD thread_)
+		: method(method_), args(args_), thread(thread_)
 	{
 	}
 
 public:
 	CefString method;
 	CefRefPtr<CefListValue> args;
+	DWORD thread;
 };
 
 class StreamElementsApiContext_t
-	: public std::vector<std::shared_ptr<StreamElementsApiContextItem>> {
+	: public std::list<std::shared_ptr<StreamElementsApiContextItem>> {
 public:
 	StreamElementsApiContext_t() {}
 	~StreamElementsApiContext_t()
@@ -92,9 +94,9 @@ public:
 	}
 };
 
-StreamElementsApiContext_t* GetApiContext();
-void PushApiContext(CefString method, CefRefPtr<CefListValue> args);
-void PopApiContext();
+void GetApiContext(std::function<void(StreamElementsApiContext_t *)> callback);
+std::shared_ptr<StreamElementsApiContextItem> PushApiContext(CefString method, CefRefPtr<CefListValue> args);
+void RemoveApiContext(std::shared_ptr<StreamElementsApiContextItem> item);
 
 /* ========================================================= */
 
@@ -103,28 +105,51 @@ public:
 	StreamElementsAsyncCallContextItem(std::string& file_, int line_)
 		: file(file_), line(line_)
 	{
+		thread = GetCurrentThreadId();
 	}
 
 public:
 	std::string file;
 	int line;
+	DWORD thread = 0;
 };
 
 class StreamElementsAsyncCallContextStack_t : public
-	std::vector<StreamElementsAsyncCallContextItem *> {
+	std::list<std::shared_ptr<StreamElementsAsyncCallContextItem>> {
 public:
 	StreamElementsAsyncCallContextStack_t() {}
 	~StreamElementsAsyncCallContextStack_t()
 	{
-		for (auto ptr : *this) {
-			delete ptr;
-		}
-
 		clear();
 	}
 };
 
-const StreamElementsAsyncCallContextStack_t *GetAsyncCallContextStack();
+void GetAsyncCallContextStack(
+	std::function<void(const StreamElementsAsyncCallContextStack_t *)>
+		callback);
+
+std::shared_ptr<StreamElementsAsyncCallContextItem> AsyncCallContextPush(std::string file,
+							 int line);
+void AsyncCallContextRemove(
+	std::shared_ptr<StreamElementsAsyncCallContextItem> item);
+
+class SEAsyncCallContextMarker {
+private:
+	std::shared_ptr<StreamElementsAsyncCallContextItem> m_contextItem = nullptr;
+
+public:
+	SEAsyncCallContextMarker(const char *file, const int line)
+	{
+		m_contextItem = AsyncCallContextPush(file, line);
+	}
+
+	~SEAsyncCallContextMarker()
+	{
+		AsyncCallContextRemove(m_contextItem);
+
+		m_contextItem = nullptr;
+	}
+};
 
 std::future<void> __QtPostTask_Impl(std::function<void()> task,
 				    std::string file, int line);
@@ -152,8 +177,9 @@ public:
 	}
 };
 
-std::future<void> QtDelayTask(std::function<void()> task, int delayMs);
+std::future<void> __QtDelayTask_Impl(std::function<void()> task, int delayMs, const char* file, const int line);
 
+#define QtDelayTask(task, delayMs) __QtDelayTask_Impl(task, delayMs, __FILE__, __LINE__)
 #define QtPostTask QtAsyncCallFunctor(__FILE__, __LINE__, &__QtPostTask_Impl)
 #define QtExecSync QtAsyncCallFunctor(__FILE__, __LINE__, &__QtExecSync_Impl)
 

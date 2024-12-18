@@ -170,6 +170,8 @@ static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* compos
 void StreamElementsVideoCompositionBase::handle_obs_frontend_event(
 	enum obs_frontend_event event, void* data)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	StreamElementsVideoCompositionBase *self =
 		static_cast < StreamElementsVideoCompositionBase*>(data);
 

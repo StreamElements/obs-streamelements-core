@@ -71,6 +71,8 @@ static void dispatch_event(
 void StreamElementsOutputBase::handle_output_start(void *my_data,
 							  calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	auto self = (StreamElementsOutputBase *)my_data;
 
 	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
@@ -84,6 +86,8 @@ void StreamElementsOutputBase::handle_output_start(void *my_data,
 void StreamElementsOutputBase::handle_output_stop(void *my_data,
 							 calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	auto self = (StreamElementsOutputBase *)my_data;
 
 	int code = calldata_int(cd, "code");
@@ -153,6 +157,8 @@ void StreamElementsOutputBase::handle_output_stop(void *my_data,
 void StreamElementsOutputBase::handle_output_pause(void *my_data,
 							  calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	auto self = (StreamElementsOutputBase *)my_data;
 
 	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
@@ -166,6 +172,8 @@ void StreamElementsOutputBase::handle_output_pause(void *my_data,
 void StreamElementsOutputBase::handle_output_unpause(void *my_data,
 							    calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	auto self = (StreamElementsOutputBase *)my_data;
 
 	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
@@ -179,6 +187,8 @@ void StreamElementsOutputBase::handle_output_unpause(void *my_data,
 void StreamElementsOutputBase::handle_output_starting(void *my_data,
 							     calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	auto self = (StreamElementsOutputBase *)my_data;
 
 	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
@@ -192,6 +202,8 @@ void StreamElementsOutputBase::handle_output_starting(void *my_data,
 void StreamElementsOutputBase::handle_output_stopping(void *my_data,
 							     calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	auto self = (StreamElementsOutputBase *)my_data;
 
 	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
@@ -205,6 +217,8 @@ void StreamElementsOutputBase::handle_output_stopping(void *my_data,
 void StreamElementsOutputBase::handle_output_activate(void *my_data,
 							     calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	auto self = (StreamElementsOutputBase *)my_data;
 
 	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
@@ -218,6 +232,8 @@ void StreamElementsOutputBase::handle_output_activate(void *my_data,
 void StreamElementsOutputBase::handle_output_deactivate(void *my_data,
 							       calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	auto self = (StreamElementsOutputBase *)my_data;
 
 	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
@@ -231,6 +247,8 @@ void StreamElementsOutputBase::handle_output_deactivate(void *my_data,
 void StreamElementsOutputBase::handle_output_reconnect(void *my_data,
 							      calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	auto self = (StreamElementsOutputBase *)my_data;
 
 	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
@@ -245,6 +263,8 @@ void
 StreamElementsOutputBase::handle_output_reconnect_success(void *my_data,
 							  calldata_t *cd)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	auto self = (StreamElementsOutputBase *)my_data;
 
 	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
@@ -259,6 +279,8 @@ void StreamElementsOutputBase::handle_obs_frontend_event(
 	enum obs_frontend_event event,
 	void* data)
 {
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
 	StreamElementsOutputBase *self = (StreamElementsOutputBase *)data;
 
 	switch (event) {

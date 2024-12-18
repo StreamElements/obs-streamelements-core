@@ -472,7 +472,10 @@ void StreamElementsNativeOBSControlsManager::OnStartStopStreamingButtonUpdate()
 
 void StreamElementsNativeOBSControlsManager::handle_obs_frontend_event(enum obs_frontend_event event, void* data)
 {
-	StreamElementsNativeOBSControlsManager* self = (StreamElementsNativeOBSControlsManager*)data;
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
+	StreamElementsNativeOBSControlsManager *self =
+		(StreamElementsNativeOBSControlsManager *)data;
 
 	switch (event) {
 	case OBS_FRONTEND_EVENT_FINISHED_LOADING:
