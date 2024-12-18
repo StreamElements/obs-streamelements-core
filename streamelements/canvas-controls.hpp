@@ -363,6 +363,9 @@ private:
 				if (obs_sceneitem_locked(sceneItem))
 					return true;
 
+				if (!obs_sceneitem_visible(sceneItem))
+					return true;
+
 				// Check if we're a parent of a selected scene item
 				if (selectedSceneItemsParentsMap.count(
 					    sceneItem))
@@ -375,6 +378,9 @@ private:
 
 					if (obs_sceneitem_locked(
 						    parentSceneItem))
+						return true;
+
+					if (!obs_sceneitem_visible(parentSceneItem))
 						return true;
 				}
 
