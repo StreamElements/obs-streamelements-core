@@ -675,6 +675,92 @@ void SerializeSystemHardwareProperties(CefRefPtr<CefValue> &output)
 
 /* ========================================================= */
 
+bool DeserializeObsSourceFilters(obs_source_t* source, CefRefPtr<CefValue> filtersValue)
+{
+	if (!filtersValue.get())
+		return false;
+
+	if (filtersValue->GetType() != VTYPE_LIST)
+		return false;
+
+	auto filtersList = filtersValue->GetList();
+
+	std::map<int, OBSSourceAutoRelease> filtersMap;
+	int maxOrder = -1;
+	std::vector<int> orderIndexes;
+
+	for (size_t i = 0; i < filtersList->GetSize(); ++i) {
+		if (filtersList->GetType(i) != VTYPE_DICTIONARY)
+			return false;
+
+		auto d = filtersList->GetDictionary(i);
+
+		if (!d->HasKey("class") || d->GetType("class") != VTYPE_STRING)
+			return false;
+
+		std::string sourceType = d->GetString("class");
+		std::string sourceName =
+			d->HasKey("name") && d->GetType("name") == VTYPE_STRING
+				? d->GetString("name")
+				: obs_source_get_display_name(
+					  sourceType.c_str());
+
+		int order = d->HasKey("order") &&
+					    d->GetType("order") == VTYPE_INT
+				    ? order = d->GetInt("order")
+				    : filtersList->GetSize() - i - 1;
+
+		if (order < 0)
+			return false;
+
+		if (order > maxOrder)
+			maxOrder = order;
+
+		if (filtersMap.count(order))
+			return false; // duplicate "order" value
+
+		orderIndexes.push_back(order);
+
+		OBSDataAutoRelease settings = obs_data_create();
+
+		if (d->HasKey("settings") &&
+		    d->GetType("settings") == VTYPE_DICTIONARY) {
+			if (!DeserializeObsData(d->GetValue("settings"),
+						settings))
+				return false;
+		}
+
+		filtersMap[order] = obs_source_create_private(
+			sourceType.c_str(), sourceName.c_str(), settings);
+
+		if (!filtersMap[order])
+			return false;
+	}
+
+	// Sort order indexes ascending
+	std::sort(orderIndexes.begin(), orderIndexes.end());
+
+	// Remove existing filters if any
+	obs_source_enum_filters(
+		source,
+		[](obs_source_t *source, obs_source_t *filter, void *params) {
+			obs_source_filter_remove(source, filter);
+		},
+		nullptr);
+
+	// Add new filters
+	for (auto i : orderIndexes) {
+		obs_source_filter_add(source, filtersMap[i]);
+	}
+
+	// Set new filters order
+	for (auto i : orderIndexes) {
+		obs_source_filter_set_index(source, filtersMap[i], i);
+	}
+
+	return true;
+}
+
 CefRefPtr<CefListValue> SerializeObsSourceFilters(obs_source_t* source)
 {
 	if (!source) return CefListValue::Create();

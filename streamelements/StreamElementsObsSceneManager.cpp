@@ -1811,6 +1811,21 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 			DeserializeAuxiliaryObsSceneItemProperties(
 				videoComposition, sceneitem, root);
 
+			if (root->HasKey("filters")) {
+				if (!DeserializeObsSourceFilters(
+					    source,
+					    root->GetValue("filters"))) {
+					blog(LOG_ERROR,
+					     "[obs-streamelements-core]: DeserializeObsBrowserSource: failed parsing filters for source '%s': %s",
+					     obs_source_get_name(source),
+					     CefWriteJSON(
+						     root->GetValue("filters"),
+						     JSON_WRITER_DEFAULT)
+						     .ToString()
+						     .c_str());
+				}
+			}
+
 			// Result
 			SerializeSourceAndSceneItem(
 				output, obs_sceneitem_get_scene(sceneitem),
@@ -1898,6 +1913,21 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 
 			DeserializeAuxiliaryObsSceneItemProperties(
 				videoComposition, sceneitem, root);
+
+			if (root->HasKey("filters")) {
+				if (!DeserializeObsSourceFilters(
+					    source,
+					    root->GetValue("filters"))) {
+					blog(LOG_ERROR,
+					     "[obs-streamelements-core]: DeserializeObsGameCaptureSource: failed parsing filters for source '%s': %s",
+					     obs_source_get_name(source),
+					     CefWriteJSON(
+						     root->GetValue("filters"),
+						     JSON_WRITER_DEFAULT)
+						     .ToString()
+						     .c_str());
+				}
+			}
 
 			// Result
 			SerializeSourceAndSceneItem(
@@ -2047,6 +2077,23 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 				DeserializeAuxiliaryObsSceneItemProperties(
 					videoComposition, sceneitem, root);
 
+				if (root->HasKey("filters")) {
+					if (!DeserializeObsSourceFilters(
+						    source,
+						    root->GetValue("filters"))) {
+						blog(LOG_ERROR,
+						     "[obs-streamelements-core]: DeserializeObsVideoCaptureSource: failed parsing filters for source '%s': %s",
+						     obs_source_get_name(
+							     source),
+						     CefWriteJSON(
+							     root->GetValue(
+								     "filters"),
+							     JSON_WRITER_DEFAULT)
+							     .ToString()
+							     .c_str());
+					}
+				}
+
 				// Result
 				SerializeSourceAndSceneItem(
 					output,
@@ -2157,6 +2204,21 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 
 			DeserializeAuxiliaryObsSceneItemProperties(
 				videoComposition, sceneitem, root);
+
+			if (root->HasKey("filters")) {
+				if (!DeserializeObsSourceFilters(
+					    source,
+					    root->GetValue("filters"))) {
+					blog(LOG_ERROR,
+					     "[obs-streamelements-core]: DeserializeObsNativeSource: failed parsing filters for source '%s': %s",
+					     obs_source_get_name(source),
+					     CefWriteJSON(
+						     root->GetValue("filters"),
+						     JSON_WRITER_DEFAULT)
+						     .ToString()
+						     .c_str());
+				}
+			}
 
 			// Result
 			SerializeSourceAndSceneItem(
@@ -2792,52 +2854,66 @@ void StreamElementsObsSceneManager::SetObsSceneItemPropertiesById(
 
 	sceneitem = videoComposition->GetSceneItemById(id);
 
-	if (!!sceneitem) {
-		bool result = false;
+	if (!sceneitem)
+		return;
 
-		obs_source_t *source = obs_sceneitem_get_source(
-			sceneitem); // does not increment refcount
+	bool result = false;
 
-		if (d->HasKey("name")) {
-			ObsSetUniqueSourceName(
-				source,
-				d->GetString("name").ToString());
+	obs_source_t *source = obs_sceneitem_get_source(
+		sceneitem); // does not increment refcount
+
+	if (d->HasKey("name")) {
+		ObsSetUniqueSourceName(
+			source,
+			d->GetString("name").ToString());
+
+		result = true;
+	}
+
+	if (d->HasKey("settings")) {
+		obs_data_t *settings = obs_data_create();
+
+		bool parsed = DeserializeObsData(d->GetValue("settings"),
+						settings);
+
+		if (parsed) {
+			obs_source_update(source, settings);
 
 			result = true;
 		}
 
-		if (d->HasKey("settings")) {
-			obs_data_t *settings = obs_data_create();
-
-			bool parsed = DeserializeObsData(d->GetValue("settings"),
-						      settings);
-
-			if (parsed) {
-				obs_source_update(source, settings);
-
-				result = true;
-			}
-
-			obs_data_release(settings);
-		}
-
-		obs_transform_info info;
-		obs_sceneitem_crop crop;
-
-		if (DeserializeSceneItemComposition(input, info, crop)) {
-			obs_sceneitem_set_info(sceneitem, &info);
-			obs_sceneitem_set_crop(sceneitem, &crop);
-		}
-
-		DeserializeAuxiliaryObsSceneItemProperties(
-			videoComposition, sceneitem, d);
-
-		// Result
-		SerializeSourceAndSceneItem(output,
-					    obs_sceneitem_get_scene(sceneitem),
-					    source, sceneitem, true,
-					    videoComposition.get());
+		obs_data_release(settings);
 	}
+
+	obs_transform_info info;
+	obs_sceneitem_crop crop;
+
+	if (DeserializeSceneItemComposition(input, info, crop)) {
+		obs_sceneitem_set_info(sceneitem, &info);
+		obs_sceneitem_set_crop(sceneitem, &crop);
+	}
+
+	DeserializeAuxiliaryObsSceneItemProperties(
+		videoComposition, sceneitem, d);
+
+	if (d->HasKey("filters")) {
+		if (!DeserializeObsSourceFilters(source,
+						 d->GetValue("filters"))) {
+			blog(LOG_ERROR,
+			     "[obs-streamelements-core]: SetObsSceneItemPropertiesById: failed parsing filters for source '%s': %s",
+			     obs_source_get_name(source),
+			     CefWriteJSON(d->GetValue("filters"),
+					  JSON_WRITER_DEFAULT)
+				     .ToString()
+				     .c_str());
+		}
+	}
+
+	// Result
+	SerializeSourceAndSceneItem(output,
+					obs_sceneitem_get_scene(sceneitem),
+					source, sceneitem, true,
+					videoComposition.get());
 }
 
 void StreamElementsObsSceneManager::SerializeInputSourceClasses(

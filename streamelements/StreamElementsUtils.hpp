@@ -170,6 +170,8 @@ void SerializeSystemHardwareProperties(CefRefPtr<CefValue> &output);
 /* ========================================================= */
 
 CefRefPtr<CefListValue> SerializeObsSourceFilters(obs_source_t *source);
+bool DeserializeObsSourceFilters(obs_source_t *source,
+				 CefRefPtr<CefValue> filtersValue);
 
 void SerializeObsSource(obs_source_t *source, CefRefPtr<CefDictionaryValue> dic,
 			bool isExistingSource);
