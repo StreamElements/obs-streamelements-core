@@ -169,8 +169,16 @@ void SerializeSystemHardwareProperties(CefRefPtr<CefValue> &output);
 
 /* ========================================================= */
 
-void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
-					uint32_t requireAnyOfOutputFlagsMask);
+CefRefPtr<CefListValue> SerializeObsSourceFilters(obs_source_t *source);
+bool DeserializeObsSourceFilters(obs_source_t *source,
+				 CefRefPtr<CefValue> filtersValue);
+
+void SerializeObsSource(obs_source_t *source, CefRefPtr<CefDictionaryValue> dic,
+			bool isExistingSource);
+
+void SerializeAvailableInputSourceTypes(
+	CefRefPtr<CefValue> &output, uint32_t requireAnyOfOutputFlagsMask,
+	std::vector<obs_source_type> requiredSourceTypes);
 void SerializeExistingInputSources(
 	CefRefPtr<CefValue> &output, uint32_t requireAnyOfOutputFlagsMask, uint32_t requireOutputFlagsMask,
 	std::vector<obs_source_type> requireSourceTypes);

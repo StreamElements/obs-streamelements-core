@@ -1382,23 +1382,51 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("getAvailableFilterSourceTypes");
+	{
+		SerializeAvailableInputSourceTypes(
+			result, OBS_SOURCE_VIDEO | OBS_SOURCE_AUDIO,
+			{OBS_SOURCE_TYPE_FILTER});
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAvailableAudioFilterSourceTypes");
+	{
+		SerializeAvailableInputSourceTypes(
+			result, OBS_SOURCE_AUDIO,
+			{OBS_SOURCE_TYPE_FILTER});
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAvailableVideoFilterSourceTypes");
+	{
+		SerializeAvailableInputSourceTypes(
+			result, OBS_SOURCE_VIDEO,
+			{OBS_SOURCE_TYPE_FILTER});
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("getAvailableInputSourceTypes");
 	{
-		SerializeAvailableInputSourceTypes(result, OBS_SOURCE_VIDEO | OBS_SOURCE_AUDIO);
+		SerializeAvailableInputSourceTypes(
+			result, OBS_SOURCE_VIDEO | OBS_SOURCE_AUDIO,
+			{OBS_SOURCE_TYPE_INPUT, OBS_SOURCE_TYPE_SCENE});
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAvailableVideoInputSourceTypes");
 	{
-		SerializeAvailableInputSourceTypes(
-			result, OBS_SOURCE_VIDEO);
+		SerializeAvailableInputSourceTypes(result, OBS_SOURCE_VIDEO,
+						   {OBS_SOURCE_TYPE_INPUT,
+						    OBS_SOURCE_TYPE_SCENE});
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAvailableAudioInputSourceTypes");
 	{
-		SerializeAvailableInputSourceTypes(
-			result, OBS_SOURCE_AUDIO);
+		SerializeAvailableInputSourceTypes(result, OBS_SOURCE_AUDIO,
+						   {OBS_SOURCE_TYPE_INPUT,
+						    OBS_SOURCE_TYPE_SCENE});
 	}
 	API_HANDLER_END();
 
