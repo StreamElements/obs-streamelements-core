@@ -190,6 +190,16 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 			if (!obs_sceneitem_visible(item))
 				return true;
 
+			auto source = obs_sceneitem_get_source(item);
+
+			if (!source)
+				return true;
+
+			auto caps = obs_source_get_output_flags(source);
+
+			if ((caps & OBS_SOURCE_VIDEO) == 0)
+				return true;
+
 			existingSceneItems[item] = parent;
 
 			m_sceneItemsEventProcessingOrder.push_back(item);

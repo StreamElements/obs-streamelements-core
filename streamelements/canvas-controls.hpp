@@ -366,6 +366,16 @@ private:
 				if (!obs_sceneitem_visible(sceneItem))
 					return true;
 
+				auto source =
+					obs_sceneitem_get_source(sceneItem);
+
+				if (!source)
+					return true;
+
+				if ((obs_source_get_output_flags(source) &
+				     OBS_SOURCE_VIDEO) == 0)
+					return true;
+
 				// Check if we're a parent of a selected scene item
 				if (selectedSceneItemsParentsMap.count(
 					    sceneItem))
@@ -518,6 +528,16 @@ private:
 			    obs_sceneitem_t *parentSceneItem) -> bool {
 				if (obs_sceneitem_locked(sceneItem) ||
 				    !obs_sceneitem_selected(sceneItem))
+					return true;
+
+				auto source =
+					obs_sceneitem_get_source(sceneItem);
+
+				if (!source)
+					return true;
+
+				if ((obs_source_get_output_flags(source) &
+				     OBS_SOURCE_VIDEO) == 0)
 					return true;
 
 				vec2 item_tl, item_br;
