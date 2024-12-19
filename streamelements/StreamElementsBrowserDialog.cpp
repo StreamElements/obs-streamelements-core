@@ -65,6 +65,9 @@ protected:
 
 				CefRefPtr<CefValue> arg = args->GetValue(0);
 
+				msgHandler
+					->Shutdown(); // Stop processing any queued messages
+
 				msgHandler->dialog()->m_result = "null";
 
 				if (arg->GetType() != VTYPE_NULL) {
@@ -95,6 +98,9 @@ protected:
 						self);
 
 				CefRefPtr<CefValue> arg = args->GetValue(0);
+
+				msgHandler
+					->Shutdown(); // Stop processing any queued messages
 
 				msgHandler->dialog()->m_result = "null";
 
@@ -130,6 +136,9 @@ protected:
 				CefRefPtr<CefValue> arg = args->GetValue(0);
 
 				msgHandler->dialog()->m_result = "null";
+
+				msgHandler
+					->Shutdown(); // Stop processing any queued messages
 
 				if (arg->GetType() != VTYPE_NULL) {
 					CefString json = CefWriteJSON(

@@ -41,6 +41,8 @@ public:
 		m_runtimeStatus->m_running = false;
 	}
 
+	void Shutdown() { m_runtimeStatus->m_running = false; }
+
 	//
 	// Called by StreamElementsBrowserWidget ctor/dtor to set/unset m_browserWidget
 	//

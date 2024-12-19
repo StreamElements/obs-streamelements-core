@@ -200,6 +200,18 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 						return;
 					}
 
+					if (!context->self->m_runtimeStatus
+						     ->m_running) {
+						blog(LOG_ERROR,
+						     "obs-streamelements-core[%s]: API: message handler no longer initialized while performing call to '%s', callback id %d",
+						     context->target.c_str(),
+						     context->id.c_str(),
+						     context->cef_app_callback_id);
+
+						context->complete();
+						return;
+					}
+
 					if (IsTraceLogLevel()) {
 						blog(LOG_INFO,
 						     "obs-streamelements-core[%s]: API: performing call to '%s', callback id %d",
@@ -240,6 +252,9 @@ void StreamElementsApiMessageHandler::InvokeApiCallHandlerAsync(
 		return;
 
 	auto runtimeStatus = m_runtimeStatus;
+
+	if (!runtimeStatus->m_running)
+		return;
 
 	CefRefPtr<CefValue> result = CefValue::Create();
 	result->SetNull();
@@ -467,6 +482,11 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		   const long cefClientId,
 		   std::function<void()> complete_callback) {
 			result->SetNull();
+
+			if (!self->m_runtimeStatus->m_running) {
+				complete_callback();
+				return;
+			}
 
 			if (args->GetSize() < 1) {
 				complete_callback();
