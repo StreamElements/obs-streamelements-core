@@ -103,6 +103,8 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 			StreamElementsVideoCompositionBase::CompositionInfo>
 			videoCompositionInfo)
 {
+	std::shared_lock lock(m_mutex);
+
 	QCursor mouseCursor(Qt::ArrowCursor);
 
 	uint32_t worldWidth;
@@ -168,8 +170,12 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 
 	///////////////////////////////////////////
 
-	m_view->m_worldHorizontalRulersY.clear();
-	m_view->m_worldVerticalRulersX.clear();
+	{
+		std::unique_lock lock(m_view->m_worldRulersMutex);
+
+		m_view->m_worldHorizontalRulersY.clear();
+		m_view->m_worldVerticalRulersX.clear();
+	}
 
 	std::map<obs_sceneitem_t *, obs_sceneitem_t *> existingSceneItems;
 
@@ -286,16 +292,23 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 	QColor rulerColor(150, 150, 150);
 	
 
-	for (auto x : m_view->m_worldVerticalRulersX) {
-		const double thickness = 1.0f * m_view->m_worldPixelDensity.x;
+	{
+		std::shared_lock lock(m_view->m_worldRulersMutex);
 
-		drawLine(x, 0.0f, x, worldHeight, thickness, rulerColor);
-	}
+		for (auto x : m_view->m_worldVerticalRulersX) {
+			const double thickness =
+				1.0f * m_view->m_worldPixelDensity.x;
 
-	for (auto y : m_view->m_worldHorizontalRulersY) {
-		const double thickness = 1.0f * m_view->m_worldPixelDensity.y;
+			drawLine(x, 0.0f, x, worldHeight, thickness,
+				 rulerColor);
+		}
 
-		drawLine(0.0f, y, worldWidth, y, thickness, rulerColor);
+		for (auto y : m_view->m_worldHorizontalRulersY) {
+			const double thickness =
+				1.0f * m_view->m_worldPixelDensity.y;
+
+			drawLine(0.0f, y, worldWidth, y, thickness, rulerColor);
+		}
 	}
 
 	/*

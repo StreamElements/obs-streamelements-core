@@ -169,6 +169,7 @@ public:
 		std::map<obs_sceneitem_t *, std::shared_ptr<VisualElements>>
 			m_sceneItemsVisualElementsMap;
 		std::vector<obs_sceneitem_t *> m_sceneItemsEventProcessingOrder;
+		std::shared_mutex m_mutex;
 
 	public:
 		VisualElementsStateManager(
@@ -179,6 +180,8 @@ public:
 		~VisualElementsStateManager() {}
 
 		void Clear() {
+			std::unique_lock lock(m_mutex);
+
 			m_sceneItemsVisualElementsMap.clear();
 			m_sceneItemsEventProcessingOrder.clear();
 		}
@@ -194,6 +197,8 @@ public:
 		bool ExecProcessingOrder(
 			std::function<bool(obs_sceneitem_t *)> callback, bool processAllSelected, bool processAllUnselected)
 		{
+			std::shared_lock lock(m_mutex);
+
 			bool wasProcessed = false;
 
 			for (auto sceneItem :
@@ -228,6 +233,8 @@ public:
 			std::function<bool(obs_sceneitem_t *)> callback,
 			bool processAllSelected, bool processAllUnselected)
 		{
+			std::shared_lock lock(m_mutex);
+
 			bool wasProcessed = false;
 
 			for (auto sceneItem :
@@ -360,6 +367,7 @@ private:
 
 	VisualElementsStateManager m_visualElementsState;
 
+	std::shared_mutex m_worldRulersMutex;
 	std::vector<double> m_worldVerticalRulersX;
 	std::vector<double> m_worldHorizontalRulersY;
 
@@ -380,11 +388,15 @@ public:
 
 	void AddVerticalRulerX(double x)
 	{
+		std::unique_lock lock(m_worldRulersMutex);
+
 		m_worldVerticalRulersX.push_back(x);
 	}
 
 	void AddHorizontalRulerY(double y)
 	{
+		std::unique_lock lock(m_worldRulersMutex);
+
 		m_worldHorizontalRulersY.push_back(y);
 	}
 
