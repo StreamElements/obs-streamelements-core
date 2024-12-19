@@ -192,6 +192,8 @@ StreamElementsBrowserDialog::StreamElementsBrowserDialog(
 
 StreamElementsBrowserDialog::~StreamElementsBrowserDialog()
 {
+	m_browser->ShutdownApiMessagehandler();
+
 	m_browser->deleteLater();
 }
 

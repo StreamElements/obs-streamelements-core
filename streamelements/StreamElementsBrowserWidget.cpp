@@ -429,6 +429,8 @@ StreamElementsBrowserWidget::GetWidgetByMessageTargetId(std::string target)
 
 StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 {
+	ShutdownApiMessagehandler();
+
 	{
 		std::unique_lock<decltype(s_widgetRegistryMutex)> lock(
 			s_widgetRegistryMutex);

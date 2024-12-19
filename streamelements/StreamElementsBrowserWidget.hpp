@@ -66,6 +66,14 @@ public:
 
 	~StreamElementsBrowserWidget();
 
+	void ShutdownApiMessagehandler()
+	{
+		if (!m_requestedApiMessageHandler.get())
+			return;
+
+		m_requestedApiMessageHandler->Shutdown();
+	}
+
 public:
 	std::string GetStartUrl();
 	std::string GetExecuteJavaScriptCodeOnLoad();
