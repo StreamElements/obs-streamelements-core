@@ -720,9 +720,11 @@ private:
 	uint32_t m_baseWidth = 1920;
 	uint32_t m_baseHeight = 1080;
 
+	std::shared_ptr<StreamElementsCustomVideoComposition> m_compositionOwner = nullptr;
+
 public:
 	StreamElementsCustomVideoCompositionInfo(
-		std::shared_ptr<StreamElementsVideoCompositionBase> owner,
+		std::shared_ptr<StreamElementsCustomVideoComposition> owner,
 		StreamElementsVideoCompositionEventListener *listener,
 		std::string holder,
 		video_t *video, uint32_t baseWidth, uint32_t baseHeight,
@@ -730,6 +732,7 @@ public:
 		obs_encoder_t *recordingVideoEncoder, obs_view_t *videoView)
 		: StreamElementsVideoCompositionBase::CompositionInfo(
 			  owner, listener, holder),
+		  m_compositionOwner(owner),
 		  m_video(video),
 		  m_baseWidth(baseWidth),
 		  m_baseHeight(baseHeight),
@@ -772,7 +775,16 @@ public:
 		*videoHeight = m_baseHeight;
 	}
 
-	virtual void Render() { obs_view_render(m_videoView); }
+
+	virtual void Render() {
+		//obs_view_render(m_videoView);
+
+		m_compositionOwner->ProcessRenderingRoot(
+			[](obs_source_t *source) {
+				obs_source_video_render(source);
+			});
+		
+	}
 };
 
 // ctor only usable by this class
@@ -1240,6 +1252,14 @@ obs_source_t *StreamElementsCustomVideoComposition::GetTransition()
 	auto transition = m_transition;
 
 	return transition;
+}
+
+void StreamElementsCustomVideoComposition::ProcessRenderingRoot(
+	std::function<void(obs_source_t*)> callback)
+{
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+
+	callback(m_transition);
 }
 
 void StreamElementsCustomVideoComposition::SetTransitionDurationMilliseconds(

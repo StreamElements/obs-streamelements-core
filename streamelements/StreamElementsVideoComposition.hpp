@@ -501,7 +501,7 @@ class SESignalHandlerData;
 class StreamElementsCustomVideoComposition
 	: public StreamElementsVideoCompositionBase,
 	  public std::enable_shared_from_this<
-		  StreamElementsVideoCompositionBase> {
+		  StreamElementsCustomVideoComposition> {
 private:
 	struct Private {
 		explicit Private() = default;
@@ -598,4 +598,7 @@ protected:
 	virtual void SetTransitionDurationMilliseconds(int duration) override;
 
 	virtual void HandleObsSceneCollectionCleanup() override;
+
+public:
+	void ProcessRenderingRoot(std::function<void(obs_source_t *)> callback);
 };
