@@ -102,16 +102,17 @@ void RemoveApiContext(std::shared_ptr<StreamElementsApiContextItem> item);
 
 class StreamElementsAsyncCallContextItem {
 public:
-	StreamElementsAsyncCallContextItem(std::string& file_, int line_)
-		: file(file_), line(line_)
+	StreamElementsAsyncCallContextItem(std::string& file_, int line_, bool running_)
+		: file(file_), line(line_), running(running_)
 	{
 		thread = GetCurrentThreadId();
 	}
 
 public:
-	std::string file;
-	int line;
+	std::string file = "";
+	int line = -1;
 	DWORD thread = 0;
+	bool running = false;
 };
 
 class StreamElementsAsyncCallContextStack_t : public
@@ -128,8 +129,7 @@ void GetAsyncCallContextStack(
 	std::function<void(const StreamElementsAsyncCallContextStack_t *)>
 		callback);
 
-std::shared_ptr<StreamElementsAsyncCallContextItem> AsyncCallContextPush(std::string file,
-							 int line);
+std::shared_ptr<StreamElementsAsyncCallContextItem> AsyncCallContextPush(std::string file, int line, bool running);
 void AsyncCallContextRemove(
 	std::shared_ptr<StreamElementsAsyncCallContextItem> item);
 
@@ -138,9 +138,9 @@ private:
 	std::shared_ptr<StreamElementsAsyncCallContextItem> m_contextItem = nullptr;
 
 public:
-	SEAsyncCallContextMarker(const char *file, const int line)
+	SEAsyncCallContextMarker(const char *file, const int line, bool running = true)
 	{
-		m_contextItem = AsyncCallContextPush(file, line);
+		m_contextItem = AsyncCallContextPush(file, line, running);
 	}
 
 	~SEAsyncCallContextMarker()

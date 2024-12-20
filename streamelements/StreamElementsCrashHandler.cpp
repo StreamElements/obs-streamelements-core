@@ -1211,6 +1211,7 @@ static inline void AddObsConfigurationFiles()
 				d->SetString("file", item->file);
 				d->SetInt("line", item->line);
 				d->SetInt("thread", item->thread);
+				d->SetBool("running", item->running);
 
 				asyncContextList->SetDictionary(
 					asyncContextList->GetSize(), d);

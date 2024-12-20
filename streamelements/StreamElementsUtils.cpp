@@ -209,12 +209,12 @@ void GetAsyncCallContextStack(std::function<void(const StreamElementsAsyncCallCo
 }
 
 std::shared_ptr<StreamElementsAsyncCallContextItem>
-AsyncCallContextPush(std::string file, int line)
+AsyncCallContextPush(std::string file, int line, bool running)
 {
 	std::unique_lock lock(s_asyncCallContextStackMutex);
 
-	auto item = std::make_shared<StreamElementsAsyncCallContextItem>(file,
-									 line);
+	auto item = std::make_shared<StreamElementsAsyncCallContextItem>(
+		file, line, running);
 
 	s_asyncCallContextStack.push_back(item);
 
@@ -239,10 +239,12 @@ std::future<void> __QtDelayTask_Impl(std::function<void()> task, int delayMs,
 	t->moveToThread(qApp->thread());
 	t->setSingleShot(true);
 
-	auto item = AsyncCallContextPush(file, line);
+	auto item = AsyncCallContextPush(file, line, false);
 
 	QObject::connect(t, &QTimer::timeout, [=]() {
 		t->deleteLater();
+
+		item->running = true;
 
 		task();
 
@@ -263,10 +265,12 @@ std::future<void> __QtPostTask_Impl(std::function<void()> task,
 	std::shared_ptr<std::promise<void>> promise =
 		std::make_shared<std::promise<void>>();
 
-	auto item = AsyncCallContextPush(file, line);
+	auto item = AsyncCallContextPush(file, line, false);
 
 	auto executor = [=]() {
 		task();
+
+		item->running = true;
 
 		AsyncCallContextRemove(item);
 
