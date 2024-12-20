@@ -73,12 +73,16 @@ public:
 					  CefRefPtr<CefValue> &output);
 
 	void SerializeObsSceneItems(CefRefPtr<CefValue> input,
-				    CefRefPtr<CefValue> &output);
+				    CefRefPtr<CefValue> &output,
+				    bool serializeProperties);
 
 	void RemoveObsSceneItemsByIds(CefRefPtr<CefValue> input,
 				      CefRefPtr<CefValue> &output);
 
 	void SetObsSceneItemPropertiesById(CefRefPtr<CefValue> input,
+					   CefRefPtr<CefValue> &output);
+
+	void GetObsSceneItemPropertiesById(CefRefPtr<CefValue> input,
 					   CefRefPtr<CefValue> &output);
 
 	void UngroupObsSceneItemsByGroupId(CefRefPtr<CefValue> input,

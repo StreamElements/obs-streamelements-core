@@ -1410,7 +1410,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		SerializeAvailableInputSourceTypes(
 			result, OBS_SOURCE_VIDEO | OBS_SOURCE_AUDIO,
-			{OBS_SOURCE_TYPE_FILTER});
+			{OBS_SOURCE_TYPE_FILTER}, false);
 	}
 	API_HANDLER_END();
 
@@ -1418,7 +1418,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		SerializeAvailableInputSourceTypes(
 			result, OBS_SOURCE_AUDIO,
-			{OBS_SOURCE_TYPE_FILTER});
+			{OBS_SOURCE_TYPE_FILTER}, false);
 	}
 	API_HANDLER_END();
 
@@ -1426,7 +1426,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		SerializeAvailableInputSourceTypes(
 			result, OBS_SOURCE_VIDEO,
-			{OBS_SOURCE_TYPE_FILTER});
+			{OBS_SOURCE_TYPE_FILTER}, false);
 	}
 	API_HANDLER_END();
 
@@ -1434,7 +1434,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		SerializeAvailableInputSourceTypes(
 			result, OBS_SOURCE_VIDEO | OBS_SOURCE_AUDIO,
-			{OBS_SOURCE_TYPE_INPUT, OBS_SOURCE_TYPE_SCENE});
+			{OBS_SOURCE_TYPE_INPUT, OBS_SOURCE_TYPE_SCENE}, false);
 	}
 	API_HANDLER_END();
 
@@ -1442,7 +1442,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		SerializeAvailableInputSourceTypes(result, OBS_SOURCE_VIDEO,
 						   {OBS_SOURCE_TYPE_INPUT,
-						    OBS_SOURCE_TYPE_SCENE});
+						    OBS_SOURCE_TYPE_SCENE}, false);
 	}
 	API_HANDLER_END();
 
@@ -1450,7 +1450,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		SerializeAvailableInputSourceTypes(result, OBS_SOURCE_AUDIO,
 						   {OBS_SOURCE_TYPE_INPUT,
-						    OBS_SOURCE_TYPE_SCENE});
+						    OBS_SOURCE_TYPE_SCENE}, false);
 	}
 	API_HANDLER_END();
 
@@ -1458,7 +1458,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		SerializeExistingInputSources(result, OBS_SOURCE_VIDEO, 0L,
 					      {OBS_SOURCE_TYPE_INPUT,
-					       OBS_SOURCE_TYPE_SCENE});
+					       OBS_SOURCE_TYPE_SCENE}, false);
 	}
 	API_HANDLER_END();
 
@@ -1466,7 +1466,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		SerializeExistingInputSources(result, OBS_SOURCE_AUDIO, 0L,
 					      {OBS_SOURCE_TYPE_INPUT,
-					       OBS_SOURCE_TYPE_SCENE});
+					       OBS_SOURCE_TYPE_SCENE}, false);
 	}
 	API_HANDLER_END();
 
@@ -1474,7 +1474,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		SerializeExistingInputSources(
 			result, OBS_SOURCE_VIDEO | OBS_SOURCE_AUDIO, 0L,
-			{OBS_SOURCE_TYPE_INPUT, OBS_SOURCE_TYPE_SCENE});
+			{OBS_SOURCE_TYPE_INPUT, OBS_SOURCE_TYPE_SCENE}, false);
 	}
 	API_HANDLER_END();
 
@@ -1792,13 +1792,13 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
 				->SerializeObsSceneItems(args->GetValue(0),
-							 result);
+							 result, false);
 		} else {
 			CefRefPtr<CefValue> nullArg = CefValue::Create();
 
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
-				->SerializeObsSceneItems(nullArg, result);
+				->SerializeObsSceneItems(nullArg, result, false);
 		}
 	}
 	API_HANDLER_END();
@@ -1809,13 +1809,13 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
 				->SerializeObsSceneItems(args->GetValue(0),
-							 result);
+							 result, false);
 		} else {
 			CefRefPtr<CefValue> nullArg = CefValue::Create();
 
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
-				->SerializeObsSceneItems(nullArg, result);
+				->SerializeObsSceneItems(nullArg, result, false);
 		}
 	}
 	API_HANDLER_END();
@@ -1919,6 +1919,28 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetObsSceneManager()
 				->SetObsSceneItemPropertiesById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getCurrentSceneItemPropertiesById");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->GetObsSceneItemPropertiesById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getSceneItemPropertiesById");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->GetObsSceneItemPropertiesById(
 					args->GetValue(0), result);
 		}
 	}

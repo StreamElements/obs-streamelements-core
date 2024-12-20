@@ -784,7 +784,8 @@ bool DeserializeObsSourceFilters(obs_source_t* source, CefRefPtr<CefValue> filte
 	return true;
 }
 
-CefRefPtr<CefListValue> SerializeObsSourceFilters(obs_source_t* source)
+CefRefPtr<CefListValue> SerializeObsSourceFilters(obs_source_t *source,
+						  bool serializeProperties)
 {
 	if (!source) return CefListValue::Create();
 
@@ -808,7 +809,8 @@ CefRefPtr<CefListValue> SerializeObsSourceFilters(obs_source_t* source)
 	for (size_t i = 0; i < context.filters.size(); ++i) {
 		auto d = CefDictionaryValue::Create();
 
-		SerializeObsSource(context.filters[i], d, true);
+		SerializeObsSource(context.filters[i], d, true,
+				   serializeProperties);
 
 		context.items->SetDictionary(context.items->GetSize(), d);
 	}
@@ -816,7 +818,8 @@ CefRefPtr<CefListValue> SerializeObsSourceFilters(obs_source_t* source)
 	return context.items;
 }
 
-void SerializeObsSource(obs_source_t* source, CefRefPtr<CefDictionaryValue> dic, bool isExistingSource)
+void SerializeObsSource(obs_source_t *source, CefRefPtr<CefDictionaryValue> dic,
+			bool isExistingSource, bool serializeProperties)
 {
 	if (!source)
 		return;
@@ -884,21 +887,24 @@ void SerializeObsSource(obs_source_t* source, CefRefPtr<CefDictionaryValue> dic,
 
 	dic->SetValue("defaultSettings", SerializeObsData(defaultSettings));
 
-	auto properties = obs_source_properties(source);
+	if (serializeProperties) {
+		auto properties = obs_source_properties(source);
 
-	if (properties) {
-		if (isExistingSource) {
-			obs_properties_apply_settings(properties, settings);
+		if (properties) {
+			if (isExistingSource) {
+				obs_properties_apply_settings(properties,
+							      settings);
+			}
+
+			auto propertiesVal = CefValue::Create();
+			SerializeObsProperties(properties, propertiesVal);
+
+			dic->SetValue("properties", propertiesVal);
+
+			obs_properties_destroy(properties);
+		} else {
+			dic->SetList("properties", CefListValue::Create());
 		}
-
-		auto propertiesVal = CefValue::Create();
-		SerializeObsProperties(properties, propertiesVal);
-
-		dic->SetValue("properties", propertiesVal);
-
-		obs_properties_destroy(properties);
-	} else {
-		dic->SetList("properties", CefListValue::Create());
 	}
 
 	if (!isExistingSource)
@@ -914,12 +920,14 @@ void SerializeObsSource(obs_source_t* source, CefRefPtr<CefDictionaryValue> dic,
 	if (sourceType == OBS_SOURCE_TYPE_FILTER)
 		return;
 
-	dic->SetList("filters", SerializeObsSourceFilters(source));
+	dic->SetList("filters",
+		     SerializeObsSourceFilters(source, serializeProperties));
 }
 
 void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 					uint32_t requireAnyOfOutputFlagsMask,
-					std::vector<obs_source_type> requiredSourceTypes)
+	std::vector<obs_source_type> requiredSourceTypes,
+	bool serializeProperties)
 {
 	// Response codec collection (array)
 	CefRefPtr<CefListValue> list = CefListValue::Create();
@@ -972,7 +980,7 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 		CefRefPtr<CefDictionaryValue> dic =
 			CefDictionaryValue::Create();
 
-		SerializeObsSource(source, dic, false);
+		SerializeObsSource(source, dic, false, serializeProperties);
 
 		// Append dictionary to response list
 		list->SetDictionary(list->GetSize(), dic);
@@ -1024,13 +1032,15 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 void SerializeExistingInputSources(
 	CefRefPtr<CefValue> &output, uint32_t requireAnyOfOutputFlagsMask,
 	uint32_t requireOutputFlagsMask,
-	std::vector<obs_source_type> requireSourceTypes)
+	std::vector<obs_source_type> requireSourceTypes,
+	bool serializeProperties)
 {
 	struct local_context_t {
 		CefRefPtr<CefListValue> list;
 		uint32_t requireAnyOfOutputFlagsMask;
 		uint32_t requireOutputFlagsMask;
 		std::vector<obs_source_type> requireSourceTypes;
+		bool serializeProperties;
 	};
 
 	local_context_t local_context;
@@ -1039,6 +1049,7 @@ void SerializeExistingInputSources(
 	local_context.requireAnyOfOutputFlagsMask = requireAnyOfOutputFlagsMask;
 	local_context.requireOutputFlagsMask = requireOutputFlagsMask;
 	local_context.requireSourceTypes = requireSourceTypes;
+	local_context.serializeProperties = serializeProperties;
 
 	auto process = [](void *param, obs_source_t *source) -> bool {
 		auto context = (local_context_t *)param;
@@ -1065,7 +1076,8 @@ void SerializeExistingInputSources(
 			CefRefPtr<CefDictionaryValue> dic =
 				CefDictionaryValue::Create();
 
-			SerializeObsSource(source, dic, true);
+			SerializeObsSource(source, dic, true,
+					   context->serializeProperties);
 
 			// Append dictionary to response list
 			context->list->SetDictionary(context->list->GetSize(),
