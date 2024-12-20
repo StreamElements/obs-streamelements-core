@@ -380,6 +380,11 @@ StreamElementsBrowserWidgetManager::GetDockBrowserWidgetInfo(
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
+	if (!m_browserWidgets.count(id))
+		return nullptr;
+
+	auto browser = m_browserWidgets[id];
+
 	StreamElementsBrowserWidgetManager::DockWidgetInfo *baseInfo =
 		GetDockWidgetInfo(id);
 
@@ -393,12 +398,12 @@ StreamElementsBrowserWidgetManager::GetDockBrowserWidgetInfo(
 
 	delete baseInfo;
 
-	result->m_url = m_browserWidgets[id]->GetStartUrl();
+	result->m_url = browser->GetStartUrl();
 
 	result->m_executeJavaScriptOnLoad =
-		m_browserWidgets[id]->GetExecuteJavaScriptCodeOnLoad();
+		browser->GetExecuteJavaScriptCodeOnLoad();
 
-	result->m_reloadPolicy = m_browserWidgets[id]->GetReloadPolicy();
+	result->m_reloadPolicy = browser->GetReloadPolicy();
 
 	return result;
 }
