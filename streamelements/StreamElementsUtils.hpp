@@ -203,6 +203,9 @@ bool DeserializeObsSourceFilters(obs_source_t *source,
 void SerializeObsSource(obs_source_t *source, CefRefPtr<CefDictionaryValue> dic,
 			bool isExistingSource, bool serializeProperties);
 
+void SerializeObsSourceProperties(CefRefPtr<CefValue> input,
+				  CefRefPtr<CefValue> &output);
+
 void SerializeAvailableInputSourceTypes(
 	CefRefPtr<CefValue> &output, uint32_t requireAnyOfOutputFlagsMask,
 	std::vector<obs_source_type> requiredSourceTypes,

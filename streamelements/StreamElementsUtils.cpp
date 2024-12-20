@@ -895,10 +895,7 @@ void SerializeObsSource(obs_source_t *source, CefRefPtr<CefDictionaryValue> dic,
 		auto properties = obs_source_properties(source);
 
 		if (properties) {
-			if (isExistingSource) {
-				obs_properties_apply_settings(properties,
-							      settings);
-			}
+			obs_properties_apply_settings(properties, settings);
 
 			auto propertiesVal = CefValue::Create();
 			SerializeObsProperties(properties, propertiesVal);
@@ -926,6 +923,40 @@ void SerializeObsSource(obs_source_t *source, CefRefPtr<CefDictionaryValue> dic,
 
 	dic->SetList("filters",
 		     SerializeObsSourceFilters(source, serializeProperties));
+}
+
+void SerializeObsSourceProperties(CefRefPtr<CefValue> input, CefRefPtr<CefValue>& output)
+{
+	output->SetNull();
+
+	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto d = input->GetDictionary();
+
+	if (!d->HasKey("class") || d->GetType("class") != VTYPE_STRING)
+		return;
+
+	std::string id = d->GetString("class");
+
+	OBSDataAutoRelease settings = obs_data_create();
+
+	if (d->HasKey("settings")) {
+		if (!DeserializeObsData(d->GetValue("settings"), settings))
+			return;
+	}
+
+	OBSSourceAutoRelease source =
+		obs_source_create_private(id.c_str(), id.c_str(), settings);
+
+	if (!source)
+		return;
+
+	auto root = CefDictionaryValue::Create();
+
+	SerializeObsSource(source, root, false, true);
+
+	output->SetDictionary(root);
 }
 
 void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,

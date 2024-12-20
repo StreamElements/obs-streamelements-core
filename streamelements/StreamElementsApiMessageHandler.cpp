@@ -1430,6 +1430,22 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("getInputSourceProperties");
+	{
+		if (args->GetSize() > 0) {
+			SerializeObsSourceProperties(args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getFilterSourceProperties");
+	{
+		if (args->GetSize() > 0) {
+			SerializeObsSourceProperties(args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("getAvailableInputSourceTypes");
 	{
 		SerializeAvailableInputSourceTypes(
