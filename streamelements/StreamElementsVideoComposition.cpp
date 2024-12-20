@@ -492,7 +492,13 @@ public:
 
 protected:
 	virtual obs_encoder_t *GetStreamingVideoEncoder() {
+		if (!obs_frontend_streaming_active())
+			return nullptr;
+
 		auto output = obs_frontend_get_streaming_output();
+
+		if (!output)
+			return nullptr;
 
 		auto result = obs_output_get_video_encoder(output);
 
@@ -502,7 +508,13 @@ protected:
 	}
 
 	virtual obs_encoder_t* GetRecordingVideoEncoder() {
+		if (!obs_frontend_recording_active())
+			return nullptr;
+
 		auto output = obs_frontend_get_recording_output();
+
+		if (!output)
+			return nullptr;
 
 		auto result = obs_output_get_video_encoder(output);
 
