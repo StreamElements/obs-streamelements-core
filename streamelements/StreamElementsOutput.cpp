@@ -7,6 +7,14 @@
 
 #include <ctime>
 
+static std::string safe_string(const char* input)
+{
+	if (!input)
+		return "";
+
+	return std::string(input);
+}
+
 static std::vector<uint32_t> DeserializeAudioTracks(CefRefPtr<CefDictionaryValue> rootDict)
 {
 	std::vector<uint32_t> result;
@@ -760,17 +768,21 @@ void StreamElementsCustomStreamingOutput::SerializeOutputSettings(
 	d->SetString("type", obs_service_get_type(m_service));
 
 	d->SetString("serverUrl",
-		     obs_data_get_string(service_settings, "server"));
+		     safe_string(obs_data_get_string(service_settings, "server")));
 
-	d->SetString("streamKey", obs_data_get_string(service_settings, "key"));
+	d->SetString("streamKey", safe_string(obs_data_get_string(service_settings, "key")));
 
 	bool useAuth = obs_data_get_bool(service_settings, "use_auth");
 
 	d->SetBool("useAuth", useAuth);
 
 	if (useAuth) {
-		d->SetString("authUsername", obs_data_get_string(service_settings, "username"));
-		d->SetString("authPassword", obs_data_get_string(service_settings, "password"));
+		d->SetString("authUsername",
+			     safe_string(obs_data_get_string(service_settings,
+							    "username")));
+		d->SetString("authPassword",
+			     safe_string(obs_data_get_string(service_settings,
+							    "password")));
 	}
 
 	obs_data_release(service_settings);
@@ -937,10 +949,11 @@ void StreamElementsObsNativeStreamingOutput::SerializeOutputSettings(
 
 	d->SetString("type", obs_service_get_type(service));
 
-	d->SetString("serverUrl",
-		     obs_data_get_string(service_settings, "server"));
+	d->SetString("serverUrl", safe_string(obs_data_get_string(
+					  service_settings, "server")));
 
-	d->SetString("streamKey", obs_data_get_string(service_settings, "key"));
+	d->SetString("streamKey",
+		     safe_string(obs_data_get_string(service_settings, "key")));
 
 	bool useAuth = obs_data_get_bool(service_settings, "use_auth");
 
@@ -948,9 +961,11 @@ void StreamElementsObsNativeStreamingOutput::SerializeOutputSettings(
 
 	if (useAuth) {
 		d->SetString("authUsername",
-			     obs_data_get_string(service_settings, "username"));
+			     safe_string(obs_data_get_string(service_settings,
+							     "username")));
 		d->SetString("authPassword",
-			     obs_data_get_string(service_settings, "password"));
+			     safe_string(obs_data_get_string(service_settings,
+							     "password")));
 	}
 
 	obs_data_release(service_settings);
