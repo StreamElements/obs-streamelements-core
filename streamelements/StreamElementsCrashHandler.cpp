@@ -293,7 +293,7 @@ static void HangDetectionThread()
 
 	int consecutiveHangDetectionsCount = 0;
 
-	const int MIN_CONSECUTIVE_HANG_DETECTIONS = 30;
+	const int MIN_CONSECUTIVE_HANG_DETECTIONS = 60;
 	const int CHECK_INTERVAL_MS = 1000;
 
 	std::time_t startTimestamp = std::time(nullptr);
@@ -342,6 +342,16 @@ static void HangDetectionThread()
 
 			blog(LOG_ERROR,
 			     "[obs-streamelements-core]: main app window hang detected");
+
+			if (IDYES != ::MessageBoxA(
+				0,
+				"Would you like to interrupt OBS Studio and send a hang report to StreamElements for analysis?\n\nClicking \"Yes\" will close OBS Studio, clicking \"No\" will continue waiting for the program to respond.",
+				"Oops, OBS Studio appears to have stopped responding.",
+				MB_YESNO | MB_ICONSTOP | MB_DEFBUTTON1 |
+					    MB_SETFOREGROUND | MB_TOPMOST)) {
+				// Stop hang detection thread completely, and don't show this message again.
+				return;
+			}
 
 			CreateMessageWindow(true);
 
