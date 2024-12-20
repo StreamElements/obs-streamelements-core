@@ -865,12 +865,11 @@ static void dispatch_scene_event(void *my_data, calldata_t *cd,
 	dispatch_scene_event(scene, currentSceneEventName, otherSceneEventName);
 }
 
-static void dispatch_scene_update(void *my_data, calldata_t *cd, bool shouldDelay)
+static void dispatch_scene_update(obs_scene_t* scene,
+				  bool shouldDelay)
 {
 	if (s_shutdown)
 		return;
-
-	obs_scene_t *scene = (obs_scene_t *)calldata_ptr(cd, "scene");
 
 	if (!scene)
 		return;
@@ -887,6 +886,20 @@ static void dispatch_scene_update(void *my_data, calldata_t *cd, bool shouldDela
 		dispatch_scene_event(scene, "hostActiveSceneItemListChanged",
 				     "hostSceneItemListChanged");
 	}
+}
+
+static void dispatch_scene_update(void *my_data, calldata_t *cd,
+					  bool shouldDelay)
+{
+	if (s_shutdown)
+		return;
+
+	obs_scene_t *scene = (obs_scene_t *)calldata_ptr(cd, "scene");
+
+	if (!scene)
+		return;
+
+	dispatch_scene_update(scene, shouldDelay);
 }
 
 static void dispatch_scene_update(void* my_data, calldata_t* cd) {
@@ -1107,36 +1120,6 @@ static void handle_scene_item_deselect(void *my_data, calldata_t *cd)
 	}
 }
 
-static void handle_scene_item_remove(void *my_data, calldata_t *cd)
-{
-	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
-
-	obs_sceneitem_t *sceneitem =
-		(obs_sceneitem_t *)calldata_ptr(cd, "item");
-
-	if (!sceneitem)
-		return;
-
-	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemRemoved",
-				 "hostSceneItemRemoved", false);
-	dispatch_scene_update(my_data, cd);
-
-	if (!obs_sceneitem_is_group(sceneitem))
-		return;
-
-	obs_scene_t *group_scene = obs_sceneitem_group_get_scene(sceneitem);
-
-	remove_scene_signals(group_scene, (SESignalHandlerData *)my_data);
-
-	if (my_data) {
-		auto sceneManager =
-			((SESignalHandlerData *)my_data)->m_obsSceneManager;
-
-		if (sceneManager)
-			sceneManager->Update();
-	}
-}
-
 static void handle_scene_item_reorder(void *my_data, calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
@@ -1184,6 +1167,113 @@ static void handle_scene_item_source_rename(void *my_data, calldata_t *cd)
 	dispatch_scene_update(my_data, cd);
 }
 
+// Filter event handlers are special: they get a sceneitem as my_data
+static void handle_scene_item_source_filter_add(void *my_data, calldata_t *cd)
+{
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
+	// obs_source_t *source = (obs_source_t *)calldata_ptr(cd, "source");
+	// obs_source_t *filter = (obs_source_t *)calldata_ptr(cd, "filter");
+
+	auto sceneitem = (obs_sceneitem_t *)my_data;
+
+	if (!sceneitem)
+		return;
+
+	auto scene = obs_sceneitem_get_scene(sceneitem);
+
+	if (!scene)
+		return;
+
+	dispatch_scene_update(scene, true);
+}
+
+// Filter event handlers are special: they get a sceneitem as my_data
+static void handle_scene_item_source_filter_remove(void *my_data, calldata_t *cd)
+{
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
+	// obs_source_t *source = (obs_source_t *)calldata_ptr(cd, "source");
+	// obs_source_t *filter = (obs_source_t *)calldata_ptr(cd, "filter");
+
+	auto sceneitem = (obs_sceneitem_t *)my_data;
+
+	if (!sceneitem)
+		return;
+
+	auto scene = obs_sceneitem_get_scene(sceneitem);
+
+	if (!scene)
+		return;
+
+	dispatch_scene_update(scene, true);
+}
+
+// Filter event handlers are special: they get a sceneitem as my_data
+static void handle_scene_item_source_filter_reorder(void *my_data,
+						   calldata_t *cd)
+{
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
+	// obs_source_t *source = (obs_source_t *)calldata_ptr(cd, "source");
+
+	auto sceneitem = (obs_sceneitem_t *)my_data;
+
+	if (!sceneitem)
+		return;
+
+	auto scene = obs_sceneitem_get_scene(sceneitem);
+
+	if (!scene)
+		return;
+
+	dispatch_scene_update(scene, true);
+}
+
+static void add_filter_signals(obs_sceneitem_t* sceneitem)
+{
+	void *data = sceneitem; // Filter event handlers are special: they get a sceneitem as my_data
+
+	auto source = obs_sceneitem_get_source(sceneitem);
+
+	if (!source)
+		return;
+
+	auto handler = obs_source_get_signal_handler(source);
+
+	if (!handler)
+		return;
+
+	signal_handler_connect(handler, "filter_add",
+			       handle_scene_item_source_filter_add, data);
+	signal_handler_connect(handler, "filter_remove",
+			       handle_scene_item_source_filter_remove, data);
+	signal_handler_connect(handler, "reorder_filters",
+			       handle_scene_item_source_filter_reorder, data);
+}
+
+static void remove_filter_signals(obs_sceneitem_t *sceneitem)
+{
+	void *data = sceneitem; // Filter event handlers are special: they get a sceneitem as my_data
+
+	auto source = obs_sceneitem_get_source(sceneitem);
+
+	if (!source)
+		return;
+
+	auto handler = obs_source_get_signal_handler(source);
+
+	if (!handler)
+		return;
+
+	signal_handler_disconnect(handler, "filter_add",
+				  handle_scene_item_source_filter_add, data);
+	signal_handler_disconnect(handler, "filter_remove",
+				  handle_scene_item_source_filter_remove, data);
+	signal_handler_disconnect(handler, "reorder_filters",
+				  handle_scene_item_source_filter_reorder, data);
+}
+
 static void handle_scene_item_add(void *my_data, calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
@@ -1198,12 +1288,46 @@ static void handle_scene_item_add(void *my_data, calldata_t *cd)
 				 "hostSceneItemAdded", false);
 	dispatch_scene_update(my_data, cd);
 
+	add_filter_signals(sceneitem);
+
 	if (!obs_sceneitem_is_group(sceneitem))
 		return;
 
 	obs_scene_t *group_scene = obs_sceneitem_group_get_scene(sceneitem);
 
 	add_scene_signals(group_scene, (SESignalHandlerData *)my_data);
+
+	if (my_data) {
+		auto sceneManager =
+			((SESignalHandlerData *)my_data)->m_obsSceneManager;
+
+		if (sceneManager)
+			sceneManager->Update();
+	}
+}
+
+static void handle_scene_item_remove(void *my_data, calldata_t *cd)
+{
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
+	obs_sceneitem_t *sceneitem =
+		(obs_sceneitem_t *)calldata_ptr(cd, "item");
+
+	if (!sceneitem)
+		return;
+
+	remove_filter_signals(sceneitem);
+
+	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemRemoved",
+				 "hostSceneItemRemoved", false);
+	dispatch_scene_update(my_data, cd);
+
+	if (!obs_sceneitem_is_group(sceneitem))
+		return;
+
+	obs_scene_t *group_scene = obs_sceneitem_group_get_scene(sceneitem);
+
+	remove_scene_signals(group_scene, (SESignalHandlerData *)my_data);
 
 	if (my_data) {
 		auto sceneManager =
