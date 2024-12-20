@@ -1171,12 +1171,10 @@ static void handle_scene_item_source_rename(void *my_data, calldata_t *cd)
 }
 
 // Filter event handlers are special: they get a sceneitem as my_data
-static void handle_scene_item_source_filter_add(void *my_data, calldata_t *cd)
+static void handle_scene_item_source_filter_update_props(void *my_data,
+							 calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
-
-	// obs_source_t *source = (obs_source_t *)calldata_ptr(cd, "source");
-	// obs_source_t *filter = (obs_source_t *)calldata_ptr(cd, "filter");
 
 	auto sceneitem = (obs_sceneitem_t *)my_data;
 
@@ -1192,17 +1190,118 @@ static void handle_scene_item_source_filter_add(void *my_data, calldata_t *cd)
 }
 
 // Filter event handlers are special: they get a sceneitem as my_data
-static void handle_scene_item_source_filter_remove(void *my_data, calldata_t *cd)
+static void handle_scene_item_source_filter_update_settings(void *my_data,
+							    calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
-
-	// obs_source_t *source = (obs_source_t *)calldata_ptr(cd, "source");
-	// obs_source_t *filter = (obs_source_t *)calldata_ptr(cd, "filter");
 
 	auto sceneitem = (obs_sceneitem_t *)my_data;
 
 	if (!sceneitem)
 		return;
+
+	auto scene = obs_sceneitem_get_scene(sceneitem);
+
+	if (!scene)
+		return;
+
+	dispatch_scene_update(scene, true);
+}
+
+// Filter event handlers are special: they get a sceneitem as my_data
+static void handle_scene_item_source_filter_rename(void *my_data,
+						   calldata_t *cd)
+{
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
+	auto sceneitem = (obs_sceneitem_t *)my_data;
+
+	if (!sceneitem)
+		return;
+
+	auto scene = obs_sceneitem_get_scene(sceneitem);
+
+	if (!scene)
+		return;
+
+	dispatch_scene_update(scene, true);
+}
+
+static void connect_filter_source_signals(obs_source_t* filter, void* data)
+{
+	auto handler = obs_source_get_signal_handler(filter);
+
+	if (!handler)
+		return;
+
+	signal_handler_connect(handler, "update",
+			       handle_scene_item_source_filter_update_settings,
+			       data);
+
+	signal_handler_connect(handler, "update_properties",
+			       handle_scene_item_source_filter_update_props,
+			       data);
+
+	signal_handler_connect(handler, "rename",
+			       handle_scene_item_source_filter_rename, data);
+}
+
+static void disconnect_filter_source_signals(obs_source_t *filter, void *data)
+{
+	auto handler = obs_source_get_signal_handler(filter);
+
+	if (!handler)
+		return;
+
+	signal_handler_disconnect(
+		handler, "update",
+		handle_scene_item_source_filter_update_settings, data);
+
+	signal_handler_disconnect(handler, "update_properties",
+				  handle_scene_item_source_filter_update_props,
+				  data);
+
+	signal_handler_disconnect(handler, "rename",
+				  handle_scene_item_source_filter_rename, data);
+}
+
+// Filter event handlers are special: they get a sceneitem as my_data
+static void handle_scene_item_source_filter_add(void *my_data, calldata_t *cd)
+{
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
+	// obs_source_t *source = (obs_source_t *)calldata_ptr(cd, "source");
+	obs_source_t *filter = (obs_source_t *)calldata_ptr(cd, "filter");
+
+	auto sceneitem = (obs_sceneitem_t *)my_data;
+
+	if (!sceneitem)
+		return;
+
+	connect_filter_source_signals(filter, my_data);
+
+	auto scene = obs_sceneitem_get_scene(sceneitem);
+
+	if (!scene)
+		return;
+
+	dispatch_scene_update(scene, true);
+}
+
+// Filter event handlers are special: they get a sceneitem as my_data
+static void handle_scene_item_source_filter_remove(void *my_data, calldata_t *cd)
+{
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
+	// obs_source_t *source = (obs_source_t *)calldata_ptr(cd, "source");
+	obs_source_t *filter = (obs_source_t *)calldata_ptr(cd, "filter");
+
+	auto sceneitem = (obs_sceneitem_t *)my_data;
+
+	if (!sceneitem)
+		return;
+
+	disconnect_filter_source_signals(filter, my_data);
 
 	auto scene = obs_sceneitem_get_scene(sceneitem);
 
@@ -1253,6 +1352,13 @@ static void add_filter_signals(obs_sceneitem_t* sceneitem)
 			       handle_scene_item_source_filter_remove, data);
 	signal_handler_connect(handler, "reorder_filters",
 			       handle_scene_item_source_filter_reorder, data);
+
+	obs_source_enum_filters(
+		source,
+		[](obs_source_t *source, obs_source_t *filter, void *data) {
+			connect_filter_source_signals(filter, data);
+		},
+		data);
 }
 
 static void remove_filter_signals(obs_sceneitem_t *sceneitem)
@@ -1275,6 +1381,13 @@ static void remove_filter_signals(obs_sceneitem_t *sceneitem)
 				  handle_scene_item_source_filter_remove, data);
 	signal_handler_disconnect(handler, "reorder_filters",
 				  handle_scene_item_source_filter_reorder, data);
+
+	obs_source_enum_filters(
+		source,
+		[](obs_source_t *source, obs_source_t *filter, void *data) {
+			disconnect_filter_source_signals(filter, data);
+		},
+		data);
 }
 
 static void handle_scene_item_add(void *my_data, calldata_t *cd)
