@@ -11,7 +11,53 @@
 
 #include "audio-wrapper-source.h"
 
-#include "StreamElementsObsSceneManager.hpp"
+static obs_scene_t *scene_create_private_with_custom_size(std::string name,
+							  uint32_t width,
+							  uint32_t height)
+{
+	//
+	// A newly created scene assumes OBS default output video mix's dimensions as indicated here:
+	// https://github.com/obsproject/obs-studio/blob/master/libobs/obs-scene.c#L1458-L1476
+	//
+	// To mitigate this, we apply custom size to the newly created scene through settings, and
+	// apply it via a call to obs_source_load2(), which executes this piece of code:
+	// https://github.com/obsproject/obs-studio/blob/master/libobs/obs-scene.c#L1269-L1300
+	//
+	// This ensures that a scene is always sized the same as our video view base width & height.
+	//
+
+	auto scene = obs_scene_create_private(name.c_str());
+
+	if (!scene)
+		return nullptr;
+
+	auto source = obs_scene_get_source(scene);
+
+	if (!source) {
+		obs_scene_release(scene);
+
+		return nullptr;
+	}
+
+	OBSDataAutoRelease settings = obs_source_get_settings(source);
+
+	obs_data_set_bool(settings, "custom_size", true);
+	obs_data_set_int(settings, "cx", width);
+	obs_data_set_int(settings, "cy", height);
+
+	obs_source_update(source, settings);
+	obs_source_load2(source);
+
+	return scene;
+}
+
+static void transition_set_defaults(obs_source_t *transition, uint32_t width,
+				    uint32_t height)
+{
+	//obs_transition_set_size(transition, width, height);
+	//obs_transition_set_alignment(transition, OBS_ALIGN_TOP | OBS_ALIGN_LEFT);
+	//obs_transition_set_scale_type(transition, OBS_TRANSITION_SCALE_ASPECT);
+}
 
 static void dispatch_external_event(std::string name, std::string args)
 {
@@ -789,13 +835,14 @@ public:
 
 
 	virtual void Render() {
-		//obs_view_render(m_videoView);
+		obs_view_render(m_videoView);
 
+		/*
 		m_compositionOwner->ProcessRenderingRoot(
 			[](obs_source_t *source) {
 				obs_source_video_render(source);
 			});
-		
+		*/
 	}
 };
 
@@ -853,7 +900,8 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 
 	obs_encoder_set_video(m_streamingVideoEncoder, m_video);
 
-	auto currentScene = obs_scene_create_private(GetUniqueSceneName("Scene").c_str());
+	auto currentScene = scene_create_private_with_custom_size(
+		GetUniqueSceneName("Scene").c_str(), m_baseWidth, m_baseHeight);
 	m_currentScene = obs_scene_get_ref(currentScene);
 	m_scenes.push_back(currentScene);
 
@@ -864,6 +912,8 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 			   m_signalHandlerData);
 
 	obs_transition_set(m_transition, obs_scene_get_source(currentScene));
+
+	transition_set_defaults(m_transition, m_baseWidth, m_baseHeight);
 
 	auto source = obs_scene_get_source(currentScene);
 	if (source) {
@@ -1174,7 +1224,9 @@ void StreamElementsCustomVideoComposition::GetAllScenesInternal(scenes_t &result
 obs_scene_t *
 StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 {
-	auto scene = obs_scene_create_private(GetUniqueSceneName(requestName).c_str());
+	auto scene =
+		scene_create_private_with_custom_size(GetUniqueSceneName(requestName).c_str(),
+				     m_baseWidth, m_baseHeight);
 
 	obs_scene_get_ref(scene); // caller will release
 
@@ -1247,6 +1299,8 @@ void StreamElementsCustomVideoComposition::SetTransition(
 		obs_transition_set(transition,
 				   obs_scene_get_source(m_currentScene));
 	}
+
+	transition_set_defaults(m_transition, m_baseWidth, m_baseHeight);
 
 	auto jsonValue = CefValue::Create();
 	SerializeComposition(jsonValue);
