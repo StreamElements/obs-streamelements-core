@@ -152,6 +152,10 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 							context->result,
 							JSON_WRITER_DEFAULT));
 
+					if (!StreamElementsGlobalStateManager::
+						    IsInstanceAvailable())
+						return;
+
 					auto apiServer =
 						StreamElementsGlobalStateManager::
 							GetInstance()
@@ -369,6 +373,9 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlersInternal(
 	msg->GetArgumentList()->SetString(0, "host");
 	msg->GetArgumentList()->SetString(1, jsonString);
 
+	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+		return;
+
 	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
 				 ->GetWebsocketApiServer();
 
@@ -410,6 +417,9 @@ void StreamElementsApiMessageHandler::RegisterApiPropsInternal(
 	msg->GetArgumentList()->SetString(0, "host");
 	msg->GetArgumentList()->SetString(1, jsonString);
 
+	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+		return;
+
 	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
 				 ->GetWebsocketApiServer();
 
@@ -429,6 +439,9 @@ void StreamElementsApiMessageHandler::DispatchEventInternal(
 	std::string target, std::string event,
 	std::string eventArgsJson)
 {
+	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+		return;
+
 	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
 				 ->GetWebsocketApiServer();
 

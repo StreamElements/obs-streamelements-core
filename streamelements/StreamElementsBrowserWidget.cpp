@@ -444,11 +444,14 @@ StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 
 	RemoveVideoCompositionView();
 
-	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
-				 ->GetWebsocketApiServer();
+	if (StreamElementsGlobalStateManager::IsInstanceAvailable()) {
+		auto apiServer = StreamElementsGlobalStateManager::GetInstance()
+					 ->GetWebsocketApiServer();
 
-	if (apiServer) {
-		apiServer->UnregisterMessageHandler(m_clientId, m_msgHandler);
+		if (apiServer) {
+			apiServer->UnregisterMessageHandler(m_clientId,
+							    m_msgHandler);
+		}
 	}
 
 	m_requestedApiMessageHandler->SetBrowserWidget(nullptr);

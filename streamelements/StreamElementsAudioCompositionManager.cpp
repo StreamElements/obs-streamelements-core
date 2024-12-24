@@ -17,6 +17,9 @@ static void dispatch_external_event(std::string name, std::string args)
 
 static void dispatch_js_event(std::string name, std::string args)
 {
+	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+		return;
+
 	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
 				 ->GetWebsocketApiServer();
 

@@ -3455,6 +3455,9 @@ bool IsSafeFileExtension(std::string path)
 
 void DispatchClientMessage(std::string target, CefRefPtr<CefProcessMessage> msg)
 {
+	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+		return;
+
 	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
 				 ->GetWebsocketApiServer();
 
@@ -3466,6 +3469,9 @@ void DispatchClientMessage(std::string target, CefRefPtr<CefProcessMessage> msg)
 
 void DispatchClientJSEvent(std::string event, std::string eventArgsJson)
 {
+	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+		return;
+
 	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
 				 ->GetWebsocketApiServer();
 
@@ -3477,6 +3483,9 @@ void DispatchClientJSEvent(std::string event, std::string eventArgsJson)
 
 void DispatchClientJSEvent(std::string target, std::string event, std::string eventArgsJson)
 {
+	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+		return;
+
 	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
 				 ->GetWebsocketApiServer();
 

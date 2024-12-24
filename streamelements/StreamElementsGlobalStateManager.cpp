@@ -132,6 +132,10 @@ void StreamElementsGlobalStateManager::ThemeChangeListener::changeEvent(
 				{"name", newTheme},
 			};
 
+			if (!StreamElementsGlobalStateManager::
+				    IsInstanceAvailable())
+				return;
+
 			auto apiServer =
 				StreamElementsGlobalStateManager::GetInstance()
 					->GetWebsocketApiServer();
@@ -258,6 +262,9 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 	}
 
 	if (name.size()) {
+		if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+			return;
+
 		auto apiServer = StreamElementsGlobalStateManager::GetInstance()
 					 ->GetWebsocketApiServer();
 
@@ -825,6 +832,9 @@ void StreamElementsGlobalStateManager::DeleteCookies()
 static void DispatchJSEventAllBrowsers(const char *eventName,
 				       const char *jsonString)
 {
+	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+		return;
+
 	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
 				 ->GetWebsocketApiServer();
 

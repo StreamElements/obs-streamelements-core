@@ -878,11 +878,16 @@ static void dispatch_scene_update(obs_scene_t* scene,
 		return;
 
 	if (shouldDelay) {
+		auto sceneRef = obs_scene_get_ref(scene);
+
 		QtDelayTask(
 			[=]() -> void {
 				dispatch_scene_event(
-					scene, "hostActiveSceneItemListChanged",
+					sceneRef,
+					"hostActiveSceneItemListChanged",
 					"hostSceneItemListChanged");
+
+				obs_scene_release(sceneRef);
 			},
 			1);
 	} else {
