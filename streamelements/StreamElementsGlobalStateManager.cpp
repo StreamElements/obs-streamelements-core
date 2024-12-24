@@ -317,7 +317,10 @@ void StreamElementsGlobalStateManager::Destroy()
 
 bool StreamElementsGlobalStateManager::IsInstanceAvailable()
 {
-	return (!!s_instance.get());
+	if (!s_instance.get())
+		return false;
+
+	return s_instance->IsInitialized();
 }
 
 

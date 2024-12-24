@@ -243,6 +243,10 @@ bool StreamElementsWidgetManager::AddDockWidget(
 			m_dockWidgetAreas[savedId] = area;
 
 			QtPostTask([]() -> void {
+				if (!StreamElementsGlobalStateManager::
+					    IsInstanceAvailable())
+					return;
+
 				StreamElementsGlobalStateManager::GetInstance()
 					->PersistState();
 			});
@@ -250,12 +254,20 @@ bool StreamElementsWidgetManager::AddDockWidget(
 
 	QObject::connect(dock, &QDockWidget::visibilityChanged, [this]() {
 		QtPostTask([]() -> void {
+			if (!StreamElementsGlobalStateManager::
+				    IsInstanceAvailable())
+				return;
+
 			StreamElementsGlobalStateManager::GetInstance()
 				->PersistState();
 		});
 
 		QtDelayTask(
 			[]() -> void {
+				if (!StreamElementsGlobalStateManager::
+					    IsInstanceAvailable())
+					return;
+
 				if (!StreamElementsGlobalStateManager::
 					     GetInstance()
 						     ->IsInitialized())
