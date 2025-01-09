@@ -57,6 +57,8 @@
 #include <condition_variable>
 #include <QUrl>
 
+#define HANG_DETECTION_ENABLED 0
+
 #define STATUS_HANG_DETECTED 0xE0000001
 
 /* ================================================================= */
@@ -279,12 +281,13 @@ static void DestroyMessageWindow()
 
 /* ================================================================= */
 
-LONG CALLBACK CustomExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo);
+static bool s_isNotesSet = false;
+
+#if HANG_DETECTION_ENABLED
 
 static std::condition_variable s_eventHangDetectionStop;
 static std::mutex s_hangDetectionMutex;
 static std::shared_ptr<std::thread> s_threadHangDetection = nullptr;
-static bool s_isNotesSet = false;
 static bool s_isQtResponsive = true;
 
 static void HangDetectionThread()
@@ -480,6 +483,8 @@ static void StartHangDetection()
 	s_threadHangDetection =
 		std::make_shared<std::thread>(HangDetectionThread);
 }
+
+#endif
 
 /* ================================================================= */
 
@@ -1398,9 +1403,11 @@ static LONG CALLBACK CustomExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
 				     pExceptionInfo->ContextRecord);
 
 	if (InterlockedIncrement(&s_insideExceptionFilter) == 1L) {
+#if HANG_DETECTION_ENABLED
 		// Turn off hang detection so it doesn't pop up during minidump collection
 		// s_mdSender->setFlags(g_dwBugSplatBaseFlags);
 		StopHangDetection();
+#endif
 
 		CreateMessageWindow(false);
 
@@ -1488,12 +1495,16 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
 	s_prevExceptionFilter =
 		SetUnhandledExceptionFilter(CustomExceptionFilter);
 
+#if HANG_DETECTION_ENABLED
 	StartHangDetection();
+#endif
 }
 
 void StreamElementsCrashHandler::StopAsyncHangDetection()
 {
+#if HANG_DETECTION_ENABLED
 	StopHangDetection();
+#endif
 }
 
 StreamElementsCrashHandler::~StreamElementsCrashHandler()
