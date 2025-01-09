@@ -14,6 +14,7 @@ class StreamElementsVideoCompositionViewWidget : public QWidget, public StreamEl
 public:
 	bool m_destroyed = false;
 	os_event_t *m_destroy_event = nullptr;
+	std::shared_mutex m_destroy_event_mutex;
 
 	std::shared_ptr<FileTexture> m_overflowTexture =
 		std::make_shared<FileTexture>(

@@ -512,12 +512,14 @@ void StreamElementsVideoCompositionViewWidget::Destroy()
 		m_display = nullptr;
 	}
 
-	obs_enter_graphics();
-	if (m_destroy_event) {
-		os_event_destroy(m_destroy_event);
-		m_destroy_event = nullptr;
+	{
+		std::unique_lock lock(m_destroy_event_mutex);
+
+		if (m_destroy_event) {
+			os_event_destroy(m_destroy_event);
+			m_destroy_event = nullptr;
+		}
 	}
-	obs_leave_graphics();
 
 	m_visualElementsState.Clear();
 
@@ -564,11 +566,13 @@ void StreamElementsVideoCompositionViewWidget::CreateDisplay()
 	if (!QTToGSWindow(windowHandle(), info.window))
 		return;
 
-	obs_enter_graphics();
-	if (!m_destroy_event) {
-		os_event_init(&m_destroy_event, OS_EVENT_TYPE_MANUAL);
+	{
+		std::unique_lock lock(m_destroy_event_mutex);
+
+		if (!m_destroy_event) {
+			os_event_init(&m_destroy_event, OS_EVENT_TYPE_MANUAL);
+		}
 	}
-	obs_leave_graphics();
 
 	m_display = obs_display_create(&info, 0x303030L);
 
@@ -727,8 +731,12 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 		self->m_overflowTexture->Destroy();
 		self->m_overflowTexture = nullptr;
 
-		if (self->m_destroy_event) {
-			os_event_signal(self->m_destroy_event);
+		{
+			std::shared_lock lock(self->m_destroy_event_mutex);
+
+			if (self->m_destroy_event) {
+				os_event_signal(self->m_destroy_event);
+			}
 		}
 	} else if (hasWidgetInRegistry(self)) {
 		OBSSceneAutoRelease currentScene =
