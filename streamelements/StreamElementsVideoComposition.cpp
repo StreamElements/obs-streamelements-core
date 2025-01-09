@@ -1424,34 +1424,6 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 		m_scenes.clear();
 	}
 
-	// Clean all owned sources here
-
-	for (auto scene : scenesToRemove) {
-		std::vector<obs_sceneitem_t *> scene_items;
-
-		// Get all scene items
-		obs_scene_enum_items(
-			scene,
-			[](obs_scene_t *scene, obs_sceneitem_t *sceneitem,
-			   void *param) {
-				auto sceneitems = static_cast<std::vector<obs_sceneitem_t *>*>(
-					param);
-
-				sceneitems->push_back(sceneitem);
-
-				// Continue iteration
-				return true;
-			},
-			&scene_items);
-
-		for (auto sceneitem : scene_items) {
-			obs_sceneitem_remove(sceneitem);
-		}
-
-		dispatch_scene_item_list_changed_event(
-			this, scene);
-	}
-
 	// Clean all owned scenes here
 
 	// Clear current transition
@@ -1462,6 +1434,9 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 
 		remove_source_signals(source, m_signalHandlerData);
 		remove_scene_signals(scene, m_signalHandlerData);
+
+		obs_source_dec_showing(source);
+		obs_source_dec_active(source);
 
 		obs_scene_release(scene);
 	}
