@@ -697,10 +697,8 @@ void StreamElementsObsNativeVideoComposition::GetAllScenesInternal(
 
 	obs_frontend_get_scenes(&frontendScenes);
 
-	size_t removedCount = 0;
-
 	for (size_t idx = 0;
-	     idx < frontendScenes.sources.num && removedCount + 1 < frontendScenes.sources.num;
+	     idx < frontendScenes.sources.num;
 	     ++idx) {
 		/* Get the scene (a scene is a source) */
 		obs_source_t *source = frontendScenes.sources.array[idx];
