@@ -1298,7 +1298,19 @@ static void handle_scene_item_source_filter_remove(void *my_data, calldata_t *cd
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	// obs_source_t *source = (obs_source_t *)calldata_ptr(cd, "source");
+	obs_source_t *source = (obs_source_t *)calldata_ptr(cd, "source");
+
+	if (obs_source_removed(source)) {
+		//
+		// Do not process filter_removed signals for removed sources.
+		// 
+		// This applies to the case where OBS has removed it's scenes
+		// during a scene collection change, and removed non-referenced
+		// sources as a consequence.
+		//
+		return;
+	}
+
 	obs_source_t *filter = (obs_source_t *)calldata_ptr(cd, "filter");
 
 	auto sceneitem = (obs_sceneitem_t *)my_data;
