@@ -1089,6 +1089,11 @@ void SerializeExistingInputSources(
 	auto process = [](void *param, obs_source_t *source) -> bool {
 		auto context = (local_context_t *)param;
 
+		if (obs_source_removed(source)) {
+			// Skip sources which have been marked removed
+			return true;
+		}
+
 		// Get source caps
 		uint32_t sourceCaps = obs_source_get_output_flags(source);
 
