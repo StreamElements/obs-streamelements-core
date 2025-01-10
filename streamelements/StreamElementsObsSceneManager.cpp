@@ -2097,6 +2097,8 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 				videoComposition, sceneitem, root);
 
 			if (root->HasKey("filters")) {
+				remove_filter_signals(sceneitem);
+
 				if (!DeserializeObsSourceFilters(
 					    source,
 					    root->GetValue("filters"))) {
@@ -2109,6 +2111,10 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 						     .ToString()
 						     .c_str());
 				}
+
+				add_filter_signals(sceneitem);
+
+				dispatch_scene_update(parent_scene, true);
 			}
 
 			// Result
@@ -2200,6 +2206,8 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 				videoComposition, sceneitem, root);
 
 			if (root->HasKey("filters")) {
+				remove_filter_signals(sceneitem);
+
 				if (!DeserializeObsSourceFilters(
 					    source,
 					    root->GetValue("filters"))) {
@@ -2212,6 +2220,10 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 						     .ToString()
 						     .c_str());
 				}
+
+				add_filter_signals(sceneitem);
+
+				dispatch_scene_update(parent_scene, true);
 			}
 
 			// Result
@@ -2363,6 +2375,8 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 					videoComposition, sceneitem, root);
 
 				if (root->HasKey("filters")) {
+					remove_filter_signals(sceneitem);
+
 					if (!DeserializeObsSourceFilters(
 						    source,
 						    root->GetValue("filters"))) {
@@ -2377,6 +2391,11 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 							     .ToString()
 							     .c_str());
 					}
+
+					add_filter_signals(sceneitem);
+
+					dispatch_scene_update(parent_scene,
+							      true);
 				}
 
 				// Result
@@ -2491,6 +2510,8 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 				videoComposition, sceneitem, root);
 
 			if (root->HasKey("filters")) {
+				remove_filter_signals(sceneitem);
+
 				if (!DeserializeObsSourceFilters(
 					    source,
 					    root->GetValue("filters"))) {
@@ -2503,6 +2524,10 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 						     .ToString()
 						     .c_str());
 				}
+
+				add_filter_signals(sceneitem);
+
+				dispatch_scene_update(parent_scene, true);
 			}
 
 			// Result
