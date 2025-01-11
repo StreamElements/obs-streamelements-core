@@ -171,15 +171,13 @@ protected:
 protected:
 	QMainWindow *mainWindow() { return m_parent; }
 
-	void ObsAddSourceInternal(obs_source_t *parentScene,
-				  obs_sceneitem_t *parentGroup,
-				  const char *sourceId, const char *sourceName,
-				  obs_data_t *sourceSettings,
-				  obs_data_t *sourceHotkeyData,
-				  bool preferExistingSource,
-				  const char *existingSourceId,
-				  obs_source_t **output_source,
-				  obs_sceneitem_t **output_sceneitem);
+	void ObsAddSourceInternal(
+		obs_source_t *parentScene, obs_sceneitem_t *parentGroup,
+		const char *sourceId, const char *sourceName,
+		obs_data_t *sourceSettings, obs_data_t *sourceHotkeyData,
+		bool preferExistingSource, const char *existingSourceId,
+		obs_source_t **output_source,
+		obs_sceneitem_t **output_sceneitem, bool *isExistingSource);
 
 	void RefreshObsSceneItemsList();
 

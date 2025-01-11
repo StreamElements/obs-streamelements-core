@@ -1793,7 +1793,8 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 	obs_data_t *sourceSettings, obs_data_t *sourceHotkeyData,
 	bool preferExistingSource, const char *existingSourceId,
 	obs_source_t **output_source,
-	obs_sceneitem_t **output_sceneitem)
+	obs_sceneitem_t **output_sceneitem,
+	bool *isExistingSource)
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 	
@@ -1880,6 +1881,8 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 					   sourceHotkeyData);
 
 		obs_source_update(source, sourceSettings);
+	} else {
+		*isExistingSource = true;
 	}
 
 	/*
@@ -2077,11 +2080,14 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 		obs_source_t *source = nullptr;
 		obs_sceneitem_t *sceneitem = nullptr;
 
+		bool isExistingSource = false;
+
 		ObsAddSourceInternal(
 			parent_scene_source,
 			videoComposition->GetSceneItemById(groupId),
 			source_class.c_str(), unique_name.c_str(), settings,
-			nullptr, false, nullptr, &source, &sceneitem);
+			nullptr, false, nullptr, &source, &sceneitem,
+			&isExistingSource);
 
 		if (sceneitem) {
 			obs_transform_info info;
@@ -2096,7 +2102,7 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 			DeserializeAuxiliaryObsSceneItemProperties(
 				videoComposition, sceneitem, root);
 
-			if (root->HasKey("filters")) {
+			if (root->HasKey("filters") && !isExistingSource) {
 				remove_filter_signals(sceneitem);
 
 				if (!DeserializeObsSourceFilters(
@@ -2182,11 +2188,14 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 		obs_source_t *source = nullptr;
 		obs_sceneitem_t *sceneitem = nullptr;
 
+		bool isExistingSource = false;
+
 		ObsAddSourceInternal(
 			parent_scene_source,
 			videoComposition->GetSceneItemById(groupId),
 			source_class.c_str(), unique_name.c_str(), settings,
-			nullptr, false, nullptr, &source, &sceneitem);
+			nullptr, false, nullptr, &source, &sceneitem,
+			&isExistingSource);
 
 		//if (parent_scene) {
 		//	obs_source_release(parent_scene);
@@ -2205,7 +2214,7 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 			DeserializeAuxiliaryObsSceneItemProperties(
 				videoComposition, sceneitem, root);
 
-			if (root->HasKey("filters")) {
+			if (root->HasKey("filters") && !isExistingSource) {
 				remove_filter_signals(sceneitem);
 
 				if (!DeserializeObsSourceFilters(
@@ -2350,10 +2359,13 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 			obs_source_t *source = nullptr;
 			obs_sceneitem_t *sceneitem = nullptr;
 
+			bool isExistingSource = false;
+
 			ObsAddSourceInternal(
 				parent_scene_source, videoComposition->GetSceneItemById(groupId),
 				source_class.c_str(), unique_name.c_str(),
-				settings, nullptr, true, nullptr, &source, &sceneitem);
+				settings, nullptr, true, nullptr, &source,
+				&sceneitem, &isExistingSource);
 
 			//if (parent_scene) {
 			//	obs_source_release(parent_scene);
@@ -2374,7 +2386,8 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 				DeserializeAuxiliaryObsSceneItemProperties(
 					videoComposition, sceneitem, root);
 
-				if (root->HasKey("filters")) {
+				if (root->HasKey("filters") &&
+				    !isExistingSource) {
 					remove_filter_signals(sceneitem);
 
 					if (!DeserializeObsSourceFilters(
@@ -2483,6 +2496,8 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 		obs_source_t *source = nullptr;
 		obs_sceneitem_t *sceneitem = nullptr;
 
+		bool isExistingSource = false;
+
 		ObsAddSourceInternal(
 			parent_scene_source,
 			videoComposition->GetSceneItemById(groupId),
@@ -2490,7 +2505,7 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 			nullptr, preferExistingSourceReference,
 			existingSourceId.size() ? existingSourceId.c_str()
 						: nullptr,
-			&source, &sceneitem);
+			&source, &sceneitem, &isExistingSource);
 
 		//if (parent_scene) {
 		//	obs_source_release(parent_scene);
@@ -2509,7 +2524,7 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 			DeserializeAuxiliaryObsSceneItemProperties(
 				videoComposition, sceneitem, root);
 
-			if (root->HasKey("filters")) {
+			if (root->HasKey("filters") && !isExistingSource) {
 				remove_filter_signals(sceneitem);
 
 				if (!DeserializeObsSourceFilters(
