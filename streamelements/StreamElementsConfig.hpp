@@ -149,7 +149,8 @@ public:
 		}
 
 		if (!result.size()) {
-			result = "https://obs.streamelements.com/welcome";
+			// result = "https://obs.streamelements.com/welcome"; // old URL, yoink repo in github
+			result = "https://selive.streamelements.com/auth/login"; // obs-multistreaming repo in github
 		}
 
 		return result;
