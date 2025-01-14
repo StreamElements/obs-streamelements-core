@@ -3145,22 +3145,7 @@ void StreamElementsObsSceneManager::DeserializeAuxiliaryObsSceneItemProperties(
 	if (d->HasKey("order") && d->GetType("order") == VTYPE_INT) {
 		int order = d->GetInt("order");
 
-		auto update = [&]() -> void {
-			if (!obs_sceneitem_get_scene(sceneitem))
-				return;
-
-			obs_sceneitem_set_order_position(sceneitem,
-							 order);
-		};
-
-		using update_t = decltype(update);
-
-		obs_scene_atomic_update(
-			obs_sceneitem_get_scene(sceneitem),
-			[](void *data, obs_scene_t *) {
-				(*reinterpret_cast<update_t *>(data))();
-			},
-			&update);
+		obs_sceneitem_set_order_position(sceneitem, order);
 	}
 
 	if (d->HasKey("visible") && d->GetType("visible") == VTYPE_BOOL) {
