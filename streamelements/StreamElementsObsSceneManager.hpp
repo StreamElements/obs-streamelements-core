@@ -24,6 +24,9 @@ public:
 	StreamElementsObsSceneManager(QMainWindow *parent);
 	virtual ~StreamElementsObsSceneManager();
 
+private:
+	void CleanObsScenes();
+
 public:
 	void Update()
 	{
@@ -209,21 +212,195 @@ public:
 		: m_obsSceneManager(obsSceneManager),
 		  m_videoCompositionBase(videoCompositionBase)
 	{
+		AddRef();
 	}
 
-	~SESignalHandlerData() {}
+	~SESignalHandlerData()
+	{
+		Clear();
+	}
 
-public:
-	void Clear() {
+private:
+	SESignalHandlerData(
+		SESignalHandlerData *parent,
+		StreamElementsObsSceneManager *obsSceneManager,
+		StreamElementsVideoCompositionBase *videoCompositionBase,
+		obs_scene_t *scene)
+		: m_parent(parent),
+		  m_obsSceneManager(obsSceneManager),
+		  m_videoCompositionBase(videoCompositionBase),
+		  m_scene(obs_scene_get_ref(scene))
+	{
+	}
+
+	void Clear()
+	{
+		std::unique_lock lock(m_scenes_mutex);
+
 		m_videoCompositionBase = nullptr;
 		m_obsSceneManager = nullptr;
+
+		for (auto kv : m_scenes) {
+			delete kv.second;
+		}
+
+		m_scenes.clear();
+		m_scenes_refcount.clear();
+
+		if (m_scene) {
+			obs_scene_release(m_scene);
+		}
+	}
+
+public:
+	void AddRef() {
+		std::unique_lock lock(m_refcount_mutex);
+
+		if (m_parent) {
+			m_parent->AddRef();
+		} else {
+			++m_refcount;
+		}
+	}
+
+	void Release() {
+		std::unique_lock lock(m_refcount_mutex);
+
+		if (m_parent) {
+			m_parent->Release();
+		} else {
+			--m_refcount;
+
+			if (m_refcount == 0) {
+				blog(LOG_INFO,
+				     "[obs-streamelements-core]: released SESignalHandlerData for video composition '%s'", m_videoCompositionBase->GetId().c_str());
+
+				delete this;
+			}
+		}
+	}
+
+	void GetScenes(std::vector<obs_scene_t *> &scenes)
+	{
+		SESignalHandlerData *self = this;
+
+		while (self->m_parent)
+			self = m_parent;
+
+		std::shared_lock lock(self->m_scenes_mutex);
+		for (auto kv : self->m_scenes)
+			scenes.push_back(kv.first);
+	}
+
+	SESignalHandlerData *GetSceneRef(obs_scene_t *scene)
+	{
+		if (obs_scene_is_group(scene) && m_scene) {
+			// If it's a group, use OUR scene (root scene) instead
+			scene = m_scene;
+		}
+
+		if (m_parent) {
+			return m_parent->GetSceneRef(scene);
+		}
+
+		std::shared_lock lock(m_scenes_mutex);
+
+		if (!m_scenes.count(scene))
+			return nullptr;
+
+		return m_scenes[scene];
+	}
+
+	SESignalHandlerData* AddSceneRef(obs_scene_t* scene) {
+		if (obs_scene_is_group(scene) && m_scene) {
+			// If it's a group, use OUR scene (root scene) instead
+			scene = m_scene;
+		}
+
+		if (m_parent) {
+			return m_parent->AddSceneRef(scene);
+		}
+
+		std::unique_lock lock(m_scenes_mutex);
+
+		if (!m_scenes.count(scene)) {
+			m_scenes[scene] = new SESignalHandlerData(
+				this,
+				m_obsSceneManager, m_videoCompositionBase,
+				scene);
+
+			m_scenes_refcount[scene] = 1;
+
+			AddRef();
+		} else {
+			++m_scenes_refcount[scene];
+		}
+
+		return m_scenes[scene];
+	}
+
+	void RemoveSceneRef(obs_scene_t* scene) {
+		if (obs_scene_is_group(scene) && m_scene) {
+			// If it's a group, use OUR scene (root scene) instead
+			scene = m_scene;
+		}
+
+		if (m_parent) {
+			m_parent->RemoveSceneRef(scene);
+
+			return;
+		}
+
+		std::unique_lock lock(m_scenes_mutex);
+
+		if (!m_scenes.count(scene))
+			return;
+
+		--m_scenes_refcount[scene];
+
+		if (m_scenes_refcount[scene] == 0) {
+			delete m_scenes[scene];
+
+			m_scenes_refcount.erase(scene);
+			m_scenes.erase(scene);
+
+			Release();
+		}
+	}
+
+	obs_scene_t* GetRootSceneRef()
+	{
+		std::shared_lock lock(m_scenes_mutex);
+
+		auto item = this;
+
+		obs_scene_t* scene = m_scene;
+
+		while (scene && item->m_scene && item->m_parent) {
+			item = item->m_parent;
+
+			if (item->m_scene)
+				scene = item->m_scene;
+		}
+
+		return obs_scene_get_ref(scene);
 	}
 
 public:
 	char m_header[7] = "header"; // TODO: Remvoe debug marker
 	StreamElementsObsSceneManager *m_obsSceneManager = nullptr;
 	StreamElementsVideoCompositionBase *m_videoCompositionBase = nullptr;
+	obs_scene_t* m_scene = nullptr;
 	char m_footer[7] = "footer"; // TODO: Remvoe debug marker
+
+private:
+	std::shared_mutex m_scenes_mutex;
+	std::map<obs_scene_t *, SESignalHandlerData *> m_scenes;
+	std::map<obs_scene_t *, uint32_t> m_scenes_refcount;
+	SESignalHandlerData *m_parent = nullptr;
+
+	std::shared_mutex m_refcount_mutex;
+	uint32_t m_refcount = 0;
 };
 
 void add_scene_signals(obs_source_t *scene, SESignalHandlerData *data);

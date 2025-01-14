@@ -19,6 +19,7 @@
 #include "StreamElementsGlobalStateManager.hpp"
 
 #include "canvas-mutate.hpp"
+#include "canvas-scan.hpp"
 
 #ifndef WIN32
 #define stricmp strcasecmp
@@ -885,7 +886,8 @@ static void dispatch_scene_event(void *my_data, calldata_t *cd,
 }
 
 static void dispatch_scene_update(obs_scene_t* scene,
-				  bool shouldDelay)
+				  bool shouldDelay,
+				  std::function<void()> doneCallback = [](){})
 {
 	if (s_shutdown)
 		return;
@@ -904,11 +906,15 @@ static void dispatch_scene_update(obs_scene_t* scene,
 					"hostSceneItemListChanged");
 
 				obs_scene_release(sceneRef);
+
+				doneCallback();
 			},
 			1);
 	} else {
 		dispatch_scene_event(scene, "hostActiveSceneItemListChanged",
 				     "hostSceneItemListChanged");
+
+		doneCallback();
 	}
 }
 
@@ -918,12 +924,24 @@ static void dispatch_scene_update(void *my_data, calldata_t *cd,
 	if (s_shutdown)
 		return;
 
-	obs_scene_t *scene = (obs_scene_t *)calldata_ptr(cd, "scene");
+	auto signalHandlerData = static_cast<SESignalHandlerData *>(my_data);
 
-	if (!scene)
-		return;
+	if (!signalHandlerData) {
+		obs_scene_t *scene = (obs_scene_t *)calldata_ptr(cd, "scene");
 
-	dispatch_scene_update(scene, shouldDelay);
+		if (!scene)
+			return;
+
+		dispatch_scene_update(scene, shouldDelay);
+	} else {
+		OBSSceneAutoRelease scene =
+			signalHandlerData->GetRootSceneRef();
+
+		if (!scene)
+			return;
+
+		dispatch_scene_update(scene, shouldDelay);
+	}
 }
 
 static void dispatch_scene_update(void* my_data, calldata_t* cd) {
@@ -1191,18 +1209,17 @@ static void handle_scene_item_source_rename(void *my_data, calldata_t *cd)
 	dispatch_scene_update(my_data, cd);
 }
 
-// Filter event handlers are special: they get a sceneitem as my_data
 static void handle_scene_item_source_filter_update_props(void *my_data,
 							 calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	auto sceneitem = (obs_sceneitem_t *)my_data;
+	auto signalHandlerData = static_cast<SESignalHandlerData *>(my_data);
 
-	if (!sceneitem)
+	if (!signalHandlerData)
 		return;
 
-	auto scene = obs_sceneitem_get_scene(sceneitem);
+	OBSSceneAutoRelease scene = signalHandlerData->GetRootSceneRef();
 
 	if (!scene)
 		return;
@@ -1210,20 +1227,17 @@ static void handle_scene_item_source_filter_update_props(void *my_data,
 	dispatch_scene_update(scene, true);
 }
 
-// Filter event handlers are special: they get a sceneitem as my_data
 static void handle_scene_item_source_filter_update_settings(void *my_data,
 							    calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	auto sceneitem = (obs_sceneitem_t *)my_data;
+	auto signalHandlerData = static_cast<SESignalHandlerData *>(my_data);
 
-	if (!sceneitem)
+	if (!signalHandlerData)
 		return;
 
-	// obs_scene_find_source_recursive()
-
-	auto scene = obs_sceneitem_get_scene(sceneitem);
+	OBSSceneAutoRelease scene = signalHandlerData->GetRootSceneRef();
 
 	if (!scene)
 		return;
@@ -1231,18 +1245,17 @@ static void handle_scene_item_source_filter_update_settings(void *my_data,
 	dispatch_scene_update(scene, true);
 }
 
-// Filter event handlers are special: they get a sceneitem as my_data
 static void handle_scene_item_source_filter_rename(void *my_data,
 						   calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	auto sceneitem = (obs_sceneitem_t *)my_data;
+	auto signalHandlerData = static_cast<SESignalHandlerData *>(my_data);
 
-	if (!sceneitem)
+	if (!signalHandlerData)
 		return;
 
-	auto scene = obs_sceneitem_get_scene(sceneitem);
+	OBSSceneAutoRelease scene = signalHandlerData->GetRootSceneRef();
 
 	if (!scene)
 		return;
@@ -1250,7 +1263,8 @@ static void handle_scene_item_source_filter_rename(void *my_data,
 	dispatch_scene_update(scene, true);
 }
 
-static void connect_filter_source_signals(obs_source_t* filter, void* data)
+static void connect_filter_source_signals(obs_source_t *filter,
+					  SESignalHandlerData *data)
 {
 	auto handler = obs_source_get_signal_handler(filter);
 
@@ -1269,7 +1283,8 @@ static void connect_filter_source_signals(obs_source_t* filter, void* data)
 			       handle_scene_item_source_filter_rename, data);
 }
 
-static void disconnect_filter_source_signals(obs_source_t *filter, void *data)
+static void disconnect_filter_source_signals(obs_source_t *filter,
+					     SESignalHandlerData *data)
 {
 	auto handler = obs_source_get_signal_handler(filter);
 
@@ -1288,7 +1303,6 @@ static void disconnect_filter_source_signals(obs_source_t *filter, void *data)
 				  handle_scene_item_source_filter_rename, data);
 }
 
-// Filter event handlers are special: they get a sceneitem as my_data
 static void handle_scene_item_source_filter_add(void *my_data, calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
@@ -1296,14 +1310,14 @@ static void handle_scene_item_source_filter_add(void *my_data, calldata_t *cd)
 	// obs_source_t *source = (obs_source_t *)calldata_ptr(cd, "source");
 	obs_source_t *filter = (obs_source_t *)calldata_ptr(cd, "filter");
 
-	auto sceneitem = (obs_sceneitem_t *)my_data;
+	auto signalHandlerData = static_cast<SESignalHandlerData *>(my_data);
 
-	if (!sceneitem)
+	if (!signalHandlerData)
 		return;
 
-	connect_filter_source_signals(filter, my_data);
+	connect_filter_source_signals(filter, signalHandlerData);
 
-	auto scene = obs_sceneitem_get_scene(sceneitem);
+	OBSSceneAutoRelease scene = signalHandlerData->GetRootSceneRef();
 
 	if (!scene)
 		return;
@@ -1311,7 +1325,6 @@ static void handle_scene_item_source_filter_add(void *my_data, calldata_t *cd)
 	dispatch_scene_update(scene, true);
 }
 
-// Filter event handlers are special: they get a sceneitem as my_data
 static void handle_scene_item_source_filter_remove(void *my_data, calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
@@ -1331,14 +1344,14 @@ static void handle_scene_item_source_filter_remove(void *my_data, calldata_t *cd
 
 	obs_source_t *filter = (obs_source_t *)calldata_ptr(cd, "filter");
 
-	auto sceneitem = (obs_sceneitem_t *)my_data;
+	auto signalHandlerData = static_cast<SESignalHandlerData *>(my_data);
 
-	if (!sceneitem)
+	if (!signalHandlerData)
 		return;
 
-	disconnect_filter_source_signals(filter, my_data);
+	disconnect_filter_source_signals(filter, signalHandlerData);
 
-	auto scene = obs_sceneitem_get_scene(sceneitem);
+	OBSSceneAutoRelease scene = signalHandlerData->GetRootSceneRef();
 
 	if (!scene)
 		return;
@@ -1346,7 +1359,6 @@ static void handle_scene_item_source_filter_remove(void *my_data, calldata_t *cd
 	dispatch_scene_update(scene, true);
 }
 
-// Filter event handlers are special: they get a sceneitem as my_data
 static void handle_scene_item_source_filter_reorder(void *my_data,
 						   calldata_t *cd)
 {
@@ -1354,12 +1366,12 @@ static void handle_scene_item_source_filter_reorder(void *my_data,
 
 	// obs_source_t *source = (obs_source_t *)calldata_ptr(cd, "source");
 
-	auto sceneitem = (obs_sceneitem_t *)my_data;
+	auto signalHandlerData = static_cast<SESignalHandlerData *>(my_data);
 
-	if (!sceneitem)
+	if (!signalHandlerData)
 		return;
 
-	auto scene = obs_sceneitem_get_scene(sceneitem);
+	OBSSceneAutoRelease scene = signalHandlerData->GetRootSceneRef();
 
 	if (!scene)
 		return;
@@ -1367,10 +1379,8 @@ static void handle_scene_item_source_filter_reorder(void *my_data,
 	dispatch_scene_update(scene, true);
 }
 
-static void add_filter_signals(obs_sceneitem_t* sceneitem)
+static void add_filter_signals(obs_sceneitem_t *sceneitem, SESignalHandlerData* data)
 {
-	void *data = sceneitem; // Filter event handlers are special: they get a sceneitem as my_data
-
 	auto source = obs_sceneitem_get_source(sceneitem);
 
 	if (!source)
@@ -1391,15 +1401,16 @@ static void add_filter_signals(obs_sceneitem_t* sceneitem)
 	obs_source_enum_filters(
 		source,
 		[](obs_source_t *source, obs_source_t *filter, void *data) {
-			connect_filter_source_signals(filter, data);
+			connect_filter_source_signals(
+				filter,
+				static_cast<SESignalHandlerData *>(data));
 		},
 		data);
 }
 
-static void remove_filter_signals(obs_sceneitem_t *sceneitem)
+static void remove_filter_signals(obs_sceneitem_t *sceneitem,
+				  SESignalHandlerData* data)
 {
-	void *data = sceneitem; // Filter event handlers are special: they get a sceneitem as my_data
-
 	auto source = obs_sceneitem_get_source(sceneitem);
 
 	if (!source)
@@ -1420,7 +1431,9 @@ static void remove_filter_signals(obs_sceneitem_t *sceneitem)
 	obs_source_enum_filters(
 		source,
 		[](obs_source_t *source, obs_source_t *filter, void *data) {
-			disconnect_filter_source_signals(filter, data);
+			disconnect_filter_source_signals(
+				filter,
+				static_cast<SESignalHandlerData *>(data));
 		},
 		data);
 }
@@ -1439,18 +1452,27 @@ static void handle_scene_item_add(void *my_data, calldata_t *cd)
 				 "hostSceneItemAdded", false);
 	dispatch_scene_update(my_data, cd);
 
-	add_filter_signals(sceneitem);
+	auto source = obs_sceneitem_get_source(sceneitem);
+
+	if (source) {
+		add_source_signals(source,
+				   static_cast<SESignalHandlerData *>(my_data));
+	}
+
+	add_filter_signals(sceneitem,
+			   static_cast<SESignalHandlerData *>(my_data));
 
 	if (!obs_sceneitem_is_group(sceneitem))
 		return;
 
 	obs_scene_t *group_scene = obs_sceneitem_group_get_scene(sceneitem);
 
-	add_scene_signals(group_scene, (SESignalHandlerData *)my_data);
+	add_scene_signals(group_scene,
+			  static_cast<SESignalHandlerData *>(my_data));
 
 	if (my_data) {
 		auto sceneManager =
-			((SESignalHandlerData *)my_data)->m_obsSceneManager;
+			static_cast<SESignalHandlerData *>(my_data)->m_obsSceneManager;
 
 		if (sceneManager)
 			sceneManager->Update();
@@ -1467,7 +1489,15 @@ static void handle_scene_item_remove(void *my_data, calldata_t *cd)
 	if (!sceneitem)
 		return;
 
-	remove_filter_signals(sceneitem);
+	remove_filter_signals(sceneitem,
+			      static_cast<SESignalHandlerData *>(my_data));
+
+	auto source = obs_sceneitem_get_source(sceneitem);
+
+	if (source) {
+		remove_source_signals(
+			source, static_cast<SESignalHandlerData *>(my_data));
+	}
 
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemRemoved",
 				 "hostSceneItemRemoved", false);
@@ -1478,11 +1508,12 @@ static void handle_scene_item_remove(void *my_data, calldata_t *cd)
 
 	obs_scene_t *group_scene = obs_sceneitem_group_get_scene(sceneitem);
 
-	remove_scene_signals(group_scene, (SESignalHandlerData *)my_data);
+	remove_scene_signals(group_scene,
+			     static_cast<SESignalHandlerData *>(my_data));
 
 	if (my_data) {
-		auto sceneManager =
-			((SESignalHandlerData *)my_data)->m_obsSceneManager;
+		auto sceneManager = static_cast<SESignalHandlerData *>(my_data)
+					    ->m_obsSceneManager;
 
 		if (sceneManager)
 			sceneManager->Update();
@@ -1528,31 +1559,53 @@ void remove_scene_signals(obs_scene_t *scene, SESignalHandlerData *data)
 
 	obs_source_t *source = obs_scene_get_source(scene);
 
-	if (source) {
-		auto handler = obs_source_get_signal_handler(source);
+	if (!source)
+		return;
 
-		signal_handler_disconnect(handler, "item_add",
-					  handle_scene_item_add, data);
-		signal_handler_disconnect(handler, "item_remove",
-					  handle_scene_item_remove, data);
-		signal_handler_disconnect(handler, "reorder",
-					  handle_scene_item_reorder, data);
-		signal_handler_disconnect(handler, "item_visible",
-					  dispatch_scene_update, data);
-		signal_handler_disconnect(handler, "item_locked",
-					  dispatch_scene_update, data);
-		signal_handler_disconnect(handler, "item_select",
-					  handle_scene_item_select, data);
-		signal_handler_disconnect(handler, "item_deselect",
-					  handle_scene_item_deselect, data);
-		signal_handler_disconnect(handler, "item_transform",
-					  handle_scene_item_transform, data);
+	auto signalHandlerData = data->GetSceneRef(scene);
+	auto handler = obs_source_get_signal_handler(source);
 
-		signal_handler_disconnect(handler, "rename",
-					  handle_scene_rename, data);
-		signal_handler_disconnect(handler, "remove",
-					  handle_scene_remove, data);
-	}
+	signal_handler_disconnect(handler, "item_add", handle_scene_item_add,
+				  signalHandlerData);
+	signal_handler_disconnect(handler, "item_remove",
+				  handle_scene_item_remove, signalHandlerData);
+	signal_handler_disconnect(handler, "reorder", handle_scene_item_reorder,
+				  signalHandlerData);
+	signal_handler_disconnect(handler, "item_visible",
+				  dispatch_scene_update, signalHandlerData);
+	signal_handler_disconnect(handler, "item_locked", dispatch_scene_update,
+				  signalHandlerData);
+	signal_handler_disconnect(handler, "item_select",
+				  handle_scene_item_select, signalHandlerData);
+	signal_handler_disconnect(handler, "item_deselect",
+				  handle_scene_item_deselect,
+				  signalHandlerData);
+	signal_handler_disconnect(handler, "item_transform",
+				  handle_scene_item_transform,
+				  signalHandlerData);
+
+	signal_handler_disconnect(handler, "rename", handle_scene_rename,
+				  signalHandlerData);
+	signal_handler_disconnect(handler, "remove", handle_scene_remove,
+				  signalHandlerData);
+
+	remove_source_signals(source, signalHandlerData);
+
+	scanSceneItems(
+		scene,
+		[&](obs_sceneitem_t *item,
+		    obs_sceneitem_t *parent_item) -> bool {
+			calldata_t *cd = calldata_create();
+			calldata_set_ptr(cd, "item", item);
+
+			handle_scene_item_remove(signalHandlerData, cd);
+			calldata_destroy(cd);
+
+			return true;
+		},
+		true);
+
+	data->RemoveSceneRef(scene);
 }
 
 void remove_scene_signals(obs_source_t *sceneSource, SESignalHandlerData *data)
@@ -1575,35 +1628,48 @@ void add_scene_signals(obs_scene_t *scene, SESignalHandlerData *data)
 
 	obs_source_t *source = obs_scene_get_source(scene);
 
-	if (source) {
-		auto handler = obs_source_get_signal_handler(source);
+	if (!source)
+		return;
 
-		signal_handler_connect(handler, "item_add",
-					handle_scene_item_add, data);
-		signal_handler_connect(handler, "item_remove",
-					handle_scene_item_remove, data);
-		signal_handler_connect(handler, "reorder",
-					handle_scene_item_reorder, data);
-		signal_handler_connect(handler, "item_visible",
-					dispatch_scene_update, data);
-		signal_handler_connect(handler, "item_locked",
-					dispatch_scene_update, data);
-		signal_handler_connect(handler, "item_select",
-					handle_scene_item_select, data);
-		signal_handler_connect(handler, "item_deselect",
-					handle_scene_item_deselect,
-					data);
-		signal_handler_connect(handler, "item_transform",
-					handle_scene_item_transform,
-					data);
+	auto signalHandlerData = data->AddSceneRef(scene);
 
-		signal_handler_connect(handler, "rename",
-					handle_scene_rename,
-					data);
-		signal_handler_connect(handler, "remove",
-					handle_scene_remove,
-					data);
-	}
+	auto handler = obs_source_get_signal_handler(source);
+
+	add_source_signals(source, signalHandlerData);
+
+	signal_handler_connect(handler, "item_add", handle_scene_item_add,
+			       signalHandlerData);
+	signal_handler_connect(handler, "item_remove", handle_scene_item_remove,
+			       signalHandlerData);
+	signal_handler_connect(handler, "reorder", handle_scene_item_reorder,
+			       signalHandlerData);
+	signal_handler_connect(handler, "item_visible", dispatch_scene_update,
+			       signalHandlerData);
+	signal_handler_connect(handler, "item_locked", dispatch_scene_update,
+			       signalHandlerData);
+	signal_handler_connect(handler, "item_select", handle_scene_item_select,
+			       signalHandlerData);
+	signal_handler_connect(handler, "item_deselect",
+			       handle_scene_item_deselect, signalHandlerData);
+	signal_handler_connect(handler, "item_transform",
+			       handle_scene_item_transform, signalHandlerData);
+
+	signal_handler_connect(handler, "rename", handle_scene_rename,
+			       signalHandlerData);
+	signal_handler_connect(handler, "remove", handle_scene_remove,
+			       signalHandlerData);
+
+	scanSceneItems(scene,
+		       [&](obs_sceneitem_t *item,
+			   obs_sceneitem_t *parent_item) -> bool {
+			       calldata_t *cd = calldata_create();
+			       calldata_set_ptr(cd, "item", item);
+
+			       handle_scene_item_add(signalHandlerData, cd);
+			       calldata_destroy(cd);
+
+			       return true;
+		       }, true);
 }
 
 void add_scene_signals(obs_source_t *sceneSource, SESignalHandlerData *data)
@@ -1624,16 +1690,21 @@ void StreamElementsObsSceneManager::handle_obs_frontend_event(
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	if (event == OBS_FRONTEND_EVENT_EXIT) {
+	if (event == OBS_FRONTEND_EVENT_EXIT || event == OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN) {
 		s_shutdown = true;
+	}
+
+	StreamElementsObsSceneManager *self =
+		(StreamElementsObsSceneManager *)data;
+
+	if (event == OBS_FRONTEND_EVENT_SCENE_COLLECTION_CLEANUP ||
+	    event == OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN) {
+		self->CleanObsScenes();
 	}
 
 	if (event != OBS_FRONTEND_EVENT_SCENE_CHANGED &&
 	    event != OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED)
 		return;
-
-	StreamElementsObsSceneManager *self =
-		(StreamElementsObsSceneManager *)data;
 
 	if (self->m_sceneItemsMonitor)
 		self->m_sceneItemsMonitor->Update();
@@ -1651,8 +1722,6 @@ static void handle_source_create(void *data, calldata_t *cd)
 	if (!source)
 		return;
 
-	add_source_signals(source, (SESignalHandlerData *)data);
-
 	add_scene_signals(source, (SESignalHandlerData *)data);
 }
 
@@ -1666,8 +1735,6 @@ static void handle_source_remove(void *data, calldata_t *cd)
 		return;
 
 	remove_scene_signals(source, (SESignalHandlerData *)data);
-
-	remove_source_signals(source, (SESignalHandlerData *)data);
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -1732,13 +1799,13 @@ StreamElementsObsSceneManager::StreamElementsObsSceneManager(QMainWindow *parent
 	// Add signals to existing scenes
 	obs_enum_scenes(
 		[](void * data, obs_source_t *scene_source) -> bool {
-			add_source_signals(scene_source,
-					   (SESignalHandlerData *)data);
+			auto scene = obs_scene_from_source(scene_source);
 
-			add_scene_signals(scene_source,
-					  (SESignalHandlerData *)data);
+			add_scene_signals(
+				scene_source,
+				static_cast<SESignalHandlerData *>(data));
 
-		return true;
+			return true;
 		},
 		m_signalHandlerData);
 
@@ -1755,6 +1822,53 @@ StreamElementsObsSceneManager::StreamElementsObsSceneManager(QMainWindow *parent
 				     ->GetScenesAuxActionsConfig(),
 			     JSON_PARSER_ALLOW_TRAILING_COMMAS),
 		dummy2);
+}
+
+void StreamElementsObsSceneManager::CleanObsScenes()
+{
+	std::vector<obs_scene_t *> scenes;
+	m_signalHandlerData->GetScenes(scenes);
+
+	for (auto scene : scenes) {
+		auto signalHandlerData = m_signalHandlerData->GetSceneRef(scene);
+
+		scanSceneItems(
+			scene,
+			[&](
+				obs_sceneitem_t *item,
+				obs_sceneitem_t *parent_item) -> bool {
+
+				if (obs_sceneitem_is_group(item)) {
+					scanGroupSceneItems(
+						item,
+						[signalHandlerData,
+						 scene](obs_sceneitem_t *item,
+							obs_sceneitem_t
+								*parent_item)
+							-> bool {
+							calldata_t *cd =
+								calldata_create();
+							calldata_set_ptr(cd,
+									 "item",
+									 item);
+
+							handle_scene_item_remove(
+								signalHandlerData,
+								cd);
+
+							calldata_destroy(cd);
+
+							return true;
+						},
+						false);
+				}
+
+				return true;
+			},
+			false);
+
+			remove_scene_signals(scene, m_signalHandlerData);
+	}
 }
 
 StreamElementsObsSceneManager::~StreamElementsObsSceneManager()
@@ -1785,22 +1899,9 @@ StreamElementsObsSceneManager::~StreamElementsObsSceneManager()
 					  m_signalHandlerData);
 
 		// Remove signals from existing scenes
-		obs_enum_scenes(
-			[](void *data, obs_source_t *scene_source) -> bool {
-				remove_source_signals(
-					scene_source,
-					(SESignalHandlerData *)data);
+		CleanObsScenes();
 
-				remove_scene_signals(
-					scene_source,
-					(SESignalHandlerData *)data);
-
-				return true;
-			},
-			m_signalHandlerData);
-
-		m_signalHandlerData->Clear();
-		delete m_signalHandlerData;
+		m_signalHandlerData->Release();
 		m_signalHandlerData = nullptr;
 	}
 }
@@ -2121,8 +2222,6 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 				videoComposition, sceneitem, root);
 
 			if (root->HasKey("filters") && !isExistingSource) {
-				remove_filter_signals(sceneitem);
-
 				if (!DeserializeObsSourceFilters(
 					    source,
 					    root->GetValue("filters"))) {
@@ -2135,10 +2234,6 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 						     .ToString()
 						     .c_str());
 				}
-
-				add_filter_signals(sceneitem);
-
-				dispatch_scene_update(parent_scene, true);
 			}
 
 			// Result
@@ -2233,8 +2328,6 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 				videoComposition, sceneitem, root);
 
 			if (root->HasKey("filters") && !isExistingSource) {
-				remove_filter_signals(sceneitem);
-
 				if (!DeserializeObsSourceFilters(
 					    source,
 					    root->GetValue("filters"))) {
@@ -2247,10 +2340,6 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 						     .ToString()
 						     .c_str());
 				}
-
-				add_filter_signals(sceneitem);
-
-				dispatch_scene_update(parent_scene, true);
 			}
 
 			// Result
@@ -2406,8 +2495,6 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 
 				if (root->HasKey("filters") &&
 				    !isExistingSource) {
-					remove_filter_signals(sceneitem);
-
 					if (!DeserializeObsSourceFilters(
 						    source,
 						    root->GetValue("filters"))) {
@@ -2422,11 +2509,6 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 							     .ToString()
 							     .c_str());
 					}
-
-					add_filter_signals(sceneitem);
-
-					dispatch_scene_update(parent_scene,
-							      true);
 				}
 
 				// Result
@@ -2543,8 +2625,6 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 				videoComposition, sceneitem, root);
 
 			if (root->HasKey("filters") && !isExistingSource) {
-				remove_filter_signals(sceneitem);
-
 				if (!DeserializeObsSourceFilters(
 					    source,
 					    root->GetValue("filters"))) {
@@ -2557,10 +2637,6 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 						     .ToString()
 						     .c_str());
 				}
-
-				add_filter_signals(sceneitem);
-
-				dispatch_scene_update(parent_scene, true);
 			}
 
 			// Result

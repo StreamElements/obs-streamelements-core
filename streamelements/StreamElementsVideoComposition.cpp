@@ -909,8 +909,6 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	m_signalHandlerData = new SESignalHandlerData(nullptr, this);
 
 	add_scene_signals(currentScene, m_signalHandlerData);
-	add_source_signals(obs_scene_get_source(currentScene),
-			   m_signalHandlerData);
 
 	obs_transition_set(m_transition, obs_scene_get_source(currentScene));
 
@@ -1033,8 +1031,7 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 		m_currentScene = nullptr;
 	}
 
-	m_signalHandlerData->Clear();
-	delete m_signalHandlerData;
+	m_signalHandlerData->Release();
 	m_signalHandlerData = nullptr;
 }
 
@@ -1239,7 +1236,6 @@ StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 
 	auto source = obs_scene_get_source(scene);
 
-	add_source_signals(source, m_signalHandlerData);
 	add_scene_signals(scene, m_signalHandlerData);
 
 	{
@@ -1261,7 +1257,6 @@ bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
 
 			auto source = obs_scene_get_source(scene);
 
-			remove_source_signals(source, m_signalHandlerData);
 			remove_scene_signals(scene, m_signalHandlerData);
 
 			obs_scene_release(scene);
@@ -1430,7 +1425,6 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 	for (auto scene : scenesToRemove) {
 		auto source = obs_scene_get_source(scene);
 
-		remove_source_signals(source, m_signalHandlerData);
 		remove_scene_signals(scene, m_signalHandlerData);
 
 		obs_source_dec_showing(source);
@@ -1474,8 +1468,6 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 		}
 
 		add_scene_signals(currentScene, m_signalHandlerData);
-		add_source_signals(obs_scene_get_source(currentScene),
-				   m_signalHandlerData);
 	}
 
 	dispatch_scene_list_changed_event(this);
