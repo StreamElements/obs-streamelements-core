@@ -42,6 +42,16 @@ bool s_shutdown = false;
 
 ///////////////////////////////////////////////////////////////////////////
 
+static inline const std::string safe_str(const char *s)
+{
+	if (s == NULL)
+		return "(NULL)";
+	else
+		return s;
+}
+
+///////////////////////////////////////////////////////////////////////////
+
 static bool is_active_scene(obs_scene_t *scene)
 {
 	if (!scene)
@@ -622,10 +632,10 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 		const char *id = obs_source_get_id(source);
 
 		if (name)
-			root->SetString("name", name);
+			root->SetString("name", safe_str(name));
 
 		if (id)
-			root->SetString("class", id);
+			root->SetString("class", safe_str(id));
 	}
 	root->SetBool("visible", obs_sceneitem_visible(sceneitem));
 	root->SetBool("selected", obs_sceneitem_selected(sceneitem));
@@ -651,17 +661,20 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 			obs_source_t *parent_scene =
 				obs_frontend_get_current_scene();
 
-			if (parent_scene) {
+			if (!!parent_scene) {
 				obs_scene_t *scene =
 					obs_scene_from_source(parent_scene);
 
-				obs_sceneitem_t *group =
-					obs_sceneitem_get_group(scene,
-								sceneitem);
-				if (!!group) {
-					root->SetString(
-						"parentId",
-						GetIdFromPointer(group));
+				if (!!scene) {
+					obs_sceneitem_t *group =
+						obs_sceneitem_get_group(
+							scene, sceneitem);
+					if (!!group) {
+						root->SetString(
+							"parentId",
+							GetIdFromPointer(
+								group));
+					}
 				}
 
 				obs_source_release(parent_scene);
@@ -703,6 +716,9 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 			     it != context.groupItems.cend(); ++it) {
 				obs_source_t *source = obs_sceneitem_get_source(
 					*it); // does not increase refcount
+
+				if (!source)
+					continue;
 
 				CefRefPtr<CefValue> item = CefValue::Create();
 
@@ -765,7 +781,7 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 		root->SetValue(
 			"uiSettings",
 			StreamElementsSceneItemsMonitor::GetSceneItemUISettings(
-				sceneitem)
+					sceneitem)
 				->Copy());
 		#endif
 	}
@@ -1204,6 +1220,8 @@ static void handle_scene_item_source_filter_update_settings(void *my_data,
 
 	if (!sceneitem)
 		return;
+
+	// obs_scene_find_source_recursive()
 
 	auto scene = obs_sceneitem_get_scene(sceneitem);
 

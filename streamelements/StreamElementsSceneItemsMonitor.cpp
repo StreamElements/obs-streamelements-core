@@ -738,6 +738,9 @@ CefRefPtr<CefValue> StreamElementsSceneItemsMonitor::GetSceneItemPropertyValue(
 	obs_data_t *scene_item_private_data =
 		obs_sceneitem_get_private_settings(scene_item);
 
+	if (!scene_item_private_data)
+		return result;
+
 	const char *json = obs_data_get_string(scene_item_private_data, key);
 
 	if (json) {

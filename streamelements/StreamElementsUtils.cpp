@@ -82,6 +82,16 @@ static config_t *obs_fe_global_config()
 
 /* ========================================================= */
 
+static inline const char *safe_str(const char *s)
+{
+	if (s == NULL)
+		return "(NULL)";
+	else
+		return s;
+}
+
+/* ========================================================= */
+
 bool IsTraceLogLevel() {
 	static bool has_result = false;
 	static bool result = false;
@@ -832,8 +842,8 @@ void SerializeObsSource(obs_source_t *source, CefRefPtr<CefDictionaryValue> dic,
 		return;
 
 	obs_source_type sourceType = obs_source_get_type(source);
-	std::string sourceId = obs_source_get_id(source);
-	std::string unversioned_id = obs_source_get_unversioned_id(source);
+	std::string sourceId = safe_str(obs_source_get_id(source));
+	std::string unversioned_id = safe_str(obs_source_get_unversioned_id(source));
 
 	uint32_t sourceCaps = obs_get_source_output_flags(sourceId.c_str());
 
@@ -845,15 +855,15 @@ void SerializeObsSource(obs_source_t *source, CefRefPtr<CefDictionaryValue> dic,
 
 	if (isExistingSource) {
 		dic->SetString("id", GetIdFromPointer(source));
-		dic->SetString("name", obs_source_get_name(source));
+		dic->SetString("name", safe_str(obs_source_get_name(source)));
 	} else {
 		dic->SetString("id", sourceId);
 		dic->SetString("name",
-			       obs_source_get_display_name(sourceId.c_str()));
+			       safe_str(obs_source_get_display_name(sourceId.c_str())));
 	}
 
 	dic->SetString("className",
-		       obs_source_get_display_name(sourceId.c_str()));
+		       safe_str(obs_source_get_display_name(sourceId.c_str())));
 
 	dic->SetBool("hasVideo",
 		     (sourceCaps & OBS_SOURCE_VIDEO) == OBS_SOURCE_VIDEO);
@@ -914,8 +924,10 @@ void SerializeObsSource(obs_source_t *source, CefRefPtr<CefDictionaryValue> dic,
 	if (sourceType == OBS_SOURCE_TYPE_FILTER) {
 		auto parentSource = obs_filter_get_parent(source);
 
-		dic->SetInt("order",
-			    obs_source_filter_get_index(parentSource, source));
+		if (parentSource) {
+			dic->SetInt("order", obs_source_filter_get_index(
+						     parentSource, source));
+		}
 	}
 
 	if (sourceType == OBS_SOURCE_TYPE_FILTER)
@@ -3711,7 +3723,7 @@ bool SerializeObsProperty(obs_property_t *prop, CefRefPtr<CefValue> &output)
 		return false;
 	}
 
-	root->SetString("name", obs_property_name(prop));
+	root->SetString("name", safe_str(obs_property_name(prop)));
 	root->SetString("label", safe_str(obs_property_description(prop)));
 	root->SetString("description",
 			safe_str(obs_property_long_description(prop)));
@@ -3926,25 +3938,31 @@ CefRefPtr<CefValue> SerializeObsData(obs_data_t *data)
 			d->SetBool(name, obs_data_item_get_bool(item));
 		else if (type == OBS_DATA_OBJECT) {
 			obs_data_t *obj = obs_data_item_get_obj(item);
-			d->SetValue(name, SerializeObsData(obj));
-			obs_data_release(obj);
+			if (obj) {
+				d->SetValue(name, SerializeObsData(obj));
+				obs_data_release(obj);
+			}
 		} else if (type == OBS_DATA_ARRAY) {
 			CefRefPtr<CefListValue> list = CefListValue::Create();
 
 			obs_data_array_t *array = obs_data_item_get_array(item);
-			size_t count = obs_data_array_count(array);
 
-			for (size_t idx = 0; idx < count; idx++) {
-				obs_data_t *sub_item =
-					obs_data_array_item(array, idx);
+			if (array) {
+				size_t count = obs_data_array_count(array);
 
-				list->SetValue(list->GetSize(),
-					       SerializeObsData(sub_item));
+				for (size_t idx = 0; idx < count; idx++) {
+					obs_data_t *sub_item =
+						obs_data_array_item(array, idx);
 
-				obs_data_release(sub_item);
+					list->SetValue(
+						list->GetSize(),
+						SerializeObsData(sub_item));
+
+					obs_data_release(sub_item);
+				}
+
+				obs_data_array_release(array);
 			}
-
-			obs_data_array_release(array);
 		}
 	}
 
