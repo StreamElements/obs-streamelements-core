@@ -77,7 +77,7 @@ scanSceneItems(obs_scene_t *scene,
 			}
 
 			if (data->result)
-				data->callback(item, nullptr);
+				data->result = data->callback(item, nullptr);
 
 			return data->result;
 		},
