@@ -237,6 +237,8 @@ private:
 
 	void Clear()
 	{
+		Wait();
+
 		std::unique_lock lock(m_scenes_mutex);
 
 		m_videoCompositionBase = nullptr;
