@@ -1031,6 +1031,7 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 		m_currentScene = nullptr;
 	}
 
+	m_signalHandlerData->Wait();
 	m_signalHandlerData->Release();
 	m_signalHandlerData = nullptr;
 }
@@ -1474,4 +1475,6 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 	dispatch_scene_changed_event(this, currentScene);
 
 	dispatch_scenes_reset_end_event(this);
+
+	m_signalHandlerData->Wait();
 }

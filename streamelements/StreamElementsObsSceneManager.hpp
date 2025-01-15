@@ -25,7 +25,7 @@ public:
 	virtual ~StreamElementsObsSceneManager();
 
 private:
-	void CleanObsScenes();
+	void CleanObsSceneSignals();
 
 public:
 	void Update()
@@ -213,6 +213,8 @@ public:
 		  m_videoCompositionBase(videoCompositionBase)
 	{
 		AddRef();
+
+		m_wait_promise.set_value(); // release by default
 	}
 
 	~SESignalHandlerData()
@@ -386,12 +388,76 @@ public:
 		return obs_scene_get_ref(scene);
 	}
 
+	void Lock()
+	{
+		if (m_parent) {
+			m_parent->Lock();
+
+			return;
+		}
+
+		std::unique_lock lock(m_wait_mutex);
+
+		++m_wait_count;
+
+		if (m_wait_count == 1) {
+			m_wait_promise = std::promise<void>();
+			m_wait_future = m_wait_promise.get_future();
+		}
+	}
+
+	void Unlock()
+	{
+		if (m_parent) {
+			m_parent->Unlock();
+
+			return;
+		}
+
+		std::unique_lock lock(m_wait_mutex);
+
+		--m_wait_count;
+
+		if (m_wait_count == 0) {
+			m_wait_promise.set_value();
+		}
+	}
+
+	void Wait()
+	{
+		if (m_parent)
+		{
+			m_parent->Wait();
+
+			return;
+		}
+
+		std::shared_future<void> future;
+
+		{
+			std::shared_lock lock(m_wait_mutex);
+
+			if (m_wait_count == 0)
+				return;
+
+			future = m_wait_future;
+		}
+
+		future.wait();
+	}
+
 public:
 	char m_header[7] = "header"; // TODO: Remvoe debug marker
 	StreamElementsObsSceneManager *m_obsSceneManager = nullptr;
 	StreamElementsVideoCompositionBase *m_videoCompositionBase = nullptr;
 	obs_scene_t* m_scene = nullptr;
 	char m_footer[7] = "footer"; // TODO: Remvoe debug marker
+
+private:
+	std::shared_mutex m_wait_mutex;
+	std::promise<void> m_wait_promise;
+	std::shared_future<void> m_wait_future = m_wait_promise.get_future();
+	uint32_t m_wait_count = 0;
 
 private:
 	std::shared_mutex m_scenes_mutex;
