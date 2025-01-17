@@ -213,6 +213,13 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 
 			if (sourceName) {
 				json11::Json json = json11::Json::object{
+					{"sceneId",
+					 GetIdFromPointer(source)},
+					{"videoCompositionId",
+					 StreamElementsGlobalStateManager::GetInstance()
+						 ->GetVideoCompositionManager()
+						 ->GetObsNativeVideoComposition()
+						 ->GetId()},
 					{"name", sourceName},
 					{"width",
 					 (int)obs_source_get_width(source)},
@@ -438,6 +445,9 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		std::make_shared<StreamElementsOutputManager>(
 			m_videoCompositionManager, m_audioCompositionManager);
 
+	m_obsActiveSceneTracker =
+		std::make_shared<StreamElementsObsActiveSceneTracker>();
+
 	m_appStateListener = new ApplicationStateListener();
 	m_themeChangeListener = new ThemeChangeListener();
 #ifdef WIN32
@@ -639,6 +649,7 @@ void StreamElementsGlobalStateManager::Shutdown()
 		m_appStateListener = nullptr;
 	}
 
+	m_obsActiveSceneTracker = nullptr;
 	m_analyticsEventsManager = nullptr;
 	m_performanceHistoryTracker = nullptr;
 	m_outputSettingsManager = nullptr;

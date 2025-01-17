@@ -103,6 +103,7 @@ dispatch_scene_changed_event(StreamElementsVideoCompositionBase *self,
 
 	json11::Json json = json11::Json::object{
 		{"name", sourceName},
+		{"sceneId", GetIdFromPointer(source)},
 		{"videoCompositionId", self->GetId()},
 		{"width", (int)obs_source_get_width(source)},
 		{"height", (int)obs_source_get_height(source)}};

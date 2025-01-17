@@ -31,6 +31,7 @@ struct QCefCookieManager;
 #include "StreamElementsVideoCompositionManager.hpp"
 #include "StreamElementsAudioCompositionManager.hpp"
 #include "StreamElementsOutputManager.hpp"
+#include "StreamElementsObsActiveSceneTracker.hpp"
 
 class StreamElementsGlobalStateManager : public StreamElementsObsAppMonitor {
 private:
@@ -201,6 +202,11 @@ public:
 	{
 		return m_outputManager;
 	}
+	std::shared_ptr<StreamElementsObsActiveSceneTracker>
+		GetObsActiveSceneTracker()
+	{
+		return m_obsActiveSceneTracker;
+	}
 		
 	QMainWindow *mainWindow() { return m_mainWindow; }
 
@@ -282,6 +288,8 @@ private:
 	std::shared_ptr<StreamElementsAudioCompositionManager>
 		m_audioCompositionManager = nullptr;
 	std::shared_ptr<StreamElementsOutputManager> m_outputManager = nullptr;
+	std::shared_ptr<StreamElementsObsActiveSceneTracker>
+		m_obsActiveSceneTracker = nullptr;
 
 private:
 	static std::shared_ptr<

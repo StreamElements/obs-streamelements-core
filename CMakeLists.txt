@@ -248,6 +248,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/StreamElementsAudioCompositionManager.cpp
 	streamelements/StreamElementsOutput.cpp
 	streamelements/StreamElementsOutputManager.cpp
+	streamelements/StreamElementsObsActiveSceneTracker.cpp
 	streamelements/deps/StackWalker/StackWalker.cpp
 	streamelements/deps/zip/zip.c
 	streamelements/deps/server/NamedPipesServer.cpp
@@ -337,6 +338,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/StreamElementsAudioCompositionManager.hpp
 	streamelements/StreamElementsOutput.hpp
 	streamelements/StreamElementsOutputManager.hpp
+	streamelements/StreamElementsObsActiveSceneTracker.hpp
 	streamelements/canvas-config.hpp
 	streamelements/canvas-scan.hpp
 	streamelements/canvas-math.hpp
