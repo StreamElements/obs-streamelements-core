@@ -47,6 +47,9 @@ public:
 	void TriggerSplitRecordingOutputById(CefRefPtr<CefValue> input,
 					     CefRefPtr<CefValue> &output);
 
+	void TriggerSaveReplayBufferById(CefRefPtr<CefValue> input,
+					 CefRefPtr<CefValue> &output);
+
 	void Reset();
 
 private:
