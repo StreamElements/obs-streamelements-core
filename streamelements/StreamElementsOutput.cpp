@@ -33,6 +33,8 @@ static void CleanStopObsOutput(obs_output_t *output, bool forceStop)
 	signal_handler_connect(handler, "stop", handle_signal, &future);
 	signal_handler_connect(handler, "error", handle_signal, &future);
 
+	obs_output_pause(output, true);
+
 	if (forceStop)
 		obs_output_force_stop(output);
 	else
@@ -40,6 +42,12 @@ static void CleanStopObsOutput(obs_output_t *output, bool forceStop)
 
 	while (future.wait_for(std::chrono::milliseconds(10)) ==
 	       std::future_status::timeout) {
+		if (!obs_output_active(output))
+			break;
+
+		if (forceStop)
+			obs_output_force_stop(output);
+
 		QApplication::processEvents();
 	}
 
@@ -1748,7 +1756,7 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 	if (!filenameFormat.size())
 		filenameFormat = "Replay %CCYY-%MM-%DD %hh-%mm-%ss";
 
-	filenameFormat = std::string("SE.Live  ") + filenameFormat +
+	filenameFormat = std::string("SE.Live Replay ") + filenameFormat +
 			 std::string(" ") + GetName() + std::string(".mkv");
 
 	bool overwriteIfExists =
