@@ -474,9 +474,6 @@ public:
 
 	virtual bool IsObsNativeOutput() override { return false; }
 
-	virtual bool CanSplitRecordingOutput();
-	virtual bool TriggerSplitRecordingOutput();
-
 protected:
 	virtual obs_output_t *GetOutput() override
 	{

@@ -558,17 +558,31 @@ protected:
 	}
 
 	virtual obs_encoder_t* GetRecordingVideoEncoder() {
-		if (!obs_frontend_recording_active())
-			return nullptr;
+		obs_encoder_t *result = nullptr;
 
-		auto output = obs_frontend_get_recording_output();
+		if (!result && obs_frontend_recording_active()) {
+			auto output = obs_frontend_get_recording_output();
 
-		if (!output)
-			return nullptr;
+			if (output) {
+				result = obs_output_get_video_encoder(output);
 
-		auto result = obs_output_get_video_encoder(output);
+				obs_output_release(output);
+			}
+		}
 
-		obs_output_release(output);
+		if (!result && obs_frontend_replay_buffer_active()) {
+			auto output = obs_frontend_get_replay_buffer_output();
+
+			if (output) {
+				result = obs_output_get_video_encoder(output);
+
+				obs_output_release(output);
+			}
+		}
+
+		if (!result && obs_frontend_streaming_active()) {
+			result = GetStreamingVideoEncoder();
+		}
 
 		return result;
 	}

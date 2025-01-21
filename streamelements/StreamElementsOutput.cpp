@@ -428,6 +428,7 @@ void StreamElementsOutputBase::handle_obs_frontend_event(
 		break;
 
 	case OBS_FRONTEND_EVENT_EXIT:
+	case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
 		self->Stop();
 		break;
 	default:
@@ -1649,41 +1650,6 @@ StreamElementsObsNativeReplayBufferOutput::GetAudioTracks()
 bool StreamElementsCustomReplayBufferOutput::CanDisable()
 {
 	return true;
-}
-
-bool StreamElementsCustomReplayBufferOutput::CanSplitRecordingOutput()
-{
-	OBSOutputAutoRelease output = GetOutput();
-
-	if (!output)
-		return false;
-
-	if (!obs_output_active(output))
-		return false;
-
-	if (!obs_output_paused(output))
-		return false;
-
-	return true;
-}
-
-bool StreamElementsCustomReplayBufferOutput::TriggerSplitRecordingOutput()
-{
-	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
-
-	if (!CanSplitRecordingOutput())
-		return false;
-
-	OBSOutputAutoRelease output = GetOutput();
-
-	proc_handler_t *ph = obs_output_get_proc_handler(output);
-	uint8_t stack[128];
-	calldata cd;
-	calldata_init_fixed(&cd, stack, sizeof(stack));
-	proc_handler_call(ph, "split_file", &cd);
-	bool result = calldata_bool(&cd, "split_file_enabled");
-
-	return result;
 }
 
 bool StreamElementsCustomReplayBufferOutput::StartInternal(
