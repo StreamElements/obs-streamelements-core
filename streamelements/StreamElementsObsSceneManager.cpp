@@ -1461,7 +1461,7 @@ static void handle_scene_item_add(void *my_data, calldata_t *cd)
 
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemAdded",
 				 "hostSceneItemAdded", false);
-	dispatch_scene_update(my_data, cd);
+	dispatch_scene_update(my_data, cd, true);
 
 	auto source = obs_sceneitem_get_source(sceneitem);
 
@@ -1512,7 +1512,7 @@ static void handle_scene_item_remove(void *my_data, calldata_t *cd)
 
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemRemoved",
 				 "hostSceneItemRemoved", false);
-	dispatch_scene_update(my_data, cd);
+	dispatch_scene_update(my_data, cd, true);
 
 	if (!obs_sceneitem_is_group(sceneitem))
 		return;
