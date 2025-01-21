@@ -1526,6 +1526,21 @@ StreamElementsCustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 // StreamElementsObsNativeReplayBufferOutput
 ////////////////////////////////////////////////////////////////////////////////
 
+bool StreamElementsObsNativeReplayBufferOutput::CanSaveReplayBuffer()
+{
+	return IsActive() && obs_frontend_replay_buffer_active();
+}
+
+bool StreamElementsObsNativeReplayBufferOutput::TriggerSaveReplayBuffer()
+{
+	if (!CanSaveReplayBuffer())
+		return;
+
+	obs_frontend_replay_buffer_save();
+
+	return true;
+}
+
 bool StreamElementsObsNativeReplayBufferOutput::StartInternal(
 	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
 		videoCompositionInfo,

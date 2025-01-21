@@ -401,6 +401,9 @@ public:
 
 	virtual bool CanStart() override { return true; }
 
+	virtual bool CanSaveReplayBuffer();
+	virtual bool TriggerSaveReplayBuffer();
+
 protected:
 	virtual obs_output_t *GetOutput() override
 	{
