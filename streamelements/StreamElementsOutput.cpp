@@ -1805,7 +1805,7 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 	obs_data_set_string(settings, "extension", filenameExtension.c_str());
 	obs_data_set_bool(settings, "allow_spaces", !noSpace);
 	obs_data_set_bool(settings, "allow_overwrite", overwriteIfExists);
-	obs_data_set_bool(settings, "split_file", true);
+	obs_data_set_bool(settings, "split_file", false);
 	obs_data_set_int(settings, "max_time_sec", splitFileTime);
 	obs_data_set_int(settings, "max_size_mb", splitFileSize);
 
@@ -2038,7 +2038,7 @@ void StreamElementsCustomReplayBufferOutput::handle_output_saved(
 	if (calldata_get_string(proc_cd, "path", &path)) {
 		eventArgs->SetString("filePath", path);
 
-		dispatch_event(self, "hostReplayBufferOutputSavedToLocalFile");
+		dispatch_event(self, "hostReplayBufferOutputSavedToLocalFile", eventArgs);
 	}
 
 	calldata_destroy(proc_cd);
