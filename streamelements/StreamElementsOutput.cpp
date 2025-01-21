@@ -1534,7 +1534,7 @@ bool StreamElementsObsNativeReplayBufferOutput::CanSaveReplayBuffer()
 bool StreamElementsObsNativeReplayBufferOutput::TriggerSaveReplayBuffer()
 {
 	if (!CanSaveReplayBuffer())
-		return;
+		return false;
 
 	obs_frontend_replay_buffer_save();
 
