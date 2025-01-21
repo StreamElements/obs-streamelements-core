@@ -15,6 +15,38 @@ static std::string safe_string(const char* input)
 	return std::string(input);
 }
 
+static void CleanStopObsOutput(obs_output_t *output, bool forceStop)
+{
+	if (!obs_output_active(output))
+		return;
+
+	auto handler = obs_output_get_signal_handler(output);
+	std::promise<void> promise;
+	std::shared_future<void> future = promise.get_future();
+
+	auto handle_signal = [](void *my_data, calldata_t *cd) {
+		auto promise = static_cast<std::promise<void> *>(my_data);
+
+		promise->set_value();
+	};
+
+	signal_handler_connect(handler, "stop", handle_signal, &future);
+	signal_handler_connect(handler, "error", handle_signal, &future);
+
+	if (forceStop)
+		obs_output_force_stop(output);
+	else
+		obs_output_stop(output);
+
+	while (future.wait_for(std::chrono::milliseconds(10)) ==
+	       std::future_status::timeout) {
+		QApplication::processEvents();
+	}
+
+	signal_handler_disconnect(handler, "stop", handle_signal, &future);
+	signal_handler_disconnect(handler, "error", handle_signal, &future);
+}
+
 static std::vector<uint32_t> DeserializeAudioTracks(CefRefPtr<CefDictionaryValue> rootDict)
 {
 	std::vector<uint32_t> result;
@@ -1900,9 +1932,7 @@ void StreamElementsCustomReplayBufferOutput::StopInternal()
 	if (!m_output)
 		return;
 
-	// obs_output_stop(m_output);
-
-	obs_output_force_stop(m_output);
+	CleanStopObsOutput(m_output, true);
 
 	DisconnectOutputEvents();
 

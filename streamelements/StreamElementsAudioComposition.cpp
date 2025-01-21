@@ -485,6 +485,12 @@ StreamElementsCustomAudioComposition::Create(
 		std::rethrow_exception(exception);
 
 	// Recording encoders
+	if (!recordingAudioEncoder.get() ||
+	    recordingAudioEncoder->GetType() != VTYPE_DICTIONARY) {
+		// Default to streaming encoder settings
+		recordingAudioEncoder = streamingAudioEncoder;
+	}
+
 	if (recordingAudioEncoder.get() &&
 	    recordingAudioEncoder->GetType() == VTYPE_DICTIONARY) {
 		std::string recordingAudioEncoderId;

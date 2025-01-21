@@ -234,8 +234,8 @@ void StreamElementsOutputManager::TriggerSaveReplayBufferById(
 
 	std::string id = input->GetString();
 
-	if (m_map[RecordingOutput].count(id)) {
-		output->SetBool(m_map[RecordingOutput][id]
+	if (m_map[ReplayBufferOutput].count(id)) {
+		output->SetBool(m_map[ReplayBufferOutput][id]
 					->TriggerSaveReplayBuffer());
 	}
 }

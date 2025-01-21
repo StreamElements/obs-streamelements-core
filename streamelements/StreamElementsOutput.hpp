@@ -88,6 +88,9 @@ public:
 	virtual bool CanSaveReplayBuffer() { return false; }
 	virtual bool TriggerSaveReplayBuffer() { return false; }
 
+	virtual void ConnectOutputEvents();
+	virtual void DisconnectOutputEvents();
+
 protected:
 	virtual obs_output_t *GetOutput() = 0;
 
@@ -104,9 +107,6 @@ protected:
 protected:
 	bool Start();
 	void Stop();
-
-	virtual void ConnectOutputEvents();
-	virtual void DisconnectOutputEvents();
 
 protected:
 	void SetError(std::string error) { m_error = error; }
