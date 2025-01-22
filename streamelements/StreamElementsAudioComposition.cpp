@@ -170,22 +170,22 @@ void StreamElementsAudioCompositionBase::SetName(std::string name)
 class StreamElementsDefaultAudioCompositionInfo
 	: public StreamElementsAudioCompositionBase::CompositionInfo {
 private:
-	StreamElementsAudioCompositionEventListener *m_listener;
+	StreamElementsAudioCompositionEventListener* m_listener;
 
 public:
 	StreamElementsDefaultAudioCompositionInfo(
 		std::shared_ptr<StreamElementsAudioCompositionBase> owner,
-		StreamElementsAudioCompositionEventListener *listener)
+		StreamElementsAudioCompositionEventListener* listener)
 		: StreamElementsAudioCompositionBase::CompositionInfo(owner,
-								      listener),
-		  m_listener(listener)
+			listener),
+		m_listener(listener)
 	{
 	}
 
 	virtual ~StreamElementsDefaultAudioCompositionInfo() {}
 
 protected:
-	virtual obs_encoder_t *GetStreamingAudioEncoder(size_t index)
+	virtual obs_encoder_t* GetStreamingAudioEncoder(size_t index)
 	{
 		if (!obs_frontend_streaming_active())
 			return nullptr;
@@ -202,19 +202,35 @@ protected:
 		return result;
 	}
 
-	virtual obs_encoder_t *GetRecordingAudioEncoder(size_t index)
+	virtual obs_encoder_t* GetRecordingAudioEncoder(size_t index)
 	{
-		if (!obs_frontend_recording_active())
-			return nullptr;
+		obs_encoder_t* result = nullptr;
 
-		auto output = obs_frontend_get_recording_output();
+		if (!result && obs_frontend_recording_active()) {
+			auto output = obs_frontend_get_recording_output();
 
-		if (!output)
-			return nullptr;
+			if (output) {
+				result = obs_output_get_audio_encoder(output,
+					index);
 
-		auto result = obs_output_get_audio_encoder(output, index);
+				obs_output_release(output);
+			}
+		}
 
-		obs_output_release(output);
+		if (!result && obs_frontend_replay_buffer_active()) {
+			auto output = obs_frontend_get_replay_buffer_output();
+
+			if (output) {
+				result = obs_output_get_audio_encoder(output,
+					index);
+
+				obs_output_release(output);
+			}
+		}
+
+		if (!result) {
+				result = GetStreamingAudioEncoder(index);
+		}
 
 		return result;
 	}
@@ -485,6 +501,12 @@ StreamElementsCustomAudioComposition::Create(
 		std::rethrow_exception(exception);
 
 	// Recording encoders
+	if (!recordingAudioEncoder.get() ||
+	    recordingAudioEncoder->GetType() != VTYPE_DICTIONARY) {
+		// Default to streaming encoder settings
+		recordingAudioEncoder = streamingAudioEncoder;
+	}
+
 	if (recordingAudioEncoder.get() &&
 	    recordingAudioEncoder->GetType() == VTYPE_DICTIONARY) {
 		std::string recordingAudioEncoderId;

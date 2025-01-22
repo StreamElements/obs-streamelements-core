@@ -3,6 +3,7 @@
 
 #define StreamingOutput StreamElementsOutputBase::StreamingOutput
 #define RecordingOutput StreamElementsOutputBase::RecordingOutput
+#define ReplayBufferOutput StreamElementsOutputBase::ReplayBufferOutput
 
 StreamElementsOutputManager::StreamElementsOutputManager(
 	std::shared_ptr<StreamElementsVideoCompositionManager>
@@ -26,6 +27,15 @@ StreamElementsOutputManager::StreamElementsOutputManager(
 		m_audioCompositionManager->GetObsNativeAudioComposition());
 
 	m_map[RecordingOutput][nativeRecordingOutput->GetId()] = nativeRecordingOutput;
+
+	auto nativeReplayBufferOutput = std::make_shared<
+		StreamElementsObsNativeReplayBufferOutput>(
+		"default", "OBS Native Replay Buffer",
+		m_videoCompositionManager->GetObsNativeVideoComposition(),
+		m_audioCompositionManager->GetObsNativeAudioComposition());
+
+	m_map[ReplayBufferOutput][nativeReplayBufferOutput->GetId()] =
+		nativeReplayBufferOutput;
 }
 
 StreamElementsOutputManager::~StreamElementsOutputManager()
@@ -88,10 +98,19 @@ void StreamElementsOutputManager::DeserializeOutput(
 
 		customOutput->SerializeOutput(output);
 	}
-	else
-	{
+	else if (outputType == RecordingOutput) {
 		auto customOutput =
 			StreamElementsCustomRecordingOutput::Create(input);
+
+		if (!customOutput.get())
+			return;
+
+		m_map[outputType][customOutput->GetId()] = customOutput;
+
+		customOutput->SerializeOutput(output);
+	} else {
+		auto customOutput =
+			StreamElementsCustomReplayBufferOutput::Create(input);
 
 		if (!customOutput.get())
 			return;
@@ -203,6 +222,23 @@ void StreamElementsOutputManager::TriggerSplitRecordingOutputById(
 	}
 }
 
+void StreamElementsOutputManager::TriggerSaveReplayBufferById(
+	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
+{
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+
+	output->SetBool(false);
+
+	if (input->GetType() != VTYPE_STRING)
+		return;
+
+	std::string id = input->GetString();
+
+	if (m_map[ReplayBufferOutput].count(id)) {
+		output->SetBool(m_map[ReplayBufferOutput][id]
+					->TriggerSaveReplayBuffer());
+	}
+}
 
 bool StreamElementsOutputManager::GetValidIds(
 	StreamElementsOutputBase::ObsOutputType outputType, CefRefPtr<CefValue> input,

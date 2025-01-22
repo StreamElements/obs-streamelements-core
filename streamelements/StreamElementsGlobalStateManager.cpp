@@ -250,6 +250,7 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 		name = "hostProfileListChanged";
 		break;
 	case OBS_FRONTEND_EVENT_EXIT:
+	case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
 		name = "hostExit";
 		break;
 	/*case OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED:

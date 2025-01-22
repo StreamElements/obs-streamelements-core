@@ -36,6 +36,7 @@ private:
 
 		switch (event) {
 		case OBS_FRONTEND_EVENT_EXIT:
+		case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
 			self->OnObsExit();
 			break;
 		}

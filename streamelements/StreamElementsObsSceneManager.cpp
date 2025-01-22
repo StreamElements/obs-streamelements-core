@@ -1142,7 +1142,7 @@ static void handle_scene_item_select(void *my_data, calldata_t *cd)
 		dispatch_sceneitem_event(my_data, cd,
 					 "hostActiveSceneItemSelected",
 					 "hostSceneItemSelected", false);
-		dispatch_scene_update(my_data, cd);
+		dispatch_scene_update(my_data, cd, true);
 	} else {
 		obs_sceneitem_select(sceneitem, false);
 	}
@@ -1162,7 +1162,7 @@ static void handle_scene_item_deselect(void *my_data, calldata_t *cd)
 
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemUnselected",
 				 "hostSceneItemUnselected", false);
-	dispatch_scene_update(my_data, cd);
+	dispatch_scene_update(my_data, cd, true);
 
 	if (my_data) {
 		auto sceneManager =
@@ -1180,7 +1180,7 @@ static void handle_scene_item_reorder(void *my_data, calldata_t *cd)
 	dispatch_scene_event(my_data, cd, "hostActiveSceneItemsOrderChanged",
 			     "hostSceneItemOrderChanged");
 
-	dispatch_scene_update(my_data, cd);
+	dispatch_scene_update(my_data, cd, true);
 
 	if (my_data) {
 		auto sceneManager =
@@ -1198,7 +1198,7 @@ static void handle_scene_item_source_update_props(void *my_data, calldata_t *cd)
 	dispatch_source_event(my_data, cd,
 			      "hostActiveSceneItemPropertiesChanged",
 			      "hostSceneItemPropertiesChanged");
-	dispatch_scene_update(my_data, cd);
+	dispatch_scene_update(my_data, cd, true);
 }
 
 static void handle_scene_item_source_update_settings(void *my_data,
@@ -1208,7 +1208,7 @@ static void handle_scene_item_source_update_settings(void *my_data,
 
 	dispatch_source_event(my_data, cd, "hostActiveSceneItemSettingsChanged",
 			      "hostSceneItemSettingsChanged");
-	dispatch_scene_update(my_data, cd);
+	dispatch_scene_update(my_data, cd, true);
 }
 
 static void handle_scene_item_source_rename(void *my_data, calldata_t *cd)
@@ -1217,7 +1217,7 @@ static void handle_scene_item_source_rename(void *my_data, calldata_t *cd)
 
 	dispatch_source_event(my_data, cd, "hostActiveSceneItemRenamed",
 			      "hostSceneItemRenamed");
-	dispatch_scene_update(my_data, cd);
+	dispatch_scene_update(my_data, cd, true);
 }
 
 static void handle_scene_item_source_filter_update_props(void *my_data,
@@ -1461,7 +1461,7 @@ static void handle_scene_item_add(void *my_data, calldata_t *cd)
 
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemAdded",
 				 "hostSceneItemAdded", false);
-	dispatch_scene_update(my_data, cd);
+	dispatch_scene_update(my_data, cd, true);
 
 	auto source = obs_sceneitem_get_source(sceneitem);
 
@@ -1512,7 +1512,7 @@ static void handle_scene_item_remove(void *my_data, calldata_t *cd)
 
 	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemRemoved",
 				 "hostSceneItemRemoved", false);
-	dispatch_scene_update(my_data, cd);
+	dispatch_scene_update(my_data, cd, true);
 
 	if (!obs_sceneitem_is_group(sceneitem))
 		return;

@@ -2722,6 +2722,76 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("getAllReplayBufferOutputs");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetOutputManager()
+			->SerializeAllOutputs(
+				StreamElementsOutputBase::ReplayBufferOutput,
+				result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addReplayBufferOutput");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->DeserializeOutput(StreamElementsOutputBase::
+							    ReplayBufferOutput,
+						    args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeReplayBufferOutputsByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->RemoveOutputsByIds(StreamElementsOutputBase::
+							     ReplayBufferOutput,
+						     args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("enableReplayBufferOutputsByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->EnableOutputsByIds(StreamElementsOutputBase::
+							     ReplayBufferOutput,
+						     args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("disableReplayBufferOutputsByIds");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->DisableOutputsByIds(
+					StreamElementsOutputBase::
+						ReplayBufferOutput,
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("triggerReplayBufferOutputSaveById");
+	{
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->TriggerSaveReplayBufferById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("readScopedStorageJsonItem");
 	{
 		if (args->GetSize()) {

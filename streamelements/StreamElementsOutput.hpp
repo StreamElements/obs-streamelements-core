@@ -13,12 +13,14 @@ public:
 	enum ObsStateDependencyType {
 		Streaming,
 		Recording,
+		ReplayBuffer,
 		None
 	};
 
 	enum ObsOutputType {
 		StreamingOutput,
-		RecordingOutput
+		RecordingOutput,
+		ReplayBufferOutput
 	};
 
 protected:
@@ -83,6 +85,12 @@ public:
 	virtual bool CanSplitRecordingOutput() { return false; }
 	virtual bool TriggerSplitRecordingOutput() { return false; }
 
+	virtual bool CanSaveReplayBuffer() { return false; }
+	virtual bool TriggerSaveReplayBuffer() { return false; }
+
+	virtual void ConnectOutputEvents();
+	virtual void DisconnectOutputEvents();
+
 protected:
 	virtual obs_output_t *GetOutput() = 0;
 
@@ -99,9 +107,6 @@ protected:
 protected:
 	bool Start();
 	void Stop();
-
-	void ConnectOutputEvents();
-	void DisconnectOutputEvents();
 
 protected:
 	void SetError(std::string error) { m_error = error; }
@@ -369,4 +374,127 @@ protected:
 			StreamElementsAudioCompositionBase::CompositionInfo>
 			audioCompositionInfo);
 	virtual void StopInternal();
+};
+
+class StreamElementsObsNativeReplayBufferOutput : public StreamElementsOutputBase {
+public:
+	StreamElementsObsNativeReplayBufferOutput(
+		std::string id, std::string name,
+		std::shared_ptr<StreamElementsVideoCompositionBase>
+			videoComposition,
+		std::shared_ptr<StreamElementsAudioCompositionBase>
+			audioComposition)
+		: StreamElementsOutputBase(id, name, ReplayBufferOutput,
+					   ReplayBuffer,
+					   videoComposition, audioComposition,
+					   CefDictionaryValue::Create())
+	{
+	}
+
+	virtual ~StreamElementsObsNativeReplayBufferOutput() {}
+
+	virtual bool CanRemove() override { return false; }
+	virtual bool CanChange() override { return false; }
+	virtual bool CanDisable() override { return false; }
+
+	virtual bool IsObsNativeOutput() override { return true; }
+
+	virtual bool CanStart() override { return true; }
+
+	virtual bool CanSaveReplayBuffer();
+	virtual bool TriggerSaveReplayBuffer();
+
+protected:
+	virtual obs_output_t *GetOutput() override
+	{
+		return obs_frontend_get_replay_buffer_output();
+	}
+
+	virtual bool StartInternal(
+		std::shared_ptr<
+			StreamElementsVideoCompositionBase::CompositionInfo>
+			videoCompositionInfo,
+		std::shared_ptr<
+			StreamElementsAudioCompositionBase::CompositionInfo>
+			audioCompositionInfo) override;
+	virtual void StopInternal() override;
+
+	virtual void
+	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
+
+	virtual std::vector<uint32_t> GetAudioTracks() override;
+};
+
+class StreamElementsCustomReplayBufferOutput : public StreamElementsOutputBase {
+private:
+	std::shared_mutex m_mutex;
+
+	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
+		m_videoCompositionInfo = nullptr;
+
+	obs_output_t *m_output = nullptr;
+
+	CefRefPtr<CefDictionaryValue> m_recordingSettings =
+		CefDictionaryValue::Create();
+
+	std::vector<uint32_t> m_audioTracks;
+
+public:
+	StreamElementsCustomReplayBufferOutput(
+		std::string id, std::string name,
+		CefRefPtr<CefDictionaryValue> recordingSettings,
+		std::shared_ptr<StreamElementsVideoCompositionBase>
+			videoComposition,
+		std::shared_ptr<StreamElementsAudioCompositionBase>
+			audioComposition,
+		std::vector<uint32_t> audioTracks,
+		CefRefPtr<CefDictionaryValue> auxData)
+		: StreamElementsOutputBase(id, name, ReplayBufferOutput, None,
+					   videoComposition, audioComposition,
+					   auxData),
+		  m_recordingSettings(recordingSettings),
+		  m_audioTracks(audioTracks)
+	{
+	}
+
+	virtual ~StreamElementsCustomReplayBufferOutput() { Stop(); }
+
+	virtual bool CanDisable() override;
+
+	virtual void
+	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
+
+	virtual std::vector<uint32_t> GetAudioTracks() override
+	{
+		return m_audioTracks;
+	}
+
+	static std::shared_ptr<StreamElementsCustomReplayBufferOutput>
+	Create(CefRefPtr<CefValue> input);
+
+	virtual bool IsObsNativeOutput() override { return false; }
+
+protected:
+	virtual obs_output_t *GetOutput() override
+	{
+		return m_output ? obs_output_get_ref(m_output) : nullptr;
+	}
+
+	virtual bool StartInternal(
+		std::shared_ptr<
+			StreamElementsVideoCompositionBase::CompositionInfo>
+			videoCompositionInfo,
+		std::shared_ptr<
+			StreamElementsAudioCompositionBase::CompositionInfo>
+			audioCompositionInfo) override;
+	virtual void StopInternal() override;
+
+	virtual void ConnectOutputEvents() override;
+	virtual void DisconnectOutputEvents() override;
+
+	virtual bool CanSaveReplayBuffer() override { return IsActive(); }
+	virtual bool TriggerSaveReplayBuffer() override;
+
+private:
+	static void handle_output_saved(void *my_data, calldata_t *cd);
 };
