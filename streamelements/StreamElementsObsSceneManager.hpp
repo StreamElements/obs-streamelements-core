@@ -237,7 +237,9 @@ private:
 
 	void Clear()
 	{
-		Wait();
+		if (!m_parent) {
+			Wait();
+		}
 
 		std::unique_lock lock(m_scenes_mutex);
 
@@ -449,11 +451,11 @@ public:
 	}
 
 public:
-	char m_header[7] = "header"; // TODO: Remvoe debug marker
+	// char m_header[7] = "header"; // TODO: Remvoe debug marker
 	StreamElementsObsSceneManager *m_obsSceneManager = nullptr;
 	StreamElementsVideoCompositionBase *m_videoCompositionBase = nullptr;
 	obs_scene_t* m_scene = nullptr;
-	char m_footer[7] = "footer"; // TODO: Remvoe debug marker
+	// char m_footer[7] = "footer"; // TODO: Remvoe debug marker
 
 private:
 	std::shared_mutex m_wait_mutex;

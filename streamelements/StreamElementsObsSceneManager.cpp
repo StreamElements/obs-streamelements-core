@@ -895,11 +895,13 @@ static void dispatch_scene_update(obs_scene_t* scene,
 	if (!scene)
 		return;
 
+	if (!signalHandlerData)
+		return;
+
 	if (shouldDelay) {
 		auto sceneRef = obs_scene_get_ref(scene);
 
-		if (signalHandlerData)
-			signalHandlerData->Lock();
+		signalHandlerData->Lock();
 
 		std::thread thread([=]() {
 			dispatch_scene_event(sceneRef,
@@ -908,8 +910,7 @@ static void dispatch_scene_update(obs_scene_t* scene,
 
 			obs_scene_release(sceneRef);
 
-			if (signalHandlerData)
-				signalHandlerData->Unlock();
+			signalHandlerData->Unlock();
 		});
 
 		thread.detach();
@@ -1027,11 +1028,14 @@ static void dispatch_sceneitem_event(void *my_data, calldata_t *cd,
 
 	auto signalHandlerData = static_cast<SESignalHandlerData *>(my_data);
 
+	if (!signalHandlerData)
+		return;
+
 	if (shouldDelay) {
 		obs_sceneitem_addref(sceneitem);
 
-		if (signalHandlerData)
-			signalHandlerData->Lock();
+		
+		signalHandlerData->Lock();
 
 		std::thread thread([=]() -> void {
 			dispatch_sceneitem_event(my_data, sceneitem,
@@ -1041,8 +1045,7 @@ static void dispatch_sceneitem_event(void *my_data, calldata_t *cd,
 
 			obs_sceneitem_release(sceneitem);
 
-			if (signalHandlerData)
-				signalHandlerData->Unlock();
+			signalHandlerData->Unlock();
 		});
 
 		thread.detach();
@@ -1490,6 +1493,48 @@ static void handle_scene_item_add(void *my_data, calldata_t *cd)
 	}
 }
 
+static void process_scene_item_remove(obs_sceneitem_t *sceneitem,
+				      SESignalHandlerData *signalHandlerData,
+				      bool dispatchEvents)
+{
+	if (!sceneitem)
+		return;
+
+	if (!signalHandlerData)
+		return;
+
+	remove_filter_signals(sceneitem, signalHandlerData);
+
+	auto source = obs_sceneitem_get_source(sceneitem);
+
+	if (source) {
+		remove_source_signals(source, signalHandlerData);
+	}
+
+	if (dispatchEvents) {
+		OBSSceneAutoRelease sceneRef = signalHandlerData->GetRootSceneRef();
+
+		dispatch_sceneitem_event(signalHandlerData, sceneitem,
+					 "hostActiveSceneItemRemoved",
+					 "hostSceneItemRemoved", false);
+		dispatch_scene_update(sceneRef, true, signalHandlerData);
+	}
+
+	if (!obs_sceneitem_is_group(sceneitem))
+		return;
+
+	obs_scene_t *group_scene = obs_sceneitem_group_get_scene(sceneitem);
+
+	remove_scene_signals(group_scene, signalHandlerData);
+
+	if (signalHandlerData) {
+		auto sceneManager = signalHandlerData->m_obsSceneManager;
+
+		if (sceneManager)
+			sceneManager->Update();
+	}
+}
+
 static void handle_scene_item_remove(void *my_data, calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
@@ -1500,35 +1545,12 @@ static void handle_scene_item_remove(void *my_data, calldata_t *cd)
 	if (!sceneitem)
 		return;
 
-	remove_filter_signals(sceneitem,
-			      static_cast<SESignalHandlerData *>(my_data));
+	auto signalHandlerData = static_cast<SESignalHandlerData *>(my_data);
 
-	auto source = obs_sceneitem_get_source(sceneitem);
-
-	if (source) {
-		remove_source_signals(
-			source, static_cast<SESignalHandlerData *>(my_data));
-	}
-
-	dispatch_sceneitem_event(my_data, cd, "hostActiveSceneItemRemoved",
-				 "hostSceneItemRemoved", false);
-	dispatch_scene_update(my_data, cd, true);
-
-	if (!obs_sceneitem_is_group(sceneitem))
+	if (!signalHandlerData)
 		return;
 
-	obs_scene_t *group_scene = obs_sceneitem_group_get_scene(sceneitem);
-
-	remove_scene_signals(group_scene,
-			     static_cast<SESignalHandlerData *>(my_data));
-
-	if (my_data) {
-		auto sceneManager = static_cast<SESignalHandlerData *>(my_data)
-					    ->m_obsSceneManager;
-
-		if (sceneManager)
-			sceneManager->Update();
-	}
+	process_scene_item_remove(sceneitem, signalHandlerData, true);
 }
 
 void remove_source_signals(obs_source_t *source, SESignalHandlerData *data)
@@ -1586,26 +1608,16 @@ void remove_scene_signals(obs_scene_t *scene, SESignalHandlerData *data)
 					 scene](obs_sceneitem_t *item,
 						obs_sceneitem_t *parent_item)
 						-> bool {
-						calldata_t *cd =
-							calldata_create();
-						calldata_set_ptr(cd, "item",
-								 item);
-
-						handle_scene_item_remove(
-							signalHandlerData, cd);
-
-						calldata_destroy(cd);
+						process_scene_item_remove(
+							item, signalHandlerData, false);
 
 						return true;
 					},
 					false);
 			}
 
-			calldata_t *cd = calldata_create();
-			calldata_set_ptr(cd, "item", item);
-
-			handle_scene_item_remove(signalHandlerData, cd);
-			calldata_destroy(cd);
+			process_scene_item_remove(item, signalHandlerData,
+						  false);
 
 			return true;
 		},
