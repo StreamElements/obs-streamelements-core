@@ -1,3 +1,4 @@
+#include <strings.h>
 #include "StreamElementsAudioComposition.hpp"
 #include <util/config-file.h>
 
@@ -7,6 +8,8 @@
 #include "StreamElementsObsSceneManager.hpp"
 #include "StreamElementsMessageBus.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
+
+#include <exception>
 
 static void dispatch_external_event(std::string name, std::string args)
 {
@@ -107,7 +110,7 @@ SerializeObsAudioTracks(StreamElementsAudioCompositionBase *composition,
 {
 	const char *mode = config_get_string(obs_frontend_get_profile_config(),
 					     "Output", "Mode");
-	bool advOut = stricmp(mode, "Advanced") == 0;
+	bool advOut = strcasecmp(mode, "Advanced") == 0;
 
 	auto audioTracks = CefListValue::Create();
 
@@ -354,8 +357,8 @@ StreamElementsCustomAudioComposition::StreamElementsCustomAudioComposition(
 					m_streamingAudioEncoders[di]);
 			}
 
-			throw std::exception(
-				"obs_audio_encoder_create() failed", 2);
+			throw std::runtime_error(
+				"obs_audio_encoder_create() failed");
 		}
 
 		obs_encoder_set_audio(m_streamingAudioEncoders[i], m_audio);
@@ -385,8 +388,8 @@ void StreamElementsCustomAudioComposition::SetRecordingEncoder(
 				m_recordingAudioEncoders[di] = nullptr;
 			}
 
-			throw std::exception(
-				"obs_audio_encoder_create() failed", 2);
+			throw std::runtime_error(
+				"obs_audio_encoder_create() failed");
 		}
 
 		obs_encoder_set_audio(m_recordingAudioEncoders[i], m_audio);

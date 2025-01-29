@@ -73,7 +73,7 @@ class StreamElementsApiContextItem {
 public:
 	StreamElementsApiContextItem(CefString method_,
 				     CefRefPtr<CefListValue> args_,
-				     DWORD thread_)
+				     uint32_t thread_)
 		: method(method_), args(args_), thread(thread_)
 	{
 	}
@@ -81,7 +81,7 @@ public:
 public:
 	CefString method;
 	CefRefPtr<CefListValue> args;
-	DWORD thread;
+	uint32_t thread;
 };
 
 class StreamElementsApiContext_t
@@ -105,13 +105,17 @@ public:
 	StreamElementsAsyncCallContextItem(std::string& file_, int line_, bool running_)
 		: file(file_), line(line_), running(running_)
 	{
+#if _WIN32
 		thread = GetCurrentThreadId();
+#else
+		thread = 0;
+#endif
 	}
 
 public:
 	std::string file = "";
 	int line = -1;
-	DWORD thread = 0;
+	uint32_t thread = 0;
 	bool running = false;
 };
 

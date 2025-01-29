@@ -39,6 +39,8 @@ private:
 		case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
 			self->OnObsExit();
 			break;
+		default:
+			break;
 		}
 	}
 };

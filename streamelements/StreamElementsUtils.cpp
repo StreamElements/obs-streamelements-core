@@ -61,6 +61,8 @@
 	#ifndef HKEY
 	typedef void *HKEY;
 	#endif
+
+#include <sys/syscall.h>
 #endif
 
 /* ========================================================= */
@@ -192,7 +194,13 @@ std::shared_ptr<StreamElementsApiContextItem> PushApiContext(CefString method, C
 	std::unique_lock lock(s_apiContextMutex);
 
 	auto item =
-		std::make_shared<StreamElementsApiContextItem>(method, args, GetCurrentThreadId());
+		std::make_shared<StreamElementsApiContextItem>(method, args,
+#ifdef _WIN32
+							       GetCurrentThreadId()
+#else
+							       uint32_t(syscall(SYS_thread_selfid))
+#endif
+							       );
 
 	s_apiContext.push_back(item);
 
@@ -1148,6 +1156,8 @@ void SerializeExistingInputSources(
 		case OBS_SOURCE_TYPE_SCENE:
 			obs_enum_scenes(process, &local_context);
 			break;
+		default:
+			break;
 		}
 	}
 
@@ -1241,6 +1251,7 @@ std::string GetCefVersionString()
 {
 	char buf[64] = "unknown";
 
+#ifdef _WIN32
 	void* libcef = os_dlopen("libcef");
 	if (libcef) {
 		typedef int (*cef_version_info_func_ptr_t)(int entry);
@@ -1261,6 +1272,7 @@ std::string GetCefVersionString()
 
 		os_dlclose(libcef);
 	}
+#endif
 
 	return std::string(buf);
 }
@@ -1269,6 +1281,7 @@ std::string GetCefPlatformApiHash()
 {
 	char buf[128] = "unknown";
 
+#ifdef _WIN32
 	void *libcef = os_dlopen("libcef");
 	if (libcef) {
 		typedef const char *(*cef_api_hash_func_ptr_t)(int entry);
@@ -1285,6 +1298,7 @@ std::string GetCefPlatformApiHash()
 
 		os_dlclose(libcef);
 	}
+#endif
 
 	return std::string(buf);
 }
@@ -1293,6 +1307,7 @@ std::string GetCefUniversalApiHash()
 {
 	char buf[128] = "unknown";
 
+#ifdef _WIN32
 	void *libcef = os_dlopen("libcef");
 	if (libcef) {
 		typedef const char *(*cef_api_hash_func_ptr_t)(int entry);
@@ -1309,6 +1324,7 @@ std::string GetCefUniversalApiHash()
 
 		os_dlclose(libcef);
 	}
+#endif
 
 	return std::string(buf);
 }
@@ -1923,7 +1939,7 @@ bool WriteProductEnvironmentConfigurationString(const char *key,
 bool WriteProductEnvironmentConfigurationStrings(
 	streamelements_env_update_requests requests)
 {
-	for (int i = 0; i < requests.size(); ++i) {
+	for (size_t i = 0; i < requests.size(); ++i) {
 		requests[i].product = ENV_PRODUCT_NAME;
 	}
 
@@ -2650,7 +2666,7 @@ HttpGetAsync(std::string url,
 	});
 }
 
-static class QRemoteIconMenu : public QMenu {
+class QRemoteIconMenu : public QMenu {
 public:
 	QRemoteIconMenu(const char *iconUrl, QPixmap *defaultPixmap = nullptr)
 		: QMenu(),
@@ -2666,7 +2682,7 @@ private:
 	CefRefPtr<StreamElementsRemoteIconLoader> loader;
 };
 
-static class QRemoteIconAction : public QAction {
+class QRemoteIconAction : public QAction {
 public:
 	QRemoteIconAction(const char *iconUrl, QPixmap *defaultPixmap = nullptr)
 		: QAction(),
@@ -2682,7 +2698,7 @@ private:
 	CefRefPtr<StreamElementsRemoteIconLoader> loader;
 };
 
-static class QRemoteIconPushButton : public QPushButton {
+class QRemoteIconPushButton : public QPushButton {
 public:
 	QRemoteIconPushButton(const char *iconUrl,
 			      QPixmap *defaultPixmap = nullptr)
@@ -3785,7 +3801,7 @@ bool SerializeObsProperty(obs_property_t *prop, CefRefPtr<CefValue> &output)
 		root->SetList("items", items);
 	} else if (type_id == OBS_PROPERTY_EDITABLE_LIST) {
 		/* Nothing to do */
-	} else if (type_id == OBS_GROUP_NORMAL) {
+	} else if (type_id == OBS_PROPERTY_GROUP) {
 		obs_properties_t *props = obs_property_group_content(
 			prop); // Does not increment refcount
 

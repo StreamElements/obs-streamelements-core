@@ -39,6 +39,14 @@ if (WIN32)
 else()
 	set(ENABLE_BUGSPLAT FALSE)
 	set(ENABLE_ANGELSCRIPT FALSE)
+
+	add_compile_options(
+		"-Wno-deprecated-declarations"
+		"-Wno-unused-parameter"
+		"-Wno-unused-variable"
+
+		"-fvisibility=default"
+	)
 endif(WIN32)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -68,9 +76,9 @@ if (APPLE)
 			${CMAKE_CURRENT_SOURCE_DIR}/streamelements/mach_exc.h
 			${CMAKE_CURRENT_SOURCE_DIR}/streamelements/mach_excServer.c
 			${CMAKE_CURRENT_SOURCE_DIR}/streamelements/mach_excUser.c
-		MAIN_DEPENDENCY /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk/usr/include/mach/mach_exc.defs
+		MAIN_DEPENDENCY /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/mach/mach_exc.defs
 		WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/streamelements
-		COMMAND mig -v /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk/usr/include/mach/mach_exc.defs
+		COMMAND mig -v /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/mach/mach_exc.defs
 	)
 endif(APPLE)
 
@@ -254,7 +262,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/deps/server/NamedPipesServer.cpp
 	streamelements/deps/server/NamedPipesServerClientHandler.cpp
 	streamelements/deps/server/HttpServer.cpp
-	streamelements/deps/sqlite/sqlite3.c
+	#streamelements/deps/sqlite/sqlite3.c
 	)
 
 if (APPLE)
@@ -353,8 +361,8 @@ set(obs-streamelements-core_HEADERS
 	streamelements/deps/server/NamedPipesServer.hpp
 	streamelements/deps/server/NamedPipesServerClientHandler.hpp
 	streamelements/deps/server/HttpServer.hpp
-	streamelements/deps/sqlite/sqlite3.h
-	streamelements/deps/sqlite/sqlite3ext.h
+	#streamelements/deps/sqlite/sqlite3.h
+	#streamelements/deps/sqlite/sqlite3ext.h
 	streamelements/deps/cpp-httplib/httplib.h
 	streamelements/streamelements.qrc
 	)
@@ -410,8 +418,10 @@ target_link_libraries(obs-streamelements-core
 set_target_properties(obs-streamelements-core PROPERTIES FOLDER "plugins/obs-streamelements-core")
 
 if (APPLE)
-	set_target_properties(obs-streamelements-core PROPERTIES
-		COMPILE_FLAGS "-mmacosx-version-min=10.15 -target x86_64-apple-macos10.15")
+	#set_target_properties(obs-streamelements-core PROPERTIES
+	#	COMPILE_FLAGS "-mmacosx-version-min=10.15 -target x86_64-apple-macos10.15")
+
+	set_property(TARGET obs-streamelements-core PROPERTY ENABLE_EXPORTS 1)
 endif(APPLE)
 
 # ----------------------------------------------------------------------------

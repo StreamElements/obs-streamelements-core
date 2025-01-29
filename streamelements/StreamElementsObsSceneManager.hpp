@@ -241,7 +241,7 @@ private:
 			Wait();
 		}
 
-		std::unique_lock lock(m_scenes_mutex);
+		// std::unique_lock lock(m_scenes_mutex);
 
 		m_videoCompositionBase = nullptr;
 		m_obsSceneManager = nullptr;
@@ -260,29 +260,39 @@ private:
 
 public:
 	void AddRef() {
-		std::unique_lock lock(m_refcount_mutex);
-
 		if (m_parent) {
 			m_parent->AddRef();
+			
+			return;
 		} else {
+			std::unique_lock lock(m_refcount_mutex);
+
 			++m_refcount;
 		}
 	}
 
 	void Release() {
-		std::unique_lock lock(m_refcount_mutex);
-
+		bool shouldDelete = false;
+		
 		if (m_parent) {
 			m_parent->Release();
+			
+			return;
 		} else {
+			std::unique_lock lock(m_refcount_mutex);
+
 			--m_refcount;
-
+			
 			if (m_refcount == 0) {
-				blog(LOG_INFO,
-				     "[obs-streamelements-core]: released SESignalHandlerData for video composition '%s'", m_videoCompositionBase->GetId().c_str());
-
-				delete this;
+				shouldDelete = true;
 			}
+		}
+		
+		if (shouldDelete) {
+			blog(LOG_INFO,
+			     "[obs-streamelements-core]: released SESignalHandlerData for video composition '%s'", m_videoCompositionBase->GetId().c_str());
+			
+			delete this;
 		}
 	}
 

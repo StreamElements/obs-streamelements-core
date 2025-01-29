@@ -37,7 +37,7 @@ using namespace json11;
 
 /* ========================================================================= */
 
-bool obs_module_load(void)
+MODULE_EXPORT bool obs_module_load(void)
 {
 	blog(LOG_INFO, "[obs-streamelements-core]: Version %lu",
 	     STREAMELEMENTS_PLUGIN_VERSION);
@@ -53,7 +53,7 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 
 	switch (event) {
 	case OBS_FRONTEND_EVENT_FINISHED_LOADING:
-		QtExecSync([] {
+		//QtExecSync([] {
 			blog(LOG_INFO,
 			     "[obs-streamelements-core]: initializing");
 
@@ -65,7 +65,7 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 
 			blog(LOG_INFO,
 			     "[obs-streamelements-core]: init done");
-		});
+		//});
 		break;
 	case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
 	case OBS_FRONTEND_EVENT_EXIT:
@@ -73,7 +73,7 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 						   nullptr);
 
 		// Shutdown StreamElements plug-in
-		QtExecSync([] {
+		//QtExecSync([] {
 			blog(LOG_INFO,
 			     "[obs-streamelements-core]: shutting down");
 
@@ -83,12 +83,14 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 
 			blog(LOG_INFO,
 			     "[obs-streamelements-core]: shutdown complete");
-		});
+		//});
+		break;
+	default:
 		break;
 	}
 }
 
-void obs_module_post_load(void)
+MODULE_EXPORT void obs_module_post_load(void)
 {
 	obs_frontend_add_event_callback(handle_obs_frontend_event, nullptr);
 
@@ -117,6 +119,6 @@ void obs_module_post_load(void)
 	*/
 }
 
-void obs_module_unload(void)
+MODULE_EXPORT void obs_module_unload(void)
 {
 }

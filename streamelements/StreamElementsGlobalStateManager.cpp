@@ -362,17 +362,26 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		QMainWindow::AllowNestedDocks |
 		QMainWindow::AllowTabbedDocks);
 
+#ifdef _WIN32
 	std::string storagePath = std::string("../obs-browser/") + GetCefVersionString();
+#else
+	std::string storagePath = GetCefVersionString();
+#endif
 	std::string fullStoragePath;
 	{
 		auto rpath = obs_module_config_path(
 			storagePath.c_str());
 
+#ifdef _WIN32
 		auto path = os_get_abs_path_ptr(rpath);
 
 		fullStoragePath = path;
 
 		bfree(path);
+#else
+		fullStoragePath = rpath;
+#endif
+
 		bfree(rpath);
 	}
 	int os_mkdirs_ret = os_mkdirs(fullStoragePath.c_str());
@@ -639,7 +648,8 @@ void StreamElementsGlobalStateManager::Shutdown()
 		//delete m_crashHandler; // TODO: Shutting down the crash handler might be contributing to us missing some exceptions during shutdown
 		//m_crashHandler = nullptr;
 	}
-
+#endif
+	
 	//mainWindow()->removeDockWidget(m_themeChangeListener);
 	if (m_themeChangeListener) {
 		m_themeChangeListener->deleteLater();
@@ -691,7 +701,6 @@ void StreamElementsGlobalStateManager::Shutdown()
 	}
 
 	StreamElementsMessageBus::Destroy();
-#endif
 
 	StreamElementsConfig::Destroy();
 

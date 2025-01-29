@@ -72,7 +72,7 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 			CefRefPtr<CefListValue> callArgs =
 				CefListValue::Create();
 
-			for (int i = headerSize; i < args->GetSize() - 1; ++i) {
+			for (size_t i = headerSize; i < args->GetSize() - 1; ++i) {
 				CefRefPtr<CefValue> parsedValue = CefParseJSON(
 					args->GetString(i),
 					JSON_PARSER_ALLOW_TRAILING_COMMAS);
@@ -776,7 +776,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			CefRefPtr<CefListValue> list = args->GetList(0);
 
 			if (list.get()) {
-				for (int i = 0; i < list->GetSize(); ++i) {
+				for (size_t i = 0; i < list->GetSize(); ++i) {
 					CefString id = list->GetString(i);
 
 					StreamElementsGlobalStateManager::
@@ -1307,7 +1307,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			CefRefPtr<CefListValue> list = args->GetList(0);
 
 			if (list.get()) {
-				for (int i = 0; i < list->GetSize(); ++i) {
+				for (size_t i = 0; i < list->GetSize(); ++i) {
 					CefString id = list->GetString(i);
 
 					StreamElementsGlobalStateManager::
@@ -3188,7 +3188,7 @@ bool StreamElementsApiMessageHandler::InvokeHandler::InvokeApiCallAsync(
 	if (IsTraceLogLevel()) {
 		blog(LOG_INFO,
 		     "obs-streamelements-core: StreamElementsApiMessageHandler::InvokeHandler::InvokeApiCallAsync: '%s', [%d]",
-		     invoke.c_str(), args->GetSize());
+		     invoke.c_str(), int(args->GetSize()));
 	}
 
 	incoming_call_handler_t handler = m_apiCallHandlers[invoke];

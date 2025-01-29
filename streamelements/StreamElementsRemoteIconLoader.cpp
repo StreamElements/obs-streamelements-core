@@ -3,7 +3,7 @@
 #include <QCache>
 #include <QReadWriteLock>
 
-static class CachedPixmap : QObject {
+class CachedPixmap : QObject {
 private:
 	QIcon m_icon;
 

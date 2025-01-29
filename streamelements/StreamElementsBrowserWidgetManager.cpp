@@ -546,7 +546,7 @@ void StreamElementsBrowserWidgetManager::DeserializeDockingWidgets(
 
 			// 4. For each dock Id
 			//
-			for (int i = 0; i < dockIds.size(); ++i) {
+			for (size_t i = 0; i < dockIds.size(); ++i) {
 				CefRefPtr<CefValue> widgetValue =
 					rootDictionary->GetValue(dockIds[i]);
 
@@ -898,7 +898,7 @@ bool StreamElementsBrowserWidgetManager::InsertDockingWidgetRelativeToId(
 		main->addDockWidget(area, group->at(0));
 		group->at(0)->setFloating(false);
 
-		for (size_t i = 1; i < group->size(); ++i) {
+		for (size_t i = 1; i < size_t(group->size()); ++i) {
 			main->addDockWidget(area, group->at(i));
 			group->at(i)->setFloating(false);
 			main->tabifyDockWidget(group->at(0), group->at(i));
@@ -906,7 +906,7 @@ bool StreamElementsBrowserWidgetManager::InsertDockingWidgetRelativeToId(
 	}
 
 	// Set size
-	for (size_t key = 0; key < result.size(); ++key) {
+	for (size_t key = 0; key < size_t(result.size()); ++key) {
 		auto group = result.at(key);
 
 		for (auto item : *group) {
@@ -932,7 +932,7 @@ bool StreamElementsBrowserWidgetManager::InsertDockingWidgetRelativeToId(
 	//QApplication::sendPostedEvents();
 
 	// Restore original size constraints
-	for (size_t key = 0; key < result.size(); ++key) {
+	for (size_t key = 0; key < size_t(result.size()); ++key) {
 		auto group = result.at(key);
 
 		for (auto item : *group) {

@@ -40,7 +40,7 @@ StreamElementsOutputManager::StreamElementsOutputManager(
 
 StreamElementsOutputManager::~StreamElementsOutputManager()
 {
-	Reset();
+	//Reset();
 
 	m_map.clear();
 }

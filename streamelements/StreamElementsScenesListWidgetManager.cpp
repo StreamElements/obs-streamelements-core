@@ -212,7 +212,7 @@ SourceDataManager SourceDataManager::s_instance;
 /* ================================================================= */
 /* ================================================================= */
 
-static class ScenesLocalEventFilter : public QObject {
+class ScenesLocalEventFilter : public QObject {
 private:
 	StreamElementsScenesListWidgetManager *m_manager;
 
@@ -395,11 +395,12 @@ StreamElementsScenesListWidgetManager::StreamElementsScenesListWidgetManager(
 	m_scenesToolBarActions->SetNull();
 
 	//QtPostTask([this]() {
-		auto model = m_nativeWidget->model();
 
 		/* Subscribe to signals */
 
 		#if SE_ENABLE_SCENES_UI_EXTENSIONS
+		auto model = m_nativeWidget->model();
+
 		QObject::connect(model, &QAbstractItemModel::modelReset, this,
 				 &StreamElementsScenesListWidgetManager::
 					 HandleScenesModelReset);
@@ -467,9 +468,9 @@ StreamElementsScenesListWidgetManager::
 
 	m_eventFilter->deleteLater();
 
+	#if SE_ENABLE_SCENES_UI_EXTENSIONS
 	auto model = m_nativeWidget->model();
 
-	#if SE_ENABLE_SCENES_UI_EXTENSIONS
 	QObject::disconnect(m_nativeWidget, &QListWidget::itemDoubleClicked,
 			    this,
 			    &StreamElementsScenesListWidgetManager::
@@ -503,10 +504,10 @@ StreamElementsScenesListWidgetManager::
 void StreamElementsScenesListWidgetManager::HandleSceneRename(
 	void *data, calldata_t *params)
 {
+	#if SE_ENABLE_SCENES_UI_EXTENSIONS
 	StreamElementsScenesListWidgetManager *self =
 		(StreamElementsScenesListWidgetManager *)data;
 
-	#if SE_ENABLE_SCENES_UI_EXTENSIONS
 	self->ScheduleUpdateWidgets();
 	#endif
 }

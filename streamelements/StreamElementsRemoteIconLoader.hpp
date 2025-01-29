@@ -7,7 +7,7 @@
 #include <functional>
 #include <memory>
 
-static class StreamElementsRemoteIconLoader {
+class StreamElementsRemoteIconLoader {
 public:
 	typedef std::function<void(const QIcon)> setIcon_callback_t;
 

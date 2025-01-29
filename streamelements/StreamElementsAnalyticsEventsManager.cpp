@@ -48,6 +48,13 @@ void StreamElementsAnalyticsEventsManager::Enqueue(task_queue_item_t task)
 	m_taskQueue.enqueue(task);
 }
 
+static const char* itoa(int input, char* buf, int radix)
+{
+	snprintf(buf, 32, "%d", input);
+	
+	return buf;
+}
+
 void StreamElementsAnalyticsEventsManager::AddRawEvent(
 	const char *eventName, json11::Json::object propertiesJson,
 	json11::Json::array fieldsJson,

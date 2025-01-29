@@ -325,9 +325,7 @@ void StreamElementsReportIssueDialog::accept()
 			// This won't grab CEF windows' content on Win32
 			// QPixmap pixmap = mainWindow->grab();
 #else
-			QDesktopWidget desktop;
-			QScreen *screen = QGuiApplication::screens().at(
-				desktop.screenNumber(this));
+			QScreen *screen = this->screen();
 			QRect screenRect = screen->geometry();
 			QPixmap pixmap = screen->grabWindow(0, screenRect.x(),
 				screenRect.y(), screenRect.width(), screenRect.height());
@@ -643,7 +641,7 @@ void StreamElementsReportIssueDialog::accept()
 							sprintf(lineBuf,
 								"%1.2Lf,%d",
 								totalSec,
-								item // % Used
+								int(item.dwMemoryLoad) // % Used
 							);
 #endif
 						} else {
@@ -655,9 +653,9 @@ void StreamElementsReportIssueDialog::accept()
 							);
 #else
 							sprintf(lineBuf,
-								"%1.2Lf,%d",
-								0.0,
-								item // % Used
+								"%1.2f,%d",
+								0.0f,
+								int(item.dwMemoryLoad) // % Used
 							);
 #endif
 						}

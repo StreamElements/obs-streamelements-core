@@ -24,7 +24,7 @@ StreamElementsBandwidthTestClient::~StreamElementsBandwidthTestClient()
 void StreamElementsBandwidthTestClient::TestServerBitsPerSecond(
 	const char* serverUrl,
 	const char* streamKey,
-	const int maxBitrateBitsPerSecond,
+	const uint64_t maxBitrateBitsPerSecond,
 	const char* bindToIP,
 	const int durationSeconds,
 	const bool useAuth,
@@ -231,7 +231,7 @@ void StreamElementsBandwidthTestClient::TestServerBitsPerSecond(
 void StreamElementsBandwidthTestClient::TestServerBitsPerSecondAsync(
 	const char* const serverUrl,
 	const char* const streamKey,
-	const int maxBitrateBitsPerSecond,
+	const uint64_t maxBitrateBitsPerSecond,
 	const char* const bindToIP,
 	const int durationSeconds,
 	const bool useAuth,
@@ -320,7 +320,7 @@ void StreamElementsBandwidthTestClient::CancelAll()
 
 void StreamElementsBandwidthTestClient::TestMultipleServersBitsPerSecondAsync(
 	std::vector<Server> servers,
-	const int maxBitrateBitsPerSecond,
+	const uint64_t maxBitrateBitsPerSecond,
 	const char* const bindToIP,
 	const int durationSeconds,
 	const TestMultipleServersBitsPerSecondAsyncCallback progress_callback,
@@ -356,7 +356,7 @@ void StreamElementsBandwidthTestClient::TestMultipleServersBitsPerSecondAsync(
 	context->self->m_async_busy = true;
 
 	std::thread worker = std::thread([=]() {
-		for (int i = 0; i < context->servers.size(); ++i) {
+		for (size_t i = 0; i < context->servers.size(); ++i) {
 			Result testResult;
 
 			TestServerBitsPerSecond(

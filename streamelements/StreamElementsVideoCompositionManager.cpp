@@ -45,7 +45,7 @@ StreamElementsVideoCompositionManager::StreamElementsVideoCompositionManager()
 
 StreamElementsVideoCompositionManager::~StreamElementsVideoCompositionManager()
 {
-	Reset();
+	//Reset();
 
 	m_videoCompositionsMap.clear();
 }

@@ -193,6 +193,13 @@ static void UnregisterAppActiveTrackerWidget(QWidget *widget)
 
 #include <QVBoxLayout>
 
+static const char* itoa(int input, char* buf, int radix)
+{
+	sprintf(buf, "%d", input);
+	
+	return buf;
+}
+
 StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 	QWidget *parent,
 	StreamElementsMessageBus::message_destination_filter_flags_t

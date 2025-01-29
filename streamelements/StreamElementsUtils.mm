@@ -138,7 +138,7 @@ void SerializeSystemHardwareProperties(CefRefPtr<CefValue> &output)
     d->SetString("platform", "macos");
     
     char bitness[16];
-    sprintf(bitness, "%dbit", sizeof(void*) * 8);
+    sprintf(bitness, "%dbit", int(sizeof(void*) * 8));
     
     d->SetString("cpuArch", bitness);
     d->SetInt("cpuCount", os_get_physical_cores());
@@ -351,5 +351,5 @@ void RestartCurrentApplication()
         */
     
     ::exit(0);
-    QApplication::quit();
+    //QApplication::quit();
 }

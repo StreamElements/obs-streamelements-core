@@ -59,6 +59,8 @@ void StreamElementsHttpClient::DeserializeHttpRequestText(
 
 		auto cb = [&](char* data, void* userdata, char* error_msg, int http_code)
 		{
+			UNUSED_PARAMETER(userdata);
+
 			if (http_code != 0) {
 				http_status_code = http_code;
 			}

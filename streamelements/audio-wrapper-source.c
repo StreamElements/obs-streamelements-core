@@ -9,6 +9,8 @@ const char *audio_wrapper_get_name(void *type_data)
 }
 
 static obs_source_t* null_target(void* param) {
+	UNUSED_PARAMETER(param);
+
 	return NULL;
 }
 

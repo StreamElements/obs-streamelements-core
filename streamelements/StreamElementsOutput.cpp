@@ -67,7 +67,7 @@ static std::vector<uint32_t> DeserializeAudioTracks(CefRefPtr<CefDictionaryValue
 			if (list->GetType(i) != VTYPE_INT)
 				continue;
 
-			auto trackIndex = list->GetInt(i);
+			auto trackIndex = uint32_t(list->GetInt(i));
 
 			if (trackIndex >= 0 && trackIndex < MAX_AUDIO_MIXES) {
 				bool hasValue = false;
@@ -184,8 +184,9 @@ void StreamElementsOutputBase::handle_output_stop(void *my_data,
 		default:
 			char buffer[32];
 			std::string reason = "Unknown reason code ";
-			reason += itoa(code, buffer, 10);
-
+			snprintf(buffer, sizeof(buffer), "%d", code);
+			reason += buffer;
+				
 			args->SetString("reason", reason);
 			break;
 		}
@@ -1069,7 +1070,7 @@ std::vector<uint32_t> StreamElementsObsNativeStreamingOutput::GetAudioTracks()
 
 	const char *mode = config_get_string(obs_frontend_get_profile_config(),
 					     "Output", "Mode");
-	bool advOut = stricmp(mode, "Advanced") == 0;
+	bool advOut = strcasecmp(mode, "Advanced") == 0;
 
 	if (advOut) {
 		int streamTrack =
@@ -1136,7 +1137,7 @@ std::vector<uint32_t> StreamElementsObsNativeRecordingOutput::GetAudioTracks()
 
 	const char *mode = config_get_string(obs_frontend_get_profile_config(),
 					     "Output", "Mode");
-	bool advOut = stricmp(mode, "Advanced") == 0;
+	bool advOut = strcasecmp(mode, "Advanced") == 0;
 
 	int tracks = config_get_int(obs_frontend_get_profile_config(),
 				    advOut ? "AdvOut" : "SimpleOutput",
@@ -1232,7 +1233,7 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 	}
 
 	bool ffmpegOutput =
-		strcmpi(config_get_string(obs_frontend_get_profile_config(),
+		strcasecmp(config_get_string(obs_frontend_get_profile_config(),
 					  "AdvOut", "RecType"),
 			"FFmpeg") == 0;
 
@@ -1284,12 +1285,12 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 			  : "";
 
 	auto splitFileTime =
-		(strcmpi(splitFileType, "Time") == 0)
+		(strcasecmp(splitFileType, "Time") == 0)
 			? config_get_int(obs_frontend_get_profile_config(),
 					 "AdvOut", "RecSplitFileTime")
 			: 0;
 
-	auto splitFileSize = (strcmpi(splitFileType, "Size") == 0)
+	auto splitFileSize = (strcasecmp(splitFileType, "Size") == 0)
 			? config_get_int(obs_frontend_get_profile_config(),
 					 "AdvOut",
 						 "RecSplitFileSize")
@@ -1628,7 +1629,7 @@ StreamElementsObsNativeReplayBufferOutput::GetAudioTracks()
 
 	const char *mode = config_get_string(obs_frontend_get_profile_config(),
 					     "Output", "Mode");
-	bool advOut = stricmp(mode, "Advanced") == 0;
+	bool advOut = strcasecmp(mode, "Advanced") == 0;
 
 	int tracks = config_get_int(obs_frontend_get_profile_config(),
 				    advOut ? "AdvOut" : "SimpleOutput",
@@ -1688,7 +1689,7 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 	}
 
 	bool ffmpegOutput =
-		strcmpi(config_get_string(obs_frontend_get_profile_config(),
+		strcasecmp(config_get_string(obs_frontend_get_profile_config(),
 					  "AdvOut", "RecType"),
 			"FFmpeg") == 0;
 
@@ -1741,13 +1742,13 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 			  : "";
 
 	auto splitFileTime =
-		(strcmpi(splitFileType, "Time") == 0)
+		(strcasecmp(splitFileType, "Time") == 0)
 			? config_get_int(obs_frontend_get_profile_config(),
 					 "AdvOut", "RecSplitFileTime")
 			: 0;
 
 	auto splitFileSize =
-		(strcmpi(splitFileType, "Size") == 0)
+		(strcasecmp(splitFileType, "Size") == 0)
 			? config_get_int(obs_frontend_get_profile_config(),
 					 "AdvOut", "RecSplitFileSize")
 			: 0;

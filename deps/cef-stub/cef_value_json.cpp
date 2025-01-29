@@ -90,7 +90,7 @@ static json serialize_json(CefRefPtr<CefValue> v) {
 }
 
 CefRefPtr<CefValue> CefParseJSON(const CefString& json_string,
-                                 cef_json_parser_options_t options)
+                                 cef_json_parser_options_t /*options*/)
 {
 	try {
 		auto json = json::parse(json_string.ToString());
@@ -102,8 +102,8 @@ CefRefPtr<CefValue> CefParseJSON(const CefString& json_string,
 }
 
 CefString CefWriteJSON(CefRefPtr<CefValue> node,
-                       cef_json_writer_options_t options) {
-    json root = serialize_json(node);
+                       cef_json_writer_options_t /*options*/) {
+	json root = serialize_json(node);
     
-    return root.dump();
+	return root.dump();
 }

@@ -71,6 +71,8 @@ private:
 					m_target->removeEventFilter(this);
 					m_target = nullptr;
 					break;
+				default:
+					break;
 				}
 			}
 
