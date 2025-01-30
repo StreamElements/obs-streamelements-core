@@ -209,10 +209,14 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 		true);
 
 	// Remove scene items which have been removed from the scene, hidden or locked
+	std::list<obs_sceneitem_t *> scene_items_to_remove;
 	for (auto it = m_sceneItemsVisualElementsMap.cbegin(); it != m_sceneItemsVisualElementsMap.cend(); ++it) {
 		if (!existingSceneItems.count(it->first)) {
-			m_sceneItemsVisualElementsMap.erase(it);
+			scene_items_to_remove.push_back(it->first);
 		}
+	}
+	for (auto key : scene_items_to_remove) {
+		m_sceneItemsVisualElementsMap.erase(key);
 	}
 
 	// Add scene items which do not exist in the state yet

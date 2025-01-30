@@ -49,10 +49,15 @@ void StreamElementsAudioCompositionManager::Reset()
 {
 	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
-	for (auto it = m_audioCompositionsMap.cbegin();
-	     it != m_audioCompositionsMap.cend(); ++it) {
-		if (!it->second->IsObsNativeComposition())
-			m_audioCompositionsMap.erase(it->first);
+	std::list<std::string> keys_to_delete;
+
+	for (auto it : m_audioCompositionsMap) {
+		if (!it.second->IsObsNativeComposition())
+			keys_to_delete.push_back(it.first);
+	}
+
+	for (auto key : keys_to_delete) {
+		m_audioCompositionsMap.erase(key);
 	}
 
 	dispatch_js_event("hostAudioCompositionListChanged", "null");
