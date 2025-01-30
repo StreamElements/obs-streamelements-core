@@ -1265,7 +1265,7 @@ private:
 
 		auto rotationDistance =
 			(1.0f / scale1ToDims.y) * screenPixelDensity *
-			screenRotationDistance * m_view->m_worldPixelDensity.y;
+			screenRotationDistance * m_view->m_worldPixelDensity.y * screenPixelDensity;
 
 		if (scale1ToDims.y >= 0)
 			m_y = -rotationDistance;
