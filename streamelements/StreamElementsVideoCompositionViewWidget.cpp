@@ -160,16 +160,17 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 	//       matrix. For the time being it works very well as is, so we'll leave this excercise
 	//       for a later time.
 	//
-	self->m_currMouseWorldX = (double)(self->m_currMouseWidgetX - viewX) /
+	auto pixelRatio = self->devicePixelRatioF();
+	self->m_currMouseWorldX = (double)(self->m_currMouseWidgetX - (viewX / pixelRatio)) /
 				  viewWidth * worldWidth *
-				  self->devicePixelRatioF();
-	self->m_currMouseWorldY = (double)(self->m_currMouseWidgetY - viewY) /
+				  pixelRatio;
+	self->m_currMouseWorldY = (double)(self->m_currMouseWidgetY - (viewY / pixelRatio)) /
 				  viewWidth * worldWidth *
-				  self->devicePixelRatioF();
+				  pixelRatio;
 
 	vec2_set(&self->m_worldPixelDensity,
-		 worldWidth / viewWidth / self->devicePixelRatioF(),
-		 worldHeight / viewHeight / self->devicePixelRatioF());
+		 worldWidth / viewWidth / pixelRatio,
+		 worldHeight / viewHeight / pixelRatio);
 
 	///////////////////////////////////////////
 
@@ -328,6 +329,7 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 		}
 	}
 
+	/*
 	if (self->m_currUnderMouse) {
 		// Temporary mouse tracking debugger
 		fillRect(self->m_currMouseWorldX, self->m_currMouseWorldY,
@@ -352,6 +354,7 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 		drawLine(worldWidth, 0, self->m_currMouseWorldX,
 			 self->m_currMouseWorldY, 5.0f, QColor(0, 255, 0, 175));
 	}
+	*/
 
 	endProjectionRegion();
 }
