@@ -161,12 +161,15 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 	//       for a later time.
 	//
 	self->m_currMouseWorldX = (double)(self->m_currMouseWidgetX - viewX) /
-				  viewWidth * worldWidth;
+				  viewWidth * worldWidth *
+				  self->devicePixelRatioF();
 	self->m_currMouseWorldY = (double)(self->m_currMouseWidgetY - viewY) /
-				  viewWidth * worldWidth;
+				  viewWidth * worldWidth *
+				  self->devicePixelRatioF();
 
-	vec2_set(&self->m_worldPixelDensity, worldWidth / viewWidth,
-		 worldHeight / viewHeight);
+	vec2_set(&self->m_worldPixelDensity,
+		 worldWidth / viewWidth / self->devicePixelRatioF(),
+		 worldHeight / viewHeight / self->devicePixelRatioF());
 
 	///////////////////////////////////////////
 
@@ -325,7 +328,6 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 		}
 	}
 
-	/*
 	if (self->m_currUnderMouse) {
 		// Temporary mouse tracking debugger
 		fillRect(self->m_currMouseWorldX, self->m_currMouseWorldY,
@@ -350,46 +352,8 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 		drawLine(worldWidth, 0, self->m_currMouseWorldX,
 			 self->m_currMouseWorldY, 5.0f, QColor(0, 255, 0, 175));
 	}
-	*/
 
 	endProjectionRegion();
-
-	/*
-
-	//
-	// Lets paint our focus / hover state here
-	//
-
-	QColor color(0, 0, 0, 0);
-
-	if (self->hasFocus())
-		color = g_colorSelection.get();
-	else if (self->m_currUnderMouse)
-		color = g_colorHover.get();
-
-	if (color.alpha() != 0) {
-		startProjectionRegion(0, 0, viewportWidth, viewportHeight, 0.0f,
-				      0.0f, viewportWidth, viewportHeight);
-
-		vec3 size;
-		vec3_set(&size, viewportWidth, viewportHeight, 1.0f);
-		gs_matrix_push();
-		gs_matrix_scale(&size);
-
-		vec2 scale;
-		vec2_set(&scale, viewportWidth, viewportHeight);
-
-		double thickness = 1.5f;
-		drawLine(0.0f, 0.0f, 1.0f, 0.0f, thickness, scale, color);
-		drawLine(0.0f, 1.0f, 1.0f, 1.0f, thickness, scale, color);
-		drawLine(0.0f, 0.0f, 0.0f, 1.0f, thickness, scale, color);
-		drawLine(1.0f, 0.0f, 1.0f, 1.0f, thickness, scale, color);
-
-		gs_matrix_pop();
-
-		endProjectionRegion();
-	}
-	*/
 }
 
 static inline QSize GetPixelSize(QWidget *widget)
