@@ -48,12 +48,14 @@ void StreamElementsAnalyticsEventsManager::Enqueue(task_queue_item_t task)
 	m_taskQueue.enqueue(task);
 }
 
+#ifndef _WIN32
 static const char* itoa(int input, char* buf, int radix)
 {
 	snprintf(buf, 32, "%d", input);
 	
 	return buf;
 }
+#endif
 
 void StreamElementsAnalyticsEventsManager::AddRawEvent(
 	const char *eventName, json11::Json::object propertiesJson,
@@ -71,7 +73,7 @@ void StreamElementsAnalyticsEventsManager::AddRawEvent(
 	uint64_t secondsSincePrevEvent = (now - m_prevEventTime) / (uint64_t)1000000000L;
 	m_prevEventTime = now;
 
-	char atoi_buf[32];
+	char atoi_buf[32] = {0};
 
 	json11::Json::array fields = json11::Json::array{
 		json11::Json::array{"plugin_version",

@@ -251,17 +251,17 @@ void StreamElementsBandwidthTestClient::TestServerBitsPerSecondAsync(
 	os_event_reset(m_event_async_done);
 
 	struct local_context {
-		StreamElementsBandwidthTestClient* self;
+		StreamElementsBandwidthTestClient* self = nullptr;
 		std::string serverUrl;
 		std::string streamKey;
-		bool useAuth;
+		bool useAuth = false;
 		std::string authUsername;
 		std::string authPassword;
-		int maxBitrateBitsPerSecond;
+		uint64_t maxBitrateBitsPerSecond = 0L;
 		std::string bindToIP;
-		int durationSeconds;
-		TestServerBitsPerSecondAsyncCallback callback;
-		void* data;
+		int durationSeconds = 0;
+		TestServerBitsPerSecondAsyncCallback callback = nullptr;
+		void* data = nullptr;
 	};
 
 	local_context* context = new local_context();
@@ -328,15 +328,15 @@ void StreamElementsBandwidthTestClient::TestMultipleServersBitsPerSecondAsync(
 	void* const data)
 {
 	struct local_context {
-		StreamElementsBandwidthTestClient* self;
-		TestMultipleServersBitsPerSecondAsyncCallback callback;
-		void* data;
+		StreamElementsBandwidthTestClient* self = nullptr;
+		TestMultipleServersBitsPerSecondAsyncCallback callback = nullptr;
+		void* data = nullptr;
 		std::vector<Server> servers;
 		std::vector<Result> results;
 
-		int maxBitrateBitsPerSecond;
+		uint64_t maxBitrateBitsPerSecond = 0;
 		std::string bindToIP;
-		int durationSeconds;
+		int durationSeconds = 0;
 	};
 
 	local_context* context = new local_context();

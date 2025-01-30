@@ -1,4 +1,3 @@
-#include <strings.h>
 #include "StreamElementsAudioComposition.hpp"
 #include <util/config-file.h>
 
@@ -10,6 +9,10 @@
 #include "StreamElementsGlobalStateManager.hpp"
 
 #include <exception>
+
+#ifndef _WIN32
+#include <strings.h>
+#endif
 
 static void dispatch_external_event(std::string name, std::string args)
 {

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <strings.h>
 #include <obs.h>
 #include <obs.hpp>
 #include <obs-frontend-api.h>
@@ -10,6 +9,10 @@
 #include "StreamElementsScenesListWidgetManager.hpp"
 
 #include <shared_mutex>
+
+#ifndef _WIN32
+#include <strings.h>
+#endif
 
 class StreamElementsVideoCompositionEventListener {
 public:

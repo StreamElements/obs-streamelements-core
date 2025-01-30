@@ -1,4 +1,3 @@
-#include <strings.h>
 #include "StreamElementsVideoComposition.hpp"
 #include <obs-frontend-api.h>
 #include <util/config-file.h>
@@ -13,6 +12,10 @@
 #include "audio-wrapper-source.h"
 
 #include <exception>
+
+#ifndef _WIN32
+#include <strings.h>
+#endif
 
 static obs_scene_t *scene_create_private_with_custom_size(std::string name,
 							  uint32_t width,

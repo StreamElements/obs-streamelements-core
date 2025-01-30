@@ -7,13 +7,10 @@ StreamElementsConfig* StreamElementsConfig::s_instance = nullptr;
 bool StreamElementsConfig::s_destroyed = false;
 std::shared_mutex StreamElementsConfig::s_mutex;
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 StreamElementsConfig::StreamElementsConfig()
 	: m_config(nullptr), m_obsGlobalConfig(obs_frontend_get_global_config())
 {
 }
-#pragma clang diagnostic pop
 
 StreamElementsConfig::~StreamElementsConfig()
 {
