@@ -54,10 +54,15 @@ void StreamElementsVideoCompositionManager::Reset()
 {
 	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
-	for (auto it = m_videoCompositionsMap.cbegin();
-	     it != m_videoCompositionsMap.cend(); ++it) {
-		if (!it->second->IsObsNativeComposition())
-			m_videoCompositionsMap.erase(it->first);
+	std::list<std::string> keys_to_delete;
+	
+	for (auto pair : m_videoCompositionsMap) {
+		if (!pair.second->IsObsNativeComposition())
+			keys_to_delete.push_back(pair.first);
+	}
+	
+	for (auto key : keys_to_delete) {
+		m_videoCompositionsMap.erase(key);
 	}
 
 	dispatch_js_event("hostVideoCompositionListChanged", "null");

@@ -50,10 +50,15 @@ void StreamElementsOutputManager::Reset()
 	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	for (auto kv : m_map) {
-		for (auto it = m_map[kv.first].cbegin();
-		     it != m_map[kv.first].cend(); ++it) {
-			if (!it->second->IsObsNativeOutput())
-				m_map[kv.first].erase(it);
+		std::list<std::string> keys_to_delete;
+		
+		for (auto pair : kv.second) {
+			if (!pair.second->IsObsNativeOutput())
+				keys_to_delete.push_back(pair.first);
+		}
+		
+		for (auto key : keys_to_delete) {
+			kv.second.erase(key);
 		}
 	}
 }
