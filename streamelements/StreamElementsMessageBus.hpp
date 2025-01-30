@@ -11,6 +11,8 @@
 
 #include <util/threading.h>
 
+#include <future>
+
 // Message bus for exchanging messages between:
 //
 // * Background Workers
@@ -149,15 +151,14 @@ private:
 					HttpServer::response_t *res)
 			: request(req), response(res)
 		{
-			os_event_init(&event, OS_EVENT_TYPE_MANUAL);
 		}
 		~WaitingHttpRequestState()
 		{
-			os_event_destroy(event);
 		}
 
 	public:
-		os_event_t *event = nullptr;
+		std::promise<void> promise;
+		std::shared_future<void> future = promise.get_future();
 		const HttpServer::request_t *request;
 		HttpServer::response_t *response;
 	};
