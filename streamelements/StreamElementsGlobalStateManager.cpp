@@ -16,6 +16,8 @@
 #include <QMessageBox>
 #include <QGuiApplication>
 
+#include "updater/updater.hpp"
+
 #ifndef WIN32
 #include <errno.h>
 #include <string.h>
@@ -620,6 +622,8 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			->Update();
 	//});
 
+	streamelements_updater_init();
+
 	m_persistStateEnabled = true;
 	m_initialized = true;
 
@@ -639,6 +643,8 @@ void StreamElementsGlobalStateManager::Shutdown()
 	PersistState(false);
 
 	m_persistStateEnabled = false;
+
+	streamelements_updater_shutdown();
 
 #ifdef WIN32
 	// Shutdown on the main thread

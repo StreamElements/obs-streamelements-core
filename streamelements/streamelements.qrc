@@ -1,6 +1,7 @@
 <RCC>
 	<qresource prefix="/">
 		<file>images/logo.png</file>
+		<file>images/updater_logo.png</file>
 		<file>images/icon.png</file>
 		<file>images/icon.ico</file>
 		<file>images/logo_137x30.png</file>

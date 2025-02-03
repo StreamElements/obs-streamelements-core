@@ -8,6 +8,8 @@ endif()
 
 project(obs-streamelements-core)
 
+set(CMAKE_AUTORCC ON)
+
 if(NOT QT_VERSION)
   set(QT_VERSION
       "5"
@@ -257,6 +259,9 @@ set(obs-streamelements-core_SOURCES
 	streamelements/StreamElementsOutput.cpp
 	streamelements/StreamElementsOutputManager.cpp
 	streamelements/StreamElementsObsActiveSceneTracker.cpp
+	streamelements/updater/confirmpendingupdatedialog.cpp
+	streamelements/updater/networkdialog.cpp
+	streamelements/updater/updater.cpp
 	streamelements/deps/StackWalker/StackWalker.cpp
 	streamelements/deps/zip/zip.c
 	streamelements/deps/server/NamedPipesServer.cpp
@@ -353,6 +358,11 @@ set(obs-streamelements-core_HEADERS
 	streamelements/canvas-draw.hpp
 	streamelements/canvas-mutate.hpp
 	streamelements/canvas-controls.hpp
+	streamelements/updater/confirmpendingupdatedialog.hpp
+	streamelements/updater/confirmpendingupdatedialog.ui
+	streamelements/updater/networkdialog.hpp
+	streamelements/updater/networkdialog.ui
+	streamelements/updater/updater.hpp
 	streamelements/deps/StackWalker/StackWalker.h
 	streamelements/deps/zip/zip.h
 	streamelements/deps/zip/miniz.h
@@ -394,6 +404,7 @@ if (${QT_VERSION} EQUAL "6")
 		BASE "streamelements"
 		FILES
 		"streamelements/images/logo.png"
+		"streamelements/images/updater_logo.png"
 		"streamelements/images/icon.png"
 		"streamelements/images/icon.ico"
 		"streamelements/images/logo_137x30.png"
