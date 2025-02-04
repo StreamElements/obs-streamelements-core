@@ -66,6 +66,7 @@ static vec3 getSnapOffset(const vec3 &tl, const vec3 &br, double worldWidth, dou
 
 	const bool snap = config_get_bool(fe_config, "BasicWindow",
 					  "SnappingEnabled");
+	
 	if (snap == false)
 		return clampOffset;
 
