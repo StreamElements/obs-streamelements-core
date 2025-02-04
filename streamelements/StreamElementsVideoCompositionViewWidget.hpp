@@ -167,9 +167,12 @@ public:
 	class VisualElementsStateManager {
 	private:
 		StreamElementsVideoCompositionViewWidget* m_view;
+
 		std::map<obs_sceneitem_t *, std::shared_ptr<VisualElements>>
 			m_sceneItemsVisualElementsMap;
 		std::vector<obs_sceneitem_t *> m_sceneItemsEventProcessingOrder;
+
+	public:
 		std::shared_mutex m_mutex;
 
 	public:
@@ -435,8 +438,9 @@ protected:
 #endif
 
 public: // Used by ControlPoint
-	double m_currMouseWidgetX = 0;
-	double m_currMouseWidgetY = 0;
+	volatile double m_currMouseWidgetX = 0;
+	volatile double m_currMouseWidgetY = 0;
+
 	double m_currMouseWorldX = 0;
 	double m_currMouseWorldY = 0;
 	bool m_currUnderMouse = false;

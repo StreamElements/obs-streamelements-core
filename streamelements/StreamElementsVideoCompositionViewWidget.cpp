@@ -103,7 +103,7 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 			StreamElementsVideoCompositionBase::CompositionInfo>
 			videoCompositionInfo)
 {
-	std::shared_lock lock(m_mutex);
+	std::unique_lock lock(m_mutex);
 
 	QCursor mouseCursor(Qt::ArrowCursor);
 
@@ -647,8 +647,12 @@ void StreamElementsVideoCompositionViewWidget::keyPressEvent(
 
 void StreamElementsVideoCompositionViewWidget::mouseMoveEvent(QMouseEvent *event)
 {
-	m_currMouseWidgetX = event->localPos().x();
-	m_currMouseWidgetY = event->localPos().y();
+	{
+		std::unique_lock lock(m_visualElementsState.m_mutex);
+
+		m_currMouseWidgetX = event->localPos().x();
+		m_currMouseWidgetY = event->localPos().y();
+	}
 
 	m_mouseArmedForClickEvent = false;
 
@@ -661,8 +665,12 @@ void StreamElementsVideoCompositionViewWidget::mouseMoveEvent(QMouseEvent *event
 void StreamElementsVideoCompositionViewWidget::mousePressEvent(
 	QMouseEvent *event)
 {
-	m_currMouseWidgetX = event->localPos().x();
-	m_currMouseWidgetY = event->localPos().y();
+	{
+		std::unique_lock lock(m_visualElementsState.m_mutex);
+
+		m_currMouseWidgetX = event->localPos().x();
+		m_currMouseWidgetY = event->localPos().y();
+	}
 
 	m_mouseArmedForClickEvent = true;
 
@@ -675,8 +683,12 @@ void StreamElementsVideoCompositionViewWidget::mousePressEvent(
 void StreamElementsVideoCompositionViewWidget::mouseReleaseEvent(
 	QMouseEvent *event)
 {
-	m_currMouseWidgetX = event->localPos().x();
-	m_currMouseWidgetY = event->localPos().y();
+	{
+		std::unique_lock lock(m_visualElementsState.m_mutex);
+
+		m_currMouseWidgetX = event->localPos().x();
+		m_currMouseWidgetY = event->localPos().y();
+	}
 
 	m_visualElementsState.HandleMouseUp(event, m_currMouseWorldX,
 					    m_currMouseWorldY);
