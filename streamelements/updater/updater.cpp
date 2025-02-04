@@ -236,7 +236,7 @@ static int64_t get_installed_streamelements_core_plugin_version_number()
 {
 	blog(LOG_INFO,
 			"obs-streamelements-core: updater: detected obs-streamelements-core version: %llu",
-			STREAMELEMENTS_PLUGIN_VERSION);
+			(unsigned long long)STREAMELEMENTS_PLUGIN_VERSION);
 
 	return STREAMELEMENTS_PLUGIN_VERSION;
 }
