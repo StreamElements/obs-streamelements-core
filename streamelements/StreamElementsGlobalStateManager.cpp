@@ -1232,6 +1232,8 @@ bool StreamElementsGlobalStateManager::DeserializeStatusBarTemporaryMessage(
 bool StreamElementsGlobalStateManager::DeserializeModalDialog(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
+	bool result = false;
+
 	output->SetNull();
 
 	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
@@ -1261,40 +1263,42 @@ bool StreamElementsGlobalStateManager::DeserializeModalDialog(
 			isIncognito = true;
 		}
 
-		StreamElementsBrowserDialog dialog(mainWindow(), url,
-						   executeJavaScriptOnLoad,
-						   isIncognito, "modalDialog");
+		auto dialog = new StreamElementsBrowserDialog(
+			mainWindow(), url, executeJavaScriptOnLoad, isIncognito,
+			"modalDialog");
 
 		if (d->HasKey("title")) {
-			dialog.setWindowTitle(QString(
+			dialog->setWindowTitle(QString(
 				d->GetString("title").ToString().c_str()));
 		}
 
 		if (d->HasKey("isResizable") &&
 		    d->GetType("isResizable") == VTYPE_BOOL &&
 		    d->GetBool("isResizable")) {
-			auto savedMaxSize = dialog.maximumSize();
+			auto savedMaxSize = dialog->maximumSize();
 
-			dialog.setFixedSize(width, height);
+			dialog->setFixedSize(width, height);
 
 			QApplication::sendPostedEvents();
 
-			dialog.setMinimumSize(width, height);
-			dialog.setMaximumSize(savedMaxSize);
+			dialog->setMinimumSize(width, height);
+			dialog->setMaximumSize(savedMaxSize);
 		} else {
-			dialog.setFixedSize(width, height);
+			dialog->setFixedSize(width, height);
 		}
 
-		if (dialog.exec() == QDialog::Accepted) {
+		if (dialog->exec() == QDialog::Accepted) {
 			output =
-				CefParseJSON(dialog.result(),
+				CefParseJSON(dialog->result(),
 					     JSON_PARSER_ALLOW_TRAILING_COMMAS);
 
-			return true;
+			result = true;
 		}
+
+		dialog->deleteLater();
 	}
 
-	return false;
+	return result;
 }
 
 bool StreamElementsGlobalStateManager::HasNonModalDialog(const char* id) {

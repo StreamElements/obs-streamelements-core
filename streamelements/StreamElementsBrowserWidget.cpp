@@ -428,6 +428,9 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 
 		s_widgetRegistry[this] = true;
 	}
+
+	QObject::connect(this, &QObject::destroyed,
+			 [this](QObject *obj) { DestroyBrowser(); });
 }
 
 StreamElementsBrowserWidget*
@@ -443,6 +446,11 @@ StreamElementsBrowserWidget::GetWidgetByMessageTargetId(std::string target)
 }
 
 StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
+{
+	DestroyBrowser();
+}
+
+void StreamElementsBrowserWidget::DestroyBrowser()
 {
 	ShutdownApiMessagehandler();
 
@@ -469,7 +477,9 @@ StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 		}
 	}
 
-	m_requestedApiMessageHandler->SetBrowserWidget(nullptr);
+	if (m_requestedApiMessageHandler) {
+		m_requestedApiMessageHandler->SetBrowserWidget(nullptr);
+	}
 
 	if (s_widgets.count(m_clientId)) {
 		s_widgets.erase(m_clientId);
@@ -479,12 +489,11 @@ StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 
 	m_requestedApiMessageHandler = nullptr;
 
-	m_cefWidget->hide();
-	QApplication::sendPostedEvents();
-	layout()->removeWidget(m_cefWidget);
-	QApplication::sendPostedEvents();
-	m_cefWidget->closeBrowser();
-	QApplication::sendPostedEvents();
+	if (m_cefWidget) {
+		m_cefWidget->closeBrowser();
+
+		m_cefWidget = nullptr;
+	}
 
 	if (m_separateCookieManager) {
 		m_separateCookieManager->DeleteCookies("", "");

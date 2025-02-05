@@ -7,6 +7,7 @@
 
 #include <QWidget>
 #include <QHideEvent>
+#include <QCloseEvent>
 
 #include <util/platform.h>
 #include <util/threading.h>
@@ -95,6 +96,7 @@ public:
 
 private:
 	std::string GetInitialPageURLInternal();
+	void DestroyBrowser();
 
 private:
 	QCefCookieManager *m_separateCookieManager = nullptr;
