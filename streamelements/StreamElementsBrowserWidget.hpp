@@ -75,6 +75,8 @@ public:
 		m_requestedApiMessageHandler->Shutdown();
 	}
 
+	void DestroyBrowser();
+
 public:
 	std::string GetStartUrl();
 	std::string GetExecuteJavaScriptCodeOnLoad();
@@ -96,7 +98,6 @@ public:
 
 private:
 	std::string GetInitialPageURLInternal();
-	void DestroyBrowser();
 
 private:
 	QCefCookieManager *m_separateCookieManager = nullptr;

@@ -194,12 +194,16 @@ StreamElementsBrowserDialog::~StreamElementsBrowserDialog()
 {
 	m_browser->ShutdownApiMessagehandler();
 
-	m_browser->deleteLater();
+	m_browser->DestroyBrowser();
+
+	// m_browser->deleteLater();
 }
 
 int StreamElementsBrowserDialog::exec()
 {
 	int result = QDialog::exec();
+
+	m_browser->DestroyBrowser();
 
 	return result;
 }
