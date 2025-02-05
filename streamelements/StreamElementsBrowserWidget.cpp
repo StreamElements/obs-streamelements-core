@@ -479,8 +479,12 @@ StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 
 	m_requestedApiMessageHandler = nullptr;
 
-	// This is redundant and will crash on MacOS
-	// m_cefWidget->closeBrowser();
+	m_cefWidget->hide();
+	QApplication::sendPostedEvents();
+	layout()->removeWidget(m_cefWidget);
+	QApplication::sendPostedEvents();
+	m_cefWidget->closeBrowser();
+	QApplication::sendPostedEvents();
 
 	if (m_separateCookieManager) {
 		m_separateCookieManager->DeleteCookies("", "");
