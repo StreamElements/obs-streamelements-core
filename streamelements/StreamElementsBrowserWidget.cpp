@@ -479,7 +479,8 @@ StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 
 	m_requestedApiMessageHandler = nullptr;
 
-	m_cefWidget->closeBrowser();
+	// This is redundant and will crash on MacOS
+	// m_cefWidget->closeBrowser();
 
 	if (m_separateCookieManager) {
 		m_separateCookieManager->DeleteCookies("", "");
