@@ -188,13 +188,13 @@ StreamElementsBrowserDialog::StreamElementsBrowserDialog(
 	m_isIncognito);
 
 	layout()->addWidget(m_browser);
+
+	connect(this, &QDialog::finished, [this]() { m_browser->DestroyBrowser(); });
 }
 
 StreamElementsBrowserDialog::~StreamElementsBrowserDialog()
 {
 	m_browser->ShutdownApiMessagehandler();
-
-	m_browser->DestroyBrowser();
 
 	// m_browser->deleteLater();
 }
@@ -202,8 +202,6 @@ StreamElementsBrowserDialog::~StreamElementsBrowserDialog()
 int StreamElementsBrowserDialog::exec()
 {
 	int result = QDialog::exec();
-
-	m_browser->DestroyBrowser();
 
 	return result;
 }
