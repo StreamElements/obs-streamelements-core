@@ -164,7 +164,11 @@ protected:
 StreamElementsBrowserDialog::StreamElementsBrowserDialog(
 	QWidget *parent, std::string url, std::string executeJavaScriptOnLoad,
 	bool isIncognito, std::string containerType)
-	: QDialog(parent), m_url(url), m_executeJavaScriptOnLoad(executeJavaScriptOnLoad), m_isIncognito(isIncognito)
+	: QDialog(parent),
+	  m_url(url),
+	  m_executeJavaScriptOnLoad(executeJavaScriptOnLoad),
+	  m_isIncognito(isIncognito),
+	  m_containerType(containerType)
 {
 	setContentsMargins(0, 0, 0, 0);
 	setLayout(new QVBoxLayout());
@@ -179,24 +183,34 @@ StreamElementsBrowserDialog::StreamElementsBrowserDialog(
 		SetAlwaysOnTop(this, true);
 	}
 
-	m_browser = new StreamElementsBrowserWidget(
-	nullptr, StreamElementsMessageBus::DEST_UI, m_url.c_str(),
-	m_executeJavaScriptOnLoad.c_str(), "reload", "dialog",
-	CreateGloballyUniqueIdString().c_str(),
-		std::make_shared<StreamElementsDialogApiMessageHandler>(
-			this, containerType),
-	m_isIncognito);
+	connect(this, &QDialog::finished, [this]() {
+		m_browser->DestroyBrowser();
 
-	layout()->addWidget(m_browser);
+		layout()->removeWidget(m_browser);
 
-	connect(this, &QDialog::finished, [this]() { m_browser->DestroyBrowser(); });
+		m_browser->deleteLater();
+
+		m_browser = nullptr;
+	});
 }
 
 StreamElementsBrowserDialog::~StreamElementsBrowserDialog()
 {
-	m_browser->ShutdownApiMessagehandler();
+}
 
-	// m_browser->deleteLater();
+void StreamElementsBrowserDialog::showEvent(QShowEvent* event)
+{
+	QDialog::showEvent(event);
+
+	m_browser = new StreamElementsBrowserWidget(
+		nullptr, StreamElementsMessageBus::DEST_UI, m_url.c_str(),
+		m_executeJavaScriptOnLoad.c_str(), "reload", "dialog",
+		CreateGloballyUniqueIdString().c_str(),
+		std::make_shared<StreamElementsDialogApiMessageHandler>(
+			this, m_containerType),
+		m_isIncognito);
+
+	layout()->addWidget(m_browser);
 }
 
 int StreamElementsBrowserDialog::exec()

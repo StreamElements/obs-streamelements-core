@@ -67,6 +67,10 @@ public:
 
 	~StreamElementsBrowserWidget();
 
+	// To be called by dialogs, since CEF interprets the window close event as a signal to destroy the browser on it's own
+	void DestroyBrowser();
+
+private:
 	void ShutdownApiMessagehandler()
 	{
 		if (!m_requestedApiMessageHandler.get())
@@ -74,8 +78,6 @@ public:
 
 		m_requestedApiMessageHandler->Shutdown();
 	}
-
-	void DestroyBrowser();
 
 public:
 	std::string GetStartUrl();

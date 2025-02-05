@@ -21,6 +21,8 @@ public:
 
 	std::string result() { return m_result; }
 
+	virtual void showEvent(QShowEvent *event) override;
+
 public Q_SLOTS:
 	virtual int exec() override;
 
@@ -40,4 +42,6 @@ private:
 	std::string m_executeJavaScriptOnLoad;
 
 	bool m_isIncognito = false;
+
+	std::string m_containerType;
 };
