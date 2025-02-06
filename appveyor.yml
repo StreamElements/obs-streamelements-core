@@ -5,8 +5,6 @@ branches:
 image:
   - macos-sonoma
   - Visual Studio 2022
-matrix:
-  - fast_finish: true
 for:
   -
     matrix:
