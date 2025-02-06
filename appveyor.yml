@@ -67,7 +67,7 @@ for:
     artifacts:
     - path: build_*.zip
       name: build
-    - path: ~/Version.generated.hpp
+    - path: Version.generated.hpp
       name: version.generated.hpp
     deploy:
     - provider: S3
