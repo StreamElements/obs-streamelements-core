@@ -4,7 +4,7 @@ branches:
   - master
 image:
   - macos-sonoma
-#  - Visual Studio 2022
+  - Visual Studio 2022
 matrix:
   fast_finish: true
 for:
