@@ -16,6 +16,20 @@ for:
     clone_folder: ~/src/obs-streamelements-core
     environment:
       CHECKOUT: 31.0.0-rc1
+      CODESIGN_DEVIDAPP_CERT_PWD:
+        secure: SSzXgyD9cFqQ9L+L30Ceog==
+      CODESIGN_DEVIDAPP_IDENTITY: Developer ID Application
+      CODESIGN_DEVIDINST_CERT_PWD:
+        secure: SSzXgyD9cFqQ9L+L30Ceog==
+      CODESIGN_DEVIDINST_IDENTITY: Developer ID Installer
+      NOTARIZE_APPLE_ID: ilya@streamelements.com
+      NOTARIZE_APPLE_APP_PWD:
+        secure: e+BC7vblvY1AbaCrxpSokBxg6JsuDiQR9KWX3cP8H+o=
+      NOTARIZE_APPLE_TEAM_ID: 7CFM4DQ87G
+      CODESIGN_DEVIDAPP_CERT_P12_BASE64:
+        secure: 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
+      CODESIGN_DEVIDINST_CERT_P12_BASE64:
+        secure: 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
     install:
       - sh: >-
           git clone --recursive https://github.com/obsproject/obs-studio.git ~/src/obs-studio
@@ -27,39 +41,147 @@ for:
           cp -R ~/src/obs-streamelements-core ~/src/obs-studio/plugins/obs-streamelements-core
    
           echo "add_obs_plugin(obs-streamelements-core)" >>~/src/obs-studio/plugins/CMakeLists.txt
+
     build_script:
       - sh: >-
-          cd ~/src/obs-studio
+          cd ~
 
-          pwd
+          
+          
+          # Create temporary keychain
+
+          security create-keychain -p secret my_keychain
+
+          
+          
+          # Append keychain to the search list
+
+          security list-keychains -d user -s my_keychain $(security list-keychains -d user | sed s/\"//g)
+
+          security list-keychains
+
+          
+          
+          # Unlock keychain
+
+          security set-keychain-settings my_keychain
+
+          security unlock-keychain -p secret my_keychain
+
+          
+          
+          # Import certificates
+          
+          echo ${CODESIGN_DEVIDAPP_CERT_P12_BASE64} |base64 -D -o devidapp.p12
+          
+          echo ${CODESIGN_DEVIDINST_CERT_P12_BASE64} |base64 -D -o devidinst.p12
+
+          security import ./devidapp.p12 -k my_keychain -P ${CODESIGN_DEVIDAPP_CERT_PWD} -T "/usr/bin/codesign"
+
+          security import ./devidinst.p12 -k my_keychain -P ${CODESIGN_DEVIDINST_CERT_PWD} -T "/usr/bin/productsign"
+
+          rm devidapp.p12
+
+          rm devidinst.p12
+
+
+
+          # New requirement for MacOS 10.12
+
+          security set-key-partition-list -S apple-tool:,apple: -s -k secret my_keychain
+
+      - sh: >-
+
+
+
+
+          cd ~/src/obs-studio
 
           export STREAMELEMENTS_PLUGIN_VERSION="$(date "+%Y%m%d")$(printf "%06d" 1)"
 
           echo "#define STREAMELEMENTS_PLUGIN_VERSION $STREAMELEMENTS_PLUGIN_VERSION" >~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp
 
-          cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=arm64 -Bbuild_macos_arm64
 
-          cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=x86_64 -Bbuild_macos_x86_64
+
+
+          # Build ARM64 (Apple Silicon)
+
+          cd ~/src/obs-studio
+
+          cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=arm64 -Bbuild_macos_arm64
 
           cd ~/src/obs-studio/build_macos_arm64
 
-          pwd
-
           xcodebuild -configuration RelWithDebInfo -scheme obs-studio -destination "generic/platform=macOS,name=Any Mac"
 
-          cd ~/src/obs-studio/build_macos_x86_64
 
-          pwd
 
-          xcodebuild -configuration RelWithDebInfo -scheme obs-studio -destination "generic/platform=macOS,name=Any Mac"
 
           cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core
 
+          codesign --remove-signature obs-streamelements-core.plugin
+
+          codesign --force --options runtime --sign "${CODESIGN_DEVIDAPP_IDENTITY}" obs-streamelements-core.plugin
+
+          codesign -dvv obs-streamelements-core.plugin
+
+          productbuild --component obs-streamelements-core.plugin "/Applications/OBS.app/Contents/PlugIns" obs-streamelements-core-unsigned.pkg
+
+          productsign --sign "${CODESIGN_DEVIDINST_IDENTITY}" obs-streamelements-core-unsigned.pkg obs-streamelements-core.pkg
+
+          xcrun notarytool submit obs-streamelements-core.pkg --keychain-profile "notarytool-password" --wait
+
+          xcrun stapler staple obs-streamelements-core.pkg
+
+          cp obs-streamelements-core.pkg $APPVEYOR_BUILD_FOLDER/obs-streamelements-core_arm64.pkg
+
           7z a $APPVEYOR_BUILD_FOLDER/build_arm64.zip .
+
+
+
+
+          # Build x86_64 (Intel)
+
+          cd ~/src/obs-studio
+
+          cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=x86_64 -Bbuild_macos_x86_64
+
+          cd ~/src/obs-studio/build_macos_x86_64
+
+          xcodebuild -configuration RelWithDebInfo -scheme obs-studio -destination "generic/platform=macOS,name=Any Mac"
+
+
+
+
+          xcrun notarytool store-credentials "notarytool-password" --apple-id "${NOTARIZE_APPLE_ID}" --team-id "${NOTARIZE_APPLE_TEAM_ID}" --password "${NOTARIZE_APPLE_APP_PWD}"
+
+
+
 
           cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core
 
+          codesign --remove-signature obs-streamelements-core.plugin
+
+          codesign --force --options runtime --sign "${CODESIGN_DEVIDAPP_IDENTITY}" obs-streamelements-core.plugin
+
+          codesign -dvv obs-streamelements-core.plugin
+
+          productbuild --component obs-streamelements-core.plugin "/Applications/OBS.app/Contents/PlugIns" obs-streamelements-core-unsigned.pkg
+
+          productsign --sign "${CODESIGN_DEVIDINST_IDENTITY}" obs-streamelements-core-unsigned.pkg obs-streamelements-core.pkg
+
+          xcrun notarytool submit obs-streamelements-core.pkg --keychain-profile "notarytool-password" --wait
+
+          xcrun stapler staple obs-streamelements-core.pkg
+
+          cp obs-streamelements-core.pkg $APPVEYOR_BUILD_FOLDER/obs-streamelements-core_x86_64.pkg
+
           7z a $APPVEYOR_BUILD_FOLDER/build_x86_64.zip .
+
+
+
+
+          # Copy version file
 
           cp ~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp $APPVEYOR_BUILD_FOLDER/Version.generated.hpp
 
@@ -67,6 +189,8 @@ for:
     artifacts:
     - path: build_*.zip
       name: build
+    - path: obs-streamelements-core_*.pkg
+      name: package
     - path: Version.generated.hpp
       name: version.generated.hpp
     deploy:
@@ -76,7 +200,7 @@ for:
         secure: lhOyqT4/E0Oqv8BOQR81rx/SweOIbDELTYW7iJTqRz5shmkZ8eXMCgFzcIuXyvpB
       bucket: obs-builds
       folder: obs-streamelements-core/latest/macos
-      artifact: build,version.generated.hpp
+      artifact: build,package,version.generated.hpp
       max_error_retry: 5
       on:
         branch: master
