@@ -94,7 +94,7 @@ for:
           
           # Store notarytool credentials
 
-          xcrun notarytool store-credentials "notarytool-password" --keychain my_keychain --apple-id "${NOTARIZE_APPLE_ID}" --team-id "${NOTARIZE_APPLE_TEAM_ID}" --password "${NOTARIZE_APPLE_APP_PWD}"
+          xcrun notarytool store-credentials "notarytool-password" --apple-id "${NOTARIZE_APPLE_ID}" --team-id "${NOTARIZE_APPLE_TEAM_ID}" --password "${NOTARIZE_APPLE_APP_PWD}"
 
       - sh: >-
 
@@ -135,7 +135,7 @@ for:
 
           productsign --sign "${CODESIGN_DEVIDINST_IDENTITY}" obs-streamelements-core-unsigned.pkg obs-streamelements-core.pkg
 
-          xcrun notarytool submit obs-streamelements-core.pkg  --keychain my_keychain --keychain-profile "notarytool-password" --wait
+          xcrun notarytool submit obs-streamelements-core.pkg  --keychain-profile "notarytool-password" --wait
 
           xcrun stapler staple obs-streamelements-core.pkg
 
@@ -174,7 +174,7 @@ for:
 
           productsign --sign "${CODESIGN_DEVIDINST_IDENTITY}" obs-streamelements-core-unsigned.pkg obs-streamelements-core.pkg
 
-          xcrun notarytool submit obs-streamelements-core.pkg  --keychain my_keychain --keychain-profile "notarytool-password" --wait
+          xcrun notarytool submit obs-streamelements-core.pkg --keychain-profile "notarytool-password" --wait
 
           xcrun stapler staple obs-streamelements-core.pkg
 
