@@ -9,7 +9,7 @@ for:
   -
     matrix:
       only:
-        image: macos-sonoma
+        - image: macos-sonoma
     configuration: RelWithDebInfo
     clone_folder: ~/src/obs-streamelements-core
     environment:
