@@ -21,27 +21,25 @@ for:
           chdir ~/src/obs-studio
   
           git checkout $CHECKOUT
-  
-          chdir ~/src/obs-studio/plugins
-  
-          cp -R ~/src/obs-streamelements-core obs-streamelements-core
-  
-          chdir ~/src/obs-studio
-  
-          echo "add_obs_plugin(obs-streamelements-core)" >CMakeLists.txt
+   
+          cp -R ~/src/obs-streamelements-core ~/src/obs-studio/plugins/obs-streamelements-core
+   
+          echo "add_obs_plugin(obs-streamelements-core)" >~/src/obs-studio/CMakeLists.txt
     build_script:
       - sh: >-
+          chdir ~/src/obs-studio
+
+          pwd
+
           export STREAMELEMENTS_PLUGIN_VERSION="$(date "+%Y%m%d")$(printf "%06d" 1)"
 
-          rm -f ~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp
-
           echo "#define STREAMELEMENTS_PLUGIN_VERSION $STREAMELEMENTS_PLUGIN_VERSION" >~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp
-
-          chdir ~/src/obs-studio
 
           cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=arm64;x86_64
 
           chdir ~/src/obs-studio/build_macos
+
+          pwd
 
           xcodebuild -configuration RelWithDebInfo -scheme obs-studio -destination "generic/platform=macOS,name=Any Mac"
 
