@@ -20,7 +20,7 @@ for:
       - sh: >-
           git clone --recursive https://github.com/obsproject/obs-studio.git ~/src/obs-studio
   
-          chdir ~/src/obs-studio
+          cd ~/src/obs-studio
   
           git checkout $CHECKOUT
    
@@ -29,7 +29,7 @@ for:
           echo "add_obs_plugin(obs-streamelements-core)" >~/src/obs-studio/CMakeLists.txt
     build_script:
       - sh: >-
-          chdir ~/src/obs-studio
+          cd ~/src/obs-studio
 
           pwd
 
@@ -39,13 +39,13 @@ for:
 
           cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=arm64;x86_64
 
-          chdir ~/src/obs-studio/build_macos
+          cd ~/src/obs-studio/build_macos
 
           pwd
 
           xcodebuild -configuration RelWithDebInfo -scheme obs-studio -destination "generic/platform=macOS,name=Any Mac"
 
-          chdir ~/src/obs-studio/build_macos/plugins/obs-streamelements-core
+          cd ~/src/obs-studio/build_macos/plugins/obs-streamelements-core
 
           7z a ~/build_macos.zip .
 
