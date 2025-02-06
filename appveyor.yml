@@ -55,17 +55,17 @@ for:
 
           cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core
 
-          7z a ~/build_macos_arm64.zip .
+          7z a $APPVEYOR_BUILD_FOLDER/build_arm64.zip .
 
           cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core
 
-          7z a ~/build_macos_x86_64.zip .
+          7z a $APPVEYOR_BUILD_FOLDER/build_x86_64.zip .
 
-          cp ~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp ~/Version.generated.hpp
+          cp ~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp $APPVEYOR_BUILD_FOLDER/Version.generated.hpp
 
     test: off
     artifacts:
-    - path: ~/build_macos_*.zip
+    - path: build_*.zip
       name: build
     - path: ~/Version.generated.hpp
       name: version.generated.hpp
