@@ -26,7 +26,7 @@ for:
    
           cp -R ~/src/obs-streamelements-core ~/src/obs-studio/plugins/obs-streamelements-core
    
-          echo "add_obs_plugin(obs-streamelements-core)" >~/src/obs-studio/CMakeLists.txt
+          echo "add_obs_plugin(obs-streamelements-core)" >>~/src/obs-studio/CMakeLists.txt
     build_script:
       - sh: >-
           cd ~/src/obs-studio
