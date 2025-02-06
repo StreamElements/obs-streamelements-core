@@ -37,23 +37,35 @@ for:
 
           echo "#define STREAMELEMENTS_PLUGIN_VERSION $STREAMELEMENTS_PLUGIN_VERSION" >~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp
 
-          cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=arm64;x86_64
+          cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=arm64 -Bbuild_macos_arm64
 
-          cd ~/src/obs-studio/build_macos
+          cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=x86_64 -Bbuild_macos_x86_64
+
+          cd ~/src/obs-studio/build_macos_arm64
 
           pwd
 
           xcodebuild -configuration RelWithDebInfo -scheme obs-studio -destination "generic/platform=macOS,name=Any Mac"
 
-          cd ~/src/obs-studio/build_macos/plugins/obs-streamelements-core
+          cd ~/src/obs-studio/build_macos_x86_64
 
-          7z a ~/build_macos.zip .
+          pwd
+
+          xcodebuild -configuration RelWithDebInfo -scheme obs-studio -destination "generic/platform=macOS,name=Any Mac"
+
+          cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core
+
+          7z a ~/build_macos_arm64.zip .
+
+          cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core
+
+          7z a ~/build_macos_x86_64.zip .
 
           cp ~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp ~/Version.generated.hpp
 
     test: off
     artifacts:
-    - path: ~/build64_macos.zip
+    - path: ~/build_macos_*.zip
       name: build
     - path: ~/Version.generated.hpp
       name: version.generated.hpp
