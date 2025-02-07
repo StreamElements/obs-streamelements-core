@@ -10,6 +10,10 @@
 
 #include <shared_mutex>
 
+#ifndef _WIN32
+#include <strings.h>
+#endif
+
 class StreamElementsVideoCompositionEventListener {
 public:
 	StreamElementsVideoCompositionEventListener() {}
@@ -119,7 +123,8 @@ private:
 				str += pair.first;
 				str += " = ";
 				char buf[32];
-				str += itoa(pair.second, buf, 10);
+				snprintf(buf, sizeof(buf), "%d", pair.second);
+				str += buf;
 			}
 
 			blog(LOG_ERROR,
@@ -156,7 +161,8 @@ private:
 				str += pair.first;
 				str += " = ";
 				char buf[32];
-				str += itoa(pair.second, buf, 10);
+				snprintf(buf, sizeof(buf), "%d", pair.second);
+				str += buf;
 			}
 
 			blog(LOG_ERROR,
@@ -250,7 +256,7 @@ public:
 			GetAllScenesInternal(scenes);
 		}
 
-		auto pointer = GetPointerFromId(id.c_str());
+		//auto pointer = GetPointerFromId(id.c_str());
 
 		for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
 			auto id1 = GetIdFromPointer(*it);
@@ -276,7 +282,7 @@ public:
 		}
 
 		for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
-			if (stricmp(obs_source_get_name(
+			if (strcasecmp(obs_source_get_name(
 					    obs_scene_get_source(*it)),
 				    name.c_str()) == 0)
 				return true;
@@ -297,7 +303,7 @@ public:
 		}
 
 		for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
-			if (stricmp(obs_source_get_name(
+			if (strcasecmp(obs_source_get_name(
 					    obs_scene_get_source(*it)),
 				    name.c_str()) == 0)
 				return obs_scene_get_ref(*it);
@@ -458,41 +464,41 @@ public:
 	}
 
 protected:
-	virtual obs_scene_t *GetCurrentScene();
-	virtual void GetAllScenesInternal(scenes_t &scenes);
+	virtual obs_scene_t *GetCurrentScene() override;
+	virtual void GetAllScenesInternal(scenes_t &scenes) override;
 
 public:
-	virtual bool IsObsNativeComposition() { return true; }
+	virtual bool IsObsNativeComposition() override { return true; }
 
 	virtual std::shared_ptr<
 		StreamElementsVideoCompositionBase::CompositionInfo>
-		GetCompositionInfo(StreamElementsVideoCompositionEventListener* listener, std::string holder);
+		GetCompositionInfo(StreamElementsVideoCompositionEventListener* listener, std::string holder) override;
 
-	virtual bool CanRemove() { return false; }
+	virtual bool CanRemove() override { return false; }
 
-	virtual void SerializeComposition(CefRefPtr<CefValue> &output);
+	virtual void SerializeComposition(CefRefPtr<CefValue> &output) override;
 	
-	virtual obs_scene_t *GetCurrentSceneRef();
+	virtual obs_scene_t *GetCurrentSceneRef() override;
 
-	virtual obs_scene_t *AddScene(std::string requestName);
-	virtual bool SetCurrentScene(obs_scene_t *scene);
+	virtual obs_scene_t *AddScene(std::string requestName) override;
+	virtual bool SetCurrentScene(obs_scene_t *scene) override;
 
 	virtual void TakeScreenshot() override {
 		obs_frontend_take_screenshot();
 	}
 
 protected:
-	virtual bool RemoveScene(obs_scene_t *scene);
+	virtual bool RemoveScene(obs_scene_t *scene) override;
 
-	virtual void SetTransition(obs_source_t *transition);
-	virtual obs_source_t *GetTransition();
+	virtual void SetTransition(obs_source_t *transition) override;
+	virtual obs_source_t *GetTransition() override;
 
-	virtual int GetTransitionDurationMilliseconds()
+	virtual int GetTransitionDurationMilliseconds() override
 	{
 		return obs_frontend_get_transition_duration();
 	}
 
-	virtual void SetTransitionDurationMilliseconds(int duration);
+	virtual void SetTransitionDurationMilliseconds(int duration) override;
 };
 
 class SESignalHandlerData;
@@ -561,22 +567,22 @@ private:
 	std::vector<obs_scene_t *> m_scenes;
 
 protected:
-	virtual obs_scene_t *GetCurrentScene();
-	virtual void GetAllScenesInternal(scenes_t &scenes);
+	virtual obs_scene_t *GetCurrentScene() override;
+	virtual void GetAllScenesInternal(scenes_t &scenes) override;
 
 public:
-	virtual bool IsObsNativeComposition() { return false; }
+	virtual bool IsObsNativeComposition() override { return false; }
 
 	virtual std::shared_ptr<
 		StreamElementsVideoCompositionBase::CompositionInfo>
-	GetCompositionInfo(StreamElementsVideoCompositionEventListener *listener, std::string holder);
+	GetCompositionInfo(StreamElementsVideoCompositionEventListener *listener, std::string holder) override;
 
-	virtual void SerializeComposition(CefRefPtr<CefValue> &output);
+	virtual void SerializeComposition(CefRefPtr<CefValue> &output) override;
 
-	virtual obs_scene_t *GetCurrentSceneRef();
+	virtual obs_scene_t *GetCurrentSceneRef() override;
 
-	virtual obs_scene_t *AddScene(std::string requestName);
-	virtual bool SetCurrentScene(obs_scene_t *scene);
+	virtual obs_scene_t *AddScene(std::string requestName) override;
+	virtual bool SetCurrentScene(obs_scene_t *scene) override;
 
 	virtual void TakeScreenshot() override
 	{

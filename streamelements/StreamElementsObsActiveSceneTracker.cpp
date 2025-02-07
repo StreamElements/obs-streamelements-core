@@ -71,6 +71,9 @@ void StreamElementsObsActiveSceneTracker::handle_obs_frontend_event(
 	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CLEANUP:
 		self->ClearTransition();
 		break;
+			
+	default:
+		break;
 	}
 }
 

@@ -207,7 +207,7 @@ protected:
 
 		if (!hasMatchModuleOfInterest) {
 			for (auto filter : modulesOfInterest) {
-				if (stricmp(filter.c_str(), entry.moduleName) ==
+				if (strcasecmp(filter.c_str(), entry.moduleName) ==
 				    0) {
 					hasMatchModuleOfInterest = true;
 

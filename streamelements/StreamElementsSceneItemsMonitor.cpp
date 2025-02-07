@@ -382,7 +382,7 @@ static bool IsSceneItemReorderActionAllowed() {
 	return allowed;
 }
 
-static class SceneItemsLocalEventFilter : public QObject {
+class SceneItemsLocalEventFilter : public QObject {
 private:
 	QMainWindow *m_mainWindow;
 	StreamElementsSceneItemsMonitor *m_monitor;
@@ -1289,7 +1289,7 @@ bool StreamElementsSceneItemsMonitor::InvokeCurrentSceneItemDefaultAction(
 
 	obs_scene_enum_items(scene, retrieveSceneItemsWithAddRef, &sceneItems);
 
-	for (int rowIndex = 0; rowIndex < m_sceneItemsModel->rowCount() &&
+	for (size_t rowIndex = 0; rowIndex < size_t(m_sceneItemsModel->rowCount()) &&
 			       rowIndex < sceneItems.size() && !result;
 	     ++rowIndex) {
 		obs_sceneitem_t *item = sceneItems[rowIndex];
@@ -1346,7 +1346,7 @@ bool StreamElementsSceneItemsMonitor::InvokeCurrentSceneItemDefaultContextMenu(
 
 	obs_scene_enum_items(scene, retrieveSceneItemsWithAddRef, &sceneItems);
 
-	for (int rowIndex = 0; rowIndex < m_sceneItemsModel->rowCount() &&
+	for (size_t rowIndex = 0; rowIndex < size_t(m_sceneItemsModel->rowCount()) &&
 			       rowIndex < sceneItems.size() && !result;
 	     ++rowIndex) {
 		obs_sceneitem_t *item = sceneItems[rowIndex];

@@ -344,7 +344,10 @@ bool StreamElementsNetworkDialog::DownloadFile(const char *localFilePath,
 					       const char *message)
 {
 	DownloadFileAsync(
-		localFilePath, url, large_file, [](bool result, void *data) {},
+		localFilePath, url, large_file, [](bool result, void *data) {
+			UNUSED_PARAMETER(result);
+			UNUSED_PARAMETER(data);
+		},
 		nullptr, message);
 
 	return exec() == QDialog::Accepted;

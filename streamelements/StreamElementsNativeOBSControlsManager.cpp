@@ -497,6 +497,9 @@ void StreamElementsNativeOBSControlsManager::handle_obs_frontend_event(enum obs_
 	case OBS_FRONTEND_EVENT_STREAMING_STOPPED:
 		self->SetStreamingStoppedState();
 		break;
+			
+	default:
+		break;
 	}
 }
 

@@ -11,6 +11,12 @@
 
 #include "audio-wrapper-source.h"
 
+#include <exception>
+
+#ifndef _WIN32
+#include <strings.h>
+#endif
+
 static obs_scene_t *scene_create_private_with_custom_size(std::string name,
 							  uint32_t width,
 							  uint32_t height)
@@ -230,6 +236,8 @@ void StreamElementsVideoCompositionBase::handle_obs_frontend_event(
 	case OBS_FRONTEND_EVENT_PROFILE_CHANGING:
 		self->HandleObsSceneCollectionCleanup();
 		break;
+	default:
+		break;
 	}
 }
 
@@ -259,7 +267,7 @@ static std::string GetUniqueSceneNameInternal(std::string name, StreamElementsVi
 
 		auto hasSceneName = [&](std::string name) -> bool {
 		for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
-			if (stricmp(name.c_str(),
+			if (strcasecmp(name.c_str(),
 				    obs_source_get_name(
 					    obs_scene_get_source(*it))) == 0)
 				return true;
@@ -299,7 +307,7 @@ GetUniqueSceneNameInternal(std::string name,
 
 	auto hasSceneName = [&](std::string name) -> bool {
 		for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
-			if (stricmp(name.c_str(),
+			if (strcasecmp(name.c_str(),
 				    obs_source_get_name(
 					    obs_scene_get_source(*it))) == 0)
 				return true;
@@ -452,7 +460,7 @@ obs_sceneitem_t *StreamElementsVideoCompositionBase::GetSceneItemByName(
 	for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
 		ObsSceneEnumAllItems(
 			*it, [&](obs_sceneitem_t *sceneitem) -> bool {
-				if (stricmp(obs_source_get_name(
+				if (strcasecmp(obs_source_get_name(
 						    obs_sceneitem_get_source(
 							    sceneitem)),
 					    name.c_str()) == 0) {
@@ -880,14 +888,14 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	obs_video_info ovi;
 
 	if (!obs_get_video_info(&ovi))
-		throw std::exception("obs_get_video_info() failed", 1);
+		throw std::runtime_error("obs_get_video_info() failed");
 
 	m_streamingVideoEncoder = obs_video_encoder_create(
 		streamingVideoEncoderId.c_str(), (name + ": streaming video encoder").c_str(),
 		streamingVideoEncoderSettings, streamingVideoEncoderHotkeyData);
 
 	if (!m_streamingVideoEncoder)
-		throw std::exception("obs_video_encoder_create() failed", 2);
+		throw std::runtime_error("obs_video_encoder_create() failed");
 
 	//
 	// This will prevent obs_encoder_get_width & obs_encoder_get_height from crashing due to video output being improperly initialized for SOME REASON
@@ -901,7 +909,7 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 
 	if (!m_transition) {
 		obs_encoder_release(m_streamingVideoEncoder);
-		throw std::exception("obs_source_create_private(cut_transition) failed", 2);
+		throw std::runtime_error("obs_source_create_private(cut_transition) failed");
 	}
 
 	ovi.base_width = m_baseWidth;

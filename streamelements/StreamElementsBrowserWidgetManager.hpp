@@ -80,7 +80,7 @@ public:
 				      const char *const url);
 
 	virtual bool SetWidgetTitleById(const char* const id,
-		const char* const title)
+		const char* const title) override
 	{
 		return StreamElementsWidgetManager::SetWidgetTitleById(id, title);
 	}

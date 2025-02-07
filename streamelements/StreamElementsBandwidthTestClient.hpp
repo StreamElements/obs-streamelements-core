@@ -92,7 +92,7 @@ public:
 	void TestServerBitsPerSecondAsync(
 		const char* const serverUrl,
 		const char* const streamKey,
-		const int maxBitrateBitsPerSecond,
+		const uint64_t maxBitrateBitsPerSecond,
 		const char* const bindToIP,
 		const int durationSeconds,
 		const bool useAuth,
@@ -103,7 +103,7 @@ public:
 
 	void TestMultipleServersBitsPerSecondAsync(
 		std::vector<Server> servers,
-		const int maxBitrateBitsPerSecond,
+		const uint64_t maxBitrateBitsPerSecond,
 		const char* const bindToIP,
 		const int durationSeconds,
 		const TestMultipleServersBitsPerSecondAsyncCallback progress_callback,
@@ -116,7 +116,7 @@ private:
 	void TestServerBitsPerSecond(
 		const char* serverUrl,
 		const char* streamKey,
-		const int maxBitrateBitsPerSecond,
+	        const uint64_t maxBitrateBitsPerSecond,
 		const char* bindToIP,
 		const int durationSeconds,
 		const bool useAuth,

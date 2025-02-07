@@ -21,7 +21,7 @@ public:
 	public:
 		std::string m_id;
 		std::string m_title;
-		bool m_visible;
+		bool m_visible = true;
 		std::string m_dockingArea;
 
 	public:
@@ -39,7 +39,7 @@ public:
 		}
 
 	private:
-		QWidget* m_widget;
+		QWidget* m_widget = nullptr;
 
 		friend class StreamElementsWidgetManager;
 

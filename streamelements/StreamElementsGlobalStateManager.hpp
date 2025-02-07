@@ -68,6 +68,8 @@ private:
 				case QEvent::WindowStateChange:
 					AdviseHostUserInterfaceStateChanged();
 					break;
+				default:
+					break;
 				}
 			}
 

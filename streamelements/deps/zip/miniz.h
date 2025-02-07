@@ -1327,18 +1327,19 @@ extern "C" {
 			return MZ_ADLER32_INIT;
 		while (buf_len) {
 			for (i = 0; i + 7 < block_len; i += 8, ptr += 8) {
-				s1 += ptr[0], s2 += s1;
-				s1 += ptr[1], s2 += s1;
-				s1 += ptr[2], s2 += s1;
-				s1 += ptr[3], s2 += s1;
-				s1 += ptr[4], s2 += s1;
-				s1 += ptr[5], s2 += s1;
-				s1 += ptr[6], s2 += s1;
-				s1 += ptr[7], s2 += s1;
+				s1 += ptr[0]; s2 += s1;
+				s1 += ptr[1]; s2 += s1;
+				s1 += ptr[2]; s2 += s1;
+				s1 += ptr[3]; s2 += s1;
+				s1 += ptr[4]; s2 += s1;
+				s1 += ptr[5]; s2 += s1;
+				s1 += ptr[6]; s2 += s1;
+				s1 += ptr[7]; s2 += s1;
 			}
-			for (; i < block_len; ++i)
-				s1 += *ptr++, s2 += s1;
-			s1 %= 65521U, s2 %= 65521U;
+			for (; i < block_len; ++i) {
+				s1 += *ptr++; s2 += s1;
+			}
+			s1 %= 65521U; s2 %= 65521U;
 			buf_len -= block_len;
 			block_len = 5552;
 		}
@@ -2088,7 +2089,7 @@ extern "C" {
 					MZ_CLEAR_OBJ(pTable->m_tree);
 					for (i = 0; i < r->m_table_sizes[r->m_type]; ++i)
 						total_syms[pTable->m_code_size[i]]++;
-					used_syms = 0, total = 0;
+					used_syms = 0; total = 0;
 					next_code[0] = next_code[1] = 0;
 					for (i = 1; i <= 15; ++i) {
 						used_syms += total_syms[i];
@@ -2355,18 +2356,19 @@ extern "C" {
 			size_t block_len = buf_len % 5552;
 			while (buf_len) {
 				for (i = 0; i + 7 < block_len; i += 8, ptr += 8) {
-					s1 += ptr[0], s2 += s1;
-					s1 += ptr[1], s2 += s1;
-					s1 += ptr[2], s2 += s1;
-					s1 += ptr[3], s2 += s1;
-					s1 += ptr[4], s2 += s1;
-					s1 += ptr[5], s2 += s1;
-					s1 += ptr[6], s2 += s1;
-					s1 += ptr[7], s2 += s1;
+					s1 += ptr[0]; s2 += s1;
+					s1 += ptr[1]; s2 += s1;
+					s1 += ptr[2]; s2 += s1;
+					s1 += ptr[3]; s2 += s1;
+					s1 += ptr[4]; s2 += s1;
+					s1 += ptr[5]; s2 += s1;
+					s1 += ptr[6]; s2 += s1;
+					s1 += ptr[7]; s2 += s1;
 				}
-				for (; i < block_len; ++i)
-					s1 += *ptr++, s2 += s1;
-				s1 %= 65521U, s2 %= 65521U;
+				for (; i < block_len; ++i) {
+					s1 += *ptr++; s2 += s1;
+				}
+				s1 %= 65521U; s2 %= 65521U;
 				buf_len -= block_len;
 				block_len = 5552;
 			}
@@ -3112,7 +3114,7 @@ extern "C" {
 				((d->m_lookahead_pos - d->m_lz_code_buf_dict_pos) <= d->m_dict_size)) {
 			mz_uint i;
 			d->m_pOutput_buf = pSaved_output_buf;
-			d->m_bit_buffer = saved_bit_buf, d->m_bits_in = saved_bits_in;
+			d->m_bit_buffer = saved_bit_buf; d->m_bits_in = saved_bits_in;
 			TDEFL_PUT_BITS(0, 2);
 			if (d->m_bits_in) {
 				TDEFL_PUT_BITS(0, 8 - d->m_bits_in);
@@ -3130,7 +3132,7 @@ extern "C" {
 		// block not fitting into the output buffer when using dynamic codes.
 		else if (!comp_block_succeeded) {
 			d->m_pOutput_buf = pSaved_output_buf;
-			d->m_bit_buffer = saved_bit_buf, d->m_bits_in = saved_bits_in;
+			d->m_bit_buffer = saved_bit_buf; d->m_bits_in = saved_bits_in;
 			tdefl_compress_block(d, MZ_TRUE);
 		}
 

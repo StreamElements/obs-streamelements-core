@@ -13,7 +13,7 @@ public:
 	std::string GetBaseUrl()
 	{
 		char portbuf[8];
-		sprintf(portbuf, "%d", GetPort());
+		snprintf(portbuf, sizeof(portbuf), "%d", GetPort());
 
 		std::string result = "http://localhost:";
 		result += portbuf;

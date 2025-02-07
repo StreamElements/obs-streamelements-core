@@ -32,7 +32,7 @@ bool StreamElementsBandwidthTestManager::BeginBandwidthTest(CefRefPtr<CefValue> 
 
 			m_last_test_servers.clear();
 
-			for (int i = 0; i < servers->GetSize(); ++i) {
+			for (size_t i = 0; i < servers->GetSize(); ++i) {
 				CefRefPtr<CefDictionaryValue> server =
 					servers->GetValue(i)->GetDictionary();
 

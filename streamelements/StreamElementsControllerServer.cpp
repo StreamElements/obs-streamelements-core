@@ -1,13 +1,16 @@
 #include "StreamElementsControllerServer.hpp"
 #include "StreamElementsMessageBus.hpp"
 
+#ifdef _WIN32
 static const char* PIPE_NAME = "\\\\.\\pipe\\StreamElementsObsLiveControllerServer";
 static const size_t MAX_CLIENTS = 15;
+#endif
 static const char* SOURCE_ADDR = "";
 
 StreamElementsControllerServer::StreamElementsControllerServer(StreamElementsMessageBus* bus) :
 	m_bus(bus)
 {
+#ifdef _WIN32
 	auto msgReceiver = [this](const char* const buffer, const size_t length) {
 		std::string str = "";
 		str.append(buffer, length);
@@ -15,7 +18,6 @@ StreamElementsControllerServer::StreamElementsControllerServer(StreamElementsMes
 		OnMsgReceivedInternal(str);
 	};
 
-#ifdef _WIN32
 	m_server = new NamedPipesServer(
 		PIPE_NAME,
 		msgReceiver,

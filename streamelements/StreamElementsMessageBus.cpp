@@ -90,22 +90,33 @@ void StreamElementsMessageBus::AddListener(std::string target, message_destinati
 
 		root->SetDictionary(rootDict);
 
+		auto requestState = std::make_shared<WaitingHttpRequestState>(&req,
+									      &res);
+		
 		{
 			std::lock_guard<decltype(m_waiting_http_requests_mutex)>
 				guard(m_waiting_http_requests_mutex);
 
-			m_waiting_http_requests[requestId] =
-				std::make_shared<WaitingHttpRequestState>(&req,
-									  &res);
+			m_waiting_http_requests[requestId] = requestState;
+				
 		}
 
 		NotifyEventListener(target, "browser", "http",
 				    "urn:http:server:browser",
 				    "hostMessageReceived", root);
 
-		if (0 !=
-		    os_event_timedwait(
-			    m_waiting_http_requests[requestId]->event, 15000)) {
+		bool requestHandled = false;
+		
+		for (int i = 0; i < 15000 / 10 && !requestHandled; ++i) {
+			if (requestState->future.wait_for(std::chrono::milliseconds(10)) != std::future_status::timeout)
+			{
+				requestHandled = true;
+			} else {
+				QApplication::processEvents();
+			}
+		}
+		
+		if (!requestHandled) {
 			// Nobody handled the request
 			res.status = 404;
 			res.reason = "Request Not Handled";
@@ -202,7 +213,7 @@ void StreamElementsMessageBus::DeserializeHttpRequestResponse(
 		}
 	}
 
-	os_event_signal(m_waiting_http_requests[requestId]->event);
+	m_waiting_http_requests[requestId]->promise.set_value();
 
 	output->SetBool(true);
 }

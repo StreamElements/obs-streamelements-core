@@ -103,7 +103,7 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 			StreamElementsVideoCompositionBase::CompositionInfo>
 			videoCompositionInfo)
 {
-	std::shared_lock lock(m_mutex);
+	std::unique_lock lock(m_mutex);
 
 	QCursor mouseCursor(Qt::ArrowCursor);
 
@@ -160,13 +160,17 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 	//       matrix. For the time being it works very well as is, so we'll leave this excercise
 	//       for a later time.
 	//
-	self->m_currMouseWorldX = (double)(self->m_currMouseWidgetX - viewX) /
-				  viewWidth * worldWidth;
-	self->m_currMouseWorldY = (double)(self->m_currMouseWidgetY - viewY) /
-				  viewWidth * worldWidth;
+	auto pixelRatio = self->devicePixelRatioF();
+	self->m_currMouseWorldX = (double)(self->m_currMouseWidgetX - (viewX / pixelRatio)) /
+				  viewWidth * worldWidth *
+				  pixelRatio;
+	self->m_currMouseWorldY = (double)(self->m_currMouseWidgetY - (viewY / pixelRatio)) /
+				  viewWidth * worldWidth *
+				  pixelRatio;
 
-	vec2_set(&self->m_worldPixelDensity, worldWidth / viewWidth,
-		 worldHeight / viewHeight);
+	vec2_set(&self->m_worldPixelDensity,
+		 worldWidth / viewWidth / pixelRatio,
+		 worldHeight / viewHeight / pixelRatio);
 
 	///////////////////////////////////////////
 
@@ -209,10 +213,14 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 		true);
 
 	// Remove scene items which have been removed from the scene, hidden or locked
+	std::list<obs_sceneitem_t *> scene_items_to_remove;
 	for (auto it = m_sceneItemsVisualElementsMap.cbegin(); it != m_sceneItemsVisualElementsMap.cend(); ++it) {
 		if (!existingSceneItems.count(it->first)) {
-			m_sceneItemsVisualElementsMap.erase(it);
+			scene_items_to_remove.push_back(it->first);
 		}
+	}
+	for (auto key : scene_items_to_remove) {
+		m_sceneItemsVisualElementsMap.erase(key);
 	}
 
 	// Add scene items which do not exist in the state yet
@@ -349,43 +357,6 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 	*/
 
 	endProjectionRegion();
-
-	/*
-
-	//
-	// Lets paint our focus / hover state here
-	//
-
-	QColor color(0, 0, 0, 0);
-
-	if (self->hasFocus())
-		color = g_colorSelection.get();
-	else if (self->m_currUnderMouse)
-		color = g_colorHover.get();
-
-	if (color.alpha() != 0) {
-		startProjectionRegion(0, 0, viewportWidth, viewportHeight, 0.0f,
-				      0.0f, viewportWidth, viewportHeight);
-
-		vec3 size;
-		vec3_set(&size, viewportWidth, viewportHeight, 1.0f);
-		gs_matrix_push();
-		gs_matrix_scale(&size);
-
-		vec2 scale;
-		vec2_set(&scale, viewportWidth, viewportHeight);
-
-		double thickness = 1.5f;
-		drawLine(0.0f, 0.0f, 1.0f, 0.0f, thickness, scale, color);
-		drawLine(0.0f, 1.0f, 1.0f, 1.0f, thickness, scale, color);
-		drawLine(0.0f, 0.0f, 0.0f, 1.0f, thickness, scale, color);
-		drawLine(1.0f, 0.0f, 1.0f, 1.0f, thickness, scale, color);
-
-		gs_matrix_pop();
-
-		endProjectionRegion();
-	}
-	*/
 }
 
 static inline QSize GetPixelSize(QWidget *widget)
@@ -676,8 +647,12 @@ void StreamElementsVideoCompositionViewWidget::keyPressEvent(
 
 void StreamElementsVideoCompositionViewWidget::mouseMoveEvent(QMouseEvent *event)
 {
-	m_currMouseWidgetX = event->localPos().x();
-	m_currMouseWidgetY = event->localPos().y();
+	{
+		std::unique_lock lock(m_visualElementsState.m_mutex);
+
+		m_currMouseWidgetX = event->localPos().x();
+		m_currMouseWidgetY = event->localPos().y();
+	}
 
 	m_mouseArmedForClickEvent = false;
 
@@ -690,8 +665,12 @@ void StreamElementsVideoCompositionViewWidget::mouseMoveEvent(QMouseEvent *event
 void StreamElementsVideoCompositionViewWidget::mousePressEvent(
 	QMouseEvent *event)
 {
-	m_currMouseWidgetX = event->localPos().x();
-	m_currMouseWidgetY = event->localPos().y();
+	{
+		std::unique_lock lock(m_visualElementsState.m_mutex);
+
+		m_currMouseWidgetX = event->localPos().x();
+		m_currMouseWidgetY = event->localPos().y();
+	}
 
 	m_mouseArmedForClickEvent = true;
 
@@ -704,8 +683,12 @@ void StreamElementsVideoCompositionViewWidget::mousePressEvent(
 void StreamElementsVideoCompositionViewWidget::mouseReleaseEvent(
 	QMouseEvent *event)
 {
-	m_currMouseWidgetX = event->localPos().x();
-	m_currMouseWidgetY = event->localPos().y();
+	{
+		std::unique_lock lock(m_visualElementsState.m_mutex);
+
+		m_currMouseWidgetX = event->localPos().x();
+		m_currMouseWidgetY = event->localPos().y();
+	}
 
 	m_visualElementsState.HandleMouseUp(event, m_currMouseWorldX,
 					    m_currMouseWorldY);

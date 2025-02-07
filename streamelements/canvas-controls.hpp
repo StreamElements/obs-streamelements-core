@@ -66,6 +66,7 @@ static vec3 getSnapOffset(const vec3 &tl, const vec3 &br, double worldWidth, dou
 
 	const bool snap = config_get_bool(fe_config, "BasicWindow",
 					  "SnappingEnabled");
+	
 	if (snap == false)
 		return clampOffset;
 
@@ -604,7 +605,7 @@ public:
 
 	}
 
-	virtual bool HandleKeyPressEvent(QKeyEvent *event)
+	virtual bool HandleKeyPressEvent(QKeyEvent *event) override
 	{
 		if (obs_sceneitem_locked(m_sceneItem) || !obs_sceneitem_selected(m_sceneItem))
 			return false;
@@ -931,12 +932,12 @@ public:
 		}
 
 
-		QColor color;
+		//QColor color;
 
 		bool isSelected = obs_sceneitem_selected(m_sceneItem);
 
-		bool altDown = (QGuiApplication::keyboardModifiers() &
-				Qt::AltModifier);
+		//bool altDown = (QGuiApplication::keyboardModifiers() &
+		//		Qt::AltModifier);
 
 		const double thickness = 1.0f * m_view->devicePixelRatioF() *
 					 fmax(m_view->m_worldPixelDensity.x, m_view->m_worldPixelDensity.y);
@@ -1054,8 +1055,8 @@ public:
 		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
 						 &transform, &inv_tranform);
 
-		auto itemScale =
-			getSceneItemFinalScale(m_sceneItem, m_parentSceneItem);
+		//auto itemScale =
+		//	getSceneItemFinalScale(m_sceneItem, m_parentSceneItem);
 
 		gs_matrix_push();
 		gs_matrix_mul(&transform);
@@ -1265,7 +1266,7 @@ private:
 
 		auto rotationDistance =
 			(1.0f / scale1ToDims.y) * screenPixelDensity *
-			screenRotationDistance * m_view->m_worldPixelDensity.y;
+			screenRotationDistance * m_view->m_worldPixelDensity.y * screenPixelDensity;
 
 		if (scale1ToDims.y >= 0)
 			m_y = -rotationDistance;
@@ -1391,7 +1392,7 @@ private:
 		getSceneItemBoxTransformMatrices(m_sceneItem, m_parentSceneItem,
 						 &transform, &inv_transform);
 
-		auto pos3 = getTransformedPosition(m_x, m_y, transform);
+		//auto pos3 = getTransformedPosition(m_x, m_y, transform);
 		auto center3 = getTransformedPosition(0.5f, 0.5f, transform);
 
 		vec2 pos, center;

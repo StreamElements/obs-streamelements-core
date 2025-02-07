@@ -7,10 +7,6 @@
 #include <util/platform.h>
 #include <util/config-file.h>
 
-#ifndef WIN32
-#define stricmp strcasecmp
-#endif
-
 StreamElementsOutputSettingsManager::StreamElementsOutputSettingsManager()
 {
 }
@@ -404,7 +400,7 @@ bool StreamElementsOutputSettingsManager::GetEncodingSettings(CefRefPtr<CefValue
 
 	config_t* basicConfig = obs_frontend_get_profile_config(); // does not increase refcount
 
-	if (stricmp(config_get_string(basicConfig, "Output", "Mode"), "Simple") == 0) {
+	if (strcasecmp(config_get_string(basicConfig, "Output", "Mode"), "Simple") == 0) {
 		d->SetString("videoEncoderId", config_get_string(basicConfig, "SimpleOutput", "StreamEncoder"));
 		d->SetInt("videoBitsPerSecond", config_get_uint(basicConfig, "SimpleOutput", "VBitrate") * 1000);
 		d->SetInt("audioBitsPerSecond", config_get_uint(basicConfig, "SimpleOutput", "ABitrate") * 1000);

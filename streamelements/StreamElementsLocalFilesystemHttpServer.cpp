@@ -47,11 +47,11 @@ StreamElementsLocalFilesystemHttpServer() {
 			"StreamElementsLocalFilesystemHttpServer: serving file from path: %s",
 			path.c_str());
 
-		#ifdef WIN32
+		#ifdef _WIN32
 		std::wstring wpath = utf8_to_wstring(path);
 		int handle = _wopen(wpath.c_str(), O_BINARY | O_RDONLY);
 		#else
-		int handle = ::open(path.c_str(), O_BINARY | O_RDONLY);
+		int handle = ::open(path.c_str(), O_RDONLY);
 		#endif
 
 		if (handle < 0) {
@@ -75,6 +75,8 @@ StreamElementsLocalFilesystemHttpServer() {
 			[handle,buffer,buflen](size_t offset, size_t length,
 				httplib::DataSink &sink)
 		{
+			UNUSED_PARAMETER(offset);
+			
 			int req_read = std::min(buflen, (int)length);
 			int bytes_read = read(handle, buffer, req_read);
 

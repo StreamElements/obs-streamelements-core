@@ -216,8 +216,8 @@ protected:
 			videoCompositionInfo,
 		std::shared_ptr<
 			StreamElementsAudioCompositionBase::CompositionInfo>
-			audioCompositionInfo);
-	virtual void StopInternal();
+			audioCompositionInfo) override;
+	virtual void StopInternal() override;
 };
 
 class StreamElementsObsNativeStreamingOutput : public StreamElementsOutputBase {
@@ -357,8 +357,8 @@ public:
 
 	virtual bool IsObsNativeOutput() override { return false; }
 
-	virtual bool CanSplitRecordingOutput();
-	virtual bool TriggerSplitRecordingOutput();
+	virtual bool CanSplitRecordingOutput() override;
+	virtual bool TriggerSplitRecordingOutput() override;
 
 protected:
 	virtual obs_output_t *GetOutput() override
@@ -372,8 +372,8 @@ protected:
 			videoCompositionInfo,
 		std::shared_ptr<
 			StreamElementsAudioCompositionBase::CompositionInfo>
-			audioCompositionInfo);
-	virtual void StopInternal();
+			audioCompositionInfo) override;
+	virtual void StopInternal() override;
 };
 
 class StreamElementsObsNativeReplayBufferOutput : public StreamElementsOutputBase {
@@ -401,8 +401,8 @@ public:
 
 	virtual bool CanStart() override { return true; }
 
-	virtual bool CanSaveReplayBuffer();
-	virtual bool TriggerSaveReplayBuffer();
+	virtual bool CanSaveReplayBuffer() override;
+	virtual bool TriggerSaveReplayBuffer() override;
 
 protected:
 	virtual obs_output_t *GetOutput() override

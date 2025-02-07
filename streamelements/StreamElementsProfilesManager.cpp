@@ -6,10 +6,6 @@
 #include <util/config-file.h>
 #include <util/platform.h>
 
-#ifndef WIN32
-#define stricmp strcasecmp
-#endif
-
 StreamElementsProfilesManager::StreamElementsProfilesManager() {}
 
 StreamElementsProfilesManager::~StreamElementsProfilesManager() {}
@@ -91,7 +87,7 @@ bool StreamElementsProfilesManager::DeserializeCurrentProfileById(
 	char **profiles = obs_frontend_get_profiles();
 
 	for (size_t index = 0; profiles[index] && !actualId.size(); ++index) {
-		if (stricmp(profiles[index], id.c_str()) == 0) {
+		if (strcasecmp(profiles[index], id.c_str()) == 0) {
 			actualId = profiles[index];
 			break;
 		}

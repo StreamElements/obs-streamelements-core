@@ -130,9 +130,11 @@ std::string StreamElementsConfig::GetScopedConfigStorageRootPath()
 
 	root += "/scoped_config_storage";
 
+#ifdef _WIN32
 	char* path = os_get_abs_path_ptr(root.c_str());
 	root = path;
 	bfree(path);
+#endif
 
 	return root;
 }
@@ -154,9 +156,13 @@ bool StreamElementsConfig::GetScopedTextFileFolderPath(
 	root += "/";
 	root += container;
 
+#ifdef _WIN32
 	char *abs = os_get_abs_path_ptr(root.c_str());
 	result = abs;
 	bfree(abs);
+#else
+	result = root;
+#endif
 
 	return true;
 }

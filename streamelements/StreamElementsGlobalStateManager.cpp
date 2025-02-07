@@ -16,6 +16,8 @@
 #include <QMessageBox>
 #include <QGuiApplication>
 
+#include "updater/updater.hpp"
+
 #ifndef WIN32
 #include <errno.h>
 #include <string.h>
@@ -362,17 +364,26 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		QMainWindow::AllowNestedDocks |
 		QMainWindow::AllowTabbedDocks);
 
+#ifdef _WIN32
 	std::string storagePath = std::string("../obs-browser/") + GetCefVersionString();
+#else
+	std::string storagePath = GetCefVersionString();
+#endif
 	std::string fullStoragePath;
 	{
 		auto rpath = obs_module_config_path(
 			storagePath.c_str());
 
+#ifdef _WIN32
 		auto path = os_get_abs_path_ptr(rpath);
 
 		fullStoragePath = path;
 
 		bfree(path);
+#else
+		fullStoragePath = rpath;
+#endif
+
 		bfree(rpath);
 	}
 	int os_mkdirs_ret = os_mkdirs(fullStoragePath.c_str());
@@ -611,6 +622,8 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			->Update();
 	//});
 
+	streamelements_updater_init();
+
 	m_persistStateEnabled = true;
 	m_initialized = true;
 
@@ -631,6 +644,8 @@ void StreamElementsGlobalStateManager::Shutdown()
 
 	m_persistStateEnabled = false;
 
+	streamelements_updater_shutdown();
+
 #ifdef WIN32
 	// Shutdown on the main thread
 	if (m_crashHandler) {
@@ -639,7 +654,8 @@ void StreamElementsGlobalStateManager::Shutdown()
 		//delete m_crashHandler; // TODO: Shutting down the crash handler might be contributing to us missing some exceptions during shutdown
 		//m_crashHandler = nullptr;
 	}
-
+#endif
+	
 	//mainWindow()->removeDockWidget(m_themeChangeListener);
 	if (m_themeChangeListener) {
 		m_themeChangeListener->deleteLater();
@@ -691,7 +707,6 @@ void StreamElementsGlobalStateManager::Shutdown()
 	}
 
 	StreamElementsMessageBus::Destroy();
-#endif
 
 	StreamElementsConfig::Destroy();
 
@@ -1217,6 +1232,8 @@ bool StreamElementsGlobalStateManager::DeserializeStatusBarTemporaryMessage(
 bool StreamElementsGlobalStateManager::DeserializeModalDialog(
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
+	bool result = false;
+
 	output->SetNull();
 
 	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
@@ -1246,40 +1263,42 @@ bool StreamElementsGlobalStateManager::DeserializeModalDialog(
 			isIncognito = true;
 		}
 
-		StreamElementsBrowserDialog dialog(mainWindow(), url,
-						   executeJavaScriptOnLoad,
-						   isIncognito, "modalDialog");
+		auto dialog = new StreamElementsBrowserDialog(
+			mainWindow(), url, executeJavaScriptOnLoad, isIncognito,
+			"modalDialog");
 
 		if (d->HasKey("title")) {
-			dialog.setWindowTitle(QString(
+			dialog->setWindowTitle(QString(
 				d->GetString("title").ToString().c_str()));
 		}
 
 		if (d->HasKey("isResizable") &&
 		    d->GetType("isResizable") == VTYPE_BOOL &&
 		    d->GetBool("isResizable")) {
-			auto savedMaxSize = dialog.maximumSize();
+			auto savedMaxSize = dialog->maximumSize();
 
-			dialog.setFixedSize(width, height);
+			dialog->setFixedSize(width, height);
 
 			QApplication::sendPostedEvents();
 
-			dialog.setMinimumSize(width, height);
-			dialog.setMaximumSize(savedMaxSize);
+			dialog->setMinimumSize(width, height);
+			dialog->setMaximumSize(savedMaxSize);
 		} else {
-			dialog.setFixedSize(width, height);
+			dialog->setFixedSize(width, height);
 		}
 
-		if (dialog.exec() == QDialog::Accepted) {
+		if (dialog->exec() == QDialog::Accepted) {
 			output =
-				CefParseJSON(dialog.result(),
+				CefParseJSON(dialog->result(),
 					     JSON_PARSER_ALLOW_TRAILING_COMMAS);
 
-			return true;
+			result = true;
 		}
+
+		dialog->deleteLater();
 	}
 
-	return false;
+	return result;
 }
 
 bool StreamElementsGlobalStateManager::HasNonModalDialog(const char* id) {

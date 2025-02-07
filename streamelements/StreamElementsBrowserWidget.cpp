@@ -7,7 +7,9 @@
 #include "../../obs-browser/panel/browser-panel.hpp"
 #include "../deps/base64/base64.hpp"
 
-extern "C" int getpid(void);
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 #ifdef USE_QT_LOOP
 #include "browser-app.hpp"
@@ -193,6 +195,15 @@ static void UnregisterAppActiveTrackerWidget(QWidget *widget)
 
 #include <QVBoxLayout>
 
+#ifndef _WIN32
+static const char* itoa(int input, char* buf, int radix)
+{
+	sprintf(buf, "%d", input);
+	
+	return buf;
+}
+#endif
+
 StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 	QWidget *parent,
 	StreamElementsMessageBus::message_destination_filter_flags_t
@@ -270,7 +281,11 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 	if (m_isIncognito) {
 		char cookie_store_name[128];
 
+#ifdef _WIN32
+		sprintf(cookie_store_name, "anonymous_%d.tmp", (int)GetCurrentProcessId());
+#else
 		sprintf(cookie_store_name, "anonymous_%d.tmp", getpid());
+#endif
 
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetCleanupManager()
@@ -413,6 +428,9 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 
 		s_widgetRegistry[this] = true;
 	}
+
+	QObject::connect(this, &QObject::destroyed,
+			 [this](QObject *obj) { DestroyBrowser(); });
 }
 
 StreamElementsBrowserWidget*
@@ -428,6 +446,11 @@ StreamElementsBrowserWidget::GetWidgetByMessageTargetId(std::string target)
 }
 
 StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
+{
+	DestroyBrowser();
+}
+
+void StreamElementsBrowserWidget::DestroyBrowser()
 {
 	ShutdownApiMessagehandler();
 
@@ -454,7 +477,9 @@ StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 		}
 	}
 
-	m_requestedApiMessageHandler->SetBrowserWidget(nullptr);
+	if (m_requestedApiMessageHandler) {
+		m_requestedApiMessageHandler->SetBrowserWidget(nullptr);
+	}
 
 	if (s_widgets.count(m_clientId)) {
 		s_widgets.erase(m_clientId);
@@ -464,7 +489,11 @@ StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 
 	m_requestedApiMessageHandler = nullptr;
 
-	m_cefWidget->closeBrowser();
+	if (m_cefWidget) {
+		m_cefWidget->closeBrowser();
+
+		m_cefWidget = nullptr;
+	}
 
 	if (m_separateCookieManager) {
 		m_separateCookieManager->DeleteCookies("", "");
@@ -588,7 +617,7 @@ void StreamElementsBrowserWidget::SerializeVideoCompositionView(
 
 	auto geometry = CefDictionaryValue::Create();
 
-	auto rect = m_activeVideoCompositionViewWidget->geometry();
+	const QRect rect = m_activeVideoCompositionViewWidget->geometry();
 
 	geometry->SetInt("left", rect.x());
 	geometry->SetInt("top", rect.y());

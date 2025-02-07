@@ -2,128 +2,226 @@ version: '{build}'
 branches:
   only:
   - master
-image: Visual Studio 2022
-configuration: RelWithDebInfo
-clone_folder: c:\local\source
-init:
-- ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
-environment:
-  BUGSPLAT_USERNAME: ilya77@gmail.com
-  BUGSPLAT_PASSWORD:
-    secure: VuWpM4WRVv4EBc27bOHR4Q==
-  matrix:
-    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
-      QT_VERSION: 6
+image:
+  - macos-sonoma
+  - Visual Studio 2022
+matrix:
+  fast_finish: true
+for:
+  -
+    matrix:
+      only:
+        - image: macos-sonoma
+    configuration: RelWithDebInfo
+    clone_folder: ~/src/obs-streamelements-core
+    environment:
       CHECKOUT: 31.0.0-rc1
-      GENERATOR: Visual Studio 17 2022
-      #WindowsDepsVersion: 2023-01-06
-install:
-- cmd: >-
-    if not exist c:\local md c:\local
+    install:
+      - sh: >-
+          git clone --recursive https://github.com/obsproject/obs-studio.git ~/src/obs-studio
+  
+          cd ~/src/obs-studio
+  
+          git checkout $CHECKOUT
+   
+          cp -R ~/src/obs-streamelements-core ~/src/obs-studio/plugins/obs-streamelements-core
+   
+          echo "add_obs_plugin(obs-streamelements-core)" >>~/src/obs-studio/plugins/CMakeLists.txt
 
-    git clone --recursive https://github.com/obsproject/obs-studio.git c:\local\obs-studio
+    build_script:
+      - sh: >-
+          cd ~/src/obs-studio
 
-    cd /d c:\local\obs-studio
+          export STREAMELEMENTS_PLUGIN_VERSION="$(date "+%Y%m%d")$(printf "%06d" 1)"
 
-    git checkout %CHECKOUT%
-
-    cd /d c:\local\obs-studio\plugins
-
-    md obs-streamelements-core
-
-    xcopy c:\local\source\*.* c:\local\obs-studio\plugins\obs-streamelements-core /S /E /I /Y
-
-    cd /d c:\local\obs-studio
-
-    echo add_obs_plugin(obs-streamelements-core) >c:\local\obs-studio\plugins\CMakeLists.txt
-
-cache:
-- c:\local\obs-build-dependencies
-
-build_script:
-- cmd: >-
-    echo ("#define STREAMELEMENTS_PLUGIN_VERSION " + (Get-Date).ToUniversalTime().ToString("yyyyMMdd") + "${Env:APPVEYOR_BUILD_NUMBER}".PadLeft(6, '0')) >c:\local\generate_version.ps1
-
-    echo ("set STREAMELEMENTS_PLUGIN_VERSION=" + (Get-Date).ToUniversalTime().ToString("y.M.d") + "." + "${Env:APPVEYOR_BUILD_NUMBER}".PadLeft(1, '0')) >c:\local\generate_version_cmd.ps1
-
-    powershell -File c:\local\generate_version.ps1 >c:\local\obs-studio\plugins\obs-streamelements-core\streamelements\Version.generated.hpp
-
-    powershell -File c:\local\generate_version_cmd.ps1 >c:\local\generate_version_cmd.bat
-
-    c:\local\generate_version_cmd.bat
-
-    echo %STREAMELEMENTS_PLUGIN_VERSION%
-
-    cd /d c:\local\obs-studio
+          echo "#define STREAMELEMENTS_PLUGIN_VERSION $STREAMELEMENTS_PLUGIN_VERSION" >~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp
 
 
 
 
-    echo Setting up CMAKE build projects
+          # Build ARM64 (Apple Silicon)
 
-    cmake --preset=windows-x64
+          cd ~/src/obs-studio
 
-    
-    
-    
-    echo Building 64bit ...
+          cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=arm64 -Bbuild_macos_arm64
 
-    cd /d c:\local\obs-studio\build_x64
+          cd ~/src/obs-studio/build_macos_arm64
 
-    msbuild obs-studio.sln -p:Configuration=RelWithDebInfo
+          xcodebuild -configuration RelWithDebInfo -scheme obs-studio -destination "generic/platform=macOS,name=Any Mac"
 
-    
-    
-    
-    echo Building 32bit ...
+          cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
 
-    cd /d c:\local\obs-studio\build_x86
-
-    msbuild obs-studio.sln -p:Configuration=RelWithDebInfo
+          7z a $APPVEYOR_BUILD_FOLDER/build_arm64.zip .
 
 
 
-    cd /d c:\local\obs-studio
 
-- cmd: >-
-    echo.Upload PDBs to BugSplat in case this is a commit to master branch (64bit. QT%QT_VERSION%).
+          # Build x86_64 (Intel)
 
-    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\Tools\symbol-upload-windows.exe -u "%BUGSPLAT_USERNAME%" -p "%BUGSPLAT_PASSWORD%" -a obs-streamelements-core -v "%STREAMELEMENTS_PLUGIN_VERSION%" -b OBS_Live -d "c:\local\obs-studio\build_x64\rundir\RelWithDebInfo\obs-plugins\64bit" -f obs-streamelements*.pdb
+          cd ~/src/obs-studio
 
-    if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\Tools\symbol-upload-windows.exe -u "%BUGSPLAT_USERNAME%" -p "%BUGSPLAT_PASSWORD%" -a obs-streamelements-core -v "%STREAMELEMENTS_PLUGIN_VERSION%" -b OBS_Live -d "c:\local\obs-studio\build_x64\rundir\RelWithDebInfo\obs-plugins\64bit" -f obs-streamelements*.dll
+          cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=x86_64 -Bbuild_macos_x86_64
 
+          cd ~/src/obs-studio/build_macos_x86_64
 
+          xcodebuild -configuration RelWithDebInfo -scheme obs-studio -destination "generic/platform=macOS,name=Any Mac"
 
-    echo.Pack 64bit, QT%QT_VERSION% artifacts...
+          cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core/RelWithDebInfo
 
-    cd /d c:\local\obs-studio\build_x64\rundir\RelWithDebInfo
-
-    7z a c:\local\source\build64_qt%QT_VERSION%.zip .
+          7z a $APPVEYOR_BUILD_FOLDER/build_x86_64.zip .
 
 
 
-    echo.Update generated version header...
 
-    copy /Y c:\local\obs-studio\plugins\obs-streamelements-core\streamelements\Version.generated.hpp c:\local\source\streamelements\Version.generated.hpp
+          # Copy version file
 
-    cd /d c:\local\obs-studio
+          cp ~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp $APPVEYOR_BUILD_FOLDER/Version.generated.hpp
 
-test: off
-artifacts:
-- path: build64_qt*.zip
-  name: build64
-- path: streamelements\Version.generated.hpp
-  name: version.generated.hpp
-deploy:
-- provider: S3
-  access_key_id: AKIAJESHQW2DGHPN57KQ
-  secret_access_key:
-    secure: lhOyqT4/E0Oqv8BOQR81rx/SweOIbDELTYW7iJTqRz5shmkZ8eXMCgFzcIuXyvpB
-  bucket: obs-builds
-  folder: obs-streamelements-core/latest/windows
-  artifact: build64,version.generated.hpp
-  max_error_retry: 5
-  on:
-    branch: master
-on_success:
-- cmd: echo.All done.
+    test: off
+    artifacts:
+    - path: build_*.zip
+      name: build
+    - path: Version.generated.hpp
+      name: version.generated.hpp
+    deploy:
+    - provider: S3
+      access_key_id: AKIAJESHQW2DGHPN57KQ
+      secret_access_key:
+        secure: lhOyqT4/E0Oqv8BOQR81rx/SweOIbDELTYW7iJTqRz5shmkZ8eXMCgFzcIuXyvpB
+      bucket: obs-builds
+      folder: obs-streamelements-core/latest/macos
+      artifact: build,version.generated.hpp
+      max_error_retry: 5
+      on:
+        branch: master
+    on_success:
+    - cmd: echo.All done.
+
+  -
+    matrix:
+      only:
+        - image: Visual Studio 2022
+    configuration: RelWithDebInfo
+    clone_folder: c:\local\source
+    init:
+    - ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
+    environment:
+      BUGSPLAT_USERNAME: ilya77@gmail.com
+      BUGSPLAT_PASSWORD:
+        secure: VuWpM4WRVv4EBc27bOHR4Q==
+      matrix:
+        - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
+          QT_VERSION: 6
+          CHECKOUT: 31.0.0-rc1
+          GENERATOR: Visual Studio 17 2022
+          #WindowsDepsVersion: 2023-01-06
+    install:
+    - cmd: >-
+        if not exist c:\local md c:\local
+
+        git clone --recursive https://github.com/obsproject/obs-studio.git c:\local\obs-studio
+
+        cd /d c:\local\obs-studio
+
+        git checkout %CHECKOUT%
+
+        cd /d c:\local\obs-studio\plugins
+
+        md obs-streamelements-core
+
+        xcopy c:\local\source\*.* c:\local\obs-studio\plugins\obs-streamelements-core /S /E /I /Y
+
+        cd /d c:\local\obs-studio
+
+        echo add_obs_plugin(obs-streamelements-core) >c:\local\obs-studio\plugins\CMakeLists.txt
+
+    cache:
+    - c:\local\obs-build-dependencies
+
+    build_script:
+    - cmd: >-
+        echo ("#define STREAMELEMENTS_PLUGIN_VERSION " + (Get-Date).ToUniversalTime().ToString("yyyyMMdd") + "${Env:APPVEYOR_BUILD_NUMBER}".PadLeft(6, '0')) >c:\local\generate_version.ps1
+
+        echo ("set STREAMELEMENTS_PLUGIN_VERSION=" + (Get-Date).ToUniversalTime().ToString("y.M.d") + "." + "${Env:APPVEYOR_BUILD_NUMBER}".PadLeft(1, '0')) >c:\local\generate_version_cmd.ps1
+
+        powershell -File c:\local\generate_version.ps1 >c:\local\obs-studio\plugins\obs-streamelements-core\streamelements\Version.generated.hpp
+
+        powershell -File c:\local\generate_version_cmd.ps1 >c:\local\generate_version_cmd.bat
+
+        c:\local\generate_version_cmd.bat
+
+        echo %STREAMELEMENTS_PLUGIN_VERSION%
+
+        cd /d c:\local\obs-studio
+
+
+
+
+        echo Setting up CMAKE build projects
+
+        cmake --preset=windows-x64
+
+        
+        
+        
+        echo Building 64bit ...
+
+        cd /d c:\local\obs-studio\build_x64
+
+        msbuild obs-studio.sln -p:Configuration=RelWithDebInfo
+
+        
+        
+        
+        echo Building 32bit ...
+
+        cd /d c:\local\obs-studio\build_x86
+
+        msbuild obs-studio.sln -p:Configuration=RelWithDebInfo
+
+
+
+        cd /d c:\local\obs-studio
+
+    - cmd: >-
+        echo.Upload PDBs to BugSplat in case this is a commit to master branch (64bit. QT%QT_VERSION%).
+
+        if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\Tools\symbol-upload-windows.exe -u "%BUGSPLAT_USERNAME%" -p "%BUGSPLAT_PASSWORD%" -a obs-streamelements-core -v "%STREAMELEMENTS_PLUGIN_VERSION%" -b OBS_Live -d "c:\local\obs-studio\build_x64\rundir\RelWithDebInfo\obs-plugins\64bit" -f obs-streamelements*.pdb
+
+        if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\Tools\symbol-upload-windows.exe -u "%BUGSPLAT_USERNAME%" -p "%BUGSPLAT_PASSWORD%" -a obs-streamelements-core -v "%STREAMELEMENTS_PLUGIN_VERSION%" -b OBS_Live -d "c:\local\obs-studio\build_x64\rundir\RelWithDebInfo\obs-plugins\64bit" -f obs-streamelements*.dll
+
+
+
+        echo.Pack 64bit, QT%QT_VERSION% artifacts...
+
+        cd /d c:\local\obs-studio\build_x64\rundir\RelWithDebInfo
+
+        7z a c:\local\source\build64_qt%QT_VERSION%.zip .
+
+
+
+        echo.Update generated version header...
+
+        copy /Y c:\local\obs-studio\plugins\obs-streamelements-core\streamelements\Version.generated.hpp c:\local\source\streamelements\Version.generated.hpp
+
+        cd /d c:\local\obs-studio
+
+    test: off
+    artifacts:
+    - path: build64_qt*.zip
+      name: build64
+    - path: streamelements\Version.generated.hpp
+      name: version.generated.hpp
+    deploy:
+    - provider: S3
+      access_key_id: AKIAJESHQW2DGHPN57KQ
+      secret_access_key:
+        secure: lhOyqT4/E0Oqv8BOQR81rx/SweOIbDELTYW7iJTqRz5shmkZ8eXMCgFzcIuXyvpB
+      bucket: obs-builds
+      folder: obs-streamelements-core/latest/windows
+      artifact: build64,version.generated.hpp
+      max_error_retry: 5
+      on:
+        branch: master
+    on_success:
+    - cmd: echo.All done.

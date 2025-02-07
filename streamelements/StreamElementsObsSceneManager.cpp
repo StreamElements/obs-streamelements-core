@@ -21,10 +21,6 @@
 #include "canvas-mutate.hpp"
 #include "canvas-scan.hpp"
 
-#ifndef WIN32
-#define stricmp strcasecmp
-#endif
-
 //#define CP(a) blog(LOG_INFO, "checkpoint %d", a)
 
 // obs_sceneitem_group_add_item() and obs_sceneitem_group_remove_item()
@@ -385,49 +381,6 @@ static vec2 DeserializeVec2(CefRefPtr<CefValue> input)
 	}
 
 	return result;
-}
-
-static uint32_t GetInt32FromAlignmentId(std::string alignment)
-{
-	uint32_t result = 0;
-
-	if (std::regex_search(alignment, std::regex("left")))
-		result |= OBS_ALIGN_LEFT;
-
-	if (std::regex_search(alignment, std::regex("right")))
-		result |= OBS_ALIGN_RIGHT;
-
-	if (std::regex_search(alignment, std::regex("top")))
-		result |= OBS_ALIGN_TOP;
-
-	if (std::regex_search(alignment, std::regex("bottom")))
-		result |= OBS_ALIGN_BOTTOM;
-
-	return result;
-}
-
-static std::string GetAlignmentIdFromInt32(uint32_t a)
-{
-	std::string h = "center";
-	std::string v = "center";
-
-	if (a & OBS_ALIGN_LEFT) {
-		h = "left";
-	} else if (a & OBS_ALIGN_RIGHT) {
-		h = "right";
-	}
-
-	if (a & OBS_ALIGN_TOP) {
-		v = "top";
-	} else if (a & OBS_ALIGN_BOTTOM) {
-		v = "bottom";
-	}
-
-	if (h == v) {
-		return "center";
-	} else {
-		return v + "_" + h;
-	}
 }
 
 static bool DeserializeSceneItemComposition(CefRefPtr<CefValue> input,
@@ -2882,7 +2835,7 @@ StreamElementsObsSceneManager::ObsGetUniqueSceneCollectionName(std::string name)
 		isUnique = true;
 
 		for (size_t idx = 0; names[idx] && isUnique; ++idx) {
-			if (stricmp(result.c_str(), names[idx]) == 0)
+			if (strcasecmp(result.c_str(), names[idx]) == 0)
 				isUnique = false;
 		}
 
@@ -3559,11 +3512,11 @@ void StreamElementsObsSceneManager::DeserializeObsCurrentSceneCollectionById(
 	ReadListOfObsSceneCollections(items);
 
 	for (auto item : items) {
-		if (stricmp(item.second.c_str(), id.c_str()) == 0) {
+		if (strcasecmp(item.second.c_str(), id.c_str()) == 0) {
 			actualId = item.second;
 
 			break;
-		} else if (stricmp(item.first.c_str(), id.c_str()) == 0) {
+		} else if (strcasecmp(item.first.c_str(), id.c_str()) == 0) {
 			actualId = item.second;
 
 			break;

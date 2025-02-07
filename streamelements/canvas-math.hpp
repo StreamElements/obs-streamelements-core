@@ -13,19 +13,19 @@ static inline double degreesToRadians(double degrees) {
 	return degrees * PI / 180.0f;
 }
 
-static inline double normalizeDegrees(double degrees) {
+static inline float normalizeDegrees(double degrees) {
 	while (degrees >= 360.0f)
 		degrees -= 360.0f;
 
 	while (degrees < 0.0f)
 		degrees += 360.0f;
 
-	return degrees;
+	return float(degrees);
 }
 
 static inline double getCircleDegrees(vec2 center, vec2 periphery) {
-	double adjacent = periphery.x - center.x;
-	double opposite = periphery.y - center.y;
+	float adjacent = periphery.x - center.x;
+	float opposite = periphery.y - center.y;
 
 	if (adjacent == 0.0f) {
 		return opposite > 0.0f ? 0.0f : 180.0f;

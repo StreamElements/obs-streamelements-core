@@ -9,7 +9,7 @@
 #include "StreamElementsObsAppMonitor.hpp"
 #include "StreamElementsUtils.hpp"
 
-static class PreviewMouseEventFilter : public QObject {
+class PreviewMouseEventFilter : public QObject {
 private:
 	QMainWindow *m_mainWindow;
 
@@ -52,6 +52,8 @@ public:
 				DispatchClientJSEvent(
 					"hostBeforeFocusChange", "null");
 			}
+			break;
+		default:
 			break;
 		}
 
