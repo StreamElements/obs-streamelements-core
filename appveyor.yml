@@ -28,6 +28,7 @@ for:
    
           echo "add_obs_plugin(obs-streamelements-core)" >>~/src/obs-studio/plugins/CMakeLists.txt
 
+    build_script:
       - sh: >-
           cd ~/src/obs-studio
 
