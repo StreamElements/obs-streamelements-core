@@ -90,7 +90,7 @@ for:
         secure: lhOyqT4/E0Oqv8BOQR81rx/SweOIbDELTYW7iJTqRz5shmkZ8eXMCgFzcIuXyvpB
       bucket: obs-builds
       folder: obs-streamelements-core/latest/macos
-      artifact: build,package,version.generated.hpp
+      artifact: build,version.generated.hpp
       max_error_retry: 5
       on:
         branch: master
