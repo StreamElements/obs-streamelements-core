@@ -105,24 +105,26 @@
        <cursorShape>PointingHandCursor</cursorShape>
       </property>
       <property name="styleSheet">
-       <string notr="true">QPushButton {
-	border-radius: 15px;
-	background-color: #444444;
-	color: white;
-	padding: 8px;
-	padding-left: 40px;
-	padding-right: 40px;
-}
+       <string notr="true">
+        QPushButton {
+          border-radius: 15px;
+          background-color: rgb(86, 132, 253);
+          color: white;
+          padding: 8px;
+          padding-left: 40px;
+          padding-right: 40px;
+          font-weight: bold;
+        }
 
-QPushButton:hover {
-	background-color: #666666;
-}
+        QPushButton:hover {
+          background-color: rgba(86, 132, 253, 175);
+        }
 
-QPushButton:pressed {
-	background-color: #eeeeee;
-	color: black;
-}
-</string>
+        QPushButton:pressed {
+          background-color: rgba(86, 132, 253, 225);
+          color: black;
+        }
+       </string>
       </property>
       <property name="text">
        <string>UPDATE</string>

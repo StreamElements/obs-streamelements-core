@@ -405,6 +405,7 @@ if (${QT_VERSION} EQUAL "6")
 		FILES
 		"streamelements/images/logo.png"
 		"streamelements/images/updater_logo.png"
+		"streamelements/images/updater_logo_dark.png"
 		"streamelements/images/icon.png"
 		"streamelements/images/icon.ico"
 		"streamelements/images/logo_137x30.png"
