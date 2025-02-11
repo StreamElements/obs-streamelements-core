@@ -32,7 +32,7 @@ for:
       - sh: >-
           cd ~/src/obs-studio
 
-          export STREAMELEMENTS_PLUGIN_VERSION="$(date "+%Y%m%d")$(printf "%06d" 1)"
+          export STREAMELEMENTS_PLUGIN_VERSION="$(date "+%Y%m%d")$(printf "%06d" $APPVEYOR_BUILD_NUMBER)"
 
           echo "#define STREAMELEMENTS_PLUGIN_VERSION $STREAMELEMENTS_PLUGIN_VERSION" >~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp
 
