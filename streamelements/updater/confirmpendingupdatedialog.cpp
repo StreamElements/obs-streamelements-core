@@ -26,6 +26,13 @@ ConfirmPendingUpdateDialog::ConfirmPendingUpdateDialog(QWidget *parent)
 	}
 
 	setModal(false);
+
+	QObject::connect(ui->ctl_rejectSkipVersionButton, &QPushButton::clicked,
+			 [this]() {
+				 m_skipVersionClicked = true;
+
+				 reject();
+			 });
 }
 
 ConfirmPendingUpdateDialog::~ConfirmPendingUpdateDialog()
@@ -33,9 +40,9 @@ ConfirmPendingUpdateDialog::~ConfirmPendingUpdateDialog()
 	delete ui;
 }
 
-bool ConfirmPendingUpdateDialog::IsDontAskAgainChecked()
+bool ConfirmPendingUpdateDialog::IsSkipVersionClicked()
 {
-	return ui->ctl_saveSelectionCheckbox->isChecked();
+	return m_skipVersionClicked;
 }
 
 void ConfirmPendingUpdateDialog::SetReleaseNotes(std::string release_notes)
@@ -52,6 +59,8 @@ void ConfirmPendingUpdateDialog::SetReleaseNotes(std::string release_notes)
 int ConfirmPendingUpdateDialog::ExecDialog()
 {
 	int result = 0;
+
+	m_skipVersionClicked = false;
 
 	QtExecSync([&]() {
 		setModal(true);

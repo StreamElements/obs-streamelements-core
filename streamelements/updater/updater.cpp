@@ -423,7 +423,8 @@ static void download_update_package_async(std::string package_url,
 //
 // @return	true to update, false to skip
 //
-static bool prompt_for_update(bool allowUseLastResponse,
+static bool prompt_for_update(const bool allowUseLastResponse,
+			      const uint64_t avail_version_number,
 			      std::string release_notes)
 {
 	bool result = false;
@@ -444,40 +445,35 @@ static bool prompt_for_update(bool allowUseLastResponse,
 	config_set_default_bool(config, "update-prompt",
 				"auto_use_last_response", false);
 
-	// Read configuration
-	bool last_response =
-		config_get_bool(config, "update-prompt", "last_response");
+	// Remove legacy values
+	config_remove_value(config, "update-prompt", "last_response"); // replaced by "skip_version"
+	config_remove_value(
+		config, "update-prompt", "auto_use_last_response"); // replaced by "skip_version"
 
-	bool auto_use_last_response = config_get_bool(config, "update-prompt",
-						      "auto_use_last_response");
+	if (allowUseLastResponse) {
+		uint64_t skip_version = config_get_uint(config, "update-prompt",
+							"skip_version");
 
-	if (auto_use_last_response && allowUseLastResponse) {
-		// User checked "don't ask me next time" last time,
-		// re-use their last response, and don't prompt.
-
-		result = last_response;
-	} else {
-		// Prompt the user with available update
-		s_ConfirmPendingUpdateDialog->SetReleaseNotes(release_notes);
-
-		int confirmPendingUpdateReturnVal =
-			s_ConfirmPendingUpdateDialog->ExecDialog();
-
-		result = confirmPendingUpdateReturnVal == QDialog::Accepted;
-
-		// Get "don't ask again" checkbox state
-		auto_use_last_response =
-			s_ConfirmPendingUpdateDialog->IsDontAskAgainChecked();
+		if (STREAMELEMENTS_PLUGIN_VERSION == skip_version)
+			return false;
 	}
 
-	last_response = result;
+	// Prompt the user with available update
+	s_ConfirmPendingUpdateDialog->SetReleaseNotes(release_notes);
 
-	// Save configuration for next time
-	config_set_bool(config, "update-prompt", "last_response",
-			last_response);
+	int confirmPendingUpdateReturnVal =
+		s_ConfirmPendingUpdateDialog->ExecDialog();
 
-	config_set_bool(config, "update-prompt", "auto_use_last_response",
-			auto_use_last_response);
+	result = confirmPendingUpdateReturnVal == QDialog::Accepted;
+
+	if (s_ConfirmPendingUpdateDialog->IsSkipVersionClicked()) {
+		// Save skipped version for next time
+		config_set_uint(config, "update-prompt", "skip_version",
+				STREAMELEMENTS_PLUGIN_VERSION);
+	} else {
+		// Remove skipped version for next time
+		config_remove_value(config, "update-prompt", "skip_version");
+	}
 
 	config_save_safe(config, "tmp", "bak");
 
@@ -798,6 +794,7 @@ static void check_for_updates_async(bool allowUseLastResponse, bool silent,
 									// user accepted the prompt
 									do_update = prompt_for_update(
 										allowUseLastResponse,
+										avail_version_number,
 										release_notes);
 								}
 

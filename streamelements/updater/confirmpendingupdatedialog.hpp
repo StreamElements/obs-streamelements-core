@@ -25,7 +25,7 @@ public:
 	//
 	// @return	true if checked, otherwise false
 	//
-	bool IsDontAskAgainChecked();
+	bool IsSkipVersionClicked();
 
 	///
 	// Set "release notes" text
@@ -62,5 +62,6 @@ private slots:
 	}
 
 private:
-    Ui::ConfirmPendingUpdateDialog *ui;
+	Ui::ConfirmPendingUpdateDialog *ui;
+	bool m_skipVersionClicked = false;
 };

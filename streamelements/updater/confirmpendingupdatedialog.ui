@@ -52,7 +52,7 @@
      <x>0</x>
      <y>0</y>
      <width>801</width>
-     <height>631</height>
+     <height>571</height>
     </rect>
    </property>
    <layout class="QGridLayout" name="gridLayout">
@@ -71,163 +71,41 @@
     <property name="bottomMargin">
      <number>20</number>
     </property>
-    <item row="1" column="1">
-     <spacer name="verticalSpacer_4">
-      <property name="orientation">
-       <enum>Qt::Orientation::Vertical</enum>
+    <item row="5" column="0" colspan="3">
+     <layout class="QVBoxLayout" name="verticalLayout_3">
+      <property name="sizeConstraint">
+       <enum>QLayout::SizeConstraint::SetFixedSize</enum>
       </property>
-      <property name="sizeType">
-       <enum>QSizePolicy::Policy::Preferred</enum>
+      <property name="bottomMargin">
+       <number>10</number>
       </property>
-      <property name="sizeHint" stdset="0">
-       <size>
-        <width>20</width>
-        <height>20</height>
-       </size>
-      </property>
-     </spacer>
-    </item>
-    <item row="9" column="1">
-     <widget class="QPushButton" name="ctl_acceptButton">
-      <property name="baseSize">
-       <size>
-        <width>0</width>
-        <height>0</height>
-       </size>
-      </property>
-      <property name="font">
-       <font>
-        <pointsize>10</pointsize>
-        <bold>false</bold>
-       </font>
-      </property>
-      <property name="cursor">
-       <cursorShape>PointingHandCursor</cursorShape>
-      </property>
-      <property name="styleSheet">
-       <string notr="true">
-        QPushButton {
-          border-radius: 15px;
-          background-color: rgb(86, 132, 253);
-          color: white;
-          padding: 8px;
-          padding-left: 40px;
-          padding-right: 40px;
-          font-weight: bold;
-        }
-
-        QPushButton:hover {
-          background-color: rgba(86, 132, 253, 175);
-        }
-
-        QPushButton:pressed {
-          background-color: rgba(86, 132, 253, 225);
-          color: black;
-        }
-       </string>
-      </property>
-      <property name="text">
-       <string>UPDATE</string>
-      </property>
-      <property name="checkable">
-       <bool>false</bool>
-      </property>
-      <property name="default">
-       <bool>true</bool>
-      </property>
-      <property name="flat">
-       <bool>true</bool>
-      </property>
-     </widget>
+      <item>
+       <spacer name="verticalSpacer_5">
+        <property name="orientation">
+         <enum>Qt::Orientation::Vertical</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>20</width>
+          <height>40</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+     </layout>
     </item>
     <item row="8" column="1">
      <spacer name="verticalSpacer">
       <property name="orientation">
        <enum>Qt::Orientation::Vertical</enum>
       </property>
-      <property name="sizeType">
-       <enum>QSizePolicy::Policy::Preferred</enum>
-      </property>
       <property name="sizeHint" stdset="0">
        <size>
         <width>20</width>
-        <height>20</height>
+        <height>40</height>
        </size>
       </property>
      </spacer>
-    </item>
-    <item row="11" column="1">
-     <widget class="QPushButton" name="ctl_rejectButton">
-      <property name="font">
-       <font>
-        <pointsize>10</pointsize>
-        <underline>true</underline>
-       </font>
-      </property>
-      <property name="cursor">
-       <cursorShape>PointingHandCursor</cursorShape>
-      </property>
-      <property name="styleSheet">
-       <string notr="true">QPushButton {
-	border: none;
-	background-color: transparent;
-}
-
-QPushButton:pressed {
-	color: blue;
-}</string>
-      </property>
-      <property name="text">
-       <string>Not Now</string>
-      </property>
-      <property name="autoDefault">
-       <bool>false</bool>
-      </property>
-      <property name="flat">
-       <bool>true</bool>
-      </property>
-     </widget>
-    </item>
-    <item row="9" column="0">
-     <spacer name="horizontalSpacer">
-      <property name="orientation">
-       <enum>Qt::Orientation::Horizontal</enum>
-      </property>
-      <property name="sizeHint" stdset="0">
-       <size>
-        <width>40</width>
-        <height>20</height>
-       </size>
-      </property>
-     </spacer>
-    </item>
-    <item row="9" column="2">
-     <spacer name="horizontalSpacer_2">
-      <property name="orientation">
-       <enum>Qt::Orientation::Horizontal</enum>
-      </property>
-      <property name="sizeHint" stdset="0">
-       <size>
-        <width>40</width>
-        <height>20</height>
-       </size>
-      </property>
-     </spacer>
-    </item>
-    <item row="3" column="0" colspan="3">
-     <widget class="QLabel" name="label">
-      <property name="font">
-       <font>
-        <pointsize>20</pointsize>
-       </font>
-      </property>
-      <property name="text">
-       <string>SE.Live Needs an Update</string>
-      </property>
-      <property name="alignment">
-       <set>Qt::AlignmentFlag::AlignCenter</set>
-      </property>
-     </widget>
     </item>
     <item row="4" column="0" colspan="3">
      <widget class="QLabel" name="label_2">
@@ -245,8 +123,25 @@ QPushButton:pressed {
       </property>
      </widget>
     </item>
-    <item row="13" column="1">
-     <spacer name="verticalSpacer_3">
+    <item row="6" column="0" colspan="3">
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <item>
+       <widget class="QTextBrowser" name="releaseNotes">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="readOnly">
+         <bool>true</bool>
+        </property>
+        <property name="openExternalLinks">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
+    <item row="1" column="1">
+     <spacer name="verticalSpacer_4">
       <property name="orientation">
        <enum>Qt::Orientation::Vertical</enum>
       </property>
@@ -261,46 +156,8 @@ QPushButton:pressed {
       </property>
      </spacer>
     </item>
-    <item row="10" column="1">
-     <spacer name="verticalSpacer_2">
-      <property name="orientation">
-       <enum>Qt::Orientation::Vertical</enum>
-      </property>
-      <property name="sizeType">
-       <enum>QSizePolicy::Policy::Preferred</enum>
-      </property>
-      <property name="sizeHint" stdset="0">
-       <size>
-        <width>20</width>
-        <height>20</height>
-       </size>
-      </property>
-     </spacer>
-    </item>
-    <item row="0" column="1">
-     <widget class="QLabel" name="ctl_imageContainer">
-      <property name="minimumSize">
-       <size>
-        <width>128</width>
-        <height>200</height>
-       </size>
-      </property>
-      <property name="text">
-       <string/>
-      </property>
-      <property name="pixmap">
-       <pixmap resource="streamelements/streamelements.qrc">:/images/updater_logo.png</pixmap>
-      </property>
-      <property name="scaledContents">
-       <bool>false</bool>
-      </property>
-      <property name="alignment">
-       <set>Qt::AlignmentFlag::AlignCenter</set>
-      </property>
-     </widget>
-    </item>
-    <item row="12" column="0" colspan="3">
-     <widget class="QLabel" name="label_4">
+    <item row="9" column="1">
+     <widget class="QLabel" name="label_5">
       <property name="palette">
        <palette>
         <active>
@@ -346,112 +203,236 @@ QPushButton:pressed {
       </property>
      </widget>
     </item>
-    <item row="14" column="1">
-     <layout class="QHBoxLayout" name="horizontalLayout">
-      <item>
-       <spacer name="horizontalSpacer_3">
-        <property name="orientation">
-         <enum>Qt::Orientation::Horizontal</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>40</width>
-          <height>20</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-      <item>
-       <widget class="QCheckBox" name="ctl_saveSelectionCheckbox">
-        <property name="font">
-         <font>
-          <pointsize>10</pointsize>
-         </font>
-        </property>
-        <property name="cursor">
-         <cursorShape>PointingHandCursor</cursorShape>
-        </property>
-        <property name="styleSheet">
-         <string notr="true"/>
-        </property>
-        <property name="text">
-         <string>Do not ask again</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <spacer name="horizontalSpacer_4">
-        <property name="orientation">
-         <enum>Qt::Orientation::Horizontal</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>40</width>
-          <height>20</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-     </layout>
-    </item>
-    <item row="6" column="0" colspan="3">
-     <layout class="QVBoxLayout" name="verticalLayout">
-      <item>
-       <widget class="QTextBrowser" name="releaseNotes">
-        <property name="enabled">
-         <bool>true</bool>
-        </property>
-        <property name="readOnly">
-         <bool>true</bool>
-        </property>
-        <property name="openExternalLinks">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </item>
-    <item row="8" column="0">
-     <layout class="QHBoxLayout" name="horizontalLayout_4"/>
-    </item>
-    <item row="5" column="0" colspan="3">
-     <layout class="QVBoxLayout" name="verticalLayout_3">
-      <property name="sizeConstraint">
-       <enum>QLayout::SizeConstraint::SetFixedSize</enum>
+    <item row="3" column="0" colspan="3">
+     <widget class="QLabel" name="label">
+      <property name="font">
+       <font>
+        <pointsize>20</pointsize>
+       </font>
       </property>
-      <property name="bottomMargin">
-       <number>10</number>
+      <property name="text">
+       <string>SE.Live Needs an Update</string>
       </property>
-      <item>
-       <spacer name="verticalSpacer_5">
-        <property name="orientation">
-         <enum>Qt::Orientation::Vertical</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>20</width>
-          <height>40</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-     </layout>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignCenter</set>
+      </property>
+     </widget>
     </item>
-    <item row="7" column="0" colspan="3">
-     <layout class="QVBoxLayout" name="verticalLayout_4">
-      <property name="sizeConstraint">
-       <enum>QLayout::SizeConstraint::SetFixedSize</enum>
+    <item row="0" column="1">
+     <widget class="QLabel" name="ctl_imageContainer">
+      <property name="minimumSize">
+       <size>
+        <width>128</width>
+        <height>200</height>
+       </size>
       </property>
-      <property name="bottomMargin">
-       <number>20</number>
+      <property name="text">
+       <string/>
       </property>
-     </layout>
+      <property name="pixmap">
+       <pixmap resource="../streamelements.qrc">:/images/updater_logo.png</pixmap>
+      </property>
+      <property name="scaledContents">
+       <bool>false</bool>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="10" column="1">
+     <spacer name="verticalSpacer_2">
+      <property name="orientation">
+       <enum>Qt::Orientation::Vertical</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>40</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QWidget" name="horizontalLayoutWidget">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>570</y>
+     <width>761</width>
+     <height>41</height>
+    </rect>
+   </property>
+   <layout class="QHBoxLayout" name="horizontalLayout_2">
+    <item>
+     <widget class="QPushButton" name="ctl_rejectButton">
+      <property name="enabled">
+       <bool>true</bool>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>10</pointsize>
+        <bold>true</bold>
+        <underline>false</underline>
+        <strikeout>false</strikeout>
+       </font>
+      </property>
+      <property name="cursor">
+       <cursorShape>PointingHandCursor</cursorShape>
+      </property>
+      <property name="autoFillBackground">
+       <bool>false</bool>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">
+        QPushButton {
+          border-radius: 15px;
+          padding: 8px;
+          padding-left: 40px;
+          padding-right: 40px;
+          font-weight: bold;
+          text-decoration: none;
+        }
+
+        QPushButton:hover {
+        }
+
+        QPushButton:pressed {
+        }
+       </string>
+      </property>
+      <property name="text">
+       <string>ASK ME LATER</string>
+      </property>
+      <property name="autoDefault">
+       <bool>false</bool>
+      </property>
+      <property name="flat">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QPushButton" name="ctl_rejectSkipVersionButton">
+      <property name="enabled">
+       <bool>true</bool>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>10</pointsize>
+        <bold>true</bold>
+        <underline>false</underline>
+        <strikeout>false</strikeout>
+       </font>
+      </property>
+      <property name="cursor">
+       <cursorShape>PointingHandCursor</cursorShape>
+      </property>
+      <property name="autoFillBackground">
+       <bool>false</bool>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">
+        QPushButton {
+         border-radius: 15px;
+         padding: 8px;
+         padding-left: 40px;
+         padding-right: 40px;
+         font-weight: bold;
+         text-decoration: none;
+        }
+
+        QPushButton:hover {
+        }
+
+        QPushButton:pressed {
+        }
+       </string>
+      </property>
+      <property name="text">
+       <string>SKIP VERSION</string>
+      </property>
+      <property name="autoDefault">
+       <bool>false</bool>
+      </property>
+      <property name="flat">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <spacer name="horizontalSpacer_5">
+      <property name="orientation">
+       <enum>Qt::Orientation::Horizontal</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>40</width>
+        <height>20</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+    <item>
+     <widget class="QPushButton" name="ctl_acceptButton">
+      <property name="baseSize">
+       <size>
+        <width>0</width>
+        <height>0</height>
+       </size>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>10</pointsize>
+        <bold>true</bold>
+       </font>
+      </property>
+      <property name="cursor">
+       <cursorShape>PointingHandCursor</cursorShape>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">
+        QPushButton {
+          border-radius: 15px;
+          background-color: rgb(86, 132, 253);
+          color: white;
+          padding: 8px;
+          padding-left: 100px;
+          padding-right: 100px;
+          font-weight: bold;
+        }
+
+        QPushButton:hover {
+          background-color: rgba(86, 132, 253, 175);
+        }
+
+        QPushButton:pressed {
+          background-color: rgba(86, 132, 253, 225);
+          color: black;
+        }
+       </string>
+      </property>
+      <property name="text">
+       <string>UPDATE NOW</string>
+      </property>
+      <property name="checkable">
+       <bool>false</bool>
+      </property>
+      <property name="default">
+       <bool>true</bool>
+      </property>
+      <property name="flat">
+       <bool>true</bool>
+      </property>
+     </widget>
     </item>
    </layout>
   </widget>
  </widget>
  <resources>
   <include location="../streamelements.qrc"/>
+  <include location="streamelements/streamelements.qrc"/>
  </resources>
  <connections/>
 </ui>
