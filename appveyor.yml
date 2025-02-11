@@ -5,6 +5,8 @@ branches:
 image:
   - macos-sonoma
   - Visual Studio 2022
+environment:
+  BUILD_OPTIONS: -DENABLE_DECKLINK=OFF -DENABLE_SYPHON=OFF -DENABLE_LIBFDK=OFF -DENABLE_NVENC=OFF -DENABLE_QSV11=OFF -DENABLE_VST=OFF -DENABLE_WEBRTC=OFF -DENABLE_WEBSOCKET=OFF -DENABLE_OSS=OFF -DENABLE_SNDIO=OFF -DENABLE_VLC=OFF -DENABLE_VIRTUALCAM=OFF -DENABLE_TEST_INPUT=OFF -DENABLE_AJA=OFF -DENABLE_SCRIPTING=OFF -DENABLE_SCRIPTING_LUA=OFF -DENABLE_UI=OFF
 matrix:
   fast_finish: true
 for:
@@ -43,7 +45,7 @@ for:
 
           cd ~/src/obs-studio
 
-          cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=arm64 -Bbuild_macos_arm64
+          cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=arm64 -Bbuild_macos_arm64 $BUILD_OPTIONS
 
           cd ~/src/obs-studio/build_macos_arm64
 
@@ -60,7 +62,7 @@ for:
 
           cd ~/src/obs-studio
 
-          cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=x86_64 -Bbuild_macos_x86_64
+          cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=x86_64 -Bbuild_macos_x86_64 $BUILD_OPTIONS
 
           cd ~/src/obs-studio/build_macos_x86_64
 
@@ -159,7 +161,7 @@ for:
 
         echo Setting up CMAKE build projects
 
-        cmake --preset=windows-x64
+        cmake --preset=windows-x64 %BUILD_OPTIONS%
 
         
         
