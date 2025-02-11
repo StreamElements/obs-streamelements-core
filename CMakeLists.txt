@@ -590,6 +590,8 @@ endif()
 if(BUILD_OUT_OF_TREE)
 	install_obs_plugin_with_data(obs-streamelements-core data)
 else()
+	set_property(TARGET obs-streamelements-core PROPERTY TYPE "MODULE_LIBRARY")
+	
 	set_target_properties_obs(obs-streamelements-core PROPERTIES FOLDER "plugins/streamelements" PREFIX "")
 endif()
 
@@ -597,6 +599,8 @@ if (ENABLE_ANGELSCRIPT)
 	if(BUILD_OUT_OF_TREE)
 		install_obs_plugin(obs-streamelements-core-streamelements-restore-script-host)
 	else()
+		set_property(TARGET obs-streamelements-core-streamelements-restore-script-host PROPERTY TYPE "MODULE_LIBRARY")
+
 		set_target_properties_obs(obs-streamelements-core-streamelements-restore-script-host PROPERTIES FOLDER "plugins/streamelements" PREFIX "")
 	endif()
 endif()
