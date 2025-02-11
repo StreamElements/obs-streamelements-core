@@ -49,7 +49,9 @@ for:
 
           cd ~/src/obs-studio/build_macos_arm64
 
-          xcodebuild -configuration RelWithDebInfo -scheme obs-studio -destination "generic/platform=macOS,name=Any Mac"
+          # xcodebuild -configuration RelWithDebInfo -scheme obs-studio -destination "generic/platform=macOS,name=Any Mac"
+
+          xcodebuild -configuration RelWithDebInfo -scheme obs-streamelements-core -destination "generic/platform=macOS,name=Any Mac"
 
           cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
 
@@ -66,7 +68,9 @@ for:
 
           cd ~/src/obs-studio/build_macos_x86_64
 
-          xcodebuild -configuration RelWithDebInfo -scheme obs-studio -destination "generic/platform=macOS,name=Any Mac"
+          # xcodebuild -configuration RelWithDebInfo -scheme obs-studio -destination "generic/platform=macOS,name=Any Mac"
+
+          xcodebuild -configuration RelWithDebInfo -scheme obs-streamelements-core -destination "generic/platform=macOS,name=Any Mac"
 
           cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core/RelWithDebInfo
 
