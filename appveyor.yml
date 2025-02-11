@@ -5,6 +5,8 @@ branches:
 image:
   - macos-sonoma
   - Visual Studio 2022
+environment:
+  BUILD_OPTIONS: -DENABLE_DECKLINK=OFF -DENABLE_SYPHON=OFF -DENABLE_LIBFDK=OFF -DENABLE_NVENC=OFF -DENABLE_QSV11=OFF -DENABLE_VST=OFF -DENABLE_WEBRTC=OFF -DENABLE_WEBSOCKET=OFF -DENABLE_OSS=OFF -DENABLE_SNDIO=OFF -DENABLE_VLC=OFF -DENABLE_VIRTUALCAM=OFF -DENABLE_TEST_INPUT=OFF -DENABLE_AJA=OFF -DENABLE_SCRIPTING=OFF -DENABLE_SCRIPTING_LUA=OFF -DENABLE_UI=OFF
 matrix:
   fast_finish: true
 for:
@@ -15,7 +17,7 @@ for:
     configuration: RelWithDebInfo
     clone_folder: ~/src/obs-streamelements-core
     environment:
-      CHECKOUT: 31.0.0-rc1
+      CHECKOUT: 31.0.1
     install:
       - sh: >-
           git clone --recursive https://github.com/obsproject/obs-studio.git ~/src/obs-studio
@@ -43,11 +45,13 @@ for:
 
           cd ~/src/obs-studio
 
-          cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=arm64 -Bbuild_macos_arm64
+          cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=arm64 -Bbuild_macos_arm64 $BUILD_OPTIONS
 
           cd ~/src/obs-studio/build_macos_arm64
 
-          xcodebuild -configuration RelWithDebInfo -scheme obs-studio -destination "generic/platform=macOS,name=Any Mac"
+          # xcodebuild -configuration RelWithDebInfo -scheme obs-studio -destination "generic/platform=macOS,name=Any Mac"
+
+          xcodebuild -configuration RelWithDebInfo -scheme obs-streamelements-core -destination "generic/platform=macOS,name=Any Mac"
 
           cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
 
@@ -60,11 +64,13 @@ for:
 
           cd ~/src/obs-studio
 
-          cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=x86_64 -Bbuild_macos_x86_64
+          cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=x86_64 -Bbuild_macos_x86_64 $BUILD_OPTIONS
 
           cd ~/src/obs-studio/build_macos_x86_64
 
-          xcodebuild -configuration RelWithDebInfo -scheme obs-studio -destination "generic/platform=macOS,name=Any Mac"
+          # xcodebuild -configuration RelWithDebInfo -scheme obs-studio -destination "generic/platform=macOS,name=Any Mac"
+
+          xcodebuild -configuration RelWithDebInfo -scheme obs-streamelements-core -destination "generic/platform=macOS,name=Any Mac"
 
           cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core/RelWithDebInfo
 
@@ -112,7 +118,7 @@ for:
       matrix:
         - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
           QT_VERSION: 6
-          CHECKOUT: 31.0.0-rc1
+          CHECKOUT: 31.0.1
           GENERATOR: Visual Studio 17 2022
           #WindowsDepsVersion: 2023-01-06
     install:
@@ -159,7 +165,7 @@ for:
 
         echo Setting up CMAKE build projects
 
-        cmake --preset=windows-x64
+        cmake --preset=windows-x64 %BUILD_OPTIONS%
 
         
         
