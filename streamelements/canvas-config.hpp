@@ -24,7 +24,7 @@ public:
 		if (!config)
 			return m_defaultValue;
 
-		auto fe_config = config->GetObsGlobalConfig();
+		auto fe_config = config->GetObsUserConfig();
 
 		if (!fe_config)
 			return m_defaultValue;

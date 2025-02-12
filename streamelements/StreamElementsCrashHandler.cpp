@@ -488,12 +488,12 @@ static void StartHangDetection()
 
 /* ================================================================= */
 
-static config_t *obs_fe_global_config()
+static config_t *obs_fe_user_config()
 {
 	auto config = StreamElementsConfig::GetInstance();
 
 	if (config) {
-		return config->GetObsGlobalConfig();
+		return config->GetObsUserConfig();
 	}
 
 	return nullptr;
@@ -1445,7 +1445,7 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
 		return;
 	}
 
-	auto fe_config = obs_fe_global_config();
+	auto fe_config = obs_fe_user_config();
 
 	if (fe_config) {
 		s_maxRemainingLogFilesCount = (unsigned int)config_get_uint(

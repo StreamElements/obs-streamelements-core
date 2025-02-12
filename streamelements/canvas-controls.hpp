@@ -9,11 +9,11 @@
 
 #include "StreamElementsConfig.hpp"
 
-static config_t* obs_fe_global_config() {
+static config_t* obs_fe_user_config() {
 	auto config = StreamElementsConfig::GetInstance();
 
 	if (config) {
-		return config->GetObsGlobalConfig();
+		return config->GetObsUserConfig();
 	}
 
 	return nullptr;
@@ -59,7 +59,7 @@ static vec3 getSnapOffset(const vec3 &tl, const vec3 &br, double worldWidth, dou
 	vec3 clampOffset;
 	vec3_zero(&clampOffset);
 
-	auto fe_config = obs_fe_global_config();
+	auto fe_config = obs_fe_user_config();
 
 	if (!fe_config)
 		return clampOffset;
@@ -287,7 +287,7 @@ private:
 
 	void addWorldSnapPoints(std::vector<vec2> &result)
 	{
-		auto fe_config = obs_fe_global_config();
+		auto fe_config = obs_fe_user_config();
 
 		if (!fe_config)
 			return;
@@ -455,7 +455,7 @@ private:
 		vec2_zero(&result);
 		vec2_set(&snapWorldCoords, -1.0f, -1.0f);
 
-		auto fe_config = obs_fe_global_config();
+		auto fe_config = obs_fe_user_config();
 
 		if (!fe_config)
 			return;

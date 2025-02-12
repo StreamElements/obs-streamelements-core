@@ -8,7 +8,7 @@ bool StreamElementsConfig::s_destroyed = false;
 std::shared_mutex StreamElementsConfig::s_mutex;
 
 StreamElementsConfig::StreamElementsConfig()
-	: m_config(nullptr), m_obsGlobalConfig(obs_frontend_get_global_config())
+	: m_config(nullptr), m_obsUserConfig(obs_frontend_get_user_config())
 {
 }
 
@@ -22,8 +22,8 @@ StreamElementsConfig::~StreamElementsConfig()
 		m_config = nullptr;
 	}
 
-	if (m_obsGlobalConfig) {
-		m_obsGlobalConfig = nullptr;
+	if (m_obsUserConfig) {
+		m_obsUserConfig = nullptr;
 	}
 }
 

@@ -71,12 +71,12 @@ static const char *ENV_PRODUCT_NAME = "OBS.Live";
 
 /* ========================================================= */
 
-static config_t *obs_fe_global_config()
+static config_t *obs_fe_user_config()
 {
 	auto config = StreamElementsConfig::GetInstance();
 
 	if (config) {
-		return config->GetObsGlobalConfig();
+		return config->GetObsUserConfig();
 	}
 
 	return nullptr;
@@ -1217,7 +1217,7 @@ std::string GetCurrentThemeName()
 	std::string result = "Default";
 
 	config_t *globalConfig =
-		obs_fe_global_config(); // does not increase refcount
+		obs_fe_user_config(); // does not increase refcount
 
 	if (globalConfig) {
 		const char *themeName = config_get_string(

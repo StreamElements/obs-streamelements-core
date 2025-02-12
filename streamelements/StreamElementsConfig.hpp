@@ -61,7 +61,7 @@ public:
 	config_t* GetConfig();
 	void SaveConfig();
 
-	config_t* GetObsGlobalConfig() { return m_obsGlobalConfig; }
+	config_t* GetObsUserConfig() { return m_obsUserConfig; }
 
 public:
 	std::string GetScopedConfigStorageRootPath();
@@ -256,7 +256,7 @@ public:
 
 private:
 	config_t* m_config = nullptr;
-	config_t *m_obsGlobalConfig = nullptr;
+	config_t *m_obsUserConfig = nullptr;
 
 private:
 	static StreamElementsConfig* s_instance;
