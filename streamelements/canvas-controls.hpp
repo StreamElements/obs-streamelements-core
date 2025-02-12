@@ -469,10 +469,12 @@ private:
 
 		vec2 targetPoint, sourcePoint;
 
-		const float snapDistance = config_get_double(fe_config,
+		/*const*/ float snapDistance = config_get_double(fe_config,
 							     "BasicWindow",
-							     "SnapDistance") *
-					   m_view->m_worldPixelDensity.x;
+							     "SnapDistance");
+		
+		snapDistance *= fmax(m_view->m_worldPixelDensity.x, m_view->m_worldPixelDensity.y);
+		snapDistance *= m_view->devicePixelRatioF();
 
 		bool hasXSnapPoint, hasYSnapPoint;
 		if (!getClosestSnapPoint(selectedSceneItemsPoints,

@@ -311,11 +311,13 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 	
 
 	{
+		auto pixelDensity = m_view->devicePixelRatioF();
+		
 		std::shared_lock lock(m_view->m_worldRulersMutex);
 
 		for (auto x : m_view->m_worldVerticalRulersX) {
 			const double thickness =
-				1.0f * m_view->m_worldPixelDensity.x;
+				1.0f * m_view->m_worldPixelDensity.x * pixelDensity;
 
 			drawLine(x, 0.0f, x, worldHeight, thickness,
 				 rulerColor);
@@ -323,7 +325,7 @@ void StreamElementsVideoCompositionViewWidget::VisualElementsStateManager::
 
 		for (auto y : m_view->m_worldHorizontalRulersY) {
 			const double thickness =
-				1.0f * m_view->m_worldPixelDensity.y;
+				1.0f * m_view->m_worldPixelDensity.y * pixelDensity;
 
 			drawLine(0.0f, y, worldWidth, y, thickness, rulerColor);
 		}
