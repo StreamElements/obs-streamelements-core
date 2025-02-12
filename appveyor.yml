@@ -22,13 +22,21 @@ for:
       - sh: >-
           git clone --recursive https://github.com/obsproject/obs-studio.git ~/src/obs-studio
   
+          if [ $? -ne 0 ]; then exit 1; fi
+
           cd ~/src/obs-studio
   
           git checkout $CHECKOUT
    
+          if [ $? -ne 0 ]; then exit 1; fi
+
           cp -R ~/src/obs-streamelements-core ~/src/obs-studio/plugins/obs-streamelements-core
    
+          if [ $? -ne 0 ]; then exit 1; fi
+
           echo "add_obs_plugin(obs-streamelements-core)" >>~/src/obs-studio/plugins/CMakeLists.txt
+
+          if [ $? -ne 0 ]; then exit 1; fi
 
     build_script:
       - sh: >-
@@ -37,6 +45,8 @@ for:
           export STREAMELEMENTS_PLUGIN_VERSION="$(date "+%Y%m%d")$(printf "%06d" $APPVEYOR_BUILD_NUMBER)"
 
           echo "#define STREAMELEMENTS_PLUGIN_VERSION $STREAMELEMENTS_PLUGIN_VERSION" >~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp
+
+          if [ $? -ne 0 ]; then exit 1; fi
 
 
 
@@ -47,15 +57,21 @@ for:
 
           cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=arm64 -Bbuild_macos_arm64 $BUILD_OPTIONS
 
+          if [ $? -ne 0 ]; then exit 1; fi
+
           cd ~/src/obs-studio/build_macos_arm64
 
           # xcodebuild -configuration RelWithDebInfo -scheme obs-studio -destination "generic/platform=macOS,name=Any Mac"
 
           xcodebuild -configuration RelWithDebInfo -scheme obs-streamelements-core -destination "generic/platform=macOS,name=Any Mac"
 
+          if [ $? -ne 0 ]; then exit 1; fi
+
           cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
 
           7z a $APPVEYOR_BUILD_FOLDER/build_arm64.zip .
+
+          if [ $? -ne 0 ]; then exit 1; fi
 
 
 
@@ -66,15 +82,21 @@ for:
 
           cmake --preset=macos -DCMAKE_OSX_ARCHITECTURES=x86_64 -Bbuild_macos_x86_64 $BUILD_OPTIONS
 
+          if [ $? -ne 0 ]; then exit 1; fi
+
           cd ~/src/obs-studio/build_macos_x86_64
 
           # xcodebuild -configuration RelWithDebInfo -scheme obs-studio -destination "generic/platform=macOS,name=Any Mac"
 
           xcodebuild -configuration RelWithDebInfo -scheme obs-streamelements-core -destination "generic/platform=macOS,name=Any Mac"
 
+          if [ $? -ne 0 ]; then exit 1; fi
+
           cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core/RelWithDebInfo
 
           7z a $APPVEYOR_BUILD_FOLDER/build_x86_64.zip .
+
+          if [ $? -ne 0 ]; then exit 1; fi
 
 
 
@@ -82,6 +104,8 @@ for:
           # Copy version file
 
           cp ~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp $APPVEYOR_BUILD_FOLDER/Version.generated.hpp
+
+          if [ $? -ne 0 ]; then exit 1; fi
 
     test: off
     artifacts:
