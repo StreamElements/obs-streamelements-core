@@ -59,6 +59,8 @@
 #include <unistd.h>
 #include <sys/sysctl.h>
 
+#include <BugSplatMac/BugSplat.h>
+
 static bool AmIBeingDebugged(void)
     // Returns true if the current process is being debugged (either
     // running under the debugger or has a debugger attached post facto).

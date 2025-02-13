@@ -154,22 +154,29 @@ if (APPLE)
 	list(APPEND obs-streamelements-core_LIBRARIES
 			${COREFOUNDATION})
 
+	message("--------------------------------------------------")
 	message("Looking for BugSplat framework here: ${CMAKE_CURRENT_SOURCE_DIR}/deps")
 
 	find_library(BUGSPLATMAC_FRAMEWORK
 		NAMES BugSplatMac
-		PATHS "${CMAKE_CURRENT_SOURCE_DIR}/deps/BugSplat.xcframework/macos-arm64_x86_64"
-		PATH_SUFFIXES framework xcframework
+		PATHS "${CMAKE_CURRENT_SOURCE_DIR}/deps"
+		PATH_SUFFIXES framework
 		NO_DEFAULT_PATH
 		REQUIRED
 	)
 
-	if (${BUGSPLAT_FRAMEWORK} STREQUAL BUGSPLATMAC_FRAMEWORK-NOTFOUND)
+	message("Value: ${BUGSPLATMAC_FRAMEWORK}")
+
+	if (${BUGSPLATMAC_FRAMEWORK} STREQUAL BUGSPLATMAC_FRAMEWORK-NOTFOUND)
 		message(FATAL_ERROR "BugSplat framework not found")
 	else()
-		message(STATUS "BugSplat framework found: ${BUGSPLATMAC_FRAMEWORK}")
-		list(APPEND obs-streamelements-code_LIBRARIES ${BUGSPLATMAC_FRAMEWORK})
+		message("BugSplat framework found: ${BUGSPLATMAC_FRAMEWORK}")
+
+		list(APPEND obs-streamelements-code_LIBRARIES "-framework ${BUGSPLATMAC_FRAMEWORK}")
+		
+		include_directories("${BUGSPLATMAC_FRAMEWORK}/Headers")
 	endif()
+	message("--------------------------------------------------")
 endif()
 
 set(CMAKE_AUTOMOC TRUE)
@@ -414,6 +421,12 @@ add_library(obs-streamelements-core MODULE
 	${obs-streamelements-core_HEADERS}
 	${obs-streamelements-core-streamelements_QRC_SOURCES}
 )
+
+if (APPLE)
+	set_target_properties(obs-streamelements-core PROPERTIES
+		INTERFACE_COMPILE_OPTIONS "$<INSTALL_INTERFACE:-F\${_IMPORT_PREFIX}>"
+	)
+endif()
 
 if (${QT_VERSION} EQUAL "6")
 	qt6_add_resources(obs-streamelements-core "streamelements/streamelements.qrc"
