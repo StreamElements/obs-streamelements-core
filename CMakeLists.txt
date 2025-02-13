@@ -153,6 +153,13 @@ if (APPLE)
 	find_library(COREFOUNDATION CoreFoundation)
 	list(APPEND obs-streamelements-core_LIBRARIES
 			${COREFOUNDATION})
+
+	find_library(BUGSPLAT_FRAMEWORK BugSplat "${CMAKE_CURRENT_SOURCE_DIR}/deps")
+
+	message("Bugsplat framework: ${BUGSPLAT_FRAMEWORK}")
+
+	list(APPEND obs-streamelements-core_LIBRARIES
+			${BUGSPLAT_FRAMEWORK})
 endif()
 
 set(CMAKE_AUTOMOC TRUE)

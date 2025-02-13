@@ -50,6 +50,11 @@ for:
 
 
 
+          # Prepare bugsplat Framework
+
+          7z x -y ~/src/obs-studio/plugins/obs-streamelements-core/deps/BugSplat.xcframework.zip -o~/src/obs-studio/plugins/obs-streamelements-core/deps
+
+
 
           # Build ARM64 (Apple Silicon)
 
