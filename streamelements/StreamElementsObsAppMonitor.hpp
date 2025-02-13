@@ -34,13 +34,21 @@ private:
 	{
 		StreamElementsObsAppMonitor* self = (StreamElementsObsAppMonitor*)data;
 
+		if (self->m_exitSignalDispatched)
+			return;
+
 		switch (event) {
 		case OBS_FRONTEND_EVENT_EXIT:
 		case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
+			self->m_exitSignalDispatched = true;
+
 			self->OnObsExit();
 			break;
 		default:
 			break;
 		}
 	}
+
+private:
+	bool m_exitSignalDispatched = false;
 };
