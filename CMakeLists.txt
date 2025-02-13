@@ -154,12 +154,22 @@ if (APPLE)
 	list(APPEND obs-streamelements-core_LIBRARIES
 			${COREFOUNDATION})
 
-	find_library(BUGSPLAT_FRAMEWORK BugSplat "${CMAKE_CURRENT_SOURCE_DIR}/deps")
+	message("Looking for BugSplat framework here: ${CMAKE_CURRENT_SOURCE_DIR}/deps")
 
-	message("Bugsplat framework: ${BUGSPLAT_FRAMEWORK}")
+	find_library(BUGSPLATMAC_FRAMEWORK
+		NAMES BugSplatMac
+		PATHS "${CMAKE_CURRENT_SOURCE_DIR}/deps/BugSplat.xcframework/macos-arm64_x86_64"
+		PATH_SUFFIXES framework xcframework
+		NO_DEFAULT_PATH
+		REQUIRED
+	)
 
-	list(APPEND obs-streamelements-core_LIBRARIES
-			${BUGSPLAT_FRAMEWORK})
+	if (${BUGSPLAT_FRAMEWORK} STREQUAL BUGSPLATMAC_FRAMEWORK-NOTFOUND)
+		message(FATAL_ERROR "BugSplat framework not found")
+	else()
+		message(STATUS "BugSplat framework found: ${BUGSPLATMAC_FRAMEWORK}")
+		list(APPEND obs-streamelements-code_LIBRARIES ${BUGSPLATMAC_FRAMEWORK})
+	endif()
 endif()
 
 set(CMAKE_AUTOMOC TRUE)
