@@ -59,7 +59,9 @@
 #include <unistd.h>
 #include <sys/sysctl.h>
 
-#include <BugSplatMac/BugSplat.h>
+#import <BugSplatMac/BugSplat.h>
+//@import BugSplatMac;
+//#import <BugSplatMac/BugSplat.h>
 
 static bool AmIBeingDebugged(void)
     // Returns true if the current process is being debugged (either
@@ -231,6 +233,11 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
         
 	if (!AmIBeingDebugged())
 		exn_init();
+	    
+	    [[BugSplat shared] setAutoSubmitCrashReport:NO];
+	    [[BugSplat shared] setPersistUserDetails:YES];
+	    [[BugSplat shared] setPresentModally:YES];
+	    [[BugSplat shared] start];
     }
 }
 

@@ -1,6 +1,0 @@
-framework module BugSplatMac {
-  umbrella header "BugSplatMac.h"
-  export *
-
-  module * { export * }
-}

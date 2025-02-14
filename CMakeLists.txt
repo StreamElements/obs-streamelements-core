@@ -141,44 +141,6 @@ else()
 		)
 endif()
 
-if (APPLE)
-	list(APPEND obs-streamelements-core_LIBRARIES
-		"-framework AppKit"
-		"-framework IOKit"
-		"-framework Foundation"
-		"-framework System"
-        "-framework SystemConfiguration"
-	)
-
-	find_library(COREFOUNDATION CoreFoundation)
-	list(APPEND obs-streamelements-core_LIBRARIES
-			${COREFOUNDATION})
-
-	message("--------------------------------------------------")
-	message("Looking for BugSplat framework here: ${CMAKE_CURRENT_SOURCE_DIR}/deps")
-
-	find_library(BUGSPLATMAC_FRAMEWORK
-		NAMES BugSplatMac
-		PATHS "${CMAKE_CURRENT_SOURCE_DIR}/deps"
-		PATH_SUFFIXES framework
-		NO_DEFAULT_PATH
-		REQUIRED
-	)
-
-	message("Value: ${BUGSPLATMAC_FRAMEWORK}")
-
-	if (${BUGSPLATMAC_FRAMEWORK} STREQUAL BUGSPLATMAC_FRAMEWORK-NOTFOUND)
-		message(FATAL_ERROR "BugSplat framework not found")
-	else()
-		message("BugSplat framework found: ${BUGSPLATMAC_FRAMEWORK}")
-
-		list(APPEND obs-streamelements-code_LIBRARIES "-framework ${BUGSPLATMAC_FRAMEWORK}")
-		
-		include_directories("${BUGSPLATMAC_FRAMEWORK}/Headers")
-	endif()
-	message("--------------------------------------------------")
-endif()
-
 set(CMAKE_AUTOMOC TRUE)
 list(APPEND obs-streamelements-core_LIBRARIES
 	Qt::Widgets
@@ -409,7 +371,7 @@ if (APPLE)
 endif()
 
 if (APPLE)
-	list(APPEND obs-streamelements-core_LIBRARIES objc)
+	list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/macos")
 endif()
 
 if (${QT_VERSION} EQUAL "5")
@@ -423,9 +385,50 @@ add_library(obs-streamelements-core MODULE
 )
 
 if (APPLE)
-	set_target_properties(obs-streamelements-core PROPERTIES
-		INTERFACE_COMPILE_OPTIONS "$<INSTALL_INTERFACE:-F\${_IMPORT_PREFIX}>"
+	list(APPEND obs-streamelements-core_LIBRARIES
+		"-framework AppKit"
+		"-framework IOKit"
+		"-framework Foundation"
+		"-framework System"
+        "-framework SystemConfiguration"
 	)
+
+	find_library(COREFOUNDATION CoreFoundation)
+	list(APPEND obs-streamelements-core_LIBRARIES
+			${COREFOUNDATION})
+
+	message("--------------------------------------------------")
+	message("Looking for BugSplat framework here: ${CMAKE_CURRENT_SOURCE_DIR}/deps")
+
+	set (MACOS_INFO_PLIST_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/MacOSXBundleInfo.plist.in")
+
+	find_library(BUGSPLATMAC_FRAMEWORK
+		NAMES BugSplat
+		PATHS "${CMAKE_CURRENT_SOURCE_DIR}/deps"
+		PATH_SUFFIXES framework xcframework
+		NO_DEFAULT_PATH
+		REQUIRED
+	)
+
+	message("BugSplat: ${BUGSPLATMAC_FRAMEWORK}")
+	message("MACOS_INFO_PLIST_TEMPLATE: ${MACOS_INFO_PLIST_TEMPLATE}")
+
+	if (${BUGSPLATMAC_FRAMEWORK} STREQUAL BUGSPLAT_FRAMEWORK-NOTFOUND)
+		message(FATAL_ERROR "BugSplat framework not found")
+	else()
+		message("BugSplat framework found: ${BUGSPLATMAC_FRAMEWORK}")
+
+		list(APPEND obs-streamelements-code_LIBRARIES "$<LINK_LIBRARY:FRAMEWORK,${BUGSPLATMAC_FRAMEWORK}>")
+
+		set_source_files_properties(streamelements/StreamElementsCrashHandler.mm PROPERTIES COMPILE_FLAGS "-fmodules -fcxx-modules")
+		
+		set_target_properties(obs-streamelements-core PROPERTIES
+			XCODE_EMBED_FRAMEWORKS "${BUGSPLATMAC_FRAMEWORK}"
+			XCODE_ATTRIBUTE_LD_RUNPATH_SEARCH_PATHS "@loader_path/../Frameworks"
+			MACOSX_BUNDLE_INFO_PLIST "${MACOS_INFO_PLIST_TEMPLATE}"
+		)
+	endif()
+	message("--------------------------------------------------")
 endif()
 
 if (${QT_VERSION} EQUAL "6")

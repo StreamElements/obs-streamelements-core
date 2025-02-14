@@ -50,7 +50,7 @@ for:
 
 
 
-          # Prepare bugsplat Framework
+          # Prepare bugsplat Framework: we store it as a ZIP since on Windows the resulting paths of the unpacked archive are just way too long
 
           7z x -y ~/src/obs-studio/plugins/obs-streamelements-core/deps/BugSplat.xcframework.zip -o~/src/obs-studio/plugins/obs-streamelements-core/deps
 
