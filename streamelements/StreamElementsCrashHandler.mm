@@ -237,6 +237,7 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
 	    [[BugSplat shared] setAutoSubmitCrashReport:NO];
 	    [[BugSplat shared] setPersistUserDetails:YES];
 	    [[BugSplat shared] setPresentModally:YES];
+	    [[BugSplat shared] setBugSplatDatabase:@"OBS_Live"];
 	    [[BugSplat shared] start];
     }
 }
