@@ -270,6 +270,16 @@ extern "C" {
     return [NSString stringWithFormat:@"SE.Live (Mac) %@", appKeyNSString];
 }
 
+- (NSArray<BugSplatAttachment *> *)attachmentsForBugSplat:(BugSplat *)bugSplat API_AVAILABLE(macosx(10.13)) {
+	NSLog(@"attachmentsForBugSplat called");
+
+	[[BugSplat shared] setValue:@"SE.Live" forAttribute:@"product"];
+	
+	id res = [[NSArray<BugSplatAttachment *> alloc] init];
+	
+	return res;
+}
+
 @end
 
 StreamElementsCrashHandler::StreamElementsCrashHandler()
