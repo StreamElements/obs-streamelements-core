@@ -76,6 +76,10 @@ for:
 
           cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
 
+          xcrun dsymutil obs-streamelements-core.plugin/Contents/MacOS/obs-streamelements-core -o obs-streamelements-core.dSYM
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
           7z a $APPVEYOR_BUILD_FOLDER/build_arm64.zip .
 
           if [ $? -ne 0 ]; then exit 1; fi
@@ -100,6 +104,10 @@ for:
           if [ $? -ne 0 ]; then exit 1; fi
 
           cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core/RelWithDebInfo
+
+          xcrun dsymutil obs-streamelements-core.plugin/Contents/MacOS/obs-streamelements-core -o obs-streamelements-core.dSYM
+
+          if [ $? -ne 0 ]; then exit 1; fi
 
           7z a $APPVEYOR_BUILD_FOLDER/build_x86_64.zip .
 
