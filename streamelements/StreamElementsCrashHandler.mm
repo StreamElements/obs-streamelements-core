@@ -59,6 +59,11 @@
 #include <unistd.h>
 #include <sys/sysctl.h>
 
+#import <BugSplatMac/BugSplat.h>
+#import <BugSplatMac/BugSplatDelegate.h>
+//@import BugSplatMac;
+//#import <BugSplatMac/BugSplat.h>
+
 static bool AmIBeingDebugged(void)
     // Returns true if the current process is being debugged (either
     // running under the debugger or has a debugger attached post facto).
@@ -218,6 +223,65 @@ extern "C" {
     }
 }
 
+@interface MyBugSplatDelegate : NSObject <BugSplatDelegate>
+@end
+
+@implementation MyBugSplatDelegate
+
+- (instancetype) init
+{
+	self = [super init];
+	
+	return self;
+}
+
+- (void)bugSplatWillSendCrashReport:(BugSplat *)bugSplat {
+    NSLog(@"bugSplatWillSendCrashReport called");
+}
+
+- (void)bugSplatWillSendCrashReportsAlways:(BugSplat *)bugSplat {
+    NSLog(@"bugSplatWillSendCrashReportsAlways called");
+}
+
+- (void)bugSplatDidFinishSendingCrashReport:(BugSplat *)bugSplat {
+    NSLog(@"bugSplatDidFinishSendingCrashReport called");
+}
+
+- (void)bugSplatWillCancelSendingCrashReport:(BugSplat *)bugSplat {
+    NSLog(@"bugSplatWillCancelSendingCrashReport called");
+}
+
+- (void)bugSplatWillShowSubmitCrashReportAlert:(BugSplat *)bugSplat {
+    NSLog(@"bugSplatWillShowSubmitCrashReportAlert called");
+}
+
+- (void)bugSplat:(BugSplat *)bugSplat didFailWithError:(NSError *)error {
+    NSLog(@"bugSplat:didFailWithError: %@", [error localizedDescription]);
+}
+
+- (NSString *)applicationKeyForBugSplat:(BugSplat *)bugSplat signal:(NSString *)signal exceptionName:(NSString *)exceptionName exceptionReason:(NSString *)exceptionReason API_AVAILABLE(macosx(10.13)) {
+    NSLog(@"applicationKeyForBugSplat called");
+
+    auto appKey = GetStreamElementsPluginVersionString();
+	
+    id appKeyNSString = [NSString stringWithCString:appKey.c_str()
+					   encoding:[NSString defaultCStringEncoding]];
+
+    return [NSString stringWithFormat:@"SE.Live (Mac) %@", appKeyNSString];
+}
+
+- (NSArray<BugSplatAttachment *> *)attachmentsForBugSplat:(BugSplat *)bugSplat API_AVAILABLE(macosx(10.13)) {
+	NSLog(@"attachmentsForBugSplat called");
+
+	[[BugSplat shared] setValue:@"SE.Live" forAttribute:@"product"];
+	
+	id res = [[NSArray<BugSplatAttachment *> alloc] init];
+	
+	return res;
+}
+
+@end
+
 StreamElementsCrashHandler::StreamElementsCrashHandler()
 {
     static std::mutex mutex;
@@ -229,6 +293,14 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
         
 	if (!AmIBeingDebugged())
 		exn_init();
+
+	    [[BugSplat shared] setDelegate:[[MyBugSplatDelegate alloc] init]];
+	    [[BugSplat shared] setPresentModally:YES];
+	    [[BugSplat shared] setAutoSubmitCrashReport:NO];
+	    [[BugSplat shared] setPersistUserDetails:YES];
+	    [[BugSplat shared] setPresentModally:YES];
+	    [[BugSplat shared] setBugSplatDatabase:@"OBS_Live"];
+	    [[BugSplat shared] start];
     }
 }
 

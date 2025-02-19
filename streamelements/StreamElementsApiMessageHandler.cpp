@@ -3153,7 +3153,8 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("crashProgram");
 	{
 		// Crash
-		*((int *)0x133713337) = 12345; // exception
+		*(static_cast<volatile int*>(nullptr)) = 12345; // exception
+		// *((int *)nullptr) = 12345; // exception
         
 		UNUSED_PARAMETER(result);
 	}
