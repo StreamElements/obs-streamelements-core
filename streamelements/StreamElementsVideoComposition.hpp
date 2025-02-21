@@ -533,30 +533,36 @@ public:
 	// ctor only usable by this class
 	StreamElementsCustomVideoComposition(
 		Private, std::string id, std::string name, uint32_t baseWidth,
-		uint32_t baseHeight, std::vector<std::string> streamingVideoEncoderIds,
-		std::vector<obs_data_t *> streamingVideoEncoderSettings,
-		std::vector<obs_data_t *> streamingVideoEncoderHotkeyData);
+		uint32_t baseHeight, std::vector<std::string> &streamingVideoEncoderIds,
+		std::vector<OBSDataAutoRelease> &streamingVideoEncoderSettings,
+		std::vector<OBSDataAutoRelease> &streamingVideoEncoderHotkeyData);
 
 	virtual ~StreamElementsCustomVideoComposition();
 
-public:
+private:
 	static std::shared_ptr<StreamElementsCustomVideoComposition>
 	Create(std::string id, std::string name, uint32_t width,
-	       uint32_t height, std::vector<std::string> streamingVideoEncoderIds, std::vector<obs_data_t*> streamingVideoEncoderSettings, std::vector<obs_data_t*> streamingVideoEncoderHotkeyData)
+	       uint32_t height,
+	       std::vector<std::string> &streamingVideoEncoderIds,
+	       std::vector<OBSDataAutoRelease> &streamingVideoEncoderSettings,
+	       std::vector<OBSDataAutoRelease> &streamingVideoEncoderHotkeyData)
 	{
 		return std::make_shared<StreamElementsCustomVideoComposition>(
 			Private(), id, name, width, height, streamingVideoEncoderIds, streamingVideoEncoderSettings, streamingVideoEncoderHotkeyData);
 	}
 
+public:
 	static std::shared_ptr<StreamElementsCustomVideoComposition>
 	Create(std::string id, std::string name, uint32_t width,
 	       uint32_t height, CefRefPtr<CefValue> streamingVideoEncoders,
 	       CefRefPtr<CefValue> recordingVideoEncoders);
 
 private:
-	void SetRecordingEncoders(std::vector<std::string> recordingVideoEncoderId,
-				 std::vector<obs_data_t *> recordingVideoEncoderSettings,
-				 std::vector<obs_data_t *> recordingVideoEncoderHotkeyData);
+	void SetRecordingEncoders(
+		std::vector<std::string> &recordingVideoEncoderId,
+		std::vector<OBSDataAutoRelease> &recordingVideoEncoderSettings,
+		std::vector<OBSDataAutoRelease>
+			&recordingVideoEncoderHotkeyData);
 
 private:
 	std::vector<obs_encoder_t *> m_streamingVideoEncoders;
@@ -610,4 +616,93 @@ protected:
 
 public:
 	void ProcessRenderingRoot(std::function<void(obs_source_t *)> callback);
+};
+
+// Virtual main canvas WITH CUSTOM ENCODERS video composition
+class StreamElementsObsVirtualNativeVideoComposition
+	: public StreamElementsVideoCompositionBase,
+	  public std::enable_shared_from_this<
+		  StreamElementsVideoCompositionBase> {
+private:
+	struct Private {
+		explicit Private() = default;
+	};
+
+private:
+	std::vector<obs_encoder_t *> m_streamingVideoEncoders;
+	std::vector<obs_encoder_t *> m_recordingVideoEncoders;
+
+public:
+	// ctor only usable by this class
+	StreamElementsObsVirtualNativeVideoComposition(
+		Private, std::string id, std::string name,
+		std::vector<std::string> &streamingVideoEncoderIds,
+		std::vector<OBSDataAutoRelease> &streamingVideoEncoderSettings,
+		std::vector<OBSDataAutoRelease>
+			&streamingVideoEncoderHotkeyData);
+
+	virtual ~StreamElementsObsVirtualNativeVideoComposition();
+
+private:
+	static std::shared_ptr<StreamElementsObsVirtualNativeVideoComposition>
+	Create(std::string id, std::string name,
+	       std::vector<std::string> &streamingVideoEncoderIds,
+	       std::vector<OBSDataAutoRelease> &streamingVideoEncoderSettings,
+	       std::vector<OBSDataAutoRelease> &streamingVideoEncoderHotkeyData)
+	{
+		return std::make_shared<
+			StreamElementsObsVirtualNativeVideoComposition>(
+			Private(), id, name,
+			streamingVideoEncoderIds, streamingVideoEncoderSettings,
+			streamingVideoEncoderHotkeyData);
+	}
+
+public:
+	static std::shared_ptr<StreamElementsObsVirtualNativeVideoComposition>
+	Create(std::string id, std::string name, CefRefPtr<CefValue> streamingVideoEncoders,
+	       CefRefPtr<CefValue> recordingVideoEncoders);
+
+private:
+	void SetRecordingEncoders(
+		std::vector<std::string> &recordingVideoEncoderId,
+		std::vector<OBSDataAutoRelease> &recordingVideoEncoderSettings,
+		std::vector<OBSDataAutoRelease>
+			&recordingVideoEncoderHotkeyData);
+
+protected:
+	virtual obs_scene_t *GetCurrentScene() override;
+	virtual void GetAllScenesInternal(scenes_t &scenes) override;
+
+public:
+	virtual bool IsObsNativeComposition() override { return true; }
+
+	virtual std::shared_ptr<
+		StreamElementsVideoCompositionBase::CompositionInfo>
+	GetCompositionInfo(StreamElementsVideoCompositionEventListener *listener,
+			   std::string holder) override;
+
+	virtual void SerializeComposition(CefRefPtr<CefValue> &output) override;
+
+	virtual obs_scene_t *GetCurrentSceneRef() override;
+
+	virtual obs_scene_t *AddScene(std::string requestName) override;
+	virtual bool SetCurrentScene(obs_scene_t *scene) override;
+
+	virtual void TakeScreenshot() override
+	{
+		obs_frontend_take_screenshot();
+	}
+
+protected:
+	virtual bool RemoveScene(obs_scene_t *scene) override;
+
+	virtual void SetTransition(obs_source_t *transition) override;
+	virtual obs_source_t *GetTransition() override;
+
+	virtual int GetTransitionDurationMilliseconds() override
+	{
+		return obs_frontend_get_transition_duration();
+	}
+
+	virtual void SetTransitionDurationMilliseconds(int duration) override;
 };
