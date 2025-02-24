@@ -910,7 +910,7 @@ void StreamElementsCustomStreamingOutput::SerializeOutputSettings(
 
 	obs_data_t *service_settings = obs_service_get_settings(m_service);
 
-	d->SetString("type", obs_service_get_type(m_service));
+	d->SetString("type", safe_string(obs_service_get_type(m_service)));
 
 	d->SetString("serverUrl",
 		     safe_string(obs_data_get_string(service_settings, "server")));
@@ -1093,7 +1093,7 @@ void StreamElementsObsNativeStreamingOutput::SerializeOutputSettings(
 
 	obs_data_t *service_settings = obs_service_get_settings(service);
 
-	d->SetString("type", obs_service_get_type(service));
+	d->SetString("type", safe_string(obs_service_get_type(service)));
 
 	d->SetString("serverUrl", safe_string(obs_data_get_string(
 					  service_settings, "server")));
@@ -1183,7 +1183,7 @@ void StreamElementsObsNativeRecordingOutput::SerializeOutputSettings(
 
 	obs_data_t *obs_output_settings = obs_output_get_settings(obs_output);
 
-	d->SetString("type", obs_output_get_id(obs_output));
+	d->SetString("type", safe_string(obs_output_get_id(obs_output)));
 	d->SetValue("settings", SerializeObsData(obs_output_settings));
 
 	obs_data_release(obs_output_settings);
@@ -1693,7 +1693,7 @@ void StreamElementsObsNativeReplayBufferOutput::SerializeOutputSettings(
 
 	obs_data_t *obs_output_settings = obs_output_get_settings(obs_output);
 
-	d->SetString("type", obs_output_get_id(obs_output));
+	d->SetString("type", safe_string(obs_output_get_id(obs_output)));
 	d->SetValue("settings", SerializeObsData(obs_output_settings));
 
 	obs_data_release(obs_output_settings);
@@ -2159,7 +2159,7 @@ void StreamElementsCustomReplayBufferOutput::handle_output_saved(
 
 	const char *path = nullptr;
 	if (calldata_get_string(proc_cd, "path", &path)) {
-		eventArgs->SetString("filePath", path);
+		eventArgs->SetString("filePath", safe_string(path));
 
 		dispatch_event(self, "hostReplayBufferOutputSavedToLocalFile", eventArgs);
 	}

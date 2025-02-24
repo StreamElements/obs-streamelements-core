@@ -1600,7 +1600,7 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 ////////////////////////////////////////////////////////////////////////////////
 
 std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
-StreamElementsObsVirtualNativeVideoComposition::GetCompositionInfo(
+StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetCompositionInfo(
 	StreamElementsVideoCompositionEventListener *listener,
 	std::string holder)
 {
@@ -1614,13 +1614,13 @@ StreamElementsObsVirtualNativeVideoComposition::GetCompositionInfo(
 		m_recordingVideoEncoders, nullptr /* render native OBS canvas */);
 }
 
-obs_scene_t *StreamElementsObsVirtualNativeVideoComposition::AddScene(
+obs_scene_t *StreamElementsObsNativeVideoCompositionWithCustomEncoders::AddScene(
 	std::string requestName)
 {
 	return obs_scene_create(GetUniqueSceneName(requestName).c_str());
 }
 
-bool StreamElementsObsVirtualNativeVideoComposition::RemoveScene(
+bool StreamElementsObsNativeVideoCompositionWithCustomEncoders::RemoveScene(
 	obs_scene_t *sceneToRemove)
 {
 	scenes_t scenes;
@@ -1638,7 +1638,7 @@ bool StreamElementsObsVirtualNativeVideoComposition::RemoveScene(
 	return false;
 }
 
-void StreamElementsObsVirtualNativeVideoComposition::SetTransition(
+void StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetTransition(
 	obs_source_t *transition)
 {
 	obs_frontend_set_current_transition(transition);
@@ -1652,7 +1652,7 @@ void StreamElementsObsVirtualNativeVideoComposition::SetTransition(
 	dispatch_external_event("hostVideoCompositionChanged", json);
 }
 
-void StreamElementsObsVirtualNativeVideoComposition::
+void StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 	SetTransitionDurationMilliseconds(int duration)
 {
 	obs_frontend_set_transition_duration(duration);
@@ -1666,7 +1666,7 @@ void StreamElementsObsVirtualNativeVideoComposition::
 	dispatch_external_event("hostVideoCompositionChanged", json);
 }
 
-obs_source_t *StreamElementsObsVirtualNativeVideoComposition::GetTransition()
+obs_source_t *StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetTransition()
 {
 	auto source = obs_frontend_get_current_transition();
 
@@ -1675,7 +1675,7 @@ obs_source_t *StreamElementsObsVirtualNativeVideoComposition::GetTransition()
 	return source;
 }
 
-bool StreamElementsObsVirtualNativeVideoComposition::SetCurrentScene(
+bool StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetCurrentScene(
 	obs_scene_t *scene)
 {
 	if (!scene)
@@ -1697,7 +1697,7 @@ bool StreamElementsObsVirtualNativeVideoComposition::SetCurrentScene(
 	return false;
 }
 
-void StreamElementsObsVirtualNativeVideoComposition::GetAllScenesInternal(
+void StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetAllScenesInternal(
 	scenes_t &result)
 {
 	result.clear();
@@ -1720,7 +1720,7 @@ void StreamElementsObsVirtualNativeVideoComposition::GetAllScenesInternal(
 	obs_frontend_source_list_free(&frontendScenes);
 }
 
-void StreamElementsObsVirtualNativeVideoComposition::SerializeComposition(
+void StreamElementsObsNativeVideoCompositionWithCustomEncoders::SerializeComposition(
 	CefRefPtr<CefValue> &output)
 {
 	obs_video_info ovi;
@@ -1752,7 +1752,7 @@ void StreamElementsObsVirtualNativeVideoComposition::SerializeComposition(
 	output->SetDictionary(root);
 }
 
-obs_scene_t *StreamElementsObsVirtualNativeVideoComposition::GetCurrentScene()
+obs_scene_t *StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetCurrentScene()
 {
 	auto source = obs_frontend_get_current_scene();
 	auto scene = obs_scene_from_source(source);
@@ -1763,7 +1763,7 @@ obs_scene_t *StreamElementsObsVirtualNativeVideoComposition::GetCurrentScene()
 }
 
 obs_scene_t *
-StreamElementsObsVirtualNativeVideoComposition::GetCurrentSceneRef()
+StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetCurrentSceneRef()
 {
 	auto source = obs_frontend_get_current_scene();
 	auto scene = obs_scene_from_source(source);
@@ -1771,9 +1771,9 @@ StreamElementsObsVirtualNativeVideoComposition::GetCurrentSceneRef()
 	return scene;
 }
 
-StreamElementsObsVirtualNativeVideoComposition::
-		StreamElementsObsVirtualNativeVideoComposition(
-			StreamElementsObsVirtualNativeVideoComposition::Private,
+StreamElementsObsNativeVideoCompositionWithCustomEncoders::
+		StreamElementsObsNativeVideoCompositionWithCustomEncoders(
+			StreamElementsObsNativeVideoCompositionWithCustomEncoders::Private,
 			std::string id,
 		std::string name,
 		std::vector<std::string> & streamingVideoEncoderIds,
@@ -1840,8 +1840,8 @@ StreamElementsObsVirtualNativeVideoComposition::
 		}
 }
 
-StreamElementsObsVirtualNativeVideoComposition::
-	~StreamElementsObsVirtualNativeVideoComposition()
+StreamElementsObsNativeVideoCompositionWithCustomEncoders::
+	~StreamElementsObsNativeVideoCompositionWithCustomEncoders()
 {
 	for (auto encoder : m_streamingVideoEncoders) {
 		obs_encoder_release(encoder);
@@ -1854,7 +1854,7 @@ StreamElementsObsVirtualNativeVideoComposition::
 	m_recordingVideoEncoders.clear();
 }
 
-void StreamElementsObsVirtualNativeVideoComposition::SetRecordingEncoders(
+void StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetRecordingEncoders(
 	std::vector<std::string> &recordingVideoEncoderIds,
 	std::vector<OBSDataAutoRelease> &recordingVideoEncoderSettings,
 	std::vector<OBSDataAutoRelease> &recordingVideoEncoderHotkeyData)
@@ -1905,8 +1905,8 @@ void StreamElementsObsVirtualNativeVideoComposition::SetRecordingEncoders(
 	}
 }
 
-std::shared_ptr<StreamElementsObsVirtualNativeVideoComposition>
-StreamElementsObsVirtualNativeVideoComposition::Create(
+std::shared_ptr<StreamElementsObsNativeVideoCompositionWithCustomEncoders>
+StreamElementsObsNativeVideoCompositionWithCustomEncoders::Create(
 	std::string id, std::string name,
 	CefRefPtr<CefValue> streamingVideoEncoders,
 	CefRefPtr<CefValue> recordingVideoEncoders)
@@ -1921,7 +1921,7 @@ StreamElementsObsVirtualNativeVideoComposition::Create(
 			  streamingVideoEncoderHotkeyData);
 
 	std::exception_ptr exception = nullptr;
-	std::shared_ptr<StreamElementsObsVirtualNativeVideoComposition> result =
+	std::shared_ptr<StreamElementsObsNativeVideoCompositionWithCustomEncoders> result =
 		nullptr;
 
 	try {

@@ -619,7 +619,7 @@ public:
 };
 
 // Virtual main canvas WITH CUSTOM ENCODERS video composition
-class StreamElementsObsVirtualNativeVideoComposition
+class StreamElementsObsNativeVideoCompositionWithCustomEncoders
 	: public StreamElementsVideoCompositionBase,
 	  public std::enable_shared_from_this<
 		  StreamElementsVideoCompositionBase> {
@@ -634,31 +634,31 @@ private:
 
 public:
 	// ctor only usable by this class
-	StreamElementsObsVirtualNativeVideoComposition(
+	StreamElementsObsNativeVideoCompositionWithCustomEncoders(
 		Private, std::string id, std::string name,
 		std::vector<std::string> &streamingVideoEncoderIds,
 		std::vector<OBSDataAutoRelease> &streamingVideoEncoderSettings,
 		std::vector<OBSDataAutoRelease>
 			&streamingVideoEncoderHotkeyData);
 
-	virtual ~StreamElementsObsVirtualNativeVideoComposition();
+	virtual ~StreamElementsObsNativeVideoCompositionWithCustomEncoders();
 
 private:
-	static std::shared_ptr<StreamElementsObsVirtualNativeVideoComposition>
+	static std::shared_ptr<StreamElementsObsNativeVideoCompositionWithCustomEncoders>
 	Create(std::string id, std::string name,
 	       std::vector<std::string> &streamingVideoEncoderIds,
 	       std::vector<OBSDataAutoRelease> &streamingVideoEncoderSettings,
 	       std::vector<OBSDataAutoRelease> &streamingVideoEncoderHotkeyData)
 	{
 		return std::make_shared<
-			StreamElementsObsVirtualNativeVideoComposition>(
+			StreamElementsObsNativeVideoCompositionWithCustomEncoders>(
 			Private(), id, name,
 			streamingVideoEncoderIds, streamingVideoEncoderSettings,
 			streamingVideoEncoderHotkeyData);
 	}
 
 public:
-	static std::shared_ptr<StreamElementsObsVirtualNativeVideoComposition>
+	static std::shared_ptr<StreamElementsObsNativeVideoCompositionWithCustomEncoders>
 	Create(std::string id, std::string name, CefRefPtr<CefValue> streamingVideoEncoders,
 	       CefRefPtr<CefValue> recordingVideoEncoders);
 
