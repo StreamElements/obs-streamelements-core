@@ -837,6 +837,8 @@ void StreamElementsObsNativeVideoComposition::SerializeComposition(
 
 	root->SetDictionary("videoFrame", videoFrame);
 
+	root->SetString("view", "obs");
+
 	SerializeObsVideoEncoders(this, root);
 
 	output->SetDictionary(root);
@@ -1263,6 +1265,8 @@ void StreamElementsCustomVideoComposition::SerializeComposition(
 	videoFrame->SetInt("height", m_baseHeight);
 
 	root->SetDictionary("videoFrame", videoFrame);
+
+	root->SetString("view", "custom");
 
 	SerializeObsVideoEncoders(this, root);
 
@@ -1746,6 +1750,8 @@ void StreamElementsObsNativeVideoCompositionWithCustomEncoders::SerializeComposi
 	videoFrame->SetInt("height", int(size.y));
 
 	root->SetDictionary("videoFrame", videoFrame);
+
+	root->SetString("view", "obs");
 
 	SerializeObsVideoEncoders(this, root);
 
