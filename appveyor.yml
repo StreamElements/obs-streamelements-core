@@ -206,12 +206,8 @@ for:
     init:
     - ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
     environment:
-      matrix:
-        - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
-          QT_VERSION: 6
-          CHECKOUT: 31.0.1
-          GENERATOR: Visual Studio 17 2022
-          #WindowsDepsVersion: 2023-01-06
+      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
+      CHECKOUT: 31.0.1
     install:
     - cmd: >-
         if not exist c:\local md c:\local
@@ -270,18 +266,10 @@ for:
         
         
         
-        echo Building 32bit ...
-
-        cd /d c:\local\obs-studio\build_x86
-
-        msbuild obs-studio.sln -p:Configuration=RelWithDebInfo
-
-
-
         cd /d c:\local\obs-studio
 
     - cmd: >-
-        echo.Upload PDBs to BugSplat in case this is a commit to master branch (64bit. QT%QT_VERSION%).
+        echo.Upload PDBs to BugSplat in case this is a commit to master branch (64bit. QT6).
 
         if "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" c:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\Tools\symbol-upload-windows.exe -u "%BUGSPLAT_USERNAME%" -p "%BUGSPLAT_PASSWORD%" -a obs-streamelements-core -v "%STREAMELEMENTS_PLUGIN_VERSION%" -b OBS_Live -d "c:\local\obs-studio\build_x64\rundir\RelWithDebInfo\obs-plugins\64bit" -f obs-streamelements*.pdb
 
@@ -289,11 +277,11 @@ for:
 
 
 
-        echo.Pack 64bit, QT%QT_VERSION% artifacts...
+        echo.Pack 64bit, QT6 artifacts...
 
         cd /d c:\local\obs-studio\build_x64\rundir\RelWithDebInfo
 
-        7z a c:\local\source\build64_qt%QT_VERSION%.zip .
+        7z a c:\local\source\build64_qt6.zip .
 
 
 
@@ -305,7 +293,7 @@ for:
 
     test: off
     artifacts:
-    - path: build64_qt*.zip
+    - path: build64_qt6.zip
       name: build64
     - path: streamelements\Version.generated.hpp
       name: version.generated.hpp
