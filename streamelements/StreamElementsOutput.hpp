@@ -81,6 +81,7 @@ public:
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) = 0;
 
 	virtual std::vector<uint32_t> GetAudioTracks() = 0;
+	virtual std::vector<uint32_t> GetVideoEncoders() = 0;
 
 	virtual bool CanSplitRecordingOutput() { return false; }
 	virtual bool TriggerSplitRecordingOutput() { return false; }
@@ -146,6 +147,7 @@ private:
 	std::string m_bindToIP;
 
 	std::vector<uint32_t> m_audioTracks = {0};
+	std::vector<uint32_t> m_videoEncoders = {0};
 
 public:
 	StreamElementsCustomStreamingOutput(
@@ -154,13 +156,15 @@ public:
 			videoComposition,
 		std::shared_ptr<StreamElementsAudioCompositionBase>
 			audioComposition,
-		std::vector<uint32_t> audioTracks, obs_service_t *service,
+		std::vector<uint32_t> audioTracks,
+		std::vector<uint32_t> videoEncoders, obs_service_t *service,
 		const char *bindToIP, CefRefPtr<CefDictionaryValue> auxData)
 		: StreamElementsOutputBase(id, name, StreamingOutput, Streaming,
 					   videoComposition, audioComposition,
 					   auxData),
 		  m_service(service),
-		  m_audioTracks(audioTracks)
+		  m_audioTracks(audioTracks),
+		  m_videoEncoders(videoEncoders)
 	{
 		if (bindToIP) {
 			m_bindToIP = bindToIP;
@@ -197,6 +201,11 @@ public:
 	virtual std::vector<uint32_t> GetAudioTracks() override
 	{
 		return m_audioTracks;
+	}
+
+	virtual std::vector<uint32_t> GetVideoEncoders() override
+	{
+		return m_videoEncoders;
 	}
 
 	static std::shared_ptr<StreamElementsCustomStreamingOutput>
@@ -259,6 +268,7 @@ protected:
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
 
 	virtual std::vector<uint32_t> GetAudioTracks() override;
+	virtual std::vector<uint32_t> GetVideoEncoders() override;
 };
 
 class StreamElementsObsNativeRecordingOutput : public StreamElementsOutputBase {
@@ -304,6 +314,7 @@ protected:
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
 
 	virtual std::vector<uint32_t> GetAudioTracks() override;
+	virtual std::vector<uint32_t> GetVideoEncoders() override;
 };
 
 class StreamElementsCustomRecordingOutput : public StreamElementsOutputBase {
@@ -318,6 +329,7 @@ private:
 	CefRefPtr<CefDictionaryValue> m_recordingSettings = CefDictionaryValue::Create();
 
 	std::vector<uint32_t> m_audioTracks;
+	std::vector<uint32_t> m_videoEncoders;
 
 public:
 	StreamElementsCustomRecordingOutput(
@@ -328,12 +340,14 @@ public:
 		std::shared_ptr<StreamElementsAudioCompositionBase>
 			audioComposition,
 		std::vector<uint32_t> audioTracks,
+		std::vector<uint32_t> videoEncoders,
 		CefRefPtr<CefDictionaryValue> auxData)
 		: StreamElementsOutputBase(id, name, RecordingOutput, None,
 					   videoComposition, audioComposition,
 					   auxData),
 		  m_recordingSettings(recordingSettings),
-		  m_audioTracks(audioTracks)
+		  m_audioTracks(audioTracks),
+		  m_videoEncoders(videoEncoders)
 	{
 	}
 
@@ -350,6 +364,11 @@ public:
 	virtual std::vector<uint32_t> GetAudioTracks() override
 	{
 		return m_audioTracks;
+	}
+
+	virtual std::vector<uint32_t> GetVideoEncoders() override
+	{
+		return m_videoEncoders;
 	}
 
 	static std::shared_ptr<StreamElementsCustomRecordingOutput>
@@ -423,6 +442,7 @@ protected:
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
 
 	virtual std::vector<uint32_t> GetAudioTracks() override;
+	virtual std::vector<uint32_t> GetVideoEncoders() override;
 };
 
 class StreamElementsCustomReplayBufferOutput : public StreamElementsOutputBase {
@@ -437,7 +457,8 @@ private:
 	CefRefPtr<CefDictionaryValue> m_recordingSettings =
 		CefDictionaryValue::Create();
 
-	std::vector<uint32_t> m_audioTracks;
+	std::vector<uint32_t> m_audioTracks = {0};
+	std::vector<uint32_t> m_videoEncoders = {0};
 
 public:
 	StreamElementsCustomReplayBufferOutput(
@@ -448,12 +469,14 @@ public:
 		std::shared_ptr<StreamElementsAudioCompositionBase>
 			audioComposition,
 		std::vector<uint32_t> audioTracks,
+		std::vector<uint32_t> videoEncoders,
 		CefRefPtr<CefDictionaryValue> auxData)
 		: StreamElementsOutputBase(id, name, ReplayBufferOutput, None,
 					   videoComposition, audioComposition,
 					   auxData),
 		  m_recordingSettings(recordingSettings),
-		  m_audioTracks(audioTracks)
+		  m_audioTracks(audioTracks),
+		  m_videoEncoders(videoEncoders)
 	{
 	}
 
@@ -467,6 +490,11 @@ public:
 	virtual std::vector<uint32_t> GetAudioTracks() override
 	{
 		return m_audioTracks;
+	}
+
+	virtual std::vector<uint32_t> GetVideoEncoders() override
+	{
+		return m_videoEncoders;
 	}
 
 	static std::shared_ptr<StreamElementsCustomReplayBufferOutput>

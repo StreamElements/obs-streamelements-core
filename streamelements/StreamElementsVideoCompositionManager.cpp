@@ -115,9 +115,6 @@ void StreamElementsVideoCompositionManager::DeserializeComposition(
 	if (!root->HasKey("name") || root->GetType("name") != VTYPE_STRING)
 		return;
 
-	if (!root->HasKey("videoFrame") || root->GetType("videoFrame") != VTYPE_DICTIONARY)
-		return;
-
 	if (!root->HasKey("streamingVideoEncoders"))
 		return;
 
@@ -126,15 +123,16 @@ void StreamElementsVideoCompositionManager::DeserializeComposition(
 	if (m_videoCompositionsMap.count(id))
 		return;
 
-	auto videoFrame = root->GetDictionary("videoFrame");
+	std::string referencedView = "custom";
 
-	if (!videoFrame->HasKey("width") ||
-	    videoFrame->GetType("width") != VTYPE_INT)
-		return;
+	if (root->HasKey("view") &&
+	    root->GetType("view") == VTYPE_STRING) {
+		referencedView = root->GetString("view");
+	}
 
-	if (!videoFrame->HasKey("height") ||
-	    videoFrame->GetType("height") != VTYPE_INT)
-		return;
+	bool isNativeObsView = referencedView == "obs";
+
+	std::string name = root->GetString("name");
 
 	try {
 		auto recordingVideoEncoders = CefValue::Create();
@@ -144,12 +142,39 @@ void StreamElementsVideoCompositionManager::DeserializeComposition(
 			recordingVideoEncoders =
 				root->GetValue("recordingVideoEncoders");
 
-		auto composition = StreamElementsCustomVideoComposition::Create(
-			id, root->GetString("name"),
-			videoFrame->GetInt("width"),
-			videoFrame->GetInt("height"),
-			root->GetValue("streamingVideoEncoders"),
-			recordingVideoEncoders);
+		auto streamingVideoEncoders =
+			root->GetValue("streamingVideoEncoders");
+
+		std::shared_ptr<StreamElementsVideoCompositionBase>
+			composition = nullptr;
+
+		if (isNativeObsView) {
+			composition =
+				StreamElementsObsNativeVideoCompositionWithCustomEncoders::
+					Create(id, name, streamingVideoEncoders,
+					       recordingVideoEncoders);
+		} else {
+			if (!root->HasKey("videoFrame") ||
+			    root->GetType("videoFrame") != VTYPE_DICTIONARY)
+				return;
+
+			auto videoFrame = root->GetDictionary("videoFrame");
+
+			if (!videoFrame->HasKey("width") ||
+			    videoFrame->GetType("width") != VTYPE_INT)
+				return;
+
+			if (!videoFrame->HasKey("height") ||
+			    videoFrame->GetType("height") != VTYPE_INT)
+				return;
+
+			composition =
+				StreamElementsCustomVideoComposition::Create(
+					id, name, videoFrame->GetInt("width"),
+					videoFrame->GetInt("height"),
+					streamingVideoEncoders,
+					recordingVideoEncoders);
+		}
 
 		if (!composition)
 			return;

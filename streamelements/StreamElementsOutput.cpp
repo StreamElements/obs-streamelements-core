@@ -15,6 +15,29 @@ static std::string safe_string(const char* input)
 	return std::string(input);
 }
 
+static std::vector<uint32_t> GetVideoEncodersFromOutput(obs_output_t *output)
+{
+	std::vector<uint32_t> result;
+
+	if (output) {
+		for (size_t idx = 0;; ++idx) {
+			OBSEncoderAutoRelease encoder =
+				obs_output_get_video_encoder2(output, idx);
+
+			if (!encoder)
+				break;
+
+			result.push_back(idx);
+		}
+	}
+
+	if (!result.size()) {
+		result.push_back(0);
+	}
+
+	return result;
+}
+
 static void CleanStopObsOutput(obs_output_t *output, bool forceStop)
 {
 	if (!obs_output_active(output))
@@ -55,13 +78,12 @@ static void CleanStopObsOutput(obs_output_t *output, bool forceStop)
 	signal_handler_disconnect(handler, "error", handle_signal, &future);
 }
 
-static std::vector<uint32_t> DeserializeAudioTracks(CefRefPtr<CefDictionaryValue> rootDict)
+static std::vector<uint32_t> DeserializeTracks(CefRefPtr<CefDictionaryValue> rootDict, std::string key, uint32_t maxTrackIndex)
 {
 	std::vector<uint32_t> result;
 
-	if (rootDict->HasKey("audioTracks") &&
-	    rootDict->GetType("audioTracks") == VTYPE_LIST) {
-		auto list = rootDict->GetList("audioTracks");
+	if (rootDict->HasKey(key) && rootDict->GetType(key) == VTYPE_LIST) {
+		auto list = rootDict->GetList(key);
 
 		for (size_t i = 0; i < list->GetSize(); ++i) {
 			if (list->GetType(i) != VTYPE_INT)
@@ -69,7 +91,7 @@ static std::vector<uint32_t> DeserializeAudioTracks(CefRefPtr<CefDictionaryValue
 
 			auto trackIndex = uint32_t(list->GetInt(i));
 
-			if (trackIndex >= 0 && trackIndex < MAX_AUDIO_MIXES) {
+			if (trackIndex >= 0 && trackIndex < maxTrackIndex) {
 				bool hasValue = false;
 
 				for (auto it = result.cbegin();
@@ -92,6 +114,18 @@ static std::vector<uint32_t> DeserializeAudioTracks(CefRefPtr<CefDictionaryValue
 	}
 
 	return result;
+}
+
+static std::vector<uint32_t>
+DeserializeAudioTracks(CefRefPtr<CefDictionaryValue> rootDict)
+{
+	return DeserializeTracks(rootDict, "audioTracks", MAX_AUDIO_MIXES);
+}
+
+static std::vector<uint32_t>
+DeserializeVideoEncoders(CefRefPtr<CefDictionaryValue> rootDict)
+{
+	return DeserializeTracks(rootDict, "videoEncoders", 128);
 }
 
 static void dispatch_list_change_event(StreamElementsOutputBase *output)
@@ -511,6 +545,13 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 	}
 	d->SetList("audioTracks", audioTracks);
 
+	auto videoEncoders = CefListValue::Create();
+	for (auto videoEncoderIndex : GetVideoEncoders()) {
+		videoEncoders->SetInt(videoEncoders->GetSize(),
+				      videoEncoderIndex);
+	}
+	d->SetList("videoEncoders", videoEncoders);
+
 	auto outputSettings = CefValue::Create();
 
 	SerializeOutputSettings(outputSettings);
@@ -731,19 +772,33 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 	if (!videoCompositionInfo)
 		return false;
 
-	OBSEncoderAutoRelease streamingVideoEncoder =
-		videoCompositionInfo->GetStreamingVideoEncoderRef();
+	std::vector<OBSEncoderAutoRelease> streamingVideoEncoders;
 
-	if (!streamingVideoEncoder && videoCompositionInfo->IsObsNative()) {
+	for (size_t i = 0; i < m_videoEncoders.size(); ++i) {
+		auto idx = m_videoEncoders[i];
+
+		OBSEncoderAutoRelease streamingVideoEncoder =
+			videoCompositionInfo->GetStreamingVideoEncoderRef(idx);
+
+		if (!streamingVideoEncoder)
+			break;
+
+		streamingVideoEncoders.push_back(
+			obs_encoder_get_ref(streamingVideoEncoder));
+	}
+
+	if (!streamingVideoEncoders.size() && videoCompositionInfo->IsObsNative()) {
 		blog(LOG_WARNING,
-		     "obs-streamelements-core: OBS Native streaming video encoder does not exist yet on streaming output '%s'",
+		     "obs-streamelements-core: OBS Native streaming video encoders do not exist yet on streaming output '%s'",
 		     GetId().c_str());
 
 		SetError(
-			"OBS Native streaming video encoder does not exist yet");
+			"OBS Native streaming video encoders do not exist yet");
 
 		auto args = CefDictionaryValue::Create();
-		args->SetString("reason", "OBS Native streaming video encoder does not exist yet");
+		args->SetString(
+			"reason",
+			"OBS Native streaming video encoders do not exist yet");
 
 		dispatch_event(this, "hostStreamingOutputError", args);
 		dispatch_event(this, "hostStreamingOutputStopped");
@@ -770,11 +825,10 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 	obs_data_release(output_settings);
 
 	if (m_output) {
-		OBSEncoderAutoRelease streamingVideoEncoder =
-			videoCompositionInfo->GetStreamingVideoEncoderRef();
-
-		obs_output_set_video_encoder(
-			m_output, streamingVideoEncoder);
+		for (size_t i = 0; i < streamingVideoEncoders.size(); ++i) {
+			obs_output_set_video_encoder2(
+				m_output, streamingVideoEncoders[i], i);
+		}
 
 		size_t audioEncodersCount = 0;
 
@@ -856,7 +910,7 @@ void StreamElementsCustomStreamingOutput::SerializeOutputSettings(
 
 	obs_data_t *service_settings = obs_service_get_settings(m_service);
 
-	d->SetString("type", obs_service_get_type(m_service));
+	d->SetString("type", safe_string(obs_service_get_type(m_service)));
 
 	d->SetString("serverUrl",
 		     safe_string(obs_data_get_string(service_settings, "server")));
@@ -995,10 +1049,11 @@ std::shared_ptr <StreamElementsCustomStreamingOutput> StreamElementsCustomStream
 	auto bindToIP = "";
 
 	auto audioTracks = DeserializeAudioTracks(rootDict);
+	auto videoEncoders = DeserializeVideoEncoders(rootDict);
 
 	auto result = std::make_shared<StreamElementsCustomStreamingOutput>(
 		id, name, videoComposition, audioComposition, audioTracks,
-		service, bindToIP, auxData);
+		videoEncoders, service, bindToIP, auxData);
 
 	result->SetEnabled(isEnabled);
 
@@ -1038,7 +1093,7 @@ void StreamElementsObsNativeStreamingOutput::SerializeOutputSettings(
 
 	obs_data_t *service_settings = obs_service_get_settings(service);
 
-	d->SetString("type", obs_service_get_type(service));
+	d->SetString("type", safe_string(obs_service_get_type(service)));
 
 	d->SetString("serverUrl", safe_string(obs_data_get_string(
 					  service_settings, "server")));
@@ -1087,6 +1142,13 @@ std::vector<uint32_t> StreamElementsObsNativeStreamingOutput::GetAudioTracks()
 	return result;
 }
 
+std::vector<uint32_t> StreamElementsObsNativeStreamingOutput::GetVideoEncoders()
+{
+	OBSOutputAutoRelease output = GetOutput();
+
+	return GetVideoEncodersFromOutput(output);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // StreamElementsObsNativeRecordingOutput
 ////////////////////////////////////////////////////////////////////////////////
@@ -1121,7 +1183,7 @@ void StreamElementsObsNativeRecordingOutput::SerializeOutputSettings(
 
 	obs_data_t *obs_output_settings = obs_output_get_settings(obs_output);
 
-	d->SetString("type", obs_output_get_id(obs_output));
+	d->SetString("type", safe_string(obs_output_get_id(obs_output)));
 	d->SetValue("settings", SerializeObsData(obs_output_settings));
 
 	obs_data_release(obs_output_settings);
@@ -1150,6 +1212,13 @@ std::vector<uint32_t> StreamElementsObsNativeRecordingOutput::GetAudioTracks()
 	}
 
 	return result;
+}
+
+std::vector<uint32_t> StreamElementsObsNativeRecordingOutput::GetVideoEncoders()
+{
+	OBSOutputAutoRelease output = GetOutput();
+
+	return GetVideoEncodersFromOutput(output);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1208,22 +1277,34 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 	if (!videoCompositionInfo)
 		return false;
 
-	OBSEncoderAutoRelease recordingVideoEncoder =
-		videoCompositionInfo->GetRecordingVideoEncoderRef();
+	std::vector<OBSEncoderAutoRelease> recordingVideoEncoders;
 
-	if (!recordingVideoEncoder &&
+	for (size_t i = 0; i < m_videoEncoders.size(); ++i) {
+		auto idx = m_videoEncoders[i];
+
+		OBSEncoderAutoRelease recordingVideoEncoder =
+			videoCompositionInfo->GetRecordingVideoEncoderRef(idx);
+
+		if (!recordingVideoEncoder)
+			break;
+
+		recordingVideoEncoders.push_back(
+			obs_encoder_get_ref(recordingVideoEncoder));
+	}
+
+	if (!recordingVideoEncoders.size() &&
 	    videoCompositionInfo->IsObsNative()) {
 		blog(LOG_WARNING,
-		     "obs-streamelements-core: OBS Native recording video encoder does not exist yet on recording output '%s'",
+		     "obs-streamelements-core: OBS Native recording video encoders do not exist yet on recording output '%s'",
 		     GetId().c_str());
 
 		SetError(
-			"OBS Native recording video encoder does not exist yet");
+			"OBS Native recording video encoders do not exist yet");
 
 		auto args = CefDictionaryValue::Create();
 		args->SetString(
 			"reason",
-			"OBS Native recording video encoder does not exist yet");
+			"OBS Native recording video encoders do not exist yet");
 
 		dispatch_event(this, "hostRecordingOutputError", args);
 		dispatch_event(this, "hostRecordingOutputStopped");
@@ -1384,11 +1465,11 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 				     hotkeyData);
 
 	if (m_output) {
-		OBSEncoderAutoRelease recordingVideoEncoder =
-			videoCompositionInfo->GetRecordingVideoEncoderRef();
-
-		obs_output_set_video_encoder(
-			m_output, recordingVideoEncoder);
+		for (size_t i = 0; i < recordingVideoEncoders.size(); ++i) {
+			// TODO: Find by request
+			obs_output_set_video_encoder2(
+				m_output, recordingVideoEncoders[i], i);
+		}
 
 		size_t audioEncodersCount = 0;
 
@@ -1553,11 +1634,11 @@ StreamElementsCustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 	}
 
 	auto audioTracks = DeserializeAudioTracks(rootDict);
+	auto videoEncoders = DeserializeVideoEncoders(rootDict);
 
 	auto result = std::make_shared<StreamElementsCustomRecordingOutput>(
 		id, name, recordingSettings, videoComposition, audioComposition,
-		audioTracks,
-		auxData);
+		audioTracks, videoEncoders, auxData);
 
 	result->SetEnabled(isEnabled);
 
@@ -1612,7 +1693,7 @@ void StreamElementsObsNativeReplayBufferOutput::SerializeOutputSettings(
 
 	obs_data_t *obs_output_settings = obs_output_get_settings(obs_output);
 
-	d->SetString("type", obs_output_get_id(obs_output));
+	d->SetString("type", safe_string(obs_output_get_id(obs_output)));
 	d->SetValue("settings", SerializeObsData(obs_output_settings));
 
 	obs_data_release(obs_output_settings);
@@ -1644,6 +1725,14 @@ StreamElementsObsNativeReplayBufferOutput::GetAudioTracks()
 	return result;
 }
 
+std::vector<uint32_t>
+StreamElementsObsNativeReplayBufferOutput::GetVideoEncoders()
+{
+	OBSOutputAutoRelease output = GetOutput();
+
+	return GetVideoEncodersFromOutput(output);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // StreamElementsCustomReplayBufferOutput
 ////////////////////////////////////////////////////////////////////////////////
@@ -1665,21 +1754,33 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 	if (!videoCompositionInfo)
 		return false;
 
-	OBSEncoderAutoRelease recordingVideoEncoder =
-		videoCompositionInfo->GetRecordingVideoEncoderRef();
+	std::vector<OBSEncoderAutoRelease> recordingVideoEncoders;
 
-	if (!recordingVideoEncoder && videoCompositionInfo->IsObsNative()) {
+	for (size_t i = 0; i < m_videoEncoders.size(); ++i) {
+		auto idx = m_videoEncoders[i];
+
+		OBSEncoderAutoRelease recordingVideoEncoder =
+			videoCompositionInfo->GetRecordingVideoEncoderRef(idx);
+
+		if (!recordingVideoEncoder)
+			break;
+
+		recordingVideoEncoders.push_back(
+			obs_encoder_get_ref(recordingVideoEncoder));
+	}
+
+	if (!recordingVideoEncoders.size() && videoCompositionInfo->IsObsNative()) {
 		blog(LOG_WARNING,
-		     "obs-streamelements-core: OBS Native recording video encoder does not exist yet on replay buffer output '%s'",
+		     "obs-streamelements-core: OBS Native recording video encoders do not exist yet on replay buffer output '%s'",
 		     GetId().c_str());
 
 		SetError(
-			"OBS Native recording video encoder does not exist yet");
+			"OBS Native recording video encoders do not exist yet");
 
 		auto args = CefDictionaryValue::Create();
 		args->SetString(
 			"reason",
-			"OBS Native recording video encoder does not exist yet");
+			"OBS Native recording video encoders do not exist yet");
 
 		dispatch_event(this, "hostReplayBufferOutputError", args);
 		dispatch_event(this, "hostReplayBufferOutputStopped");
@@ -1839,10 +1940,11 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 				     hotkeyData);
 
 	if (m_output) {
-		OBSEncoderAutoRelease recordingVideoEncoder =
-			videoCompositionInfo->GetRecordingVideoEncoderRef();
-
-		obs_output_set_video_encoder(m_output, recordingVideoEncoder);
+		for (size_t i = 0; i < recordingVideoEncoders.size(); ++i) {
+			// TODO: Find by request
+			obs_output_set_video_encoder2(
+				m_output, recordingVideoEncoders[i], i);
+		}
 
 		size_t audioEncodersCount = 0;
 
@@ -2005,10 +2107,11 @@ StreamElementsCustomReplayBufferOutput::Create(CefRefPtr<CefValue> input)
 	}
 
 	auto audioTracks = DeserializeAudioTracks(rootDict);
+	auto videoEncoders = DeserializeVideoEncoders(rootDict);
 
 	auto result = std::make_shared<StreamElementsCustomReplayBufferOutput>(
 		id, name, recordingSettings, videoComposition, audioComposition,
-		audioTracks, auxData);
+		audioTracks, videoEncoders, auxData);
 
 	result->SetEnabled(isEnabled);
 
@@ -2056,7 +2159,7 @@ void StreamElementsCustomReplayBufferOutput::handle_output_saved(
 
 	const char *path = nullptr;
 	if (calldata_get_string(proc_cd, "path", &path)) {
-		eventArgs->SetString("filePath", path);
+		eventArgs->SetString("filePath", safe_string(path));
 
 		dispatch_event(self, "hostReplayBufferOutputSavedToLocalFile", eventArgs);
 	}
