@@ -265,8 +265,15 @@ void StreamElementsVideoCompositionManager::SerializeAvailableEncoderClasses(
 		if (obs_get_encoder_type(id) != type)
 			continue;
 
+		uint32_t caps = obs_get_encoder_caps(id);
+
+		if (caps & OBS_ENCODER_CAP_INTERNAL)
+			continue;
+
 		auto d = CefDictionaryValue::Create();
 
+		d->SetBool("isDeprecated",
+			   !!(caps & OBS_ENCODER_CAP_DEPRECATED));
 		d->SetString("class", id);
 		d->SetString("label", obs_encoder_get_display_name(id));
 		d->SetString("codec", obs_get_encoder_codec(id));

@@ -7,6 +7,8 @@
 #include <util/platform.h>
 #include <util/config-file.h>
 
+#include <obs.hpp>
+
 StreamElementsOutputSettingsManager::StreamElementsOutputSettingsManager()
 {
 }
@@ -90,6 +92,15 @@ void StreamElementsOutputSettingsManager::GetAvailableEncoders(CefRefPtr<CefValu
 			{
 				CefRefPtr<CefDictionaryValue> codec = CefDictionaryValue::Create();
 
+				uint32_t caps = obs_get_encoder_caps(encoderId);
+
+				if (caps & OBS_ENCODER_CAP_INTERNAL)
+					continue;
+
+				codec->SetBool("isDeprecated",
+					       !!(caps &
+						  OBS_ENCODER_CAP_DEPRECATED));
+
 				// Set codec dictionary properties
 				codec->SetString("id", encoderId);
 				codec->SetString("codec", obs_get_encoder_codec(encoderId));
@@ -107,7 +118,7 @@ void StreamElementsOutputSettingsManager::GetAvailableEncoders(CefRefPtr<CefValu
 					codec->SetString("type", "unknown");
 					break;
 				}
-
+				
 				// Append dictionary to codec list
 				codec_list->SetDictionary(
 					codec_list->GetSize(),
