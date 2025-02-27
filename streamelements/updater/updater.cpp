@@ -454,7 +454,7 @@ static bool prompt_for_update(const bool allowUseLastResponse,
 		uint64_t skip_version = config_get_uint(config, "update-prompt",
 							"skip_version");
 
-		if (STREAMELEMENTS_PLUGIN_VERSION == skip_version)
+		if (avail_version_number == skip_version)
 			return false;
 	}
 
@@ -469,7 +469,7 @@ static bool prompt_for_update(const bool allowUseLastResponse,
 	if (s_ConfirmPendingUpdateDialog->IsSkipVersionClicked()) {
 		// Save skipped version for next time
 		config_set_uint(config, "update-prompt", "skip_version",
-				STREAMELEMENTS_PLUGIN_VERSION);
+				avail_version_number);
 	} else {
 		// Remove skipped version for next time
 		config_remove_value(config, "update-prompt", "skip_version");
