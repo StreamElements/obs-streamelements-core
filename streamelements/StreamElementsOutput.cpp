@@ -22,7 +22,7 @@ static std::vector<uint32_t> GetVideoEncodersFromOutput(obs_output_t *output)
 	if (output) {
 		for (size_t idx = 0;; ++idx) {
 			OBSEncoderAutoRelease encoder =
-				obs_output_get_video_encoder2(output, idx);
+				obs_encoder_get_ref(obs_output_get_video_encoder2(output, idx));
 
 			if (!encoder)
 				break;
@@ -825,7 +825,10 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 	obs_data_release(output_settings);
 
 	if (m_output) {
-		for (size_t i = 0; i < streamingVideoEncoders.size(); ++i) {
+		obs_output_set_video_encoder(m_output,
+					     streamingVideoEncoders[0]);
+
+		for (size_t i = 1; i < streamingVideoEncoders.size(); ++i) {
 			obs_output_set_video_encoder2(
 				m_output, streamingVideoEncoders[i], i);
 		}
@@ -1465,7 +1468,10 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 				     hotkeyData);
 
 	if (m_output) {
-		for (size_t i = 0; i < recordingVideoEncoders.size(); ++i) {
+		obs_output_set_video_encoder(m_output,
+					     recordingVideoEncoders[0]);
+
+		for (size_t i = 1; i < recordingVideoEncoders.size(); ++i) {
 			// TODO: Find by request
 			obs_output_set_video_encoder2(
 				m_output, recordingVideoEncoders[i], i);
@@ -1940,7 +1946,10 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 				     hotkeyData);
 
 	if (m_output) {
-		for (size_t i = 0; i < recordingVideoEncoders.size(); ++i) {
+		obs_output_set_video_encoder(m_output,
+					     recordingVideoEncoders[0]);
+
+		for (size_t i = 1; i < recordingVideoEncoders.size(); ++i) {
 			// TODO: Find by request
 			obs_output_set_video_encoder2(
 				m_output, recordingVideoEncoders[i], i);

@@ -626,14 +626,20 @@ protected:
 		if (!obs_frontend_streaming_active())
 			return nullptr;
 
-		auto output = obs_frontend_get_streaming_output();
+		OBSOutputAutoRelease output = obs_frontend_get_streaming_output();
 
 		if (!output)
 			return nullptr;
 
-		auto result = obs_output_get_video_encoder2(output, index);
+		obs_encoder_t* result = nullptr;
 
-		obs_output_release(output);
+		if (index == 0) {
+			result = obs_output_get_video_encoder(output);
+		}
+
+		if (!result) {
+			result = obs_output_get_video_encoder2(output, index);
+		}
 
 		return result;
 	}
@@ -643,22 +649,34 @@ protected:
 		obs_encoder_t *result = nullptr;
 
 		if (!result && obs_frontend_recording_active()) {
-			auto output = obs_frontend_get_recording_output();
+			OBSOutputAutoRelease output = obs_frontend_get_recording_output();
 
 			if (output) {
-				result = obs_output_get_video_encoder2(output, index);
+				if (index == 0) {
+					result = obs_output_get_video_encoder(
+						output);
+				}
 
-				obs_output_release(output);
+				if (!result) {
+					result = obs_output_get_video_encoder2(
+						output, index);
+				}
 			}
 		}
 
 		if (!result && obs_frontend_replay_buffer_active()) {
-			auto output = obs_frontend_get_replay_buffer_output();
+			OBSOutputAutoRelease output = obs_frontend_get_replay_buffer_output();
 
 			if (output) {
-				result = obs_output_get_video_encoder(output);
+				if (index == 0) {
+					result = obs_output_get_video_encoder(
+						output);
+				}
 
-				obs_output_release(output);
+				if (!result) {
+					result = obs_output_get_video_encoder2(
+						output, index);
+				}
 			}
 		}
 
