@@ -41,6 +41,19 @@
 static NetworkDialog *s_NetworkDialog = NULL;
 static ConfirmPendingUpdateDialog *s_ConfirmPendingUpdateDialog = NULL;
 
+static const char *streamelements_check_for_updates_signal_decl =
+	"void streamelements_request_check_for_updates(bool allow_downgrade, bool force_install, bool allow_use_last_response)";
+static const char *streamelements_check_for_updates_signal_id =
+	"streamelements_request_check_for_updates";
+
+static const char *streamelements_check_for_updates_silent_signal_decl =
+	"void streamelements_request_check_for_updates_silent(bool allow_downgrade, bool force_install, bool allow_use_last_response)";
+static const char *streamelements_check_for_updates_silent_signal_id =
+	"streamelements_request_check_for_updates_silent";
+
+static os_event_t *streamelements_check_for_updates_event;
+static bool streamelements_updater_is_running = false;
+
 ///
 // Get registry key path for configuration values
 //
@@ -61,6 +74,9 @@ static std::string GetEnvironmentRegKeyPath(const char *productName = nullptr)
 inline static void ShowStatusBarMessage(std::string msg, bool showMsgBox,
 					int timeout = 3000)
 {
+	if (!streamelements_updater_is_running)
+		return;
+
 	blog(LOG_INFO, "obs-streamelements: ShowStatusBarMessage: %s",
 	     msg.c_str());
 
@@ -78,19 +94,21 @@ inline static void ShowStatusBarMessage(std::string msg, bool showMsgBox,
 
 	QtPostTask(
 		[context]() {
-			QMainWindow *mainWindow =
-				(QMainWindow *)obs_frontend_get_main_window();
-			mainWindow->statusBar()->showMessage(
-				("SE.Live: " + context->text).c_str(),
-				context->timeout);
+			if (streamelements_updater_is_running) {
+				QMainWindow *mainWindow =
+					(QMainWindow *)obs_frontend_get_main_window();
+				mainWindow->statusBar()->showMessage(
+					("SE.Live: " + context->text).c_str(),
+					context->timeout);
 
-			if (context->showMsgBox) {
-				QMessageBox msgBox;
-				msgBox.setWindowTitle(
-					"StreamElements: The Ultimate Streamer Platform"),
-					msgBox.setText(
-						QString(context->text.c_str()));
-				msgBox.exec();
+				if (context->showMsgBox) {
+					QMessageBox msgBox;
+					msgBox.setWindowTitle(
+						"StreamElements: The Ultimate Streamer Platform"),
+						msgBox.setText(
+							QString(context->text.c_str()));
+					msgBox.exec();
+				}
 			}
 
 			delete context;
@@ -279,6 +297,12 @@ static void download_update_package_async(std::string package_url,
 					  std::string package_arguments,
 					  void (*callback)())
 {
+	if (!streamelements_updater_is_running) {
+		callback();
+
+		return;
+	}
+
 	// We'll use this to pass data to download result handler callback
 	struct local_context {
 		char *packageFilePath;
@@ -427,6 +451,9 @@ static bool prompt_for_update(const bool allowUseLastResponse,
 			      const uint64_t avail_version_number,
 			      std::string release_notes)
 {
+	if (!streamelements_updater_is_running)
+		return false;
+
 	bool result = false;
 
 	config_t *config = NULL;
@@ -562,7 +589,8 @@ static void check_for_updates_async(bool allowUseLastResponse, bool silent,
 
 			config_t *manifest = NULL;
 
-			if (download_success) {
+			if (download_success &&
+			    streamelements_updater_is_running) {
 				// Open manifest as INI file
 				if (CONFIG_SUCCESS ==
 				    config_open(&manifest,
@@ -854,18 +882,6 @@ static void check_for_updates_async(bool allowUseLastResponse, bool silent,
 		context, Message_DownloadingUpdateManifest);
 }
 
-static const char *streamelements_check_for_updates_signal_decl =
-	"void streamelements_request_check_for_updates(bool allow_downgrade, bool force_install, bool allow_use_last_response)";
-static const char *streamelements_check_for_updates_signal_id =
-	"streamelements_request_check_for_updates";
-
-static const char *streamelements_check_for_updates_silent_signal_decl =
-	"void streamelements_request_check_for_updates_silent(bool allow_downgrade, bool force_install, bool allow_use_last_response)";
-static const char *streamelements_check_for_updates_silent_signal_id =
-	"streamelements_request_check_for_updates_silent";
-
-static os_event_t *streamelements_check_for_updates_event;
-
 static void check_for_updates(bool allowUseLastResponse, bool silent, bool allowDowngrade, bool forceInstall)
 {
 	if (0 == os_event_try(streamelements_check_for_updates_event)) {
@@ -934,6 +950,8 @@ bool streamelements_updater_init(void)
 		// obs_frontend_pop_ui_translation();
 	});
 
+	streamelements_updater_is_running = true;
+
 	blog(LOG_INFO,
 	     "obs-streamelements-core: updater: checking for updates");
 	check_for_updates(true, false, false, false);
@@ -964,6 +982,8 @@ bool streamelements_updater_init(void)
 
 void streamelements_updater_shutdown(void)
 {
+	streamelements_updater_is_running = false;
+
 	signal_handler_disconnect(
 		obs_get_signal_handler(),
 		streamelements_check_for_updates_silent_signal_id,

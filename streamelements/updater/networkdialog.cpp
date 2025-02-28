@@ -129,7 +129,7 @@ void NetworkDialog::DownloadFileAsync(const char* dest, const char* url, bool la
 			QMetaObject::invokeMethod(
 				task_context->self->ui->ctl_message,
 				"setText",
-				Qt::BlockingQueuedConnection,
+				Qt::QueuedConnection,
 				Q_ARG(QString, QString(task_context->user_message)));
 
 			task_context->self->m_cancel_pending = false;
@@ -137,7 +137,7 @@ void NetworkDialog::DownloadFileAsync(const char* dest, const char* url, bool la
 			QMetaObject::invokeMethod(
 				task_context->self->ui->ctl_cancelButton,
 				"setEnabled",
-				Qt::BlockingQueuedConnection,
+				Qt::QueuedConnection,
 				Q_ARG(bool, true));
 
 			bool result = false;
@@ -209,9 +209,9 @@ void NetworkDialog::on_ctl_cancelButton_clicked()
 
 void NetworkDialog::HideDialog()
 {
-	QtExecSync([&] {
-		hide();
+	QMetaObject::invokeMethod(this,
+				  "hide", Qt::QueuedConnection);
 
-		setModal(false);
-	});
+	QMetaObject::invokeMethod(this, "setModal", Qt::QueuedConnection,
+				  Q_ARG(bool, false));
 }
