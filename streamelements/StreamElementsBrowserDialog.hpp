@@ -22,6 +22,7 @@ public:
 	std::string result() { return m_result; }
 
 	virtual void showEvent(QShowEvent *event) override;
+	virtual void hideEvent(QHideEvent *event) override;
 
 public Q_SLOTS:
 	virtual int exec() override;
@@ -44,4 +45,10 @@ private:
 	bool m_isIncognito = false;
 
 	std::string m_containerType;
+
+private:
+	void DestroyBrowser(std::string reason);
+
+protected:
+	virtual void closeEvent(QCloseEvent *e) override;
 };

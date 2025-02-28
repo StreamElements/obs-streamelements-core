@@ -183,24 +183,45 @@ StreamElementsBrowserDialog::StreamElementsBrowserDialog(
 		SetAlwaysOnTop(this, true);
 	}
 
-	connect(this, &QDialog::finished, [this]() {
-		m_browser->DestroyBrowser();
-
-		layout()->removeWidget(m_browser);
-
-		m_browser->deleteLater();
-
-		m_browser = nullptr;
-	});
+	connect(this, &QDialog::finished, [this](int result) { DestroyBrowser("finished"); });
+	connect(this, &QDialog::accepted, [this]() { DestroyBrowser("accepted"); });
+	connect(this, &QDialog::rejected, [this]() { DestroyBrowser("rejected"); });
 }
 
 StreamElementsBrowserDialog::~StreamElementsBrowserDialog()
 {
 }
 
+void StreamElementsBrowserDialog::closeEvent(QCloseEvent* e)
+{
+	DestroyBrowser("closeEvent");
+
+	QDialog::closeEvent(e);
+}
+
+void StreamElementsBrowserDialog::DestroyBrowser(std::string reason)
+{
+	if (!m_browser)
+		return;
+
+	blog(LOG_INFO,
+	     "[obs-streamelements-core]: StreamElementsBrowserDialog::DestroyBrowser('%s'): %s",
+	     reason.c_str(), m_url.c_str());
+
+	layout()->removeWidget(m_browser);
+
+	m_browser->DestroyBrowser();
+	m_browser->deleteLater();
+
+	m_browser = nullptr;
+}
+
 void StreamElementsBrowserDialog::showEvent(QShowEvent* event)
 {
 	QDialog::showEvent(event);
+
+	if (m_browser)
+		return;
 
 	m_browser = new StreamElementsBrowserWidget(
 		nullptr, StreamElementsMessageBus::DEST_UI, m_url.c_str(),
@@ -213,9 +234,18 @@ void StreamElementsBrowserDialog::showEvent(QShowEvent* event)
 	layout()->addWidget(m_browser);
 }
 
+void StreamElementsBrowserDialog::hideEvent(QHideEvent* event)
+{
+	DestroyBrowser("hideEvent");
+
+	QDialog::hideEvent(event);
+}
+
 int StreamElementsBrowserDialog::exec()
 {
 	int result = QDialog::exec();
+
+	DestroyBrowser("exec finished");
 
 	return result;
 }
