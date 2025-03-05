@@ -2847,6 +2847,25 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("getAvailableAudioEncoderClassProperties");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->SerializeAvailableEncoderClassPropertiesForSettings(
+				args->GetValue(0), result, OBS_ENCODER_AUDIO);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAvailableVideoEncoderClassProperties");
+	{
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->SerializeAvailableEncoderClassPropertiesForSettings(
+				args->GetValue(0), result, OBS_ENCODER_VIDEO);
+	}
+	API_HANDLER_END();
+
+
 	API_HANDLER_BEGIN("getAllVideoCompositions");
 	{
 		StreamElementsGlobalStateManager::GetInstance()

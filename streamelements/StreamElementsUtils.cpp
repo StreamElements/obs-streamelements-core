@@ -4245,12 +4245,18 @@ CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e)
 	else
 		result->SetNull("codec");
 
-	if (obs_encoder_get_type(e) == OBS_ENCODER_VIDEO) {
+	auto encoder_type = obs_encoder_get_type(e);
+
+	if (encoder_type == OBS_ENCODER_VIDEO) {
+		result->SetString("type", "video");
+
 		if (obs_encoder_parent_video(e) ||
 		    obs_encoder_scaling_enabled(e)) {
 			result->SetInt("width", obs_encoder_get_width(e));
 			result->SetInt("height", obs_encoder_get_height(e));
 		}
+	} else if (encoder_type == OBS_ENCODER_AUDIO) {
+		result->SetString("type", "audio");
 	}
 
 	auto settings = obs_encoder_get_settings(e);

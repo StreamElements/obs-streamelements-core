@@ -254,6 +254,46 @@ void StreamElementsVideoCompositionManager::RemoveCompositionsByIds(
 	output->SetBool(true);
 }
 
+void StreamElementsVideoCompositionManager::
+SerializeAvailableEncoderClassPropertiesForSettings(
+	CefRefPtr<CefValue> input, CefRefPtr<CefValue>& output, obs_encoder_type encoder_type)
+{
+	output->SetNull();
+
+	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto d = input->GetDictionary();
+
+	if (!d->HasKey("class") || d->GetType("class") != VTYPE_STRING)
+		return;
+
+	std::string id = d->GetString("class");
+
+	OBSDataAutoRelease settings = obs_data_create();
+
+	if (d->HasKey("settings") &&
+	    d->GetType("settings") == VTYPE_DICTIONARY) {
+		if (!DeserializeObsData(d->GetValue("settings"), settings))
+			return;
+	}
+
+	OBSEncoderAutoRelease encoder = nullptr;
+
+	if (encoder_type == OBS_ENCODER_AUDIO)
+		encoder = obs_audio_encoder_create(id.c_str(), "temp", settings,
+						   0, nullptr);
+	else
+		encoder = obs_video_encoder_create(id.c_str(), "temp", settings,
+						   nullptr);
+
+	auto result = SerializeObsEncoder(encoder);
+
+	if (result.get()) {
+		output->SetDictionary(result);
+	}
+}
+
 void StreamElementsVideoCompositionManager::SerializeAvailableEncoderClasses(
 	obs_encoder_type type,
 	CefRefPtr<CefValue>& output)

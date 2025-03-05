@@ -26,6 +26,10 @@ public:
 	void SerializeAvailableEncoderClasses(obs_encoder_type type,
 					CefRefPtr<CefValue> &output);
 
+	void SerializeAvailableEncoderClassPropertiesForSettings(
+		CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output,
+		obs_encoder_type encoder_type);
+
 	void SerializeAvailableTransitionClasses(CefRefPtr<CefValue> &output);
 
 	void Reset();
