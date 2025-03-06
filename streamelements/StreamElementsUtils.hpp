@@ -527,4 +527,10 @@ obs_source_t *GetExistingObsTransition(std::string lookupId);
 bool DeserializeObsTransition(CefRefPtr<CefValue> input, obs_source_t **t,
 			      int *durationMilliseconds, bool useExisting);
 
+/* ========================================================= */
+
 CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e);
+
+obs_encoder_t *DeserializeObsVideoEncoder(CefRefPtr<CefValue> input);
+obs_encoder_t *DeserializeObsAudioEncoder(CefRefPtr<CefValue> input,
+					  int mixer_idx = -1);
