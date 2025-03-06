@@ -245,7 +245,7 @@ private:
 
 	std::vector<uint32_t> m_audioTracks = {0};
 	std::vector<std::shared_ptr<VideoEncoder>> m_videoEncoders = {
-		std::make_shared<VideoEncoder>(0, nullptr)};
+		std::make_shared<VideoEncoder>(0)};
 
 public:
 	StreamElementsCustomStreamingOutput(
@@ -429,7 +429,7 @@ private:
 
 	std::vector<uint32_t> m_audioTracks;
 	std::vector<std::shared_ptr<VideoEncoder>> m_videoEncoders = {
-		std::make_shared<VideoEncoder>(0, nullptr)};
+		std::make_shared<VideoEncoder>(0)};
 
 public:
 	StreamElementsCustomRecordingOutput(
@@ -560,7 +560,7 @@ private:
 
 	std::vector<uint32_t> m_audioTracks = {0};
 	std::vector<std::shared_ptr<VideoEncoder>> m_videoEncoders = {
-		std::make_shared<VideoEncoder>(0, nullptr)};
+		std::make_shared<VideoEncoder>(0)};
 
 public:
 	StreamElementsCustomReplayBufferOutput(
