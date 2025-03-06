@@ -15,9 +15,11 @@ static std::string safe_string(const char* input)
 	return std::string(input);
 }
 
-static std::vector<uint32_t> GetVideoEncodersFromOutput(obs_output_t *output)
+static std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoder>>
+GetVideoEncodersFromOutput(obs_output_t *output)
 {
-	std::vector<uint32_t> result;
+	std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoder>>
+		result;
 
 	if (output) {
 		for (size_t idx = 0;; ++idx) {
@@ -27,12 +29,15 @@ static std::vector<uint32_t> GetVideoEncodersFromOutput(obs_output_t *output)
 			if (!encoder)
 				break;
 
-			result.push_back(idx);
+			result.push_back(
+				std::make_shared <
+				StreamElementsOutputBase::VideoEncoder>(idx));
 		}
 	}
 
 	if (!result.size()) {
-		result.push_back(0);
+		result.push_back(std::make_shared <
+				 StreamElementsOutputBase::VideoEncoder>(0));
 	}
 
 	return result;
@@ -122,10 +127,68 @@ DeserializeAudioTracks(CefRefPtr<CefDictionaryValue> rootDict)
 	return DeserializeTracks(rootDict, "audioTracks", MAX_AUDIO_MIXES);
 }
 
-static std::vector<uint32_t>
+static std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoder>>
 DeserializeVideoEncoders(CefRefPtr<CefDictionaryValue> rootDict)
 {
-	return DeserializeTracks(rootDict, "videoEncoders", 128);
+	std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoder>>
+		result;
+
+
+	const std::string key = "videoEncoders";
+	const uint32_t maxTrackIndex = 128;
+
+	if (rootDict->HasKey(key) && rootDict->GetType(key) == VTYPE_LIST) {
+		auto list = rootDict->GetList(key);
+
+		for (size_t i = 0; i < list->GetSize(); ++i) {
+			if (list->GetType(i) == VTYPE_DICTIONARY) {
+				// Deserialize ObsEncoderInfo
+
+				auto value = list->GetValue(i);
+
+				OBSEncoderAutoRelease encoder =
+					DeserializeObsVideoEncoder(value);
+
+				if (!encoder)
+					continue; // Invalid encoder
+
+				result.push_back(std::make_shared<
+						 StreamElementsOutputBase::
+							 VideoEncoder>(value));
+
+			} else if (list->GetType(i) == VTYPE_INT) {
+				auto trackIndex = uint32_t(list->GetInt(i));
+
+				if (trackIndex >= 0 &&
+				    trackIndex < maxTrackIndex) {
+					bool hasValue = false;
+
+					for (auto it = result.cbegin();
+					     it != result.cend(); ++it) {
+						if ((*it)->IsMatchingIndex(trackIndex)) {
+							hasValue = true;
+							break;
+						}
+					}
+
+					if (!hasValue) {
+						result.push_back(
+							std::make_shared<
+								StreamElementsOutputBase::
+									VideoEncoder>(
+								trackIndex));
+					}
+				}
+			}
+		}
+	}
+
+	if (!result.size()) {
+		result.push_back(
+			std::make_shared<StreamElementsOutputBase::VideoEncoder>(0));
+	}
+
+	return result;
 }
 
 static void dispatch_list_change_event(StreamElementsOutputBase *output)
@@ -546,9 +609,9 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 	d->SetList("audioTracks", audioTracks);
 
 	auto videoEncoders = CefListValue::Create();
-	for (auto videoEncoderIndex : GetVideoEncoders()) {
-		videoEncoders->SetInt(videoEncoders->GetSize(),
-				      videoEncoderIndex);
+	for (auto videoEncoder : GetVideoEncoders()) {
+		videoEncoders->SetValue(videoEncoders->GetSize(),
+					videoEncoder->Serialize());
 	}
 	d->SetList("videoEncoders", videoEncoders);
 
@@ -775,10 +838,9 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 	std::vector<OBSEncoderAutoRelease> streamingVideoEncoders;
 
 	for (size_t i = 0; i < m_videoEncoders.size(); ++i) {
-		auto idx = m_videoEncoders[i];
-
 		OBSEncoderAutoRelease streamingVideoEncoder =
-			videoCompositionInfo->GetStreamingVideoEncoderRef(idx);
+			m_videoEncoders[i]->GetStreamingEncoderRef(
+				videoCompositionInfo);
 
 		if (!streamingVideoEncoder)
 			break;
@@ -1145,7 +1207,8 @@ std::vector<uint32_t> StreamElementsObsNativeStreamingOutput::GetAudioTracks()
 	return result;
 }
 
-std::vector<uint32_t> StreamElementsObsNativeStreamingOutput::GetVideoEncoders()
+std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoder>>
+StreamElementsObsNativeStreamingOutput::GetVideoEncoders()
 {
 	OBSOutputAutoRelease output = GetOutput();
 
@@ -1217,7 +1280,8 @@ std::vector<uint32_t> StreamElementsObsNativeRecordingOutput::GetAudioTracks()
 	return result;
 }
 
-std::vector<uint32_t> StreamElementsObsNativeRecordingOutput::GetVideoEncoders()
+std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoder>>
+StreamElementsObsNativeRecordingOutput::GetVideoEncoders()
 {
 	OBSOutputAutoRelease output = GetOutput();
 
@@ -1283,10 +1347,9 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 	std::vector<OBSEncoderAutoRelease> recordingVideoEncoders;
 
 	for (size_t i = 0; i < m_videoEncoders.size(); ++i) {
-		auto idx = m_videoEncoders[i];
-
 		OBSEncoderAutoRelease recordingVideoEncoder =
-			videoCompositionInfo->GetRecordingVideoEncoderRef(idx);
+			m_videoEncoders[i]
+				->GetRecordingEncoderRef(videoCompositionInfo);
 
 		if (!recordingVideoEncoder)
 			break;
@@ -1731,7 +1794,7 @@ StreamElementsObsNativeReplayBufferOutput::GetAudioTracks()
 	return result;
 }
 
-std::vector<uint32_t>
+std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoder>>
 StreamElementsObsNativeReplayBufferOutput::GetVideoEncoders()
 {
 	OBSOutputAutoRelease output = GetOutput();
@@ -1763,10 +1826,9 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 	std::vector<OBSEncoderAutoRelease> recordingVideoEncoders;
 
 	for (size_t i = 0; i < m_videoEncoders.size(); ++i) {
-		auto idx = m_videoEncoders[i];
-
 		OBSEncoderAutoRelease recordingVideoEncoder =
-			videoCompositionInfo->GetRecordingVideoEncoderRef(idx);
+			m_videoEncoders[i]->GetRecordingEncoderRef(
+				videoCompositionInfo);
 
 		if (!recordingVideoEncoder)
 			break;

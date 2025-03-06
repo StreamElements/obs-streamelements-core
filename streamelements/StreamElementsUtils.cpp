@@ -4257,6 +4257,8 @@ CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e)
 		}
 	} else if (encoder_type == OBS_ENCODER_AUDIO) {
 		result->SetString("type", "audio");
+
+		result->SetInt("audioMix", obs_encoder_get_mixer_index(e));
 	}
 
 	auto settings = obs_encoder_get_settings(e);
@@ -4283,3 +4285,58 @@ CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e)
 	return result;
 }
 
+static obs_encoder_t *DeserializeObsEncoder(obs_encoder_type type,
+					    CefRefPtr<CefValue> input,
+					    int mixer_idx)
+{
+	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
+		return nullptr;
+
+	auto d = input->GetDictionary();
+
+	if (!d->HasKey("class") || d->GetType("class") != VTYPE_STRING)
+		return nullptr;
+
+	std::string id = d->GetString("class");
+	std::string name = id;
+
+	if (d->HasKey("name") && d->GetType("name") == VTYPE_STRING)
+		name = d->GetString("name");
+
+	OBSDataAutoRelease settings = obs_data_create();
+
+	if (d->HasKey("settings")) {
+		if (!DeserializeObsData(d->GetValue("settings"), settings))
+			return nullptr;
+	}
+
+	if (mixer_idx < 0) {
+		if (d->HasKey("audioMix") &&
+		    d->GetType("audioMix") == VTYPE_INT)
+			mixer_idx = d->GetInt("audioMix");
+	}
+
+	if (mixer_idx < 0 || mixer_idx >= MAX_AUDIO_MIXES)
+		mixer_idx = 0;
+
+	if (type == OBS_ENCODER_VIDEO)
+		return obs_video_encoder_create(id.c_str(), name.c_str(),
+						settings, nullptr);
+	else if (type == OBS_ENCODER_AUDIO)
+		return obs_audio_encoder_create(id.c_str(), name.c_str(),
+						settings,
+						static_cast<size_t>(mixer_idx),
+						nullptr);
+	else
+		return nullptr;
+}
+
+obs_encoder_t* DeserializeObsVideoEncoder(CefRefPtr<CefValue> input)
+{
+	return DeserializeObsEncoder(OBS_ENCODER_VIDEO, input, 0);
+}
+
+obs_encoder_t *DeserializeObsAudioEncoder(CefRefPtr<CefValue> input, int mixer_idx)
+{
+	return DeserializeObsEncoder(OBS_ENCODER_VIDEO, input, mixer_idx);
+}
