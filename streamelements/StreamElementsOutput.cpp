@@ -949,7 +949,11 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 
 				return true;
 			} else {
-				SetErrorIfEmpty("Failed to start output");
+				SetErrorIfEmpty(
+					std::string(
+						"Failed to start output: ") +
+					safe_string(obs_output_get_last_error(
+						m_output)));
 			}
 		} else {
 			blog(LOG_ERROR,
@@ -1584,7 +1588,11 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 
 				return true;
 			} else {
-				SetErrorIfEmpty("Failed to start output");
+				SetErrorIfEmpty(
+					std::string(
+						"Failed to start output: ") +
+					safe_string(obs_output_get_last_error(
+						m_output)));
 			}
 		} else {
 			blog(LOG_ERROR,
@@ -2053,7 +2061,11 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 
 				return true;
 			} else {
-				SetErrorIfEmpty("Failed to start output");
+				SetErrorIfEmpty(
+					std::string(
+						"Failed to start output: ") +
+					safe_string(obs_output_get_last_error(
+						m_output)));
 			}
 		} else {
 			blog(LOG_ERROR,
