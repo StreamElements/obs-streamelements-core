@@ -37,7 +37,7 @@ public:
 		: StreamElementsApiMessageHandler(containerType),
 		  m_dialog(dialog)
 	{
-		RegisterIncomingApiCallHandlers();
+		// RegisterIncomingApiCallHandlers();
 	}
 
 	/*
@@ -55,6 +55,9 @@ protected:
 
 	virtual void RegisterIncomingApiCallHandlers() override
 	{
+		StreamElementsApiMessageHandler::
+			RegisterIncomingApiCallHandlers();
+
 		API_HANDLER_BEGIN("endModalDialog");
 		{
 			result->SetBool(false);

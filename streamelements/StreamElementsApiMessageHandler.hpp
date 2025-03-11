@@ -3,6 +3,7 @@
 #include "cef-headers.hpp"
 
 #include <mutex>
+#include <shared_mutex>
 #include <functional>
 #include <memory>
 
@@ -34,7 +35,7 @@ public:
 	StreamElementsApiMessageHandler(std::string containerType)
 		: m_containerType(containerType)
 	{
-		RegisterIncomingApiCallHandlers();
+		// RegisterIncomingApiCallHandlers();
 	}
 
 	virtual ~StreamElementsApiMessageHandler() {
@@ -103,6 +104,8 @@ private:
 #endif
 
 private:
+	std::shared_mutex m_processMessageReceivedMutex;
+
 	std::map<std::string, incoming_call_handler_t> m_apiCallHandlers;
 	bool m_initialHiddenState = false;
 
@@ -127,7 +130,7 @@ public:
 	InvokeHandler(std::string containerType)
 		: StreamElementsApiMessageHandler(containerType)
 	{
-		RegisterIncomingApiCallHandlers();
+		// RegisterIncomingApiCallHandlers();
 	}
 
 public:

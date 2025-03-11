@@ -47,10 +47,16 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 {
 	if (!IsPluginInitialized())
 		return true;
+	
+	// This should prevent concurrent access to m_apiCallHandlers during initialization
+	std::unique_lock processMessageReceivedLock(
+		m_processMessageReceivedMutex);
 
 	const std::string &name = message->GetName();
 
 	if (name == MSG_ON_CONTEXT_CREATED) {
+		RegisterIncomingApiCallHandlers();
+
 		RegisterIncomingApiCallHandlersInternal(source);
 		RegisterApiPropsInternal(source);
 		DispatchHostReadyEventInternal(source);
@@ -340,16 +346,12 @@ StreamElementsApiMessageHandler::CreateApiCallHandlersDictionaryInternal()
 		CefDictionaryValue::Create();
 
 	for (auto apiCallHandler : m_apiCallHandlers) {
-		CefRefPtr<CefValue> val = CefValue::Create();
-
 		CefRefPtr<CefDictionaryValue> function =
 			CefDictionaryValue::Create();
 
 		function->SetString("message", MSG_INCOMING_API_CALL);
 
-		val->SetDictionary(function);
-
-		rootDictionary->SetValue(apiCallHandler.first, val);
+		rootDictionary->SetDictionary(apiCallHandler.first, function);
 	}
 
 	return rootDictionary;

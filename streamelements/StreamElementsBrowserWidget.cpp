@@ -334,6 +334,7 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 		"			}\n" +
 		"		} else if (json.payload.name === 'CefRenderProcessHandler::BindJavaScriptFunctions') {\n" +
 		"			const defs = JSON.parse(json.payload.args[1]);\n" +
+		"			window[json.payload.args[0]] = window[json.payload.args[0]] || {};\n" +
 		"			for (const key of Object.keys(defs)) {\n" +
 		"				const fullName = `window.${json.payload.args[0]}.${key}`;\n" +
 		"				window[json.payload.args[0]][key] = (...args) => {\n" +
