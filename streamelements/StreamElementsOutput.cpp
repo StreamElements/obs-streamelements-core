@@ -15,6 +15,29 @@ static std::string safe_string(const char* input)
 	return std::string(input);
 }
 
+static std::string getRecordingsFolderPath()
+{
+	auto activeConfiguration = obs_frontend_get_profile_config();
+
+	const char *mode =
+		config_get_string(activeConfiguration, "Output", "Mode");
+	const char *type =
+		config_get_string(activeConfiguration, "AdvOut", "RecType");
+	const char *adv_path =
+		strcmp(type, "Standard")
+			? config_get_string(activeConfiguration, "AdvOut",
+					    "FFFilePath")
+			: config_get_string(activeConfiguration, "AdvOut",
+					    "RecFilePath");
+	const char *path = strcmp(mode, "Advanced")
+				   ? config_get_string(activeConfiguration,
+						       "SimpleOutput",
+						       "FilePath")
+				   : adv_path;
+
+	return std::string(path);
+}
+
 static std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoder>>
 GetVideoEncodersFromOutput(obs_output_t *output)
 {
@@ -1393,21 +1416,13 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 	// Parse OBS settings (defaults)
 	//////////////////////////////////
 
-	std::string basePath = "";
+	std::string basePath = getRecordingsFolderPath();
 
-	auto advBasePath = config_get_string(
-		obs_frontend_get_profile_config(), "AdvOut",
-		ffmpegRecording ? "FFFilePath" : "RecFilePath");
-	if (advBasePath) {
-		basePath = advBasePath;
-	} else {
-		basePath = config_get_string(obs_frontend_get_profile_config(),
-					     "SimpleOutput", "FilePath");
-	}
-
+	/*
 	std::string recFormat = config_get_string(
 		obs_frontend_get_profile_config(), "AdvOut",
 		ffmpegRecording ? "FFExtension" : "RecFormat2");
+	*/
 	std::string filenameFormat =
 		config_get_string(obs_frontend_get_profile_config(), "Output",
 				  "FilenameFormatting");
@@ -1871,21 +1886,13 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 	// Parse OBS settings (defaults)
 	//////////////////////////////////
 
-	std::string basePath = "";
+	std::string basePath = getRecordingsFolderPath();
 
-	auto advBasePath = config_get_string(
-		obs_frontend_get_profile_config(), "AdvOut",
-		ffmpegRecording ? "FFFilePath" : "RecFilePath");
-	if (advBasePath) {
-		basePath = advBasePath;
-	} else {
-		basePath = config_get_string(obs_frontend_get_profile_config(),
-					     "SimpleOutput", "FilePath");
-	}
-
+	/*
 	std::string recFormat = config_get_string(
 		obs_frontend_get_profile_config(), "AdvOut",
 		ffmpegRecording ? "FFExtension" : "RecFormat2");
+	*/
 	std::string filenameFormat =
 		config_get_string(obs_frontend_get_profile_config(), "Output",
 				  "FilenameFormatting");
