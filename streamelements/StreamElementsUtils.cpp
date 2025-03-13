@@ -3859,138 +3859,32 @@ bool DeserializeObsData(CefRefPtr<CefValue> input, obs_data_t *data)
 	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
 		return false;
 
-	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
+	std::string json = CefWriteJSON(input, JSON_WRITER_DEFAULT);
 
-	CefDictionaryValue::KeyList keys;
+	OBSDataAutoRelease parsed_data = obs_data_create_from_json(json.c_str());
 
-	if (!d->GetKeys(keys))
+	if (!parsed_data)
 		return false;
 
-	for (std::string key : keys) {
-		CefRefPtr<CefValue> v = d->GetValue(key);
-
-		if (v->GetType() == VTYPE_STRING)
-			obs_data_set_string(data, key.c_str(),
-					    v->GetString().ToString().c_str());
-		else if (v->GetType() == VTYPE_INT)
-			obs_data_set_int(data, key.c_str(), v->GetInt());
-		else if (v->GetType() == VTYPE_DOUBLE)
-			obs_data_set_double(data, key.c_str(), v->GetDouble());
-		else if (v->GetType() == VTYPE_BOOL)
-			obs_data_set_bool(data, key.c_str(), v->GetBool());
-		else if (v->GetType() == VTYPE_DICTIONARY) {
-			obs_data_t *obj = obs_data_create_from_json(
-				CefWriteJSON(v, JSON_WRITER_DEFAULT)
-					.ToString()
-					.c_str());
-
-			obs_data_set_obj(data, key.c_str(), obj);
-
-			obs_data_release(obj);
-		} else if (v->GetType() == VTYPE_LIST) {
-			CefRefPtr<CefListValue> list = v->GetList();
-
-			obs_data_array_t *array = obs_data_array_create();
-
-			for (size_t index = 0; index < list->GetSize();
-			     ++index) {
-				obs_data_t *obj = obs_data_create_from_json(
-					CefWriteJSON(v, JSON_WRITER_DEFAULT)
-						.ToString()
-						.c_str());
-
-				obs_data_array_push_back(array, obj);
-
-				obs_data_release(obj);
-			}
-
-			obs_data_set_array(data, key.c_str(), array);
-
-			obs_data_array_release(array);
-		} else {
-			/* Unexpected data type */
-			return false;
-		}
-	}
+	obs_data_apply(data, parsed_data);
 
 	return true;
 }
 
 CefRefPtr<CefValue> SerializeObsData(obs_data_t *data)
 {
-	CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+	if (data) {
+		return CefParseJSON(obs_data_get_json(data),
+				    JSON_PARSER_ALLOW_TRAILING_COMMAS);
+	} else {
+		auto result = CefValue::Create();
 
-	for (obs_data_item_t *item = obs_data_first(data); item;
-	     obs_data_item_next(&item)) {
-		enum obs_data_type type = obs_data_item_gettype(item);
-		const char *name = obs_data_item_get_name(item);
+		result->SetNull();
 
-		if (!name)
-			continue;
-
-		if (type == OBS_DATA_STRING) {
-			if (obs_data_item_has_user_value(item) ||
-			    obs_data_item_has_default_value(item)) {
-				const char *str =
-					obs_data_item_get_string(item);
-
-				if (str) {
-					d->SetString(name, str);
-				} else {
-					d->SetNull(name);
-				}
-			} else {
-				d->SetNull(name);
-			}
-		} else if (type == OBS_DATA_NUMBER) {
-			if (obs_data_item_numtype(item) == OBS_DATA_NUM_INT) {
-				d->SetInt(name, obs_data_item_get_int(item));
-			} else if (obs_data_item_numtype(item) ==
-				   OBS_DATA_NUM_DOUBLE) {
-				d->SetDouble(name,
-					     obs_data_item_get_double(item));
-			}
-		} else if (type == OBS_DATA_BOOLEAN)
-			d->SetBool(name, obs_data_item_get_bool(item));
-		else if (type == OBS_DATA_OBJECT) {
-			obs_data_t *obj = obs_data_item_get_obj(item);
-			if (obj) {
-				d->SetValue(name, SerializeObsData(obj));
-				obs_data_release(obj);
-			}
-		} else if (type == OBS_DATA_ARRAY) {
-			CefRefPtr<CefListValue> list = CefListValue::Create();
-
-			obs_data_array_t *array = obs_data_item_get_array(item);
-
-			if (array) {
-				size_t count = obs_data_array_count(array);
-
-				for (size_t idx = 0; idx < count; idx++) {
-					obs_data_t *sub_item =
-						obs_data_array_item(array, idx);
-
-					list->SetValue(
-						list->GetSize(),
-						SerializeObsData(sub_item));
-
-					obs_data_release(sub_item);
-				}
-
-				obs_data_array_release(array);
-			}
-		}
+		return result;
 	}
 
-	CefRefPtr<CefValue> result = CefValue::Create();
-	result->SetDictionary(d);
-
-	/*
-	return CefParseJSON(obs_data_get_json(data),
-			JSON_PARSER_ALLOW_TRAILING_COMMAS);
-	*/
-
-	return result;
+	//return result;
 }
 
 CefRefPtr<CefValue>
