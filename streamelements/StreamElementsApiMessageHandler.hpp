@@ -130,7 +130,9 @@ public:
 	InvokeHandler(std::string containerType)
 		: StreamElementsApiMessageHandler(containerType)
 	{
-		// RegisterIncomingApiCallHandlers();
+		// We must init this here since Invoke handler does not get "context initialized" event from
+		// the browser script which does not exist here :)
+		RegisterIncomingApiCallHandlers();
 	}
 
 public:
