@@ -1120,7 +1120,9 @@ void StreamElementsBackupManager::RestoreBackupPackageContent(
 
 	std::string extractPath;
 
-#ifdef WIN32
+
+//#ifdef WIN32
+#if 0
 	if (!GetTemporaryFilePath("obs-live-restore-content", extractPath))
 		return;
 
@@ -1236,7 +1238,8 @@ void StreamElementsBackupManager::RestoreBackupPackageContent(
 
 	/* Replace file monikers for Scene Collections */
 
-#ifdef WIN32
+//#ifdef WIN32
+#if 0
     if (ScanForFileReferencesMonikersToRestore(extractPath, destBasePath)) {
         std::string scriptPath;
         if (!GetTemporaryFilePath("obs-restore-script", scriptPath))
@@ -1410,6 +1413,11 @@ void StreamElementsBackupManager::RestoreBackupPackageContent(
         StreamElementsGlobalStateManager::GetInstance()
             ->GetCleanupManager()
             ->Clean();
+
+	// Prevent front-end from saving it's shit and overwriting our backup
+	obs_frontend_defer_save_begin();
+
+	RemoveObsDirtyShutdownMarker();
 
 	RestartCurrentApplication();
 

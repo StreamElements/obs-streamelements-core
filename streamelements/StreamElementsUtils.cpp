@@ -3435,6 +3435,17 @@ static std::wstring GetWString(CefRefPtr<CefDictionaryValue> input,
 	return input->GetString(key).ToWString();
 }
 
+void RemoveObsDirtyShutdownMarker()
+{
+	char *safeModeMarkerPathPtr =
+		os_get_config_path_ptr("obs-studio/safe_mode");
+	if (safeModeMarkerPathPtr) {
+		// We'll remove this flag so the next time OBS starts, it won't alert that it was terminated abnormally
+		os_unlink(safeModeMarkerPathPtr);
+	}
+	bfree(safeModeMarkerPathPtr);
+}
+
 #ifdef WIN32
 void RestartCurrentApplication()
 {
@@ -3458,9 +3469,13 @@ void RestartCurrentApplication()
 			* might have, and which appear from time to time. We definitely
 			* do NOT want those attributed to Cloud Restore.
 			*/
-		
-		::exit(0);
-		QApplication::quit();
+
+		::TerminateProcess(GetCurrentProcess(), 0);
+		//::exit(0);
+		//QApplication::quit();
+		//auto mainWindow = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+
+		//mainWindow->close();
 	}
 }
 #endif

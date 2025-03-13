@@ -482,6 +482,8 @@ void CompleteTimedObsApiTransaction(std::string id);
 
 /* ========================================================= */
 
+void RemoveObsDirtyShutdownMarker();
+
 void RestartCurrentApplication();
 
 bool IsSafeFileExtension(std::string path);
