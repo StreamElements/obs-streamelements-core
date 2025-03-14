@@ -50,6 +50,10 @@ static CefRefPtr<CefValue> parse_json(json& v) {
 }
 
 static json serialize_json(CefRefPtr<CefValue> v) {
+    if (!v.get())
+	return nullptr;
+
+
     switch (v->GetType()) {
         case VTYPE_NULL: return nullptr;
         case VTYPE_INT: return v->GetInt();
