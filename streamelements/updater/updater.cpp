@@ -904,7 +904,8 @@ static void streamelements_check_for_updates_signal_callback(void *,
 	calldata_get_bool(cd, "force_install", &forceInstall);
 	calldata_get_bool(cd, "allow_use_last_response", &allowUseLastResponse);
 
-	check_for_updates(false, false, allowDowngrade, forceInstall);
+	check_for_updates(allowUseLastResponse, false, allowDowngrade,
+			  forceInstall);
 }
 
 static void
@@ -918,7 +919,7 @@ streamelements_check_for_updates_silent_signal_callback(void *, calldata_t *cd)
 	calldata_get_bool(cd, "force_install", &forceInstall);
 	calldata_get_bool(cd, "allow_use_last_response", &allowUseLastResponse);
 
-	check_for_updates(false, allowUseLastResponse, allowDowngrade,
+	check_for_updates(allowUseLastResponse, true, allowDowngrade,
 			  forceInstall);
 }
 
