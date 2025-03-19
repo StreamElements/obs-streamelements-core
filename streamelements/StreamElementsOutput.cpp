@@ -1983,6 +1983,11 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 		}
 	}
 
+	if (splitFileTime <= 0) {
+		// Safety. Without this, replay_buffer output will get stuck
+		splitFileTime = 20;
+	}
+
 	splitFile = splitFileSize > 0 || splitFileTime > 0;
 
 	////////////////////////////////////////////////

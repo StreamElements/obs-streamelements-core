@@ -573,7 +573,7 @@ public:
 		std::vector<uint32_t> audioTracks,
 		std::vector<std::shared_ptr<VideoEncoder>> videoEncoders,
 		CefRefPtr<CefDictionaryValue> auxData)
-		: StreamElementsOutputBase(id, name, ReplayBufferOutput, None,
+		: StreamElementsOutputBase(id, name, ReplayBufferOutput, Streaming,
 					   videoComposition, audioComposition,
 					   auxData),
 		  m_recordingSettings(recordingSettings),
