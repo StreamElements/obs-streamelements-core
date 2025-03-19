@@ -109,5 +109,5 @@ CefString CefWriteJSON(CefRefPtr<CefValue> node,
                        cef_json_writer_options_t /*options*/) {
 	json root = serialize_json(node);
     
-	return root.dump();
+	return root.dump(-1, ' ', false, nlohmann::detail::error_handler_t::ignore);
 }
