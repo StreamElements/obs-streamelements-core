@@ -751,7 +751,15 @@ bool StreamElementsOutputBase::CanStart()
 	if (IsActive())
 		return false;
 
-	return true;
+	if (m_obsStateDependency == Streaming) {
+		return obs_frontend_streaming_active();
+	} else if (m_obsStateDependency == Recording) {
+		return obs_frontend_recording_active();
+	} else if (m_obsStateDependency == ReplayBuffer) {
+		return obs_frontend_replay_buffer_active();
+	} else {
+		return true;
+	}
 }
 
 bool StreamElementsOutputBase::Start()
