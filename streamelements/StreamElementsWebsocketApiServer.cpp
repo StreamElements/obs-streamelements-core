@@ -35,11 +35,6 @@ StreamElementsWebsocketApiServer::StreamElementsWebsocketApiServer()
 
 			std::string id = m_connection_map[con_hdl];
 			m_connection_map.erase(con_hdl);
-
-			m_client_connection_map.erase(id);
-
-			if (m_client_connection_map.count(id))
-				m_client_connection_map.erase(id);
 		});
 
 	m_endpoint.set_message_handler(
@@ -132,7 +127,6 @@ void StreamElementsWebsocketApiServer::ParseIncomingRegisterMessage(
 	{
 		std::unique_lock<decltype(m_mutex)> guard(m_mutex);
 
-		m_client_connection_map[id] = con_hdl;
 		m_connection_map[con_hdl] = id;
 	}
 
@@ -178,16 +172,23 @@ bool StreamElementsWebsocketApiServer::DispatchClientMessage(
 
 	std::shared_lock<decltype(m_mutex)> guard(m_mutex);
 
-	if (!m_client_connection_map.count(target))
-		return false;
+	bool result = false;
 
-	auto con_hdl = m_client_connection_map[target];
-	auto connection = m_endpoint.get_con_from_hdl(con_hdl);
+	for (auto kv : m_connection_map) {
+		if (target != kv.second)
+			continue;
 
-	if (!connection)
-		return false;
+		auto con_hdl = kv.first;
 
-	return !connection->send(json);
+		auto connection = m_endpoint.get_con_from_hdl(con_hdl);
+
+		if (!connection)
+			continue;
+
+		result |= !connection->send(json);
+	}
+
+	return result;
 }
 
 bool StreamElementsWebsocketApiServer::RegisterMessageHandler(
@@ -286,8 +287,8 @@ bool StreamElementsWebsocketApiServer::DispatchJSEvent(std::string source, std::
 	{
 		std::shared_lock<decltype(m_mutex)> guard(m_mutex);
 
-		for (auto it : m_client_connection_map) {
-			targets.push_back(it.first);
+		for (auto it : m_connection_map) {
+			targets.push_back(it.second);
 		}
 	}
 

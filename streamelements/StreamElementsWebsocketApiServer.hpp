@@ -9,6 +9,7 @@
 #include <thread>
 #include <string>
 #include <map>
+#include <unordered_map>
 #include <vector>
 #include <mutex>
 #include <shared_mutex>
@@ -61,7 +62,6 @@ private:
 	server_t m_endpoint;
 	std::thread m_thread;
 
-	std::map<std::string, connection_hdl_t> m_client_connection_map;
 	std::map<connection_hdl_t, std::string, std::owner_less<connection_hdl_t>>
 		m_connection_map;
 	std::map<std::string, message_handler_t> m_dispatch_handlers_map;
