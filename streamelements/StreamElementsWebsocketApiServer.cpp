@@ -1,8 +1,57 @@
 #include "StreamElementsWebsocketApiServer.hpp"
+#include "StreamElementsUtils.hpp"
 
 #include <asio.hpp>
 #include <asio/ts/buffer.hpp>
 #include <asio/ts/internet.hpp>
+
+std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo>
+StreamElementsWebsocketApiServer::AddConnection(std::string target,
+	std::string unique_id,
+	connection_hdl_t con_hdl)
+{
+	std::unique_lock<decltype(m_mutex)> guard(m_mutex);
+
+	auto clientInfo = std::make_shared<ClientInfo>(target, unique_id, con_hdl);
+
+	m_connection_map[con_hdl] = clientInfo;
+
+	if (!m_target_to_connection_hdl_map.count(target))
+		m_target_to_connection_hdl_map[target] =
+			std::make_shared<connection_hdl_container_t>();
+
+	m_target_to_connection_hdl_map[target]->m_con_hdl_map[con_hdl] =
+		clientInfo;
+
+	return clientInfo;
+}
+
+void StreamElementsWebsocketApiServer::RemoveConnection(
+	connection_hdl_t con_hdl)
+{
+	std::unique_lock<decltype(m_mutex)> guard(m_mutex);
+
+	if (!m_connection_map.count(con_hdl))
+		return;
+
+	auto clientInfo = m_connection_map[con_hdl];
+
+	m_connection_map.erase(con_hdl);
+
+	std::string id = clientInfo->m_target;
+
+	if (!m_target_to_connection_hdl_map.count(id))
+		return;
+
+	auto container = m_target_to_connection_hdl_map[id];
+
+	container->m_con_hdl_map.erase(con_hdl);
+
+	if (container->m_con_hdl_map.empty()) {
+		m_target_to_connection_hdl_map.erase(id);
+	}
+}
+
 
 StreamElementsWebsocketApiServer::StreamElementsWebsocketApiServer()
 {
@@ -27,14 +76,8 @@ StreamElementsWebsocketApiServer::StreamElementsWebsocketApiServer()
 
 	m_endpoint.set_close_handler(
 		[this](websocketpp::connection_hdl con_hdl) {
-			std::unique_lock<decltype(m_mutex)> guard(m_mutex);
-
 			// Disconnect
-			if (!m_connection_map.count(con_hdl))
-				return;
-
-			std::string id = m_connection_map[con_hdl];
-			m_connection_map.erase(con_hdl);
+			RemoveConnection(con_hdl);
 		});
 
 	m_endpoint.set_message_handler(
@@ -115,6 +158,7 @@ void StreamElementsWebsocketApiServer::ParseIncomingRegisterMessage(
 		return;
 
 	std::string id = payload->GetString("id");
+	std::string unique_id = CreateGloballyUniqueIdString();
 
 	{
 		std::shared_lock<decltype(m_dispatch_handlers_map_mutex)>
@@ -124,22 +168,20 @@ void StreamElementsWebsocketApiServer::ParseIncomingRegisterMessage(
 			return;
 	}
 
-	{
-		std::unique_lock<decltype(m_mutex)> guard(m_mutex);
-
-		m_connection_map[con_hdl] = id;
-	}
+	auto clientInfo = AddConnection(id, unique_id, con_hdl);
 
 	auto response = CefValue::Create();
 	auto responseDict = CefDictionaryValue::Create();
 	responseDict->SetString("id", id);
+	responseDict->SetString("unique_id", unique_id);
 	response->SetDictionary(responseDict);
 
-	DispatchClientMessage("system", id, "register:response", response);
+	DispatchClientMessage("system", clientInfo, "register:response", response);
 }
 
 bool StreamElementsWebsocketApiServer::DispatchClientMessage(
-	std::string source, std::string target, CefRefPtr<CefProcessMessage> msg)
+	std::string source, std::shared_ptr<ClientInfo> clientInfo,
+	CefRefPtr<CefProcessMessage> msg)
 {
 	auto payload = CefDictionaryValue::Create();
 
@@ -149,18 +191,19 @@ bool StreamElementsWebsocketApiServer::DispatchClientMessage(
 	auto val = CefValue::Create();
 	val->SetDictionary(payload);
 
-	return DispatchClientMessage(source, target, "dispatch", val);
+	return DispatchClientMessage(source, clientInfo, "dispatch", val);
 }
 
 bool StreamElementsWebsocketApiServer::DispatchClientMessage(
-	std::string source, std::string target,
+	std::string source, std::shared_ptr<ClientInfo> clientInfo,
 		std::string type, CefRefPtr<CefValue> payload)
 {
 	auto root = CefDictionaryValue::Create();
 
 	root->SetString("type", type);
 	root->SetString("source", source);
-	root->SetString("target", target);
+	root->SetString("target", clientInfo->m_target);
+	root->SetString("target_unique_id", clientInfo->m_unique_id);
 
 	root->SetValue("payload", payload);
 
@@ -174,21 +217,17 @@ bool StreamElementsWebsocketApiServer::DispatchClientMessage(
 
 	bool result = false;
 
-	for (auto kv : m_connection_map) {
-		if (target != kv.second)
-			continue;
-
-		auto con_hdl = kv.first;
-
-		auto connection = m_endpoint.get_con_from_hdl(con_hdl);
+	try {
+		auto connection =
+			m_endpoint.get_con_from_hdl(clientInfo->m_con_hdl);
 
 		if (!connection)
-			continue;
+			return false;
 
-		result |= !connection->send(json);
+		return !connection->send(json);
+	} catch(...) {
+		return false;
 	}
-
-	return result;
 }
 
 bool StreamElementsWebsocketApiServer::RegisterMessageHandler(
@@ -228,7 +267,7 @@ void StreamElementsWebsocketApiServer::ParseIncomingDispatchMessage(
 		return;
 
 	// Get msg source from connection
-	std::string source = m_connection_map[con_hdl];
+	auto clientInfo = m_connection_map[con_hdl];
 
 	if (root->GetType("payload") != VTYPE_DICTIONARY)
 		return;
@@ -253,14 +292,13 @@ void StreamElementsWebsocketApiServer::ParseIncomingDispatchMessage(
 		lock(m_dispatch_handlers_map_mutex);
 
 	// Check if handlers are registered
-	if (!m_dispatch_handlers_map.count(source))
+	if (!m_dispatch_handlers_map.count(clientInfo->m_target))
 		return;
 
-	m_dispatch_handlers_map[source](source, msg);
+	m_dispatch_handlers_map[clientInfo->m_target](clientInfo, msg);
 }
 
-bool StreamElementsWebsocketApiServer::DispatchJSEvent(std::string source,
-						       std::string target,
+bool StreamElementsWebsocketApiServer::DispatchJSEvent(std::string source, std::shared_ptr<ClientInfo> clientInfo,
 						       std::string event,
 						       std::string json)
 {
@@ -270,7 +308,7 @@ bool StreamElementsWebsocketApiServer::DispatchJSEvent(std::string source,
 	args->SetString(0, event);
 	args->SetString(1, json);
 
-	return DispatchClientMessage(source, target, msg);
+	return DispatchClientMessage(source, clientInfo, msg);
 }
 
 bool StreamElementsWebsocketApiServer::DispatchJSEvent(std::string source, std::string event,
@@ -282,7 +320,7 @@ bool StreamElementsWebsocketApiServer::DispatchJSEvent(std::string source, std::
 	args->SetString(0, event);
 	args->SetString(1, json);
 
-	std::vector<std::string> targets;
+	std::vector<std::shared_ptr<ClientInfo>> targets;
 
 	{
 		std::shared_lock<decltype(m_mutex)> guard(m_mutex);
@@ -294,6 +332,62 @@ bool StreamElementsWebsocketApiServer::DispatchJSEvent(std::string source, std::
 
 	for (auto target : targets) {
 		DispatchClientMessage(source, target, msg);
+	}
+
+	return true;
+}
+
+bool StreamElementsWebsocketApiServer::DispatchTargetJSEvent(std::string source,
+							     std::string target,
+							     std::string event,
+							     std::string json)
+{
+	auto msg = CefProcessMessage::Create("DispatchJSEvent");
+	CefRefPtr<CefListValue> args = msg->GetArgumentList();
+
+	args->SetString(0, event);
+	args->SetString(1, json);
+
+	std::vector<std::shared_ptr<ClientInfo>> targets;
+
+	{
+		std::shared_lock<decltype(m_mutex)> guard(m_mutex);
+
+		if (!m_target_to_connection_hdl_map.count(target))
+			return false;
+
+		for (auto it :
+		     m_target_to_connection_hdl_map[target]->m_con_hdl_map) {
+			targets.push_back(it.second);
+		}
+	}
+
+	for (auto target : targets) {
+		DispatchClientMessage(source, target, msg);
+	}
+
+	return true;
+}
+
+bool StreamElementsWebsocketApiServer::DispatchTargetClientMessage(
+	std::string source, std::string target,
+	CefRefPtr<CefProcessMessage> msg)
+{
+	std::vector<std::shared_ptr<ClientInfo>> targets;
+
+	{
+		std::shared_lock<decltype(m_mutex)> guard(m_mutex);
+
+		if (!m_target_to_connection_hdl_map.count(target))
+			return false;
+
+		for (auto it : m_target_to_connection_hdl_map[target]->m_con_hdl_map) {
+			targets.push_back(it.second);
+		}
+	}
+
+	for (auto it : targets) {
+		DispatchClientMessage(source, it, msg);
 	}
 
 	return true;

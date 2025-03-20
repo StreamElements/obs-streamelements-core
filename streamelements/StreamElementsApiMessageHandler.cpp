@@ -8,6 +8,7 @@
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsMessageBus.hpp"
 #include "StreamElementsPleaseWaitWindow.hpp"
+#include "StreamElementsWebsocketApiServer.hpp"
 
 #include <QDesktopServices>
 #include <QUrl>
@@ -42,7 +43,8 @@ static bool IsPluginInitialized()
 }
 
 bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
-	std::string source, CefRefPtr<CefProcessMessage> message,
+	std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo> source,
+	CefRefPtr<CefProcessMessage> message,
 	const long cefClientId)
 {
 	if (!IsPluginInitialized())
@@ -90,14 +92,16 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 			struct local_context {
 				std::shared_ptr<StreamElementsApiMessageHandler> self;
 				std::string id;
-				std::string target;
+				std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo> target;
 				CefRefPtr<CefProcessMessage> message;
 				CefRefPtr<CefListValue> callArgs;
 				CefRefPtr<CefValue> result;
 				std::function<void()> complete;
 				int cef_app_callback_id;
 				long cefClientId;
-				std::string source;
+				std::shared_ptr<StreamElementsWebsocketApiServer::
+							ClientInfo>
+					source;
 
 				std::shared_ptr<StreamElementsApiContextItem>
 					apiContextHandle;
@@ -120,8 +124,9 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 			context->complete = [context]() {
 				if (!IsPluginInitialized()) {
 					blog(LOG_ERROR,
-					     "obs-streamelements-core[%s]: API: plugin is no longer initialized while completing call to '%s', callback id %d",
-					     context->target.c_str(),
+					     "obs-streamelements-core[%s %s]: API: plugin is no longer initialized while completing call to '%s', callback id %d",
+					     context->target->m_target.c_str(),
+					     context->target->m_unique_id.c_str(),
 					     context->id.c_str(),
 					     context->cef_app_callback_id);
 
@@ -135,8 +140,10 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 
 				if (IsTraceLogLevel()) {
 					blog(LOG_INFO,
-					     "obs-streamelements-core[%s]: API: completed call to '%s', callback id %d",
-					     context->target.c_str(),
+					     "obs-streamelements-core[%s %s]: API: completed call to '%s', callback id %d",
+					     context->target->m_target.c_str(),
+					     context->target->m_unique_id
+						     .c_str(),
 					     context->id.c_str(),
 					     context->cef_app_callback_id);
 				}
@@ -185,8 +192,10 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 				callArgsValue->SetList(context->callArgs);
 				if (IsTraceLogLevel()) {
 					blog(LOG_INFO,
-					     "obs-streamelements-core[%s]: API: posting call to '%s', callback id %d, args: %s",
-					     context->target.c_str(),
+					     "obs-streamelements-core[%s %s]: API: posting call to '%s', callback id %d, args: %s",
+					     context->target->m_target.c_str(),
+					     context->target->m_unique_id
+						     .c_str(),
 					     context->id.c_str(),
 					     context->cef_app_callback_id,
 					     CefWriteJSON(callArgsValue,
@@ -201,8 +210,11 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 					if (!IsPluginInitialized())
 					{
 						blog(LOG_ERROR,
-						     "obs-streamelements-core[%s]: API: plugin is no longer initialized while performing call to '%s', callback id %d",
-						     context->target.c_str(),
+						     "obs-streamelements-core[%s %s]: API: plugin is no longer initialized while performing call to '%s', callback id %d",
+						     context->target->m_target
+							     .c_str(),
+						     context->target->m_unique_id
+							     .c_str(),
 						     context->id.c_str(),
 						     context->cef_app_callback_id);
 
@@ -213,8 +225,11 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 					if (!context->self->m_runtimeStatus
 						     ->m_running) {
 						blog(LOG_ERROR,
-						     "obs-streamelements-core[%s]: API: message handler no longer initialized while performing call to '%s', callback id %d",
-						     context->target.c_str(),
+						     "obs-streamelements-core[%s %s]: API: message handler no longer initialized while performing call to '%s', callback id %d",
+						     context->target->m_target
+							     .c_str(),
+						     context->target->m_unique_id
+							     .c_str(),
 						     context->id.c_str(),
 						     context->cef_app_callback_id);
 
@@ -224,8 +239,11 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 
 					if (IsTraceLogLevel()) {
 						blog(LOG_INFO,
-						     "obs-streamelements-core[%s]: API: performing call to '%s', callback id %d",
-						     context->target.c_str(),
+						     "obs-streamelements-core[%s %s]: API: performing call to '%s', callback id %d",
+						     context->target->m_target
+							     .c_str(),
+						     context->target->m_unique_id
+							     .c_str(),
 						     context->id.c_str(),
 						     context->cef_app_callback_id);
 					}
@@ -252,7 +270,8 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 }
 
 void StreamElementsApiMessageHandler::InvokeApiCallHandlerAsync(
-	CefRefPtr<CefProcessMessage> message, std::string target,
+	CefRefPtr<CefProcessMessage> message,
+	std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo> target,
 	std::string invokeId, CefRefPtr<CefListValue> invokeArgs,
 	std::function<void(CefRefPtr<CefValue>)> result_callback,
 	const long cefClientId,
@@ -270,8 +289,10 @@ void StreamElementsApiMessageHandler::InvokeApiCallHandlerAsync(
 	result->SetNull();
 
 	if (!m_apiCallHandlers.count(invokeId)) {
-		blog(LOG_ERROR, "obs-streamelements-core[%s]: API: invalid API call to '%s'",
-		     target.c_str(), invokeId.c_str());
+		blog(LOG_ERROR,
+		     "obs-streamelements-core[%s %s]: API: invalid API call to '%s'",
+		     target->m_target.c_str(), target->m_unique_id.c_str(),
+		     invokeId.c_str());
 
 		result_callback(result);
 
@@ -279,17 +300,21 @@ void StreamElementsApiMessageHandler::InvokeApiCallHandlerAsync(
 	}
 
 	if (enable_logging) {
-		blog(LOG_INFO, "obs-streamelements-core[%s]: API: performing call to '%s'",
-		     target.c_str(), invokeId.c_str());
+		blog(LOG_INFO,
+		     "obs-streamelements-core[%s %s]: API: performing call to '%s'",
+		     target->m_target.c_str(), target->m_unique_id.c_str(),
+		     invokeId.c_str());
 	}
 
 	auto handler = m_apiCallHandlers[invokeId];
 
 	handler(this->Clone(), message, invokeArgs, result, target, cefClientId, [=]() {
 		if (enable_logging) {
-			blog(LOG_INFO,
-			     "obs-streamelements-core[%s]: API: completed call to '%s'",
-			     target.c_str(), invokeId.c_str());
+				blog(LOG_INFO,
+				     "obs-streamelements-core[%s %s]: API: completed call to '%s'",
+				     target->m_target.c_str(),
+				     target->m_unique_id.c_str(),
+				     invokeId.c_str());
 		}
 
 		if (runtimeStatus->m_running) {
@@ -358,7 +383,7 @@ StreamElementsApiMessageHandler::CreateApiCallHandlersDictionaryInternal()
 }
 
 void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlersInternal(
-	std::string target)
+	std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo> target)
 {
 	// Context created, request creation of window.host object
 	// with API methods
@@ -402,7 +427,7 @@ StreamElementsApiMessageHandler::CreateApiPropsDictionaryInternal()
 }
 
 void StreamElementsApiMessageHandler::RegisterApiPropsInternal(
-	std::string target)
+	std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo> target)
 {
 	// Context created, request creation of window.host object
 	// with API methods
@@ -432,13 +457,14 @@ void StreamElementsApiMessageHandler::RegisterApiPropsInternal(
 }
 
 void StreamElementsApiMessageHandler::DispatchHostReadyEventInternal(
-	std::string target)
+	std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo> target)
 {
 	DispatchEventInternal(target, "hostReady", "null");
 }
 
 void StreamElementsApiMessageHandler::DispatchEventInternal(
-	std::string target, std::string event,
+	std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo> target,
+	std::string event,
 	std::string eventArgsJson)
 {
 	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
@@ -467,7 +493,7 @@ static std::recursive_mutex s_sync_api_call_mutex;
 		CefRefPtr<CefProcessMessage> message, \
 		CefRefPtr<CefListValue> args, \
 		CefRefPtr<CefValue>& result, \
-		std::string target, \
+		std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo> target, \
 		const long cefClientId, \
 		std::function<void()> complete_callback) \
 		{ \
@@ -493,7 +519,8 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		[](std::shared_ptr<StreamElementsApiMessageHandler> self,
 		   CefRefPtr<CefProcessMessage> message,
 		   CefRefPtr<CefListValue> args, CefRefPtr<CefValue> &result,
-		   std::string target,
+		   std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo>
+			   target,
 		   const long cefClientId,
 		   std::function<void()> complete_callback) {
 			result->SetNull();
@@ -527,7 +554,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				CefRefPtr<CefProcessMessage> message;
 				CefRefPtr<CefListValue> args;
 				CefRefPtr<CefValue> result;
-				std::string target;
+				std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo> target;
 				long cefClientId;
 				std::function<void()> complete_callback;
 			};
@@ -1141,7 +1168,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 					->GetBandwidthTestManager()
 					->BeginBandwidthTest(args->GetValue(0),
 							     args->GetValue(1),
-							     target));
+							     target->m_target));
 		}
 	}
 	API_HANDLER_END();
@@ -1251,7 +1278,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 					GetInstance()
 						->GetWidgetManager()
 						->GetDockBrowserWidgetInfo(
-							target.c_str());
+							target->m_target.c_str());
 
 		if (info) {
 			dockingArea = info->m_dockingArea;
@@ -1261,7 +1288,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			delete info;
 		}
 
-		d->SetString("id", target);
+		d->SetString("id", target->m_target);
 		d->SetString("dockingArea", dockingArea);
 		d->SetString("theme", GetCurrentThemeName());
 		d->SetString("type", self->m_containerType);
@@ -1642,7 +1669,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 				->NotifyAllMessageListeners(
 					StreamElementsMessageBus::DEST_ALL_LOCAL,
 					StreamElementsMessageBus::SOURCE_WEB,
-					"urn:streamelements:internal:" + target,
+					"urn:streamelements:internal:" + target->m_target,
 					message);
 
 			result->SetBool(true);
@@ -1659,7 +1686,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			if (d->HasKey("name") &&
 			    d->GetType("name") == VTYPE_STRING) {
 				std::string sourceUrl =
-					"urn:streamelements:internal:" + target;
+					"urn:streamelements:internal:" + target->m_target;
 
 				StreamElementsMessageBus::GetInstance()
 					->NotifyAllLocalEventListeners(
@@ -2471,7 +2498,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsMessageBus::GetInstance()
 				->DeserializeBrowserHttpServer(
-					target, args->GetValue(0), result);
+					target->m_target, args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
@@ -2479,7 +2506,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getAllBrowserScopedHttpServers");
 	{
 		StreamElementsMessageBus::GetInstance()
-			->SerializeBrowserHttpServers(target, result);
+			->SerializeBrowserHttpServers(target->m_target, result);
 	}
 	API_HANDLER_END();
 
@@ -2488,7 +2515,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsMessageBus::GetInstance()
 				->RemoveBrowserHttpServersByIds(
-					target, args->GetValue(0), result);
+					target->m_target, args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
@@ -3226,7 +3253,12 @@ bool StreamElementsApiMessageHandler::InvokeHandler::InvokeApiCallAsync(
 	context->result->SetBool(false);
 	context->callback = callback;
 
-	handler(this->Clone(), nullptr, args, context->result, "", -1, [context]() {
+	
+	static auto nullTarget =
+		std::make_shared<StreamElementsWebsocketApiServer::ClientInfo>(
+			"", "");
+
+	handler(this->Clone(), nullptr, args, context->result, nullTarget, -1, [context]() {
 		context->callback(context->result);
 
 		delete context;

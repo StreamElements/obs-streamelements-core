@@ -280,7 +280,7 @@ void StreamElementsMessageBus::NotifyEventListener(std::string target,
 
 	std::string payloadJson = CefWriteJSON(root, JSON_WRITER_DEFAULT);
 
-	DispatchClientJSEvent(target, event, payloadJson);
+	DispatchJSEventContainer(target, event, payloadJson);
 }
 
 void StreamElementsMessageBus::NotifyAllLocalEventListeners(
@@ -312,7 +312,7 @@ void StreamElementsMessageBus::NotifyAllLocalEventListeners(
 		auto browser = kv.first;
 
 		if (kv.second->flags & types) {
-			DispatchClientJSEvent(kv.second->target, event,
+			DispatchJSEventContainer(kv.second->target, event,
 					      payloadJson);
 		}
 	}

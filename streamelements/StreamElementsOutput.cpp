@@ -217,11 +217,11 @@ DeserializeVideoEncoders(CefRefPtr<CefDictionaryValue> rootDict)
 static void dispatch_list_change_event(StreamElementsOutputBase *output)
 {
 	if (output->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
-		DispatchClientJSEvent("hostStreamingOutputListChanged", "null");
+		DispatchJSEventGlobal("hostStreamingOutputListChanged", "null");
 	else if (output->GetOutputType() == StreamElementsOutputBase::RecordingOutput)
-		DispatchClientJSEvent("hostRecordingOutputListChanged", "null");
+		DispatchJSEventGlobal("hostRecordingOutputListChanged", "null");
 	else
-		DispatchClientJSEvent("hostReplayBufferOutputListChanged", "null");
+		DispatchJSEventGlobal("hostReplayBufferOutputListChanged", "null");
 }
 
 static void dispatch_event(
@@ -235,7 +235,7 @@ static void dispatch_event(
 
 	std::string json = CefWriteJSON(value, JSON_WRITER_DEFAULT).ToString();
 
-	DispatchClientJSEvent(eventName, json);
+	DispatchJSEventGlobal(eventName, json);
 }
 
 void StreamElementsOutputBase::handle_output_start(void *my_data,

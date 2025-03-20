@@ -2373,7 +2373,7 @@ void AdviseHostUserInterfaceStateChanged()
 			t = nullptr;
 
 			// Advise guest code of user interface state changes
-			DispatchClientJSEvent(
+			DispatchJSEventGlobal(
 				"hostUserInterfaceStateChanged", "null");
 		});
 	}
@@ -2403,7 +2403,7 @@ void AdviseHostHotkeyBindingsChanged()
 			t = nullptr;
 
 			// Advise guest code of user interface state changes
-			DispatchClientJSEvent(
+			DispatchJSEventGlobal(
 				"hostHotkeyBindingsChanged", "null");
 		});
 	}
@@ -3512,10 +3512,10 @@ void DispatchClientMessage(std::string target, CefRefPtr<CefProcessMessage> msg)
 	if (!apiServer)
 		return;
 
-	apiServer->DispatchClientMessage("system", target, msg);
+	apiServer->DispatchTargetClientMessage("system", target, msg);
 }
 
-void DispatchClientJSEvent(std::string event, std::string eventArgsJson)
+void DispatchJSEventGlobal(std::string event, std::string eventArgsJson)
 {
 	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
 		return;
@@ -3529,7 +3529,7 @@ void DispatchClientJSEvent(std::string event, std::string eventArgsJson)
 	apiServer->DispatchJSEvent("system", event, eventArgsJson);
 }
 
-void DispatchClientJSEvent(std::string target, std::string event, std::string eventArgsJson)
+void DispatchJSEventContainer(std::string target, std::string event, std::string eventArgsJson)
 {
 	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
 		return;
@@ -3540,7 +3540,7 @@ void DispatchClientJSEvent(std::string target, std::string event, std::string ev
 	if (!apiServer)
 		return;
 
-	apiServer->DispatchJSEvent("system", target, event, eventArgsJson);
+	apiServer->DispatchTargetJSEvent("system", target, event, eventArgsJson);
 }
 
 bool SecureJoinPaths(std::string base, std::string subpath, std::string &result)

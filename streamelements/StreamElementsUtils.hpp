@@ -493,10 +493,10 @@ bool IsSafeFileExtension(std::string path);
 void DispatchClientMessage(std::string target,
 			   CefRefPtr<CefProcessMessage> msg);
 
-void DispatchClientJSEvent(std::string target, std::string event,
+void DispatchJSEventContainer(std::string target, std::string event,
 			   std::string eventArgsJson);
 
-void DispatchClientJSEvent(std::string event, std::string eventArgsJson);
+void DispatchJSEventGlobal(std::string event, std::string eventArgsJson);
 
 /* ========================================================= */
 

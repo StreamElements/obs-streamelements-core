@@ -7,6 +7,8 @@
 #include <functional>
 #include <memory>
 
+#include "StreamElementsWebsocketApiServer.hpp"
+
 class StreamElementsBrowserWidget;
 
 class StreamElementsApiMessageHandlerRuntimeStatus {
@@ -60,10 +62,10 @@ public:
 	}
 
 public:
-	virtual bool
-	OnProcessMessageReceived(std::string source,
-				 CefRefPtr<CefProcessMessage> message,
-				 const long cefClientId);
+	virtual bool OnProcessMessageReceived(
+		std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo>
+			source,
+		CefRefPtr<CefProcessMessage> message, const long cefClientId);
 
 	void setInitialHiddenState(bool isHidden)
 	{
@@ -82,14 +84,16 @@ protected:
 		std::shared_ptr<StreamElementsApiMessageHandler>,
 		CefRefPtr<CefProcessMessage> message,
 		CefRefPtr<CefListValue> args, CefRefPtr<CefValue> &result,
-		std::string target, const long cefClientId, std::function<void()> complete_callback);
+		std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo> target, const long cefClientId, std::function<void()> complete_callback);
 
 	void RegisterIncomingApiCallHandler(std::string id,
 					    incoming_call_handler_t handler);
 
 	void InvokeApiCallHandlerAsync(
 		CefRefPtr<CefProcessMessage> message,
-		std::string target, std::string invokeId,
+		std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo>
+			target,
+		std::string invokeId,
 		CefRefPtr<CefListValue> invokeArgs,
 		std::function<void(CefRefPtr<CefValue>)> result_callback,
 		const long cefClientId,
@@ -112,11 +116,18 @@ private:
 	CefRefPtr<CefDictionaryValue> CreateApiCallHandlersDictionaryInternal();
 	CefRefPtr<CefDictionaryValue> CreateApiPropsDictionaryInternal();
 
-	void
-	RegisterIncomingApiCallHandlersInternal(std::string target);
-	void RegisterApiPropsInternal(std::string target);
-	void DispatchHostReadyEventInternal(std::string target);
-	void DispatchEventInternal(std::string target,
+	void RegisterIncomingApiCallHandlersInternal(
+		std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo>
+			target);
+	void RegisterApiPropsInternal(
+		std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo>
+			target);
+	void DispatchHostReadyEventInternal(
+		std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo>
+			target);
+	void DispatchEventInternal(
+		std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo>
+			target,
 				   std::string event,
 				   std::string eventArgsJson);
 

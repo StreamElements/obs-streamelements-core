@@ -336,10 +336,10 @@ void StreamElementsHotkeyManager::hotkeyTriggered(obs_hotkey_id id, obs_hotkey_t
 		std::string dataString = m_registeredHotkeyDataString[id];
 
 		if (pressed) {
-			DispatchClientJSEvent("hostHotkeyPressed", dataString);
+			DispatchJSEventGlobal("hostHotkeyPressed", dataString);
 		}
 		else {
-			DispatchClientJSEvent("hostHotkeyReleased", dataString);
+			DispatchJSEventGlobal("hostHotkeyReleased", dataString);
 		}
 	}
 }

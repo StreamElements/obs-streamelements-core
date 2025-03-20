@@ -35,12 +35,12 @@ public:
 			    Qt::NoModifier) {
 				if (o->objectName() ==
 				    QString("previewWindow")) {
-					DispatchClientJSEvent(
+					DispatchJSEventGlobal(
 						"hostVideoPreviewMouseDoubleClicked",
 						"null");
 				} else if (o->objectName() ==
 						   QString("sourcesDockWindow")) {
-					DispatchClientJSEvent(
+					DispatchJSEventGlobal(
 						"hostCurrentSceneItemsListMouseDoubleClicked",
 						"null");
 				}
@@ -49,7 +49,7 @@ public:
 
 		case QEvent::FocusAboutToChange:
 			if (o->objectName() == "OBSBasicWindow") {
-				DispatchClientJSEvent(
+				DispatchJSEventGlobal(
 					"hostBeforeFocusChange", "null");
 			}
 			break;

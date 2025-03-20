@@ -259,7 +259,7 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 				->GetWebsocketApiServer()
 				->GetPort();
 
-	m_msgHandler = [this](std::string source,
+	m_msgHandler = [this](std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo> source,
 			      CefRefPtr<CefProcessMessage> msg) {
 		std::shared_lock<decltype(s_widgetRegistryMutex)> lock;
 
@@ -316,16 +316,20 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 		std::string("") +
 		"(function() {\n" +
 		"function close() { window.host?.endpoint?.ws?.close(); }\n" +
+		"let abortController = new AbortController();\n" +
 		"function reconnect() {\n" +
+		"abortController = new AbortController();\n" +
 		"close()\n" +
 		"window.host = window.host || {}; window.host.endpoint = { source: '" +
 		m_clientId + "', port: '" + itoa(port, portBuffer, 10) +
 		"', ws: new WebSocket(`ws://localhost:" +
 		itoa(port, portBuffer, 10) + "`) };\n" +
 		"window.host.endpoint.ws.onclose = () => {" +
+		"if (abortController.signal.aborted) return;\n" +
 		"console.warn('SE.Live API websocket endpoint client closed. Reconnecting...');\n" +
 		"setTimeout(() => { reconnect(); }, 100);\n" +
 		"};\n" + "window.host.endpoint.ws.onerror = () => {" +
+		"if (abortController.signal.aborted) return;\n" +
 		"console.warn('SE.Live API websocket endpoint client error. Reconnecting...');\n" +
 		"setTimeout(() => { reconnect(); }, 100);\n" +
 		"};\n" + "window.host.endpoint.ws.onopen = () => {" +
@@ -373,6 +377,9 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 		"		}\n" + "	}\n" + "};\n" +
 		"}\n" +
 		"reconnect();\n" +
+		"window.addEventListener('unload', () => { abortController.abort(); close(); });\n" +
+		// "window.addEventListener('pagehide', () => { abortController.abort(); close(); });\n" +
+		// "window.addEventListener('pageshow', () => { close(); reconnect(); });\n" +
 		"})();\n";
 
 	script += "(function() {\n";

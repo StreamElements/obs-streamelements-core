@@ -207,7 +207,7 @@ protected:
 
 		// Dispatch hostVisibilityChanged event
 		{
-			DispatchClientJSEvent(m_clientId,
+			DispatchJSEventContainer(m_clientId,
 					      "hostContainerVisibilityChanged",
 					      "null");
 		}

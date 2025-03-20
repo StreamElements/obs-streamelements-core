@@ -791,10 +791,10 @@ static void dispatch_scene_event(obs_scene_t *scene,
 	auto json = CefWriteJSON(item, JSON_WRITER_DEFAULT);
 
 	if (is_active_scene(scene)) {
-		DispatchClientJSEvent(currentSceneEventName, json);
+		DispatchJSEventGlobal(currentSceneEventName, json);
 	}
 
-	DispatchClientJSEvent(
+	DispatchJSEventGlobal(
 		otherSceneEventName, json);
 
 	//obs_scene_release(scene);
@@ -934,12 +934,12 @@ static void dispatch_sceneitem_event(void *my_data, obs_sceneitem_t *sceneitem,
 		std::string json =
 			CefWriteJSON(item, JSON_WRITER_DEFAULT).ToString();
 
-		DispatchClientJSEvent(eventName, json);
+		DispatchJSEventGlobal(eventName, json);
 
 		//obs_sceneitem_release(sceneitem);
 		//});
 	} else {
-		DispatchClientJSEvent(eventName, "null");
+		DispatchJSEventGlobal(eventName, "null");
 	}
 }
 

@@ -13,7 +13,7 @@ static std::recursive_mutex s_sync_api_call_mutex;
 		CefRefPtr<CefProcessMessage> message, \
 		CefRefPtr<CefListValue> args, \
 		CefRefPtr<CefValue>& result, \
-		std::string target, \
+		std::shared_ptr<StreamElementsWebsocketApiServer::ClientInfo> target, \
 		const long cefClientId, \
 		std::function<void()> complete_callback) \
 		{ \
