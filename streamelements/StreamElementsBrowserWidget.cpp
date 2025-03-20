@@ -313,27 +313,42 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 	char portBuffer[8];
 
 	std::string script =
+		std::string("") +
+		"(function() {\n" +
+		"function close() { window.host?.endpoint?.ws?.close(); }\n" +
+		"function reconnect() {\n" +
+		"close()\n" +
 		"window.host = window.host || {}; window.host.endpoint = { source: '" +
 		m_clientId + "', port: '" + itoa(port, portBuffer, 10) +
 		"', ws: new WebSocket(`ws://localhost:" +
 		itoa(port, portBuffer, 10) + "`) };\n" +
-		"window.host.endpoint.ws.onopen = () => {" +
+		"window.host.endpoint.ws.onclose = () => {" +
+		"console.warn('SE.Live API websocket endpoint client closed. Reconnecting...');\n" +
+		"setTimeout(() => { reconnect(); }, 100);\n" +
+		"};\n" + "window.host.endpoint.ws.onerror = () => {" +
+		"console.warn('SE.Live API websocket endpoint client error. Reconnecting...');\n" +
+		"setTimeout(() => { reconnect(); }, 100);\n" +
+		"};\n" + "window.host.endpoint.ws.onopen = () => {" +
+		"console.info('SE.Live API websocket endpoint client connected.');\n" +
 		"window.host.endpoint.ws.send(JSON.stringify({ type: 'register', payload: { id: window.host.endpoint.source }}));" +
 		"};" + "window.host.endpoint.ws.onmessage = (event) => {" +
 		"	const json = JSON.parse(event.data);\n" +
 		"	if (json.type === 'register:response') {" +
+		"		console.info('SE.Live API websocket endpoint client received registeration request.');\n" +
 		"		window.host.endpoint.callbacks = {};\n" +
 		"		window.host.endpoint.callbackIdSequence = 0;\n" +
 		"		window.host.endpoint.ws.send(JSON.stringify({ type: 'dispatch', source: window.host.endpoint.source, payload: { name: 'CefRenderProcessHandler::OnContextCreated', args: [] } }));\n" +
 		"	} else if (json.type === 'dispatch') {\n" +
 		"		if (json.payload.name === 'CefRenderProcessHandler::BindJavaScriptProperties') {\n" +
 		"			const defs = JSON.parse(json.payload.args[1]);\n" +
+		"			console.info(`SE.Live API websocket endpoint client received ${Object.keys(defs)?.length || 0} JS property bindings.`);\n" +
 		"			window[json.payload.args[0]] = window[json.payload.args[0]] || {};\n" +
 		"			for (const key of Object.keys(defs)) {\n" +
 		"				window[json.payload.args[0]][key] = defs[key];\n" +
 		"			}\n" +
 		"		} else if (json.payload.name === 'CefRenderProcessHandler::BindJavaScriptFunctions') {\n" +
 		"			const defs = JSON.parse(json.payload.args[1]);\n" +
+		"			console.info(`SE.Live API websocket endpoint client received ${Object.keys(defs)?.length || 0} JS function bindings.`);\n" +
 		"			window[json.payload.args[0]] = window[json.payload.args[0]] || {};\n" +
 		"			for (const key of Object.keys(defs)) {\n" +
 		"				const fullName = `window.${json.payload.args[0]}.${key}`;\n" +
@@ -355,7 +370,10 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 		"			delete window.host.endpoint.callbacks[callbackId];\n" +
 		"		} else if (json.payload.name === 'DispatchJSEvent') {\n" +
 		"			window.dispatchEvent(new CustomEvent(json.payload.args[0], { detail: JSON.parse(json.payload.args[1]) }));\n" +
-		"		}\n" + "	}\n" + "};";
+		"		}\n" + "	}\n" + "};\n" +
+		"}\n" +
+		"reconnect();\n" +
+		"})();\n";
 
 	script += "(function() {\n";
 	script += "	let pressed = '';\n";
