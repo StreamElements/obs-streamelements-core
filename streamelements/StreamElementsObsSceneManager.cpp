@@ -854,16 +854,12 @@ static void dispatch_scene_update(obs_scene_t* scene,
 	if (shouldDelay) {
 		auto sceneRef = obs_scene_get_ref(scene);
 
-		signalHandlerData->Lock();
-
 		std::thread thread([=]() {
 			dispatch_scene_event(sceneRef,
 					     "hostActiveSceneItemListChanged",
 					     "hostSceneItemListChanged");
 
 			obs_scene_release(sceneRef);
-
-			signalHandlerData->Unlock();
 		});
 
 		thread.detach();
