@@ -3184,7 +3184,30 @@ void StreamElementsObsSceneManager::DeserializeAuxiliaryObsSceneItemProperties(
 	if (d->HasKey("order") && d->GetType("order") == VTYPE_INT) {
 		int order = d->GetInt("order");
 
-		obs_sceneitem_set_order_position(sceneitem, order);
+		auto scene = obs_sceneitem_get_scene(sceneitem);
+
+		int itemsCount = 0;
+		obs_scene_enum_items(
+			scene,
+			[](obs_scene_t *, obs_sceneitem_t *,
+			   void *data) -> bool {
+				auto itemsCountPtr = static_cast<int *>(data);
+
+				++(*itemsCountPtr);
+
+				return (*itemsCountPtr) < 2;
+			},
+			&itemsCount);
+
+		if (itemsCount > 1) {
+			// We need the IF case due to a bug in OBS whcih should be fixed by this PR:
+			// https://github.com/obsproject/obs-studio/pull/11985
+			//
+			// TL;DR: When setting non-zero order on the first and only scene item in a scene
+			//        libobs crashes
+			//
+			obs_sceneitem_set_order_position(sceneitem, order);
+		}
 	}
 
 	if (d->HasKey("visible") && d->GetType("visible") == VTYPE_BOOL) {
