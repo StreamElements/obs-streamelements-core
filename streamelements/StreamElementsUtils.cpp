@@ -3889,17 +3889,19 @@ bool DeserializeObsData(CefRefPtr<CefValue> input, obs_data_t *data)
 CefRefPtr<CefValue> SerializeObsData(obs_data_t *data)
 {
 	if (data) {
-		return CefParseJSON(obs_data_get_json(data),
-				    JSON_PARSER_ALLOW_TRAILING_COMMAS);
-	} else {
-		auto result = CefValue::Create();
+		const char *json = obs_data_get_json(data);
 
-		result->SetNull();
-
-		return result;
+		if (json) {
+			return CefParseJSON(json,
+					    JSON_PARSER_ALLOW_TRAILING_COMMAS);
+		}
 	}
 
-	//return result;
+	auto result = CefValue::Create();
+
+	result->SetNull();
+
+	return result;
 }
 
 CefRefPtr<CefValue>
