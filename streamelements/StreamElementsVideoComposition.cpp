@@ -1575,8 +1575,9 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 
 	// Recreate current scene here
 
-	auto currentScene = obs_scene_create_private(
-		GetUniqueSceneNameInternal("Scene", scenesToRemove).c_str());
+	auto currentScene = scene_create_private_with_custom_size(
+		GetUniqueSceneNameInternal("Scene", scenesToRemove).c_str(),
+		m_baseWidth, m_baseHeight);
 
 	{
 		std::unique_lock<decltype(m_mutex)> lock(m_mutex);
