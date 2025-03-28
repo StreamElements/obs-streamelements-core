@@ -431,13 +431,30 @@ public:
 		GetAllScenesInternal(scenes);
 	}
 
+public:
+	bool ShowTransitionPropertiesDialog() {
+		OBSSourceAutoRelease transition = GetTransitionRef();
+
+		if (!transition) {
+			return false;
+		}
+
+		obs_frontend_open_source_properties(transition);
+
+		return true;
+	}
+
 protected:
 	virtual bool RemoveScene(obs_scene_t *scene) = 0;
 	virtual void SetTransition(obs_source_t *transition) = 0;
-	virtual obs_source_t *GetTransition() = 0;
+	virtual obs_source_t *GetTransitionRef() = 0;
 
 	virtual int GetTransitionDurationMilliseconds() = 0;
 	virtual void SetTransitionDurationMilliseconds(int duration) = 0;
+
+protected:
+	void ConnectTransitionEvents();
+	void DisconnectTransitionEvents();
 };
 
 // OBS Main Composition
@@ -494,7 +511,7 @@ protected:
 	virtual bool RemoveScene(obs_scene_t *scene) override;
 
 	virtual void SetTransition(obs_source_t *transition) override;
-	virtual obs_source_t *GetTransition() override;
+	virtual obs_source_t *GetTransitionRef() override;
 
 	virtual int GetTransitionDurationMilliseconds() override
 	{
@@ -603,7 +620,7 @@ public:
 protected:
 	virtual bool RemoveScene(obs_scene_t *scene) override;
 	virtual void SetTransition(obs_source_t *transition) override;
-	virtual obs_source_t *GetTransition() override;
+	virtual obs_source_t *GetTransitionRef() override;
 
 	virtual int GetTransitionDurationMilliseconds() override
 	{
@@ -697,7 +714,7 @@ protected:
 	virtual bool RemoveScene(obs_scene_t *scene) override;
 
 	virtual void SetTransition(obs_source_t *transition) override;
-	virtual obs_source_t *GetTransition() override;
+	virtual obs_source_t *GetTransitionRef() override;
 
 	virtual int GetTransitionDurationMilliseconds() override
 	{

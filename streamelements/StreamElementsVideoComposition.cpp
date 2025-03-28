@@ -295,6 +295,143 @@ static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* compos
 // Composition base
 ////////////////////////////////////////////////////////////////////////////////
 
+static void
+dispatch_transition_changed_event(StreamElementsVideoCompositionBase *self)
+{
+	json11::Json json = json11::Json::object{
+		{"videoCompositionId", self->GetId()},
+	};
+
+	std::string name = "hostActiveTransitionChanged";
+	std::string args = json.dump();
+
+	dispatch_js_event(name, args);
+	dispatch_external_event(name, args);
+}
+
+static void handle_transition_change(void* my_data, calldata_t* cd)
+{
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
+	StreamElementsVideoCompositionBase *self =
+		static_cast<StreamElementsVideoCompositionBase *>(my_data);
+
+	dispatch_transition_changed_event(self);
+}
+
+static void handle_transition_start(void *my_data, calldata_t *cd)
+{
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
+	StreamElementsVideoCompositionBase *self =
+		static_cast<StreamElementsVideoCompositionBase *>(my_data);
+
+
+	obs_source_t *source =
+		static_cast<obs_source_t *>(calldata_ptr(cd, "source"));
+
+	if (!source)
+		return;
+
+	OBSSourceAutoRelease destSource =
+		obs_transition_get_source(source, OBS_TRANSITION_SOURCE_B);
+
+	if (!destSource)
+		return;
+
+	const char *sourceName = obs_source_get_name(destSource);
+
+	if (!sourceName)
+		return;
+
+
+	json11::Json json = json11::Json::object{
+		{"sceneId", GetIdFromPointer(destSource.Get())},
+		{"videoCompositionId",
+		 StreamElementsGlobalStateManager::GetInstance()
+			 ->GetVideoCompositionManager()
+			 ->GetObsNativeVideoComposition()
+			 ->GetId()},
+		{"name", sourceName},
+		{"width", (int)obs_source_get_width(destSource)},
+		{"height", (int)obs_source_get_height(destSource)}};
+
+	std::string name = "hostActiveSceneChanging";
+	std::string args = json.dump();
+
+	dispatch_js_event(name, args);
+	dispatch_external_event(name, args);
+}
+
+static void handle_transition_stop(void *my_data, calldata_t *cd)
+{
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
+	StreamElementsVideoCompositionBase *self =
+		static_cast<StreamElementsVideoCompositionBase *>(my_data);
+
+	OBSSceneAutoRelease scene = self->GetCurrentSceneRef();
+
+	dispatch_scene_changed_event(self, scene);
+	dispatch_scene_item_list_changed_event(self, scene);
+}
+
+void StreamElementsVideoCompositionBase::ConnectTransitionEvents()
+{
+	OBSSourceAutoRelease source = GetTransitionRef();
+
+	if (!source)
+		return;
+
+	auto handler = obs_source_get_signal_handler(source);
+
+	signal_handler_connect(handler, "update", handle_transition_change,
+			       this);
+
+	signal_handler_connect(handler, "update_properties",
+			       handle_transition_change, this);
+
+	signal_handler_connect(handler, "rename", handle_transition_change,
+			       this);
+
+	signal_handler_connect(handler, "transition_start",
+			       handle_transition_start, this);
+
+	signal_handler_connect(handler, "transition_stop",
+			       handle_transition_stop, this);
+
+	signal_handler_connect(handler, "transition_video_stop",
+			       handle_transition_stop, this);
+}
+
+void StreamElementsVideoCompositionBase::DisconnectTransitionEvents()
+{
+	OBSSourceAutoRelease source = GetTransitionRef();
+
+	if (!source)
+		return;
+
+	auto handler = obs_source_get_signal_handler(source);
+
+	signal_handler_disconnect(handler, "update", handle_transition_change,
+				  this);
+
+	signal_handler_disconnect(handler, "update_properties",
+				  handle_transition_change, this);
+
+	signal_handler_disconnect(handler, "rename", handle_transition_change,
+				  this);
+
+	signal_handler_disconnect(handler, "transition_start",
+				  handle_transition_start, this);
+
+	signal_handler_disconnect(handler, "transition_stop",
+				  handle_transition_stop, this);
+
+	signal_handler_disconnect(handler, "transition_video_stop",
+				  handle_transition_stop, this);
+}
+
 void StreamElementsVideoCompositionBase::handle_obs_frontend_event(
 	enum obs_frontend_event event, void* data)
 {
@@ -307,6 +444,10 @@ void StreamElementsVideoCompositionBase::handle_obs_frontend_event(
 	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CLEANUP:
 	case OBS_FRONTEND_EVENT_PROFILE_CHANGING:
 		self->HandleObsSceneCollectionCleanup();
+		break;
+	case OBS_FRONTEND_EVENT_TRANSITION_CHANGED:
+	case OBS_FRONTEND_EVENT_TRANSITION_DURATION_CHANGED:
+		dispatch_transition_changed_event(self);
 		break;
 	default:
 		break;
@@ -572,7 +713,9 @@ StreamElementsVideoCompositionBase::GetSceneItemByName(std::string name,
 void StreamElementsVideoCompositionBase::SerializeTransition(
 	CefRefPtr<CefValue>& output)
 {
-	SerializeObsTransition(GetId(), GetTransition(),
+	OBSSourceAutoRelease transition = GetTransitionRef();
+
+	SerializeObsTransition(GetId(), transition,
 			       GetTransitionDurationMilliseconds(), output);
 }
 
@@ -772,13 +915,9 @@ void StreamElementsObsNativeVideoComposition::SetTransitionDurationMilliseconds(
 	dispatch_external_event("hostVideoCompositionChanged", json);
 }
 
-obs_source_t* StreamElementsObsNativeVideoComposition::GetTransition()
+obs_source_t* StreamElementsObsNativeVideoComposition::GetTransitionRef()
 {
-	auto source = obs_frontend_get_current_transition();
-
-	obs_source_release(source);
-
-	return source;
+	return obs_frontend_get_current_transition();
 }
 
 bool StreamElementsObsNativeVideoComposition::SetCurrentScene(
@@ -1125,6 +1264,8 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 			obs_source_release(source);
 		}
 	}
+
+	ConnectTransitionEvents();
 }
 
 void StreamElementsCustomVideoComposition::SetRecordingEncoders(
@@ -1214,6 +1355,8 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 	}
 
 	if (m_transition) {
+		DisconnectTransitionEvents();
+
 		obs_transition_set(m_transition, nullptr);
 		obs_source_release(m_transition);
 		m_transition = nullptr;
@@ -1416,8 +1559,12 @@ void StreamElementsCustomVideoComposition::SetTransition(
 	{
 		std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
+		DisconnectTransitionEvents();
+
 		old_transition = m_transition;
 		m_transition = obs_source_get_ref(transition);
+
+		ConnectTransitionEvents();
 	}
 
 	obs_transition_swap_begin(transition, old_transition);
@@ -1444,15 +1591,14 @@ void StreamElementsCustomVideoComposition::SetTransition(
 
 	dispatch_js_event("hostVideoCompositionChanged", json);
 	dispatch_external_event("hostVideoCompositionChanged", json);
+	dispatch_transition_changed_event(this);
 }
 
-obs_source_t *StreamElementsCustomVideoComposition::GetTransition()
+obs_source_t *StreamElementsCustomVideoComposition::GetTransitionRef()
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
-	auto transition = m_transition;
-
-	return transition;
+	return obs_source_get_ref(m_transition);
 }
 
 void StreamElementsCustomVideoComposition::ProcessRenderingRoot(
@@ -1475,6 +1621,7 @@ void StreamElementsCustomVideoComposition::SetTransitionDurationMilliseconds(
 
 	dispatch_js_event("hostVideoCompositionChanged", json);
 	dispatch_external_event("hostVideoCompositionChanged", json);
+	dispatch_transition_changed_event(this);
 }
 
 bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
@@ -1511,6 +1658,11 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 					obs_transition_set(
 						m_transition,
 						obs_scene_get_source(scene));
+
+					dispatch_scene_changed_event(this,
+								     scene);
+					dispatch_scene_item_list_changed_event(
+						this, scene);
 				} else {
 					obs_transition_start(
 						m_transition,
@@ -1532,9 +1684,6 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 			if (oldCurrentScene) {
 				obs_scene_release(oldCurrentScene);
 			}
-
-			dispatch_scene_changed_event(this, scene);
-			dispatch_scene_item_list_changed_event(this, scene);
 
 			return true;
 		}
@@ -1689,13 +1838,9 @@ void StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 	dispatch_external_event("hostVideoCompositionChanged", json);
 }
 
-obs_source_t *StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetTransition()
+obs_source_t *StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetTransitionRef()
 {
-	auto source = obs_frontend_get_current_transition();
-
-	obs_source_release(source);
-
-	return source;
+	return obs_frontend_get_current_transition();
 }
 
 bool StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetCurrentScene(

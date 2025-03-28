@@ -60,6 +60,7 @@ void StreamElementsObsActiveSceneTracker::handle_obs_frontend_event(
 	switch (event)
 	{
 	case OBS_FRONTEND_EVENT_TRANSITION_CHANGED:
+	case OBS_FRONTEND_EVENT_TRANSITION_DURATION_CHANGED:
 		self->UpdateTransition();
 		break;
 
@@ -86,6 +87,15 @@ void StreamElementsObsActiveSceneTracker::ClearTransition()
 		signal_handler_disconnect(handler, "transition_start",
 					  handle_transition_start, this);
 
+		signal_handler_disconnect(handler, "update",
+					  handle_transition_changed, this);
+
+		signal_handler_disconnect(handler, "update_properties",
+					  handle_transition_changed, this);
+
+		signal_handler_disconnect(handler, "rename",
+					  handle_transition_changed, this);
+
 		obs_source_release(m_currentTransition);
 
 		m_currentTransition = nullptr;
@@ -105,6 +115,52 @@ void StreamElementsObsActiveSceneTracker::UpdateTransition()
 
 	signal_handler_connect(handler, "transition_start",
 			       handle_transition_start, this);
+
+	signal_handler_connect(handler, "update", handle_transition_changed,
+			       this);
+
+	signal_handler_connect(handler, "update_properties",
+			       handle_transition_changed, this);
+
+	signal_handler_connect(handler, "rename", handle_transition_changed,
+			       this);
+
+	DispatchTransitionChanged();
+}
+
+void StreamElementsObsActiveSceneTracker::DispatchTransitionChanged()
+{
+	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+		return;
+
+	auto videoCompositionManager =
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager();
+
+	if (!videoCompositionManager)
+		return;
+
+	auto videoComposition =
+		videoCompositionManager->GetObsNativeVideoComposition();
+
+	if (!videoComposition)
+		return;
+
+	json11::Json json = json11::Json::object{
+		{"videoCompositionId", videoComposition->GetId()},
+	};
+
+	std::string name = "hostActiveTransitionChanged";
+	std::string args = json.dump();
+
+	dispatch_event(name, args);
+
+	CefRefPtr<CefValue> compositionJsonValue = CefValue::Create();
+
+	videoComposition->SerializeComposition(compositionJsonValue);
+
+	dispatch_event("hostVideoCompositionChanged",
+		       CefWriteJSON(compositionJsonValue, JSON_WRITER_DEFAULT));
 }
 
 void StreamElementsObsActiveSceneTracker::handle_transition_start(
@@ -160,4 +216,15 @@ void StreamElementsObsActiveSceneTracker::handle_transition_start(
 
 		dispatch_event(name, args);
 	}
+}
+
+void StreamElementsObsActiveSceneTracker::handle_transition_changed(void* my_data, calldata_t* cd)
+{
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
+	StreamElementsObsActiveSceneTracker *self =
+		static_cast<StreamElementsObsActiveSceneTracker *>(my_data);
+
+	self->DispatchTransitionChanged();
+
 }

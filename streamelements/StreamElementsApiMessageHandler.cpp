@@ -3185,6 +3185,24 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("showVideoCompositionTransitionPropertiesDialog");
+	{
+		if (args->GetSize()) {
+			auto videoComposition =
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetVideoCompositionManager()
+					->GetVideoCompositionById(
+						args->GetValue(0));
+
+			if (videoComposition.get()) {
+				result->SetBool(
+					videoComposition
+						->ShowTransitionPropertiesDialog());
+			}
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("showPopupMenuAtMousePointerPosition");
 	{
 		if (args->GetSize()) {
