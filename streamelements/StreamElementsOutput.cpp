@@ -99,7 +99,7 @@ static void CleanStopObsOutput(obs_output_t *output, bool forceStop)
 		if (forceStop)
 			obs_output_force_stop(output);
 
-		QApplication::processEvents();
+		// QApplication::processEvents();
 	}
 
 	signal_handler_disconnect(handler, "stop", handle_signal, &future);
