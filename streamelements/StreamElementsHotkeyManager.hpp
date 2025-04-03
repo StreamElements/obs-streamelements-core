@@ -15,6 +15,7 @@ public:
 
 	bool SerializeHotkeyBindings(CefRefPtr<CefValue>& result, bool onlyManagedBindings = false);
 	bool DeserializeHotkeyBindings(CefRefPtr<CefValue> input);
+	bool DeserializeHotkeyTriggers(CefRefPtr<CefValue> input);
 
 	obs_hotkey_id DeserializeSingleHotkeyBinding(CefRefPtr<CefValue> input);
 

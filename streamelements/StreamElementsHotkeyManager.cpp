@@ -112,6 +112,43 @@ static CefRefPtr<CefDictionaryValue> SerializeKeyCombination(obs_key_combination
 	return comboDict;
 }
 
+static void DeserializeAndApplyHotkeyTriggersToHotkeyID(
+	obs_hotkey_id id, CefRefPtr<CefListValue> triggersList)
+{
+	std::vector<obs_key_combination_t> combinations;
+
+	if (triggersList.get()) {
+		for (size_t index = 0; index < triggersList->GetSize();
+		     ++index) {
+			CefRefPtr<CefDictionaryValue> d =
+				triggersList->GetDictionary(index);
+
+			if (!d.get()) {
+				continue;
+			}
+
+			obs_key_combination_t combination =
+				DeserializeKeyCombination(
+					triggersList->GetValue(index));
+
+			if (!obs_key_combination_is_empty(combination)) {
+				combinations.push_back(combination);
+			}
+		}
+	}
+
+	// Update hotkey key combinations
+	auto AtomicUpdate = [&]() {
+		obs_hotkey_load_bindings(id, combinations.data(),
+					 combinations.size());
+	};
+	using AtomicUpdate_t = decltype(&AtomicUpdate);
+
+	obs_hotkey_update_atomic(
+		[](void *d) { (*static_cast<AtomicUpdate_t>(d))(); },
+		static_cast<void *>(&AtomicUpdate));
+}
+
 void StreamElementsHotkeyManager::hotkey_change_handler(void*, calldata_t*)
 {
 	AdviseHostHotkeyBindingsChanged();
@@ -305,6 +342,51 @@ bool StreamElementsHotkeyManager::SerializeHotkeyBindings(CefRefPtr<CefValue>& o
 	return true;
 }
 
+bool StreamElementsHotkeyManager::DeserializeHotkeyTriggers(
+	CefRefPtr<CefValue> input)
+{
+	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
+		return false;
+
+	auto d = input->GetDictionary();
+
+	if (!d->HasKey("id") || d->GetType("id") != VTYPE_INT)
+		return false;
+
+	if (!d->HasKey("triggers") || d->GetType("triggers") != VTYPE_LIST)
+		return false;
+
+	struct local_context {
+		 obs_hotkey_id id;
+		 bool has_id;
+	 };
+
+	local_context context = {(obs_hotkey_id)d->GetInt("id"), false};
+
+	obs_enum_hotkeys(
+		[](void *data, obs_hotkey_id id, obs_hotkey_t *key) -> bool {
+			auto context = static_cast<local_context *>(data);
+
+			if (id == context->id) {
+				context->has_id = true;
+
+				return false;
+			}
+
+			return true;
+		},
+		&context);
+
+	if (!context.has_id)
+		return false;
+
+	DeserializeAndApplyHotkeyTriggersToHotkeyID(context.id,
+						    d->GetList("triggers"));
+
+	return true;
+}
+
+
 bool StreamElementsHotkeyManager::DeserializeHotkeyBindings(CefRefPtr<CefValue> input)
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
@@ -441,40 +523,11 @@ obs_hotkey_id StreamElementsHotkeyManager::DeserializeSingleHotkeyBinding(CefRef
 		m_registeredHotkeyDataString[id] = dataString;
 	}
 
-	std::vector<obs_key_combination_t> combinations;
-
 	if (root->HasKey("triggers") && root->GetValue("triggers")->GetType() == VTYPE_LIST) {
-		CefRefPtr<CefListValue> triggersList = root->GetList("triggers");
-
-		if (triggersList.get()) {
-			for (size_t index = 0; index < triggersList->GetSize(); ++index) {
-				CefRefPtr<CefDictionaryValue> d = triggersList->GetDictionary(index);
-
-				if (!d.get()) {
-					continue;
-				}
-
-				obs_key_combination_t combination = DeserializeKeyCombination(triggersList->GetValue(index));
-
-				if (!obs_key_combination_is_empty(combination)) {
-					combinations.push_back(combination);
-				}
-			}
-		}
+		DeserializeAndApplyHotkeyTriggersToHotkeyID(id, root->GetList("triggers"));
+	} else {
+		DeserializeAndApplyHotkeyTriggersToHotkeyID(id, CefListValue::Create());
 	}
-
-	// Update hotkey key combinations
-	auto AtomicUpdate = [&]()
-	{
-		obs_hotkey_load_bindings(id,
-			combinations.data(), combinations.size());
-	};
-	using AtomicUpdate_t = decltype(&AtomicUpdate);
-
-	obs_hotkey_update_atomic([](void *d)
-	{
-		(*static_cast<AtomicUpdate_t>(d))();
-	}, static_cast<void*>(&AtomicUpdate));
 
 	return id;
 }

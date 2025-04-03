@@ -1571,14 +1571,30 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
-	API_HANDLER_BEGIN("removeHotkeyBindingById");
+	API_HANDLER_BEGIN("setHotkeyBindingTriggers");
 	{
 		if (args->GetSize()) {
 			result->SetBool(
 				StreamElementsGlobalStateManager::GetInstance()
 					->GetHotkeyManager()
+					->DeserializeHotkeyTriggers(
+						args->GetValue(0)));
+		} else {
+			result->SetNull();
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeHotkeyBindingById");
+	{
+		if (args->GetSize() && args->GetType(0) == VTYPE_INT) {
+			result->SetBool(
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetHotkeyManager()
 					->RemoveHotkeyBindingById(
 						args->GetInt(0)));
+		} else {
+			result->SetNull();
 		}
 	}
 	API_HANDLER_END();
