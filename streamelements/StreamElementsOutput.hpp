@@ -510,7 +510,9 @@ public:
 	{
 	}
 
-	virtual ~StreamElementsObsNativeReplayBufferOutput() {}
+	virtual ~StreamElementsObsNativeReplayBufferOutput() {
+		Stop();
+	}
 
 	virtual bool CanRemove() override { return false; }
 	virtual bool CanChange() override { return false; }
@@ -582,7 +584,9 @@ public:
 	{
 	}
 
-	virtual ~StreamElementsCustomReplayBufferOutput() { Stop(); }
+	virtual ~StreamElementsCustomReplayBufferOutput() {
+		Stop();
+	}
 
 	virtual bool CanDisable() override;
 
