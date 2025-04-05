@@ -3028,8 +3028,10 @@ void StreamElementsObsSceneManager::SetObsScenePropertiesById(
 			d->GetValue("auxiliaryData")->Copy());
 	}
 
+	#if SE_ENABLE_SCENE_ICONS
 	// This one is required, otherwise icon is not always reset
 	QApplication::processEvents();
+	#endif
 
 	output->SetBool(result);
 }
