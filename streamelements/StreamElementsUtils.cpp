@@ -17,6 +17,7 @@
 #include <regex>
 #include <unordered_map>
 #include <filesystem>
+#include <regex>
 
 #include <curl/curl.h>
 
@@ -32,7 +33,8 @@
 #include <QUrl>
 #include <QApplication>
 #include <QProcess>
-#include <regex>
+#include <QLatin1String>
+#include <QStringList>
 
 #include "deps/picosha2/picosha2.h"
 
@@ -84,10 +86,10 @@ static config_t *obs_fe_user_config()
 
 /* ========================================================= */
 
-static inline const char *safe_str(const char *s)
+static inline const char *safe_str(const char *s, const char *defaultValue = "(NULL)")
 {
 	if (s == NULL)
-		return "(NULL)";
+		return defaultValue;
 	else
 		return s;
 }
@@ -4250,4 +4252,100 @@ obs_encoder_t* DeserializeObsVideoEncoder(CefRefPtr<CefValue> input)
 obs_encoder_t *DeserializeObsAudioEncoder(CefRefPtr<CefValue> input, int mixer_idx)
 {
 	return DeserializeObsEncoder(OBS_ENCODER_VIDEO, input, mixer_idx);
+}
+
+void SerializeLoadedObsModules(CefRefPtr<CefValue>& output)
+{
+	struct local_context {
+		CefRefPtr<CefListValue> list = CefListValue::Create();
+	};
+
+	local_context context;
+
+	obs_enum_modules(
+		[](void *param, obs_module_t *module) -> void {
+			auto context = static_cast<local_context *>(param);
+
+			// auto libHandle = obs_get_module_lib(module);
+
+			std::string file_name =
+				safe_str(obs_get_module_file_name(module));
+
+			std::string binary_path = safe_str(
+				obs_get_module_binary_path(module), "");
+
+			char* binaryAbsPath = os_get_abs_path_ptr(binary_path.c_str());
+			binary_path = safe_str(binaryAbsPath, "");
+			bfree(binaryAbsPath);
+
+			std::string name =
+				safe_str(obs_get_module_name(module), "");
+			std::string author =
+				safe_str(obs_get_module_author(module), "");
+			std::string desc = safe_str(
+				obs_get_module_description(module), "");
+
+			auto item = CefDictionaryValue::Create();
+
+			item->SetString("binaryFileName", file_name);
+			item->SetString("name", name);
+			item->SetString("binaryFilePath", binary_path);
+			item->SetString("author", author);
+			item->SetString("description", desc);
+
+			context->list->SetDictionary(context->list->GetSize(),
+						     item);
+		},
+		&context);
+
+	output->SetList(context.list);
+}
+
+void DeserializeRevealFileInGraphicalShell(CefRefPtr<CefValue> input, CefRefPtr<CefValue>& output)
+{
+	output->SetBool(false);
+
+	if (!input.get() || input->GetType() != VTYPE_STRING)
+		return;
+
+	const QString pathIn = input->GetString().ToString().c_str();
+
+	const QFileInfo fileInfo(pathIn);
+
+	if (!fileInfo.exists())
+		return;
+
+	#ifdef WIN32
+		QString explorer = QStandardPaths::findExecutable(QString::fromLatin1("explorer.exe"));
+
+		if (explorer.isEmpty()) {
+			return;
+		}
+
+		QStringList param;
+		if (!fileInfo.isDir())
+			param += QLatin1String("/select,");
+		param += QDir::toNativeSeparators(fileInfo.canonicalFilePath());
+
+		output->SetBool(QProcess::startDetached(explorer, param));
+	#endif
+
+	#ifdef APPLE
+		QStringList scriptArgs;
+		scriptArgs
+			<< QLatin1String("-e")
+			<< QString::fromLatin1(
+				   "tell application \"Finder\" to reveal POSIX file \"%1\"")
+				   .arg(fileInfo.canonicalFilePath());
+		QProcess::execute(QLatin1String("/usr/bin/osascript"),
+				  scriptArgs);
+		scriptArgs.clear();
+		scriptArgs
+			<< QLatin1String("-e")
+			<< QLatin1String(
+				   "tell application \"Finder\" to activate");
+		output->SetBool(
+			QProcess::execute(QLatin1String("/usr/bin/osascript"),
+					  scriptArgs) == 0);
+	#endif
 }

@@ -3232,6 +3232,21 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("getAllLoadedHostModules");
+	{
+		SerializeLoadedObsModules(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("openFileLocationInHostFileManager");
+	{
+		if (args->GetSize() > 0) {
+			DeserializeRevealFileInGraphicalShell(args->GetValue(0),
+							      result);
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("crashProgram");
 	{
 		// Crash

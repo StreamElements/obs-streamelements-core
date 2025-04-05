@@ -536,3 +536,9 @@ CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e);
 obs_encoder_t *DeserializeObsVideoEncoder(CefRefPtr<CefValue> input);
 obs_encoder_t *DeserializeObsAudioEncoder(CefRefPtr<CefValue> input,
 					  int mixer_idx = -1);
+
+/* ========================================================= */
+
+void SerializeLoadedObsModules(CefRefPtr<CefValue> &output);
+void DeserializeRevealFileInGraphicalShell(CefRefPtr<CefValue> input,
+					   CefRefPtr<CefValue> &output);
