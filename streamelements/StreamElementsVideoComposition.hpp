@@ -359,7 +359,9 @@ public:
 
 		d->SetString("id", GetIdFromPointer(scene));
 		d->SetString("videoCompositionId", GetId());
-		d->SetString("name", obs_source_get_name(scene));
+
+		const char *name = obs_source_get_name(scene);
+		d->SetString("name", name ? name : "");
 
 		d->SetBool("active",
 			   GetCurrentScene() == obs_scene_from_source(scene));
