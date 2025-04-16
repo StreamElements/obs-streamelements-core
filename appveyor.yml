@@ -183,7 +183,7 @@ for:
       - sh: >-
           echo if this is a pull request build, complete build. otherwise, upload artifacts to google storage
 
-          # if [ "$APPVEYOR_PULL_REQUEST_HEAD_COMMIT" != "" ]; then exit 0; fi
+          if [ "$APPVEYOR_PULL_REQUEST_HEAD_COMMIT" != "" ]; then exit 0; fi
 
 
 
@@ -332,7 +332,7 @@ for:
     - cmd: >-
         echo if this is a pull request build, complete build. otherwise, upload artifacts to google storage
 
-        echo if not "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" exit 0
+        if not "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" exit 0
 
 
 
