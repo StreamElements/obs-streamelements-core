@@ -209,12 +209,11 @@ for:
 
           cd $APPVEYOR_BUILD_FOLDER
 
-          ~/google-cloud-sdk/bin/gsutil cp "$APPVEYOR_BUILD_FOLDER/build_x86_64.zip" "gs://se-obs-builds/obs-streamelements-installer/latest/macos/build_x86_64.zip"
+          ~/google-cloud-sdk/bin/gsutil cp "$APPVEYOR_BUILD_FOLDER/build_x86_64.zip" "gs://se-obs-builds/obs-streamelements-core/latest/macos/build_x86_64.zip"
 
-          ~/google-cloud-sdk/bin/gsutil cp "$APPVEYOR_BUILD_FOLDER/build_arm64.zip" "gs://se-obs-builds/obs-streamelements-installer/latest/macos/build_arm64.zip"
+          ~/google-cloud-sdk/bin/gsutil cp "$APPVEYOR_BUILD_FOLDER/build_arm64.zip" "gs://se-obs-builds/obs-streamelements-core/latest/macos/build_arm64.zip"
 
-          ~/google-cloud-sdk/bin/gsutil cp "$APPVEYOR_BUILD_FOLDER/Version.generated.hpp" "gs://se-obs-builds/obs-streamelements-installer/latest/macos/Version.generated.hpp"
-
+          ~/google-cloud-sdk/bin/gsutil cp "$APPVEYOR_BUILD_FOLDER/Version.generated.hpp" "gs://se-obs-builds/obs-streamelements-core/latest/macos/Version.generated.hpp"
 
     test: off
     artifacts:
@@ -373,16 +372,16 @@ for:
       name: build64
     - path: streamelements\Version.generated.hpp
       name: version.generated.hpp
-    deploy:
-    - provider: S3
-      access_key_id: AKIAJESHQW2DGHPN57KQ
-      secret_access_key:
-        secure: lhOyqT4/E0Oqv8BOQR81rx/SweOIbDELTYW7iJTqRz5shmkZ8eXMCgFzcIuXyvpB
-      bucket: obs-builds
-      folder: obs-streamelements-core/latest/windows
-      artifact: build64,version.generated.hpp
-      max_error_retry: 5
-      on:
-        branch: master
+    #deploy:
+    #- provider: S3
+    #  access_key_id: AKIAJESHQW2DGHPN57KQ
+    #  secret_access_key:
+    #    secure: lhOyqT4/E0Oqv8BOQR81rx/SweOIbDELTYW7iJTqRz5shmkZ8eXMCgFzcIuXyvpB
+    #  bucket: obs-builds
+    #  folder: obs-streamelements-core/latest/windows
+    #  artifact: build64,version.generated.hpp
+    #  max_error_retry: 5
+    #  on:
+    #    branch: master
     on_success:
     - cmd: echo.All done.
