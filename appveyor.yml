@@ -221,17 +221,17 @@ for:
       name: build
     - path: Version.generated.hpp
       name: version.generated.hpp
-    deploy:
-    - provider: S3
-      access_key_id: AKIAJESHQW2DGHPN57KQ
-      secret_access_key:
-        secure: lhOyqT4/E0Oqv8BOQR81rx/SweOIbDELTYW7iJTqRz5shmkZ8eXMCgFzcIuXyvpB
-      bucket: obs-builds
-      folder: obs-streamelements-core/latest/macos
-      artifact: build,version.generated.hpp
-      max_error_retry: 5
-      on:
-        branch: master
+    #deploy:
+    #- provider: S3
+    #  access_key_id: AKIAJESHQW2DGHPN57KQ
+    #  secret_access_key:
+    #    secure: lhOyqT4/E0Oqv8BOQR81rx/SweOIbDELTYW7iJTqRz5shmkZ8eXMCgFzcIuXyvpB
+    #  bucket: obs-builds
+    #  folder: obs-streamelements-core/latest/macos
+    #  artifact: build,version.generated.hpp
+    #  max_error_retry: 5
+    #  on:
+    #   branch: master
     on_success:
     - cmd: echo.All done.
 
