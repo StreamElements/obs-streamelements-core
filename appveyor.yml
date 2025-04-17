@@ -10,6 +10,9 @@ environment:
   BUGSPLAT_USERNAME: ilya77@gmail.com
   BUGSPLAT_PASSWORD:
     secure: VuWpM4WRVv4EBc27bOHR4Q==
+  GS_ACCESS_KEY_ID: GOOG1EUHPDNLJSIO6BYONVXJ5EVRHVGWLZKM6W2JG3RLFC2HU5JRYZQWQ7IQP
+  GS_SECRET_ACCESS_KEY:
+    secure: JNxZoufjrYu4BTO5KNsm9mkiPmxUlIBfeABlnt9OAdh16PrY0xLQLnWdY+PcULyB
 matrix:
   fast_finish: true
 for:
@@ -177,23 +180,58 @@ for:
 
           if [ $? -ne 0 ]; then exit 1; fi
 
+      - sh: >-
+          echo if this is a pull request build, complete build. otherwise, upload artifacts to google storage
+
+          if [ "$APPVEYOR_PULL_REQUEST_HEAD_COMMIT" != "" ]; then exit 0; fi
+
+
+
+          echo install gsutil
+
+          curl https://sdk.cloud.google.com > /tmp/install-google-cloud-sdk.sh
+
+          bash /tmp/install-google-cloud-sdk.sh --disable-prompts
+
+
+
+          echo prepare a .boto file for gsutil
+
+          echo [Credentials] >~/.boto
+
+          echo gs_access_key_id = $GS_ACCESS_KEY_ID >>~/.boto
+
+          echo gs_secret_access_key = $GS_SECRET_ACCESS_KEY >>~/.boto
+
+
+
+          echo upload artifacts to google storage
+
+          cd $APPVEYOR_BUILD_FOLDER
+
+          ~/google-cloud-sdk/bin/gsutil cp "$APPVEYOR_BUILD_FOLDER/build_x86_64.zip" "gs://se-obs-builds/obs-streamelements-core/latest/macos/build_x86_64.zip"
+
+          ~/google-cloud-sdk/bin/gsutil cp "$APPVEYOR_BUILD_FOLDER/build_arm64.zip" "gs://se-obs-builds/obs-streamelements-core/latest/macos/build_arm64.zip"
+
+          ~/google-cloud-sdk/bin/gsutil cp "$APPVEYOR_BUILD_FOLDER/Version.generated.hpp" "gs://se-obs-builds/obs-streamelements-core/latest/macos/Version.generated.hpp"
+
     test: off
     artifacts:
     - path: build_*.zip
       name: build
     - path: Version.generated.hpp
       name: version.generated.hpp
-    deploy:
-    - provider: S3
-      access_key_id: AKIAJESHQW2DGHPN57KQ
-      secret_access_key:
-        secure: lhOyqT4/E0Oqv8BOQR81rx/SweOIbDELTYW7iJTqRz5shmkZ8eXMCgFzcIuXyvpB
-      bucket: obs-builds
-      folder: obs-streamelements-core/latest/macos
-      artifact: build,version.generated.hpp
-      max_error_retry: 5
-      on:
-        branch: master
+    #deploy:
+    #- provider: S3
+    #  access_key_id: AKIAJESHQW2DGHPN57KQ
+    #  secret_access_key:
+    #    secure: lhOyqT4/E0Oqv8BOQR81rx/SweOIbDELTYW7iJTqRz5shmkZ8eXMCgFzcIuXyvpB
+    #  bucket: obs-builds
+    #  folder: obs-streamelements-core/latest/macos
+    #  artifact: build,version.generated.hpp
+    #  max_error_retry: 5
+    #  on:
+    #   branch: master
     on_success:
     - cmd: echo.All done.
 
@@ -291,22 +329,59 @@ for:
 
         cd /d c:\local\obs-studio
 
+    - cmd: >-
+        echo if this is a pull request build, complete build. otherwise, upload artifacts to google storage
+
+        if not "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" exit 0
+
+
+
+        echo install gsutil
+
+        cd /d c:\local\source
+
+        curl https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe --output GoogleCloudSDKInstaller.exe
+
+        start /wait GoogleCloudSDKInstaller.exe /S
+
+        refreshenv
+
+
+
+        echo prepare a .boto file for gsutil
+
+        echo.[Credentials] >%USERPROFILE%\.boto
+
+        echo.gs_access_key_id = %GS_ACCESS_KEY_ID% >>%USERPROFILE%\.boto
+
+        echo.gs_secret_access_key = %GS_SECRET_ACCESS_KEY% >>%USERPROFILE%\.boto
+
+
+
+        echo upload artifacts to google storage
+      
+        cd /d c:\local\source
+
+        gsutil cp "build64_qt6.zip" "gs://se-obs-builds/obs-streamelements-core/latest/windows/build64_qt6.zip"
+
+        gsutil cp "streamelements\Version.generated.hpp" "gs://se-obs-builds/obs-streamelements-core/latest/windows/Version.generated.hpp"
+
     test: off
     artifacts:
     - path: build64_qt6.zip
       name: build64
     - path: streamelements\Version.generated.hpp
       name: version.generated.hpp
-    deploy:
-    - provider: S3
-      access_key_id: AKIAJESHQW2DGHPN57KQ
-      secret_access_key:
-        secure: lhOyqT4/E0Oqv8BOQR81rx/SweOIbDELTYW7iJTqRz5shmkZ8eXMCgFzcIuXyvpB
-      bucket: obs-builds
-      folder: obs-streamelements-core/latest/windows
-      artifact: build64,version.generated.hpp
-      max_error_retry: 5
-      on:
-        branch: master
+    #deploy:
+    #- provider: S3
+    #  access_key_id: AKIAJESHQW2DGHPN57KQ
+    #  secret_access_key:
+    #    secure: lhOyqT4/E0Oqv8BOQR81rx/SweOIbDELTYW7iJTqRz5shmkZ8eXMCgFzcIuXyvpB
+    #  bucket: obs-builds
+    #  folder: obs-streamelements-core/latest/windows
+    #  artifact: build64,version.generated.hpp
+    #  max_error_retry: 5
+    #  on:
+    #    branch: master
     on_success:
     - cmd: echo.All done.
