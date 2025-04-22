@@ -338,7 +338,7 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 		"};" + "window.host.endpoint.ws.onmessage = (event) => {" +
 		"	const json = JSON.parse(event.data);\n" +
 		"	if (json.type === 'register:response') {" +
-		"		console.info('SE.Live API websocket endpoint client received registeration request.');\n" +
+		"		console.info('SE.Live API websocket endpoint client received registration request.');\n" +
 		"		window.host.endpoint.callbacks = {};\n" +
 		"		window.host.endpoint.callbackIdSequence = 0;\n" +
 		"		window.host.endpoint.ws.send(JSON.stringify({ type: 'dispatch', source: window.host.endpoint.source, payload: { name: 'CefRenderProcessHandler::OnContextCreated', args: [] } }));\n" +
