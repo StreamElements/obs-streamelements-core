@@ -184,8 +184,22 @@ static void write_file_content(std::string &path, const char *content)
 
 /* ================================================================= */
 
+static void SwapCrashesFolders() {
+	char* folder_path = obs_module_config_path("crashes");
+	std::string current = std::string(folder_path) + "/current";
+	std::string prev = std::string(folder_path) + "/previous";
+	bfree(folder_path);
+	
+	std::filesystem::remove_all(prev);
+	
+	os_rmdir(prev.c_str());
+	os_rename(current.c_str(), prev.c_str());
+	
+	os_mkdirs(current.c_str());
+}
+
 static std::string GetTemporaryFolderPath() {
-	char* folder_path = obs_module_file("crashes/current");
+	char* folder_path = obs_module_config_path("crashes/current");
 	std::string result = folder_path;
 	bfree(folder_path);
 	
@@ -198,7 +212,7 @@ static bool GetTemporaryFilePath(const char *basename,
 					const char *ext,
 					std::string &tempBufPath)
 {
-	tempBufPath = GetTemporaryFolderPath() + basename + std::string(ext);
+	tempBufPath = GetTemporaryFolderPath() + std::string("/") + basename + std::string(ext);
 	
 	return true;
 }
@@ -413,7 +427,7 @@ static inline void AddObsConfigurationFiles()
 
 		d->SetString("machineUniqueId", GetComputerSystemUniqueId());
 
-		addCefValueToZip(basicInfo, L"system\\basic.json");
+		addCefValueToZip(basicInfo, L"system/basic.json");
 	}
 
 	GetAsyncCallContextStack([&](const StreamElementsAsyncCallContextStack_t
@@ -748,6 +762,11 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
         
 	if (!AmIBeingDebugged())
 		exn_init();
+	    
+	    SwapCrashesFolders();
+	    
+	    // test
+	    // AddObsConfigurationFiles();
 
 	    [[BugSplat shared] setDelegate:[[MyBugSplatDelegate alloc] init]];
 	    [[BugSplat shared] setPresentModally:YES];
