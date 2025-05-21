@@ -376,10 +376,9 @@ static void handle_transition_stop(void *my_data, calldata_t *cd)
 	dispatch_scene_item_list_changed_event(self, scene);
 }
 
-void StreamElementsVideoCompositionBase::ConnectTransitionEvents()
+void StreamElementsVideoCompositionBase::ConnectTransitionEvents(
+	obs_source_t *source)
 {
-	OBSSourceAutoRelease source = GetTransitionRef();
-
 	if (!source)
 		return;
 
@@ -404,10 +403,9 @@ void StreamElementsVideoCompositionBase::ConnectTransitionEvents()
 			       handle_transition_stop, this);
 }
 
-void StreamElementsVideoCompositionBase::DisconnectTransitionEvents()
+void StreamElementsVideoCompositionBase::DisconnectTransitionEvents(
+	obs_source_t *source)
 {
-	OBSSourceAutoRelease source = GetTransitionRef();
-
 	if (!source)
 		return;
 
@@ -1265,7 +1263,7 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 		}
 	}
 
-	ConnectTransitionEvents();
+	ConnectTransitionEvents(m_transition);
 }
 
 void StreamElementsCustomVideoComposition::SetRecordingEncoders(
@@ -1355,7 +1353,7 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 	}
 
 	if (m_transition) {
-		DisconnectTransitionEvents();
+		DisconnectTransitionEvents(m_transition);
 
 		obs_transition_set(m_transition, nullptr);
 		obs_source_release(m_transition);
@@ -1559,12 +1557,12 @@ void StreamElementsCustomVideoComposition::SetTransition(
 	{
 		std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
-		DisconnectTransitionEvents();
+		DisconnectTransitionEvents(m_transition);
 
 		old_transition = m_transition;
 		m_transition = obs_source_get_ref(transition);
 
-		ConnectTransitionEvents();
+		ConnectTransitionEvents(m_transition);
 	}
 
 	obs_transition_swap_begin(transition, old_transition);

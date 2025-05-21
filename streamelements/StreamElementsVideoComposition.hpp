@@ -455,8 +455,8 @@ protected:
 	virtual void SetTransitionDurationMilliseconds(int duration) = 0;
 
 protected:
-	void ConnectTransitionEvents();
-	void DisconnectTransitionEvents();
+	void ConnectTransitionEvents(obs_source_t* source);
+	void DisconnectTransitionEvents(obs_source_t *source);
 };
 
 // OBS Main Composition
