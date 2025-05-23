@@ -590,7 +590,6 @@ private:
 	video_t *m_video = nullptr;
 
 	obs_source_t *m_transition = nullptr;
-	bool m_transition_first_scene_change = true;
 	int m_transitionDurationMs = 0;
 
 	std::vector<obs_scene_t *> m_scenes;

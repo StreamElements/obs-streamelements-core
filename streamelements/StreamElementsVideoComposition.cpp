@@ -1223,8 +1223,6 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 
 	obs_transition_set(m_transition, obs_scene_get_source(currentScene));
 
-	m_transition_first_scene_change = true;
-
 	auto source = obs_scene_get_source(currentScene);
 	if (source) {
 		obs_source_inc_showing(source);
@@ -1564,8 +1562,6 @@ void StreamElementsCustomVideoComposition::SetTransition(
 		old_transition = m_transition;
 		m_transition = obs_source_get_ref(transition);
 
-		m_transition_first_scene_change = true;
-
 		ConnectTransitionEvents(m_transition);
 	}
 
@@ -1662,13 +1658,7 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 				std::string transition_id =
 					obs_source_get_id(m_transition);
 
-				bool isFirstSceneChange =
-					os_atomic_exchange_bool(
-						&m_transition_first_scene_change,
-						false);
-
-				if (isFirstSceneChange && transition_id ==
-				    "obs_stinger_transition") {
+				if (transition_id == "obs_stinger_transition") {
 					//
 					// You may be wondering what is going on here.
 					//
@@ -1679,8 +1669,7 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 					// Calling obs_transition_start() twice seems to fix this issue, and not
 					// interfere with other transition types.
 					//
-					// We will still execute it only once after transition is being set, and
-					// only for the STINGER transition just to be safe.
+					// We will still execute it only for the STINGER transition just to be safe.
 					//
 					obs_transition_start(
 						m_transition,
