@@ -1219,9 +1219,11 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 
 	add_scene_signals(currentScene, m_signalHandlerData);
 
+	transition_set_defaults(m_transition, m_baseWidth, m_baseHeight);
+
 	obs_transition_set(m_transition, obs_scene_get_source(currentScene));
 
-	transition_set_defaults(m_transition, m_baseWidth, m_baseHeight);
+	m_transition_first_scene_change = true;
 
 	auto source = obs_scene_get_source(currentScene);
 	if (source) {
@@ -1562,6 +1564,8 @@ void StreamElementsCustomVideoComposition::SetTransition(
 		old_transition = m_transition;
 		m_transition = obs_source_get_ref(transition);
 
+		m_transition_first_scene_change = true;
+
 		ConnectTransitionEvents(m_transition);
 	}
 
@@ -1573,14 +1577,15 @@ void StreamElementsCustomVideoComposition::SetTransition(
 	obs_transition_set(old_transition, nullptr);
 	obs_source_release(old_transition);
 
+	transition_set_defaults(m_transition, m_baseWidth, m_baseHeight);
+
 	{
 		std::shared_lock<decltype(m_currentSceneMutex)> currentSceneLock(
 			m_currentSceneMutex);
+
 		obs_transition_set(transition,
 				   obs_scene_get_source(m_currentScene));
 	}
-
-	transition_set_defaults(m_transition, m_baseWidth, m_baseHeight);
 
 	auto jsonValue = CefValue::Create();
 	SerializeComposition(jsonValue);
@@ -1649,19 +1654,34 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 					}
 				}
 
-				float t = obs_transition_get_time(m_transition);
-				bool stillTransitioning = t < 1.0f && t > 0.0f;
+				obs_transition_start(
+					m_transition, OBS_TRANSITION_MODE_AUTO,
+					GetTransitionDurationMilliseconds(),
+					obs_scene_get_source(scene));
 
-				if (stillTransitioning) {
-					obs_transition_set(
-						m_transition,
-						obs_scene_get_source(scene));
+				std::string transition_id =
+					obs_source_get_id(m_transition);
 
-					dispatch_scene_changed_event(this,
-								     scene);
-					dispatch_scene_item_list_changed_event(
-						this, scene);
-				} else {
+				bool isFirstSceneChange =
+					os_atomic_exchange_bool(
+						&m_transition_first_scene_change,
+						false);
+
+				if (isFirstSceneChange && transition_id ==
+				    "obs_stinger_transition") {
+					//
+					// You may be wondering what is going on here.
+					//
+					// Apparently, the STINGER transition, sets it's duration only after the
+					// first call to "obs_transition_start", and does not execute the first time it
+					// is being called, performing a CUT transition instead.
+					//
+					// Calling obs_transition_start() twice seems to fix this issue, and not
+					// interfere with other transition types.
+					//
+					// We will still execute it only once after transition is being set, and
+					// only for the STINGER transition just to be safe.
+					//
 					obs_transition_start(
 						m_transition,
 						OBS_TRANSITION_MODE_AUTO,

@@ -4048,9 +4048,7 @@ obs_source_t *GetExistingObsTransition(std::string lookupId)
 		std::string id = obs_source_get_id(source);
 
 		if (id == lookupId) {
-			result = source;
-
-			obs_source_get_ref(result);
+			result = obs_source_get_ref(source);
 
 			break;
 		}
@@ -4061,7 +4059,7 @@ obs_source_t *GetExistingObsTransition(std::string lookupId)
 	return result;
 }
 
-bool DeserializeObsTransition(CefRefPtr<CefValue> input, obs_source_t **t,
+bool DeserializeObsTransition(CefRefPtr<CefValue> input, obs_source_t **out_transition,
 			      int *durationMilliseconds, bool useExisting)
 {
 	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
@@ -4074,23 +4072,28 @@ bool DeserializeObsTransition(CefRefPtr<CefValue> input, obs_source_t **t,
 
 	std::string id = d->GetString("class");
 
-	if (useExisting) {
-		*t = GetExistingObsTransition(id);
-
-		if (!*t)
-			return false;
-	} else {
-		*t = obs_source_create_private(id.c_str(), id.c_str(), nullptr);
-	}
-
+	OBSDataAutoRelease settings = nullptr;
+	OBSSourceAutoRelease transition = nullptr;
+	
 	if (d->HasKey("settings")) {
-		auto settings = obs_data_create();
+		settings = obs_data_create();
 
 		DeserializeObsData(d->GetValue("settings"), settings);
+	}
 
-		obs_source_update(*t, settings);
+	if (useExisting) {
+		transition = GetExistingObsTransition(id);
 
-		obs_data_release(settings);
+		if (!transition) {
+			return false;
+		}
+	} else {
+		transition = obs_source_create_private(id.c_str(), id.c_str(),
+						       settings);
+	}
+
+	if (settings) {
+		obs_source_update(transition, settings);
 	}
 
 	if (d->HasKey("width") && d->GetType("width") == VTYPE_INT &&
@@ -4098,10 +4101,9 @@ bool DeserializeObsTransition(CefRefPtr<CefValue> input, obs_source_t **t,
 		int cx = d->GetInt("width");
 		int cy = d->GetInt("height");
 
-		if (cx <= 0 || cy <= 0)
-			return false;
-
-		obs_transition_set_size(*t, cx, cy);
+		if (cx > 0 && cy > 0) {
+			obs_transition_set_size(transition, cx, cy);
+		}
 	}
 
 	if (d->HasKey("scaleType") && d->GetType("scaleType") == VTYPE_STRING) {
@@ -4109,13 +4111,13 @@ bool DeserializeObsTransition(CefRefPtr<CefValue> input, obs_source_t **t,
 
 		if (scaleType == "maxOnly") {
 			obs_transition_set_scale_type(
-				*t, OBS_TRANSITION_SCALE_MAX_ONLY);
+				transition, OBS_TRANSITION_SCALE_MAX_ONLY);
 		} else if (scaleType == "aspect") {
 			obs_transition_set_scale_type(
-				*t, OBS_TRANSITION_SCALE_ASPECT);
+				transition, OBS_TRANSITION_SCALE_ASPECT);
 		} else if (scaleType == "stretch") {
 			obs_transition_set_scale_type(
-				*t, OBS_TRANSITION_SCALE_STRETCH);
+				transition, OBS_TRANSITION_SCALE_STRETCH);
 		} else {
 			return false;
 		}
@@ -4123,16 +4125,20 @@ bool DeserializeObsTransition(CefRefPtr<CefValue> input, obs_source_t **t,
 
 	if (d->HasKey("alignment") && d->GetType("alignment") == VTYPE_STRING) {
 		obs_transition_set_alignment(
-			*t, GetInt32FromAlignmentId(
+			transition, GetInt32FromAlignmentId(
 				    d->GetString("alignment").c_str()));
 	}
 
-	if (d->HasKey("durationMilliseconds") &&
+	if (obs_transition_fixed(transition)) {
+		*durationMilliseconds = 0;
+	} else if (d->HasKey("durationMilliseconds") &&
 	    d->GetType("durationMilliseconds") == VTYPE_INT) {
 		*durationMilliseconds = d->GetInt("durationMilliseconds");
 	} else {
 		*durationMilliseconds = 300; // OBS FE default
 	}
+
+	*out_transition = obs_source_get_ref(transition);
 
 	return true;
 }
