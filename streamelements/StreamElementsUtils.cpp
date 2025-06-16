@@ -3891,6 +3891,10 @@ bool DeserializeObsData(CefRefPtr<CefValue> input, obs_data_t *data)
 CefRefPtr<CefValue> SerializeObsData(obs_data_t *data)
 {
 	if (data) {
+		static std::shared_mutex mutex;
+
+		std::unique_lock guard(mutex); // obs_data_get_json is not thread_safe for the same data container
+
 		const char *json = obs_data_get_json(data);
 
 		if (json) {
