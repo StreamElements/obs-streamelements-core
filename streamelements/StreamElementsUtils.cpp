@@ -3991,7 +3991,8 @@ void SerializeObsTransition(std::string videoCompositionId, obs_source_t *t,
 
 	auto settings = obs_source_get_settings(t);
 
-	auto props = obs_get_source_properties(id.c_str());
+	auto props = obs_source_properties(t);
+
 	auto propsValue = CefValue::Create();
 	obs_properties_apply_settings(props, settings);
 	SerializeObsProperties(props, propsValue);
