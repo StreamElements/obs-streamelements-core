@@ -1,5 +1,6 @@
 #include "StreamElementsControllerServer.hpp"
 #include "StreamElementsMessageBus.hpp"
+#include "StreamElementsGlobalStateManager.hpp"
 
 #ifdef _WIN32
 static const char* PIPE_NAME = "\\\\.\\pipe\\StreamElementsObsLiveControllerServer";
@@ -12,6 +13,9 @@ StreamElementsControllerServer::StreamElementsControllerServer(StreamElementsMes
 {
 #ifdef _WIN32
 	auto msgReceiver = [this](const char* const buffer, const size_t length) {
+		if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+			return;
+
 		std::string str = "";
 		str.append(buffer, length);
 
@@ -38,6 +42,9 @@ StreamElementsControllerServer::~StreamElementsControllerServer()
 
 void StreamElementsControllerServer::OnMsgReceivedInternal(std::string& msg)
 {
+	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+		return;
+
 	CefRefPtr<CefValue> root =
 		CefParseJSON(msg, JSON_PARSER_ALLOW_TRAILING_COMMAS);
 
