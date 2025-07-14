@@ -37,6 +37,48 @@ using namespace json11;
 
 /* ========================================================================= */
 
+static void log_remaining_objects()
+{
+	obs_enum_outputs(
+		[](void *, obs_output_t *output) -> bool {
+			auto id = obs_output_get_id(output);
+			auto name = obs_output_get_name(output);
+
+			blog(LOG_WARNING,
+			     "[obs-streamelements-core]: remaining output id '%s', name '%s'",
+			     id, name);
+
+			return true;
+		},
+		nullptr);
+
+	obs_enum_encoders(
+		[](void *, obs_encoder_t *encoder) -> bool {
+			auto id = obs_encoder_get_id(encoder);
+			auto name = obs_encoder_get_name(encoder);
+
+			blog(LOG_WARNING,
+			     "[obs-streamelements-core]: remaining encoder id '%s', name '%s'",
+			     id, name);
+
+			return true;
+		},
+		nullptr);
+
+	obs_enum_services([](void *, obs_service_t *service) -> bool {
+		auto id = obs_service_get_id(service);
+		auto name = obs_service_get_name(service);
+
+		blog(LOG_WARNING,
+		     "[obs-streamelements-core]: remaining service id '%s', name '%s'",
+		     id, name);
+
+		return true;
+	}, nullptr);
+}
+
+/* ========================================================================= */
+
 MODULE_EXPORT bool obs_module_load(void)
 {
 	blog(LOG_INFO, "[obs-streamelements-core]: Version %lu",
@@ -81,6 +123,8 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 		//StreamElementsGlobalStateManager::GetInstance()
 		//	->Shutdown();
 		StreamElementsGlobalStateManager::Destroy();
+
+		log_remaining_objects();
 
 		blog(LOG_INFO, "[obs-streamelements-core]: shutdown complete");
 		break;
