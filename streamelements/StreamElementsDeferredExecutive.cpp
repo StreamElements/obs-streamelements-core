@@ -35,6 +35,9 @@ void StreamElementsDeferredExecutive::Signal(std::function<void()> callback,
 	QObject::connect(m_timer, &QTimer::timeout, [&]() {
 		std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
+		if (m_timer == nullptr)
+			return;
+
 		m_timer->deleteLater();
 		m_timer = nullptr;
 
