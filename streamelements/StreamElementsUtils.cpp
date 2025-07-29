@@ -2356,11 +2356,7 @@ double GetObsGlobalFramesPerSecond()
 
 void AdviseHostUserInterfaceStateChanged()
 {
-	static std::mutex mutex;
-
 	static QTimer *t = nullptr;
-
-	std::lock_guard<std::mutex> guard(mutex);
 
 	if (t == nullptr) {
 		t = new QTimer();
@@ -2368,9 +2364,7 @@ void AdviseHostUserInterfaceStateChanged()
 		t->moveToThread(qApp->thread());
 		t->setSingleShot(true);
 
-		QObject::connect(t, &QTimer::timeout, [&]() {
-			std::lock_guard<std::mutex> guard(mutex);
-
+		QObject::connect(t, &QTimer::timeout, [=]() {
 			t->deleteLater();
 			t = nullptr;
 
