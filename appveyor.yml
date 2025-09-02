@@ -23,7 +23,7 @@ for:
     configuration: RelWithDebInfo
     clone_folder: ~/src/obs-streamelements-core
     environment:
-      CHECKOUT: 31.1.2
+      CHECKOUT: 31.0.1
     install:
       - sh: >-
           git clone --recursive https://github.com/obsproject/obs-studio.git ~/src/obs-studio
