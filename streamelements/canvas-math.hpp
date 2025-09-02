@@ -117,11 +117,11 @@ static vec2 getSceneItemFinalScale(obs_sceneitem_t *sceneItem,
 				   obs_sceneitem_t *parentSceneItem)
 {
 	obs_transform_info info;
-	obs_sceneitem_get_info(sceneItem, &info);
+	obs_sceneitem_get_info2(sceneItem, &info);
 
 	if (parentSceneItem) {
 		obs_transform_info parentInfo;
-		obs_sceneitem_get_info(parentSceneItem, &parentInfo);
+		obs_sceneitem_get_info2(parentSceneItem, &parentInfo);
 
 		info.scale.x *= parentInfo.scale.x;
 		info.scale.y *= parentInfo.scale.y;

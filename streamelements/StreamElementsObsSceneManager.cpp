@@ -492,7 +492,7 @@ SerializeObsSceneItemCompositionSettings(obs_source_t *source,
 	}
 
 	obs_transform_info info;
-	obs_sceneitem_get_info(sceneitem, &info);
+	obs_sceneitem_get_info2(sceneitem, &info);
 
 	d->SetDictionary("position", SerializeVec2(info.pos));
 	d->SetDictionary("scale", SerializeVec2(info.scale));
@@ -2177,7 +2177,7 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 
 			if (DeserializeSceneItemComposition(input, info,
 							    crop)) {
-				obs_sceneitem_set_info(sceneitem, &info);
+				obs_sceneitem_set_info2(sceneitem, &info);
 				obs_sceneitem_set_crop(sceneitem, &crop);
 			}
 
@@ -2283,7 +2283,7 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 
 			if (DeserializeSceneItemComposition(input, info,
 							    crop)) {
-				obs_sceneitem_set_info(sceneitem, &info);
+				obs_sceneitem_set_info2(sceneitem, &info);
 				obs_sceneitem_set_crop(sceneitem, &crop);
 			}
 
@@ -2447,7 +2447,7 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 
 				if (DeserializeSceneItemComposition(input, info,
 								    crop)) {
-					obs_sceneitem_set_info(sceneitem,
+					obs_sceneitem_set_info2(sceneitem,
 							       &info);
 					obs_sceneitem_set_crop(sceneitem,
 							       &crop);
@@ -2580,7 +2580,7 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 
 			if (DeserializeSceneItemComposition(input, info,
 							    crop)) {
-				obs_sceneitem_set_info(sceneitem, &info);
+				obs_sceneitem_set_info2(sceneitem, &info);
 				obs_sceneitem_set_crop(sceneitem, &crop);
 			}
 
@@ -2677,7 +2677,7 @@ void StreamElementsObsSceneManager::DeserializeObsSceneItemGroup(
 		obs_sceneitem_crop crop;
 
 		if (DeserializeSceneItemComposition(input, info, crop)) {
-			obs_sceneitem_set_info(args.sceneitem, &info);
+			obs_sceneitem_set_info2(args.sceneitem, &info);
 			obs_sceneitem_set_crop(args.sceneitem, &crop);
 		}
 
@@ -3283,7 +3283,7 @@ void StreamElementsObsSceneManager::SetObsSceneItemPropertiesById(
 	obs_sceneitem_crop crop;
 
 	if (DeserializeSceneItemComposition(input, info, crop)) {
-		obs_sceneitem_set_info(sceneitem, &info);
+		obs_sceneitem_set_info2(sceneitem, &info);
 		obs_sceneitem_set_crop(sceneitem, &crop);
 	}
 
