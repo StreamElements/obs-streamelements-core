@@ -48,19 +48,9 @@ public:
 
 		mainWindow->addDockWidget(Qt::NoDockWidgetArea, m_dockWidget);
 
-		auto timer = new QTimer();
-		timer->moveToThread(qApp->thread());
-		timer->setSingleShot(true);
-		timer->setInterval(3000);
-
-		QObject::connect(timer, &QTimer::timeout, [timer, this]() {
-			timer->deleteLater();
-
+		QTimer::singleShot(std::chrono::milliseconds(0), qApp, [this]() {
 			m_dockWidget->hide();
 		});
-
-		QMetaObject::invokeMethod(timer, "start",
-					  Qt::QueuedConnection, Q_ARG(int, 0));
 	}
 
 	~StreamElementsWorker() {

@@ -254,16 +254,9 @@ std::future<void> __QtDelayTask_Impl(std::function<void()> task, int delayMs,
 {
 	auto promise = std::make_shared<std::promise<void>>();
 
-	auto t = new QTimer();
-
-	t->moveToThread(qApp->thread());
-	t->setSingleShot(true);
-
 	auto item = AsyncCallContextPush(file, line, false);
 
-	QObject::connect(t, &QTimer::timeout, [=]() {
-		t->deleteLater();
-
+	QTimer::singleShot(std::chrono::milliseconds(delayMs), qApp, [=]() {
 		item->running = true;
 
 		task();
@@ -272,9 +265,6 @@ std::future<void> __QtDelayTask_Impl(std::function<void()> task, int delayMs,
 
 		promise->set_value();
 	});
-
-	QMetaObject::invokeMethod(t, "start", Qt::QueuedConnection,
-				  Q_ARG(int, delayMs));
 
 	return promise->get_future();
 }
@@ -2356,56 +2346,33 @@ double GetObsGlobalFramesPerSecond()
 
 void AdviseHostUserInterfaceStateChanged()
 {
-	static QTimer *t = nullptr;
-
-	if (t == nullptr) {
-		t = new QTimer();
-
-		t->moveToThread(qApp->thread());
-		t->setSingleShot(true);
-
-		QObject::connect(t, &QTimer::timeout, [=]() {
-			t->deleteLater();
-			t = nullptr;
+	static bool isBusy = false;
+	
+	if (!os_atomic_set_bool(&isBusy, true)) {
+		QTimer::singleShot(std::chrono::milliseconds(250), qApp, [&]() {
+			os_atomic_set_bool(&isBusy, false);
 
 			// Advise guest code of user interface state changes
 			DispatchJSEventGlobal(
 				"hostUserInterfaceStateChanged", "null");
 		});
 	}
-
-	QMetaObject::invokeMethod(t, "start", Qt::QueuedConnection,
-				  Q_ARG(int, 250));
 }
 
 void AdviseHostHotkeyBindingsChanged()
 {
-	static std::mutex mutex;
+	static bool isBusy = false;
 
-	static QTimer *t = nullptr;
+	if (!os_atomic_set_bool(&isBusy, true)) {
 
-	std::lock_guard<std::mutex> guard(mutex);
-
-	if (t == nullptr) {
-		t = new QTimer();
-
-		t->moveToThread(qApp->thread());
-		t->setSingleShot(true);
-
-		QObject::connect(t, &QTimer::timeout, [&]() {
-			std::lock_guard<std::mutex> guard(mutex);
-
-			t->deleteLater();
-			t = nullptr;
-
+		QTimer::singleShot(std::chrono::milliseconds(250), qApp, [&]() {
 			// Advise guest code of user interface state changes
 			DispatchJSEventGlobal(
 				"hostHotkeyBindingsChanged", "null");
+
+			os_atomic_set_bool(&isBusy, false);
 		});
 	}
-
-	QMetaObject::invokeMethod(t, "start", Qt::QueuedConnection,
-				  Q_ARG(int, 250));
 }
 
 bool ParseStreamElementsOverlayURL(std::string url, std::string &overlayId,
