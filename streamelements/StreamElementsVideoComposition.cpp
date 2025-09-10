@@ -1335,6 +1335,8 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 
 		obs_frontend_remove_canvas(m_obsCanvas);
 
+		obs_canvas_release(m_obsCanvas);
+
 		m_obsCanvas = nullptr;
 	}
 
@@ -1373,6 +1375,7 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 
 	if (m_currentScene) {
 		obs_canvas_scene_remove(m_currentScene);
+		obs_scene_release(m_currentScene);
 
 		m_currentScene = nullptr;
 	}
@@ -1547,6 +1550,7 @@ bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
 			remove_scene_signals(scene, m_signalHandlerData);
 
 			obs_canvas_scene_remove(scene);
+			obs_scene_release(scene);
 
 			dispatch_scene_list_changed_event(this);
 
@@ -1733,6 +1737,7 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 		obs_source_dec_active(source);
 
 		obs_canvas_scene_remove(scene);
+		obs_scene_release(scene);
 	}
 	scenesToRemove.clear();
 
