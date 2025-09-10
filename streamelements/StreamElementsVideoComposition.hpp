@@ -509,6 +509,7 @@ public:
 		obs_frontend_take_screenshot();
 	}
 
+
 protected:
 	virtual bool RemoveScene(obs_scene_t *scene) override;
 
@@ -548,6 +549,8 @@ private:
 	std::shared_mutex m_currentSceneMutex;
 	obs_scene_t *m_currentScene = nullptr;
 
+	obs_canvas_t *m_obsCanvas = nullptr;
+
 public:
 	// ctor only usable by this class
 	StreamElementsCustomVideoComposition(
@@ -586,7 +589,6 @@ private:
 private:
 	std::vector<obs_encoder_t *> m_streamingVideoEncoders;
 	std::vector<obs_encoder_t *> m_recordingVideoEncoders;
-	obs_view_t *m_view = nullptr;
 	video_t *m_video = nullptr;
 
 	obs_source_t *m_transition = nullptr;
