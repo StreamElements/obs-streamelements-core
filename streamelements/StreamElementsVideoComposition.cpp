@@ -1201,9 +1201,9 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	ovi.output_width = m_baseWidth;
 	ovi.output_height = m_baseHeight;
 
-	m_obsCanvas = obs_frontend_add_canvas(name.c_str(), &ovi,
-					      ACTIVATE | MIX_AUDIO | SCENE_REF |
-						      EPHEMERAL);
+	m_obsCanvas = obs_frontend_add_canvas(
+		name.c_str(), &ovi,
+		ACTIVATE | MIX_AUDIO | SCENE_REF /* | EPHEMERAL */);
 
 	m_video = obs_canvas_get_video(m_obsCanvas);
 
