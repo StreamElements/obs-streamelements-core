@@ -1185,10 +1185,13 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 		obs_encoder_set_scaled_size(encoder, m_baseWidth, m_baseHeight);
 	}
 
+	m_rootSource = obs_source_create_private(
+		"cut_transition", (name + ": root source").c_str(), nullptr);
+
 	m_transition = obs_source_create_private(
 		"cut_transition", (name + ": transition").c_str(), nullptr);
 
-	if (!m_transition) {
+	if (!m_transition || !m_rootSource) {
 		for (auto encoder : m_streamingVideoEncoders) {
 			obs_encoder_release(encoder);
 		}
@@ -1201,13 +1204,15 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	ovi.output_width = m_baseWidth;
 	ovi.output_height = m_baseHeight;
 
-	m_obsCanvas = obs_frontend_add_canvas(
+	m_obsCanvas = obs_canvas_create_private(
 		name.c_str(), &ovi,
-		ACTIVATE | MIX_AUDIO | SCENE_REF /* | EPHEMERAL */);
+		ACTIVATE | MIX_AUDIO | SCENE_REF | EPHEMERAL);
 
 	m_video = obs_canvas_get_video(m_obsCanvas);
 
-	obs_canvas_set_channel(m_obsCanvas, 0, m_transition);
+	obs_transition_set(m_rootSource, m_transition);
+
+	obs_canvas_set_channel(m_obsCanvas, 0, m_rootSource);
 
 	for (auto encoder : m_streamingVideoEncoders) {
 		obs_encoder_set_video(encoder, m_video);
@@ -1247,11 +1252,11 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 
 		std::shared_lock<decltype(self->m_mutex)> lock(self->m_mutex);
 
-		if (!self->m_transition)
+		if (!self->m_rootSource)
 			return nullptr;
 
 		// This will always return the most up-to-date value of transition which is always the root of our video composition
-		return obs_source_get_ref(self->m_transition);
+		return obs_source_get_ref(self->m_rootSource);
 	};
 
 	// Assign audio wrapper source to first free audio channel
@@ -1330,16 +1335,6 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 	}
 	m_recordingVideoEncoders.clear();
 
-	if (m_obsCanvas) {
-		obs_canvas_remove(m_obsCanvas);
-
-		obs_frontend_remove_canvas(m_obsCanvas);
-
-		obs_canvas_release(m_obsCanvas);
-
-		m_obsCanvas = nullptr;
-	}
-
 	m_video = nullptr;
 
 	if (m_audioWrapperSource) {
@@ -1360,11 +1355,15 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 		m_audioWrapperSource = nullptr;
 	}
 
+	if (m_rootSource) {
+		obs_transition_set(m_rootSource, nullptr);
+		m_rootSource = nullptr;
+	}
+
 	if (m_transition) {
 		DisconnectTransitionEvents(m_transition);
 
 		obs_transition_set(m_transition, nullptr);
-		obs_source_release(m_transition);
 		m_transition = nullptr;
 	}
 
@@ -1378,6 +1377,16 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 		obs_scene_release(m_currentScene);
 
 		m_currentScene = nullptr;
+	}
+
+	if (m_obsCanvas) {
+		obs_canvas_set_channel(m_obsCanvas, 0, nullptr);
+
+		obs_canvas_remove(m_obsCanvas);
+
+		obs_canvas_release(m_obsCanvas);
+
+		m_obsCanvas = nullptr;
 	}
 
 	m_signalHandlerData->Wait();
@@ -1577,7 +1586,7 @@ void StreamElementsCustomVideoComposition::SetTransition(
 	}
 
 	obs_transition_swap_begin(transition, old_transition);
-	obs_canvas_set_channel(m_obsCanvas, 0, transition);
+	obs_transition_set(m_rootSource, transition);
 	obs_transition_swap_end(transition, old_transition);
 
 	//obs_scene_get_ref(m_currentScene);
