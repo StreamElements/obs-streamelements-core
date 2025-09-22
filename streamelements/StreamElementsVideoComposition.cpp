@@ -310,6 +310,8 @@ dispatch_transition_changed_event(StreamElementsVideoCompositionBase *self)
 
 	dispatch_js_event(name, args);
 	dispatch_external_event(name, args);
+
+	self->HandleTransitionChanged();
 }
 
 static void handle_transition_change(void* my_data, calldata_t* cd)
@@ -855,6 +857,42 @@ public:
 	virtual void Render() { obs_render_main_texture(); }
 };
 
+StreamElementsObsNativeVideoComposition::StreamElementsObsNativeVideoComposition(
+	StreamElementsObsNativeVideoComposition::Private)
+	: StreamElementsVideoCompositionBase("obs_native_video_composition", "default", "Default")
+{
+	m_rootSource = obs_source_create_private(
+		"cut_transition", "SE.Live OBS main canvas root source",
+		nullptr);
+
+	HandleTransitionChanged();
+}
+
+StreamElementsObsNativeVideoComposition::
+	~StreamElementsObsNativeVideoComposition()
+{
+	std::unique_lock guard(m_mutex);
+
+	obs_transition_set(m_rootSource, nullptr);
+
+	obs_source_release(m_rootSource);
+
+	m_rootSource = nullptr;
+}
+
+void StreamElementsObsNativeVideoComposition::HandleTransitionChanged()
+{
+	std::shared_lock guard(m_mutex);
+
+	if (!m_rootSource)
+		return;
+
+	OBSSourceAutoRelease currentTransition =
+		obs_frontend_get_current_transition();
+
+	obs_transition_set(m_rootSource, currentTransition);
+}
+
 std::shared_ptr<
 	StreamElementsVideoCompositionBase::CompositionInfo>
 StreamElementsObsNativeVideoComposition::GetCompositionInfo(
@@ -1392,6 +1430,12 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 	m_signalHandlerData->Wait();
 	m_signalHandlerData->Release();
 	m_signalHandlerData = nullptr;
+}
+
+void StreamElementsCustomVideoComposition::HandleTransitionChanged() {
+	// NOP
+	//
+	// Handled individually by obs_transition_set(m_rootSource, ...) in the code
 }
 
 std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
@@ -2037,6 +2081,13 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 		for (auto encoder : m_streamingVideoEncoders) {
 			obs_encoder_set_video(encoder, obs_get_video());
 		}
+
+		m_rootSource = obs_source_create_private(
+			"cut_transition",
+			"SE.Live OBS main canvas with custom encoders root source",
+			nullptr);
+
+		HandleTransitionChanged();
 }
 
 StreamElementsObsNativeVideoCompositionWithCustomEncoders::
@@ -2051,6 +2102,28 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 		obs_encoder_release(encoder);
 	}
 	m_recordingVideoEncoders.clear();
+
+	std::unique_lock guard(m_mutex);
+
+	obs_transition_set(m_rootSource, nullptr);
+
+	obs_source_release(m_rootSource);
+
+	m_rootSource = nullptr;
+}
+
+void StreamElementsObsNativeVideoCompositionWithCustomEncoders::
+	HandleTransitionChanged()
+{
+	std::shared_lock guard(m_mutex);
+
+	if (!m_rootSource)
+		return;
+
+	OBSSourceAutoRelease currentTransition =
+		obs_frontend_get_current_transition();
+
+	obs_transition_set(m_rootSource, currentTransition);
 }
 
 void StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetRecordingEncoders(

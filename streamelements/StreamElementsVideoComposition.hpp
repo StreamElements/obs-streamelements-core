@@ -457,6 +457,10 @@ protected:
 protected:
 	void ConnectTransitionEvents(obs_source_t* source);
 	void DisconnectTransitionEvents(obs_source_t *source);
+
+public:
+	virtual void HandleTransitionChanged() = 0;
+	virtual obs_source_t *GetCompositionRootSourceRef() = 0;
 };
 
 // OBS Main Composition
@@ -467,15 +471,21 @@ private:
 		explicit Private() = default;
 	};
 
+private:
+	std::shared_mutex m_mutex;
+
+	obs_source_t *m_rootSource = nullptr;
+
 public:
 	// ctor only usable by this class
-	StreamElementsObsNativeVideoComposition(Private)
-		: StreamElementsVideoCompositionBase("obs_native_video_composition", "default", "Default")
-	{
+	StreamElementsObsNativeVideoComposition(Private);
 
-	}
+	virtual ~StreamElementsObsNativeVideoComposition();
 
-	virtual ~StreamElementsObsNativeVideoComposition() {
+	virtual void HandleTransitionChanged() override;
+
+	virtual obs_source_t* GetCompositionRootSourceRef() override {
+		return obs_source_get_ref(m_rootSource);
 	}
 
 public:
@@ -560,6 +570,13 @@ public:
 		std::vector<OBSDataAutoRelease> &streamingVideoEncoderHotkeyData);
 
 	virtual ~StreamElementsCustomVideoComposition();
+
+	virtual void HandleTransitionChanged() override;
+
+	virtual obs_source_t *GetCompositionRootSourceRef() override
+	{
+		return obs_source_get_ref(m_rootSource);
+	}
 
 private:
 	static std::shared_ptr<StreamElementsCustomVideoComposition>
@@ -651,8 +668,12 @@ private:
 	};
 
 private:
+	std::shared_mutex m_mutex;
+
 	std::vector<obs_encoder_t *> m_streamingVideoEncoders;
 	std::vector<obs_encoder_t *> m_recordingVideoEncoders;
+
+	obs_source_t *m_rootSource = nullptr;
 
 public:
 	// ctor only usable by this class
@@ -664,6 +685,12 @@ public:
 			&streamingVideoEncoderHotkeyData);
 
 	virtual ~StreamElementsObsNativeVideoCompositionWithCustomEncoders();
+
+	virtual void HandleTransitionChanged() override;
+
+	virtual obs_source_t* GetCompositionRootSourceRef() override {
+		return obs_source_get_ref(m_rootSource);
+	}
 
 private:
 	static std::shared_ptr<StreamElementsObsNativeVideoCompositionWithCustomEncoders>
