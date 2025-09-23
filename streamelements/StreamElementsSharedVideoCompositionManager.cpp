@@ -156,6 +156,8 @@ StreamElementsSharedVideoCompositionManager::
 		if (!obsUUIDs.count(uuid)) {
 			obsUUIDs.insert(uuid);
 		}
+
+		return true;
 	});
 
 	std::list<std::string> removeUUIDs;
@@ -235,7 +237,8 @@ void StreamElementsSharedVideoCompositionManager::SerializeAllSharedVideoComposi
 	output->SetList(list);
 }
 
-void RemoveSharedVideoCompositionsByIds(CefRefPtr<CefValue> input,
+void StreamElementsSharedVideoCompositionManager::
+	RemoveSharedVideoCompositionsByIds(CefRefPtr<CefValue> input,
 	CefRefPtr<CefValue>& output)
 {
 	output->SetBool(false);
