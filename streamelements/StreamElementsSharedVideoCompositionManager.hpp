@@ -4,8 +4,9 @@
 
 class StreamElementsSharedVideoCompositionManager {
 public:
-	StreamElementsSharedVideoCompositionManager() {}
-	~StreamElementsSharedVideoCompositionManager() {}
+	StreamElementsSharedVideoCompositionManager();
+
+	~StreamElementsSharedVideoCompositionManager();
 
 	void DeserializeSharedVideoComposition(CefRefPtr<CefValue> input,
 					       CefRefPtr<CefValue> &output);

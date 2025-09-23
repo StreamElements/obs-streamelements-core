@@ -132,6 +132,54 @@ static bool SerializeCanvas(obs_canvas_t* canvas, CefRefPtr<CefDictionaryValue> 
 	return true;
 }
 
+StreamElementsSharedVideoCompositionManager::
+	StreamElementsSharedVideoCompositionManager()
+{
+	// Sync config UUIDs to available canvases
+
+	std::set<std::string> configUUIDs;
+	std::set<std::string> obsUUIDs;
+
+	auto config = StreamElementsConfig::GetInstance();
+
+	if (!config)
+		return;
+
+	config->GetSharedVideoCompositionIds(configUUIDs);
+
+	EnumOwnCanvases([&](obs_canvas_t *canvas) -> bool {
+		auto uuid = obs_canvas_get_uuid(canvas);
+
+		if (!uuid)
+			return true;
+
+		if (!obsUUIDs.count(uuid)) {
+			obsUUIDs.insert(uuid);
+		}
+	});
+
+	std::list<std::string> removeUUIDs;
+
+	for (auto uuid : configUUIDs) {
+		if (obsUUIDs.count(uuid))
+			continue;
+
+		removeUUIDs.emplace_back(uuid);
+	}
+
+	for (auto uuid : removeUUIDs) {
+		configUUIDs.erase(uuid);
+	}
+
+	config->SetSharedVideoCompositionIds(configUUIDs);
+}
+
+StreamElementsSharedVideoCompositionManager::
+~StreamElementsSharedVideoCompositionManager()
+{
+	// NOP
+}
+
 void StreamElementsSharedVideoCompositionManager::DeserializeSharedVideoComposition(
 	CefRefPtr<CefValue> input,
 	CefRefPtr<CefValue>& output)
