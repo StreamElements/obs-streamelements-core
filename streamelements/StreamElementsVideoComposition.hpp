@@ -461,6 +461,7 @@ protected:
 public:
 	virtual void HandleTransitionChanged() = 0;
 	virtual obs_source_t *GetCompositionRootSourceRef() = 0;
+	virtual void GetVideoInfo(obs_video_info *ovi) = 0;
 };
 
 // OBS Main Composition
@@ -486,6 +487,10 @@ public:
 
 	virtual obs_source_t* GetCompositionRootSourceRef() override {
 		return obs_source_get_ref(m_rootSource);
+	}
+
+	virtual void GetVideoInfo(obs_video_info* ovi) override {
+		obs_get_video_info(ovi);
 	}
 
 public:
@@ -576,6 +581,11 @@ public:
 	virtual obs_source_t *GetCompositionRootSourceRef() override
 	{
 		return obs_source_get_ref(m_rootSource);
+	}
+
+	virtual void GetVideoInfo(obs_video_info *ovi) override
+	{
+		obs_canvas_get_video_info(m_obsCanvas, ovi);
 	}
 
 private:
@@ -690,6 +700,11 @@ public:
 
 	virtual obs_source_t* GetCompositionRootSourceRef() override {
 		return obs_source_get_ref(m_rootSource);
+	}
+
+	virtual void GetVideoInfo(obs_video_info *ovi) override
+	{
+		obs_get_video_info(ovi);
 	}
 
 private:

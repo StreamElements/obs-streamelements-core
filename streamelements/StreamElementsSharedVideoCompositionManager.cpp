@@ -5,6 +5,7 @@
 #include <obs-frontend-api.h>
 
 #include "StreamElementsConfig.hpp"
+#include "StreamElementsGlobalStateManager.hpp"
 
 #include <set>
 #include <string>
@@ -117,12 +118,25 @@ static obs_canvas_t *GetCanvasByUUIDRef(std::string uuid)
 	return result;
 }
 
-static bool SerializeCanvas(obs_canvas_t* canvas, CefRefPtr<CefDictionaryValue> d) {
+bool StreamElementsSharedVideoCompositionManager::SerializeCanvas(
+	obs_canvas_t *canvas, CefRefPtr<CefDictionaryValue> d)
+{
 	if (!canvas)
 		return false;
 
+	std::string uuid = obs_canvas_get_uuid(canvas);
+
 	d->SetString("name", obs_canvas_get_name(canvas));
-	d->SetString("id", obs_canvas_get_uuid(canvas));
+	d->SetString("sharedVideoCompositionId", uuid);
+
+	if (m_canvasUUIDToVideoCompositionInfoMap.count(uuid)) {
+		d->SetString("videoCompositionId",
+			     m_canvasUUIDToVideoCompositionInfoMap[uuid]
+				     ->GetComposition()
+				     ->GetId());
+	} else {
+		d->SetNull("videoCompositionId");
+	}
 
 	bool isVideoInUse = IsVideoInUse();
 
@@ -179,7 +193,7 @@ StreamElementsSharedVideoCompositionManager::
 StreamElementsSharedVideoCompositionManager::
 ~StreamElementsSharedVideoCompositionManager()
 {
-	// NOP
+	m_canvasUUIDToVideoCompositionInfoMap.clear();
 }
 
 void StreamElementsSharedVideoCompositionManager::DeserializeSharedVideoComposition(
@@ -198,6 +212,8 @@ void StreamElementsSharedVideoCompositionManager::DeserializeSharedVideoComposit
 		return;
 
 	std::string name = d->GetString("name");
+
+	std::unique_lock guard(m_mutex);
 
 	OBSCanvasAutoRelease canvas = GetCanvasByNameRef(name);
 
@@ -222,6 +238,8 @@ void StreamElementsSharedVideoCompositionManager::SerializeAllSharedVideoComposi
 	CefRefPtr<CefValue> input,
 	CefRefPtr<CefValue>& output)
 {
+	std::unique_lock guard(m_mutex);
+
 	auto list = CefListValue::Create();
 
 	EnumOwnCanvases([&](obs_canvas_t *canvas) -> bool {
@@ -241,6 +259,8 @@ void StreamElementsSharedVideoCompositionManager::
 	RemoveSharedVideoCompositionsByIds(CefRefPtr<CefValue> input,
 	CefRefPtr<CefValue>& output)
 {
+	std::unique_lock guard(m_mutex);
+
 	output->SetBool(false);
 
 	if (IsVideoInUse())
@@ -273,6 +293,130 @@ void StreamElementsSharedVideoCompositionManager::
 
 		RemoveUUID(uuid);
 
+		if (m_canvasUUIDToVideoCompositionInfoMap.count(uuid)) {
+			m_canvasUUIDToVideoCompositionInfoMap.erase(uuid);
+		}
+
 		output->SetBool(true);
 	}
+}
+
+void StreamElementsSharedVideoCompositionManager::
+	ConnectVideoCompositionToSharedVideoComposition(
+	CefRefPtr<CefValue> input, CefRefPtr<CefValue>& output)
+{
+	output->SetNull();
+
+	if (!input || input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto d = input->GetDictionary();
+
+	if (!d->HasKey("sharedVideoCompositionId") ||
+	    d->GetType("sharedVideoCompositionId") != VTYPE_STRING)
+		return;
+
+	if (!d->HasKey("videoCompositionId") ||
+	    d->GetType("videoCompositionId") != VTYPE_STRING)
+		return;
+
+	std::string sharedVideoCompositionId =
+		d->GetString("sharedVideoCompositionId");
+
+	std::string videoCompositionId = d->GetString("videoCompositionId");
+
+	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+		return;
+
+	auto videoCompositionManager =
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager();
+
+	if (!videoCompositionManager)
+		return;
+
+	auto videoComposition =
+		videoCompositionManager->GetVideoCompositionById(
+			videoCompositionId);
+
+	if (!videoComposition)
+		return;
+
+	auto videoCompositionInfo = videoComposition->GetCompositionInfo(
+		this, "StreamElementsSharedVideoCompositionManager");
+
+	std::unique_lock guard(m_mutex);
+
+	if (IsVideoInUse())
+		return;
+
+	OBSCanvasAutoRelease canvas =
+		GetCanvasByUUIDRef(sharedVideoCompositionId);
+
+	if (!canvas)
+		return;
+
+	obs_video_info ovi = {0};
+
+	videoComposition->GetVideoInfo(&ovi);
+
+	if (!obs_canvas_reset_video(canvas, &ovi))
+		return;
+
+	m_canvasUUIDToVideoCompositionInfoMap[sharedVideoCompositionId] =
+		videoCompositionInfo;
+
+	OBSSourceAutoRelease videoCompositionRootSource =
+		videoComposition->GetCompositionRootSourceRef();
+
+	obs_canvas_set_channel(canvas, 0, videoCompositionRootSource);
+
+	auto result = CefDictionaryValue::Create();
+
+	SerializeCanvas(canvas, result);
+
+	output->SetDictionary(result);
+}
+
+void StreamElementsSharedVideoCompositionManager::
+	DisconnectVideoCompositionsFromSharedVideoCompositionsByIds(
+		CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
+{
+	std::unique_lock guard(m_mutex);
+\
+	output->SetBool(false);
+
+	if (IsVideoInUse())
+		return;
+
+	if (!input.get() || input->GetType() != VTYPE_LIST)
+		return;
+
+	std::set<std::string> uuids;
+
+	auto list = input->GetList();
+
+	for (size_t i = 0; i < list->GetSize(); ++i) {
+		if (list->GetType(i) != VTYPE_STRING)
+			return;
+
+		std::string uuid = list->GetString(i);
+
+		if (!uuids.count(uuid))
+			uuids.insert(uuid);
+	}
+
+	for (auto uuid : uuids) {
+		OBSCanvasAutoRelease canvas = GetCanvasByUUIDRef(uuid);
+
+		if (canvas) {
+			obs_canvas_set_channel(canvas, 0, nullptr);
+		}
+
+		if (m_canvasUUIDToVideoCompositionInfoMap.count(uuid) > 0) {
+			m_canvasUUIDToVideoCompositionInfoMap.erase(uuid);
+		}
+	}
+
+	output->SetBool(true);
 }
