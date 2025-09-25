@@ -13,12 +13,16 @@ private:
 			 StreamElementsVideoCompositionBase::CompositionInfo>>
 		m_canvasUUIDToVideoCompositionInfoMap;
 
+	std::shared_ptr<StreamElementsVideoCompositionManager>
+		m_videoCompositionManager = nullptr;
+
 private:
 	bool SerializeCanvas(obs_canvas_t *canvas,
 			     CefRefPtr<CefDictionaryValue> d);
 
 public:
-	StreamElementsSharedVideoCompositionManager();
+	StreamElementsSharedVideoCompositionManager(
+		std::shared_ptr<StreamElementsVideoCompositionManager> videoCompositionManager);
 
 	~StreamElementsSharedVideoCompositionManager();
 

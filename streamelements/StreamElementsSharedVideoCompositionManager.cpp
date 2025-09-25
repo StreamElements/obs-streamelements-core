@@ -5,7 +5,6 @@
 #include <obs-frontend-api.h>
 
 #include "StreamElementsConfig.hpp"
-#include "StreamElementsGlobalStateManager.hpp"
 
 #include <set>
 #include <string>
@@ -147,7 +146,10 @@ bool StreamElementsSharedVideoCompositionManager::SerializeCanvas(
 }
 
 StreamElementsSharedVideoCompositionManager::
-	StreamElementsSharedVideoCompositionManager()
+	StreamElementsSharedVideoCompositionManager(
+		std::shared_ptr<StreamElementsVideoCompositionManager>
+			videoCompositionManager)
+	: m_videoCompositionManager(videoCompositionManager)
 {
 	// Sync config UUIDs to available canvases
 
@@ -194,6 +196,8 @@ StreamElementsSharedVideoCompositionManager::
 ~StreamElementsSharedVideoCompositionManager()
 {
 	m_canvasUUIDToVideoCompositionInfoMap.clear();
+
+	m_videoCompositionManager = nullptr;
 }
 
 void StreamElementsSharedVideoCompositionManager::DeserializeSharedVideoComposition(
@@ -325,18 +329,8 @@ void StreamElementsSharedVideoCompositionManager::
 
 	std::string videoCompositionId = d->GetString("videoCompositionId");
 
-	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
-		return;
-
-	auto videoCompositionManager =
-		StreamElementsGlobalStateManager::GetInstance()
-			->GetVideoCompositionManager();
-
-	if (!videoCompositionManager)
-		return;
-
 	auto videoComposition =
-		videoCompositionManager->GetVideoCompositionById(
+		m_videoCompositionManager->GetVideoCompositionById(
 			videoCompositionId);
 
 	if (!videoComposition)

@@ -30,6 +30,7 @@ struct QCefCookieManager;
 #include "StreamElementsBrowserDialog.hpp"
 #include "StreamElementsVideoCompositionManager.hpp"
 #include "StreamElementsAudioCompositionManager.hpp"
+#include "StreamElementsSharedVideoCompositionManager.hpp"
 #include "StreamElementsOutputManager.hpp"
 #include "StreamElementsObsActiveSceneTracker.hpp"
 
@@ -191,6 +192,11 @@ public:
 	{
 		return m_websocketApiServer;
 	}
+	std::shared_ptr <StreamElementsSharedVideoCompositionManager>
+		GetSharedVideoCompositionManager()
+	{
+		return m_sharedVideoCompositionManager;
+	}
 	std::shared_ptr<StreamElementsVideoCompositionManager> GetVideoCompositionManager()
 	{
 		return m_videoCompositionManager;
@@ -285,6 +291,8 @@ private:
 		nullptr;
 	std::shared_ptr<WindowStateChangeEventFilter> m_windowStateEventFilter =
 		nullptr;
+	std::shared_ptr<StreamElementsSharedVideoCompositionManager>
+		m_sharedVideoCompositionManager = nullptr;
 	std::shared_ptr<StreamElementsVideoCompositionManager>
 		m_videoCompositionManager = nullptr;
 	std::shared_ptr<StreamElementsAudioCompositionManager>
