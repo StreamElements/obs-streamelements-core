@@ -876,6 +876,7 @@ StreamElementsObsNativeVideoComposition::
 
 	obs_transition_set(m_rootSource, nullptr);
 
+	obs_source_remove(m_rootSource);
 	obs_source_release(m_rootSource);
 
 	m_rootSource = nullptr;
@@ -1384,6 +1385,7 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 			}
 		}
 
+		obs_source_remove(m_audioWrapperSource);
 		obs_source_release(m_audioWrapperSource);
 		m_audioWrapperSource = nullptr;
 	}
@@ -1625,6 +1627,7 @@ void StreamElementsCustomVideoComposition::SetTransition(
 
 	//obs_scene_get_ref(m_currentScene);
 	obs_transition_set(old_transition, nullptr);
+	obs_source_remove(old_transition);
 	obs_source_release(old_transition);
 
 	transition_set_defaults(m_transition, m_baseWidth, m_baseHeight);
@@ -2103,6 +2106,7 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 
 	obs_transition_set(m_rootSource, nullptr);
 
+	obs_source_remove(m_rootSource);
 	obs_source_release(m_rootSource);
 
 	m_rootSource = nullptr;
