@@ -20,6 +20,9 @@ private:
 	bool SerializeCanvas(obs_canvas_t *canvas,
 			     CefRefPtr<CefDictionaryValue> d);
 
+	static void handle_obs_frontend_event(enum obs_frontend_event event,
+					      void *data);
+
 public:
 	StreamElementsSharedVideoCompositionManager(
 		std::shared_ptr<StreamElementsVideoCompositionManager> videoCompositionManager);

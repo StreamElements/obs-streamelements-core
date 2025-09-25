@@ -5,10 +5,53 @@
 #include <obs-frontend-api.h>
 
 #include "StreamElementsConfig.hpp"
+#include "StreamElementsGlobalStateManager.hpp"
 
 #include <set>
 #include <string>
 #include <functional>
+
+static void dispatch_external_event(std::string name, std::string args)
+{
+	std::string externalEventName =
+		name.c_str() + 4; /* remove 'host' prefix */
+	externalEventName[0] =
+		tolower(externalEventName[0]); /* lower case first letter */
+
+	StreamElementsMessageBus::GetInstance()->NotifyAllExternalEventListeners(
+		StreamElementsMessageBus::DEST_ALL_EXTERNAL,
+		StreamElementsMessageBus::SOURCE_APPLICATION, "OBS",
+		externalEventName,
+		CefParseJSON(args, JSON_PARSER_ALLOW_TRAILING_COMMAS));
+}
+
+static void dispatch_js_event(std::string name, std::string args)
+{
+	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+		return;
+
+	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
+				 ->GetWebsocketApiServer();
+
+	if (!apiServer)
+		return;
+
+	apiServer->DispatchJSEvent("system", name, args);
+}
+
+static void dispatch_shared_video_compositions_list_changed_event(
+	StreamElementsSharedVideoCompositionManager *self)
+{
+	std::string name = "hostSharedVideoCompositionListChanged";
+	std::string args = "null";
+
+	dispatch_js_event(name, args);
+	dispatch_external_event(name, args);
+
+	dispatch_js_event("hostSharedVideoCompositionListChanged", "null");
+	dispatch_external_event("hostSharedVideoCompositionListChanged",
+				"null");
+}
 
 static bool IsVideoInUse()
 {
@@ -190,11 +233,15 @@ StreamElementsSharedVideoCompositionManager::
 	}
 
 	config->SetSharedVideoCompositionIds(configUUIDs);
+
+	obs_frontend_add_event_callback(handle_obs_frontend_event, this);
 }
 
 StreamElementsSharedVideoCompositionManager::
 ~StreamElementsSharedVideoCompositionManager()
 {
+	obs_frontend_remove_event_callback(handle_obs_frontend_event, this);
+
 	m_canvasUUIDToVideoCompositionInfoMap.clear();
 
 	m_videoCompositionManager = nullptr;
@@ -369,6 +416,8 @@ void StreamElementsSharedVideoCompositionManager::
 	SerializeCanvas(canvas, result);
 
 	output->SetDictionary(result);
+
+	dispatch_shared_video_compositions_list_changed_event(this);
 }
 
 void StreamElementsSharedVideoCompositionManager::
@@ -412,28 +461,27 @@ void StreamElementsSharedVideoCompositionManager::
 	}
 
 	output->SetBool(true);
+
+	dispatch_shared_video_compositions_list_changed_event(this);
 }
 
-/*
 void StreamElementsSharedVideoCompositionManager::handle_obs_frontend_event(
 	enum obs_frontend_event event, void *data)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	StreamElementsVideoCompositionBase *self =
-		static_cast<StreamElementsVideoCompositionBase *>(data);
+	StreamElementsSharedVideoCompositionManager *self =
+		static_cast<StreamElementsSharedVideoCompositionManager *>(
+			data);
 
 	switch (event) {
-	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CLEANUP:
-	case OBS_FRONTEND_EVENT_PROFILE_CHANGING:
-		self->HandleObsSceneCollectionCleanup();
-		break;
-	case OBS_FRONTEND_EVENT_TRANSITION_CHANGED:
-	case OBS_FRONTEND_EVENT_TRANSITION_DURATION_CHANGED:
-		dispatch_transition_changed_event(self);
+	case OBS_FRONTEND_EVENT_CANVAS_ADDED:
+	case OBS_FRONTEND_EVENT_CANVAS_REMOVED:
+	case OBS_FRONTEND_EVENT_PROFILE_CHANGED:
+	case OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED:
+		dispatch_shared_video_compositions_list_changed_event(self);
 		break;
 	default:
 		break;
 	}
 }
-*/
