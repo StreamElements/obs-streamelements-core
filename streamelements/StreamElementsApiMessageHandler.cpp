@@ -3032,6 +3032,68 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("addSharedVideoComposition");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetSharedVideoCompositionManager()
+				->DeserializeSharedVideoComposition(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeSharedVideoCompositionsByIds");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetSharedVideoCompositionManager()
+				->RemoveSharedVideoCompositionsByIds(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllSharedVideoCompositions");
+	{
+		result->SetNull();
+
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetSharedVideoCompositionManager()
+			->SerializeAllSharedVideoCompositions(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("connectVideoCompositionToSharedVideoComposition");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetSharedVideoCompositionManager()
+				->ConnectVideoCompositionToSharedVideoComposition(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("disconnectVideoCompositionsFromSharedVideoCompositionsByIds");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetSharedVideoCompositionManager()
+				->ConnectVideoCompositionToSharedVideoComposition(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("openSceneItemPropertiesDialogById");
 	{
 		if (args->GetSize()) {

@@ -239,7 +239,6 @@ void StreamElementsSharedVideoCompositionManager::DeserializeSharedVideoComposit
 }
 
 void StreamElementsSharedVideoCompositionManager::SerializeAllSharedVideoCompositions(
-	CefRefPtr<CefValue> input,
 	CefRefPtr<CefValue>& output)
 {
 	std::unique_lock guard(m_mutex);
@@ -414,3 +413,27 @@ void StreamElementsSharedVideoCompositionManager::
 
 	output->SetBool(true);
 }
+
+/*
+void StreamElementsSharedVideoCompositionManager::handle_obs_frontend_event(
+	enum obs_frontend_event event, void *data)
+{
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
+	StreamElementsVideoCompositionBase *self =
+		static_cast<StreamElementsVideoCompositionBase *>(data);
+
+	switch (event) {
+	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CLEANUP:
+	case OBS_FRONTEND_EVENT_PROFILE_CHANGING:
+		self->HandleObsSceneCollectionCleanup();
+		break;
+	case OBS_FRONTEND_EVENT_TRANSITION_CHANGED:
+	case OBS_FRONTEND_EVENT_TRANSITION_DURATION_CHANGED:
+		dispatch_transition_changed_event(self);
+		break;
+	default:
+		break;
+	}
+}
+*/

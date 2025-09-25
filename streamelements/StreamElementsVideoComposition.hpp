@@ -212,6 +212,7 @@ protected:
 	}
 
 	virtual void HandleObsSceneCollectionCleanup() {}
+	virtual void HandleObsSceneCollectionCleanupComplete() {}
 
 public:
 	std::string GetId() { return m_id; }
@@ -537,6 +538,18 @@ protected:
 	}
 
 	virtual void SetTransitionDurationMilliseconds(int duration) override;
+
+protected:
+	virtual void HandleObsSceneCollectionCleanup() override
+	{
+		obs_transition_set(m_rootSource, nullptr);
+	}
+
+	virtual void HandleObsSceneCollectionCleanupComplete() override {
+		OBSSourceAutoRelease transition = GetTransitionRef();
+
+		obs_transition_set(m_rootSource, transition);
+	}
 };
 
 class SESignalHandlerData;
@@ -564,7 +577,7 @@ private:
 	std::shared_mutex m_currentSceneMutex;
 	obs_scene_t *m_currentScene = nullptr;
 
-	obs_canvas_t *m_obsCanvas = nullptr;
+	obs_view_t *m_view = nullptr;
 
 public:
 	// ctor only usable by this class
@@ -585,7 +598,15 @@ public:
 
 	virtual void GetVideoInfo(obs_video_info *ovi) override
 	{
-		obs_canvas_get_video_info(m_obsCanvas, ovi);
+		obs_view_enum_video_info(
+			m_view,
+			[](void *data, obs_video_info *ovi) {
+				memcpy(data, ovi, sizeof(obs_video_info));
+
+
+				return false;
+			},
+			ovi);
 	}
 
 private:
@@ -662,6 +683,7 @@ protected:
 	virtual void SetTransitionDurationMilliseconds(int duration) override;
 
 	virtual void HandleObsSceneCollectionCleanup() override;
+	virtual void HandleObsSceneCollectionCleanupComplete() override;
 
 public:
 	void ProcessRenderingRoot(std::function<void(obs_source_t *)> callback);
@@ -769,4 +791,17 @@ protected:
 	}
 
 	virtual void SetTransitionDurationMilliseconds(int duration) override;
+
+protected:
+	virtual void HandleObsSceneCollectionCleanup() override
+	{
+		obs_transition_set(m_rootSource, nullptr);
+	}
+
+	virtual void HandleObsSceneCollectionCleanupComplete() override
+	{
+		OBSSourceAutoRelease transition = GetTransitionRef();
+
+		obs_transition_set(m_rootSource, transition);
+	}
 };

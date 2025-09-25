@@ -41,25 +41,6 @@ StreamElementsVideoCompositionManager::StreamElementsVideoCompositionManager()
 	m_nativeVideoComposition = StreamElementsObsNativeVideoComposition::Create();
 
 	m_videoCompositionsMap[m_nativeVideoComposition->GetId()] = m_nativeVideoComposition;
-
-	{
-		std::vector<obs_canvas_t *> to_remove;
-
-		obs_frontend_canvas_list list = {0};
-		obs_frontend_get_canvases(&list);
-		for (size_t i = 0; i < list.canvases.num; ++i) {
-			auto canvas = list.canvases.array[i];
-
-			if (canvas != obs_get_main_canvas()) {
-				to_remove.push_back(obs_canvas_get_ref(canvas));
-			}
-		}
-		obs_frontend_canvas_list_free(&list);
-
-		for (auto canvas : to_remove) {
-			obs_frontend_remove_canvas(canvas);
-		}
-	}
 }
 
 StreamElementsVideoCompositionManager::~StreamElementsVideoCompositionManager()
