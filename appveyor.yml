@@ -3,7 +3,7 @@ branches:
   only:
   - master
 image:
-  - macos-sonoma
+  - macos-sequoia
   - Visual Studio 2022
 environment:
   BUILD_OPTIONS: -DENABLE_DECKLINK=OFF -DENABLE_SYPHON=OFF -DENABLE_LIBFDK=OFF -DENABLE_NVENC=OFF -DENABLE_QSV11=OFF -DENABLE_VST=OFF -DENABLE_WEBRTC=OFF -DENABLE_WEBSOCKET=OFF -DENABLE_OSS=OFF -DENABLE_SNDIO=OFF -DENABLE_VLC=OFF -DENABLE_VIRTUALCAM=OFF -DENABLE_TEST_INPUT=OFF -DENABLE_AJA=OFF -DENABLE_SCRIPTING=OFF -DENABLE_SCRIPTING_LUA=OFF -DENABLE_UI=OFF
@@ -23,7 +23,7 @@ for:
     configuration: RelWithDebInfo
     clone_folder: ~/src/obs-streamelements-core
     environment:
-      CHECKOUT: 31.0.1
+      CHECKOUT: 31.1.2
     install:
       - sh: >-
           git clone --recursive https://github.com/obsproject/obs-studio.git ~/src/obs-studio
