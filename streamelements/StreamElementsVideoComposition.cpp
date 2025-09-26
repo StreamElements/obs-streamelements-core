@@ -1399,6 +1399,10 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 
 	if (m_rootSource) {
 		obs_transition_set(m_rootSource, nullptr);
+
+		obs_source_remove(m_rootSource);
+		obs_source_release(m_rootSource);
+
 		m_rootSource = nullptr;
 	}
 
@@ -1406,6 +1410,10 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 		DisconnectTransitionEvents(m_transition);
 
 		obs_transition_set(m_transition, nullptr);
+
+		obs_source_remove(m_transition);
+		obs_source_release(m_transition);
+
 		m_transition = nullptr;
 	}
 
