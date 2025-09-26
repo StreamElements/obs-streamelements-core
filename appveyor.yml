@@ -19,7 +19,7 @@ for:
   -
     matrix:
       only:
-        - image: macos-sonoma
+        - image: macos-sequoia
     configuration: RelWithDebInfo
     clone_folder: ~/src/obs-streamelements-core
     environment:
