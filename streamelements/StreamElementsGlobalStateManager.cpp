@@ -457,6 +457,10 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		std::make_shared<StreamElementsOutputManager>(
 			m_videoCompositionManager, m_audioCompositionManager);
 
+	m_sharedVideoCompositionManager =
+		std::make_shared<StreamElementsSharedVideoCompositionManager>(
+			m_videoCompositionManager);
+
 	m_obsActiveSceneTracker =
 		std::make_shared<StreamElementsObsActiveSceneTracker>();
 
@@ -676,6 +680,7 @@ void StreamElementsGlobalStateManager::Shutdown()
 
 	m_obsSceneManager = nullptr;
 
+	m_sharedVideoCompositionManager = nullptr;
 	m_outputManager = nullptr;
 	m_videoCompositionManager = nullptr;
 	m_audioCompositionManager = nullptr;

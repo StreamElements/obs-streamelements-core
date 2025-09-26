@@ -1,0 +1,15 @@
+{
+  "version": 8,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+        "name": "windows-x64-streamelements",
+        "inherits": ["windows-x64"],
+        "architecture": "x64"
+    }
+  ]
+}

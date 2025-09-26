@@ -212,6 +212,7 @@ protected:
 	}
 
 	virtual void HandleObsSceneCollectionCleanup() {}
+	virtual void HandleObsSceneCollectionCleanupComplete() {}
 
 public:
 	std::string GetId() { return m_id; }
@@ -457,6 +458,11 @@ protected:
 protected:
 	void ConnectTransitionEvents(obs_source_t* source);
 	void DisconnectTransitionEvents(obs_source_t *source);
+
+public:
+	virtual void HandleTransitionChanged() = 0;
+	virtual obs_source_t *GetCompositionRootSourceRef() = 0;
+	virtual void GetVideoInfo(obs_video_info *ovi) = 0;
 };
 
 // OBS Main Composition
@@ -467,15 +473,25 @@ private:
 		explicit Private() = default;
 	};
 
+private:
+	std::shared_mutex m_mutex;
+
+	obs_source_t *m_rootSource = nullptr;
+
 public:
 	// ctor only usable by this class
-	StreamElementsObsNativeVideoComposition(Private)
-		: StreamElementsVideoCompositionBase("obs_native_video_composition", "default", "Default")
-	{
+	StreamElementsObsNativeVideoComposition(Private);
 
+	virtual ~StreamElementsObsNativeVideoComposition();
+
+	virtual void HandleTransitionChanged() override;
+
+	virtual obs_source_t* GetCompositionRootSourceRef() override {
+		return obs_source_get_ref(m_rootSource);
 	}
 
-	virtual ~StreamElementsObsNativeVideoComposition() {
+	virtual void GetVideoInfo(obs_video_info* ovi) override {
+		obs_get_video_info(ovi);
 	}
 
 public:
@@ -509,6 +525,7 @@ public:
 		obs_frontend_take_screenshot();
 	}
 
+
 protected:
 	virtual bool RemoveScene(obs_scene_t *scene) override;
 
@@ -521,6 +538,18 @@ protected:
 	}
 
 	virtual void SetTransitionDurationMilliseconds(int duration) override;
+
+protected:
+	virtual void HandleObsSceneCollectionCleanup() override
+	{
+		obs_transition_set(m_rootSource, nullptr);
+	}
+
+	virtual void HandleObsSceneCollectionCleanupComplete() override {
+		OBSSourceAutoRelease transition = GetTransitionRef();
+
+		obs_transition_set(m_rootSource, transition);
+	}
 };
 
 class SESignalHandlerData;
@@ -548,6 +577,8 @@ private:
 	std::shared_mutex m_currentSceneMutex;
 	obs_scene_t *m_currentScene = nullptr;
 
+	obs_view_t *m_view = nullptr;
+
 public:
 	// ctor only usable by this class
 	StreamElementsCustomVideoComposition(
@@ -557,6 +588,26 @@ public:
 		std::vector<OBSDataAutoRelease> &streamingVideoEncoderHotkeyData);
 
 	virtual ~StreamElementsCustomVideoComposition();
+
+	virtual void HandleTransitionChanged() override;
+
+	virtual obs_source_t *GetCompositionRootSourceRef() override
+	{
+		return obs_source_get_ref(m_rootSource);
+	}
+
+	virtual void GetVideoInfo(obs_video_info *ovi) override
+	{
+		obs_view_enum_video_info(
+			m_view,
+			[](void *data, obs_video_info *ovi) {
+				memcpy(data, ovi, sizeof(obs_video_info));
+
+
+				return false;
+			},
+			ovi);
+	}
 
 private:
 	static std::shared_ptr<StreamElementsCustomVideoComposition>
@@ -586,10 +637,10 @@ private:
 private:
 	std::vector<obs_encoder_t *> m_streamingVideoEncoders;
 	std::vector<obs_encoder_t *> m_recordingVideoEncoders;
-	obs_view_t *m_view = nullptr;
 	video_t *m_video = nullptr;
 
-	obs_source_t *m_transition = nullptr;
+	OBSSourceAutoRelease m_transition = nullptr;
+	OBSSourceAutoRelease m_rootSource = nullptr;
 	int m_transitionDurationMs = 0;
 
 	std::vector<obs_scene_t *> m_scenes;
@@ -632,6 +683,7 @@ protected:
 	virtual void SetTransitionDurationMilliseconds(int duration) override;
 
 	virtual void HandleObsSceneCollectionCleanup() override;
+	virtual void HandleObsSceneCollectionCleanupComplete() override;
 
 public:
 	void ProcessRenderingRoot(std::function<void(obs_source_t *)> callback);
@@ -648,8 +700,12 @@ private:
 	};
 
 private:
+	std::shared_mutex m_mutex;
+
 	std::vector<obs_encoder_t *> m_streamingVideoEncoders;
 	std::vector<obs_encoder_t *> m_recordingVideoEncoders;
+
+	obs_source_t *m_rootSource = nullptr;
 
 public:
 	// ctor only usable by this class
@@ -661,6 +717,17 @@ public:
 			&streamingVideoEncoderHotkeyData);
 
 	virtual ~StreamElementsObsNativeVideoCompositionWithCustomEncoders();
+
+	virtual void HandleTransitionChanged() override;
+
+	virtual obs_source_t* GetCompositionRootSourceRef() override {
+		return obs_source_get_ref(m_rootSource);
+	}
+
+	virtual void GetVideoInfo(obs_video_info *ovi) override
+	{
+		obs_get_video_info(ovi);
+	}
 
 private:
 	static std::shared_ptr<StreamElementsObsNativeVideoCompositionWithCustomEncoders>
@@ -724,4 +791,17 @@ protected:
 	}
 
 	virtual void SetTransitionDurationMilliseconds(int duration) override;
+
+protected:
+	virtual void HandleObsSceneCollectionCleanup() override
+	{
+		obs_transition_set(m_rootSource, nullptr);
+	}
+
+	virtual void HandleObsSceneCollectionCleanupComplete() override
+	{
+		OBSSourceAutoRelease transition = GetTransitionRef();
+
+		obs_transition_set(m_rootSource, transition);
+	}
 };
