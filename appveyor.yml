@@ -71,7 +71,11 @@ for:
 
         echo Setting up CMAKE build projects
 
-        cmake --preset=windows-x64 -DCMAKE_SYSTEM_VERSION=10.0.26624 %BUILD_OPTIONS%
+        copy c:\local\obs-studio\plugins\obs-streamelements-core\CMakeUserPresets.json c:\local\obs-studio\CMakeUserPresets.json
+
+        del c:\local\obs-studio\plugins\obs-streamelements-core\CMakeUserPresets.json
+
+        cmake --preset=windows-x64-streamelements %BUILD_OPTIONS%
 
         
         
