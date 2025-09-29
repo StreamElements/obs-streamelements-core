@@ -22,6 +22,13 @@ StreamElementsBrowserWidgetManager::StreamElementsBrowserWidgetManager(
 StreamElementsBrowserWidgetManager::~StreamElementsBrowserWidgetManager()
 {
 	// NOP
+	for (auto kv : m_browserWidgets) {
+		kv.second->RemoveVideoCompositionView();
+	}
+
+	if (m_notificationBarBrowserWidget) {
+		m_notificationBarBrowserWidget->RemoveVideoCompositionView();
+	}
 }
 
 static QDockWidget *GetSystemWidgetById(const char *widgetId)
@@ -357,6 +364,7 @@ bool StreamElementsBrowserWidgetManager::RemoveDockWidget(const char *const id)
 
 	if (StreamElementsWidgetManager::RemoveDockWidget(id)) {
 		if (m_browserWidgets.count(id)) {
+			m_browserWidgets[id]->RemoveVideoCompositionView();
 			m_browserWidgets.erase(id);
 
 			return true;

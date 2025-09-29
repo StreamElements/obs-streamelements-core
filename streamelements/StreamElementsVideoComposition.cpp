@@ -17,6 +17,28 @@
 #include <strings.h>
 #endif
 
+std::shared_mutex
+	StreamElementsVideoCompositionBase::CompositionInfo::s_mutex;
+std::map<std::string,
+		StreamElementsVideoCompositionBase::CompositionInfo*>
+	StreamElementsVideoCompositionBase::CompositionInfo::
+		s_heldCompositionInfos;
+
+void StreamElementsVideoCompositionBase::CompositionInfo::
+	LogRemainingCompositionInfos()
+{
+	std::shared_lock guard(s_mutex);
+
+	for (auto kv : s_heldCompositionInfos) {
+		blog(LOG_INFO,
+		     "[obs-streamelements-core]: remaining StreamElementsVideoCompositionBase::CompositionInfo: holder '%s', canvas: '%s': '%s'",
+		     kv.second->m_holder.c_str(),
+		     kv.second->m_owner->GetId().c_str(),
+		     kv.second->m_owner->GetName().c_str());
+	}
+}
+
+
 static obs_scene_t *scene_create_private_with_custom_size(std::string name,
 							  uint32_t width,
 							  uint32_t height)
@@ -1272,8 +1294,13 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 		obs_source_inc_active(source);
 	}
 
+	std::string audioWrapperSourceName =
+		std::string("SE.Live audio wrapper source on canvas: ") +
+		GetId();
+
 	m_audioWrapperSource = obs_source_create_private(
-		AUDIO_WRAPPER_SOURCE_ID, AUDIO_WRAPPER_SOURCE_ID, nullptr);
+		AUDIO_WRAPPER_SOURCE_ID, audioWrapperSourceName.c_str(),
+		nullptr);
 
 	auto aw = (struct audio_wrapper_info *)obs_obj_get_data(
 		m_audioWrapperSource);
@@ -1360,11 +1387,15 @@ void StreamElementsCustomVideoComposition::SetRecordingEncoders(
 StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 {
 	for (auto encoder : m_streamingVideoEncoders) {
+		obs_encoder_set_video(encoder, nullptr);
+
 		obs_encoder_release(encoder);
 	}
 	m_streamingVideoEncoders.clear();
 
 	for (auto encoder : m_recordingVideoEncoders) {
+		obs_encoder_set_video(encoder, nullptr);
+
 		obs_encoder_release(encoder);
 	}
 	m_recordingVideoEncoders.clear();
@@ -1390,11 +1421,11 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 		m_audioWrapperSource = nullptr;
 	}
 
-
 	if (m_view) {
 		obs_view_set_source(m_view, 0, nullptr);
 
 		obs_view_remove(m_view);
+		obs_view_destroy(m_view);
 	}
 
 	if (m_rootSource) {
@@ -2101,11 +2132,15 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 	~StreamElementsObsNativeVideoCompositionWithCustomEncoders()
 {
 	for (auto encoder : m_streamingVideoEncoders) {
+		obs_encoder_set_video(encoder, nullptr);
+
 		obs_encoder_release(encoder);
 	}
 	m_streamingVideoEncoders.clear();
 
 	for (auto encoder : m_recordingVideoEncoders) {
+		obs_encoder_set_video(encoder, nullptr);
+
 		obs_encoder_release(encoder);
 	}
 	m_recordingVideoEncoders.clear();

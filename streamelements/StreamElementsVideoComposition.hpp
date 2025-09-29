@@ -41,6 +41,15 @@ public:
 		StreamElementsVideoCompositionEventListener *m_listener;
 		std::string m_holder;
 
+	private:
+		std::string m_uuid;
+
+		static std::shared_mutex s_mutex;
+		static std::map<std::string, CompositionInfo *> s_heldCompositionInfos;
+
+	public:
+		static void LogRemainingCompositionInfos();
+
 	public:
 		CompositionInfo(
 			std::shared_ptr<StreamElementsVideoCompositionBase> owner,
@@ -48,10 +57,17 @@ public:
 			std::string holder)
 			: m_owner(owner), m_listener(listener), m_holder(holder)
 		{
+			m_uuid = CreateGloballyUniqueIdString();
 			m_owner->AddRef(m_holder);
+
+			std::unique_lock guard(s_mutex);
+			s_heldCompositionInfos[m_uuid] = this;
 		}
 
 		virtual ~CompositionInfo() { m_owner->RemoveRef(m_holder);
+			std::unique_lock guard(s_mutex);
+
+			s_heldCompositionInfos.erase(m_uuid);
 		}
 
 	public:

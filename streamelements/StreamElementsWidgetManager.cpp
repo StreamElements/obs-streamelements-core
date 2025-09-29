@@ -111,6 +111,9 @@ bool StreamElementsWidgetManager::DestroyCurrentCentralWidget()
 
 	SaveDockWidgetsGeometry();
 
+	static_cast<StreamElementsBrowserWidget *>(m_nativeCentralWidget)
+		->RemoveVideoCompositionView();
+
 	QApplication::sendPostedEvents();
 	QSize currSize = mainWindow()->centralWidget()->size();
 

@@ -41,6 +41,22 @@ using namespace json11;
 
 static void log_remaining_objects()
 {
+	StreamElementsVideoCompositionBase::CompositionInfo::
+		LogRemainingCompositionInfos();
+
+	obs_enum_sources(
+		[](void *, obs_source_t *source) -> bool {
+			auto id = obs_source_get_id(source);
+			auto name = obs_source_get_name(source);
+
+			blog(LOG_WARNING,
+			     "[obs-streamelements-core]: remaining source id '%s', name '%s'",
+			     id, name);
+
+			return true;
+		},
+		nullptr);
+
 	obs_enum_outputs(
 		[](void *, obs_output_t *output) -> bool {
 			auto id = obs_output_get_id(output);
