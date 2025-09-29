@@ -54,7 +54,7 @@ static obs_scene_t *scene_create_private_with_custom_size(std::string name,
 	// This ensures that a scene is always sized the same as our video view base width & height.
 	//
 
-	auto scene = obs_scene_create(name.c_str());
+	auto scene = obs_scene_create_private(name.c_str());
 
 	if (!scene)
 		return nullptr;
