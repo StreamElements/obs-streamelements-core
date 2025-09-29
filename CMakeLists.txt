@@ -242,6 +242,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/StreamElementsVideoCompositionViewWidget.cpp
 	streamelements/StreamElementsAudioComposition.cpp
 	streamelements/StreamElementsAudioCompositionManager.cpp
+	streamelements/StreamElementsSharedVideoCompositionManager.cpp
 	streamelements/StreamElementsOutput.cpp
 	streamelements/StreamElementsOutputManager.cpp
 	streamelements/StreamElementsObsActiveSceneTracker.cpp
@@ -335,6 +336,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/StreamElementsVideoCompositionViewWidget.hpp
 	streamelements/StreamElementsAudioComposition.hpp
 	streamelements/StreamElementsAudioCompositionManager.hpp
+	streamelements/StreamElementsSharedVideoCompositionManager.hpp
 	streamelements/StreamElementsOutput.hpp
 	streamelements/StreamElementsOutputManager.hpp
 	streamelements/StreamElementsObsActiveSceneTracker.hpp

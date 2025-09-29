@@ -6,6 +6,7 @@
 #include <string>
 #include <mutex>
 #include <shared_mutex>
+#include <set>
 
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsMessageBus.hpp"
@@ -252,6 +253,48 @@ public:
 
 	bool IsOnBoardingMode() {
 		return (GetStartupFlags() & STARTUP_FLAGS_ONBOARDING_MODE) != 0;
+	}
+
+	void GetSharedVideoCompositionIds(std::set<std::string>& set) {
+		set.clear();
+
+		auto value = config_get_string(
+			StreamElementsConfig::GetInstance()->GetConfig(),
+			"SharedVideoCompositions", "UUIDList");
+
+		if (!value)
+			return;
+
+		std::string delimiter = ",";
+		std::string s = value;
+
+		size_t pos = 0;
+		while ((pos = s.find(delimiter)) != std::string::npos) {
+			auto token = s.substr(0, pos);
+
+			set.insert(token);
+
+			s.erase(0, pos + delimiter.length());
+		}
+
+		set.insert(s);
+	}
+
+	void SetSharedVideoCompositionIds(std::set<std::string>& set) {
+		std::string s = "";
+
+		for (auto key : set) {
+			if (s.size() > 0)
+				s += ",";
+
+			s += key;
+		}
+
+		config_set_string(
+			StreamElementsConfig::GetInstance()->GetConfig(),
+			"SharedVideoCompositions", "UUIDList", s.c_str());
+
+		SaveConfig();
 	}
 
 private:

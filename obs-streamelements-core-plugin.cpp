@@ -19,6 +19,8 @@
 #include "streamelements/audio-wrapper-source.h"
 #include "streamelements/Version.generated.hpp"
 
+#define ENABLE_PLUGIN 1
+
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("obs-streamelements-core", "en-US")
 MODULE_EXPORT const char *obs_module_description(void)
@@ -81,11 +83,12 @@ static void log_remaining_objects()
 
 MODULE_EXPORT bool obs_module_load(void)
 {
+#if ENABLE_PLUGIN
 	blog(LOG_INFO, "[obs-streamelements-core]: Version %lu",
 	     STREAMELEMENTS_PLUGIN_VERSION);
 
 	obs_register_source(&audio_wrapper_source);
-
+#endif
 	return true;
 }
 
@@ -135,6 +138,7 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 
 MODULE_EXPORT void obs_module_post_load(void)
 {
+#if ENABLE_PLUGIN
 	obs_frontend_add_event_callback(handle_obs_frontend_event, nullptr);
 
 	/*
@@ -160,8 +164,12 @@ MODULE_EXPORT void obs_module_post_load(void)
 		blog(LOG_WARNING,
 		     "[obs-streamelements-core]: Failed to register obs-websocket request emit_event");
 	*/
+#endif
 }
 
 MODULE_EXPORT void obs_module_unload(void)
 {
+#if ENABLE_PLUGIN
+	// NOP
+#endif
 }
