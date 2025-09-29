@@ -2991,10 +2991,15 @@ void StreamElementsObsSceneManager::SetObsScenePropertiesById(
 
 	obs_source_t *source = obs_scene_get_source(scene);
 
-	if (d->HasKey("name")) {
-		ObsSetUniqueSourceName(
-			source,
-			d->GetString("name").ToString());
+	if (d->HasKey("name") && d->GetType("name") == VTYPE_STRING) {
+		if (videoComposition->IsObsNativeComposition()) {
+			ObsSetUniqueSourceName(source,
+					       d->GetString("name").ToString().c_str());
+		} else {
+			obs_source_set_name(
+				source,
+				d->GetString("name").ToString().c_str());
+		}
 
 		result = true;
 	}
@@ -3256,10 +3261,16 @@ void StreamElementsObsSceneManager::SetObsSceneItemPropertiesById(
 	obs_source_t *source = obs_sceneitem_get_source(
 		sceneitem); // does not increment refcount
 
-	if (d->HasKey("name")) {
-		ObsSetUniqueSourceName(
-			source,
-			d->GetString("name").ToString());
+	if (d->HasKey("name") && d->GetType("name") == VTYPE_STRING) {
+		if (videoComposition->IsObsNativeComposition()) {
+			ObsSetUniqueSourceName(
+				source,
+				d->GetString("name").ToString().c_str());
+		} else {
+			obs_source_set_name(
+				source,
+				d->GetString("name").ToString().c_str());
+		}
 
 		result = true;
 	}

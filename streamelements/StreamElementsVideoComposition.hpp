@@ -478,7 +478,7 @@ protected:
 public:
 	virtual void HandleTransitionChanged() = 0;
 	virtual obs_source_t *GetCompositionRootSourceRef() = 0;
-	virtual void GetVideoInfo(obs_video_info *ovi) = 0;
+	virtual bool GetVideoInfo(obs_video_info *ovi) = 0;
 };
 
 // OBS Main Composition
@@ -506,8 +506,8 @@ public:
 		return obs_source_get_ref(m_rootSource);
 	}
 
-	virtual void GetVideoInfo(obs_video_info* ovi) override {
-		obs_get_video_info(ovi);
+	virtual bool GetVideoInfo(obs_video_info* ovi) override {
+		return obs_get_video_info(ovi);
 	}
 
 public:
@@ -593,7 +593,7 @@ private:
 	std::shared_mutex m_currentSceneMutex;
 	obs_scene_t *m_currentScene = nullptr;
 
-	obs_view_t *m_view = nullptr;
+	obs_canvas_t *m_obsCanvas = nullptr;
 
 public:
 	// ctor only usable by this class
@@ -612,17 +612,9 @@ public:
 		return obs_source_get_ref(m_rootSource);
 	}
 
-	virtual void GetVideoInfo(obs_video_info *ovi) override
+	virtual bool GetVideoInfo(obs_video_info *ovi) override
 	{
-		obs_view_enum_video_info(
-			m_view,
-			[](void *data, obs_video_info *ovi) {
-				memcpy(data, ovi, sizeof(obs_video_info));
-
-
-				return false;
-			},
-			ovi);
+		return obs_canvas_get_video_info(m_obsCanvas, ovi);
 	}
 
 private:
@@ -740,9 +732,9 @@ public:
 		return obs_source_get_ref(m_rootSource);
 	}
 
-	virtual void GetVideoInfo(obs_video_info *ovi) override
+	virtual bool GetVideoInfo(obs_video_info *ovi) override
 	{
-		obs_get_video_info(ovi);
+		return obs_get_video_info(ovi);
 	}
 
 private:
