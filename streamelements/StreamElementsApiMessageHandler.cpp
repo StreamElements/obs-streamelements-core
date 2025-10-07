@@ -3045,6 +3045,19 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	API_HANDLER_BEGIN("setSharedVideoCompositionProperties");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetSharedVideoCompositionManager()
+				->DeserializeSharedVideoCompositionProperties(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
 	API_HANDLER_BEGIN("removeSharedVideoCompositionsByIds");
 	{
 		result->SetNull();
