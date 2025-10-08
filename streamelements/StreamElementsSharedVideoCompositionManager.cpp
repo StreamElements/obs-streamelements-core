@@ -319,7 +319,7 @@ void StreamElementsSharedVideoCompositionManager::
 		if (!canvas)
 			return;
 
-		if (d->HasKey("name") && d->GetType("name") != VTYPE_STRING) {
+		if (d->HasKey("name") && d->GetType("name") == VTYPE_STRING) {
 			std::string name = QString(d->GetString("name").c_str())
 					       .trimmed()
 					       .toStdString();
@@ -327,18 +327,21 @@ void StreamElementsSharedVideoCompositionManager::
 			if (!name.size())
 				return;
 
-			bool hasName = false;
+			if (obs_canvas_get_name(canvas) != name) {
+				bool hasName = false;
 
-			GetCanvasByNameCB(name, [&](obs_canvas_t *name_canvas) {
-				if (name_canvas) {
-					hasName = true;
-				}
-			});
+				GetCanvasByNameCB(
+					name, [&](obs_canvas_t *name_canvas) {
+						if (name_canvas) {
+							hasName = true;
+						}
+					});
 
-			if (hasName)
-				return;
+				if (hasName)
+					return;
 
-			obs_canvas_set_name(canvas, name.c_str());
+				obs_canvas_set_name(canvas, name.c_str());
+			}
 		}
 
 		auto result = CefDictionaryValue::Create();
@@ -497,7 +500,7 @@ void StreamElementsSharedVideoCompositionManager::
 		CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
 	std::unique_lock guard(m_mutex);
-\
+
 	output->SetBool(false);
 
 	if (IsVideoInUse())

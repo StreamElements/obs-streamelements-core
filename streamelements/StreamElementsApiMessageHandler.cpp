@@ -3101,7 +3101,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetSharedVideoCompositionManager()
-				->ConnectVideoCompositionToSharedVideoComposition(
+				->DisconnectVideoCompositionsFromSharedVideoCompositionsByIds(
 					args->GetValue(0), result);
 		}
 	}
