@@ -4,7 +4,6 @@
 #include <obs.hpp>
 #include <obs-frontend-api.h>
 
-#include "StreamElementsConfig.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
 
 #include <set>
@@ -12,6 +11,20 @@
 #include <functional>
 
 #include <QString>
+
+const std::string PRODUCT_NAME = "SE.Live";
+
+const auto UNASSIGNED_EMOTE = QString::fromWCharArray(L"⛔").toStdString();
+const auto ASSIGNED_EMOTE = QString::fromWCharArray(L"🚀").toStdString();
+
+const auto UNASSIGNED_CANVAS_NAME_PREFIX =
+	UNASSIGNED_EMOTE + " " + PRODUCT_NAME + ": ";
+
+const auto ASSIGNED_CANVAS_NAME_PREFIX =
+	ASSIGNED_EMOTE + " " + PRODUCT_NAME + ": ";
+
+const auto UNASSIGNED_CANVAS_NAME =
+	UNASSIGNED_CANVAS_NAME_PREFIX + "Managed Canvas (Unassigned)";
 
 static void dispatch_external_event(std::string name, std::string args)
 {
@@ -63,15 +76,6 @@ static bool IsVideoInUse()
 }
 
 static void EnumOwnCanvases(std::function<bool(obs_canvas_t*)> callback) {
-	auto config = StreamElementsConfig::GetInstance();
-
-	if (!config)
-		return;
-
-	std::set<std::string> canvasUUIDs;
-
-	config->GetSharedVideoCompositionIds(canvasUUIDs);
-
 	// Enum canvases
 
 	obs_frontend_canvas_list list = {0};
@@ -82,8 +86,9 @@ static void EnumOwnCanvases(std::function<bool(obs_canvas_t*)> callback) {
 		auto canvas = list.canvases.array[i];
 
 		auto uuid = obs_canvas_get_uuid(canvas);
+		auto name = obs_canvas_get_name(canvas);
 
-		if (canvasUUIDs.count(uuid)) {
+		if (strstr(name, PRODUCT_NAME.c_str())) {
 			auto result = callback(canvas);
 
 			if (!result)
@@ -92,40 +97,6 @@ static void EnumOwnCanvases(std::function<bool(obs_canvas_t*)> callback) {
 	}
 
 	obs_frontend_canvas_list_free(&list);
-}
-
-static void AddUUID(std::string uuid) {
-	auto config = StreamElementsConfig::GetInstance();
-
-	if (!config)
-		return;
-
-	std::set<std::string> canvasUUIDs;
-
-	config->GetSharedVideoCompositionIds(canvasUUIDs);
-
-	if (!canvasUUIDs.count(uuid)) {
-		canvasUUIDs.insert(uuid);
-	}
-
-	config->SetSharedVideoCompositionIds(canvasUUIDs);
-}
-
-static void RemoveUUID(std::string uuid) {
-	auto config = StreamElementsConfig::GetInstance();
-
-	if (!config)
-		return;
-
-	std::set<std::string> canvasUUIDs;
-
-	config->GetSharedVideoCompositionIds(canvasUUIDs);
-
-	if (canvasUUIDs.count(uuid)) {
-		canvasUUIDs.erase(uuid);
-	}
-
-	config->SetSharedVideoCompositionIds(canvasUUIDs);
 }
 
 static void GetCanvasByNameCB(std::string name, std::function<void(obs_canvas_t*)> callback)
@@ -204,45 +175,7 @@ StreamElementsSharedVideoCompositionManager::
 			videoCompositionManager)
 	: m_videoCompositionManager(videoCompositionManager)
 {
-	// Sync config UUIDs to available canvases
-
-	std::set<std::string> configUUIDs;
-	std::set<std::string> obsUUIDs;
-
-	auto config = StreamElementsConfig::GetInstance();
-
-	if (!config)
-		return;
-
-	config->GetSharedVideoCompositionIds(configUUIDs);
-
-	EnumOwnCanvases([&](obs_canvas_t *canvas) -> bool {
-		auto uuid = obs_canvas_get_uuid(canvas);
-
-		if (!uuid)
-			return true;
-
-		if (!obsUUIDs.count(uuid)) {
-			obsUUIDs.insert(uuid);
-		}
-
-		return true;
-	});
-
-	std::list<std::string> removeUUIDs;
-
-	for (auto uuid : configUUIDs) {
-		if (obsUUIDs.count(uuid))
-			continue;
-
-		removeUUIDs.emplace_back(uuid);
-	}
-
-	for (auto uuid : removeUUIDs) {
-		configUUIDs.erase(uuid);
-	}
-
-	config->SetSharedVideoCompositionIds(configUUIDs);
+	Reset();
 
 	obs_frontend_add_event_callback(handle_obs_frontend_event, this);
 }
@@ -252,9 +185,22 @@ StreamElementsSharedVideoCompositionManager::
 {
 	obs_frontend_remove_event_callback(handle_obs_frontend_event, this);
 
-	m_canvasUUIDToVideoCompositionInfoMap.clear();
+	Reset();
 
 	m_videoCompositionManager = nullptr;
+}
+
+void StreamElementsSharedVideoCompositionManager::Reset()
+{
+	std::unique_lock guard(m_mutex);
+
+	m_canvasUUIDToVideoCompositionInfoMap.clear();
+
+	EnumOwnCanvases([&](obs_canvas_t *canvas) -> bool {
+		obs_canvas_set_name(canvas, UNASSIGNED_CANVAS_NAME.c_str());
+
+		return true;
+	});
 }
 
 void StreamElementsSharedVideoCompositionManager::DeserializeSharedVideoComposition(
@@ -269,31 +215,23 @@ void StreamElementsSharedVideoCompositionManager::DeserializeSharedVideoComposit
 
 	auto d = input->GetDictionary();
 
-	if (!d->HasKey("name") || d->GetType("name") != VTYPE_STRING)
-		return;
-
-	std::string name = d->GetString("name");
-
 	std::unique_lock guard(m_mutex);
 
-	GetCanvasByNameCB(name, [&](obs_canvas_t *canvas) {
-		if (!canvas) {
-			obs_video_info ovi = {0};
+	obs_video_info ovi = {0};
 
-			obs_get_video_info(&ovi);
+	obs_get_video_info(&ovi);
 
-			canvas = obs_frontend_add_canvas(name.c_str(), &ovi,
-							 PROGRAM);
+	auto canvas = obs_frontend_add_canvas(
+		UNASSIGNED_CANVAS_NAME.c_str(), &ovi, PROGRAM);
 
-			AddUUID(obs_canvas_get_uuid(canvas));
-		}
+	if (!canvas)
+		return;
 
-		auto result = CefDictionaryValue::Create();
+	auto result = CefDictionaryValue::Create();
 
-		if (SerializeCanvas(canvas, result)) {
-			output->SetDictionary(result);
-		}
-	});
+	if (SerializeCanvas(canvas, result)) {
+		output->SetDictionary(result);
+	}
 }
 
 void StreamElementsSharedVideoCompositionManager::
@@ -324,24 +262,16 @@ void StreamElementsSharedVideoCompositionManager::
 					       .trimmed()
 					       .toStdString();
 
+			if (m_canvasUUIDToVideoCompositionInfoMap.count(uuid)) {
+				name = ASSIGNED_CANVAS_NAME_PREFIX + name;
+			} else {
+				name = UNASSIGNED_CANVAS_NAME_PREFIX + name;
+			}
+
 			if (!name.size())
 				return;
 
-			if (obs_canvas_get_name(canvas) != name) {
-				bool hasName = false;
-
-				GetCanvasByNameCB(
-					name, [&](obs_canvas_t *name_canvas) {
-						if (name_canvas) {
-							hasName = true;
-						}
-					});
-
-				if (hasName)
-					return;
-
-				obs_canvas_set_name(canvas, name.c_str());
-			}
+			obs_canvas_set_name(canvas, name.c_str());
 		}
 
 		auto result = CefDictionaryValue::Create();
@@ -420,8 +350,6 @@ void StreamElementsSharedVideoCompositionManager::
 			m_canvasUUIDToVideoCompositionInfoMap.erase(uuid);
 		}
 
-		RemoveUUID(uuid);
-
 		output->SetBool(true);
 	}
 }
@@ -485,6 +413,11 @@ void StreamElementsSharedVideoCompositionManager::
 
 		obs_canvas_set_channel(canvas, 0, videoCompositionRootSource);
 
+		auto name = ASSIGNED_CANVAS_NAME_PREFIX +
+			    videoComposition->GetName();
+
+		obs_canvas_set_name(canvas, name.c_str());
+
 		auto result = CefDictionaryValue::Create();
 
 		SerializeCanvas(canvas, result);
@@ -529,6 +462,9 @@ void StreamElementsSharedVideoCompositionManager::
 				return;
 
 			obs_canvas_set_channel(canvas, 0, nullptr);
+
+			obs_canvas_set_name(canvas,
+					    UNASSIGNED_CANVAS_NAME.c_str());
 		});
 
 

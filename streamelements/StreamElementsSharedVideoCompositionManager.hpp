@@ -29,6 +29,8 @@ public:
 
 	~StreamElementsSharedVideoCompositionManager();
 
+	void Reset();
+
 	void DeserializeSharedVideoComposition(CefRefPtr<CefValue> input,
 					       CefRefPtr<CefValue> &output);
 

@@ -777,6 +777,7 @@ void StreamElementsGlobalStateManager::StartOnBoardingUI(UiModifier uiModifier)
 	QtPostTask([this]() -> void {
 		GetObsSceneManager()->Reset();
 		GetOutputManager()->Reset();
+		GetSharedVideoCompositionManager()->Reset();
 		GetVideoCompositionManager()->Reset();
 
 		GetMenuManager()->Update();
@@ -838,6 +839,7 @@ void StreamElementsGlobalStateManager::SwitchToOBSStudio()
 
 			GetObsSceneManager()->Reset();
 			GetOutputManager()->Reset();
+			GetSharedVideoCompositionManager()->Reset();
 			GetVideoCompositionManager()->Reset();
 
 			GetMenuManager()->Update();
