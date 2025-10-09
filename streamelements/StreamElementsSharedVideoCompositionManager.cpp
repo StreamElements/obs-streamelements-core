@@ -185,7 +185,7 @@ StreamElementsSharedVideoCompositionManager::
 {
 	obs_frontend_remove_event_callback(handle_obs_frontend_event, this);
 
-	Reset();
+	m_canvasUUIDToVideoCompositionInfoMap.clear();
 
 	m_videoCompositionManager = nullptr;
 }
@@ -232,6 +232,8 @@ void StreamElementsSharedVideoCompositionManager::DeserializeSharedVideoComposit
 	if (SerializeCanvas(canvas, result)) {
 		output->SetDictionary(result);
 	}
+
+	obs_canvas_release(canvas);
 }
 
 void StreamElementsSharedVideoCompositionManager::
@@ -403,7 +405,6 @@ void StreamElementsSharedVideoCompositionManager::
 
 		if (!obs_canvas_reset_video(canvas, &ovi))
 			return;
-		//obs_canvas_reset_video(canvas, &ovi);
 
 		m_canvasUUIDToVideoCompositionInfoMap[sharedVideoCompositionId] =
 			videoCompositionInfo;
@@ -466,7 +467,6 @@ void StreamElementsSharedVideoCompositionManager::
 			obs_canvas_set_name(canvas,
 					    UNASSIGNED_CANVAS_NAME.c_str());
 		});
-
 
 		if (m_canvasUUIDToVideoCompositionInfoMap.count(uuid) > 0) {
 			m_canvasUUIDToVideoCompositionInfoMap.erase(uuid);
