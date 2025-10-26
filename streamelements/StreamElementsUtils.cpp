@@ -4204,9 +4204,26 @@ static obs_encoder_t *DeserializeObsEncoder(obs_encoder_type type,
 	if (mixer_idx < 0 || mixer_idx >= MAX_AUDIO_MIXES)
 		mixer_idx = 0;
 
-	if (type == OBS_ENCODER_VIDEO)
-		return obs_video_encoder_create(id.c_str(), name.c_str(),
+	if (type == OBS_ENCODER_VIDEO) {
+		auto encoder = obs_video_encoder_create(id.c_str(), name.c_str(),
 						settings, nullptr);
+
+		if (encoder && d->HasKey("width") &&
+		   d->GetType("width") == VTYPE_INT &&
+		   d->HasKey("height") && d->GetType("height") == VTYPE_INT)
+		{
+			int width = d->GetInt("width");
+			int height = d->GetInt("height");
+
+			if (width > 0 && height > 0) {
+				obs_encoder_set_scaled_size(encoder, width,
+							    height);
+			}
+		}
+
+		return encoder;
+	}
+
 	else if (type == OBS_ENCODER_AUDIO)
 		return obs_audio_encoder_create(id.c_str(), name.c_str(),
 						settings,

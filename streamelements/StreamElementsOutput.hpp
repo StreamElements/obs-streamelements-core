@@ -59,8 +59,9 @@ public:
 			CefRefPtr<CefValue> result = CefValue::Create();
 
 			if (m_obsEncoderInfo.get() &&
-			    m_obsEncoderInfo->GetType() == VTYPE_DICTIONARY)
+			    m_obsEncoderInfo->GetType() == VTYPE_DICTIONARY) {
 				result->SetValue(m_obsEncoderInfo->Copy());
+			}
 			else
 				result->SetInt(m_index);
 
