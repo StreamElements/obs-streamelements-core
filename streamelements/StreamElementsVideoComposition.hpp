@@ -92,7 +92,7 @@ public:
 			auto result = GetStreamingVideoEncoder(index);
 
 			if (result) {
-				result = obs_encoder_get_ref(result);
+				result = SETRACE_ADDREF(obs_encoder_get_ref(result));
 			}
 
 			return result;
@@ -103,7 +103,7 @@ public:
 			auto result = GetRecordingVideoEncoder(index);
 
 			if (result) {
-				result = obs_encoder_get_ref(result);
+				result = SETRACE_ADDREF(obs_encoder_get_ref(result));
 			}
 
 			return result;
@@ -284,7 +284,7 @@ public:
 				GetIdFromPointer(obs_scene_get_source(*it));
 
 			if (id == id1 || id == id2)
-				return obs_scene_get_ref(*it);
+				return SETRACE_ADDREF(obs_scene_get_ref(*it));
 		}
 
 		return nullptr;
@@ -326,7 +326,7 @@ public:
 			if (strcasecmp(obs_source_get_name(
 					    obs_scene_get_source(*it)),
 				    name.c_str()) == 0)
-				return obs_scene_get_ref(*it);
+				return SETRACE_ADDREF(obs_scene_get_ref(*it));
 		}
 
 		return nullptr;
@@ -350,7 +350,9 @@ public:
 	bool SerializeScene(
 		std::string id,
 		CefRefPtr<CefValue>& result) {
+
 		OBSSceneAutoRelease scene = GetSceneByIdRef(id);
+		SETRACE_DECREF(scene.Get());
 
 		return SerializeScene(scene, result);
 	}
@@ -453,6 +455,7 @@ public:
 public:
 	bool ShowTransitionPropertiesDialog() {
 		OBSSourceAutoRelease transition = GetTransitionRef();
+		SETRACE_DECREF(transition.Get());
 
 		if (!transition) {
 			return false;
@@ -503,7 +506,7 @@ public:
 	virtual void HandleTransitionChanged() override;
 
 	virtual obs_source_t* GetCompositionRootSourceRef() override {
-		return obs_source_get_ref(m_rootSource);
+		return SETRACE_ADDREF(obs_source_get_ref(m_rootSource));
 	}
 
 	virtual void GetVideoInfo(obs_video_info* ovi) override {

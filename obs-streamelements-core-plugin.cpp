@@ -146,6 +146,8 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 		log_remaining_objects();
 
 		blog(LOG_INFO, "[obs-streamelements-core]: shutdown complete");
+
+		SETRACE_DUMP();
 		break;
 	default:
 		break;

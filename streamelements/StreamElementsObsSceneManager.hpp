@@ -231,7 +231,7 @@ private:
 		: m_parent(parent),
 		  m_obsSceneManager(obsSceneManager),
 		  m_videoCompositionBase(videoCompositionBase),
-		  m_scene(obs_scene_get_ref(scene))
+		  m_scene(SETRACE_ADDREF(obs_scene_get_ref(scene)))
 	{
 	}
 
@@ -254,7 +254,7 @@ private:
 		m_scenes_refcount.clear();
 
 		if (m_scene) {
-			obs_scene_release(m_scene);
+			obs_scene_release(SETRACE_DECREF(m_scene));
 		}
 	}
 
@@ -399,7 +399,7 @@ public:
 				scene = item->m_scene;
 		}
 
-		return obs_scene_get_ref(scene);
+		return SETRACE_ADDREF(obs_scene_get_ref(scene));
 	}
 
 	void Lock()
