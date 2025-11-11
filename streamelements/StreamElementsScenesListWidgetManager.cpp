@@ -265,7 +265,8 @@ protected:
 				}
 			}
 
-			obs_source_t *scene = obs_frontend_get_current_scene();
+			obs_source_t *scene = SETRACE_ADDREF(
+				obs_frontend_get_current_scene());
 
 			if (!scene)
 				return false;
@@ -297,13 +298,14 @@ protected:
 			}
 			#endif
 
-			obs_source_release(scene);
+			obs_source_release(SETRACE_DECREF(scene));
 
 			return handled;
 		}
 
 		if (e->type() == QEvent::ContextMenu) {
-			obs_source_t *scene = obs_frontend_get_current_scene();
+			obs_source_t *scene = SETRACE_ADDREF(
+				obs_frontend_get_current_scene());
 
 			if (!scene)
 				return false;
@@ -350,7 +352,7 @@ protected:
 			}
 			#endif
 
-			obs_source_release(scene);
+			obs_source_release(SETRACE_DECREF(scene));
 
 			return handled;
 		}
@@ -551,7 +553,8 @@ StreamElementsScenesListWidgetManager::GetScenePropertyValue(
 	CefRefPtr<CefValue> result = CefValue::Create();
 	result->SetNull();
 
-	obs_data_t *private_data = obs_source_get_private_settings(scene);
+	obs_data_t *private_data =
+		SETRACE_ADDREF(obs_source_get_private_settings(scene));
 
 	const char *json = obs_data_get_string(private_data, key);
 
@@ -559,7 +562,7 @@ StreamElementsScenesListWidgetManager::GetScenePropertyValue(
 		result = CefParseJSON(json, JSON_PARSER_ALLOW_TRAILING_COMMAS);
 	}
 
-	obs_data_release(private_data);
+	obs_data_release(SETRACE_DECREF(private_data));
 
 	if (!result.get()) {
 		result = CefValue::Create();
@@ -574,13 +577,14 @@ void StreamElementsScenesListWidgetManager::SetScenePropertyValue(
 	obs_source_t *scene, const char *key, CefRefPtr<CefValue> value,
 	bool triggerUpdate)
 {
-	obs_data_t *private_data = obs_source_get_private_settings(scene);
+	obs_data_t *private_data =
+		SETRACE_ADDREF(obs_source_get_private_settings(scene));
 
 	std::string json = CefWriteJSON(value, JSON_WRITER_DEFAULT).ToString();
 
 	obs_data_set_string(private_data, key, json.c_str());
 
-	obs_data_release(private_data);
+	obs_data_release(SETRACE_DECREF(private_data));
 
 	#if SE_ENABLE_SCENES_UI_EXTENSIONS
 	if (triggerUpdate) {

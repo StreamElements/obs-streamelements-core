@@ -65,6 +65,8 @@ SerializeObsAudioEncoders(StreamElementsAudioCompositionBase *composition,
 
 	OBSEncoderAutoRelease streamingAudioEncoder =
 		info->GetStreamingAudioEncoderRef(0);
+	SETRACE_DECREF(streamingAudioEncoder.Get());
+
 	if (streamingAudioEncoder) {
 		root->SetDictionary(
 			"streamingAudioEncoder",
@@ -97,6 +99,7 @@ SerializeObsAudioEncoders(StreamElementsAudioCompositionBase *composition,
 
 	OBSEncoderAutoRelease recordingAudioEncoder =
 		info->GetRecordingAudioEncoderRef(0);
+	SETRACE_DECREF(recordingAudioEncoder.Get());
 
 	if (recordingAudioEncoder) {
 		root->SetDictionary(
@@ -196,14 +199,15 @@ protected:
 		if (!obs_frontend_streaming_active())
 			return nullptr;
 
-		auto output = obs_frontend_get_streaming_output();
+		auto output =
+			SETRACE_ADDREF(obs_frontend_get_streaming_output());
 
 		if (!output)
 			return nullptr;
 
 		auto result = obs_output_get_audio_encoder(output, index);
 
-		obs_output_release(output);
+		obs_output_release(SETRACE_DECREF(output));
 
 		return result;
 	}
@@ -213,24 +217,26 @@ protected:
 		obs_encoder_t* result = nullptr;
 
 		if (!result && obs_frontend_recording_active()) {
-			auto output = obs_frontend_get_recording_output();
+			auto output = SETRACE_ADDREF(
+				obs_frontend_get_recording_output());
 
 			if (output) {
 				result = obs_output_get_audio_encoder(output,
 					index);
 
-				obs_output_release(output);
+				obs_output_release(SETRACE_DECREF(output));
 			}
 		}
 
 		if (!result && obs_frontend_replay_buffer_active()) {
-			auto output = obs_frontend_get_replay_buffer_output();
+			auto output = SETRACE_ADDREF(
+				obs_frontend_get_replay_buffer_output());
 
 			if (output) {
 				result = obs_output_get_audio_encoder(output,
 					index);
 
-				obs_output_release(output);
+				obs_output_release(SETRACE_DECREF(output));
 			}
 		}
 
@@ -298,18 +304,20 @@ public:
 		  m_listener(listener)
 	{
 		for (size_t i = 0; i < MAX_AUDIO_MIXES; ++i) {
-			m_streamingAudioEncoders[i] =
-				obs_encoder_get_ref(streamingAudioEncoders[i]);
-			m_recordingAudioEncoders[i] =
-				obs_encoder_get_ref(recordingAudioEncoders[i]);
+			m_streamingAudioEncoders[i] = SETRACE_ADDREF(
+				obs_encoder_get_ref(streamingAudioEncoders[i]));
+			m_recordingAudioEncoders[i] = SETRACE_ADDREF(
+				obs_encoder_get_ref(recordingAudioEncoders[i]));
 		}
 	}
 
 	virtual ~StreamElementsCustomAudioCompositionInfo()
 	{
 		for (size_t i = 0; i < MAX_AUDIO_MIXES; ++i) {
-			obs_encoder_release(m_streamingAudioEncoders[i]);
-			obs_encoder_release(m_recordingAudioEncoders[i]);
+			obs_encoder_release(
+				SETRACE_DECREF(m_streamingAudioEncoders[i]));
+			obs_encoder_release(
+				SETRACE_DECREF(m_recordingAudioEncoders[i]));
 		}
 	}
 
@@ -347,17 +355,18 @@ StreamElementsCustomAudioComposition::StreamElementsCustomAudioComposition(
 	m_audio = obs_get_audio();
 
 	for (size_t i = 0; i < MAX_AUDIO_MIXES; ++i) {
-		m_streamingAudioEncoders[i] = obs_audio_encoder_create(
-			streamingAudioEncoderId.c_str(),
-			(name + ": streaming audio encoder").c_str(),
-			streamingAudioEncoderSettings, i,
-			streamingAudioEncoderHotkeyData);
+		m_streamingAudioEncoders[i] =
+			SETRACE_ADDREF(obs_audio_encoder_create(
+				streamingAudioEncoderId.c_str(),
+				(name + ": streaming audio encoder").c_str(),
+				streamingAudioEncoderSettings, i,
+				streamingAudioEncoderHotkeyData));
 
 		if (!m_streamingAudioEncoders[i]) {
 			for (size_t di = 0; di < i; ++di) {
 				// Destroy previously created encoders
-				obs_encoder_release(
-					m_streamingAudioEncoders[di]);
+				obs_encoder_release(SETRACE_DECREF(
+					m_streamingAudioEncoders[di]));
 			}
 
 			throw std::runtime_error(
@@ -376,17 +385,19 @@ void StreamElementsCustomAudioComposition::SetRecordingEncoder(
 	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
 	for (size_t i = 0; i < MAX_AUDIO_MIXES; ++i) {
-		m_recordingAudioEncoders[i] = obs_audio_encoder_create(
-			recordingAudioEncoderId.c_str(),
-			(GetName() + ": recording audio encoder").c_str(),
-			recordingAudioEncoderSettings, i,
-			recordingAudioEncoderHotkeyData);
+		m_recordingAudioEncoders[i] =
+			SETRACE_ADDREF(obs_audio_encoder_create(
+				recordingAudioEncoderId.c_str(),
+				(GetName() + ": recording audio encoder")
+					.c_str(),
+				recordingAudioEncoderSettings, i,
+				recordingAudioEncoderHotkeyData));
 
 		if (!m_recordingAudioEncoders[i]) {
 			for (size_t di = 0; di < i; ++di) {
 				// Destroy previously created encoders
-				obs_encoder_release(
-					m_recordingAudioEncoders[di]);
+				obs_encoder_release(SETRACE_DECREF(
+					m_recordingAudioEncoders[di]));
 
 				m_recordingAudioEncoders[di] = nullptr;
 			}
@@ -403,12 +414,14 @@ StreamElementsCustomAudioComposition::~StreamElementsCustomAudioComposition()
 {
 	for (size_t i = 0; i < MAX_AUDIO_MIXES; ++i) {
 		if (m_streamingAudioEncoders[i]) {
-			obs_encoder_release(m_streamingAudioEncoders[i]);
+			obs_encoder_release(
+				SETRACE_DECREF(m_streamingAudioEncoders[i]));
 			m_streamingAudioEncoders[i] = nullptr;
 		}
 
 		if (m_recordingAudioEncoders[i]) {
-			obs_encoder_release(m_recordingAudioEncoders[i]);
+			obs_encoder_release(
+				SETRACE_DECREF(m_recordingAudioEncoders[i]));
 			m_recordingAudioEncoders[i] = nullptr;
 		}
 	}
@@ -474,11 +487,12 @@ StreamElementsCustomAudioComposition::Create(
 
 		streamingAudioEncoderId = encoderRoot->GetString("class");
 
-		streamingAudioEncoderSettings = obs_data_create();
+		streamingAudioEncoderSettings = SETRACE_ADDREF(obs_data_create());
 
 		if (!DeserializeObsData(encoderRoot->GetValue("settings"),
 					streamingAudioEncoderSettings)) {
-			obs_data_release(streamingAudioEncoderSettings);
+			obs_data_release(
+				SETRACE_DECREF(streamingAudioEncoderSettings));
 
 			return nullptr;
 		}
@@ -498,10 +512,11 @@ StreamElementsCustomAudioComposition::Create(
 	}
 
 	if (streamingAudioEncoderSettings)
-		obs_data_release(streamingAudioEncoderSettings);
+		obs_data_release(SETRACE_DECREF(streamingAudioEncoderSettings));
 
 	if (streamingAudioEncoderHotkeyData)
-		obs_data_release(streamingAudioEncoderHotkeyData);
+		obs_data_release(
+			SETRACE_DECREF(streamingAudioEncoderHotkeyData));
 
 	if (exception)
 		std::rethrow_exception(exception);
@@ -531,7 +546,7 @@ StreamElementsCustomAudioComposition::Create(
 
 		recordingAudioEncoderId = encoderRoot->GetString("class");
 
-		recordingAudioEncoderSettings = obs_data_create();
+		recordingAudioEncoderSettings = SETRACE_ADDREF(obs_data_create());
 
 		if (DeserializeObsData(encoderRoot->GetValue("settings"),
 				       recordingAudioEncoderSettings)) {
@@ -548,10 +563,10 @@ StreamElementsCustomAudioComposition::Create(
 		}
 
 		if (recordingAudioEncoderSettings)
-			obs_data_release(recordingAudioEncoderSettings);
+			obs_data_release(SETRACE_DECREF(recordingAudioEncoderSettings));
 
 		if (recordingAudioEncoderHotkeyData)
-			obs_data_release(recordingAudioEncoderHotkeyData);
+			obs_data_release(SETRACE_DECREF(recordingAudioEncoderHotkeyData));
 
 		if (exception)
 			std::rethrow_exception(exception);

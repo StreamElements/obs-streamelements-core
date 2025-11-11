@@ -54,7 +54,7 @@ static obs_scene_t *scene_create_private_with_custom_size(std::string name,
 	// This ensures that a scene is always sized the same as our video view base width & height.
 	//
 
-	auto scene = obs_scene_create_private(name.c_str());
+	auto scene = SETRACE_ADDREF(obs_scene_create_private(name.c_str()));
 
 	if (!scene)
 		return nullptr;
@@ -62,12 +62,13 @@ static obs_scene_t *scene_create_private_with_custom_size(std::string name,
 	auto source = obs_scene_get_source(scene);
 
 	if (!source) {
-		obs_scene_release(scene);
+		obs_scene_release(SETRACE_DECREF(scene));
 
 		return nullptr;
 	}
 
-	OBSDataAutoRelease settings = obs_source_get_settings(source);
+	OBSDataAutoRelease settings =
+		SETRACE_SCOPEREF(obs_source_get_settings(source));
 
 	obs_data_set_bool(settings, "custom_size", true);
 	obs_data_set_int(settings, "cx", width);
@@ -239,11 +240,11 @@ ParseEncodersList(CefRefPtr<CefValue> encodersList,
 		    encoderRoot->GetType("settings") != VTYPE_DICTIONARY)
 			break;
 
-		auto settings = obs_data_create();
+		auto settings = SETRACE_ADDREF(obs_data_create());
 
 		if (!DeserializeObsData(encoderRoot->GetValue("settings"),
 					settings)) {
-			obs_data_release(settings);
+			obs_data_release(SETRACE_DECREF(settings));
 
 			break;
 		}
@@ -274,6 +275,8 @@ static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* compos
 		streamingVideoEncoders->SetDictionary(
 			streamingVideoEncoders->GetSize(),
 			SerializeObsEncoder(streamingVideoEncoder));
+
+		SETRACE_DECREF(streamingVideoEncoder.Get());
 	}
 
 	if (streamingVideoEncoders->GetSize() == 0)
@@ -290,12 +293,14 @@ static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* compos
 	for (size_t idx = 0;; ++idx) {
 		OBSEncoderAutoRelease recordingVideoEncoder =
 			info->GetRecordingVideoEncoderRef(idx);
+		SETRACE_DECREF(recordingVideoEncoder.Get());
 
 		if (!recordingVideoEncoder)
 			break;
 
 		OBSEncoderAutoRelease streamingVideoEncoder =
 			info->GetRecordingVideoEncoderRef(idx);
+		SETRACE_DECREF(streamingVideoEncoder.Get());
 
 		if (!streamingVideoEncoder ||
 		    streamingVideoEncoder.Get() !=
@@ -394,7 +399,8 @@ static void handle_transition_stop(void *my_data, calldata_t *cd)
 	StreamElementsVideoCompositionBase *self =
 		static_cast<StreamElementsVideoCompositionBase *>(my_data);
 
-	OBSSceneAutoRelease scene = self->GetCurrentSceneRef();
+	OBSSceneAutoRelease scene =
+		SETRACE_AUTODECREF(self->GetCurrentSceneRef());
 
 	dispatch_scene_changed_event(self, scene);
 	dispatch_scene_item_list_changed_event(self, scene);
@@ -504,7 +510,7 @@ static std::string GetUniqueSceneNameInternal(std::string name, StreamElementsVi
 {
 	std::string result(name);
 
-		auto hasSceneName = [&](std::string name) -> bool {
+	auto hasSceneName = [&](std::string name) -> bool {
 		for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
 			if (strcasecmp(name.c_str(),
 				    obs_source_get_name(
@@ -668,7 +674,7 @@ obs_sceneitem_t *StreamElementsVideoCompositionBase::GetSceneItemById(
 	}
 
 	if (result && addRef) {
-		obs_sceneitem_addref(result);
+		obs_sceneitem_addref(SETRACE_ADDREF(result));
 	}
 
 	return result;
@@ -723,7 +729,7 @@ obs_sceneitem_t *StreamElementsVideoCompositionBase::GetSceneItemByName(
 	}
 
 	if (result && addRef) {
-		obs_sceneitem_addref(result);
+		obs_sceneitem_addref(SETRACE_ADDREF(result));
 	}
 
 	return result;
@@ -739,7 +745,8 @@ StreamElementsVideoCompositionBase::GetSceneItemByName(std::string name,
 void StreamElementsVideoCompositionBase::SerializeTransition(
 	CefRefPtr<CefValue>& output)
 {
-	OBSSourceAutoRelease transition = GetTransitionRef();
+	OBSSourceAutoRelease transition =
+		SETRACE_AUTODECREF(GetTransitionRef());
 
 	SerializeObsTransition(GetId(), transition,
 			       GetTransitionDurationMilliseconds(), output);
@@ -763,7 +770,7 @@ void StreamElementsVideoCompositionBase::DeserializeTransition(
 
 	SerializeObsTransition(GetId(), transition, durationMs, output);
 
-	obs_source_release(transition);
+	obs_source_release(SETRACE_DECREF(transition));
 }
 
 
@@ -795,7 +802,8 @@ protected:
 		if (!obs_frontend_streaming_active())
 			return nullptr;
 
-		OBSOutputAutoRelease output = obs_frontend_get_streaming_output();
+		OBSOutputAutoRelease output =
+			SETRACE_SCOPEREF(obs_frontend_get_streaming_output());
 
 		if (!output)
 			return nullptr;
@@ -818,7 +826,8 @@ protected:
 		obs_encoder_t *result = nullptr;
 
 		if (!result && obs_frontend_recording_active()) {
-			OBSOutputAutoRelease output = obs_frontend_get_recording_output();
+			OBSOutputAutoRelease output = SETRACE_SCOPEREF(
+				obs_frontend_get_recording_output());
 
 			if (output) {
 				if (index == 0) {
@@ -834,7 +843,8 @@ protected:
 		}
 
 		if (!result && obs_frontend_replay_buffer_active()) {
-			OBSOutputAutoRelease output = obs_frontend_get_replay_buffer_output();
+			OBSOutputAutoRelease output = SETRACE_SCOPEREF(
+				obs_frontend_get_replay_buffer_output());
 
 			if (output) {
 				if (index == 0) {
@@ -884,9 +894,9 @@ StreamElementsObsNativeVideoComposition::StreamElementsObsNativeVideoComposition
 	StreamElementsObsNativeVideoComposition::Private)
 	: StreamElementsVideoCompositionBase("obs_native_video_composition", "default", "Default")
 {
-	m_rootSource = obs_source_create_private(
+	m_rootSource = SETRACE_ADDREF(obs_source_create_private(
 		"cut_transition", "SE.Live OBS main canvas root source",
-		nullptr);
+		nullptr));
 
 	HandleTransitionChanged();
 }
@@ -899,7 +909,7 @@ StreamElementsObsNativeVideoComposition::
 	obs_transition_set(m_rootSource, nullptr);
 
 	obs_source_remove(m_rootSource);
-	obs_source_release(m_rootSource);
+	obs_source_release(SETRACE_DECREF(m_rootSource));
 
 	m_rootSource = nullptr;
 }
@@ -912,7 +922,7 @@ void StreamElementsObsNativeVideoComposition::HandleTransitionChanged()
 		return;
 
 	OBSSourceAutoRelease currentTransition =
-		obs_frontend_get_current_transition();
+		SETRACE_SCOPEREF(obs_frontend_get_current_transition());
 
 	obs_transition_set(m_rootSource, currentTransition);
 }
@@ -929,7 +939,8 @@ StreamElementsObsNativeVideoComposition::GetCompositionInfo(
 obs_scene_t *
 StreamElementsObsNativeVideoComposition::AddScene(std::string requestName)
 {
-	return obs_scene_create(GetUniqueSceneName(requestName).c_str());
+	return SETRACE_ADDREF(
+		obs_scene_create(GetUniqueSceneName(requestName).c_str()));
 }
 
 bool StreamElementsObsNativeVideoComposition::RemoveScene(
@@ -941,7 +952,7 @@ bool StreamElementsObsNativeVideoComposition::RemoveScene(
 
 	for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
 		if (*it == sceneToRemove) {
-			obs_source_remove(obs_scene_get_source(sceneToRemove));
+			obs_source_remove(obs_scene_get_source(SETRACE_DECREF(sceneToRemove)));
 
 			return true;
 		}
@@ -980,7 +991,7 @@ void StreamElementsObsNativeVideoComposition::SetTransitionDurationMilliseconds(
 
 obs_source_t* StreamElementsObsNativeVideoComposition::GetTransitionRef()
 {
-	return obs_frontend_get_current_transition();
+	return SETRACE_ADDREF(obs_frontend_get_current_transition());
 }
 
 bool StreamElementsObsNativeVideoComposition::SetCurrentScene(
@@ -1023,7 +1034,8 @@ void StreamElementsObsNativeVideoComposition::GetAllScenesInternal(
 		auto scene = obs_scene_from_source(source);
 
 		if (scene) {
-			result.push_back(obs_scene_get_ref(scene));
+			result.push_back(
+				SETRACE_ADDREF(obs_scene_get_ref(scene)));
 		}
 	}
 
@@ -1066,10 +1078,10 @@ void StreamElementsObsNativeVideoComposition::SerializeComposition(
 
 obs_scene_t* StreamElementsObsNativeVideoComposition::GetCurrentScene()
 {
-	auto source = obs_frontend_get_current_scene();
+	auto source = SETRACE_NOREF(obs_frontend_get_current_scene());
 	auto scene = obs_scene_from_source(source);
 
-	obs_source_release(source);
+	obs_source_release(SETRACE_NOREF(source));
 
 	return scene;
 }
@@ -1077,7 +1089,7 @@ obs_scene_t* StreamElementsObsNativeVideoComposition::GetCurrentScene()
 obs_scene_t *StreamElementsObsNativeVideoComposition::GetCurrentSceneRef()
 {
 	auto source = obs_frontend_get_current_scene();
-	auto scene = obs_scene_from_source(source);
+	auto scene = SETRACE_ADDREF(obs_scene_from_source(source));
 
 	return scene;
 }
@@ -1121,23 +1133,23 @@ public:
 	{
 		for (auto encoder : streamingVideoEncoders) {
 			m_streamingVideoEncoders.push_back(
-				obs_encoder_get_ref(encoder));
+				SETRACE_ADDREF(obs_encoder_get_ref(encoder)));
 		}
 
 		for (auto encoder : recordingVideoEncoders) {
 			m_recordingVideoEncoders.push_back(
-				obs_encoder_get_ref(encoder));
+				SETRACE_ADDREF(obs_encoder_get_ref(encoder)));
 		}
 	}
 
 	virtual ~StreamElementsCustomVideoCompositionInfo()
 	{
-		for (auto encoder : m_streamingVideoEncoders) {
-			obs_encoder_release(encoder);
+		for (const auto &encoder : m_streamingVideoEncoders) {
+			obs_encoder_release(SETRACE_DECREF(encoder));
 		}
 
-		for (auto encoder : m_recordingVideoEncoders) {
-			obs_encoder_release(encoder);
+		for (const auto &encoder : m_recordingVideoEncoders) {
+			obs_encoder_release(SETRACE_DECREF(encoder));
 		}
 	}
 
@@ -1209,19 +1221,21 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 		throw std::runtime_error("obs_get_video_info() failed");
 
 	for (size_t idx = 0; idx < streamingVideoEncoderSettings.size(); ++idx) {
-		obs_data_t* settings = streamingVideoEncoderSettings[idx];
+		obs_data_t *settings =
+			SETRACE_NOREF(streamingVideoEncoderSettings[idx]);
 
 		char buf[32];
 		sprintf(buf, "%d", (int)idx + 1);
 
-		auto created_encoder = obs_video_encoder_create(
+		auto created_encoder = SETRACE_ADDREF(obs_video_encoder_create(
 			streamingVideoEncoderIds[idx].c_str(),
-			(name + ": streaming video encoder " + std::string(buf)).c_str(),
-			settings, streamingVideoEncoderHotkeyData[idx]);
+			(name + ": streaming video encoder " + std::string(buf))
+				.c_str(),
+			settings, streamingVideoEncoderHotkeyData[idx]));
 
 		if (!created_encoder) {
 			for (auto encoder : m_streamingVideoEncoders) {
-				obs_encoder_release(encoder);
+				obs_encoder_release(SETRACE_DECREF(encoder));
 			}
 
 			throw std::runtime_error(
@@ -1243,15 +1257,15 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 		obs_encoder_set_scaled_size(encoder, m_baseWidth, m_baseHeight);
 	}
 
-	m_rootSource = obs_source_create_private(
-		"cut_transition", (name + ": root source").c_str(), nullptr);
+	m_rootSource = SETRACE_SCOPEREF(obs_source_create_private(
+		"cut_transition", (name + ": root source").c_str(), nullptr));
 
-	m_transition = obs_source_create_private(
-		"cut_transition", (name + ": transition").c_str(), nullptr);
+	m_transition = SETRACE_SCOPEREF(obs_source_create_private(
+		"cut_transition", (name + ": transition").c_str(), nullptr));
 
 	if (!m_transition || !m_rootSource) {
 		for (auto encoder : m_streamingVideoEncoders) {
-			obs_encoder_release(encoder);
+			obs_encoder_release(SETRACE_DECREF(encoder));
 		}
 
 		throw std::runtime_error("obs_source_create_private(cut_transition) failed");
@@ -1262,7 +1276,7 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	ovi.output_width = m_baseWidth;
 	ovi.output_height = m_baseHeight;
 
-	m_view = obs_view_create();
+	m_view = SETRACE_ADDREF(obs_view_create());
 
 	m_video = obs_view_add2(m_view, &ovi);
 
@@ -1274,10 +1288,11 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 		obs_encoder_set_video(encoder, m_video);
 	}
 
-	auto currentScene = scene_create_private_with_custom_size(
-		GetUniqueSceneName("Scene").c_str(), m_baseWidth,
-		m_baseHeight);
-	m_currentScene = obs_scene_get_ref(currentScene);
+	auto currentScene =
+		SETRACE_ADDREF(scene_create_private_with_custom_size(
+			GetUniqueSceneName("Scene").c_str(), m_baseWidth,
+			m_baseHeight));
+	m_currentScene = SETRACE_ADDREF(obs_scene_get_ref(currentScene));
 	m_scenes.push_back(currentScene);
 
 	m_signalHandlerData = new SESignalHandlerData(nullptr, this);
@@ -1298,9 +1313,9 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 		std::string("SE.Live audio wrapper source on canvas: ") +
 		GetId();
 
-	m_audioWrapperSource = obs_source_create_private(
+	m_audioWrapperSource = SETRACE_ADDREF(obs_source_create_private(
 		AUDIO_WRAPPER_SOURCE_ID, audioWrapperSourceName.c_str(),
-		nullptr);
+		nullptr));
 
 	auto aw = (struct audio_wrapper_info *)obs_obj_get_data(
 		m_audioWrapperSource);
@@ -1313,23 +1328,20 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 
 		std::shared_lock<decltype(self->m_mutex)> lock(self->m_mutex);
 
-		if (!self->m_rootSource)
-			return nullptr;
-
 		// This will always return the most up-to-date value of transition which is always the root of our video composition
-		return obs_source_get_ref(self->m_rootSource);
+		return self->m_rootSource;
 	};
 
 	// Assign audio wrapper source to first free audio channel
 	for (uint32_t channel = 0; channel < MAX_CHANNELS; ++channel) {
-		auto source = obs_get_output_source(channel);
+		auto source = SETRACE_ADDREF(obs_get_output_source(channel));
 
 		if (!source) {
 			obs_set_output_source(channel, m_audioWrapperSource);
 
 			break;
 		} else {
-			obs_source_release(source);
+			obs_source_release(SETRACE_DECREF(source));
 		}
 	}
 
@@ -1355,15 +1367,17 @@ void StreamElementsCustomVideoComposition::SetRecordingEncoders(
 		char buf[32];
 		sprintf(buf, "%d", (int)idx + 1);
 
-		auto created_encoder = obs_video_encoder_create(
+		auto created_encoder = SETRACE_ADDREF(obs_video_encoder_create(
 			recordingVideoEncoderIds[idx].c_str(),
-			(GetName() + ": recording video encoder " + std::string(buf)).c_str(),
+			(GetName() + ": recording video encoder " +
+			 std::string(buf))
+				.c_str(),
 			recordingVideoEncoderSettings[idx],
-			recordingVideoEncoderHotkeyData[idx]);
+			recordingVideoEncoderHotkeyData[idx]));
 
 		if (!created_encoder) {
 			for (auto encoder : m_recordingVideoEncoders) {
-				obs_encoder_release(encoder);
+				obs_encoder_release(SETRACE_DECREF(encoder));
 			}
 
 			m_recordingVideoEncoders.clear();
@@ -1389,14 +1403,14 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 	for (auto encoder : m_streamingVideoEncoders) {
 		obs_encoder_set_video(encoder, nullptr);
 
-		obs_encoder_release(encoder);
+		obs_encoder_release(SETRACE_DECREF(encoder));
 	}
 	m_streamingVideoEncoders.clear();
 
 	for (auto encoder : m_recordingVideoEncoders) {
 		obs_encoder_set_video(encoder, nullptr);
 
-		obs_encoder_release(encoder);
+		obs_encoder_release(SETRACE_DECREF(encoder));
 	}
 	m_recordingVideoEncoders.clear();
 
@@ -1405,19 +1419,20 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 	if (m_audioWrapperSource) {
 		// Release output channel
 		for (uint32_t channel = 0; channel < MAX_CHANNELS; ++channel) {
-			auto source = obs_get_output_source(channel);
+			auto source =
+				SETRACE_ADDREF(obs_get_output_source(channel));
 
 			if (source) {
 				if (source == m_audioWrapperSource) {
 					obs_set_output_source(channel, nullptr);
 				}
 
-				obs_source_release(source);
+				obs_source_release(SETRACE_DECREF(source));
 			}
 		}
 
 		obs_source_remove(m_audioWrapperSource);
-		obs_source_release(m_audioWrapperSource);
+		obs_source_release(SETRACE_DECREF(m_audioWrapperSource));
 		m_audioWrapperSource = nullptr;
 	}
 
@@ -1425,15 +1440,14 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 		obs_view_set_source(m_view, 0, nullptr);
 
 		obs_view_remove(m_view);
-		obs_view_destroy(m_view);
+		obs_view_destroy(SETRACE_DECREF(m_view));
 	}
 
 	if (m_rootSource) {
 		obs_transition_set(m_rootSource, nullptr);
 
 		obs_source_remove(m_rootSource);
-		obs_source_release(m_rootSource);
-
+		//obs_source_release(SETRACE_DECREF(m_rootSource));
 		m_rootSource = nullptr;
 	}
 
@@ -1443,8 +1457,7 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 		obs_transition_set(m_transition, nullptr);
 
 		obs_source_remove(m_transition);
-		obs_source_release(m_transition);
-
+		// obs_source_release(SETRACE_DECREF(m_transition));
 		m_transition = nullptr;
 	}
 
@@ -1454,7 +1467,7 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 	m_scenes.clear();
 
 	if (m_currentScene) {
-		obs_scene_release(m_currentScene);
+		obs_scene_release(SETRACE_DECREF(m_currentScene));
 
 		m_currentScene = nullptr;
 	}
@@ -1495,7 +1508,7 @@ obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentSceneRef()
 	std::shared_lock<decltype(m_currentSceneMutex)> currentSceneLock;
 
 	if (m_currentScene)
-		return obs_scene_get_ref(m_currentScene);
+		return SETRACE_ADDREF(obs_scene_get_ref(m_currentScene));
 	else
 		return nullptr;
 }
@@ -1558,6 +1571,13 @@ StreamElementsCustomVideoComposition::Create(
 	if (exception)
 		std::rethrow_exception(exception);
 
+	for (const auto &item : streamingVideoEncoderSettings) {
+		SETRACE_DECREF(item.Get());
+	}
+	for (const auto &item : streamingVideoEncoderHotkeyData) {
+		SETRACE_DECREF(item.Get());
+	}
+
 	// Recording encoders
 	std::vector<std::string> recordingVideoEncoderIds;
 	std::vector<OBSDataAutoRelease> recordingVideoEncoderSettings;
@@ -1579,6 +1599,13 @@ StreamElementsCustomVideoComposition::Create(
 		}
 	}
 
+	for (const auto &item : recordingVideoEncoderSettings) {
+		SETRACE_DECREF(item.Get());
+	}
+	for (const auto &item : recordingVideoEncoderHotkeyData) {
+		SETRACE_DECREF(item.Get());
+	}
+
 	if (exception)
 		std::rethrow_exception(exception);
 
@@ -1590,7 +1617,7 @@ void StreamElementsCustomVideoComposition::GetAllScenesInternal(scenes_t &result
 	result.clear();
 
 	for (auto item : m_scenes) {
-		result.push_back(obs_scene_get_ref(item));
+		result.push_back(SETRACE_ADDREF(obs_scene_get_ref(item)));
 	}
 }
 
@@ -1601,12 +1628,10 @@ StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 		GetUniqueSceneName(requestName).c_str(),
 		m_baseWidth, m_baseHeight);
 
-	obs_scene_get_ref(scene); // caller will release
-
 	{
 		std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
-		m_scenes.push_back(scene);
+		m_scenes.push_back(SETRACE_ADDREF(obs_scene_get_ref(scene))); // caller will release
 	}
 
 	auto source = obs_scene_get_source(scene);
@@ -1634,7 +1659,7 @@ bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
 
 			remove_scene_signals(scene, m_signalHandlerData);
 
-			obs_scene_release(scene);
+			obs_scene_release(SETRACE_DECREF(scene));
 
 			dispatch_scene_list_changed_event(this);
 
@@ -1654,8 +1679,8 @@ void StreamElementsCustomVideoComposition::SetTransition(
 
 		DisconnectTransitionEvents(m_transition);
 
-		old_transition = m_transition;
-		m_transition = obs_source_get_ref(transition);
+		old_transition = SETRACE_IMPLICITDECREF(obs_source_get_ref(m_transition)); // OBSAutoReleaseRef will release previous ref on assignment to m_transition
+		m_transition = SETRACE_ADDREF(obs_source_get_ref(transition));
 
 		ConnectTransitionEvents(m_transition);
 	}
@@ -1664,10 +1689,9 @@ void StreamElementsCustomVideoComposition::SetTransition(
 	obs_transition_set(m_rootSource, transition);
 	obs_transition_swap_end(transition, old_transition);
 
-	//obs_scene_get_ref(m_currentScene);
 	obs_transition_set(old_transition, nullptr);
 	obs_source_remove(old_transition);
-	obs_source_release(old_transition);
+	obs_source_release(SETRACE_DECREF(old_transition));
 
 	transition_set_defaults(m_transition, m_baseWidth, m_baseHeight);
 
@@ -1693,7 +1717,7 @@ obs_source_t *StreamElementsCustomVideoComposition::GetTransitionRef()
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
-	return obs_source_get_ref(m_transition);
+	return SETRACE_ADDREF(obs_source_get_ref(m_transition));
 }
 
 void StreamElementsCustomVideoComposition::ProcessRenderingRoot(
@@ -1781,11 +1805,13 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 				}
 
 				oldCurrentScene = m_currentScene;
-				m_currentScene = obs_scene_get_ref(scene);
+				m_currentScene = SETRACE_ADDREF(
+					obs_scene_get_ref(scene));
 			}
 
 			if (oldCurrentScene) {
-				obs_scene_release(oldCurrentScene);
+				obs_scene_release(
+					SETRACE_DECREF(oldCurrentScene));
 			}
 
 			return true;
@@ -1823,7 +1849,7 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 		obs_source_dec_showing(source);
 		obs_source_dec_active(source);
 
-		obs_scene_release(scene);
+		obs_scene_release(SETRACE_DECREF(scene));
 	}
 	scenesToRemove.clear();
 
@@ -1843,10 +1869,11 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 		std::unique_lock<decltype(m_currentSceneMutex)> currentSceneLock;
 
 		if (m_currentScene) {
-			obs_scene_release(m_currentScene);
+			obs_scene_release(SETRACE_DECREF(m_currentScene));
 		}
 
-		m_currentScene = obs_scene_get_ref(currentScene);
+		m_currentScene =
+			SETRACE_ADDREF(obs_scene_get_ref(currentScene));
 	}
 
 	{
@@ -1900,7 +1927,8 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetCompositionInfo(
 obs_scene_t *StreamElementsObsNativeVideoCompositionWithCustomEncoders::AddScene(
 	std::string requestName)
 {
-	return obs_scene_create(GetUniqueSceneName(requestName).c_str());
+	return SETRACE_ADDREF(
+		obs_scene_create(GetUniqueSceneName(requestName).c_str()));
 }
 
 bool StreamElementsObsNativeVideoCompositionWithCustomEncoders::RemoveScene(
@@ -1912,7 +1940,7 @@ bool StreamElementsObsNativeVideoCompositionWithCustomEncoders::RemoveScene(
 
 	for (auto it = scenes.cbegin(); it != scenes.cend(); ++it) {
 		if (*it == sceneToRemove) {
-			obs_source_remove(obs_scene_get_source(sceneToRemove));
+			obs_source_remove(obs_scene_get_source(SETRACE_DECREF(sceneToRemove)));
 
 			return true;
 		}
@@ -1951,7 +1979,7 @@ void StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 
 obs_source_t *StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetTransitionRef()
 {
-	return obs_frontend_get_current_transition();
+	return SETRACE_ADDREF(obs_frontend_get_current_transition());
 }
 
 bool StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetCurrentScene(
@@ -1992,7 +2020,8 @@ void StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetAllScenesInte
 		auto scene = obs_scene_from_source(source);
 
 		if (scene) {
-			result.push_back(obs_scene_get_ref(scene));
+			result.push_back(
+				SETRACE_ADDREF(obs_scene_get_ref(scene)));
 		}
 	}
 
@@ -2035,10 +2064,10 @@ void StreamElementsObsNativeVideoCompositionWithCustomEncoders::SerializeComposi
 
 obs_scene_t *StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetCurrentScene()
 {
-	auto source = obs_frontend_get_current_scene();
+	auto source = SETRACE_NOREF(obs_frontend_get_current_scene());
 	auto scene = obs_scene_from_source(source);
 
-	obs_source_release(source);
+	obs_source_release(SETRACE_NOREF(source));
 
 	return scene;
 }
@@ -2047,7 +2076,7 @@ obs_scene_t *
 StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetCurrentSceneRef()
 {
 	auto source = obs_frontend_get_current_scene();
-	auto scene = obs_scene_from_source(source);
+	auto scene = SETRACE_ADDREF(obs_scene_from_source(source));
 
 	return scene;
 }
@@ -2084,16 +2113,18 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 			char buf[32];
 			sprintf(buf, "%d", (int)idx + 1);
 
-			auto created_encoder = obs_video_encoder_create(
-				streamingVideoEncoderIds[idx].c_str(),
-				(name + ": streaming video encoder " +
-				 std::string(buf))
-					.c_str(),
-				settings, streamingVideoEncoderHotkeyData[idx]);
+			auto created_encoder =
+				SETRACE_ADDREF(obs_video_encoder_create(
+					streamingVideoEncoderIds[idx].c_str(),
+					(name + ": streaming video encoder " +
+					 std::string(buf))
+						.c_str(),
+					settings,
+					streamingVideoEncoderHotkeyData[idx]));
 
 			if (!created_encoder) {
 				for (auto encoder : m_streamingVideoEncoders) {
-					obs_encoder_release(encoder);
+					obs_encoder_release(SETRACE_DECREF(encoder));
 				}
 
 				throw std::runtime_error(
@@ -2120,10 +2151,10 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 			obs_encoder_set_video(encoder, obs_get_video());
 		}
 
-		m_rootSource = obs_source_create_private(
+		m_rootSource = SETRACE_ADDREF(obs_source_create_private(
 			"cut_transition",
 			"SE.Live OBS main canvas with custom encoders root source",
-			nullptr);
+			nullptr));
 
 		HandleTransitionChanged();
 }
@@ -2134,14 +2165,14 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 	for (auto encoder : m_streamingVideoEncoders) {
 		obs_encoder_set_video(encoder, nullptr);
 
-		obs_encoder_release(encoder);
+		obs_encoder_release(SETRACE_DECREF(encoder));
 	}
 	m_streamingVideoEncoders.clear();
 
 	for (auto encoder : m_recordingVideoEncoders) {
 		obs_encoder_set_video(encoder, nullptr);
 
-		obs_encoder_release(encoder);
+		obs_encoder_release(SETRACE_DECREF(encoder));
 	}
 	m_recordingVideoEncoders.clear();
 
@@ -2150,7 +2181,7 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 	obs_transition_set(m_rootSource, nullptr);
 
 	obs_source_remove(m_rootSource);
-	obs_source_release(m_rootSource);
+	obs_source_release(SETRACE_DECREF(m_rootSource));
 
 	m_rootSource = nullptr;
 }
@@ -2164,7 +2195,7 @@ void StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 		return;
 
 	OBSSourceAutoRelease currentTransition =
-		obs_frontend_get_current_transition();
+		SETRACE_SCOPEREF(obs_frontend_get_current_transition());
 
 	obs_transition_set(m_rootSource, currentTransition);
 }
@@ -2189,17 +2220,17 @@ void StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetRecordingEnco
 		char buf[32];
 		sprintf(buf, "%d", (int)idx + 1);
 
-		auto created_encoder = obs_video_encoder_create(
+		auto created_encoder = SETRACE_ADDREF(obs_video_encoder_create(
 			recordingVideoEncoderIds[idx].c_str(),
 			(GetName() + ": recording video encoder " +
 			 std::string(buf))
 				.c_str(),
 			recordingVideoEncoderSettings[idx],
-			recordingVideoEncoderHotkeyData[idx]);
+			recordingVideoEncoderHotkeyData[idx]));
 
 		if (!created_encoder) {
 			for (auto encoder : m_recordingVideoEncoders) {
-				obs_encoder_release(encoder);
+				obs_encoder_release(SETRACE_DECREF(encoder));
 			}
 
 			m_recordingVideoEncoders.clear();
@@ -2249,6 +2280,13 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::Create(
 		exception = std::current_exception();
 	}
 
+	for (const auto &item : streamingVideoEncoderSettings) {
+		SETRACE_DECREF(item.Get());
+	}
+	for (const auto &item : streamingVideoEncoderHotkeyData) {
+		SETRACE_DECREF(item.Get());
+	}
+
 	if (exception)
 		std::rethrow_exception(exception);
 
@@ -2270,6 +2308,13 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::Create(
 
 			exception = std::current_exception();
 		}
+	}
+
+	for (const auto &item : recordingVideoEncoderSettings) {
+		SETRACE_DECREF(item.Get());
+	}
+	for (const auto &item : recordingVideoEncoderHotkeyData) {
+		SETRACE_DECREF(item.Get());
 	}
 
 	if (exception)

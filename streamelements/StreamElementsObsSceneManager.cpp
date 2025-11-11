@@ -54,7 +54,8 @@ static bool is_active_scene(obs_scene_t *scene)
 	if (!scene)
 		return false;
 
-	obs_source_t *current_scene_source = obs_frontend_get_current_scene();
+	obs_source_t *current_scene_source =
+		SETRACE_ADDREF(obs_frontend_get_current_scene());
 
 	if (!current_scene_source)
 		return false;
@@ -64,7 +65,7 @@ static bool is_active_scene(obs_scene_t *scene)
 	if (scene == obs_scene_from_source(current_scene_source))
 		result = true;
 
-	obs_source_release(current_scene_source);
+	obs_source_release(SETRACE_DECREF(current_scene_source));
 
 	return result;
 }
@@ -73,7 +74,8 @@ static bool is_child_of_current_scene(obs_sceneitem_t *sceneitem)
 {
 	bool result = false;
 
-	obs_source_t *root_scene_source = obs_frontend_get_current_scene();
+	obs_source_t *root_scene_source =
+		SETRACE_ADDREF(obs_frontend_get_current_scene());
 	obs_scene_t *root_scene = obs_scene_from_source(root_scene_source);
 
 	obs_scene_t *parent_scene = obs_sceneitem_get_scene(sceneitem);
@@ -95,7 +97,7 @@ static bool is_child_of_current_scene(obs_sceneitem_t *sceneitem)
 #endif
 	}
 
-	obs_source_release(root_scene_source);
+	obs_source_release(SETRACE_DECREF(root_scene_source));
 
 	return result;
 }
@@ -127,7 +129,8 @@ get_scene_source_by_id_addref(std::string id, bool getCurrentIfNoId = false)
 			obs_source_t *source = scenes.sources.array[idx];
 
 			if (ptr == source) {
-				result = source;
+				result = SETRACE_ADDREF(
+					obs_source_get_ref(source));
 
 				break;
 			}
@@ -137,9 +140,9 @@ get_scene_source_by_id_addref(std::string id, bool getCurrentIfNoId = false)
 	}
 
 	if (result) {
-		obs_source_get_ref(result);
+		SETRACE_ADDREF(obs_source_get_ref(result));
 	} else if (getCurrentIfNoId) {
-		result = obs_frontend_get_current_scene();
+		result = SETRACE_ADDREF(obs_frontend_get_current_scene());
 	}
 
 	return result;
@@ -205,10 +208,11 @@ void StreamElementsObsSceneManager::RefreshObsSceneItemsList()
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
-	obs_source_t *scene_source = obs_frontend_get_current_scene();
+	obs_source_t *scene_source =
+		SETRACE_ADDREF(obs_frontend_get_current_scene());
 	obs_scene_t* current_scene = obs_scene_from_source(scene_source);
 	signal_refresh(current_scene);
-	obs_source_release(scene_source);
+	obs_source_release(SETRACE_DECREF(scene_source));
 
 #if LIBOBS_API_MAJOR_VER < 25
 	/*
@@ -317,12 +321,13 @@ static CefRefPtr<CefValue> SerializeObsSourceSettings(obs_source_t *source)
 	CefRefPtr<CefValue> result = CefValue::Create();
 
 	if (source) {
-		obs_data_t *data = obs_source_get_settings(source);
+		obs_data_t *data =
+			SETRACE_ADDREF(obs_source_get_settings(source));
 
 		if (data) {
 			result = SerializeObsData(data);
 
-			obs_data_release(data);
+			obs_data_release(SETRACE_DECREF(data));
 		}
 	} else {
 		result->SetNull();
@@ -612,8 +617,8 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 		}
 
 		{
-			obs_source_t *parent_scene =
-				obs_frontend_get_current_scene();
+			obs_source_t *parent_scene = SETRACE_ADDREF(
+				obs_frontend_get_current_scene());
 
 			if (!!parent_scene) {
 				obs_scene_t *scene =
@@ -631,7 +636,7 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 					}
 				}
 
-				obs_source_release(parent_scene);
+				obs_source_release(SETRACE_DECREF(parent_scene));
 			}
 		}
 
@@ -639,7 +644,15 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 			/* Serialize group */
 			struct local_context {
 				CefRefPtr<CefListValue> list;
-				std::vector<OBSSceneItemAutoRelease> groupItems;
+				std::vector<obs_sceneitem_t*> groupItems;
+
+				~local_context()
+				{
+					for (const auto &item : groupItems) {
+						obs_sceneitem_release(
+							SETRACE_DECREF(item));
+					}
+				}
 			};
 
 			local_context context;
@@ -656,7 +669,7 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 						(local_context *)param;
 
 					obs_sceneitem_addref(
-						sceneitem); /* will be released below */
+						SETRACE_ADDREF(sceneitem)); /* will be released below */
 
 					context->groupItems.push_back(
 						sceneitem);
@@ -781,9 +794,6 @@ static void dispatch_scene_event(obs_scene_t *scene,
 	if (s_shutdown)
 		return;
 
-	//obs_scene_get_ref(scene);
-
-	//QtPostTask([scene, currentSceneEventName, otherSceneEventName]() {
 	CefRefPtr<CefValue> item = CefValue::Create();
 
 	SerializeObsScene(scene, item);
@@ -796,9 +806,6 @@ static void dispatch_scene_event(obs_scene_t *scene,
 
 	DispatchJSEventGlobal(
 		otherSceneEventName, json);
-
-	//obs_scene_release(scene);
-	//});
 }
 
 static void dispatch_scene_event(obs_source_t *source,
@@ -852,14 +859,14 @@ static void dispatch_scene_update(obs_scene_t* scene,
 		return;
 
 	if (shouldDelay) {
-		auto sceneRef = obs_scene_get_ref(scene);
+		auto sceneRef = SETRACE_ADDREF(obs_scene_get_ref(scene));
 
 		std::thread thread([=]() {
 			dispatch_scene_event(sceneRef,
 					     "hostActiveSceneItemListChanged",
 					     "hostSceneItemListChanged");
 
-			obs_scene_release(sceneRef);
+			obs_scene_release(SETRACE_DECREF(sceneRef));
 		});
 
 		thread.detach();
@@ -887,6 +894,7 @@ static void dispatch_scene_update(void *my_data, calldata_t *cd,
 	} else {
 		OBSSceneAutoRelease scene =
 			signalHandlerData->GetRootSceneRef();
+		SETRACE_DECREF(scene.Get());
 
 		if (!scene)
 			return;
@@ -910,9 +918,6 @@ static void dispatch_sceneitem_event(void *my_data, obs_sceneitem_t *sceneitem,
 		return;
 
 	if (sceneitem) {
-		//obs_sceneitem_addref(sceneitem);
-
-		//QtPostTask([sceneitem, eventName, serializeDetails]() {
 		CefRefPtr<CefValue> item = CefValue::Create();
 
 		obs_source_t *sceneitem_source =
@@ -931,9 +936,6 @@ static void dispatch_sceneitem_event(void *my_data, obs_sceneitem_t *sceneitem,
 			CefWriteJSON(item, JSON_WRITER_DEFAULT).ToString();
 
 		DispatchJSEventGlobal(eventName, json);
-
-		//obs_sceneitem_release(sceneitem);
-		//});
 	} else {
 		DispatchJSEventGlobal(eventName, "null");
 	}
@@ -950,21 +952,14 @@ static void dispatch_sceneitem_event(void *my_data, obs_sceneitem_t *sceneitem,
 	if (!sceneitem)
 		return;
 
-	//obs_sceneitem_addref(sceneitem);
-
-	//QtPostTask([sceneitem, currentSceneEventName, otherSceneEventName,
-	//	    serializeDetails]() {
 	if (is_active_scene(sceneitem)) {
 		dispatch_sceneitem_event(my_data, sceneitem,
 					 currentSceneEventName,
 					 serializeDetails);
 	}
 
-	//obs_sceneitem_release(sceneitem);
-
 	dispatch_sceneitem_event(my_data, sceneitem, otherSceneEventName,
 				 serializeDetails);
-	//});
 }
 
 static void dispatch_sceneitem_event(void *my_data, calldata_t *cd,
@@ -981,8 +976,7 @@ static void dispatch_sceneitem_event(void *my_data, calldata_t *cd,
 		return;
 
 	if (shouldDelay) {
-		obs_sceneitem_addref(sceneitem);
-
+		obs_sceneitem_addref(SETRACE_ADDREF(sceneitem));
 		
 		signalHandlerData->Lock();
 
@@ -992,7 +986,7 @@ static void dispatch_sceneitem_event(void *my_data, calldata_t *cd,
 						 otherSceneEventName,
 						 serializeDetails);
 
-			obs_sceneitem_release(sceneitem);
+			obs_sceneitem_release(SETRACE_DECREF(sceneitem));
 
 			signalHandlerData->Unlock();
 		});
@@ -1015,7 +1009,7 @@ static void dispatch_source_event(void *my_data, calldata_t *cd,
 		return;
 
 	obs_source_t *scene_source =
-		obs_frontend_get_current_scene(); // adds ref
+		SETRACE_ADDREF(obs_frontend_get_current_scene()); // adds ref
 
 	if (!scene_source)
 		return;
@@ -1025,16 +1019,11 @@ static void dispatch_source_event(void *my_data, calldata_t *cd,
 		scene_source); // does not increment refcount
 
 	if (!scene) {
-		obs_source_release(scene_source);
+		obs_source_release(SETRACE_DECREF(scene_source));
 
 		return;
 	}
 
-	//obs_source_get_ref(source);
-
-	//QtPostTask([scene, scene_source, source, currentSceneEventName,
-	//	    otherSceneEventName]() {
-	// For each scene item
 	ObsSceneEnumAllItems(scene, [&](obs_sceneitem_t *sceneitem) {
 		obs_source_t *sceneitem_source = obs_sceneitem_get_source(
 			sceneitem); // does not increase refcount
@@ -1048,9 +1037,7 @@ static void dispatch_source_event(void *my_data, calldata_t *cd,
 		return true;
 	});
 
-	//obs_source_release(source);
-	obs_source_release(scene_source);
-	//});
+	obs_source_release(SETRACE_DECREF(scene_source));
 }
 
 static void handle_scene_rename(void *my_data, calldata_t *cd)
@@ -1182,7 +1169,8 @@ static void handle_scene_item_source_filter_update_props(void *my_data,
 	if (!signalHandlerData)
 		return;
 
-	OBSSceneAutoRelease scene = signalHandlerData->GetRootSceneRef();
+	OBSSceneAutoRelease scene =
+		SETRACE_SCOPEREF(signalHandlerData->GetRootSceneRef());
 
 	if (!scene)
 		return;
@@ -1200,7 +1188,8 @@ static void handle_scene_item_source_filter_update_settings(void *my_data,
 	if (!signalHandlerData)
 		return;
 
-	OBSSceneAutoRelease scene = signalHandlerData->GetRootSceneRef();
+	OBSSceneAutoRelease scene =
+		SETRACE_SCOPEREF(signalHandlerData->GetRootSceneRef());
 
 	if (!scene)
 		return;
@@ -1218,7 +1207,8 @@ static void handle_scene_item_source_filter_rename(void *my_data,
 	if (!signalHandlerData)
 		return;
 
-	OBSSceneAutoRelease scene = signalHandlerData->GetRootSceneRef();
+	OBSSceneAutoRelease scene =
+		SETRACE_SCOPEREF(signalHandlerData->GetRootSceneRef());
 
 	if (!scene)
 		return;
@@ -1280,7 +1270,8 @@ static void handle_scene_item_source_filter_add(void *my_data, calldata_t *cd)
 
 	connect_filter_source_signals(filter, signalHandlerData);
 
-	OBSSceneAutoRelease scene = signalHandlerData->GetRootSceneRef();
+	OBSSceneAutoRelease scene =
+		SETRACE_SCOPEREF(signalHandlerData->GetRootSceneRef());
 
 	if (!scene)
 		return;
@@ -1314,7 +1305,8 @@ static void handle_scene_item_source_filter_remove(void *my_data, calldata_t *cd
 
 	disconnect_filter_source_signals(filter, signalHandlerData);
 
-	OBSSceneAutoRelease scene = signalHandlerData->GetRootSceneRef();
+	OBSSceneAutoRelease scene =
+		SETRACE_SCOPEREF(signalHandlerData->GetRootSceneRef());
 
 	if (!scene)
 		return;
@@ -1334,7 +1326,8 @@ static void handle_scene_item_source_filter_reorder(void *my_data,
 	if (!signalHandlerData)
 		return;
 
-	OBSSceneAutoRelease scene = signalHandlerData->GetRootSceneRef();
+	OBSSceneAutoRelease scene =
+		SETRACE_SCOPEREF(signalHandlerData->GetRootSceneRef());
 
 	if (!scene)
 		return;
@@ -1461,7 +1454,8 @@ static void process_scene_item_remove(obs_sceneitem_t *sceneitem,
 	}
 
 	if (dispatchEvents) {
-		OBSSceneAutoRelease sceneRef = signalHandlerData->GetRootSceneRef();
+		OBSSceneAutoRelease sceneRef =
+			SETRACE_SCOPEREF(signalHandlerData->GetRootSceneRef());
 
 		dispatch_sceneitem_event(signalHandlerData, sceneitem,
 					 "hostActiveSceneItemRemoved",
@@ -1657,11 +1651,11 @@ void add_scene_signals(obs_scene_t *scene, SESignalHandlerData *data)
 	scanSceneItems(scene,
 		       [&](obs_sceneitem_t *item,
 			   obs_sceneitem_t *parent_item) -> bool {
-			       calldata_t *cd = calldata_create();
+			       calldata_t *cd = SETRACE_ADDREF(calldata_create());
 			       calldata_set_ptr(cd, "item", item);
 
 			       handle_scene_item_add(signalHandlerData, cd);
-			       calldata_destroy(cd);
+			       calldata_destroy(SETRACE_DECREF(cd));
 
 			       return true;
 		       }, true);
@@ -1883,9 +1877,9 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 	OBSSourceAutoRelease parentScene = nullptr;
 
 	if (inputParentScene == NULL) {
-		parentScene = obs_frontend_get_current_scene();
+		parentScene = SETRACE_SCOPEREF(obs_frontend_get_current_scene());
 	} else {
-		parentScene = obs_source_get_ref(inputParentScene);
+		parentScene = SETRACE_SCOPEREF(obs_source_get_ref(inputParentScene));
 	}
 
 	OBSSourceAutoRelease source = NULL;
@@ -1907,7 +1901,8 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 
 			if (GetIdFromPointer((void *)iterator) == args->id &&
 			    !args->result) {
-				args->result = obs_source_get_ref(iterator);
+				args->result = SETRACE_ADDREF(
+					obs_source_get_ref(iterator));
 
 				return false;
 			}
@@ -1918,7 +1913,7 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 		obs_enum_sources(process, &enum_args);
 		obs_enum_scenes(process, &enum_args);
 
-		source = enum_args.result;
+		source = SETRACE_AUTODECREF(enum_args.result);
 	}
 
 	if (preferExistingSource && !source) {
@@ -1944,8 +1939,8 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 				const char *id = obs_source_get_id(iterator);
 
 				if (strcmp(id, args->id) == 0) {
-					args->result =
-						obs_source_get_ref(iterator);
+					args->result = SETRACE_ADDREF(
+						obs_source_get_ref(iterator));
 
 					return false;
 				}
@@ -1954,35 +1949,20 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 			},
 			&enum_args);
 
-		source = enum_args.result;
+		source = SETRACE_AUTODECREF(enum_args.result);
 	}
 
 	if (source == NULL) {
 		// Not reusing an existing source, create a new one
-		source = obs_source_create(sourceId, sourceName, NULL,
-					   sourceHotkeyData);
+		source = SETRACE_SCOPEREF(obs_source_create(
+			sourceId, sourceName, NULL, sourceHotkeyData));
 
 		obs_source_update(source, sourceSettings);
 	} else {
 		*isExistingSource = true;
 	}
 
-	/*
-	if (strcmp(sourceId, "game_capture") != 0) {
-		// Wait for dimensions: some sources like video capture source do not
-		// get their dimensions immediately: they are initializing asynchronously
-		// and are not aware of the source dimensions until they do.
-		//
-		// We'll do this for maximum 15 seconds and give up.
-		for (int i = 0; i < 150 && obs_source_get_width(source) == 0;
-		     ++i) {
-			os_sleep_ms(100);
-		}
-	}
-	*/
-
-	// Does not increment refcount. No obs_scene_release() call is necessary.
-	obs_scene_t *scene = obs_scene_from_source(parentScene);
+	obs_scene_t *scene = obs_scene_from_source(parentScene); // Does not increment refcount
 
 	struct atomic_update_args {
 		obs_source_t *source;
@@ -2001,10 +1981,11 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 		[](void *data, obs_scene_t *scene) {
 			atomic_update_args *args = (atomic_update_args *)data;
 
-			args->sceneitem = obs_scene_add(scene, args->source);
+			args->sceneitem = SETRACE_ADDREF(obs_scene_add(scene, args->source));
 
 			if (args->sceneitem) {
-				obs_sceneitem_addref(args->sceneitem);
+				obs_sceneitem_addref(
+					SETRACE_ADDREF(args->sceneitem));
 
 				if (!!args->group &&
 				    obs_sceneitem_is_group(args->group)) {
@@ -2031,11 +2012,11 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 			*output_sceneitem = args.sceneitem;
 		} else {
 			obs_sceneitem_release(
-				args.sceneitem); // was allocated in atomic_scene_update
+				SETRACE_DECREF(args.sceneitem)); // was allocated in atomic_scene_update
 		}
 
 		if (output_source != NULL) {
-			*output_source = obs_source_get_ref(source);
+			*output_source = SETRACE_ADDREF(obs_source_get_ref(source));
 		}
 	}
 }
@@ -2043,7 +2024,7 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 static bool isSourceNameUnique(obs_source_t* source, std::string name) {
 	if (source) {
 		OBSSourceAutoRelease existing =
-			obs_get_source_by_name(name.c_str());
+			SETRACE_SCOPEREF(obs_get_source_by_name(name.c_str()));
 
 		if (existing && existing == source) {
 			return true;
@@ -2144,7 +2125,7 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 				      ? root->GetString("sceneId").ToString()
 				      : "";
 
-	OBSDataAutoRelease settings = obs_data_create();
+	OBSDataAutoRelease settings = SETRACE_SCOPEREF(obs_data_create());
 
 	bool parsed =
 		root->HasKey("settings")
@@ -2156,6 +2137,7 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 
 		OBSSceneAutoRelease parent_scene =
 			videoComposition->GetSceneByIdRef(sceneId);
+		SETRACE_DECREF(parent_scene.Get());
 
 		obs_source_t *parent_scene_source = obs_scene_get_source(parent_scene); // no addref
 
@@ -2205,10 +2187,10 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 				source, sceneitem, true, false,
 				videoComposition.get());
 
-			obs_sceneitem_release(sceneitem);
+			obs_sceneitem_release(SETRACE_DECREF(sceneitem));
 		}
 
-		obs_source_release(source);
+		obs_source_release(SETRACE_DECREF(source));
 	}
 }
 
@@ -2246,7 +2228,7 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 				      ? root->GetString("sceneId").ToString()
 				      : "";
 
-	obs_data_t *settings = obs_data_create();
+	obs_data_t *settings = SETRACE_ADDREF(obs_data_create());
 
 	bool parsed =
 		root->HasKey("settings")
@@ -2258,6 +2240,8 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 
 		OBSSceneAutoRelease parent_scene =
 			videoComposition->GetSceneByIdRef(sceneId);
+		SETRACE_DECREF(parent_scene.Get());
+
 		obs_source_t *parent_scene_source = obs_scene_get_source(
 			parent_scene);
 
@@ -2272,10 +2256,6 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 			source_class.c_str(), unique_name.c_str(), settings,
 			nullptr, false, nullptr, &source, &sceneitem,
 			&isExistingSource);
-
-		//if (parent_scene) {
-		//	obs_source_release(parent_scene);
-		//}
 
 		if (sceneitem) {
 			obs_transform_info info;
@@ -2311,13 +2291,13 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 				source, sceneitem, true, false,
 				videoComposition.get());
 
-			obs_sceneitem_release(sceneitem);
+			obs_sceneitem_release(SETRACE_DECREF(sceneitem));
 		}
 
-		obs_source_release(source);
+		obs_source_release(SETRACE_DECREF(source));
 	}
 
-	obs_data_release(settings);
+	obs_data_release(SETRACE_DECREF(settings));
 }
 
 void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
@@ -2365,7 +2345,7 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 				      ? root->GetString("sceneId").ToString()
 				      : "";
 
-	obs_data_t *settings = obs_data_create();
+	obs_data_t *settings = SETRACE_ADDREF(obs_data_create());
 
 	bool parsed =
 		root->HasKey("settings")
@@ -2384,7 +2364,7 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 			/* No device id supplied by user, select a default value */
 
 			obs_properties_t *props =
-				obs_get_source_properties(sourceId);
+				SETRACE_ADDREF(obs_get_source_properties(sourceId));
 
 			if (!!props) {
 				// Set first available video_device_id value
@@ -2414,7 +2394,7 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 					}
 				}
 
-				obs_properties_destroy(props);
+				obs_properties_destroy(SETRACE_DECREF(props));
 			}
 		}
 
@@ -2423,6 +2403,8 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 
 			OBSSceneAutoRelease parent_scene =
 				videoComposition->GetSceneByIdRef(sceneId);
+			SETRACE_DECREF(parent_scene.Get());
+
 			obs_source_t *parent_scene_source = obs_scene_get_source(
 				parent_scene);
 
@@ -2436,10 +2418,6 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 				source_class.c_str(), unique_name.c_str(),
 				settings, nullptr, true, nullptr, &source,
 				&sceneitem, &isExistingSource);
-
-			//if (parent_scene) {
-			//	obs_source_release(parent_scene);
-			//}
 
 			if (sceneitem) {
 				obs_transform_info info;
@@ -2481,14 +2459,14 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 					source, sceneitem, true, false,
 					videoComposition.get());
 
-				obs_sceneitem_release(sceneitem);
+				obs_sceneitem_release(SETRACE_DECREF(sceneitem));
 			}
 
-			obs_source_release(source);
+			obs_source_release(SETRACE_DECREF(source));
 		}
 	}
 
-	obs_data_release(settings);
+	obs_data_release(SETRACE_DECREF(settings));
 }
 
 void StreamElementsObsSceneManager::DeserializeObsNativeSource(
@@ -2541,7 +2519,7 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 			? root->GetString("existingSourceId")
 			: "";
 
-	obs_data_t *settings = obs_data_create();
+	obs_data_t *settings = SETRACE_ADDREF(obs_data_create());
 
 	bool parsed =
 		root->HasKey("settings")
@@ -2553,6 +2531,8 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 
 		OBSSceneAutoRelease parent_scene =
 			videoComposition->GetSceneByIdRef(sceneId);
+		SETRACE_DECREF(parent_scene.Get());
+
 		obs_source_t *parent_scene_source = obs_scene_get_source(
 			parent_scene);
 
@@ -2569,10 +2549,6 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 			existingSourceId.size() ? existingSourceId.c_str()
 						: nullptr,
 			&source, &sceneitem, &isExistingSource);
-
-		//if (parent_scene) {
-		//	obs_source_release(parent_scene);
-		//}
 
 		if (sceneitem) {
 			obs_transform_info info;
@@ -2608,13 +2584,13 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 				source, sceneitem, true, false,
 				videoComposition.get());
 
-			obs_sceneitem_release(sceneitem);
+			obs_sceneitem_release(SETRACE_DECREF(sceneitem));
 		}
 
-		obs_source_release(source);
+		obs_source_release(SETRACE_DECREF(source));
 	}
 
-	obs_data_release(settings);
+	obs_data_release(SETRACE_DECREF(settings));
 }
 
 void StreamElementsObsSceneManager::DeserializeObsSceneItemGroup(
@@ -2651,6 +2627,7 @@ void StreamElementsObsSceneManager::DeserializeObsSceneItemGroup(
 
 	OBSSceneAutoRelease scene =
 		videoComposition->GetSceneByIdRef(sceneId);
+	SETRACE_DECREF(scene.Get());
 
 	if (scene) {
 		obs_scene_atomic_update(
@@ -2663,7 +2640,8 @@ void StreamElementsObsSceneManager::DeserializeObsSceneItemGroup(
 					scene, args->unique_name.c_str());
 
 				if (args->sceneitem) {
-					obs_sceneitem_addref(args->sceneitem);
+					obs_sceneitem_addref(
+						SETRACE_ADDREF(args->sceneitem));
 
 					obs_sceneitem_set_visible(
 						args->sceneitem, true);
@@ -2690,7 +2668,8 @@ void StreamElementsObsSceneManager::DeserializeObsSceneItemGroup(
 			obs_sceneitem_get_source(args.sceneitem),
 			args.sceneitem, true, false, videoComposition.get());
 
-		//obs_sceneitem_release(args.sceneitem); // obs_scene_add_group() does not return an incremented reference
+		// TODO: Check if this is necessary
+		obs_sceneitem_release(SETRACE_DECREF(args.sceneitem));
 	}
 
 	RefreshObsSceneItemsList();
@@ -2717,16 +2696,26 @@ void StreamElementsObsSceneManager::SerializeObsSceneItems(
 			return;
 
 		// Get scene handle
-		scene = videoComposition->GetSceneByIdRef(root->GetString("id"));
+		scene = SETRACE_SCOPEREF(videoComposition->GetSceneByIdRef(
+			root->GetString("id")));
 	} else {
-		scene = videoComposition->GetCurrentSceneRef();
+		scene = SETRACE_SCOPEREF(
+			videoComposition->GetCurrentSceneRef());
 	}
 
 	if (scene) {
 		struct local_context {
 			CefRefPtr<CefListValue> list;
 			decltype(videoComposition) videoComposition;
-			std::vector<OBSSceneItemAutoRelease> sceneItems;
+			std::vector<obs_sceneitem_t*> sceneItems;
+
+			~local_context()
+			{
+				for (const auto &item : sceneItems) {
+					obs_sceneitem_release(
+						SETRACE_DECREF(item));
+				}
+			}
 		};
 
 		local_context context;
@@ -2741,7 +2730,7 @@ void StreamElementsObsSceneManager::SerializeObsSceneItems(
 			   void *param) {
 				local_context *context = (local_context *)param;
 
-				obs_sceneitem_addref(sceneitem); // Will be auto-released
+				obs_sceneitem_addref(SETRACE_SCOPEREF(sceneitem)); // Will be auto-released
 
 				context->sceneItems.push_back(sceneitem);
 
@@ -2750,15 +2739,14 @@ void StreamElementsObsSceneManager::SerializeObsSceneItems(
 			},
 			&context);
 
-		for (auto it = context.sceneItems.cbegin();
-		     it != context.sceneItems.cend(); ++it) {
+		for (const auto &it : context.sceneItems) {
 			obs_source_t *source = obs_sceneitem_get_source(
-				*it); // does not increase refcount
+				it); // does not increase refcount
 
 			CefRefPtr<CefValue> item = CefValue::Create();
 
 			SerializeSourceAndSceneItem(
-				item, scene, source, *it,
+				item, scene, source, it,
 				context.list->GetSize(), true,
 				serializeProperties,
 				context.videoComposition.get());
@@ -2780,6 +2768,7 @@ void StreamElementsObsSceneManager::SerializeObsCurrentScene(
 		return;
 
 	OBSSceneAutoRelease scene = videoComposition->GetCurrentSceneRef();
+	SETRACE_DECREF(scene.Get());
 
 	if (scene) {
 		videoComposition->SerializeScene(scene, output);
@@ -2883,7 +2872,7 @@ void StreamElementsObsSceneManager::DeserializeObsScene(
 
 	SerializeObsScene(scene, output);
 
-	obs_scene_release(scene);
+	obs_scene_release(SETRACE_DECREF(scene));
 }
 
 void StreamElementsObsSceneManager::SetCurrentObsSceneById(
@@ -2915,6 +2904,7 @@ void StreamElementsObsSceneManager::SetCurrentObsSceneById(
 		return;
 
 	OBSSceneAutoRelease scene = videoComposition->GetSceneByIdRef(id);
+	SETRACE_DECREF(scene.Get());
 
 	if (!scene)
 		return;
@@ -2955,6 +2945,7 @@ void StreamElementsObsSceneManager::RemoveObsScenesByIds(
 			continue;
 
 		OBSSceneAutoRelease scene = videoComposition->GetSceneByIdRef(id);
+		SETRACE_DECREF(scene.Get());
 
 		if (!scene)
 			continue;
@@ -2984,6 +2975,7 @@ void StreamElementsObsSceneManager::SetObsScenePropertiesById(
 
 	std::string id = d->GetString("id");
 	OBSSceneAutoRelease scene = videoComposition->GetSceneByIdRef(id);
+	SETRACE_DECREF(scene.Get());
 	if (!scene)
 		return;
 
@@ -3072,7 +3064,7 @@ void StreamElementsObsSceneManager::RemoveObsSceneItemsByIds(
 	for (obs_sceneitem_t *sceneitem : scene_items_to_remove) {
 		/* Remove the scene item */
 		obs_sceneitem_remove(sceneitem);
-		obs_sceneitem_release(sceneitem);
+		obs_sceneitem_release(SETRACE_DECREF(sceneitem));
 	}
 }
 
@@ -3265,7 +3257,7 @@ void StreamElementsObsSceneManager::SetObsSceneItemPropertiesById(
 	}
 
 	if (d->HasKey("settings")) {
-		obs_data_t *settings = obs_data_create();
+		obs_data_t *settings = SETRACE_ADDREF(obs_data_create());
 
 		bool parsed = DeserializeObsData(d->GetValue("settings"),
 						settings);
@@ -3276,7 +3268,7 @@ void StreamElementsObsSceneManager::SetObsSceneItemPropertiesById(
 			result = true;
 		}
 
-		obs_data_release(settings);
+		obs_data_release(SETRACE_DECREF(settings));
 	}
 
 	obs_transform_info info;
@@ -3383,29 +3375,29 @@ void StreamElementsObsSceneManager::SerializeSourceClassProperties(
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
 	// We need all of this create-destroy dance since some 3rd party source types just do not support obs_get_source_properties :(
-	obs_data_t *settings = obs_data_create();
-	auto source = obs_source_create_private(
-		id.c_str(), CreateGloballyUniqueIdString().c_str(), settings);
-	obs_properties_t *props = obs_source_properties(source);
-	obs_source_release(source);
-	obs_data_release(settings);
+	obs_data_t *settings = SETRACE_ADDREF(obs_data_create());
+	auto source = SETRACE_ADDREF(obs_source_create_private(
+		id.c_str(), CreateGloballyUniqueIdString().c_str(), settings));
+	obs_properties_t *props = SETRACE_ADDREF(obs_source_properties(source));
+	obs_source_release(SETRACE_DECREF(source));
+	obs_data_release(SETRACE_DECREF(settings));
 
 	if (!props)
 		return;
 
 	if (d->HasKey("settings")) {
-		obs_data_t *settings = obs_data_create();
+		obs_data_t *settings = SETRACE_ADDREF(obs_data_create());
 
 		if (DeserializeObsData(d->GetValue("settings"), settings)) {
 			obs_properties_apply_settings(props, settings);
 		}
 
-		obs_data_release(settings);
+		obs_data_release(SETRACE_DECREF(settings));
 	}
 
 	SerializeObsProperties(props, output);
 
-	obs_properties_destroy(props);
+	obs_properties_destroy(SETRACE_DECREF(props));
 }
 
 void StreamElementsObsSceneManager::UngroupObsSceneItemsByGroupId(

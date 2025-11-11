@@ -2142,7 +2142,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			}
 		}
 
-		calldata_t *cd = calldata_create();
+		calldata_t *cd = SETRACE_ADDREF(calldata_create());
 		calldata_set_bool(cd, "allow_downgrade", allowDowngrade);
 		calldata_set_bool(cd, "force_install", forceInstall);
 		calldata_set_bool(cd, "allow_use_last_response",
@@ -2153,7 +2153,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			"streamelements_request_check_for_updates_silent",
 			cd);
 
-		calldata_destroy(cd);
+		calldata_destroy(SETRACE_DECREF(cd));
 
 		result->SetBool(true);
 	}

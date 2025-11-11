@@ -115,7 +115,7 @@ void StreamElementsMenuManager::UpdateInternal()
 	m_menu->addAction(check_for_updates_action);
 	check_for_updates_action->connect(
 		check_for_updates_action, &QAction::triggered, [this] {
-			calldata_t *cd = calldata_create();
+			calldata_t *cd = SETRACE_ADDREF(calldata_create());
 			calldata_set_bool(cd, "allow_downgrade", false);
 			calldata_set_bool(cd, "force_install", false);
 			calldata_set_bool(cd, "allow_use_last_response", false);
@@ -125,7 +125,7 @@ void StreamElementsMenuManager::UpdateInternal()
 				"streamelements_request_check_for_updates",
 				cd);
 
-			calldata_destroy(cd);
+			calldata_destroy(SETRACE_DECREF(cd));
 		});
 
 	QMenu *helpMenu = new QMenu(

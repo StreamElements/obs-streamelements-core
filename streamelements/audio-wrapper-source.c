@@ -41,23 +41,8 @@ bool audio_wrapper_render(void *data, uint64_t *ts_out,
 
 	uint64_t timestamp = obs_source_get_audio_timestamp(source);
 	if (!timestamp) {
-		obs_source_release(source);
 		return false;
 	}
-
-	/*
-	if (!aw->mixers) {
-		*ts_out = timestamp;
-		obs_source_release(source);
-		return true;
-	}
-	mixers &= aw->mixers(aw->param);
-	if (mixers == 0) {
-		*ts_out = timestamp;
-		obs_source_release(source);
-		return true;
-	}
-	*/
 
 	struct obs_source_audio_mix child_audio;
 	obs_source_get_audio_mix(source, &child_audio);
@@ -74,7 +59,6 @@ bool audio_wrapper_render(void *data, uint64_t *ts_out,
 		}
 	}
 	*ts_out = timestamp;
-	obs_source_release(source);
 	return true;
 }
 
@@ -89,8 +73,6 @@ static void audio_wrapper_enum_sources(void *data,
 		return;
 
 	enum_callback(aw->source, source, param);
-
-	obs_source_release(source);
 }
 
 void audio_wrapper_enum_active_sources(void *data,

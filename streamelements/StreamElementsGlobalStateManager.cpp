@@ -208,7 +208,8 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 		name = "hostRecordingStopped";
 		break;
 	case OBS_FRONTEND_EVENT_SCENE_CHANGED: {
-		obs_source_t *source = obs_frontend_get_current_scene();
+		obs_source_t *source =
+			SETRACE_ADDREF(obs_frontend_get_current_scene());
 
 		if (source) {
 			const char *sourceName = obs_source_get_name(source);
@@ -232,7 +233,7 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 				args = json.dump();
 			}
 
-			obs_source_release(source);
+			obs_source_release(SETRACE_DECREF(source));
 		}
 		break;
 	}

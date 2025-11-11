@@ -480,7 +480,7 @@ void StreamElementsVideoCompositionViewWidget::Destroy()
 		obs_display_remove_draw_callback(
 			m_display, obs_display_draw_callback, this);
 
-		obs_display_destroy(m_display);
+		obs_display_destroy(SETRACE_DECREF(m_display));
 
 		m_display = nullptr;
 	}
@@ -547,7 +547,7 @@ void StreamElementsVideoCompositionViewWidget::CreateDisplay()
 		}
 	}
 
-	m_display = obs_display_create(&info, 0x303030L);
+	m_display = SETRACE_ADDREF(obs_display_create(&info, 0x303030L));
 
 	obs_display_resize(m_display, size.width(), size.height());
 
@@ -724,8 +724,8 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 			}
 		}
 	} else if (hasWidgetInRegistry(self)) {
-		OBSSceneAutoRelease currentScene =
-			self->m_videoComposition->GetCurrentSceneRef();
+		OBSSceneAutoRelease currentScene = SETRACE_AUTODECREF(
+			self->m_videoComposition->GetCurrentSceneRef());
 
 		// Update visual elements state and draw them on screen
 		self->m_visualElementsState.UpdateAndDraw(

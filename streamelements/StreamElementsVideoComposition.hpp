@@ -25,7 +25,17 @@ public:
 
 class StreamElementsVideoCompositionBase {
 public:
-	typedef std::vector<OBSSceneAutoRelease> scenes_t;
+	class scenes_t : public std::vector<obs_scene_t*> {
+	public:
+		scenes_t() {}
+		~scenes_t()
+		{
+			for (const auto &scene : *this) {
+				if (scene)
+					obs_scene_release(SETRACE_DECREF(scene));
+			}
+		}
+	};
 
 private:
 	char m_header[7] = "header";
@@ -565,7 +575,7 @@ protected:
 	}
 
 	virtual void HandleObsSceneCollectionCleanupComplete() override {
-		OBSSourceAutoRelease transition = GetTransitionRef();
+		OBSSourceAutoRelease transition = SETRACE_AUTODECREF(GetTransitionRef());
 
 		obs_transition_set(m_rootSource, transition);
 	}
@@ -612,7 +622,7 @@ public:
 
 	virtual obs_source_t *GetCompositionRootSourceRef() override
 	{
-		return obs_source_get_ref(m_rootSource);
+		return SETRACE_ADDREF(obs_source_get_ref(m_rootSource));
 	}
 
 	virtual void GetVideoInfo(obs_video_info *ovi) override
@@ -740,7 +750,7 @@ public:
 	virtual void HandleTransitionChanged() override;
 
 	virtual obs_source_t* GetCompositionRootSourceRef() override {
-		return obs_source_get_ref(m_rootSource);
+		return SETRACE_ADDREF(obs_source_get_ref(m_rootSource));
 	}
 
 	virtual void GetVideoInfo(obs_video_info *ovi) override
@@ -819,7 +829,7 @@ protected:
 
 	virtual void HandleObsSceneCollectionCleanupComplete() override
 	{
-		OBSSourceAutoRelease transition = GetTransitionRef();
+		OBSSourceAutoRelease transition = SETRACE_AUTODECREF(GetTransitionRef());
 
 		obs_transition_set(m_rootSource, transition);
 	}

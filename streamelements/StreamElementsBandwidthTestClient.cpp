@@ -1,4 +1,5 @@
 #include "StreamElementsBandwidthTestClient.hpp"
+#include "SETrace.hpp"
 
 #include <thread>
 
@@ -38,14 +39,14 @@ void StreamElementsBandwidthTestClient::TestServerBitsPerSecond(
 	m_state = Running;
 	os_event_reset(m_event_state_changed);
 
-	obs_encoder_t* vencoder = obs_video_encoder_create("obs_x264", "test_x264", nullptr, nullptr);
-	obs_encoder_t* aencoder = obs_audio_encoder_create("ffmpeg_aac", "test_aac", nullptr, 0, nullptr);
-	obs_service_t* service = obs_service_create("rtmp_custom", "test_service", nullptr, nullptr);
+	obs_encoder_t* vencoder = SETRACE_ADDREF(obs_video_encoder_create("obs_x264", "test_x264", nullptr, nullptr));
+	obs_encoder_t* aencoder = SETRACE_ADDREF(obs_audio_encoder_create("ffmpeg_aac", "test_aac", nullptr, 0, nullptr));
+	obs_service_t* service = SETRACE_ADDREF(obs_service_create("rtmp_custom", "test_service", nullptr, nullptr));
 
-	obs_data_t* service_settings = obs_data_create();
+	obs_data_t* service_settings = SETRACE_ADDREF(obs_data_create());
 
 	// Configure video encoder
-	obs_data_t* vencoder_settings = obs_data_create();
+	obs_data_t* vencoder_settings = SETRACE_ADDREF(obs_data_create());
 
 	obs_data_set_int(vencoder_settings, "bitrate", (int)(maxBitrateBitsPerSecond / 1000L));
 	obs_data_set_string(vencoder_settings, "rate_control", "CBR");
@@ -57,7 +58,7 @@ void StreamElementsBandwidthTestClient::TestServerBitsPerSecond(
 	obs_encoder_set_video(vencoder, obs_get_video());
 
 	// Configure audio encoder
-	obs_data_t* aencoder_settings = obs_data_create();
+	obs_data_t* aencoder_settings = SETRACE_ADDREF(obs_data_create());
 
 	obs_data_set_int(aencoder_settings, "bitrate", 128);
 
@@ -86,13 +87,13 @@ void StreamElementsBandwidthTestClient::TestServerBitsPerSecond(
 	if (!output_type)
 		output_type = "rtmp_output";
 
-	obs_data_t* output_settings = obs_data_create();
+	obs_data_t* output_settings = SETRACE_ADDREF(obs_data_create());
 
 	if (bindToIP) {
 		obs_data_set_string(output_settings, "bind_ip", bindToIP);
 	}
 
-	obs_output_t* output = obs_output_create(output_type, "test_stream", output_settings, nullptr);
+	obs_output_t* output = SETRACE_ADDREF(obs_output_create(output_type, "test_stream", output_settings, nullptr));
 
 	// obs_output_update(output, output_settings);
 
@@ -217,15 +218,15 @@ void StreamElementsBandwidthTestClient::TestServerBitsPerSecond(
 	// therefor we'll keep them commented out until the reason for
 	// the subsequent crash is determined.
 	//
-	//obs_output_release(output);
-	//obs_service_release(service);
-	//obs_encoder_release(vencoder);
-	//obs_encoder_release(aencoder);
+	//obs_output_release(SETRACE_DECREF(output));
+	//obs_service_release(SETRACE_DECREF(service));
+	//obs_encoder_release(SETRACE_DECREF(vencoder));
+	//obs_encoder_release(SETRACE_DECREF(aencoder));
 
-	obs_data_release(output_settings);
-	obs_data_release(service_settings);
-	obs_data_release(vencoder_settings);
-	obs_data_release(aencoder_settings);
+	obs_data_release(SETRACE_DECREF(output_settings));
+	obs_data_release(SETRACE_DECREF(service_settings));
+	obs_data_release(SETRACE_DECREF(vencoder_settings));
+	obs_data_release(SETRACE_DECREF(aencoder_settings));
 }
 
 void StreamElementsBandwidthTestClient::TestServerBitsPerSecondAsync(

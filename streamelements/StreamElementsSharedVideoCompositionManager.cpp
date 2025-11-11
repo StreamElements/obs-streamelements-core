@@ -221,8 +221,8 @@ void StreamElementsSharedVideoCompositionManager::DeserializeSharedVideoComposit
 
 	obs_get_video_info(&ovi);
 
-	auto canvas = obs_frontend_add_canvas(
-		UNASSIGNED_CANVAS_NAME.c_str(), &ovi, PROGRAM);
+	auto canvas = SETRACE_ADDREF(obs_frontend_add_canvas(
+		UNASSIGNED_CANVAS_NAME.c_str(), &ovi, PROGRAM));
 
 	if (!canvas)
 		return;
@@ -233,7 +233,7 @@ void StreamElementsSharedVideoCompositionManager::DeserializeSharedVideoComposit
 		output->SetDictionary(result);
 	}
 
-	obs_canvas_release(canvas);
+	obs_canvas_release(SETRACE_DECREF(canvas));
 }
 
 void StreamElementsSharedVideoCompositionManager::
@@ -410,7 +410,8 @@ void StreamElementsSharedVideoCompositionManager::
 			videoCompositionInfo;
 
 		OBSSourceAutoRelease videoCompositionRootSource =
-			videoComposition->GetCompositionRootSourceRef();
+			SETRACE_AUTODECREF(
+				videoComposition->GetCompositionRootSourceRef());
 
 		obs_canvas_set_channel(canvas, 0, videoCompositionRootSource);
 

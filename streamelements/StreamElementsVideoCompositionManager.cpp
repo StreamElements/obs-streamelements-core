@@ -270,7 +270,7 @@ SerializeAvailableEncoderClassPropertiesForSettings(
 
 	std::string id = d->GetString("class");
 
-	OBSDataAutoRelease settings = obs_data_create();
+	OBSDataAutoRelease settings = SETRACE_SCOPEREF(obs_data_create());
 
 	if (d->HasKey("settings") &&
 	    d->GetType("settings") == VTYPE_DICTIONARY) {
@@ -281,11 +281,11 @@ SerializeAvailableEncoderClassPropertiesForSettings(
 	OBSEncoderAutoRelease encoder = nullptr;
 
 	if (encoder_type == OBS_ENCODER_AUDIO)
-		encoder = obs_audio_encoder_create(id.c_str(), "temp", settings,
-						   0, nullptr);
+		encoder = SETRACE_SCOPEREF(obs_audio_encoder_create(
+			id.c_str(), "temp", settings, 0, nullptr));
 	else
-		encoder = obs_video_encoder_create(id.c_str(), "temp", settings,
-						   nullptr);
+		encoder = SETRACE_SCOPEREF(obs_video_encoder_create(id.c_str(), "temp", settings,
+						   nullptr));
 
 	auto result = SerializeObsEncoder(encoder);
 
@@ -322,23 +322,25 @@ void StreamElementsVideoCompositionManager::SerializeAvailableEncoderClasses(
 		obs_encoder_t *encoder = nullptr;
 
 		if (type == OBS_ENCODER_VIDEO)
-			encoder = obs_video_encoder_create(id, id, nullptr,
-							   nullptr);
+			encoder = SETRACE_ADDREF(obs_video_encoder_create(
+				id, id, nullptr, nullptr));
 		else if (type == OBS_ENCODER_AUDIO)
-			encoder = obs_audio_encoder_create(id, id, nullptr, 0,
-							   nullptr);
+			encoder = SETRACE_ADDREF(obs_audio_encoder_create(
+				id, id, nullptr, 0, nullptr));
 
 		if (encoder) {
-			auto defaultSettings = obs_encoder_get_defaults(encoder);
+			auto defaultSettings = SETRACE_ADDREF(
+				obs_encoder_get_defaults(encoder));
 
 			if (defaultSettings) {
 				d->SetValue("defaultSettings",
 					    SerializeObsData(defaultSettings));
 
-				obs_data_release(defaultSettings);
+				obs_data_release(
+					SETRACE_DECREF(defaultSettings));
 			}
 
-			obs_encoder_release(encoder);
+			obs_encoder_release(SETRACE_DECREF(encoder));
 		}
 
 		root->SetDictionary(root->GetSize(), d);
@@ -352,30 +354,6 @@ void StreamElementsVideoCompositionManager::SerializeAvailableTransitionClasses(
 {
 	auto list = CefListValue::Create();
 
-	/*
-	const char *id;
-	for (size_t idx = 0; obs_enum_transition_types(idx, &id); ++idx) {
-		auto d = CefDictionaryValue::Create();
-
-		auto props = obs_get_source_properties(id);
-		auto propsValue = CefValue::Create();
-		SerializeObsProperties(props, propsValue);
-		obs_properties_destroy(props);
-
-		auto defaultsData = obs_get_source_defaults(id);
-		d->SetValue("defaultSettings", SerializeObsData(defaultsData));
-		obs_data_release(defaultsData);
-
-		d->SetString("class", id);
-		d->SetValue("properties", propsValue);
-
-		d->SetString("label", obs_source_get_display_name(id));
-
-
-		list->SetDictionary(list->GetSize(), d);
-	}
-	*/
-
 	obs_frontend_source_list l = {};
 	obs_frontend_get_transitions(&l);
 
@@ -386,14 +364,16 @@ void StreamElementsVideoCompositionManager::SerializeAvailableTransitionClasses(
 
 		auto d = CefDictionaryValue::Create();
 
-		auto props = obs_get_source_properties(id.c_str());
+		auto props =
+			SETRACE_ADDREF(obs_get_source_properties(id.c_str()));
 		auto propsValue = CefValue::Create();
 		SerializeObsProperties(props, propsValue);
-		obs_properties_destroy(props);
+		obs_properties_destroy(SETRACE_DECREF(props));
 
-		auto defaultsData = obs_get_source_defaults(id.c_str());
+		auto defaultsData =
+			SETRACE_ADDREF(obs_get_source_defaults(id.c_str()));
 		d->SetValue("defaultSettings", SerializeObsData(defaultsData));
-		obs_data_release(defaultsData);
+		obs_data_release(SETRACE_DECREF(defaultsData));
 
 		d->SetString("class", id);
 		d->SetValue("properties", propsValue);
