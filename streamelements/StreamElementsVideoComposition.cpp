@@ -1857,8 +1857,13 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 		obs_scene_release(SETRACE_DECREF(scene));
 	}
 	scenesToRemove.clear();
+}
 
+void StreamElementsCustomVideoComposition::
+	HandleObsSceneCollectionCleanupComplete()
+{
 	// Recreate current scene here
+	std::vector<obs_scene_t *> scenesToRemove; // Empty
 
 	auto currentScene = scene_create_private_with_custom_size(
 		GetUniqueSceneNameInternal("Scene", scenesToRemove).c_str(),
@@ -1896,17 +1901,13 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 		add_scene_signals(currentScene, m_signalHandlerData);
 	}
 
+	m_signalHandlerData->Wait();
+
 	dispatch_scene_list_changed_event(this);
 	dispatch_scene_changed_event(this, currentScene);
 
 	dispatch_scenes_reset_end_event(this);
 
-	m_signalHandlerData->Wait();
-}
-
-void StreamElementsCustomVideoComposition::
-	HandleObsSceneCollectionCleanupComplete()
-{
 	obs_transition_set(m_rootSource, m_transition);
 }
 
