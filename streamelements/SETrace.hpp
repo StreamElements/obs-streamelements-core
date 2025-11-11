@@ -1,6 +1,6 @@
 #pragma once
 
-#define ENABLE_SETRACE 1
+#define ENABLE_SETRACE 0
 
 #if ENABLE_SETRACE
 	void *__SETrace_Trace_AddRef(const char *file, const int line,
