@@ -1293,10 +1293,8 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 		obs_encoder_set_video(encoder, m_video);
 	}
 
-	auto currentScene =
-		SETRACE_ADDREF(scene_create_private_with_custom_size(
-			GetUniqueSceneName("Scene").c_str(), m_baseWidth,
-			m_baseHeight));
+	auto currentScene = scene_create_private_with_custom_size(
+		GetUniqueSceneName("Scene").c_str(), m_baseWidth, m_baseHeight);
 	m_currentScene = SETRACE_ADDREF(obs_scene_get_ref(currentScene));
 	m_scenes.push_back(currentScene);
 
@@ -1630,8 +1628,8 @@ obs_scene_t *
 StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 {
 	auto scene = scene_create_private_with_custom_size(
-		GetUniqueSceneName(requestName).c_str(),
-		m_baseWidth, m_baseHeight);
+		GetUniqueSceneName(requestName).c_str(), m_baseWidth,
+		m_baseHeight);
 
 	{
 		std::unique_lock<decltype(m_mutex)> lock(m_mutex);
@@ -1857,6 +1855,16 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 		obs_scene_release(SETRACE_DECREF(scene));
 	}
 	scenesToRemove.clear();
+
+	{
+		std::unique_lock<decltype(m_currentSceneMutex)> currentSceneLock;
+
+		if (m_currentScene) {
+			obs_scene_release(SETRACE_DECREF(m_currentScene));
+
+			m_currentScene = nullptr;
+		}
+	}
 }
 
 void StreamElementsCustomVideoComposition::
@@ -1877,10 +1885,6 @@ void StreamElementsCustomVideoComposition::
 
 	{
 		std::unique_lock<decltype(m_currentSceneMutex)> currentSceneLock;
-
-		if (m_currentScene) {
-			obs_scene_release(SETRACE_DECREF(m_currentScene));
-		}
 
 		m_currentScene =
 			SETRACE_ADDREF(obs_scene_get_ref(currentScene));

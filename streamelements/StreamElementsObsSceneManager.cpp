@@ -2944,8 +2944,8 @@ void StreamElementsObsSceneManager::RemoveObsScenesByIds(
 		if (!videoComposition.get())
 			continue;
 
-		OBSSceneAutoRelease scene = videoComposition->GetSceneByIdRef(id);
-		SETRACE_DECREF(scene.Get());
+		OBSSceneAutoRelease scene = SETRACE_AUTODECREF(
+			videoComposition->GetSceneByIdRef(id));
 
 		if (!scene)
 			continue;
@@ -2974,8 +2974,8 @@ void StreamElementsObsSceneManager::SetObsScenePropertiesById(
 		return;
 
 	std::string id = d->GetString("id");
-	OBSSceneAutoRelease scene = videoComposition->GetSceneByIdRef(id);
-	SETRACE_DECREF(scene.Get());
+	OBSSceneAutoRelease scene =
+		SETRACE_AUTODECREF(videoComposition->GetSceneByIdRef(id));
 	if (!scene)
 		return;
 
