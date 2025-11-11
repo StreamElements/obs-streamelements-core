@@ -202,9 +202,15 @@ void __SETrace_Dump(const char* file, int line)
 
 	std::filesystem::path p = file;
 
+	int badCount = 0;
+	for (const auto &kv : g_traceRefData) {
+		if (kv.second->m_refCount != 0)
+			++badCount;
+	}
+
 	blog(LOG_INFO,
 	     "obs-streamelements-core: start of reference count trace dump for %d pointers at %s:%d",
-	     g_traceRefData.size(), p.filename().u8string().c_str(), line);
+	     badCount, p.filename().u8string().c_str(), line);
 
 	for (const auto &kv : g_traceRefData) {
 		kv.second->Dump();
@@ -212,5 +218,5 @@ void __SETrace_Dump(const char* file, int line)
 
 	blog(LOG_INFO,
 	     "obs-streamelements-core: end of reference count trace dump for %d pointers at %s:%d",
-	     g_traceRefData.size(), p.filename().u8string().c_str(), line);
+	     badCount, p.filename().u8string().c_str(), line);
 }
