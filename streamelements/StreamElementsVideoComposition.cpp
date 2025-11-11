@@ -1634,7 +1634,7 @@ StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 	{
 		std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
-		m_scenes.push_back(SETRACE_ADDREF(obs_scene_get_ref(scene))); // caller will release
+		m_scenes.push_back(scene);
 	}
 
 	auto source = obs_scene_get_source(scene);
@@ -1647,7 +1647,7 @@ StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 		dispatch_scene_list_changed_event(this);
 	}
 
-	return scene;
+	return SETRACE_ADDREF(obs_scene_get_ref(scene)); // caller will release
 }
 
 bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)

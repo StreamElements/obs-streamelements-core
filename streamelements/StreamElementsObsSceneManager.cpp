@@ -892,9 +892,8 @@ static void dispatch_scene_update(void *my_data, calldata_t *cd,
 
 		dispatch_scene_update(scene, shouldDelay, nullptr);
 	} else {
-		OBSSceneAutoRelease scene =
-			signalHandlerData->GetRootSceneRef();
-		SETRACE_DECREF(scene.Get());
+		OBSSceneAutoRelease scene = SETRACE_AUTODECREF(
+			signalHandlerData->GetRootSceneRef());
 
 		if (!scene)
 			return;
@@ -2529,9 +2528,8 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 	if (parsed) {
 		// Add game capture source
 
-		OBSSceneAutoRelease parent_scene =
-			videoComposition->GetSceneByIdRef(sceneId);
-		SETRACE_DECREF(parent_scene.Get());
+		OBSSceneAutoRelease parent_scene = SETRACE_AUTODECREF(
+			videoComposition->GetSceneByIdRef(sceneId));
 
 		obs_source_t *parent_scene_source = obs_scene_get_source(
 			parent_scene);
@@ -2696,10 +2694,10 @@ void StreamElementsObsSceneManager::SerializeObsSceneItems(
 			return;
 
 		// Get scene handle
-		scene = SETRACE_SCOPEREF(videoComposition->GetSceneByIdRef(
+		scene = SETRACE_AUTODECREF(videoComposition->GetSceneByIdRef(
 			root->GetString("id")));
 	} else {
-		scene = SETRACE_SCOPEREF(
+		scene = SETRACE_AUTODECREF(
 			videoComposition->GetCurrentSceneRef());
 	}
 
@@ -2903,8 +2901,8 @@ void StreamElementsObsSceneManager::SetCurrentObsSceneById(
 	if (!videoComposition.get())
 		return;
 
-	OBSSceneAutoRelease scene = videoComposition->GetSceneByIdRef(id);
-	SETRACE_DECREF(scene.Get());
+	OBSSceneAutoRelease scene =
+		SETRACE_AUTODECREF(videoComposition->GetSceneByIdRef(id));
 
 	if (!scene)
 		return;
