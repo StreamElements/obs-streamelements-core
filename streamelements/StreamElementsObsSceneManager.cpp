@@ -669,7 +669,7 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 						(local_context *)param;
 
 					obs_sceneitem_addref(
-						SETRACE_ADDREF(sceneitem)); /* will be released below */
+						SETRACE_ADDREF(sceneitem)); /* will be released below (above, in local_context destructor) */
 
 					context->groupItems.push_back(
 						sceneitem);
@@ -1981,7 +1981,7 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 		[](void *data, obs_scene_t *scene) {
 			atomic_update_args *args = (atomic_update_args *)data;
 
-			args->sceneitem = SETRACE_ADDREF(obs_scene_add(scene, args->source));
+			args->sceneitem = SETRACE_NOREF(obs_scene_add(scene, args->source)); // Does not increase refcount of sceneitem (ref = 1 owned by libobs)
 
 			if (args->sceneitem) {
 				obs_sceneitem_addref(
@@ -2730,7 +2730,7 @@ void StreamElementsObsSceneManager::SerializeObsSceneItems(
 			   void *param) {
 				local_context *context = (local_context *)param;
 
-				obs_sceneitem_addref(SETRACE_SCOPEREF(sceneitem)); // Will be auto-released
+				obs_sceneitem_addref(SETRACE_ADDREF(sceneitem)); // Will be auto-released
 
 				context->sceneItems.push_back(sceneitem);
 
