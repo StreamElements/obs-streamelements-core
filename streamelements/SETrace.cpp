@@ -46,29 +46,51 @@ public:
 		if (m_refCount == 0)
 			return;
 
-		blog(LOG_ERROR,
-		     "obs-streamelements-core: unbalanced reference count (%d) of data object:", m_refCount);
+		blog(LOG_INFO,
+		     "[obs-streamelements-core]: --------------------------------------------------------------");
 
 		blog(LOG_ERROR,
-		     "obs-streamelements-core:     -> AddRefs:");
+		     "[obs-streamelements-core]: unbalanced reference count (%d) of data object:", m_refCount);
+
+		int addCount = 0;
+		for (const auto &kv : m_addref) {
+			addCount += kv.second->m_count;
+		}
+
+		blog(LOG_ERROR, "[obs-streamelements-core]:");
+		blog(LOG_ERROR,
+		     "[obs-streamelements-core]:     -> ++++++++++++++++++++++++ AddRefs (%d): ++++++++++++++++++++++++", addCount);
+		blog(LOG_ERROR, "[obs-streamelements-core]:");
 
 		for (const auto &kv : m_addref) {
 			blog(LOG_ERROR,
-			     "obs-streamelements-core:         -> %s:%d : count(%d) %s : %s",
+			     "[obs-streamelements-core]:         + %s:%d : count(%d) %s : %s",
 			     kv.second->m_file.c_str(), kv.second->m_line,
 			     kv.second->m_count, kv.second->m_statement.c_str(),
 			     kv.first.c_str());
 		}
 
-		blog(LOG_ERROR, "obs-streamelements-core:     -> DecRefs:");
+		int releaseCount = 0;
+		for (const auto &kv : m_releases) {
+			releaseCount += kv.second->m_count;
+		}
+
+		blog(LOG_ERROR, "[obs-streamelements-core]:");
+		blog(LOG_ERROR,
+		     "[obs-streamelements-core]:     -> ------------------------ DecRefs (%d): ------------------------",
+		     releaseCount);
+		blog(LOG_ERROR, "[obs-streamelements-core]:");
 
 		for (const auto &kv : m_releases) {
 			blog(LOG_ERROR,
-			     "obs-streamelements-core:         -> %s:%d : count(%d) %s : %s",
+			     "[obs-streamelements-core]:         -> %s:%d : count(%d) %s : %s",
 			     kv.second->m_file.c_str(), kv.second->m_line,
 			     kv.second->m_count, kv.second->m_statement.c_str(),
 			     kv.first.c_str());
 		}
+
+		blog(LOG_INFO,
+		     "[obs-streamelements-core]: --------------------------------------------------------------");
 	}
 
 	~SETraceData() {
@@ -189,7 +211,7 @@ void* __SETrace_Trace_DecRef(const char* file, const int line,
 		}
 	} else {
 		blog(LOG_ERROR,
-		     "obs-streamelements-core: release reference of data which was not previously allocated at '%s' line '%d': %s",
+		     "[obs-streamelements-core]: release reference of data which was not previously allocated at '%s' line '%d': %s",
 		     p.filename().u8string().c_str(), line, statement);
 	}
 
@@ -209,14 +231,21 @@ void __SETrace_Dump(const char* file, int line)
 	}
 
 	blog(LOG_INFO,
-	     "obs-streamelements-core: start of reference count trace dump for %d pointers at %s:%d",
+	     "[obs-streamelements-core]: --------------------------------------------------------------");
+
+	blog(LOG_INFO,
+	     "[obs-streamelements-core]: start of reference count trace dump for %d pointers at %s:%d",
 	     badCount, p.filename().u8string().c_str(), line);
 
+	bool isFirst = false;
 	for (const auto &kv : g_traceRefData) {
 		kv.second->Dump();
 	}
 
 	blog(LOG_INFO,
-	     "obs-streamelements-core: end of reference count trace dump for %d pointers at %s:%d",
+	     "[obs-streamelements-core]: end of reference count trace dump for %d pointers at %s:%d",
 	     badCount, p.filename().u8string().c_str(), line);
+
+	blog(LOG_INFO,
+	     "[obs-streamelements-core]: --------------------------------------------------------------");
 }

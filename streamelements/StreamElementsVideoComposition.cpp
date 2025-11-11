@@ -910,7 +910,6 @@ StreamElementsObsNativeVideoComposition::
 
 	obs_source_remove(m_rootSource);
 	obs_source_release(SETRACE_DECREF(m_rootSource));
-
 	m_rootSource = nullptr;
 }
 
@@ -1257,13 +1256,19 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 		obs_encoder_set_scaled_size(encoder, m_baseWidth, m_baseHeight);
 	}
 
-	m_rootSource = SETRACE_SCOPEREF(obs_source_create_private(
+	m_rootSource = SETRACE_ADDREF(obs_source_create_private(
 		"cut_transition", (name + ": root source").c_str(), nullptr));
 
-	m_transition = SETRACE_SCOPEREF(obs_source_create_private(
+	m_transition = SETRACE_ADDREF(obs_source_create_private(
 		"cut_transition", (name + ": transition").c_str(), nullptr));
 
 	if (!m_transition || !m_rootSource) {
+		if (m_transition)
+			obs_source_release(SETRACE_DECREF(m_transition));
+
+		if (m_rootSource)
+			obs_source_release(SETRACE_DECREF(m_rootSource));
+
 		for (auto encoder : m_streamingVideoEncoders) {
 			obs_encoder_release(SETRACE_DECREF(encoder));
 		}
@@ -1447,7 +1452,7 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 		obs_transition_set(m_rootSource, nullptr);
 
 		obs_source_remove(m_rootSource);
-		//obs_source_release(SETRACE_DECREF(m_rootSource));
+		obs_source_release(SETRACE_DECREF(m_rootSource));
 		m_rootSource = nullptr;
 	}
 
@@ -1457,7 +1462,7 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 		obs_transition_set(m_transition, nullptr);
 
 		obs_source_remove(m_transition);
-		// obs_source_release(SETRACE_DECREF(m_transition));
+		obs_source_release(SETRACE_DECREF(m_transition));
 		m_transition = nullptr;
 	}
 
@@ -1679,7 +1684,7 @@ void StreamElementsCustomVideoComposition::SetTransition(
 
 		DisconnectTransitionEvents(m_transition);
 
-		old_transition = SETRACE_IMPLICITDECREF(obs_source_get_ref(m_transition)); // OBSAutoReleaseRef will release previous ref on assignment to m_transition
+		old_transition = m_transition; // OBSAutoReleaseRef will release previous ref on assignment to m_transition
 		m_transition = SETRACE_ADDREF(obs_source_get_ref(transition));
 
 		ConnectTransitionEvents(m_transition);
@@ -2182,7 +2187,6 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 
 	obs_source_remove(m_rootSource);
 	obs_source_release(SETRACE_DECREF(m_rootSource));
-
 	m_rootSource = nullptr;
 }
 

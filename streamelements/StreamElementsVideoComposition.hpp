@@ -668,8 +668,8 @@ private:
 	std::vector<obs_encoder_t *> m_recordingVideoEncoders;
 	video_t *m_video = nullptr;
 
-	OBSSourceAutoRelease m_transition = nullptr;
-	OBSSourceAutoRelease m_rootSource = nullptr;
+	obs_source_t* m_transition = nullptr;
+	obs_source_t *m_rootSource = nullptr;
 	int m_transitionDurationMs = 0;
 
 	std::vector<obs_scene_t *> m_scenes;
