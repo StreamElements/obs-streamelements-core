@@ -1842,7 +1842,7 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 	// Clean all owned scenes here
 
 	// Clear current transition
-	// obs_transition_set(m_transition, (obs_source_t *)nullptr);
+	obs_transition_set(m_transition, (obs_source_t *)nullptr);
 
 	for (auto scene : scenesToRemove) {
 		auto source = obs_scene_get_source(scene);

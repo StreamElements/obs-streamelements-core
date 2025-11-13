@@ -38,8 +38,8 @@
 #define GLOBAL_ENV_CONFIG_FILE_NAME "obs-studio/streamelements-env.ini"
 
 /* UI elements */
-static NetworkDialog *s_NetworkDialog = NULL;
-static ConfirmPendingUpdateDialog *s_ConfirmPendingUpdateDialog = NULL;
+static std::shared_ptr<NetworkDialog> s_NetworkDialog = nullptr;
+static std::shared_ptr<ConfirmPendingUpdateDialog> s_ConfirmPendingUpdateDialog = nullptr;
 
 static const char *streamelements_check_for_updates_signal_decl =
 	"void streamelements_request_check_for_updates(bool allow_downgrade, bool force_install, bool allow_use_last_response)";
@@ -942,11 +942,10 @@ bool streamelements_updater_init(void)
 		// obs_frontend_push_ui_translation(obs_module_get_string);
 
 		// Download UI
-		s_NetworkDialog = new NetworkDialog(obs_main_window);
+		s_NetworkDialog = std::make_shared<NetworkDialog>(obs_main_window);
 
 		// Update available prompt UI
-		s_ConfirmPendingUpdateDialog =
-			new ConfirmPendingUpdateDialog(obs_main_window);
+		s_ConfirmPendingUpdateDialog = std::make_shared<ConfirmPendingUpdateDialog>(obs_main_window);
 
 		// obs_frontend_pop_ui_translation();
 	});
@@ -1000,4 +999,7 @@ void streamelements_updater_shutdown(void)
 
 	os_event_destroy(streamelements_check_for_updates_event);
 	streamelements_check_for_updates_event = nullptr;
+
+	s_NetworkDialog = nullptr;
+	s_ConfirmPendingUpdateDialog = nullptr;
 }
