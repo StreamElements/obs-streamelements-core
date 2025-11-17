@@ -176,6 +176,7 @@ bool StreamElementsWidgetManager::AddDockWidget(
 				  Qt::WindowFlags flags = Qt::WindowFlags())
 			: QDockWidget(title, parent, flags)
 		{
+			setAttribute(Qt::WA_NativeWindow);
 		}
 
 	protected:

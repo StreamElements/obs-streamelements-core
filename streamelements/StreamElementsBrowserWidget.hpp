@@ -49,8 +49,11 @@ private:
 
 	bool m_isIncognito = false;
 
+	QWidget *m_activeVideoCompositionViewWidgetContainer = nullptr;
 	StreamElementsVideoCompositionViewWidget
 		*m_activeVideoCompositionViewWidget = nullptr;
+
+	bool m_isDestroyed = false;
 
 public:
 	StreamElementsBrowserWidget(
@@ -71,6 +74,8 @@ public:
 	void DestroyBrowser();
 
 private:
+	void UpdateCoords();
+
 	void ShutdownApiMessagehandler()
 	{
 		if (!m_requestedApiMessageHandler.get())
@@ -103,6 +108,7 @@ private:
 
 private:
 	QCefCookieManager *m_separateCookieManager = nullptr;
+	QWidget *m_cefWidgetContainer = nullptr;
 	QCefWidget *m_cefWidget = nullptr;
 	std::string m_clientId;
 
@@ -129,6 +135,8 @@ protected:
 	{
 		QWidget::showEvent(showEvent);
 
+		UpdateCoords();
+
 		AdviseHostWidgetHiddenChange(!isVisible());
 
 		emit browserStateChanged();
@@ -146,6 +154,8 @@ protected:
 	virtual void resizeEvent(QResizeEvent* event) override
 	{
 		QWidget::resizeEvent(event);
+
+		UpdateCoords();
 
 		emit browserStateChanged();
 	}

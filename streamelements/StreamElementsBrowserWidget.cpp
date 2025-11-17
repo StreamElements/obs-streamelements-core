@@ -238,8 +238,8 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 	//setMinimumHeight(200);
 
 	setContentsMargins(0, 0, 0, 0);
-	setLayout(new QVBoxLayout());
-	layout()->setContentsMargins(0, 0, 0, 0);
+	//setLayout(new QVBoxLayout());
+	//layout()->setContentsMargins(0, 0, 0, 0);
 
 	QSizePolicy policy;
 	policy.setHorizontalPolicy(QSizePolicy::MinimumExpanding);
@@ -437,13 +437,18 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 
 	m_cefWidget->setStartupScript(script + m_executeJavaScriptCodeOnLoad);
 
-	this->layout()->addWidget(m_cefWidget);
+	//this->layout()->addWidget(m_cefWidget);
+	m_cefWidgetContainer = new QWidget();
+	m_cefWidgetContainer->setAttribute(Qt::WA_NativeWindow);
+	m_cefWidget->setParent(m_cefWidgetContainer);
+	m_cefWidgetContainer->setParent(this);
 
 	StreamElementsMessageBus::GetInstance()->AddListener(
 		m_clientId, m_messageDestinationFlags);
 
 	s_widgets[m_clientId] = this;
 
+	m_cefWidgetContainer->setContentsMargins(0, 0, 0, 0);
 	m_cefWidget->setContentsMargins(0, 0, 0, 0);
 
 	setContentsMargins(0, 0, 0, 0);
@@ -478,6 +483,9 @@ StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 
 void StreamElementsBrowserWidget::DestroyBrowser()
 {
+	if (os_atomic_set_bool(&m_isDestroyed, true))
+		return;
+
 	ShutdownApiMessagehandler();
 
 	{
@@ -516,15 +524,28 @@ void StreamElementsBrowserWidget::DestroyBrowser()
 	m_requestedApiMessageHandler = nullptr;
 
 	if (m_cefWidget) {
+		QEvent widgetEvent(QEvent::Type(QEvent::User + QEvent::Close));
+		qApp->sendEvent(m_cefWidget, &widgetEvent);
+
 		m_cefWidget->closeBrowser();
+		m_cefWidget->setParent(nullptr);
+		m_cefWidget->deleteLater();
 
 		m_cefWidget = nullptr;
+	}
+
+	if (m_cefWidgetContainer) {
+		m_cefWidgetContainer->setParent(nullptr);
+		m_cefWidgetContainer->deleteLater();
+		m_cefWidgetContainer = nullptr;
 	}
 
 	if (m_separateCookieManager) {
 		m_separateCookieManager->DeleteCookies("", "");
 
 		delete m_separateCookieManager;
+
+		m_separateCookieManager = nullptr;
 	}
 }
 
@@ -601,9 +622,27 @@ void StreamElementsBrowserWidget::RemoveVideoCompositionView()
 
 	m_activeVideoCompositionViewWidget->hide();
 	m_activeVideoCompositionViewWidget->Destroy();
+	m_activeVideoCompositionViewWidget->setParent(nullptr);
 	m_activeVideoCompositionViewWidget->deleteLater();
 
 	m_activeVideoCompositionViewWidget = nullptr;
+
+	m_activeVideoCompositionViewWidgetContainer->hide();
+	m_activeVideoCompositionViewWidgetContainer->setParent(nullptr);
+	m_activeVideoCompositionViewWidgetContainer->deleteLater();
+
+	m_activeVideoCompositionViewWidgetContainer = nullptr;
+}
+
+void StreamElementsBrowserWidget::UpdateCoords()
+{
+	if (!m_cefWidget)
+		return;
+
+	QRect rect(0, 0, width(), height());
+
+	m_cefWidget->setGeometry(rect);
+	m_cefWidgetContainer->setGeometry(rect);
 }
 
 void StreamElementsBrowserWidget::SetVideoCompositionView(
@@ -617,13 +656,26 @@ void StreamElementsBrowserWidget::SetVideoCompositionView(
 	}
 
 	if (!m_activeVideoCompositionViewWidget) {
+		m_activeVideoCompositionViewWidgetContainer = new QWidget();
+		m_activeVideoCompositionViewWidgetContainer->setAttribute(
+			Qt::WA_NativeWindow);
+
 		m_activeVideoCompositionViewWidget =
 			new StreamElementsVideoCompositionViewWidget(
-				this, videoComposition);
+				m_activeVideoCompositionViewWidgetContainer,
+				videoComposition);
+
+		m_activeVideoCompositionViewWidgetContainer->setParent(this);
 	}
 
-	m_activeVideoCompositionViewWidget->setGeometry(coords);
-	m_activeVideoCompositionViewWidget->show();
+	if (m_activeVideoCompositionViewWidget) {
+		m_activeVideoCompositionViewWidgetContainer->setGeometry(coords);
+		m_activeVideoCompositionViewWidgetContainer->show();
+
+		QRect subCoords(0, 0, coords.width(), coords.height());
+		m_activeVideoCompositionViewWidget->setGeometry(subCoords);
+		m_activeVideoCompositionViewWidget->show();
+	}
 }
 
 void StreamElementsBrowserWidget::SerializeVideoCompositionView(
