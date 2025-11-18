@@ -1548,8 +1548,12 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 
 	OBSDataAutoRelease settings = SETRACE_SCOPEREF(obs_data_create());
 
-	std::string formattedFilename = os_generate_formatted_filename(
+	char* formattedFilename_ptr = os_generate_formatted_filename(
 		filenameExtension.c_str(), !noSpace, filenameFormat.c_str());
+
+	std::string formattedFilename = formattedFilename_ptr;
+
+	bfree(formattedFilename_ptr);
 
 	std::string formattedPath = basePath + "/" + formattedFilename;
 
@@ -2037,13 +2041,7 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 
 	OBSDataAutoRelease settings = SETRACE_SCOPEREF(obs_data_create());
 
-	//std::string formattedFilename = os_generate_formatted_filename(
-	//	filenameExtension.c_str(), !noSpace, filenameFormat.c_str());
-	//
-	//std::string formattedPath = basePath + "/" + formattedFilename;
-
 	obs_data_set_string(settings, "muxer_settings", "");
-	//obs_data_set_string(settings, "path", formattedPath.c_str());
 
 	obs_data_set_string(settings, "directory", basePath.c_str());
 	obs_data_set_string(settings, "format", filenameFormat.c_str());
