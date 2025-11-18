@@ -1470,6 +1470,7 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 	m_scenes.clear();
 
 	if (m_currentScene) {
+		obs_source_remove(obs_scene_get_source(m_currentScene));
 		obs_scene_release(SETRACE_DECREF(m_currentScene));
 
 		m_currentScene = nullptr;
@@ -1662,6 +1663,7 @@ bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
 
 			remove_scene_signals(scene, m_signalHandlerData);
 
+			obs_source_remove(source);
 			obs_scene_release(SETRACE_DECREF(scene));
 
 			dispatch_scene_list_changed_event(this);
@@ -1852,6 +1854,7 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 		obs_source_dec_showing(source);
 		obs_source_dec_active(source);
 
+		obs_source_remove(obs_scene_get_source(scene));
 		obs_scene_release(SETRACE_DECREF(scene));
 	}
 	scenesToRemove.clear();
@@ -1860,6 +1863,9 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 		std::unique_lock<decltype(m_currentSceneMutex)> currentSceneLock;
 
 		if (m_currentScene) {
+			obs_source_remove(
+				obs_scene_get_source(m_currentScene));
+
 			obs_scene_release(SETRACE_DECREF(m_currentScene));
 
 			m_currentScene = nullptr;
