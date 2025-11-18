@@ -287,9 +287,13 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 		sprintf(cookie_store_name, "anonymous_%d.tmp", getpid());
 #endif
 
+		const char *path = obs_module_config_path(cookie_store_name);
+
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetCleanupManager()
-			->AddPath(obs_module_config_path(cookie_store_name));
+			->AddPath(path);
+
+		bfree((void*)path);
 
 		m_separateCookieManager =
 			StreamElementsGlobalStateManager::GetInstance()
@@ -483,6 +487,9 @@ StreamElementsBrowserWidget::~StreamElementsBrowserWidget()
 
 void StreamElementsBrowserWidget::DestroyBrowser()
 {
+	if (!m_cefWidget)
+		return;
+
 	if (os_atomic_set_bool(&m_isDestroyed, true))
 		return;
 
