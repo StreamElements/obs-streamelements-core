@@ -773,7 +773,7 @@ void StreamElementsScenesListWidgetManager::UpdateWidgets()
 
 	obs_frontend_get_scenes(&sources);
 
-	obs_source_t *current_scene = obs_frontend_get_current_scene();
+	obs_source_t *current_scene = SETRACE_ADDREF(obs_frontend_get_current_scene());
 
 	if (!current_scene)
 		return;
@@ -832,7 +832,7 @@ void StreamElementsScenesListWidgetManager::UpdateWidgets()
 		#endif
 	}
 
-	obs_source_release(current_scene);
+	obs_source_release(SETRACE_DECREF(current_scene));
 
 	obs_frontend_source_list_free(
 		(obs_frontend_source_list *)&sources);

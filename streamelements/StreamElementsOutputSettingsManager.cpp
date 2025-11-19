@@ -193,7 +193,10 @@ bool StreamElementsOutputSettingsManager::SetStreamingSettings(CefRefPtr<CefValu
 	// Set streaming service used by UI
 	obs_frontend_set_streaming_service(service);
 
-	obs_output_set_service(obs_frontend_get_streaming_output(), service);
+	OBSOutputAutoRelease streamingOutput =
+		SETRACE_SCOPEREF(obs_frontend_get_streaming_output());
+
+	obs_output_set_service(streamingOutput, service);
 
 	// Save streaming service used by UI
 	obs_frontend_save_streaming_service();

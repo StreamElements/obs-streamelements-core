@@ -1,6 +1,6 @@
 #pragma once
 
-#define ENABLE_SETRACE 0
+#define ENABLE_SETRACE 1
 
 #if ENABLE_SETRACE
 	void *__SETrace_Trace_AddRef(const char *file, const int line,
@@ -46,7 +46,7 @@
 #else
 	#define SETRACE_ADDREF(a) a
 	#define SETRACE_DECREF(a) a
-	#define SETRACE_AUTODECREF(a) SETRACE_DECREF(a)
+	#define SETRACE_AUTODECREF(a) a
 	#define SETRACE_SCOPEREF(a) a
 	#define SETRACE_NOREF(a) a
 	#define SETRACE_IMPLICITDECREF(a) a

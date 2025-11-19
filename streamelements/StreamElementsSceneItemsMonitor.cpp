@@ -5,6 +5,7 @@
 #include "StreamElementsConfig.hpp"
 
 #include <obs.h>
+#include <obs.hpp>
 #include <obs-frontend-api.h>
 
 #include <string>
@@ -738,8 +739,8 @@ CefRefPtr<CefValue> StreamElementsSceneItemsMonitor::GetSceneItemPropertyValue(
 	if (!scene_item)
 		return result;
 
-	obs_data_t *scene_item_private_data =
-		SETRACE_ADDREF(obs_sceneitem_get_private_settings(scene_item));
+	OBSDataAutoRelease scene_item_private_data =
+		SETRACE_SCOPEREF(obs_sceneitem_get_private_settings(scene_item));
 
 	if (!scene_item_private_data)
 		return result;
@@ -752,8 +753,6 @@ CefRefPtr<CefValue> StreamElementsSceneItemsMonitor::GetSceneItemPropertyValue(
 	if (json) {
 		result = CefParseJSON(json, JSON_PARSER_ALLOW_TRAILING_COMMAS);
 	}
-
-	obs_data_release(SETRACE_DECREF(scene_item_private_data));
 
 	if (!result.get()) {
 		result = CefValue::Create();
@@ -1106,7 +1105,7 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 
 	sceneitems_vector_t sceneItems;
 
-	obs_source_t *sceneSource = obs_frontend_get_current_scene();
+	obs_source_t *sceneSource = SETRACE_ADDREF(obs_frontend_get_current_scene());
 
 	if (!sceneSource)
 		return;
@@ -1274,7 +1273,7 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 	}
 
 	release_sceneitems(&sceneItems);
-	obs_source_release(sceneSource);
+	obs_source_release(SETRACE_DECREF(sceneSource));
 }
 #endif
 

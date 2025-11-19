@@ -182,7 +182,7 @@ protected:
 		obs_source_t **output_source,
 		obs_sceneitem_t **output_sceneitem, bool *isExistingSource);
 
-	void RefreshObsSceneItemsList();
+	void RefreshObsSceneItemsList(std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition);
 
 	std::string ObsGetUniqueSourceName(std::string name);
 

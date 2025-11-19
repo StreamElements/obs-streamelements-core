@@ -100,10 +100,10 @@ public:
 
 static class MyStackWalker : public StackWalker {
 public:
-	std::string *m_output;
+	std::string *m_output = nullptr;
 
-	MyStackWalker(int options, std::string *output)
-		: StackWalker(options), m_output(output)
+	MyStackWalker(int options)
+		: StackWalker(options)
 	{
 	}
 
@@ -112,6 +112,9 @@ protected:
 				      CallstackEntry &entry) override
 	{
 		StackWalker::OnCallstackEntry(eType, entry);
+
+		if (!m_output)
+			return;
 
 		//*m_output += entry.loadedImageName;
 		//*m_output += "!";
@@ -145,11 +148,13 @@ static void GetStackKey(const char* file, int line, std::string &stackKey) {
 	stackKey += ":";
 	stackKey += ltoa(line, numbuf, 10);
 
+	// NOT thread safe!
+	static MyStackWalker walker(       //StackWalker::RetrieveSymbol |
+		StackWalker::RetrieveLine  //|
+					   //StackWalker::RetrieveModuleInfo
+	);
 
-	MyStackWalker walker(//StackWalker::RetrieveSymbol |
-				     StackWalker::RetrieveLine, //|
-				     //StackWalker::RetrieveModuleInfo,
-			     &stackKey);
+	walker.m_output = &stackKey;
 
 	walker.ShowCallstack(::GetCurrentThread(), &context);
 }

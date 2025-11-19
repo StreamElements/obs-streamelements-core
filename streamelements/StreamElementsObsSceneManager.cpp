@@ -140,7 +140,7 @@ get_scene_source_by_id_addref(std::string id, bool getCurrentIfNoId = false)
 	}
 
 	if (result) {
-		SETRACE_ADDREF(obs_source_get_ref(result));
+		result = SETRACE_ADDREF(obs_source_get_ref(result));
 	} else if (getCurrentIfNoId) {
 		result = SETRACE_ADDREF(obs_frontend_get_current_scene());
 	}
@@ -197,6 +197,9 @@ static void signal_parent_scene(obs_scene_t *parent, const char *command,
 
 static void signal_refresh(obs_scene_t *scene)
 {
+	if (!scene)
+		return;
+
 	struct calldata params;
 	uint8_t stack[128];
 
@@ -204,15 +207,15 @@ static void signal_refresh(obs_scene_t *scene)
 	signal_parent_scene(scene, "refresh", &params);
 }
 
-void StreamElementsObsSceneManager::RefreshObsSceneItemsList()
+void StreamElementsObsSceneManager::RefreshObsSceneItemsList(
+	std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition)
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
-	obs_source_t *scene_source =
-		SETRACE_ADDREF(obs_frontend_get_current_scene());
-	obs_scene_t* current_scene = obs_scene_from_source(scene_source);
-	signal_refresh(current_scene);
-	obs_source_release(SETRACE_DECREF(scene_source));
+	OBSSceneAutoRelease scene =
+		SETRACE_AUTODECREF(videoComposition->GetCurrentSceneRef());
+
+	signal_refresh(scene.Get());
 
 #if LIBOBS_API_MAJOR_VER < 25
 	/*
@@ -794,6 +797,9 @@ static void dispatch_scene_event(obs_scene_t *scene,
 	if (s_shutdown)
 		return;
 
+	if (!obs_initialized())
+		return;
+
 	CefRefPtr<CefValue> item = CefValue::Create();
 
 	SerializeObsScene(scene, item);
@@ -892,13 +898,14 @@ static void dispatch_scene_update(void *my_data, calldata_t *cd,
 
 		dispatch_scene_update(scene, shouldDelay, nullptr);
 	} else {
-		OBSSceneAutoRelease scene = SETRACE_AUTODECREF(
-			signalHandlerData->GetRootSceneRef());
+		obs_scene_t *scene = signalHandlerData->GetRootSceneRef();
 
 		if (!scene)
 			return;
 
 		dispatch_scene_update(scene, shouldDelay, signalHandlerData);
+
+		obs_scene_release(SETRACE_DECREF(scene));
 	}
 }
 
@@ -1453,13 +1460,14 @@ static void process_scene_item_remove(obs_sceneitem_t *sceneitem,
 	}
 
 	if (dispatchEvents) {
-		OBSSceneAutoRelease sceneRef =
-			SETRACE_SCOPEREF(signalHandlerData->GetRootSceneRef());
+		obs_scene_t *sceneRef = signalHandlerData->GetRootSceneRef();
 
 		dispatch_sceneitem_event(signalHandlerData, sceneitem,
 					 "hostActiveSceneItemRemoved",
 					 "hostSceneItemRemoved", false);
 		dispatch_scene_update(sceneRef, true, signalHandlerData);
+
+		obs_scene_release(SETRACE_DECREF(sceneRef));
 	}
 
 	if (!obs_sceneitem_is_group(sceneitem))
@@ -2004,7 +2012,7 @@ void StreamElementsObsSceneManager::ObsAddSourceInternal(
 
 	if (args.sceneitem) {
 		if (!!args.group) {
-			RefreshObsSceneItemsList();
+			signal_refresh(obs_scene_from_source(parentScene.Get()));
 		}
 
 		if (output_sceneitem != NULL) {
@@ -2639,7 +2647,7 @@ void StreamElementsObsSceneManager::DeserializeObsSceneItemGroup(
 
 				if (args->sceneitem) {
 					obs_sceneitem_addref(
-						SETRACE_ADDREF(args->sceneitem));
+						SETRACE_ADDREF(args->sceneitem)); // Will be released below
 
 					obs_sceneitem_set_visible(
 						args->sceneitem, true);
@@ -2666,11 +2674,10 @@ void StreamElementsObsSceneManager::DeserializeObsSceneItemGroup(
 			obs_sceneitem_get_source(args.sceneitem),
 			args.sceneitem, true, false, videoComposition.get());
 
-		// TODO: Check if this is necessary
 		obs_sceneitem_release(SETRACE_DECREF(args.sceneitem));
 	}
 
-	RefreshObsSceneItemsList();
+	RefreshObsSceneItemsList(videoComposition);
 }
 
 void StreamElementsObsSceneManager::SerializeObsSceneItems(
@@ -3168,7 +3175,7 @@ void StreamElementsObsSceneManager::DeserializeAuxiliaryObsSceneItemProperties(
 				},
 				&args);
 
-			RefreshObsSceneItemsList();
+			RefreshObsSceneItemsList(videoComposition);
 		}
 	}
 #endif
@@ -3426,7 +3433,7 @@ void StreamElementsObsSceneManager::UngroupObsSceneItemsByGroupId(
 
 	obs_sceneitem_group_ungroup(group);
 
-	RefreshObsSceneItemsList(); // TODO: If not OBS native videoComposition, check if this should be called at all
+	RefreshObsSceneItemsList(videoComposition);
 
 	output->SetBool(true);
 }
