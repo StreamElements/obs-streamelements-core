@@ -6,7 +6,7 @@ StreamElementsAsyncTaskQueue::StreamElementsAsyncTaskQueue(
 {
 	// Init events
 	os_event_init(&m_dispatchEvent, OS_EVENT_TYPE_AUTO);
-	os_event_init(&m_doneEvent, OS_EVENT_TYPE_AUTO);
+	os_event_init(&m_doneEvent, OS_EVENT_TYPE_MANUAL);
 
 	// Init queue access mutex
 	pthread_mutex_init(&m_dispatchLock, nullptr);
@@ -57,6 +57,10 @@ StreamElementsAsyncTaskQueue::StreamElementsAsyncTaskQueue(
 
 							// Mark that we have a task for execution
 							has_task = true;
+
+							// Signal worker thread should wake up on next iteration
+							os_event_signal(
+								self->m_dispatchEvent);
 						}
 
 						// Unlock queue access mutex
@@ -90,7 +94,7 @@ StreamElementsAsyncTaskQueue::StreamElementsAsyncTaskQueue(
 		this);
 }
 
-StreamElementsAsyncTaskQueue::~StreamElementsAsyncTaskQueue()
+void StreamElementsAsyncTaskQueue::Shutdown()
 {
 	if (m_continue_running) {
 		// Signal worker thread should stop running
@@ -100,11 +104,34 @@ StreamElementsAsyncTaskQueue::~StreamElementsAsyncTaskQueue()
 		os_event_signal(m_dispatchEvent);
 	}
 
-	// Unlock queue access mutex
-	// pthread_mutex_unlock(&m_dispatchLock);
-
 	// Wait until worker thread has stopped running
 	os_event_wait(m_doneEvent);
+
+	Drain();
+}
+
+void StreamElementsAsyncTaskQueue::Drain()
+{
+	// Lock queue access mutex
+	pthread_mutex_lock(&m_dispatchLock);
+
+	while (!m_queue.empty()) {
+		// Get first task in the queue
+		auto task = m_queue[0];
+
+		// Remove first task from the queue
+		m_queue.erase(m_queue.begin());
+
+		task.task_proc(task.args);
+	}
+
+	// Unlock queue access mutex
+	pthread_mutex_unlock(&m_dispatchLock);
+}
+
+StreamElementsAsyncTaskQueue::~StreamElementsAsyncTaskQueue()
+{
+	Shutdown();
 
 	// Destroy events
 	os_event_destroy(m_doneEvent);

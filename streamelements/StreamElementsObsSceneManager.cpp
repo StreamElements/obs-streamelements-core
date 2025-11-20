@@ -867,15 +867,13 @@ static void dispatch_scene_update(obs_scene_t* scene,
 	if (shouldDelay) {
 		auto sceneRef = SETRACE_ADDREF(obs_scene_get_ref(scene));
 
-		std::thread thread([=]() {
+		signalHandlerData->EnqueueAsyncTask([=]() {
 			dispatch_scene_event(sceneRef,
 					     "hostActiveSceneItemListChanged",
 					     "hostSceneItemListChanged");
 
 			obs_scene_release(SETRACE_DECREF(sceneRef));
 		});
-
-		thread.detach();
 	} else {
 		dispatch_scene_event(scene, "hostActiveSceneItemListChanged",
 				     "hostSceneItemListChanged");
@@ -1176,7 +1174,7 @@ static void handle_scene_item_source_filter_update_props(void *my_data,
 		return;
 
 	OBSSceneAutoRelease scene =
-		SETRACE_SCOPEREF(signalHandlerData->GetRootSceneRef());
+		SETRACE_AUTODECREF(signalHandlerData->GetRootSceneRef());
 
 	if (!scene)
 		return;
@@ -1195,7 +1193,7 @@ static void handle_scene_item_source_filter_update_settings(void *my_data,
 		return;
 
 	OBSSceneAutoRelease scene =
-		SETRACE_SCOPEREF(signalHandlerData->GetRootSceneRef());
+		SETRACE_AUTODECREF(signalHandlerData->GetRootSceneRef());
 
 	if (!scene)
 		return;
@@ -1214,7 +1212,7 @@ static void handle_scene_item_source_filter_rename(void *my_data,
 		return;
 
 	OBSSceneAutoRelease scene =
-		SETRACE_SCOPEREF(signalHandlerData->GetRootSceneRef());
+		SETRACE_AUTODECREF(signalHandlerData->GetRootSceneRef());
 
 	if (!scene)
 		return;
@@ -1277,7 +1275,7 @@ static void handle_scene_item_source_filter_add(void *my_data, calldata_t *cd)
 	connect_filter_source_signals(filter, signalHandlerData);
 
 	OBSSceneAutoRelease scene =
-		SETRACE_SCOPEREF(signalHandlerData->GetRootSceneRef());
+		SETRACE_AUTODECREF(signalHandlerData->GetRootSceneRef());
 
 	if (!scene)
 		return;
@@ -1312,7 +1310,7 @@ static void handle_scene_item_source_filter_remove(void *my_data, calldata_t *cd
 	disconnect_filter_source_signals(filter, signalHandlerData);
 
 	OBSSceneAutoRelease scene =
-		SETRACE_SCOPEREF(signalHandlerData->GetRootSceneRef());
+		SETRACE_AUTODECREF(signalHandlerData->GetRootSceneRef());
 
 	if (!scene)
 		return;
@@ -1333,7 +1331,7 @@ static void handle_scene_item_source_filter_reorder(void *my_data,
 		return;
 
 	OBSSceneAutoRelease scene =
-		SETRACE_SCOPEREF(signalHandlerData->GetRootSceneRef());
+		SETRACE_AUTODECREF(signalHandlerData->GetRootSceneRef());
 
 	if (!scene)
 		return;
@@ -1460,14 +1458,13 @@ static void process_scene_item_remove(obs_sceneitem_t *sceneitem,
 	}
 
 	if (dispatchEvents) {
-		obs_scene_t *sceneRef = signalHandlerData->GetRootSceneRef();
+		OBSSceneAutoRelease sceneRef = SETRACE_AUTODECREF(
+			signalHandlerData->GetRootSceneRef());
 
 		dispatch_sceneitem_event(signalHandlerData, sceneitem,
 					 "hostActiveSceneItemRemoved",
 					 "hostSceneItemRemoved", false);
 		dispatch_scene_update(sceneRef, true, signalHandlerData);
-
-		obs_scene_release(SETRACE_DECREF(sceneRef));
 	}
 
 	if (!obs_sceneitem_is_group(sceneitem))

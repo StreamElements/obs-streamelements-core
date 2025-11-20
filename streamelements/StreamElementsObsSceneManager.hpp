@@ -3,6 +3,7 @@
 #include "StreamElementsSceneItemsMonitor.hpp"
 #include "StreamElementsScenesListWidgetManager.hpp"
 #include "StreamElementsVideoComposition.hpp"
+#include "StreamElementsAsyncTaskQueue.hpp"
 
 #include "cef-headers.hpp"
 
@@ -205,6 +206,10 @@ private:
 };
 
 class SESignalHandlerData {
+private:
+	std::shared_ptr<StreamElementsAsyncTaskQueue> m_asyncTaskQueue =
+		nullptr;
+
 public:
 	SESignalHandlerData(
 		StreamElementsObsSceneManager *obsSceneManager,
@@ -212,6 +217,14 @@ public:
 		: m_obsSceneManager(obsSceneManager),
 		  m_videoCompositionBase(videoCompositionBase)
 	{
+		m_asyncTaskQueue = std::make_shared<StreamElementsAsyncTaskQueue>(
+			(std::string(
+				 "SESignalHandlerData for video composition ") +
+			 std::string(videoCompositionBase
+					     ? videoCompositionBase->GetId()
+					     : "unknown"))
+				.c_str());
+
 		AddRef();
 
 		m_wait_promise.set_value(); // release by default
@@ -219,7 +232,24 @@ public:
 
 	~SESignalHandlerData()
 	{
+		if (m_asyncTaskQueue.get()) {
+			m_asyncTaskQueue->Shutdown();
+		}
+
 		Clear();
+	}
+
+	void EnqueueAsyncTask(std::function<void()> task)
+	{
+		if (m_parent) {
+			m_parent->EnqueueAsyncTask(task);
+
+			return;
+		}
+
+		if (m_asyncTaskQueue.get()) {
+			m_asyncTaskQueue->Enqueue(task);
+		}
 	}
 
 private:
@@ -233,6 +263,7 @@ private:
 		  m_videoCompositionBase(videoCompositionBase),
 		  m_scene(SETRACE_ADDREF(obs_scene_get_ref(scene)))
 	{
+		// No m_asyncTaskQueue here, since there is a parent to refer to
 	}
 
 	void Clear()
@@ -444,6 +475,10 @@ public:
 			m_parent->Wait();
 
 			return;
+		}
+
+		if (m_asyncTaskQueue.get()) {
+			m_asyncTaskQueue->Drain();
 		}
 
 		std::shared_future<void> future;
