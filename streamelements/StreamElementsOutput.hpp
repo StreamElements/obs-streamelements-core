@@ -353,7 +353,7 @@ public:
 	virtual bool CanStart() override { return true; }
 
 protected:
-	virtual obs_output_t *GetOutput() override { return obs_frontend_get_streaming_output(); }
+	virtual obs_output_t *GetOutput() override { return SETRACE_ADDREF(obs_frontend_get_streaming_output()); }
 
 	virtual bool StartInternal(
 		std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>

@@ -984,7 +984,7 @@ static void dispatch_sceneitem_event(void *my_data, calldata_t *cd,
 		
 		signalHandlerData->Lock();
 
-		std::thread thread([=]() -> void {
+		signalHandlerData->EnqueueAsyncTask([=]() -> void {
 			dispatch_sceneitem_event(my_data, sceneitem,
 						 currentSceneEventName,
 						 otherSceneEventName,
@@ -994,8 +994,6 @@ static void dispatch_sceneitem_event(void *my_data, calldata_t *cd,
 
 			signalHandlerData->Unlock();
 		});
-
-		thread.detach();
 	} else {
 		dispatch_sceneitem_event(my_data, sceneitem,
 					 currentSceneEventName,
@@ -2866,15 +2864,14 @@ void StreamElementsObsSceneManager::DeserializeObsScene(
 	if (!videoComposition.get())
 		return;
 
-	obs_scene_t *scene = videoComposition->AddScene(d->GetString("name"));
+	OBSSceneAutoRelease scene = SETRACE_AUTODECREF(
+		videoComposition->AddScene(d->GetString("name")));
 
 	if (activate) {
 		videoComposition->SetCurrentScene(scene);
 	}
 
 	SerializeObsScene(scene, output);
-
-	obs_scene_release(SETRACE_DECREF(scene));
 }
 
 void StreamElementsObsSceneManager::SetCurrentObsSceneById(

@@ -64,8 +64,7 @@ SerializeObsAudioEncoders(StreamElementsAudioCompositionBase *composition,
 	*/
 
 	OBSEncoderAutoRelease streamingAudioEncoder =
-		info->GetStreamingAudioEncoderRef(0);
-	SETRACE_DECREF(streamingAudioEncoder.Get());
+		SETRACE_AUTODECREF(info->GetStreamingAudioEncoderRef(0));
 
 	if (streamingAudioEncoder) {
 		root->SetDictionary(
@@ -98,8 +97,7 @@ SerializeObsAudioEncoders(StreamElementsAudioCompositionBase *composition,
 	*/
 
 	OBSEncoderAutoRelease recordingAudioEncoder =
-		info->GetRecordingAudioEncoderRef(0);
-	SETRACE_DECREF(recordingAudioEncoder.Get());
+		SETRACE_AUTODECREF(info->GetRecordingAudioEncoderRef(0));
 
 	if (recordingAudioEncoder) {
 		root->SetDictionary(

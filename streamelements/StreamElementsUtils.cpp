@@ -722,7 +722,7 @@ bool DeserializeObsSourceFilters(obs_source_t* source, CefRefPtr<CefValue> filte
 
 	auto filtersList = filtersValue->GetList();
 
-	std::map<int, obs_source_t*> filtersMap;
+	std::map<int, OBSSourceAutoRelease> filtersMap;
 	int maxOrder = -1;
 	std::vector<int> orderIndexes;
 
@@ -773,7 +773,7 @@ bool DeserializeObsSourceFilters(obs_source_t* source, CefRefPtr<CefValue> filte
 				return false;
 		}
 
-		filtersMap[order] = SETRACE_ADDREF(obs_source_create_private(
+		filtersMap[order] = SETRACE_SCOPEREF(obs_source_create_private(
 			sourceType.c_str(), sourceName.c_str(), settings));
 
 		if (!filtersMap[order]) {
@@ -804,12 +804,6 @@ bool DeserializeObsSourceFilters(obs_source_t* source, CefRefPtr<CefValue> filte
 		// Set new filters order
 		for (auto i : orderIndexes) {
 			obs_source_filter_set_index(source, filtersMap[i], i);
-		}
-	}
-
-	for (auto const &kv : filtersMap) {
-		if (kv.second) {
-			SETRACE_DECREF(kv.second);
 		}
 	}
 

@@ -469,6 +469,8 @@ void StreamElementsBrowserWidgetManager::SerializeDockingWidgets(
 
 			widgetDictionary->SetInt("left", widget->pos().x());
 			widgetDictionary->SetInt("top", widget->pos().y());
+
+			delete info;
 		}
 
 		rootDictionary->SetValue(id, widgetValue);

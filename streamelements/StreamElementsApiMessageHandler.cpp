@@ -1385,7 +1385,6 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 				complete_callback();
 			}).detach();
-				
 		}
 	}
 	API_HANDLER_END_ASYNC();

@@ -22,8 +22,6 @@ public:
 
 class StreamElementsApiMessageHandler : public std::enable_shared_from_this <
 					StreamElementsApiMessageHandler> {
-public:
-
 private:
 	std::shared_ptr<StreamElementsApiMessageHandlerRuntimeStatus>
 		m_runtimeStatus = std::make_shared<
@@ -35,16 +33,19 @@ protected:
 
 public:
 	StreamElementsApiMessageHandler(std::string containerType)
-		: m_containerType(containerType)
+		: m_containerType(containerType)		  
 	{
 		// RegisterIncomingApiCallHandlers();
 	}
 
 	virtual ~StreamElementsApiMessageHandler() {
-		m_runtimeStatus->m_running = false;
+		Shutdown();
 	}
 
-	void Shutdown() { m_runtimeStatus->m_running = false; }
+	void Shutdown()
+	{
+		m_runtimeStatus->m_running = false;
+	}
 
 	//
 	// Called by StreamElementsBrowserWidget ctor/dtor to set/unset m_browserWidget
