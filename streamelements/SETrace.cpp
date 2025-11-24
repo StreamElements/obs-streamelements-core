@@ -13,6 +13,20 @@
 
 #include <Windows.h>
 
+#if ENABLE_SETRACE == 1
+
+long g_seTrace_refcountBalance = 0;
+
+void __SETrace_Dump(const char *file, int line)
+{
+	std::filesystem::path p = file;
+
+	blog(LOG_INFO,
+	     "[obs-streamelements-core]: reference count balance = %ld (0 is good) at %s:%d",
+	     g_seTrace_refcountBalance, p.filename().u8string().c_str(), line);
+}
+
+#elif ENABLE_SETRACE == 2
 static class SETraceRefDataItem {
 public:
 	std::string m_file;
@@ -254,3 +268,4 @@ void __SETrace_Dump(const char* file, int line)
 	blog(LOG_INFO,
 	     "[obs-streamelements-core]: --------------------------------------------------------------");
 }
+#endif

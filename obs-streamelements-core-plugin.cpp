@@ -100,8 +100,10 @@ static void log_remaining_objects()
 MODULE_EXPORT bool obs_module_load(void)
 {
 #if ENABLE_PLUGIN
-	blog(LOG_INFO, "[obs-streamelements-core]: Version %lu",
-	     STREAMELEMENTS_PLUGIN_VERSION);
+	std::string version = GetStreamElementsPluginVersionString();
+
+	blog(LOG_INFO, "[obs-streamelements-core]: Version %s",
+	     version.c_str());
 
 	obs_register_source(&audio_wrapper_source);
 #endif
