@@ -9,10 +9,6 @@
 #include <shared_mutex>
 #include <filesystem>
 
-#include "deps/StackWalker/StackWalker.h"
-
-#include <Windows.h>
-
 #if ENABLE_SETRACE == 1
 
 long g_seTrace_refcountBalance = 0;
@@ -27,6 +23,11 @@ void __SETrace_Dump(const char *file, int line)
 }
 
 #elif ENABLE_SETRACE == 2
+
+#include "deps/StackWalker/StackWalker.h"
+
+#include <Windows.h>
+
 static class SETraceRefDataItem {
 public:
 	std::string m_file;
