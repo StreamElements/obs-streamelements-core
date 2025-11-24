@@ -157,6 +157,7 @@ static std::string ReadEnvironmentConfigString(const char *regValueName,
 
     char *filePath = os_get_config_path_ptr(GLOBAL_ENV_CONFIG_FILE_NAME);
     config_open(&config, filePath, CONFIG_OPEN_ALWAYS);
+    SETRACE_ADDREF(config);
     bfree(filePath);
 
     const char* str = config_get_string(config, productName ? productName : "Global", regValueName);
@@ -165,7 +166,7 @@ static std::string ReadEnvironmentConfigString(const char *regValueName,
         result = str;
     }
 
-    config_close(config);
+    config_close(SETRACE_DECREF(config));
 #endif
     
 	return result;
@@ -275,7 +276,7 @@ static void reset_auto_use_last_response()
 		obs_current_module(), STREAMELEMENTS_UPDATE_CONFIG_FILENAME);
 
 	config_open(&config, configFilePath, CONFIG_OPEN_ALWAYS);
-
+	SETRACE_ADDREF(config);
 	bfree(configFilePath);
 
 	config_set_bool(config, "update-prompt", "auto_use_last_response",
@@ -283,7 +284,7 @@ static void reset_auto_use_last_response()
 
 	config_save_safe(config, "tmp", "bak");
 
-	config_close(config);
+	config_close(SETRACE_DECREF(config));
 	config = NULL;
 }
 
@@ -463,7 +464,7 @@ static bool prompt_for_update(const bool allowUseLastResponse,
 		obs_current_module(), STREAMELEMENTS_UPDATE_CONFIG_FILENAME);
 
 	config_open(&config, configFilePath, CONFIG_OPEN_ALWAYS);
-
+	SETRACE_ADDREF(config);
 	bfree(configFilePath);
 
 	// Set defaults
@@ -504,7 +505,7 @@ static bool prompt_for_update(const bool allowUseLastResponse,
 
 	config_save_safe(config, "tmp", "bak");
 
-	config_close(config);
+	config_close(SETRACE_DECREF(config));
 	config = NULL;
 
 	return result;
@@ -557,7 +558,8 @@ static void check_for_updates_async(bool allowUseLastResponse, bool silent,
 	if (CONFIG_SUCCESS == config_open(&probe_manifest,
 					  context->manifestFilePath,
 					  CONFIG_OPEN_ALWAYS)) {
-		config_close(probe_manifest);
+		SETRACE_ADDREF(probe_manifest);
+		config_close(SETRACE_DECREF(probe_manifest));
 		probe_manifest = nullptr;
 	}
 
@@ -596,6 +598,7 @@ static void check_for_updates_async(bool allowUseLastResponse, bool silent,
 				    config_open(&manifest,
 						context->manifestFilePath,
 						CONFIG_OPEN_EXISTING)) {
+					SETRACE_ADDREF(manifest);
 					// Get available version number string
 					const char *version_number_str =
 						config_get_string(
@@ -856,7 +859,7 @@ static void check_for_updates_async(bool allowUseLastResponse, bool silent,
 						context->callback();
 					}
 
-					config_close(manifest);
+					config_close(SETRACE_DECREF(manifest));
 					manifest = NULL;
 				} else {
 					ShowStatusBarMessage(

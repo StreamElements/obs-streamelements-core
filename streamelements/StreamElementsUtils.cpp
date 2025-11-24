@@ -1807,6 +1807,7 @@ static std::string ReadEnvironmentConfigString(const char *regValueName,
 
 	char *filePath = os_get_config_path_ptr(GLOBAL_ENV_CONFIG_FILE_NAME);
 	config_open(&config, filePath, CONFIG_OPEN_ALWAYS);
+	SETRACE_ADDREF(config);
 	bfree(filePath);
 
 	const char* str = config_get_string(config, productName ? productName : "Global", regValueName);
@@ -1815,7 +1816,7 @@ static std::string ReadEnvironmentConfigString(const char *regValueName,
 		result = str;
 	}
 
-	config_close(config);
+	config_close(SETRACE_DECREF(config));
 #endif
 
 	return result;
@@ -1845,6 +1846,7 @@ bool WriteEnvironmentConfigString(const char *regValueName,
 
 	char *filePath = os_get_config_path_ptr(GLOBAL_ENV_CONFIG_FILE_NAME);
 	config_open(&config, filePath, CONFIG_OPEN_ALWAYS);
+	SETRACE_ADDREF(config);
 	bfree(filePath);
 
 	config_set_string(config,
@@ -1853,7 +1855,7 @@ bool WriteEnvironmentConfigString(const char *regValueName,
 
 	config_save_safe(config, "tmp", "bak");
 
-	config_close(config);
+	config_close(SETRACE_DECREF(config));
 
 	result = true;
 #endif
@@ -2612,6 +2614,8 @@ bool ReadListOfObsProfiles(std::map<std::string, std::string> &output)
 
 		if (config_open(&ini, filePath.c_str(), CONFIG_OPEN_EXISTING) ==
 		    CONFIG_SUCCESS) {
+			SETRACE_ADDREF(ini);
+
 			const char *value =
 				config_get_string(ini, "General", "Name");
 
@@ -2621,7 +2625,7 @@ bool ReadListOfObsProfiles(std::map<std::string, std::string> &output)
 				output[id] = name;
 			}
 
-			config_close(ini);
+			config_close(SETRACE_DECREF(ini));
 		}
 	}
 
