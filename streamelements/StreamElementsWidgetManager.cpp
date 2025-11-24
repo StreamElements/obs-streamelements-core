@@ -176,6 +176,7 @@ bool StreamElementsWidgetManager::AddDockWidget(
 				  Qt::WindowFlags flags = Qt::WindowFlags())
 			: QDockWidget(title, parent, flags)
 		{
+			setAttribute(Qt::WA_NativeWindow);
 		}
 
 	protected:
@@ -220,9 +221,9 @@ bool StreamElementsWidgetManager::AddDockWidget(
 
 	dock->setAllowedAreas(allowedAreas);
 	dock->setFeatures(features);
-	dock->setWidget(widget);
 	dock->setWindowTitle(title);
 
+	dock->setWidget(widget);
 	m_parent->addDockWidget(area, dock);
 
 	m_dockWidgets[id] = dock;

@@ -18,7 +18,16 @@ StreamElementsOutputManager::StreamElementsOutputManager(
 		m_videoCompositionManager->GetObsNativeVideoComposition(),
 		m_audioCompositionManager->GetObsNativeAudioComposition());
 
-	m_map[StreamingOutput][nativeStreamingOutput->GetId()] = nativeStreamingOutput;
+	m_map[StreamingOutput] = std::make_shared<std::map<
+		std::string, std::shared_ptr<StreamElementsOutputBase>>>();
+
+	m_map[RecordingOutput] = std::make_shared<std::map<
+		std::string, std::shared_ptr<StreamElementsOutputBase>>>();
+
+	m_map[ReplayBufferOutput] = std::make_shared<std::map<
+		std::string, std::shared_ptr<StreamElementsOutputBase>>>();
+
+	(*m_map[StreamingOutput].get())[nativeStreamingOutput->GetId()] = nativeStreamingOutput;
 
 	auto nativeRecordingOutput =
 		std::make_shared<StreamElementsObsNativeRecordingOutput>(
@@ -26,7 +35,7 @@ StreamElementsOutputManager::StreamElementsOutputManager(
 		m_videoCompositionManager->GetObsNativeVideoComposition(),
 		m_audioCompositionManager->GetObsNativeAudioComposition());
 
-	m_map[RecordingOutput][nativeRecordingOutput->GetId()] = nativeRecordingOutput;
+	(*m_map[RecordingOutput].get())[nativeRecordingOutput->GetId()] = nativeRecordingOutput;
 
 	auto nativeReplayBufferOutput = std::make_shared<
 		StreamElementsObsNativeReplayBufferOutput>(
@@ -34,13 +43,13 @@ StreamElementsOutputManager::StreamElementsOutputManager(
 		m_videoCompositionManager->GetObsNativeVideoComposition(),
 		m_audioCompositionManager->GetObsNativeAudioComposition());
 
-	m_map[ReplayBufferOutput][nativeReplayBufferOutput->GetId()] =
+	(*m_map[ReplayBufferOutput].get())[nativeReplayBufferOutput->GetId()] =
 		nativeReplayBufferOutput;
 }
 
 StreamElementsOutputManager::~StreamElementsOutputManager()
 {
-	//Reset();
+	Reset();
 
 	m_map.clear();
 }
@@ -49,16 +58,16 @@ void StreamElementsOutputManager::Reset()
 {
 	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
-	for (auto kv : m_map) {
+	for (const auto &kv : m_map) {
 		std::list<std::string> keys_to_delete;
 		
-		for (auto pair : kv.second) {
+		for (const auto &pair : *kv.second.get()) {
 			if (!pair.second->IsObsNativeOutput())
 				keys_to_delete.push_back(pair.first);
 		}
 		
-		for (auto key : keys_to_delete) {
-			kv.second.erase(key);
+		for (auto &key : keys_to_delete) {
+			kv.second->erase(key);
 		}
 	}
 }
@@ -84,7 +93,7 @@ void StreamElementsOutputManager::DeserializeOutput(
 		id = d->GetString("id");
 	}
 
-	while (!id.size() || m_map[outputType].count(id)) {
+	while (!id.size() || m_map[outputType]->count(id)) {
 		id = CreateGloballyUniqueIdString();
 	}
 
@@ -99,7 +108,8 @@ void StreamElementsOutputManager::DeserializeOutput(
 		if (!customOutput.get())
 			return;
 
-		m_map[outputType][customOutput->GetId()] = customOutput;
+		(*m_map[outputType].get())[customOutput->GetId()] =
+			customOutput;
 
 		customOutput->SerializeOutput(output);
 	}
@@ -110,7 +120,8 @@ void StreamElementsOutputManager::DeserializeOutput(
 		if (!customOutput.get())
 			return;
 
-		m_map[outputType][customOutput->GetId()] = customOutput;
+		(*m_map[outputType].get())[customOutput->GetId()] =
+			customOutput;
 
 		customOutput->SerializeOutput(output);
 	} else {
@@ -120,7 +131,8 @@ void StreamElementsOutputManager::DeserializeOutput(
 		if (!customOutput.get())
 			return;
 
-		m_map[outputType][customOutput->GetId()] = customOutput;
+		(*m_map[outputType].get())[customOutput->GetId()] =
+			customOutput;
 
 		customOutput->SerializeOutput(output);
 	}
@@ -134,7 +146,7 @@ void StreamElementsOutputManager::SerializeAllOutputs(
 
 	auto d = CefDictionaryValue::Create();
 
-	for (auto kv : m_map[outputType]) {
+	for (auto &kv : (*m_map[outputType].get())) {
 		auto serializedOutput = CefValue::Create();
 
 		kv.second->SerializeOutput(serializedOutput);
@@ -159,8 +171,8 @@ void StreamElementsOutputManager::RemoveOutputsByIds(
 		return;
 
 	// Remove all valid IDs
-	for (auto kv : map) {
-		m_map[outputType].erase(kv.first);
+	for (const auto &kv : map) {
+		m_map[outputType]->erase(kv.first);
 	}
 
 	output->SetBool(true);
@@ -181,7 +193,7 @@ void StreamElementsOutputManager::EnableOutputsByIds(
 
 	// Remove all valid IDs
 	for (auto kv : map) {
-		m_map[outputType][kv.first]->SetEnabled(true);
+		(*m_map[outputType].get())[kv.first]->SetEnabled(true);
 	}
 
 	output->SetBool(true);
@@ -202,7 +214,7 @@ void StreamElementsOutputManager::DisableOutputsByIds(
 
 	// Remove all valid IDs
 	for (auto kv : map) {
-		m_map[outputType][kv.first]->SetEnabled(false);
+		(*m_map[outputType].get())[kv.first]->SetEnabled(false);
 	}
 
 	output->SetBool(true);
@@ -221,8 +233,8 @@ void StreamElementsOutputManager::TriggerSplitRecordingOutputById(
 
 	std::string id = input->GetString();
 
-	if (m_map[RecordingOutput].count(id)) {
-		output->SetBool(m_map[RecordingOutput][id]
+	if (m_map[RecordingOutput]->count(id)) {
+		output->SetBool((*m_map[RecordingOutput].get())[id]
 					->TriggerSplitRecordingOutput());
 	}
 }
@@ -239,8 +251,8 @@ void StreamElementsOutputManager::TriggerSaveReplayBufferById(
 
 	std::string id = input->GetString();
 
-	if (m_map[ReplayBufferOutput].count(id)) {
-		output->SetBool(m_map[ReplayBufferOutput][id]
+	if (m_map[ReplayBufferOutput]->count(id)) {
+		output->SetBool((*m_map[ReplayBufferOutput].get())[id]
 					->TriggerSaveReplayBuffer());
 	}
 }
@@ -266,13 +278,14 @@ bool StreamElementsOutputManager::GetValidIds(
 		if (!id.size())
 			return false;
 
-		if (!m_map[outputType].count(id))
+		if (!m_map[outputType]->count(id))
 			return false;
 
-		if (testRemove && !m_map[outputType][id]->CanRemove())
+		if (testRemove && !(*m_map[outputType].get())[id]->CanRemove())
 			return false;
 
-		if (testDisable && !m_map[outputType][id]->CanDisable())
+		if (testDisable &&
+		    !(*m_map[outputType].get())[id]->CanDisable())
 			return false;
 
 		output[id] = true;

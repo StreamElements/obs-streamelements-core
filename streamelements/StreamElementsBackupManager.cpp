@@ -614,6 +614,8 @@ static bool AddProfileToZip(zip_t *zip, std::string basePath,
 
 	if (config_open(&profile_config, (absPath + "/basic.ini").c_str(),
 			CONFIG_OPEN_EXISTING) == CONFIG_SUCCESS) {
+		SETRACE_ADDREF(profile_config);
+
 		const char *cookieProfileId =
 			config_get_string(profile_config, "Panels", "CookieId");
 
@@ -631,7 +633,7 @@ static bool AddProfileToZip(zip_t *zip, std::string basePath,
 				     cookieRelPath + "/Cookies-journal");
 		}
 
-		config_close(profile_config);
+		config_close(SETRACE_DECREF(profile_config));
 	}
 
 	return true;

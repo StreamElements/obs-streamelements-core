@@ -726,6 +726,8 @@ bool DeserializeObsSourceFilters(obs_source_t* source, CefRefPtr<CefValue> filte
 	int maxOrder = -1;
 	std::vector<int> orderIndexes;
 
+	bool result = true;
+
 	for (size_t i = 0; i < filtersList->GetSize(); ++i) {
 		if (filtersList->GetType(i) != VTYPE_DICTIONARY)
 			return false;
@@ -753,12 +755,16 @@ bool DeserializeObsSourceFilters(obs_source_t* source, CefRefPtr<CefValue> filte
 		if (order > maxOrder)
 			maxOrder = order;
 
-		if (filtersMap.count(order))
-			return false; // duplicate "order" value
+		if (filtersMap.count(order)) {
+			// duplicate "order" value
+			result = false;
+			break;
+		}
 
 		orderIndexes.push_back(order);
 
-		OBSDataAutoRelease settings = obs_data_create();
+		OBSDataAutoRelease settings =
+			SETRACE_SCOPEREF(obs_data_create());
 
 		if (d->HasKey("settings") &&
 		    d->GetType("settings") == VTYPE_DICTIONARY) {
@@ -767,35 +773,41 @@ bool DeserializeObsSourceFilters(obs_source_t* source, CefRefPtr<CefValue> filte
 				return false;
 		}
 
-		filtersMap[order] = obs_source_create_private(
-			sourceType.c_str(), sourceName.c_str(), settings);
+		filtersMap[order] = SETRACE_SCOPEREF(obs_source_create_private(
+			sourceType.c_str(), sourceName.c_str(), settings));
 
-		if (!filtersMap[order])
-			return false;
+		if (!filtersMap[order]) {
+			// Filter not created
+			result = false;
+			break;
+		}
 	}
 
-	// Sort order indexes ascending
-	std::sort(orderIndexes.begin(), orderIndexes.end());
+	if (result) {
+		// Sort order indexes ascending
+		std::sort(orderIndexes.begin(), orderIndexes.end());
 
-	// Remove existing filters if any
-	obs_source_enum_filters(
-		source,
-		[](obs_source_t *source, obs_source_t *filter, void *params) {
-			obs_source_filter_remove(source, filter);
-		},
-		nullptr);
+		// Remove existing filters if any
+		obs_source_enum_filters(
+			source,
+			[](obs_source_t *source, obs_source_t *filter,
+			   void *params) {
+				obs_source_filter_remove(source, filter);
+			},
+			nullptr);
 
-	// Add new filters
-	for (auto i : orderIndexes) {
-		obs_source_filter_add(source, filtersMap[i]);
+		// Add new filters
+		for (auto i : orderIndexes) {
+			obs_source_filter_add(source, filtersMap[i]);
+		}
+
+		// Set new filters order
+		for (auto i : orderIndexes) {
+			obs_source_filter_set_index(source, filtersMap[i], i);
+		}
 	}
 
-	// Set new filters order
-	for (auto i : orderIndexes) {
-		obs_source_filter_set_index(source, filtersMap[i], i);
-	}
-
-	return true;
+	return result;
 }
 
 CefRefPtr<CefListValue> SerializeObsSourceFilters(obs_source_t *source,
@@ -805,7 +817,14 @@ CefRefPtr<CefListValue> SerializeObsSourceFilters(obs_source_t *source,
 
 	struct local_filters_context_t {
 		CefRefPtr<CefListValue> items = CefListValue::Create();
-		std::vector<OBSSourceAutoRelease> filters;
+		std::vector<obs_source_t*> filters;
+
+		~local_filters_context_t()
+		{
+			for (const auto &filter : filters) {
+				obs_source_release(SETRACE_DECREF(filter));
+			}
+		}
 	};
 
 	local_filters_context_t context;
@@ -816,7 +835,7 @@ CefRefPtr<CefListValue> SerializeObsSourceFilters(obs_source_t *source,
 			auto context =
 				static_cast<local_filters_context_t *>(params);
 
-			context->filters.push_back(obs_source_get_ref(filter));
+			context->filters.push_back(SETRACE_ADDREF(obs_source_get_ref(filter)));
 		},
 		&context);
 
@@ -890,19 +909,19 @@ void SerializeObsSource(obs_source_t *source, CefRefPtr<CefDictionaryValue> dic,
 		     sourceType == OBS_SOURCE_TYPE_TRANSITION);
 	dic->SetBool("isSceneSource", sourceType == OBS_SOURCE_TYPE_SCENE);
 
-	OBSDataAutoRelease settings = obs_source_get_settings(source);
+	OBSDataAutoRelease settings = SETRACE_SCOPEREF(obs_source_get_settings(source));
 
 	if (isExistingSource) {
 		dic->SetValue("settings", SerializeObsData(settings));
 	}
 
 	OBSDataAutoRelease defaultSettings =
-		obs_get_source_defaults(sourceId.c_str());
+		SETRACE_SCOPEREF(obs_get_source_defaults(sourceId.c_str()));
 
 	dic->SetValue("defaultSettings", SerializeObsData(defaultSettings));
 
 	if (serializeProperties) {
-		auto properties = obs_source_properties(source);
+		auto properties = SETRACE_ADDREF(obs_source_properties(source));
 
 		if (properties) {
 			obs_properties_apply_settings(properties, settings);
@@ -912,7 +931,7 @@ void SerializeObsSource(obs_source_t *source, CefRefPtr<CefDictionaryValue> dic,
 
 			dic->SetValue("properties", propertiesVal);
 
-			obs_properties_destroy(properties);
+			obs_properties_destroy(SETRACE_DECREF(properties));
 		} else {
 			dic->SetList("properties", CefListValue::Create());
 		}
@@ -951,7 +970,7 @@ void SerializeObsSourceProperties(CefRefPtr<CefValue> input, CefRefPtr<CefValue>
 
 	std::string id = d->GetString("class");
 
-	OBSDataAutoRelease settings = obs_data_create();
+	OBSDataAutoRelease settings = SETRACE_SCOPEREF(obs_data_create());
 
 	if (d->HasKey("settings")) {
 		if (!DeserializeObsData(d->GetValue("settings"), settings))
@@ -959,7 +978,7 @@ void SerializeObsSourceProperties(CefRefPtr<CefValue> input, CefRefPtr<CefValue>
 	}
 
 	OBSSourceAutoRelease source =
-		obs_source_create_private(id.c_str(), id.c_str(), settings);
+		SETRACE_SCOPEREF(obs_source_create_private(id.c_str(), id.c_str(), settings));
 
 	if (!source)
 		return;
@@ -996,10 +1015,12 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 			return;
 
 		// We need all of this create-release dance since some 3rd party sources do not support obs_get_source_properties :(
-		OBSDataAutoRelease settings = obs_data_create();
-		OBSSourceAutoRelease source = obs_source_create_private(
-			sourceId, CreateGloballyUniqueIdString().c_str(),
-			settings);
+		OBSDataAutoRelease settings = SETRACE_SCOPEREF(obs_data_create());
+		OBSSourceAutoRelease source =
+			SETRACE_SCOPEREF(obs_source_create_private(
+				sourceId,
+				CreateGloballyUniqueIdString().c_str(),
+				settings));
 
 		if (!source)
 			return;
@@ -1786,6 +1807,7 @@ static std::string ReadEnvironmentConfigString(const char *regValueName,
 
 	char *filePath = os_get_config_path_ptr(GLOBAL_ENV_CONFIG_FILE_NAME);
 	config_open(&config, filePath, CONFIG_OPEN_ALWAYS);
+	SETRACE_ADDREF(config);
 	bfree(filePath);
 
 	const char* str = config_get_string(config, productName ? productName : "Global", regValueName);
@@ -1794,7 +1816,7 @@ static std::string ReadEnvironmentConfigString(const char *regValueName,
 		result = str;
 	}
 
-	config_close(config);
+	config_close(SETRACE_DECREF(config));
 #endif
 
 	return result;
@@ -1824,6 +1846,7 @@ bool WriteEnvironmentConfigString(const char *regValueName,
 
 	char *filePath = os_get_config_path_ptr(GLOBAL_ENV_CONFIG_FILE_NAME);
 	config_open(&config, filePath, CONFIG_OPEN_ALWAYS);
+	SETRACE_ADDREF(config);
 	bfree(filePath);
 
 	config_set_string(config,
@@ -1832,7 +1855,7 @@ bool WriteEnvironmentConfigString(const char *regValueName,
 
 	config_save_safe(config, "tmp", "bak");
 
-	config_close(config);
+	config_close(SETRACE_DECREF(config));
 
 	result = true;
 #endif
@@ -2591,6 +2614,8 @@ bool ReadListOfObsProfiles(std::map<std::string, std::string> &output)
 
 		if (config_open(&ini, filePath.c_str(), CONFIG_OPEN_EXISTING) ==
 		    CONFIG_SUCCESS) {
+			SETRACE_ADDREF(ini);
+
 			const char *value =
 				config_get_string(ini, "General", "Name");
 
@@ -2600,7 +2625,7 @@ bool ReadListOfObsProfiles(std::map<std::string, std::string> &output)
 				output[id] = name;
 			}
 
-			config_close(ini);
+			config_close(SETRACE_DECREF(ini));
 		}
 	}
 
@@ -3170,7 +3195,7 @@ void ObsSceneEnumAllItems(obs_scene_t *scene,
 		   void *param) {
 			local_context *context = (local_context *)param;
 
-			obs_sceneitem_addref(sceneitem);
+			obs_sceneitem_addref(SETRACE_ADDREF(sceneitem));
 
 			context->items.push_back(sceneitem);
 
@@ -3191,7 +3216,7 @@ void ObsSceneEnumAllItems(obs_scene_t *scene,
 					local_context *context =
 						(local_context *)param;
 
-					obs_sceneitem_addref(sceneitem);
+					obs_sceneitem_addref(SETRACE_ADDREF(sceneitem));
 
 					context->items.push_back(sceneitem);
 
@@ -3208,7 +3233,7 @@ void ObsSceneEnumAllItems(obs_scene_t *scene,
 			keepCalling = func(item);
 		}
 
-		obs_sceneitem_release(item);
+		obs_sceneitem_release(SETRACE_DECREF(item));
 	}
 }
 
@@ -3226,14 +3251,15 @@ void ObsSceneEnumAllItems(obs_source_t *source,
 
 void ObsCurrentSceneEnumAllItems(std::function<bool(obs_sceneitem_t *)> func)
 {
-	obs_source_t *sceneSource = obs_frontend_get_current_scene();
+	obs_source_t *sceneSource =
+		SETRACE_ADDREF(obs_frontend_get_current_scene());
 
 	if (!sceneSource)
 		return;
 
 	ObsSceneEnumAllItems(sceneSource, func);
 
-	obs_source_release(sceneSource);
+	obs_source_release(SETRACE_DECREF(sceneSource));
 }
 
 bool IsCefValueEqual(CefRefPtr<CefValue> a, CefRefPtr<CefValue> b)
@@ -3258,9 +3284,8 @@ void ObsEnumAllScenes(std::function < bool(obs_source_t * scene)> func)
 
 			
 			if (!obs_source_is_group(scene)) {
-				obs_source_get_ref(scene);
-
-				context->list.push_back(scene);
+				context->list.push_back(SETRACE_ADDREF(
+					obs_source_get_ref(scene)));
 			}
 
 			return true;
@@ -3273,7 +3298,7 @@ void ObsEnumAllScenes(std::function < bool(obs_source_t * scene)> func)
 	}
 
 	for (auto scene : context.list) {
-		obs_source_release(scene);
+		obs_source_release(SETRACE_DECREF(scene));
 	}
 }
 
@@ -3839,7 +3864,7 @@ bool DeserializeObsData(CefRefPtr<CefValue> input, obs_data_t *data)
 
 	std::string json = CefWriteJSON(input, JSON_WRITER_DEFAULT);
 
-	OBSDataAutoRelease parsed_data = obs_data_create_from_json(json.c_str());
+	OBSDataAutoRelease parsed_data = SETRACE_SCOPEREF(obs_data_create_from_json(json.c_str()));
 
 	if (!parsed_data)
 		return false;
@@ -3856,7 +3881,7 @@ CefRefPtr<CefValue> SerializeObsData(obs_data_t *data)
 
 		std::unique_lock guard(mutex); // obs_data_get_json is not thread_safe for the same data container
 
-		const char *json = obs_data_get_json(data);
+		const char *json = SETRACE_NOREF(obs_data_get_json(data));
 
 		if (json) {
 			return CefParseJSON(json,
@@ -3878,7 +3903,7 @@ SerializeObsEncoderProperties(std::string id, obs_data_t *settings)
 
 	result->SetNull();
 
-	auto props = obs_get_encoder_properties(id.c_str());
+	auto props = SETRACE_ADDREF(obs_get_encoder_properties(id.c_str()));
 
 	if (props) {
 		if (settings)
@@ -3886,7 +3911,7 @@ SerializeObsEncoderProperties(std::string id, obs_data_t *settings)
 
 		SerializeObsProperties(props, result);
 
-		obs_properties_destroy(props);
+		obs_properties_destroy(SETRACE_DECREF(props));
 	}
 
 	return result;
@@ -3950,25 +3975,25 @@ void SerializeObsTransition(std::string videoCompositionId, obs_source_t *t,
 	d->SetString("class", id);
 	d->SetString("videoCompositionId", videoCompositionId);
 
-	auto settings = obs_source_get_settings(t);
+	auto settings = SETRACE_ADDREF(obs_source_get_settings(t));
 
-	auto props = obs_source_properties(t);
+	auto props = SETRACE_ADDREF(obs_source_properties(t));
 
 	auto propsValue = CefValue::Create();
 	obs_properties_apply_settings(props, settings);
 	SerializeObsProperties(props, propsValue);
-	obs_properties_destroy(props);
+	obs_properties_destroy(SETRACE_DECREF(props));
 
 	auto settingsValue = SerializeObsData(settings);
 
-	obs_data_release(settings);
+	obs_data_release(SETRACE_DECREF(settings));
 
 	d->SetValue("properties", propsValue);
 	d->SetValue("settings", settingsValue);
 
-	auto defaultsData = obs_get_source_defaults(id.c_str());
+	auto defaultsData = SETRACE_ADDREF(obs_get_source_defaults(id.c_str()));
 	d->SetValue("defaultSettings", SerializeObsData(defaultsData));
-	obs_data_release(defaultsData);
+	obs_data_release(SETRACE_DECREF(defaultsData));
 
 	d->SetString("label", obs_source_get_display_name(id.c_str()));
 
@@ -4014,7 +4039,7 @@ obs_source_t *GetExistingObsTransition(std::string lookupId)
 		std::string id = obs_source_get_id(source);
 
 		if (id == lookupId) {
-			result = obs_source_get_ref(source);
+			result = SETRACE_ADDREF(obs_source_get_ref(source));
 
 			break;
 		}
@@ -4042,7 +4067,7 @@ bool DeserializeObsTransition(CefRefPtr<CefValue> input, obs_source_t **out_tran
 	OBSSourceAutoRelease transition = nullptr;
 	
 	if (d->HasKey("settings")) {
-		settings = obs_data_create();
+		settings = SETRACE_SCOPEREF(obs_data_create());
 
 		DeserializeObsData(d->GetValue("settings"), settings);
 	}
@@ -4054,8 +4079,8 @@ bool DeserializeObsTransition(CefRefPtr<CefValue> input, obs_source_t **out_tran
 			return false;
 		}
 	} else {
-		transition = obs_source_create_private(id.c_str(), id.c_str(),
-						       settings);
+		transition = SETRACE_SCOPEREF(obs_source_create_private(
+			id.c_str(), id.c_str(), settings));
 	}
 
 	if (settings) {
@@ -4104,7 +4129,7 @@ bool DeserializeObsTransition(CefRefPtr<CefValue> input, obs_source_t **out_tran
 		*durationMilliseconds = 300; // OBS FE default
 	}
 
-	*out_transition = obs_source_get_ref(transition);
+	*out_transition = SETRACE_ADDREF(obs_source_get_ref(transition));
 
 	return true;
 }
@@ -4146,7 +4171,7 @@ CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e)
 		result->SetInt("audioMix", obs_encoder_get_mixer_index(e));
 	}
 
-	auto settings = obs_encoder_get_settings(e);
+	auto settings = SETRACE_ADDREF(obs_encoder_get_settings(e));
 
 	result->SetValue("settings",
 			 CefParseJSON(obs_data_get_json(settings),
@@ -4156,16 +4181,16 @@ CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e)
 			 SerializeObsEncoderProperties(obs_encoder_get_id(e),
 						       settings));
 
-	auto defaultSettings = obs_encoder_get_defaults(e);
+	auto defaultSettings = SETRACE_ADDREF(obs_encoder_get_defaults(e));
 
 	if (defaultSettings) {
 		result->SetValue("defaultSettings",
 				 SerializeObsData(defaultSettings));
 
-		obs_data_release(defaultSettings);
+		obs_data_release(SETRACE_DECREF(defaultSettings));
 	}
 
-	obs_data_release(settings);
+	obs_data_release(SETRACE_DECREF(settings));
 
 	return result;
 }
@@ -4188,7 +4213,7 @@ static obs_encoder_t *DeserializeObsEncoder(obs_encoder_type type,
 	if (d->HasKey("name") && d->GetType("name") == VTYPE_STRING)
 		name = d->GetString("name");
 
-	OBSDataAutoRelease settings = obs_data_create();
+	OBSDataAutoRelease settings = SETRACE_SCOPEREF(obs_data_create());
 
 	if (d->HasKey("settings")) {
 		if (!DeserializeObsData(d->GetValue("settings"), settings))
@@ -4205,13 +4230,12 @@ static obs_encoder_t *DeserializeObsEncoder(obs_encoder_type type,
 		mixer_idx = 0;
 
 	if (type == OBS_ENCODER_VIDEO) {
-		auto encoder = obs_video_encoder_create(id.c_str(), name.c_str(),
-						settings, nullptr);
+		auto encoder = SETRACE_ADDREF(obs_video_encoder_create(
+			id.c_str(), name.c_str(), settings, nullptr));
 
 		if (encoder && d->HasKey("width") &&
-		   d->GetType("width") == VTYPE_INT &&
-		   d->HasKey("height") && d->GetType("height") == VTYPE_INT)
-		{
+		    d->GetType("width") == VTYPE_INT && d->HasKey("height") &&
+		    d->GetType("height") == VTYPE_INT) {
 			int width = d->GetInt("width");
 			int height = d->GetInt("height");
 
@@ -4225,10 +4249,9 @@ static obs_encoder_t *DeserializeObsEncoder(obs_encoder_type type,
 	}
 
 	else if (type == OBS_ENCODER_AUDIO)
-		return obs_audio_encoder_create(id.c_str(), name.c_str(),
-						settings,
-						static_cast<size_t>(mixer_idx),
-						nullptr);
+		return SETRACE_ADDREF(obs_audio_encoder_create(
+			id.c_str(), name.c_str(), settings,
+			static_cast<size_t>(mixer_idx), nullptr));
 	else
 		return nullptr;
 }

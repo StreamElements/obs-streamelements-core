@@ -277,7 +277,7 @@ public:
 	{
 		Stop();
 
-		obs_service_release(m_service);
+		obs_service_release(SETRACE_DECREF(m_service));
 		m_service = nullptr;
 	}
 
@@ -315,7 +315,7 @@ public:
 protected:
 	virtual obs_output_t *GetOutput() override
 	{
-		return m_output ? obs_output_get_ref(m_output) : nullptr;
+		return m_output ? SETRACE_ADDREF(obs_output_get_ref(m_output)) : nullptr;
 	}
 
 	virtual bool StartInternal(
@@ -353,7 +353,7 @@ public:
 	virtual bool CanStart() override { return true; }
 
 protected:
-	virtual obs_output_t *GetOutput() override { return obs_frontend_get_streaming_output(); }
+	virtual obs_output_t *GetOutput() override { return SETRACE_ADDREF(obs_frontend_get_streaming_output()); }
 
 	virtual bool StartInternal(
 		std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
@@ -397,7 +397,7 @@ public:
 protected:
 	virtual obs_output_t *GetOutput() override
 	{
-		return obs_frontend_get_recording_output();
+		return SETRACE_ADDREF(obs_frontend_get_recording_output());
 	}
 
 	virtual bool
@@ -483,7 +483,7 @@ public:
 protected:
 	virtual obs_output_t *GetOutput() override
 	{
-		return m_output ? obs_output_get_ref(m_output) : nullptr;
+		return m_output ? SETRACE_ADDREF(obs_output_get_ref(m_output)) : nullptr;
 	}
 
 	virtual bool
@@ -529,7 +529,7 @@ public:
 protected:
 	virtual obs_output_t *GetOutput() override
 	{
-		return obs_frontend_get_replay_buffer_output();
+		return SETRACE_ADDREF(obs_frontend_get_replay_buffer_output());
 	}
 
 	virtual bool StartInternal(
@@ -612,7 +612,7 @@ public:
 protected:
 	virtual obs_output_t *GetOutput() override
 	{
-		return m_output ? obs_output_get_ref(m_output) : nullptr;
+		return m_output ? SETRACE_ADDREF(obs_output_get_ref(m_output)) : nullptr;
 	}
 
 	virtual bool StartInternal(

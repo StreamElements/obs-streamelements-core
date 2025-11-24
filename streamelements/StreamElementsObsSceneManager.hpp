@@ -3,6 +3,7 @@
 #include "StreamElementsSceneItemsMonitor.hpp"
 #include "StreamElementsScenesListWidgetManager.hpp"
 #include "StreamElementsVideoComposition.hpp"
+#include "StreamElementsAsyncTaskQueue.hpp"
 
 #include "cef-headers.hpp"
 
@@ -182,7 +183,7 @@ protected:
 		obs_source_t **output_source,
 		obs_sceneitem_t **output_sceneitem, bool *isExistingSource);
 
-	void RefreshObsSceneItemsList();
+	void RefreshObsSceneItemsList(std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition);
 
 	std::string ObsGetUniqueSourceName(std::string name);
 
@@ -205,6 +206,10 @@ private:
 };
 
 class SESignalHandlerData {
+private:
+	std::shared_ptr<StreamElementsAsyncTaskQueue> m_asyncTaskQueue =
+		nullptr;
+
 public:
 	SESignalHandlerData(
 		StreamElementsObsSceneManager *obsSceneManager,
@@ -212,6 +217,14 @@ public:
 		: m_obsSceneManager(obsSceneManager),
 		  m_videoCompositionBase(videoCompositionBase)
 	{
+		m_asyncTaskQueue = std::make_shared<StreamElementsAsyncTaskQueue>(
+			(std::string(
+				 "SESignalHandlerData for video composition ") +
+			 std::string(videoCompositionBase
+					     ? videoCompositionBase->GetId()
+					     : "unknown"))
+				.c_str());
+
 		AddRef();
 
 		m_wait_promise.set_value(); // release by default
@@ -219,7 +232,24 @@ public:
 
 	~SESignalHandlerData()
 	{
+		if (m_asyncTaskQueue.get()) {
+			m_asyncTaskQueue->Shutdown();
+		}
+
 		Clear();
+	}
+
+	void EnqueueAsyncTask(std::function<void()> task)
+	{
+		if (m_parent) {
+			m_parent->EnqueueAsyncTask(task);
+
+			return;
+		}
+
+		if (m_asyncTaskQueue.get()) {
+			m_asyncTaskQueue->Enqueue(task);
+		}
 	}
 
 private:
@@ -231,8 +261,9 @@ private:
 		: m_parent(parent),
 		  m_obsSceneManager(obsSceneManager),
 		  m_videoCompositionBase(videoCompositionBase),
-		  m_scene(obs_scene_get_ref(scene))
+		  m_scene(SETRACE_ADDREF(obs_scene_get_ref(scene)))
 	{
+		// No m_asyncTaskQueue here, since there is a parent to refer to
 	}
 
 	void Clear()
@@ -254,7 +285,7 @@ private:
 		m_scenes_refcount.clear();
 
 		if (m_scene) {
-			obs_scene_release(m_scene);
+			obs_scene_release(SETRACE_DECREF(m_scene));
 		}
 	}
 
@@ -399,7 +430,7 @@ public:
 				scene = item->m_scene;
 		}
 
-		return obs_scene_get_ref(scene);
+		return SETRACE_ADDREF(obs_scene_get_ref(scene));
 	}
 
 	void Lock()
@@ -444,6 +475,10 @@ public:
 			m_parent->Wait();
 
 			return;
+		}
+
+		if (m_asyncTaskQueue.get()) {
+			m_asyncTaskQueue->Drain();
 		}
 
 		std::shared_future<void> future;

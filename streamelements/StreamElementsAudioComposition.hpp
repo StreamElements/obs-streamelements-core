@@ -64,8 +64,8 @@ public:
 			auto result = GetStreamingAudioEncoder(index);
 
 			if (result) {
-				result = obs_encoder_get_ref(
-					result);
+				result = SETRACE_ADDREF(obs_encoder_get_ref(
+					result));
 			}
 
 			return result;
@@ -77,7 +77,7 @@ public:
 			auto result = GetRecordingAudioEncoder(index);
 
 			if (result) {
-				result = obs_encoder_get_ref(result);
+				result = SETRACE_ADDREF(obs_encoder_get_ref(result));
 			}
 
 			return result;

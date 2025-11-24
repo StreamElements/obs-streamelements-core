@@ -229,24 +229,25 @@ void StreamElementsAudioCompositionManager::SerializeAvailableEncoderClasses(
 		obs_encoder_t *encoder = nullptr;
 
 		if (type == OBS_ENCODER_VIDEO)
-			encoder = obs_video_encoder_create(id, id, nullptr,
-							   nullptr);
+			encoder = SETRACE_ADDREF(obs_video_encoder_create(
+				id, id, nullptr, nullptr));
 		else if (type == OBS_ENCODER_AUDIO)
-			encoder = obs_audio_encoder_create(id, id, nullptr, 0,
-							   nullptr);
+			encoder = SETRACE_ADDREF(obs_audio_encoder_create(
+				id, id, nullptr, 0, nullptr));
 
 		if (encoder) {
-			auto defaultSettings =
-				obs_encoder_get_defaults(encoder);
+			auto defaultSettings = SETRACE_ADDREF(
+				obs_encoder_get_defaults(encoder));
 
 			if (defaultSettings) {
 				d->SetValue("defaultSettings",
 					    SerializeObsData(defaultSettings));
 
-				obs_data_release(defaultSettings);
+				obs_data_release(
+					SETRACE_DECREF(defaultSettings));
 			}
 
-			obs_encoder_release(encoder);
+			obs_encoder_release(SETRACE_DECREF(encoder));
 		}
 
 		root->SetDictionary(root->GetSize(), d);

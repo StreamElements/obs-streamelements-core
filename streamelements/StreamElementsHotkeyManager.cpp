@@ -243,11 +243,13 @@ bool StreamElementsHotkeyManager::SerializeHotkeyBindings(CefRefPtr<CefValue>& o
 		{
 			item.registerer_type = "encoder";
 			auto weak = static_cast<obs_weak_encoder_t*>(item.registerer_ptr);
-			auto strong = obs_weak_encoder_get_encoder(weak);
+			auto strong = SETRACE_ADDREF(
+				obs_weak_encoder_get_encoder(weak));
 			if (strong) {
 				item.registerer = obs_encoder_get_name(strong);
+
+				obs_encoder_release(SETRACE_DECREF(strong));
 			}
-			obs_encoder_release(strong);
 		}
 		break;
 
@@ -255,11 +257,13 @@ bool StreamElementsHotkeyManager::SerializeHotkeyBindings(CefRefPtr<CefValue>& o
 		{
 			item.registerer_type = "output";
 			auto weak = static_cast<obs_weak_output_t*>(item.registerer_ptr);
-			auto strong = obs_weak_output_get_output(weak);
+			auto strong = SETRACE_ADDREF(
+				obs_weak_output_get_output(weak));
 			if (strong) {
 				item.registerer = obs_output_get_name(strong);
+
+				obs_output_release(SETRACE_DECREF(strong));
 			}
-			obs_output_release(strong);
 		}
 		break;
 
@@ -267,11 +271,13 @@ bool StreamElementsHotkeyManager::SerializeHotkeyBindings(CefRefPtr<CefValue>& o
 		{
 			item.registerer_type = "service";
 			auto weak = static_cast<obs_weak_service_t*>(item.registerer_ptr);
-			auto strong = obs_weak_service_get_service(weak);
+			auto strong = SETRACE_ADDREF(
+				obs_weak_service_get_service(weak));
 			if (strong) {
 				item.registerer = obs_service_get_name(strong);
+
+				obs_service_release(SETRACE_DECREF(strong));
 			}
-			obs_service_release(strong);
 		}
 		break;
 
@@ -279,7 +285,8 @@ bool StreamElementsHotkeyManager::SerializeHotkeyBindings(CefRefPtr<CefValue>& o
 		{
 			item.registerer_type = "source";
 			auto weak = static_cast<obs_weak_source_t*>(item.registerer_ptr);
-			auto strong = obs_weak_source_get_source(weak);
+			auto strong = SETRACE_ADDREF(
+				obs_weak_source_get_source(weak));
 			if (strong) {
 				const char* sourceName = obs_source_get_name(strong);
 
@@ -287,7 +294,7 @@ bool StreamElementsHotkeyManager::SerializeHotkeyBindings(CefRefPtr<CefValue>& o
 					item.registerer = sourceName;
 				}
 
-				obs_source_release(strong);
+				obs_source_release(SETRACE_DECREF(strong));
 			}
 		}
 		break;

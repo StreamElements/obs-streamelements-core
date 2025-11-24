@@ -50,10 +50,11 @@ void StreamElementsOutputSettingsManager::GetEncoderProperties(
 
 	obs_encoder_t *encoder =
 		type == "video"
-			? obs_video_encoder_create(id.c_str(), "temporary",
-						   nullptr, nullptr)
-			: obs_audio_encoder_create(id.c_str(), "temporary",
-						   nullptr, 0, nullptr);
+			? SETRACE_ADDREF(obs_video_encoder_create(
+				  id.c_str(), "temporary", nullptr, nullptr))
+			: SETRACE_ADDREF(obs_audio_encoder_create(
+				  id.c_str(), "temporary", nullptr, 0,
+				  nullptr));
 
 	if (!encoder)
 		return;
@@ -61,7 +62,7 @@ void StreamElementsOutputSettingsManager::GetEncoderProperties(
 
 	output->SetDictionary(SerializeObsEncoder(encoder));
 
-	obs_encoder_release(encoder);
+	obs_encoder_release(SETRACE_DECREF(encoder));
 }
 
 void StreamElementsOutputSettingsManager::GetAvailableEncoders(CefRefPtr<CefValue>& result, obs_encoder_type* encoder_type)
@@ -170,8 +171,10 @@ bool StreamElementsOutputSettingsManager::SetStreamingSettings(CefRefPtr<CefValu
 	StopAllOutputs();
 
 	// Streaming service
-	obs_service_t* service = obs_service_create("rtmp_custom", "default_service", NULL, NULL);
-	obs_data_t* service_settings = obs_service_get_settings(service);
+	obs_service_t *service = SETRACE_ADDREF(obs_service_create(
+		"rtmp_custom", "default_service", NULL, NULL));
+	obs_data_t *service_settings =
+		SETRACE_ADDREF(obs_service_get_settings(service));
 
 	obs_data_set_string(service_settings, "server", serverUrl.c_str());
 	obs_data_set_string(service_settings, "key", streamKey.c_str());
@@ -185,18 +188,21 @@ bool StreamElementsOutputSettingsManager::SetStreamingSettings(CefRefPtr<CefValu
 
 	obs_service_update(service, service_settings);
 
-	obs_data_release(service_settings);
+	obs_data_release(SETRACE_DECREF(service_settings));
 
 	// Set streaming service used by UI
 	obs_frontend_set_streaming_service(service);
 
-	obs_output_set_service(obs_frontend_get_streaming_output(), service);
+	OBSOutputAutoRelease streamingOutput =
+		SETRACE_SCOPEREF(obs_frontend_get_streaming_output());
+
+	obs_output_set_service(streamingOutput, service);
 
 	// Save streaming service used by UI
 	obs_frontend_save_streaming_service();
 
 	// Release service reference
-	obs_service_release(service);
+	obs_service_release(SETRACE_DECREF(service));
 
 	// Save UI configuration
 	obs_frontend_save();
@@ -394,10 +400,12 @@ bool StreamElementsOutputSettingsManager::SetEncodingSettings(CefRefPtr<CefValue
 		if (!settings) {
 			settings = obs_data_create();
 		}
+		SETRACE_ADDREF(settings);
 
 		obs_data_set_int(settings, "bitrate", videoBitrate);
 		obs_data_save_json_safe(settings, streamEncoderJsonPath.c_str(), "tmp", "bak");
-		obs_data_release(settings);
+
+		obs_data_release(SETRACE_DECREF(settings));
 	}
 
 	return true;

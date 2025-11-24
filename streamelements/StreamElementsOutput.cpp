@@ -47,7 +47,9 @@ GetVideoEncodersFromOutput(obs_output_t *output)
 	if (output) {
 		for (size_t idx = 0;; ++idx) {
 			OBSEncoderAutoRelease encoder =
-				obs_encoder_get_ref(obs_output_get_video_encoder2(output, idx));
+				SETRACE_SCOPEREF(obs_encoder_get_ref(
+					obs_output_get_video_encoder2(output,
+								      idx)));
 
 			if (!encoder)
 				break;
@@ -169,8 +171,8 @@ DeserializeVideoEncoders(CefRefPtr<CefDictionaryValue> rootDict)
 
 				auto value = list->GetValue(i);
 
-				OBSEncoderAutoRelease encoder =
-					DeserializeObsVideoEncoder(value);
+				OBSEncoderAutoRelease encoder = SETRACE_AUTODECREF(
+					DeserializeObsVideoEncoder(value));
 
 				if (!encoder)
 					continue; // Invalid encoder
@@ -588,6 +590,7 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 	}
 
 	OBSOutputAutoRelease obs_output = GetOutput();
+	SETRACE_DECREF(obs_output.Get());
 
 	if (obs_output && IsActive()) {
 		auto stats = CefDictionaryValue::Create();
@@ -708,6 +711,7 @@ bool StreamElementsOutputBase::IsActive()
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	OBSOutputAutoRelease output = GetOutput();
+	SETRACE_DECREF(output.Get());
 
 	if (!output)
 		return false;
@@ -779,7 +783,7 @@ void StreamElementsOutputBase::ConnectOutputEvents()
 	if (m_outputEventsConnected)
 		return;
 
-	OBSOutputAutoRelease output = GetOutput();
+	OBSOutputAutoRelease output = SETRACE_AUTODECREF(GetOutput());
 
 	if (!output)
 		return;
@@ -811,7 +815,7 @@ void StreamElementsOutputBase::DisconnectOutputEvents()
 	if (!m_outputEventsConnected)
 		return;
 
-	OBSOutputAutoRelease output = GetOutput();
+	OBSOutputAutoRelease output = SETRACE_AUTODECREF(GetOutput());
 
 	if (!output)
 		return;
@@ -866,18 +870,17 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 	if (!videoCompositionInfo)
 		return false;
 
-	std::vector<OBSEncoderAutoRelease> streamingVideoEncoders;
+	std::vector<obs_encoder_t*> streamingVideoEncoders;
 
 	for (size_t i = 0; i < m_videoEncoders.size(); ++i) {
-		OBSEncoderAutoRelease streamingVideoEncoder =
+		obs_encoder_t* streamingVideoEncoder =
 			m_videoEncoders[i]->GetStreamingEncoderRef(
 				videoCompositionInfo);
 
 		if (!streamingVideoEncoder)
 			break;
 
-		streamingVideoEncoders.push_back(
-			obs_encoder_get_ref(streamingVideoEncoder));
+		streamingVideoEncoders.push_back(streamingVideoEncoder);
 	}
 
 	if (!streamingVideoEncoders.size() && videoCompositionInfo->IsObsNative()) {
@@ -906,16 +909,18 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 	if (!output_type)
 		output_type = "rtmp_output";
 
-	obs_data_t *output_settings = obs_data_create();
+	obs_data_t *output_settings = SETRACE_ADDREF(obs_data_create());
 
 	if (m_bindToIP.size()) {
 		obs_data_set_string(output_settings, "bind_ip", m_bindToIP.c_str());
 	}
 
-	m_output = obs_output_create(output_type, GetId().c_str(),
-						 output_settings, nullptr);
+	m_output = SETRACE_ADDREF(obs_output_create(
+		output_type, GetId().c_str(), output_settings, nullptr));
 
-	obs_data_release(output_settings);
+	obs_data_release(SETRACE_DECREF(output_settings));
+
+	bool result = false;
 
 	if (m_output) {
 		obs_output_set_video_encoder(m_output,
@@ -929,7 +934,7 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 		size_t audioEncodersCount = 0;
 
 		for (size_t i = 0; i < m_audioTracks.size(); ++i) {
-			OBSEncoderAutoRelease encoder =
+			obs_encoder_t* encoder =
 				audioCompositionInfo
 					->GetStreamingAudioEncoderRef(
 						m_audioTracks[i]);
@@ -944,6 +949,8 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 
 			obs_output_set_audio_encoder(m_output, encoder, i);
 
+			obs_encoder_release(SETRACE_DECREF(encoder));
+
 			++audioEncodersCount;
 		}
 
@@ -955,7 +962,7 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 			if (obs_output_start(m_output)) {
 				m_videoCompositionInfo = videoCompositionInfo;
 
-				return true;
+				result = true;
 			} else {
 				SetErrorIfEmpty(
 					std::string(
@@ -972,10 +979,12 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 				"No audio encoders were set up for requested audio tracks");
 		}
 
-		DisconnectOutputEvents();
+		if (!result) {
+			DisconnectOutputEvents();
 
-		obs_output_release(m_output);
-		m_output = nullptr;
+			obs_output_release(SETRACE_DECREF(m_output));
+			m_output = nullptr;
+		}
 	} else {
 		blog(LOG_ERROR,
 		     "obs-streamelements-core: failed to create streaming output '%s' of type '%s'",
@@ -985,7 +994,11 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 			"Failed to create output");
 	}
 
-	return false;
+	for (const auto &encoder : streamingVideoEncoders) {
+		obs_encoder_release(SETRACE_DECREF(encoder));
+	}
+
+	return result;
 }
 
 void StreamElementsCustomStreamingOutput::StopInternal()
@@ -999,7 +1012,7 @@ void StreamElementsCustomStreamingOutput::StopInternal()
 
 	DisconnectOutputEvents();
 
-	obs_output_release(m_output);
+	obs_output_release(SETRACE_DECREF(m_output));
 	m_output = nullptr;
 }
 
@@ -1008,7 +1021,8 @@ void StreamElementsCustomStreamingOutput::SerializeOutputSettings(
 {
 	auto d = CefDictionaryValue::Create();
 
-	obs_data_t *service_settings = obs_service_get_settings(m_service);
+	obs_data_t *service_settings =
+		SETRACE_ADDREF(obs_service_get_settings(m_service));
 
 	d->SetString("type", safe_string(obs_service_get_type(m_service)));
 
@@ -1030,7 +1044,7 @@ void StreamElementsCustomStreamingOutput::SerializeOutputSettings(
 							    "password")));
 	}
 
-	obs_data_release(service_settings);
+	obs_data_release(SETRACE_DECREF(service_settings));
 
 	output->SetDictionary(d);
 }
@@ -1127,9 +1141,9 @@ std::shared_ptr <StreamElementsCustomStreamingOutput> StreamElementsCustomStream
 	}
 
 	// Streaming service
-	obs_service_t *service = obs_service_create(
-		"rtmp_custom", "default_service", NULL, NULL);
-	obs_data_t *service_settings = obs_service_get_settings(service);
+	obs_service_t *service = SETRACE_ADDREF(obs_service_create(
+		"rtmp_custom", "default_service", NULL, NULL));
+	obs_data_t *service_settings = SETRACE_ADDREF(obs_service_get_settings(service));
 
 	obs_data_set_string(service_settings, "server", serverUrl.c_str());
 	obs_data_set_string(service_settings, "key", streamKey.c_str());
@@ -1144,7 +1158,7 @@ std::shared_ptr <StreamElementsCustomStreamingOutput> StreamElementsCustomStream
 
 	obs_service_update(service, service_settings);
 
-	obs_data_release(service_settings);
+	obs_data_release(SETRACE_DECREF(service_settings));
 
 	auto bindToIP = "";
 
@@ -1189,9 +1203,10 @@ void StreamElementsObsNativeStreamingOutput::SerializeOutputSettings(
 {
 	auto d = CefDictionaryValue::Create();
 
-	obs_service_t *service = obs_frontend_get_streaming_service(); // No refcount increment
+	obs_service_t *service =
+		SETRACE_NOREF(obs_frontend_get_streaming_service()); // No refcount increment
 
-	obs_data_t *service_settings = obs_service_get_settings(service);
+	obs_data_t *service_settings = SETRACE_ADDREF(obs_service_get_settings(service));
 
 	d->SetString("type", safe_string(obs_service_get_type(service)));
 
@@ -1214,7 +1229,7 @@ void StreamElementsObsNativeStreamingOutput::SerializeOutputSettings(
 							     "password")));
 	}
 
-	obs_data_release(service_settings);
+	obs_data_release(SETRACE_DECREF(service_settings));
 
 	output->SetDictionary(d);
 }
@@ -1245,7 +1260,7 @@ std::vector<uint32_t> StreamElementsObsNativeStreamingOutput::GetAudioTracks()
 std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoder>>
 StreamElementsObsNativeStreamingOutput::GetVideoEncoders()
 {
-	OBSOutputAutoRelease output = GetOutput();
+	OBSOutputAutoRelease output = SETRACE_AUTODECREF(GetOutput());
 
 	return GetVideoEncodersFromOutput(output);
 }
@@ -1280,16 +1295,17 @@ void StreamElementsObsNativeRecordingOutput::SerializeOutputSettings(
 	auto d = CefDictionaryValue::Create();
 
 	obs_output_t *obs_output =
-		obs_frontend_get_recording_output();
+		SETRACE_ADDREF(obs_frontend_get_recording_output());
 
-	obs_data_t *obs_output_settings = obs_output_get_settings(obs_output);
+	obs_data_t *obs_output_settings =
+		SETRACE_ADDREF(obs_output_get_settings(obs_output));
 
 	d->SetString("type", safe_string(obs_output_get_id(obs_output)));
 	d->SetValue("settings", SerializeObsData(obs_output_settings));
 
-	obs_data_release(obs_output_settings);
+	obs_data_release(SETRACE_DECREF(obs_output_settings));
 
-	obs_output_release(obs_output);
+	obs_output_release(SETRACE_DECREF(obs_output));
 
 	output->SetDictionary(d);
 }
@@ -1318,7 +1334,7 @@ std::vector<uint32_t> StreamElementsObsNativeRecordingOutput::GetAudioTracks()
 std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoder>>
 StreamElementsObsNativeRecordingOutput::GetVideoEncoders()
 {
-	OBSOutputAutoRelease output = GetOutput();
+	OBSOutputAutoRelease output = SETRACE_AUTODECREF(GetOutput());
 
 	return GetVideoEncodersFromOutput(output);
 }
@@ -1334,7 +1350,7 @@ bool StreamElementsCustomRecordingOutput::CanDisable()
 
 bool StreamElementsCustomRecordingOutput::CanSplitRecordingOutput()
 {
-	OBSOutputAutoRelease output = GetOutput();
+	OBSOutputAutoRelease output = SETRACE_AUTODECREF(GetOutput());
 
 	if (!output)
 		return false;
@@ -1355,7 +1371,7 @@ bool StreamElementsCustomRecordingOutput::TriggerSplitRecordingOutput()
 	if (!CanSplitRecordingOutput())
 		return false;
 
-	OBSOutputAutoRelease output = GetOutput();
+	OBSOutputAutoRelease output = SETRACE_AUTODECREF(GetOutput());
 
 	proc_handler_t *ph = obs_output_get_proc_handler(output);
 	uint8_t stack[128];
@@ -1379,18 +1395,17 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 	if (!videoCompositionInfo)
 		return false;
 
-	std::vector<OBSEncoderAutoRelease> recordingVideoEncoders;
+	std::vector<obs_encoder_t*> recordingVideoEncoders;
 
 	for (size_t i = 0; i < m_videoEncoders.size(); ++i) {
-		OBSEncoderAutoRelease recordingVideoEncoder =
+		obs_encoder_t* recordingVideoEncoder =
 			m_videoEncoders[i]
 				->GetRecordingEncoderRef(videoCompositionInfo);
 
 		if (!recordingVideoEncoder)
 			break;
 
-		recordingVideoEncoders.push_back(
-			obs_encoder_get_ref(recordingVideoEncoder));
+		recordingVideoEncoders.push_back(recordingVideoEncoder);
 	}
 
 	if (!recordingVideoEncoders.size() &&
@@ -1531,10 +1546,14 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 	// Setup output settings
 	////////////////////////////////////////////////
 
-	OBSDataAutoRelease settings = obs_data_create();
+	OBSDataAutoRelease settings = SETRACE_SCOPEREF(obs_data_create());
 
-	std::string formattedFilename = os_generate_formatted_filename(
+	char* formattedFilename_ptr = os_generate_formatted_filename(
 		filenameExtension.c_str(), !noSpace, filenameFormat.c_str());
+
+	std::string formattedFilename = formattedFilename_ptr;
+
+	bfree(formattedFilename_ptr);
 
 	std::string formattedPath = basePath + "/" + formattedFilename;
 
@@ -1550,12 +1569,14 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 	obs_data_set_int(settings, "max_time_sec", splitFileTime);
 	obs_data_set_int(settings, "max_size_mb", splitFileSize);
 
-	OBSDataAutoRelease hotkeyData = obs_data_create();
+	OBSDataAutoRelease hotkeyData = SETRACE_SCOPEREF(obs_data_create());
 
 	const char *output_type = "ffmpeg_muxer";
 
-	m_output = obs_output_create(output_type, GetId().c_str(), settings,
-				     hotkeyData);
+	m_output = SETRACE_ADDREF(obs_output_create(
+		output_type, GetId().c_str(), settings, hotkeyData));
+
+	bool result = false;
 
 	if (m_output) {
 		obs_output_set_video_encoder(m_output,
@@ -1570,7 +1591,7 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 		size_t audioEncodersCount = 0;
 
 		for (size_t i = 0; i < m_audioTracks.size(); ++i) {
-			OBSEncoderAutoRelease encoder =
+			obs_encoder_t* encoder =
 				audioCompositionInfo
 					->GetRecordingAudioEncoderRef(
 						m_audioTracks[i]);
@@ -1585,6 +1606,8 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 
 			obs_output_set_audio_encoder(m_output, encoder, i);
 
+			obs_encoder_release(SETRACE_DECREF(encoder));
+
 			++audioEncodersCount;
 		}
 
@@ -1594,7 +1617,7 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 			if (obs_output_start(m_output)) {
 				m_videoCompositionInfo = videoCompositionInfo;
 
-				return true;
+				result = true;
 			} else {
 				SetErrorIfEmpty(
 					std::string(
@@ -1611,10 +1634,12 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 				"No audio encoders were set up for requested audio tracks");
 		}
 
-		DisconnectOutputEvents();
+		if (!result) {
+			DisconnectOutputEvents();
 
-		obs_output_release(m_output);
-		m_output = nullptr;
+			obs_output_release(SETRACE_DECREF(m_output));
+			m_output = nullptr;
+		}
 	} else {
 		blog(LOG_ERROR,
 		     "obs-streamelements-core: failed to create recording output '%s' of type '%s'",
@@ -1623,7 +1648,11 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 		SetError("Failed to create output");
 	}
 
-	return false;
+	for (const auto &encoder : recordingVideoEncoders) {
+		obs_encoder_release(SETRACE_DECREF(encoder));
+	}
+
+	return result;
 }
 
 void StreamElementsCustomRecordingOutput::StopInternal()
@@ -1640,7 +1669,7 @@ void StreamElementsCustomRecordingOutput::StopInternal()
 
 	DisconnectOutputEvents();
 
-	obs_output_release(m_output);
+	obs_output_release(SETRACE_DECREF(m_output));
 	m_output = nullptr;
 }
 
@@ -1789,16 +1818,18 @@ void StreamElementsObsNativeReplayBufferOutput::SerializeOutputSettings(
 {
 	auto d = CefDictionaryValue::Create();
 
-	obs_output_t *obs_output = obs_frontend_get_replay_buffer_output();
+	obs_output_t *obs_output =
+		SETRACE_ADDREF(obs_frontend_get_replay_buffer_output());
 
-	obs_data_t *obs_output_settings = obs_output_get_settings(obs_output);
+	obs_data_t *obs_output_settings =
+		SETRACE_ADDREF(obs_output_get_settings(obs_output));
 
 	d->SetString("type", safe_string(obs_output_get_id(obs_output)));
 	d->SetValue("settings", SerializeObsData(obs_output_settings));
 
-	obs_data_release(obs_output_settings);
+	obs_data_release(SETRACE_DECREF(obs_output_settings));
 
-	obs_output_release(obs_output);
+	obs_output_release(SETRACE_DECREF(obs_output));
 
 	output->SetDictionary(d);
 }
@@ -1828,7 +1859,7 @@ StreamElementsObsNativeReplayBufferOutput::GetAudioTracks()
 std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoder>>
 StreamElementsObsNativeReplayBufferOutput::GetVideoEncoders()
 {
-	OBSOutputAutoRelease output = GetOutput();
+	OBSOutputAutoRelease output = SETRACE_AUTODECREF(GetOutput());
 
 	return GetVideoEncodersFromOutput(output);
 }
@@ -1854,18 +1885,17 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 	if (!videoCompositionInfo)
 		return false;
 
-	std::vector<OBSEncoderAutoRelease> recordingVideoEncoders;
+	std::vector<obs_encoder_t*> recordingVideoEncoders;
 
 	for (size_t i = 0; i < m_videoEncoders.size(); ++i) {
-		OBSEncoderAutoRelease recordingVideoEncoder =
+		obs_encoder_t* recordingVideoEncoder =
 			m_videoEncoders[i]->GetRecordingEncoderRef(
 				videoCompositionInfo);
 
 		if (!recordingVideoEncoder)
 			break;
 
-		recordingVideoEncoders.push_back(
-			obs_encoder_get_ref(recordingVideoEncoder));
+		recordingVideoEncoders.push_back(recordingVideoEncoder);
 	}
 
 	if (!recordingVideoEncoders.size() && videoCompositionInfo->IsObsNative()) {
@@ -2009,15 +2039,9 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 	// Setup output settings
 	////////////////////////////////////////////////
 
-	OBSDataAutoRelease settings = obs_data_create();
-
-	//std::string formattedFilename = os_generate_formatted_filename(
-	//	filenameExtension.c_str(), !noSpace, filenameFormat.c_str());
-	//
-	//std::string formattedPath = basePath + "/" + formattedFilename;
+	OBSDataAutoRelease settings = SETRACE_SCOPEREF(obs_data_create());
 
 	obs_data_set_string(settings, "muxer_settings", "");
-	//obs_data_set_string(settings, "path", formattedPath.c_str());
 
 	obs_data_set_string(settings, "directory", basePath.c_str());
 	obs_data_set_string(settings, "format", filenameFormat.c_str());
@@ -2028,12 +2052,14 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 	obs_data_set_int(settings, "max_time_sec", splitFileTime);
 	obs_data_set_int(settings, "max_size_mb", splitFileSize);
 
-	OBSDataAutoRelease hotkeyData = obs_data_create();
+	OBSDataAutoRelease hotkeyData = SETRACE_SCOPEREF(obs_data_create());
 
 	const char *output_type = "replay_buffer";
 
-	m_output = obs_output_create(output_type, GetId().c_str(), settings,
-				     hotkeyData);
+	m_output = SETRACE_ADDREF(obs_output_create(
+		output_type, GetId().c_str(), settings, hotkeyData));
+
+	bool result = false;
 
 	if (m_output) {
 		obs_output_set_video_encoder(m_output,
@@ -2048,7 +2074,7 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 		size_t audioEncodersCount = 0;
 
 		for (size_t i = 0; i < m_audioTracks.size(); ++i) {
-			OBSEncoderAutoRelease encoder =
+			obs_encoder_t* encoder =
 				audioCompositionInfo
 					->GetRecordingAudioEncoderRef(
 						m_audioTracks[i]);
@@ -2063,6 +2089,8 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 
 			obs_output_set_audio_encoder(m_output, encoder, i);
 
+			obs_encoder_release(SETRACE_DECREF(encoder));
+
 			++audioEncodersCount;
 		}
 
@@ -2072,7 +2100,7 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 			if (obs_output_start(m_output)) {
 				m_videoCompositionInfo = videoCompositionInfo;
 
-				return true;
+				result = true;
 			} else {
 				SetErrorIfEmpty(
 					std::string(
@@ -2089,10 +2117,12 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 				"No audio encoders were set up for requested audio tracks");
 		}
 
-		DisconnectOutputEvents();
+		if (!result) {
+			DisconnectOutputEvents();
 
-		obs_output_release(m_output);
-		m_output = nullptr;
+			obs_output_release(SETRACE_DECREF(m_output));
+			m_output = nullptr;
+		}
 	} else {
 		blog(LOG_ERROR,
 		     "obs-streamelements-core: failed to create replay buffer output '%s' of type '%s'",
@@ -2101,7 +2131,11 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 		SetError("Failed to create output");
 	}
 
-	return false;
+	for (const auto &encoder : recordingVideoEncoders) {
+		obs_encoder_release(SETRACE_DECREF(encoder));
+	}
+
+	return result;
 }
 
 void StreamElementsCustomReplayBufferOutput::StopInternal()
@@ -2116,7 +2150,7 @@ void StreamElementsCustomReplayBufferOutput::StopInternal()
 
 	DisconnectOutputEvents();
 
-	obs_output_release(m_output);
+	obs_output_release(SETRACE_DECREF(m_output));
 	m_output = nullptr;
 }
 
@@ -2256,7 +2290,7 @@ void StreamElementsCustomReplayBufferOutput::handle_output_saved(
 
 	auto eventArgs = CefDictionaryValue::Create();
 
-	calldata_t *proc_cd = calldata_create();
+	calldata_t *proc_cd = SETRACE_ADDREF(calldata_create());
 	auto proc_handler = obs_output_get_proc_handler(self->GetOutput());
 	proc_handler_call(proc_handler, "get_last_replay", proc_cd);
 
@@ -2267,7 +2301,7 @@ void StreamElementsCustomReplayBufferOutput::handle_output_saved(
 		dispatch_event(self, "hostReplayBufferOutputSavedToLocalFile", eventArgs);
 	}
 
-	calldata_destroy(proc_cd);
+	calldata_destroy(SETRACE_DECREF(proc_cd));
 }
 
 bool StreamElementsCustomReplayBufferOutput::TriggerSaveReplayBuffer()
@@ -2275,12 +2309,12 @@ bool StreamElementsCustomReplayBufferOutput::TriggerSaveReplayBuffer()
 	if (!IsActive() || !GetOutput())
 		return false;
 
-	calldata_t *cd = calldata_create();
+	calldata_t *cd = SETRACE_ADDREF(calldata_create());
 	auto proc_handler = obs_output_get_proc_handler(GetOutput());
 
 	proc_handler_call(proc_handler, "save", cd);
 
-	calldata_destroy(cd);
+	calldata_destroy(SETRACE_DECREF(cd));
 
 	return true;
 }

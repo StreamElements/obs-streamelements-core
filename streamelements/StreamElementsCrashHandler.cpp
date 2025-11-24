@@ -505,15 +505,6 @@ unsigned int s_maxRemainingLogFilesCount = 7;
 
 /* ================================================================= */
 
-static void null_crash_handler(const char *format, va_list args, void *param)
-{
-	exit(-1);
-
-	UNUSED_PARAMETER(format);
-	UNUSED_PARAMETER(args);
-	UNUSED_PARAMETER(param);
-}
-
 static std::string GenerateTimeDateFilename(const char *extension,
 					    bool noSpace = false)
 {
@@ -598,144 +589,6 @@ static void write_file_content(std::string &path, const char *content)
 	file << content;
 
 	file.close();
-}
-
-///
-// StreamElements Crash Handler
-//
-// Don't use any asynchronous calls here
-// Don't use stdio FILE* here
-//
-// Repeats crash handler functionality found in obs-app.cpp
-//
-// This is because there is no way to chain two crash handlers
-// together at the moment of this writing.
-//
-// Note: The message box is moved outside this function to the
-//       top level exception filter.
-//
-//       It will still be presented if the handler determines
-//       that it is not running within our top level exception
-//       filter context.
-//
-static void main_crash_handler(const char *format, va_list args, void *param)
-{
-	// Allocate space for crash report content
-	char *text = new char[MAX_CRASH_REPORT_SIZE];
-
-	// Build crash report
-	vsnprintf(text, MAX_CRASH_REPORT_SIZE, format, args);
-	text[MAX_CRASH_REPORT_SIZE - 1] = 0;
-
-	s_crashDumpFromObs = text;
-
-	GetAsyncCallContextStack([&](const StreamElementsAsyncCallContextStack_t
-					     *asyncCallContextStack) {
-		if (!asyncCallContextStack->size())
-			return;
-
-		s_crashDumpFromStackWalker +=
-			"\n======================================================================\n";
-		"\n======================================================================\n";
-		s_crashDumpFromStackWalker += "Asynchronous call context:\n";
-		s_crashDumpFromStackWalker +=
-			"======================================================================\n\n";
-
-		for (auto item : *asyncCallContextStack) {
-			s_crashDumpFromStackWalker += item->file.c_str();
-			s_crashDumpFromStackWalker += " (";
-			char buf[32];
-			s_crashDumpFromStackWalker += itoa(item->line, buf, 10);
-			s_crashDumpFromStackWalker += ")\n";
-		}
-	});
-
-	s_crashDumpFromStackWalker +=
-		"\n======================================================================\n";
-	"\n======================================================================\n";
-	s_crashDumpFromStackWalker += "Additional stack info:\n";
-	s_crashDumpFromStackWalker +=
-		"======================================================================\n\n";
-
-	s_crashDumpFromStackWalker += s_stackWalker->output;
-
-	s_crashDumpFromStackWalker +=
-		"\n======================================================================\n";
-	s_crashDumpFromStackWalker += "StreamElements Plug-in info:\n";
-	s_crashDumpFromStackWalker +=
-		"======================================================================\n\n";
-
-	s_crashDumpFromStackWalker += "StreamElements Plug-in Version: " +
-				      GetStreamElementsPluginVersionString() +
-				      "\n";
-
-	s_crashDumpFromStackWalker +=
-		"CEF Version: " + GetCefVersionString() + "\n";
-	s_crashDumpFromStackWalker +=
-		"CEF API Hash: " + GetCefPlatformApiHash() + "\n";
-	s_crashDumpFromStackWalker +=
-		"Machine Unique ID: " + GetComputerSystemUniqueId() + "\n";
-
-#ifdef _WIN32
-#ifdef _WIN64
-	s_crashDumpFromStackWalker += "Platform: Windows (64bit)\n";
-#else
-	s_crashDumpFromStackWalker += "Platform: Windows (32bit)\n";
-#endif
-#elif APPLE
-	s_crashDumpFromStackWalker += "Platform: MacOS\n";
-#elif LINUX
-	s_crashDumpFromStackWalker += "Platform: Linux\n";
-#else
-	s_crashDumpFromStackWalker += "Platform: Other\n";
-#endif
-
-	s_crashDumpFromObs += s_crashDumpFromStackWalker;
-
-	// Delete oldest crash report
-	delete_oldest_file(true, "obs-studio/crashes");
-
-	// Build output file path
-	std::string name = "obs-studio/crashes/Crash ";
-	name += GenerateTimeDateFilename("txt");
-
-	char *basePathPtr = os_get_config_path_ptr(name.c_str());
-	std::string path(basePathPtr);
-	bfree(basePathPtr);
-
-	// Write crash report content to crash dump file
-	write_file_content(path, s_crashDumpFromObs.c_str());
-
-	// Send event report to analytics service.
-	StreamElementsGlobalStateManager::GetInstance()
-		->GetAnalyticsEventsManager()
-		->trackSynchronousEvent(
-			"obs_crashed",
-			json11::Json::object{{"message", s_crashDumpFromObs},
-					     {"placement", "obs"}});
-
-	if (s_insideExceptionFilter == 0) {
-		int ret = MessageBoxA(NULL, CRASH_MESSAGE, "OBS has crashed!",
-				      MB_YESNO | MB_ICONERROR | MB_TASKMODAL);
-
-		if (ret == IDYES) {
-			size_t len = s_crashDumpFromObs.size();
-
-			HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE, len);
-			memcpy(GlobalLock(mem), s_crashDumpFromObs.c_str(),
-			       len);
-			GlobalUnlock(mem);
-
-			OpenClipboard(0);
-			EmptyClipboard();
-			SetClipboardData(CF_TEXT, mem);
-			CloseClipboard();
-		}
-
-		exit(-1);
-	}
-
-	UNUSED_PARAMETER(param);
 }
 
 /* ================================================================= */
@@ -1439,8 +1292,6 @@ static LONG CALLBACK CustomExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
 
 StreamElementsCrashHandler::StreamElementsCrashHandler()
 {
-	base_set_crash_handler(main_crash_handler, this);
-
 	if (IsDebuggerPresent()) {
 		return;
 	}
@@ -1517,6 +1368,4 @@ StreamElementsCrashHandler::~StreamElementsCrashHandler()
 
 		s_prevExceptionFilter = nullptr;
 	}
-
-	base_set_crash_handler(null_crash_handler, nullptr);
 }

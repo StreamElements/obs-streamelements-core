@@ -246,6 +246,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/StreamElementsOutput.cpp
 	streamelements/StreamElementsOutputManager.cpp
 	streamelements/StreamElementsObsActiveSceneTracker.cpp
+	streamelements/SETrace.cpp
 	streamelements/updater/confirmpendingupdatedialog.cpp
 	streamelements/updater/networkdialog.cpp
 	streamelements/updater/updater.cpp
@@ -346,6 +347,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/canvas-draw.hpp
 	streamelements/canvas-mutate.hpp
 	streamelements/canvas-controls.hpp
+	streamelements/SETrace.hpp
 	streamelements/updater/confirmpendingupdatedialog.hpp
 	streamelements/updater/confirmpendingupdatedialog.ui
 	streamelements/updater/networkdialog.hpp

@@ -5,6 +5,7 @@
 #include "StreamElementsConfig.hpp"
 
 #include <obs.h>
+#include <obs.hpp>
 #include <obs-frontend-api.h>
 
 #include <string>
@@ -83,7 +84,8 @@ static obs_sceneitem_t *FindSceneItemByIdAddRef(std::string id)
 	if (!context.searchPtr)
 		return nullptr;
 
-	obs_source_t *currentScene = obs_frontend_get_current_scene();
+	obs_source_t *currentScene =
+		SETRACE_ADDREF(obs_frontend_get_current_scene());
 
 	if (!currentScene)
 		return nullptr;
@@ -101,10 +103,10 @@ static obs_sceneitem_t *FindSceneItemByIdAddRef(std::string id)
 		return true;
 	});
 
-	obs_source_release(currentScene);
+	obs_source_release(SETRACE_DECREF(currentScene));
 
 	if (context.sceneitem)
-		obs_sceneitem_addref(context.sceneitem);
+		obs_sceneitem_addref(SETRACE_ADDREF(context.sceneitem));
 
 	return context.sceneitem;
 }
@@ -123,7 +125,7 @@ typedef std::vector<obs_sceneitem_t *> sceneitem_list_t;
 
 static void ReleaseSceneItemsList(sceneitem_list_t* list) {
 	for (auto sceneitem : *list) {
-		obs_sceneitem_release(sceneitem);
+		obs_sceneitem_release(SETRACE_DECREF(sceneitem));
 	}
 
 	delete list;
@@ -131,7 +133,8 @@ static void ReleaseSceneItemsList(sceneitem_list_t* list) {
 
 static sceneitem_list_t* GetSelectedSceneItemsAddRef()
 {
-	obs_source_t *sceneSource = obs_frontend_get_current_scene();
+	obs_source_t *sceneSource =
+		SETRACE_ADDREF(obs_frontend_get_current_scene());
 
 	obs_scene_t *scene = obs_scene_from_source(sceneSource); // does not increment refcount
 
@@ -143,7 +146,7 @@ static sceneitem_list_t* GetSelectedSceneItemsAddRef()
 			sceneitem_list_t *list = (sceneitem_list_t *)param;
 
 			if (obs_sceneitem_selected(sceneitem)) {
-				obs_sceneitem_addref(sceneitem);
+				obs_sceneitem_addref(SETRACE_ADDREF(sceneitem));
 
 				list->push_back(sceneitem);
 			}
@@ -153,7 +156,7 @@ static sceneitem_list_t* GetSelectedSceneItemsAddRef()
 		},
 		sceneItems);
 
-	obs_source_release(sceneSource);
+	obs_source_release(SETRACE_DECREF(sceneSource));
 
 	return sceneItems;
 }
@@ -490,7 +493,7 @@ public:
 				scene_item, this->m_monitor, e);
 
 			if (scene_item)
-				obs_sceneitem_release(scene_item);
+				obs_sceneitem_release(SETRACE_DECREF(scene_item));
 
 			return handled;
 		}
@@ -510,7 +513,7 @@ public:
 			}
 
 			if (scene_item)
-				obs_sceneitem_release(scene_item);
+				obs_sceneitem_release(SETRACE_DECREF(scene_item));
 
 			return handled;
 		}
@@ -696,7 +699,8 @@ static bool retrieveSceneItemsWithAddRef(obs_scene_t *, obs_sceneitem_t *item,
 		reinterpret_cast<sceneitems_vector_t *>(ptr);
 
 	if (obs_sceneitem_is_group(item)) {
-		obs_data_t *data = obs_sceneitem_get_private_settings(item);
+		obs_data_t *data = SETRACE_ADDREF(
+			obs_sceneitem_get_private_settings(item));
 
 		/* WARNING: COMPATIBILITY: COMPAT: This relies on OBS internal data management.
 		 *                                 May jeopardize compatibility with future releases
@@ -711,10 +715,10 @@ static bool retrieveSceneItemsWithAddRef(obs_scene_t *, obs_sceneitem_t *item,
 				scene, retrieveSceneItemsWithAddRef, items);
 		}
 
-		obs_data_release(data);
+		obs_data_release(SETRACE_DECREF(data));
 	}
 
-	obs_sceneitem_addref(item);
+	obs_sceneitem_addref(SETRACE_ADDREF(item));
 	items->insert(items->begin(), item);
 	return true;
 };
@@ -722,7 +726,7 @@ static bool retrieveSceneItemsWithAddRef(obs_scene_t *, obs_sceneitem_t *item,
 static void release_sceneitems(sceneitems_vector_t *items)
 {
 	for (obs_sceneitem_t *item : *items) {
-		obs_sceneitem_release(item);
+		obs_sceneitem_release(SETRACE_DECREF(item));
 	}
 }
 
@@ -735,8 +739,8 @@ CefRefPtr<CefValue> StreamElementsSceneItemsMonitor::GetSceneItemPropertyValue(
 	if (!scene_item)
 		return result;
 
-	obs_data_t *scene_item_private_data =
-		obs_sceneitem_get_private_settings(scene_item);
+	OBSDataAutoRelease scene_item_private_data =
+		SETRACE_SCOPEREF(obs_sceneitem_get_private_settings(scene_item));
 
 	if (!scene_item_private_data)
 		return result;
@@ -749,8 +753,6 @@ CefRefPtr<CefValue> StreamElementsSceneItemsMonitor::GetSceneItemPropertyValue(
 	if (json) {
 		result = CefParseJSON(json, JSON_PARSER_ALLOW_TRAILING_COMMAS);
 	}
-
-	obs_data_release(scene_item_private_data);
 
 	if (!result.get()) {
 		result = CefValue::Create();
@@ -766,13 +768,13 @@ void StreamElementsSceneItemsMonitor::SetSceneItemPropertyValue(
 	bool triggerUpdate)
 {
 	obs_data_t *scene_item_private_data =
-		obs_sceneitem_get_private_settings(scene_item);
+		SETRACE_ADDREF(obs_sceneitem_get_private_settings(scene_item));
 
 	std::string json = CefWriteJSON(value, JSON_WRITER_DEFAULT).ToString();
 
 	obs_data_set_string(scene_item_private_data, key, json.c_str());
 
-	obs_data_release(scene_item_private_data);
+	obs_data_release(SETRACE_DECREF(scene_item_private_data));
 
 	#if SE_ENABLE_SCENEITEM_UI_EXTENSIONS
 	if (triggerUpdate) {
@@ -1103,7 +1105,7 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 
 	sceneitems_vector_t sceneItems;
 
-	obs_source_t *sceneSource = obs_frontend_get_current_scene();
+	obs_source_t *sceneSource = SETRACE_ADDREF(obs_frontend_get_current_scene());
 
 	if (!sceneSource)
 		return;
@@ -1271,7 +1273,7 @@ void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 	}
 
 	release_sceneitems(&sceneItems);
-	obs_source_release(sceneSource);
+	obs_source_release(SETRACE_DECREF(sceneSource));
 }
 #endif
 
@@ -1282,7 +1284,8 @@ bool StreamElementsSceneItemsMonitor::InvokeCurrentSceneItemDefaultAction(
 
 	sceneitems_vector_t sceneItems;
 
-	obs_source_t *sceneSource = obs_frontend_get_current_scene();
+	obs_source_t *sceneSource =
+		SETRACE_ADDREF(obs_frontend_get_current_scene());
 
 	if (!sceneSource)
 		return false;
@@ -1327,7 +1330,7 @@ bool StreamElementsSceneItemsMonitor::InvokeCurrentSceneItemDefaultAction(
 	}
 
 	release_sceneitems(&sceneItems);
-	obs_source_release(sceneSource);
+	obs_source_release(SETRACE_DECREF(sceneSource));
 
 	return result;
 }
@@ -1339,7 +1342,8 @@ bool StreamElementsSceneItemsMonitor::InvokeCurrentSceneItemDefaultContextMenu(
 
 	sceneitems_vector_t sceneItems;
 
-	obs_source_t *sceneSource = obs_frontend_get_current_scene();
+	obs_source_t *sceneSource =
+		SETRACE_ADDREF(obs_frontend_get_current_scene());
 
 	if (!sceneSource)
 		return false;
@@ -1378,7 +1382,7 @@ bool StreamElementsSceneItemsMonitor::InvokeCurrentSceneItemDefaultContextMenu(
 	}
 
 	release_sceneitems(&sceneItems);
-	obs_source_release(sceneSource);
+	obs_source_release(SETRACE_DECREF(sceneSource));
 
 	return result;
 }

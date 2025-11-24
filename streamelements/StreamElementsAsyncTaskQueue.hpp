@@ -73,6 +73,16 @@ public:
 	//
 	~StreamElementsAsyncTaskQueue();
 
+	//
+	// Wait for all queued tasks to complete and stop running
+	//
+	void Shutdown();
+
+	//
+	// Wait for all queued tasks to complete and continue running
+	//
+	void Drain();
+
 	///
 	// Add task to the processing queue
 	//

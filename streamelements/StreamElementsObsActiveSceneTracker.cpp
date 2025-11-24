@@ -96,7 +96,7 @@ void StreamElementsObsActiveSceneTracker::ClearTransition()
 		signal_handler_disconnect(handler, "rename",
 					  handle_transition_changed, this);
 
-		obs_source_release(m_currentTransition);
+		obs_source_release(SETRACE_DECREF(m_currentTransition));
 
 		m_currentTransition = nullptr;
 	}
@@ -106,7 +106,8 @@ void StreamElementsObsActiveSceneTracker::UpdateTransition()
 {
 	ClearTransition();
 
-	m_currentTransition = obs_frontend_get_current_transition();
+	m_currentTransition =
+		SETRACE_ADDREF(obs_frontend_get_current_transition());
 
 	if (!m_currentTransition)
 		return;
@@ -178,7 +179,7 @@ void StreamElementsObsActiveSceneTracker::handle_transition_start(
 	//
 
 	if (obs_frontend_preview_program_mode_active()) {
-		destSource = obs_frontend_get_current_scene();
+		destSource = SETRACE_SCOPEREF(obs_frontend_get_current_scene());
 	} else {
 		obs_source_t *source =
 			static_cast<obs_source_t *>(calldata_ptr(cd, "source"));
@@ -186,8 +187,8 @@ void StreamElementsObsActiveSceneTracker::handle_transition_start(
 		if (!source)
 			return;
 
-		destSource = obs_transition_get_source(source,
-						       OBS_TRANSITION_SOURCE_B);
+		destSource = SETRACE_SCOPEREF(obs_transition_get_source(
+			source, OBS_TRANSITION_SOURCE_B));
 
 		//if (!destSource)
 		//	destSource = obs_transition_get_source(

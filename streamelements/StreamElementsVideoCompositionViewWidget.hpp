@@ -419,6 +419,7 @@ public:
 	}
 
 private:
+	void ResizeDisplay();
 	void CreateDisplay();
 
 	void OnMove();

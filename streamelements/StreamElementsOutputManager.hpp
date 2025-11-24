@@ -10,7 +10,7 @@ class StreamElementsOutputManager {
 private:
 	std::shared_mutex m_mutex;
 	std::map<StreamElementsOutputBase::ObsOutputType,
-		 std::map<std::string, std::shared_ptr<StreamElementsOutputBase>>>
+		 std::shared_ptr<std::map<std::string, std::shared_ptr<StreamElementsOutputBase>>>>
 		m_map;
 	std::shared_ptr<StreamElementsVideoCompositionManager>
 		m_videoCompositionManager;

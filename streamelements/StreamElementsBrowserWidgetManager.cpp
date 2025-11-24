@@ -207,6 +207,9 @@ std::string StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 				    reloadPolicy.c_str(), dockingArea)) {
 				QDockWidget *widget = GetDockWidget(id.c_str());
 
+				if (!widget)
+					return "";
+
 				//widget->setVisible(!visible);
 				//QApplication::sendPostedEvents();
 				//widget->setVisible(visible);
@@ -277,8 +280,10 @@ bool StreamElementsBrowserWidgetManager::AddDockBrowserWidget(
 	closeAction->setFont(font);
 	*/
 
+	std::string my_url = url;
+
 	StreamElementsBrowserWidget *widget = new StreamElementsBrowserWidget(
-		nullptr, StreamElementsMessageBus::DEST_UI, url, executeJavaScriptCodeOnLoad, reloadPolicy,
+		nullptr, StreamElementsMessageBus::DEST_UI, my_url.c_str(), executeJavaScriptCodeOnLoad, reloadPolicy,
 		DockWidgetAreaToString(area).c_str(), id,
 		std::make_shared<StreamElementsApiMessageHandler>("dockingWidget"));
 
@@ -464,6 +469,8 @@ void StreamElementsBrowserWidgetManager::SerializeDockingWidgets(
 
 			widgetDictionary->SetInt("left", widget->pos().x());
 			widgetDictionary->SetInt("top", widget->pos().y());
+
+			delete info;
 		}
 
 		rootDictionary->SetValue(id, widgetValue);

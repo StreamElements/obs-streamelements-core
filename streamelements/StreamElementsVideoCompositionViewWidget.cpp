@@ -405,10 +405,10 @@ StreamElementsVideoCompositionViewWidget::StreamElementsVideoCompositionViewWidg
 	  QWidget(parent),
 	  m_visualElementsState(this)
 {
-	setAttribute(Qt::WA_PaintOnScreen);
 	setAttribute(Qt::WA_StaticContents);
-	setAttribute(Qt::WA_NoSystemBackground);
+	setAttribute(Qt::WA_PaintOnScreen);
 	setAttribute(Qt::WA_OpaquePaintEvent);
+	setAttribute(Qt::WA_NoSystemBackground);
 	setAttribute(Qt::WA_DontCreateNativeAncestors);
 	setAttribute(Qt::WA_NativeWindow);
 
@@ -420,6 +420,9 @@ StreamElementsVideoCompositionViewWidget::StreamElementsVideoCompositionViewWidg
 		this, std::string("StreamElementsVideoCompositionViewWidget"));
 
 	auto windowVisible = [this](bool visible) {
+		if (os_atomic_load_bool(&m_destroyed))
+			return;
+
 		if (!visible) {
 #if !defined(_WIN32) && !defined(__APPLE__)
 			//m_display = nullptr;
@@ -428,24 +431,21 @@ StreamElementsVideoCompositionViewWidget::StreamElementsVideoCompositionViewWidg
 		}
 
 		if (!m_display) {
-			//CreateDisplay();
+			CreateDisplay();
 		} else {
-			QSize size = GetPixelSize(this);
-
-			obs_display_resize(m_display, size.width(),
-					   size.height());
+			ResizeDisplay();
 		}
 	};
 
 	auto screenChanged = [this](QScreen *) {
 		//CreateDisplay();
+		if (os_atomic_load_bool(&m_destroyed))
+			return;
 
 		if (!m_display)
 			return;
 
-		QSize size = GetPixelSize(this);
-
-		obs_display_resize(m_display, size.width(), size.height());
+		ResizeDisplay();
 	};
 
 	connect(windowHandle(), &QWindow::visibleChanged, windowVisible);
@@ -457,7 +457,7 @@ StreamElementsVideoCompositionViewWidget::StreamElementsVideoCompositionViewWidg
 			new SurfaceEventFilter(this));
 #endif
 
-	//CreateDisplay();
+	CreateDisplay();
 
 	{
 		std::unique_lock<decltype(s_widgetRegistryMutex)> lock;
@@ -480,7 +480,7 @@ void StreamElementsVideoCompositionViewWidget::Destroy()
 		obs_display_remove_draw_callback(
 			m_display, obs_display_draw_callback, this);
 
-		obs_display_destroy(m_display);
+		obs_display_destroy(SETRACE_DECREF(m_display));
 
 		m_display = nullptr;
 	}
@@ -511,8 +511,21 @@ StreamElementsVideoCompositionViewWidget::
 	Destroy();
 }
 
+void StreamElementsVideoCompositionViewWidget::ResizeDisplay()
+{
+	if (!m_display)
+		return;
+
+	QSize size = GetPixelSize(this);
+
+	obs_display_resize(m_display, size.width(), size.height());
+}
+
 void StreamElementsVideoCompositionViewWidget::CreateDisplay()
 {
+	if (os_atomic_load_bool(&m_destroyed))
+		return;
+
 	if (!m_videoComposition.get())
 		return;
 
@@ -547,18 +560,18 @@ void StreamElementsVideoCompositionViewWidget::CreateDisplay()
 		}
 	}
 
-	m_display = obs_display_create(&info, 0x303030L);
+	m_display = SETRACE_ADDREF(obs_display_create(&info, 0x303030L));
 
-	obs_display_resize(m_display, size.width(), size.height());
+	ResizeDisplay();
 
 	obs_display_add_draw_callback(m_display, obs_display_draw_callback, this);
 }
 
 void StreamElementsVideoCompositionViewWidget::paintEvent(QPaintEvent *event)
 {
-	CreateDisplay();
-
 	QWidget::paintEvent(event);
+
+	CreateDisplay();
 }
 
 void StreamElementsVideoCompositionViewWidget::moveEvent(QMoveEvent *event)
@@ -595,11 +608,10 @@ void StreamElementsVideoCompositionViewWidget::resizeEvent(QResizeEvent *event)
 {
 	QWidget::resizeEvent(event);
 
-	CreateDisplay();
-
 	if (isVisible() && m_display) {
-		QSize size = GetPixelSize(this);
-		obs_display_resize(m_display, size.width(), size.height());
+		ResizeDisplay();
+	} else {
+		CreateDisplay();
 	}
 }
 
@@ -724,8 +736,8 @@ void StreamElementsVideoCompositionViewWidget::obs_display_draw_callback(void* d
 			}
 		}
 	} else if (hasWidgetInRegistry(self)) {
-		OBSSceneAutoRelease currentScene =
-			self->m_videoComposition->GetCurrentSceneRef();
+		OBSSceneAutoRelease currentScene = SETRACE_AUTODECREF(
+			self->m_videoComposition->GetCurrentSceneRef());
 
 		// Update visual elements state and draw them on screen
 		self->m_visualElementsState.UpdateAndDraw(

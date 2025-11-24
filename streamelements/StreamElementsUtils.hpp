@@ -1,5 +1,7 @@
 #pragma once
 
+#include "SETrace.hpp"
+
 #include <cef-headers.hpp>
 #include <obs.h>
 #include <obs-module.h>

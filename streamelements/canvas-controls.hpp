@@ -120,20 +120,19 @@ public:
 			     obs_scene_t *scene, obs_sceneitem_t *sceneItem,
 			     obs_sceneitem_t *parentSceneItem)
 		: m_view(view),
-		  m_scene(scene),
+		  m_scene(SETRACE_ADDREF(obs_scene_get_ref(scene))),
 		  m_sceneItem(sceneItem),
 		  m_parentSceneItem(parentSceneItem)
 	{
-		obs_scene_get_ref(m_scene);
-		obs_sceneitem_addref(m_sceneItem);
+		obs_sceneitem_addref(SETRACE_ADDREF(m_sceneItem));
 	}
 	SceneItemControlBase(SceneItemControlBase &) = delete;
 	void operator=(SceneItemControlBase &) = delete;
 
 	~SceneItemControlBase()
 	{
-		obs_sceneitem_release(m_sceneItem);
-		obs_scene_release(m_scene);
+		obs_sceneitem_release(SETRACE_DECREF(m_sceneItem));
+		obs_scene_release(SETRACE_DECREF(m_scene));
 	}
 
 	obs_sceneitem_t *GetSceneItem() { return m_sceneItem; }

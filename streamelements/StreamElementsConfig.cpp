@@ -17,7 +17,7 @@ StreamElementsConfig::~StreamElementsConfig()
 	SaveConfig();
 
 	if (m_config) {
-		config_close(m_config);
+		config_close(SETRACE_DECREF(m_config));
 
 		m_config = nullptr;
 	}
@@ -40,6 +40,7 @@ config_t* StreamElementsConfig::GetConfig()
 		config_open(
 			&m_config, configPath,
 			CONFIG_OPEN_ALWAYS);
+		SETRACE_ADDREF(m_config);
 		bfree(configPath);
 
 		config_set_default_uint(m_config, "Header", "Version", STREAMELEMENTS_PLUGIN_VERSION);

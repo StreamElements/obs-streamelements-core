@@ -100,8 +100,10 @@ static void log_remaining_objects()
 MODULE_EXPORT bool obs_module_load(void)
 {
 #if ENABLE_PLUGIN
-	blog(LOG_INFO, "[obs-streamelements-core]: Version %lu",
-	     STREAMELEMENTS_PLUGIN_VERSION);
+	std::string version = GetStreamElementsPluginVersionString();
+
+	blog(LOG_INFO, "[obs-streamelements-core]: Version %s",
+	     version.c_str());
 
 	obs_register_source(&audio_wrapper_source);
 #endif
@@ -142,10 +144,6 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 		//StreamElementsGlobalStateManager::GetInstance()
 		//	->Shutdown();
 		StreamElementsGlobalStateManager::Destroy();
-
-		log_remaining_objects();
-
-		blog(LOG_INFO, "[obs-streamelements-core]: shutdown complete");
 		break;
 	default:
 		break;
@@ -186,6 +184,10 @@ MODULE_EXPORT void obs_module_post_load(void)
 MODULE_EXPORT void obs_module_unload(void)
 {
 #if ENABLE_PLUGIN
-	// NOP
+	log_remaining_objects();
+
+	blog(LOG_INFO, "[obs-streamelements-core]: shutdown complete");
+
+	SETRACE_DUMP();
 #endif
 }
