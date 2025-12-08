@@ -531,8 +531,10 @@ void StreamElementsBrowserWidget::DestroyBrowser()
 	m_requestedApiMessageHandler = nullptr;
 
 	if (m_cefWidget) {
-		QEvent widgetEvent(QEvent::Type(QEvent::User + QEvent::Close));
-		qApp->sendEvent(m_cefWidget, &widgetEvent);
+		// Sent in OBS QDockWidget closeEvent
+		//
+		// QEvent widgetEvent(QEvent::Type(QEvent::User + QEvent::Close));
+		// qApp->sendEvent(m_cefWidget, &widgetEvent);
 
 		m_cefWidget->closeBrowser();
 		//m_cefWidget->setParent(nullptr);
