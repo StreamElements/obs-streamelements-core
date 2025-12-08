@@ -1210,26 +1210,32 @@ void StreamElementsObsNativeStreamingOutput::SerializeOutputSettings(
 
 	d->SetString("type", safe_string(obs_service_get_type(service)));
 
-	d->SetString("serverUrl", safe_string(obs_data_get_string(
-					  service_settings, "server")));
+	if (service_settings) {
+		d->SetString("serverUrl", safe_string(obs_data_get_string(
+						  service_settings, "server")));
 
-	d->SetString("streamKey",
-		     safe_string(obs_data_get_string(service_settings, "key")));
+		d->SetString("streamKey", safe_string(obs_data_get_string(
+						  service_settings, "key")));
 
-	bool useAuth = obs_data_get_bool(service_settings, "use_auth");
+		bool useAuth = obs_data_get_bool(service_settings, "use_auth");
 
-	d->SetBool("useAuth", useAuth);
+		d->SetBool("useAuth", useAuth);
 
-	if (useAuth) {
-		d->SetString("authUsername",
-			     safe_string(obs_data_get_string(service_settings,
-							     "username")));
-		d->SetString("authPassword",
-			     safe_string(obs_data_get_string(service_settings,
-							     "password")));
+		if (useAuth) {
+			d->SetString("authUsername",
+				     safe_string(obs_data_get_string(
+					     service_settings, "username")));
+			d->SetString("authPassword",
+				     safe_string(obs_data_get_string(
+					     service_settings, "password")));
+		}
+
+		obs_data_release(SETRACE_DECREF(service_settings));
+	} else {
+		d->SetString("serverUrl", "");
+		d->SetString("streamKey", "");
+		d->SetBool("useAuth", false);
 	}
-
-	obs_data_release(SETRACE_DECREF(service_settings));
 
 	output->SetDictionary(d);
 }
