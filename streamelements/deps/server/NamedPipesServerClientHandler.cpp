@@ -10,6 +10,8 @@ NamedPipesServerClientHandler::NamedPipesServerClientHandler(HANDLE hPipe, msg_h
 	m_hPipe(hPipe),
 	m_msgHandler(msgHandler)
 {
+	os_event_init(&m_end_running_event, OS_EVENT_TYPE_MANUAL);
+
 	m_thread = std::thread([this]() {
 		ThreadProc();
 	});
@@ -21,8 +23,6 @@ NamedPipesServerClientHandler::NamedPipesServerClientHandler(HANDLE hPipe, msg_h
 
 NamedPipesServerClientHandler::~NamedPipesServerClientHandler()
 {
-	std::lock_guard<std::recursive_mutex> guard(m_mutex);
-
 	Disconnect();
 
 	if (m_thread.joinable()) {
@@ -32,24 +32,18 @@ NamedPipesServerClientHandler::~NamedPipesServerClientHandler()
 	if (m_callback_thread.joinable()) {
 		m_callback_thread.join();
 	}
+
+	os_event_destroy(m_end_running_event);
 }
 
 bool NamedPipesServerClientHandler::IsConnected()
 {
-	return (m_hPipe != INVALID_HANDLE_VALUE);
+	return (0 != os_event_try(m_end_running_event));
 }
 
 void NamedPipesServerClientHandler::Disconnect()
 {
-	std::lock_guard<std::recursive_mutex> guard(m_mutex);
-
-	if (IsConnected()) {
-		DisconnectNamedPipe(m_hPipe);
-
-		CloseHandle(m_hPipe);
-
-		m_hPipe = INVALID_HANDLE_VALUE;
-	}
+	os_event_signal(m_end_running_event);
 }
 
 bool NamedPipesServerClientHandler::WriteMessage(const char* const buffer, size_t length)
@@ -152,6 +146,12 @@ void NamedPipesServerClientHandler::ThreadProc()
 			Sleep(25);
 		}
 	}
+
+	DisconnectNamedPipe(m_hPipe);
+
+	CloseHandle(m_hPipe);
+
+	m_hPipe = INVALID_HANDLE_VALUE;
 }
 
 #endif
