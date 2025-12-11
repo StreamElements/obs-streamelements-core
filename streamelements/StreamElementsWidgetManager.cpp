@@ -25,10 +25,14 @@ StreamElementsWidgetManager::~StreamElementsWidgetManager()
 		     pair.first.c_str());
 
 		m_parent->removeDockWidget(pair.second);
-		pair.second->deleteLater();
+
+		// This causes a crash on shutdown, just delete below
+		// pair.second->deleteLater();
 
 		// Drain event queue
 		QApplication::sendPostedEvents();
+
+		delete pair.second;
 	}
 
 	m_dockWidgets.clear();
