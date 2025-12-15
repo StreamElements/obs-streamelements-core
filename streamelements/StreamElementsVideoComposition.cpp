@@ -1501,7 +1501,7 @@ StreamElementsCustomVideoComposition::GetCompositionInfo(
 obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentScene()
 {
 	//std::shared_lock<decltype(m_mutex)> lock(m_mutex);
-	std::shared_lock<decltype(m_currentSceneMutex)> currentSceneLock;
+	std::shared_lock<decltype(m_currentSceneMutex)> currentSceneLock(m_currentSceneMutex);
 
 	return m_currentScene;
 }
@@ -1509,7 +1509,7 @@ obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentScene()
 obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentSceneRef()
 {
 	//std::shared_lock<decltype(m_mutex)> lock(m_mutex);
-	std::shared_lock<decltype(m_currentSceneMutex)> currentSceneLock;
+	std::shared_lock<decltype(m_currentSceneMutex)> currentSceneLock(m_currentSceneMutex);
 
 	if (m_currentScene)
 		return SETRACE_ADDREF(obs_scene_get_ref(m_currentScene));
@@ -1761,7 +1761,7 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 
 			{
 				std::unique_lock<decltype(m_currentSceneMutex)>
-					currentSceneLock;
+					currentSceneLock(m_currentSceneMutex);
 
 				if (m_currentScene == scene)
 					return true;
@@ -1860,7 +1860,7 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 	scenesToRemove.clear();
 
 	{
-		std::unique_lock<decltype(m_currentSceneMutex)> currentSceneLock;
+		std::unique_lock<decltype(m_currentSceneMutex)> currentSceneLock(m_currentSceneMutex);
 
 		if (m_currentScene) {
 			obs_source_remove(
@@ -1890,7 +1890,7 @@ void StreamElementsCustomVideoComposition::
 	}
 
 	{
-		std::unique_lock<decltype(m_currentSceneMutex)> currentSceneLock;
+		std::unique_lock<decltype(m_currentSceneMutex)> currentSceneLock(m_currentSceneMutex);
 
 		m_currentScene =
 			SETRACE_ADDREF(obs_scene_get_ref(currentScene));
