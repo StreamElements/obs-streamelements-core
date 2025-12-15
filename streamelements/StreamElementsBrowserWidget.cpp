@@ -303,11 +303,15 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 		m_separateCookieManager->DeleteCookies("", "");
 	}
 
+	m_cefWidgetContainer = new QWidget(this);
+	m_cefWidgetContainer->setAttribute(Qt::WA_NativeWindow);
+
 	m_cefWidget =
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetCef()
 			->create_widget(
-				nullptr, GetInitialPageURLInternal(),
+				m_cefWidgetContainer,
+				GetInitialPageURLInternal(),
 				m_separateCookieManager
 					? m_separateCookieManager
 					: StreamElementsGlobalStateManager::
@@ -441,12 +445,6 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 
 	m_cefWidget->setStartupScript(script + m_executeJavaScriptCodeOnLoad);
 
-	//this->layout()->addWidget(m_cefWidget);
-	m_cefWidgetContainer = new QWidget();
-	m_cefWidgetContainer->setAttribute(Qt::WA_NativeWindow);
-	m_cefWidget->setParent(m_cefWidgetContainer);
-	m_cefWidgetContainer->setParent(this);
-
 	StreamElementsMessageBus::GetInstance()->AddListener(
 		m_clientId, m_messageDestinationFlags);
 
@@ -537,15 +535,11 @@ void StreamElementsBrowserWidget::DestroyBrowser()
 		// qApp->sendEvent(m_cefWidget, &widgetEvent);
 
 		m_cefWidget->closeBrowser();
-		//m_cefWidget->setParent(nullptr);
-		//m_cefWidget->deleteLater();
 
 		m_cefWidget = nullptr;
 	}
 
 	if (m_cefWidgetContainer) {
-		//m_cefWidgetContainer->setParent(nullptr);
-		//m_cefWidgetContainer->deleteLater();
 		m_cefWidgetContainer = nullptr;
 	}
 
@@ -632,13 +626,15 @@ void StreamElementsBrowserWidget::RemoveVideoCompositionView()
 	m_activeVideoCompositionViewWidget->hide();
 	m_activeVideoCompositionViewWidget->Destroy();
 	m_activeVideoCompositionViewWidget->setParent(nullptr);
-	m_activeVideoCompositionViewWidget->deleteLater();
+	delete m_activeVideoCompositionViewWidget;
+	// m_activeVideoCompositionViewWidget->deleteLater();
 
 	m_activeVideoCompositionViewWidget = nullptr;
 
 	m_activeVideoCompositionViewWidgetContainer->hide();
 	m_activeVideoCompositionViewWidgetContainer->setParent(nullptr);
-	m_activeVideoCompositionViewWidgetContainer->deleteLater();
+	delete m_activeVideoCompositionViewWidgetContainer;
+	//m_activeVideoCompositionViewWidgetContainer->deleteLater();
 
 	m_activeVideoCompositionViewWidgetContainer = nullptr;
 }
@@ -665,7 +661,7 @@ void StreamElementsBrowserWidget::SetVideoCompositionView(
 	}
 
 	if (!m_activeVideoCompositionViewWidget) {
-		m_activeVideoCompositionViewWidgetContainer = new QWidget();
+		m_activeVideoCompositionViewWidgetContainer = new QWidget(this);
 		m_activeVideoCompositionViewWidgetContainer->setAttribute(
 			Qt::WA_NativeWindow);
 
@@ -673,8 +669,6 @@ void StreamElementsBrowserWidget::SetVideoCompositionView(
 			new StreamElementsVideoCompositionViewWidget(
 				m_activeVideoCompositionViewWidgetContainer,
 				videoComposition);
-
-		m_activeVideoCompositionViewWidgetContainer->setParent(this);
 	}
 
 	if (m_activeVideoCompositionViewWidget) {
