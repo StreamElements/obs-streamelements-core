@@ -214,7 +214,8 @@ void StreamElementsBrowserDialog::DestroyBrowser(std::string reason)
 	layout()->removeWidget(m_browser);
 
 	m_browser->DestroyBrowser();
-	m_browser->deleteLater();
+	//m_browser->deleteLater();
+	delete m_browser;
 
 	m_browser = nullptr;
 }
