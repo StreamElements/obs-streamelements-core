@@ -1206,35 +1206,46 @@ void StreamElementsObsNativeStreamingOutput::SerializeOutputSettings(
 	obs_service_t *service =
 		SETRACE_NOREF(obs_frontend_get_streaming_service()); // No refcount increment
 
-	obs_data_t *service_settings = SETRACE_ADDREF(obs_service_get_settings(service));
-
-	d->SetString("type", safe_string(obs_service_get_type(service)));
-
-	if (service_settings) {
-		d->SetString("serverUrl", safe_string(obs_data_get_string(
-						  service_settings, "server")));
-
-		d->SetString("streamKey", safe_string(obs_data_get_string(
-						  service_settings, "key")));
-
-		bool useAuth = obs_data_get_bool(service_settings, "use_auth");
-
-		d->SetBool("useAuth", useAuth);
-
-		if (useAuth) {
-			d->SetString("authUsername",
-				     safe_string(obs_data_get_string(
-					     service_settings, "username")));
-			d->SetString("authPassword",
-				     safe_string(obs_data_get_string(
-					     service_settings, "password")));
-		}
-
-		obs_data_release(SETRACE_DECREF(service_settings));
+	if (!service) {
+		d->SetString("type", "none");
 	} else {
-		d->SetString("serverUrl", "");
-		d->SetString("streamKey", "");
-		d->SetBool("useAuth", false);
+		d->SetString("type",
+			     safe_string(obs_service_get_type(service)));
+
+		obs_data_t *service_settings =
+			SETRACE_ADDREF(obs_service_get_settings(service));
+
+		if (service_settings) {
+			d->SetString("serverUrl",
+				     safe_string(obs_data_get_string(
+					     service_settings, "server")));
+
+			d->SetString("streamKey",
+				     safe_string(obs_data_get_string(
+					     service_settings, "key")));
+
+			bool useAuth =
+				obs_data_get_bool(service_settings, "use_auth");
+
+			d->SetBool("useAuth", useAuth);
+
+			if (useAuth) {
+				d->SetString(
+					"authUsername",
+					safe_string(obs_data_get_string(
+						service_settings, "username")));
+				d->SetString(
+					"authPassword",
+					safe_string(obs_data_get_string(
+						service_settings, "password")));
+			}
+
+			obs_data_release(SETRACE_DECREF(service_settings));
+		} else {
+			d->SetString("serverUrl", "");
+			d->SetString("streamKey", "");
+			d->SetBool("useAuth", false);
+		}
 	}
 
 	output->SetDictionary(d);
