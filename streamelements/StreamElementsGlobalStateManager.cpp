@@ -307,6 +307,8 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 std::shared_ptr<StreamElementsGlobalStateManager> StreamElementsGlobalStateManager::s_instance =
 	nullptr;
 
+/* ========================================================================= */
+
 StreamElementsGlobalStateManager::StreamElementsGlobalStateManager(
 	StreamElementsGlobalStateManager::Private)
 {
@@ -321,7 +323,8 @@ std::shared_ptr<StreamElementsGlobalStateManager>
 StreamElementsGlobalStateManager::GetInstance()
 {
 	if (!s_instance) {
-		s_instance = std::make_shared<StreamElementsGlobalStateManager>(
+		s_instance = std::make_shared<
+			StreamElementsGlobalStateManager>(
 			StreamElementsGlobalStateManager::Private());
 	}
 
@@ -340,7 +343,6 @@ bool StreamElementsGlobalStateManager::IsInstanceAvailable()
 
 	return s_instance->IsInitialized();
 }
-
 
 #include <QWindow>
 #include <QObjectList>

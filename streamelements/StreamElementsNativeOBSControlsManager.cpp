@@ -1,4 +1,5 @@
 #include "StreamElementsNativeOBSControlsManager.hpp"
+#include "StreamElementsGlobalStateManager.hpp"
 #include "StreamElementsUtils.hpp"
 #include <QDockWidget>
 #include <QVBoxLayout>
@@ -342,6 +343,8 @@ void StreamElementsNativeOBSControlsManager::Reset()
 {
 	SetStartStreamingMode(StreamElementsNativeOBSControlsManager::start);
 
+	os_atomic_set_bool(&m_isStreamingTransitionState, false);
+
 	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
 	HidePreviewTitleBar();
 	HidePreviewFrame();
@@ -364,6 +367,8 @@ void StreamElementsNativeOBSControlsManager::SetStreamingActiveState()
 {
 	if (!m_startStopStreamingButton) return;
 
+	os_atomic_set_bool(&m_isStreamingTransitionState, false);
+
 	QtExecSync([&] {
 		m_startStopStreamingButton->setText(obs_module_text("StreamElements.Action.StopStreaming"));
 		m_startStopStreamingButton->setEnabled(true);
@@ -377,6 +382,8 @@ void StreamElementsNativeOBSControlsManager::SetStreamingActiveState()
 void StreamElementsNativeOBSControlsManager::SetStreamingStoppedState()
 {
 	if (!m_startStopStreamingButton) return;
+
+	os_atomic_set_bool(&m_isStreamingTransitionState, false);
 
 	StopTimeoutTracker();
 
@@ -394,6 +401,8 @@ void StreamElementsNativeOBSControlsManager::SetStreamingTransitionState()
 {
 	if (!m_startStopStreamingButton) return;
 
+	os_atomic_set_bool(&m_isStreamingTransitionState, true);
+
 	if (obs_frontend_streaming_active()) {
 		SetStreamingTransitionStoppingState();
 	}
@@ -405,6 +414,8 @@ void StreamElementsNativeOBSControlsManager::SetStreamingTransitionState()
 void StreamElementsNativeOBSControlsManager::SetStreamingTransitionStartingState()
 {
 	if (!m_startStopStreamingButton) return;
+
+	os_atomic_set_bool(&m_isStreamingTransitionState, true);
 
 	StopTimeoutTracker();
 
@@ -435,6 +446,8 @@ void StreamElementsNativeOBSControlsManager::SetStreamingRequestedState()
 void StreamElementsNativeOBSControlsManager::SetStreamingTransitionStoppingState()
 {
 	if (!m_startStopStreamingButton) return;
+
+	os_atomic_set_bool(&m_isStreamingTransitionState, true);
 
 	StopTimeoutTracker();
 
@@ -614,6 +627,30 @@ void StreamElementsNativeOBSControlsManager::BeginStartStreaming()
 		break;
 	}
 }
+
+void StreamElementsNativeOBSControlsManager::StartStreaming()
+{
+	SetStreamingInitialState();
+
+	m_startStopStreamingButton->setEnabled(false);
+
+	QtDelayTask(
+		[this]() {
+			if (!StreamElementsGlobalStateManager::
+				    IsInstanceAvailable())
+				return;
+
+			if (!os_atomic_load_bool(&m_isStreamingTransitionState))
+				m_startStopStreamingButton->setEnabled(true);
+		},
+		5000);
+
+	obs_frontend_streaming_start();
+
+	if (!m_startStopStreamingButton)
+		return;
+}
+
 
 bool StreamElementsNativeOBSControlsManager::DeserializeStartStreamingUIHandlerProperties(CefRefPtr<CefValue> input)
 {

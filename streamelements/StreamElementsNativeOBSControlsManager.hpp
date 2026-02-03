@@ -127,6 +127,9 @@ public:
 
 	void Reset();
 
+public:
+	void StartStreaming();
+
 private:
 	void SetStreamingInitialState();
 	void SetStreamingActiveState();
@@ -171,6 +174,8 @@ private:
 	int m_startStreamingRequestAcknowledgeTimeoutSeconds = 5;
 	QTimer* m_timeoutTimer = nullptr;
 	std::recursive_mutex m_timeoutTimerMutex;
+
+	bool m_isStreamingTransitionState = false;
 
 	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
 	QFrame *m_previewFrame = nullptr;

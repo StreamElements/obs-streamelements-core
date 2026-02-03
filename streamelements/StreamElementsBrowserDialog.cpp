@@ -1,5 +1,6 @@
 #include "StreamElementsBrowserDialog.hpp"
 #include "StreamElementsApiMessageHandler.hpp"
+#include "StreamElementsGlobalStateManager.hpp"
 
 #include <QVBoxLayout>
 
@@ -214,8 +215,12 @@ void StreamElementsBrowserDialog::DestroyBrowser(std::string reason)
 	layout()->removeWidget(m_browser);
 
 	m_browser->DestroyBrowser();
-	//m_browser->deleteLater();
-	delete m_browser;
+
+	if (StreamElementsGlobalStateManager::IsInstanceAvailable()) {
+		m_browser->deleteLater();
+	} else {
+		delete m_browser;
+	}
 
 	m_browser = nullptr;
 }

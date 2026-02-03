@@ -2212,7 +2212,9 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("requestStreamingStart");
 	{
-		obs_frontend_streaming_start();
+		StreamElementsGlobalStateManager::GetInstance()
+			->GetNativeOBSControlsManager()
+			->StartStreaming();
 
 		result->SetBool(true);
 	}
