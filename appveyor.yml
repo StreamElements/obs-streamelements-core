@@ -47,6 +47,38 @@ for:
 
         echo add_obs_plugin(obs-streamelements-core) >c:\local\obs-studio\plugins\CMakeLists.txt
 
+
+
+        echo install gsutil
+
+        cd /d c:\local\source
+
+        curl https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe --output GoogleCloudSDKInstaller.exe
+
+        start /wait GoogleCloudSDKInstaller.exe /S
+
+        refreshenv
+
+
+
+        echo prepare a .boto file for gsutil
+
+        echo.[Credentials] >%USERPROFILE%\.boto
+
+        echo.gs_access_key_id = %GS_ACCESS_KEY_ID% >>%USERPROFILE%\.boto
+
+        echo.gs_secret_access_key = %GS_SECRET_ACCESS_KEY% >>%USERPROFILE%\.boto
+
+
+
+        echo test upload to google storage
+      
+        cd /d c:\local\source
+
+        echo test >test.txt
+
+        gsutil cp "test.txt" "gs://se-obs-builds/obs-streamelements-core/latest/windows/test.txt"
+
     cache:
     - c:\local\obs-build-dependencies
 
@@ -118,28 +150,6 @@ for:
         echo if this is a pull request build, complete build. otherwise, upload artifacts to google storage
 
         if not "%APPVEYOR_PULL_REQUEST_HEAD_COMMIT%"=="" exit 0
-
-
-
-        echo install gsutil
-
-        cd /d c:\local\source
-
-        curl https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe --output GoogleCloudSDKInstaller.exe
-
-        start /wait GoogleCloudSDKInstaller.exe /S
-
-        refreshenv
-
-
-
-        echo prepare a .boto file for gsutil
-
-        echo.[Credentials] >%USERPROFILE%\.boto
-
-        echo.gs_access_key_id = %GS_ACCESS_KEY_ID% >>%USERPROFILE%\.boto
-
-        echo.gs_secret_access_key = %GS_SECRET_ACCESS_KEY% >>%USERPROFILE%\.boto
 
 
 
