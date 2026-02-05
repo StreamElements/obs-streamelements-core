@@ -143,8 +143,6 @@ for:
       
         cd /d c:\local\obs-studio\plugins\obs-streamelements-core\CI\gcs
 
-        cd /d 
-
         node upload.js c:\local\source\build64_qt6.zip se-obs-builds /obs-streamelements-core/latest/windows/build64_qt6.zip
 
         node upload.js c:\local\source\streamelements\Version.generated.hpp se-obs-builds /obs-streamelements-core/latest/windows/Version.generated.hpp
