@@ -61,7 +61,7 @@ for:
 
         echo test >test.txt
 
-        evho testing GCS uploader
+        echo testing GCS uploader
 
         node upload.js test.txt se-obs-builds /test.txt
 
