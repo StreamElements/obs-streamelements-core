@@ -65,39 +65,6 @@ for:
 
         node upload.js test.txt se-obs-builds /test.txt
 
-
-
-
-        @rem echo install gsutil
-
-        @rem cd /d c:\local\source
-
-        @rem curl https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe --output GoogleCloudSDKInstaller.exe
-
-        @rem start /wait GoogleCloudSDKInstaller.exe /S
-
-        @rem refreshenv
-
-
-
-        @rem echo prepare a .boto file for gsutil
-
-        @rem echo.[Credentials] >%USERPROFILE%\.boto
-
-        @rem echo.gs_access_key_id = %GS_ACCESS_KEY_ID% >>%USERPROFILE%\.boto
-
-        @rem echo.gs_secret_access_key = %GS_SECRET_ACCESS_KEY% >>%USERPROFILE%\.boto
-
-
-
-        @rem echo test upload to google storage
-      
-        @rem cd /d c:\local\source
-
-        @rem echo test >test.txt
-
-        @rem gsutil cp "test.txt" "gs://se-obs-builds/obs-streamelements-core/latest/windows/test.txt"
-
     cache:
     - c:\local\obs-build-dependencies
 
