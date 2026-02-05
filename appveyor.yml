@@ -68,35 +68,35 @@ for:
 
 
 
-        echo install gsutil
+        @rem echo install gsutil
 
-        cd /d c:\local\source
+        @rem cd /d c:\local\source
 
-        curl https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe --output GoogleCloudSDKInstaller.exe
+        @rem curl https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe --output GoogleCloudSDKInstaller.exe
 
-        start /wait GoogleCloudSDKInstaller.exe /S
+        @rem start /wait GoogleCloudSDKInstaller.exe /S
 
-        refreshenv
-
-
-
-        echo prepare a .boto file for gsutil
-
-        echo.[Credentials] >%USERPROFILE%\.boto
-
-        echo.gs_access_key_id = %GS_ACCESS_KEY_ID% >>%USERPROFILE%\.boto
-
-        echo.gs_secret_access_key = %GS_SECRET_ACCESS_KEY% >>%USERPROFILE%\.boto
+        @rem refreshenv
 
 
 
-        echo test upload to google storage
+        @rem echo prepare a .boto file for gsutil
+
+        @rem echo.[Credentials] >%USERPROFILE%\.boto
+
+        @rem echo.gs_access_key_id = %GS_ACCESS_KEY_ID% >>%USERPROFILE%\.boto
+
+        @rem echo.gs_secret_access_key = %GS_SECRET_ACCESS_KEY% >>%USERPROFILE%\.boto
+
+
+
+        @rem echo test upload to google storage
       
-        cd /d c:\local\source
+        @rem cd /d c:\local\source
 
-        echo test >test.txt
+        @rem echo test >test.txt
 
-        gsutil cp "test.txt" "gs://se-obs-builds/obs-streamelements-core/latest/windows/test.txt"
+        @rem gsutil cp "test.txt" "gs://se-obs-builds/obs-streamelements-core/latest/windows/test.txt"
 
     cache:
     - c:\local\obs-build-dependencies
@@ -174,11 +174,13 @@ for:
 
         echo upload artifacts to google storage
       
-        cd /d c:\local\source
+        cd /d c:\local\obs-studio\plugins\obs-streamelements-core\CI\gcs
 
-        gsutil cp "build64_qt6.zip" "gs://se-obs-builds/obs-streamelements-core/latest/windows/build64_qt6.zip"
+        cd /d 
 
-        gsutil cp "streamelements\Version.generated.hpp" "gs://se-obs-builds/obs-streamelements-core/latest/windows/Version.generated.hpp"
+        node upload.js c:\local\source\build64_qt6.zip se-obs-builds /obs-streamelements-core/latest/windows/build64_qt6.zip
+
+        node upload.js c:\local\source\streamelements\Version.generated.hpp se-obs-builds /obs-streamelements-core/latest/windows/Version.generated.hpp
 
     test: off
     artifacts:
