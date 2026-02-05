@@ -1,3 +1,6 @@
+#nodejs
+node_modules/
+
 #binaries
 *.exe
 *.dll
