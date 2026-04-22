@@ -606,7 +606,8 @@ private:
 	std::shared_mutex m_currentSceneMutex;
 	obs_scene_t *m_currentScene = nullptr;
 
-	obs_view_t *m_view = nullptr;
+	//obs_view_t *m_view = nullptr;
+	obs_canvas_t *m_canvas = nullptr;
 
 public:
 	// ctor only usable by this class
@@ -627,6 +628,9 @@ public:
 
 	virtual void GetVideoInfo(obs_video_info *ovi) override
 	{
+		obs_canvas_get_video_info(m_canvas, ovi);
+
+		/*
 		obs_view_enum_video_info(
 			m_view,
 			[](void *data, obs_video_info *ovi) {
@@ -636,6 +640,7 @@ public:
 				return false;
 			},
 			ovi);
+		*/
 	}
 
 private:

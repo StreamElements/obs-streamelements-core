@@ -41,7 +41,8 @@ void StreamElementsVideoCompositionBase::CompositionInfo::
 
 static obs_scene_t *scene_create_private_with_custom_size(std::string name,
 							  uint32_t width,
-							  uint32_t height)
+							  uint32_t height,
+							  obs_canvas_t *canvas)
 {
 	//
 	// A newly created scene assumes OBS default output video mix's dimensions as indicated here:
@@ -54,7 +55,7 @@ static obs_scene_t *scene_create_private_with_custom_size(std::string name,
 	// This ensures that a scene is always sized the same as our video view base width & height.
 	//
 
-	auto scene = SETRACE_ADDREF(obs_scene_create_private(name.c_str()));
+	auto scene = canvas ? SETRACE_ADDREF(obs_canvas_scene_create(canvas, name.c_str())) : SETRACE_ADDREF(obs_scene_create_private(name.c_str()));
 
 	if (!scene)
 		return nullptr;
@@ -62,6 +63,9 @@ static obs_scene_t *scene_create_private_with_custom_size(std::string name,
 	auto source = obs_scene_get_source(scene);
 
 	if (!source) {
+		if (canvas)
+			obs_canvas_scene_remove(scene);
+
 		obs_scene_release(SETRACE_DECREF(scene));
 
 		return nullptr;
@@ -1103,7 +1107,8 @@ private:
 	StreamElementsVideoCompositionEventListener *m_listener;
 
 	video_t *m_video = nullptr;
-	obs_view_t *m_view = nullptr;
+	//obs_view_t *m_view = nullptr;
+	obs_canvas_t *m_canvas = nullptr;
 	std::vector<obs_encoder_t *> m_streamingVideoEncoders;
 	std::vector<obs_encoder_t *> m_recordingVideoEncoders;
 	uint32_t m_baseWidth = 1920;
@@ -1120,7 +1125,8 @@ public:
 		video_t *video, uint32_t baseWidth, uint32_t baseHeight,
 		std::vector<obs_encoder_t *> streamingVideoEncoders,
 		std::vector<obs_encoder_t *> recordingVideoEncoders,
-		obs_view_t* view)
+		obs_canvas_t* canvas
+		/* obs_view_t *view*/)
 		: StreamElementsVideoCompositionBase::CompositionInfo(
 			  owner, listener, holder),
 		  m_compositionOwner(owner),
@@ -1128,7 +1134,8 @@ public:
 		  m_baseWidth(baseWidth),
 		  m_baseHeight(baseHeight),
 		  m_listener(listener),
-		  m_view(view)
+		  m_canvas(canvas)
+		  //m_view(view)
 	{
 		for (auto encoder : streamingVideoEncoders) {
 			m_streamingVideoEncoders.push_back(
@@ -1183,8 +1190,10 @@ public:
 
 
 	virtual void Render() {
-		if (m_view) {
-			obs_view_render(m_view);
+		if (m_canvas) {
+			obs_canvas_render(m_canvas);
+		//} else if (m_view) {
+		//	obs_view_render(m_view);
 		} else {
 			obs_render_main_texture();
 		}
@@ -1281,20 +1290,26 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	ovi.output_width = m_baseWidth;
 	ovi.output_height = m_baseHeight;
 
-	m_view = SETRACE_ADDREF(obs_view_create());
+	m_canvas = SETRACE_ADDREF(obs_canvas_create_private(
+		GetId().c_str(), &ovi, PROGRAM | EPHEMERAL));
 
-	m_video = obs_view_add2(m_view, &ovi);
+	m_video = obs_canvas_get_video(m_canvas);
+
+	//m_view = SETRACE_ADDREF(obs_view_create());
+
+	//m_video = obs_view_add2(m_view, &ovi);
 
 	obs_transition_set(m_rootSource, m_transition);
 
-	obs_view_set_source(m_view, 0, m_rootSource);
+	//obs_view_set_source(m_view, 0, m_rootSource);
+	obs_canvas_set_channel(m_canvas, 0, m_rootSource);
 
 	for (auto encoder : m_streamingVideoEncoders) {
 		obs_encoder_set_video(encoder, m_video);
 	}
 
 	auto currentScene = scene_create_private_with_custom_size(
-		GetUniqueSceneName("Scene").c_str(), m_baseWidth, m_baseHeight);
+		GetUniqueSceneName("Scene").c_str(), m_baseWidth, m_baseHeight, m_canvas);
 	m_currentScene = SETRACE_ADDREF(obs_scene_get_ref(currentScene));
 	m_scenes.push_back(currentScene);
 
@@ -1439,12 +1454,21 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 		m_audioWrapperSource = nullptr;
 	}
 
+	if (m_canvas) {
+		obs_canvas_set_channel(m_canvas, 0, nullptr);
+
+		obs_canvas_remove(m_canvas);
+		obs_canvas_release(SETRACE_DECREF(m_canvas));
+	}
+
+	/*
 	if (m_view) {
 		obs_view_set_source(m_view, 0, nullptr);
 
 		obs_view_remove(m_view);
 		obs_view_destroy(SETRACE_DECREF(m_view));
 	}
+	*/
 
 	if (m_rootSource) {
 		obs_transition_set(m_rootSource, nullptr);
@@ -1470,6 +1494,7 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 	m_scenes.clear();
 
 	if (m_currentScene) {
+		obs_canvas_scene_remove(m_currentScene);
 		obs_source_remove(obs_scene_get_source(m_currentScene));
 		obs_scene_release(SETRACE_DECREF(m_currentScene));
 
@@ -1495,7 +1520,9 @@ StreamElementsCustomVideoComposition::GetCompositionInfo(
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	return std::make_shared<StreamElementsCustomVideoCompositionInfo>(
-		shared_from_this(), listener, holder, m_video, m_baseWidth, m_baseHeight, m_streamingVideoEncoders, m_recordingVideoEncoders, m_view);
+		shared_from_this(), listener, holder, m_video, m_baseWidth,
+		m_baseHeight, m_streamingVideoEncoders,
+		m_recordingVideoEncoders, m_canvas /*m_view*/);
 }
 
 obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentScene()
@@ -1630,7 +1657,7 @@ StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 {
 	auto scene = scene_create_private_with_custom_size(
 		GetUniqueSceneName(requestName).c_str(), m_baseWidth,
-		m_baseHeight);
+		m_baseHeight, m_canvas);
 
 	{
 		std::unique_lock<decltype(m_mutex)> lock(m_mutex);
@@ -1664,6 +1691,7 @@ bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
 			remove_scene_signals(scene, m_signalHandlerData);
 
 			obs_source_remove(source);
+			obs_canvas_scene_remove(scene);
 			obs_scene_release(SETRACE_DECREF(scene));
 
 			dispatch_scene_list_changed_event(this);
@@ -1815,6 +1843,7 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 			}
 
 			if (oldCurrentScene) {
+				obs_canvas_scene_remove(oldCurrentScene);
 				obs_scene_release(
 					SETRACE_DECREF(oldCurrentScene));
 			}
@@ -1854,6 +1883,7 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 		obs_source_dec_showing(source);
 		obs_source_dec_active(source);
 
+		obs_canvas_scene_remove(scene);
 		obs_source_remove(obs_scene_get_source(scene));
 		obs_scene_release(SETRACE_DECREF(scene));
 	}
@@ -1863,6 +1893,7 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 		std::unique_lock<decltype(m_currentSceneMutex)> currentSceneLock(m_currentSceneMutex);
 
 		if (m_currentScene) {
+			obs_canvas_scene_remove(m_currentScene);
 			obs_source_remove(
 				obs_scene_get_source(m_currentScene));
 
@@ -1881,7 +1912,7 @@ void StreamElementsCustomVideoComposition::
 
 	auto currentScene = scene_create_private_with_custom_size(
 		GetUniqueSceneNameInternal("Scene", scenesToRemove).c_str(),
-		m_baseWidth, m_baseHeight);
+		m_baseWidth, m_baseHeight, m_canvas);
 
 	{
 		std::unique_lock<decltype(m_mutex)> lock(m_mutex);

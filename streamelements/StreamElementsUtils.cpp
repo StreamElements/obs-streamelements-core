@@ -995,16 +995,25 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 	std::vector<obs_source_type> requiredSourceTypes,
 	bool serializeProperties)
 {
+	static std::shared_mutex mutex;
+	static std::map<std::string, CefRefPtr<CefDictionaryValue>> cache;
+
+	std::unique_lock guard(mutex);
+
+	std::map<std::string, bool> existingSourceIds;
+
 	// Response codec collection (array)
 	CefRefPtr<CefListValue> list = CefListValue::Create();
 
 	// Response codec collection is our root object
 	output->SetList(list);
 
-	auto add = [&](const char *sourceId,
-		       const char *unversioned_id) -> void {
+	auto add = [&](std::string sourceId,
+		       const char *unversioned_id, obs_canvas_t* canvas) -> void {
+		existingSourceIds[sourceId] = true;
+
 		// Get source caps
-		uint32_t sourceCaps = obs_get_source_output_flags(sourceId);
+		uint32_t sourceCaps = obs_get_source_output_flags(sourceId.c_str());
 
 		// Check if the source is disabled, if so - skip it
 		if ((sourceCaps & OBS_SOURCE_CAP_DISABLED) != 0)
@@ -1014,13 +1023,32 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 		if ((sourceCaps & requireAnyOfOutputFlagsMask) == 0L)
 			return;
 
-		// We need all of this create-release dance since some 3rd party sources do not support obs_get_source_properties :(
-		OBSDataAutoRelease settings = SETRACE_SCOPEREF(obs_data_create());
-		OBSSourceAutoRelease source =
-			SETRACE_SCOPEREF(obs_source_create_private(
-				sourceId,
+		if (cache.count(sourceId)) {
+			// Append dictionary to response list
+			list->SetDictionary(list->GetSize(), cache[sourceId]);
+
+			return;
+		}
+
+		OBSSourceAutoRelease source = nullptr;
+
+		if (canvas && sourceId == "scene") {
+			obs_scene_t* scene =
+				SETRACE_NOREF(obs_canvas_scene_create(
+					canvas,
+					CreateGloballyUniqueIdString().c_str()));
+
+			source = SETRACE_SCOPEREF(obs_scene_get_source(scene));
+		} else {
+			// We need all of this create-release dance since some 3rd party sources do not support obs_get_source_properties :(
+			OBSDataAutoRelease settings =
+				SETRACE_SCOPEREF(obs_data_create());
+
+			source = SETRACE_SCOPEREF(obs_source_create_private(
+				sourceId.c_str(),
 				CreateGloballyUniqueIdString().c_str(),
 				settings));
+		}
 
 		if (!source)
 			return;
@@ -1052,6 +1080,9 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 
 		// Append dictionary to response list
 		list->SetDictionary(list->GetSize(), dic);
+
+		// Add to cache for reuse
+		cache[sourceId] = dic;
 	};
 
 	// Iterate over all required source types
@@ -1059,7 +1090,9 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 		if (requiredType == OBS_SOURCE_TYPE_SCENE &&
 			(requireAnyOfOutputFlagsMask & OBS_SOURCE_VIDEO) ==
 				OBS_SOURCE_VIDEO) {
-			add("scene", "scene");
+			OBSCanvasAutoRelease canvas =
+				SETRACE_SCOPEREF(obs_get_main_canvas());
+			add("scene", "scene", canvas);
 
 			break;
 		}
@@ -1077,19 +1110,19 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 							   &unversioned_id))
 					break;
 
-				add(sourceId, unversioned_id);
+				add(sourceId, unversioned_id, nullptr);
 			} else if (requiredType ==
 					OBS_SOURCE_TYPE_FILTER) {
 				if (!obs_enum_filter_types(idx, &sourceId))
 					break;
 
-				add(sourceId, nullptr);
+				add(sourceId, nullptr, nullptr);
 			} else if (requiredType ==
 					OBS_SOURCE_TYPE_TRANSITION) {
 				if (!obs_enum_transition_types(idx, &sourceId))
 					break;
 
-				add(sourceId, nullptr);
+				add(sourceId, nullptr, nullptr);
 			} else {
 				break;
 			}
