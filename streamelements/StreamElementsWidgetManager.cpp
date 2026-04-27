@@ -1,6 +1,7 @@
 #include "StreamElementsWidgetManager.hpp"
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
+#include "StreamElementsBrowserWidget.hpp"
 
 #include <cassert>
 #include <mutex>
@@ -26,20 +27,25 @@ StreamElementsWidgetManager::~StreamElementsWidgetManager()
 		// NOP
 	}
 
+	// Fallback-only path: by this point OBS/Qt may already be mid-shutdown.
+	// Avoid aggressive dock teardown here and only shut down embedded browser
+	// internals if widgets are still reachable.
 	for (auto pair : m_dockWidgets) {
 		blog(LOG_INFO,
 		     "[obs-streamelements-core]: destroying dock widget '%s'",
 		     pair.first.c_str());
 
-		m_parent->removeDockWidget(pair.second);
+		QDockWidget *dock = pair.second;
+		if (!dock)
+			continue;
 
-		// This causes a crash on shutdown, just delete below
-		// pair.second->deleteLater();
-
-		// Drain event queue
-		QApplication::sendPostedEvents();
-
-		delete pair.second;
+		QWidget *content = dock->widget();
+		if (auto *browser =
+			    qobject_cast<StreamElementsBrowserWidget *>(
+				    content)) {
+			browser->DestroyBrowser();
+			browser->RemoveVideoCompositionView();
+		}
 	}
 
 	m_dockWidgets.clear();

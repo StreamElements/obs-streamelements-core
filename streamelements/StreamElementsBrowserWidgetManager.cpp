@@ -21,12 +21,17 @@ StreamElementsBrowserWidgetManager::StreamElementsBrowserWidgetManager(
 
 StreamElementsBrowserWidgetManager::~StreamElementsBrowserWidgetManager()
 {
-	// NOP
+	// Shutdown browser internals first so base dock teardown doesn't race
+	// with CEF/native resources during OBS exit.
 	for (auto kv : m_browserWidgets) {
+		if (kv.second) {
+			kv.second->DestroyBrowser();
+		}
 		kv.second->RemoveVideoCompositionView();
 	}
 
 	if (m_notificationBarBrowserWidget) {
+		m_notificationBarBrowserWidget->DestroyBrowser();
 		m_notificationBarBrowserWidget->RemoveVideoCompositionView();
 	}
 }
@@ -1006,6 +1011,14 @@ void StreamElementsBrowserWidgetManager::HideNotificationBar()
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
 	if (m_notificationBarToolBar) {
+		if (m_notificationBarBrowserWidget &&
+		    StreamElementsGlobalStateManager::IsInstanceAvailable() &&
+		    StreamElementsGlobalStateManager::GetInstance()
+			    ->IsShuttingDown()) {
+			m_notificationBarBrowserWidget->DestroyBrowser();
+			m_notificationBarBrowserWidget->RemoveVideoCompositionView();
+		}
+
 		m_notificationBarToolBar->setVisible(false);
 
 		QApplication::sendPostedEvents();

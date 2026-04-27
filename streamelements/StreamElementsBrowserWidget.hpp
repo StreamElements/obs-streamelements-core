@@ -4,6 +4,7 @@
 #include <QHideEvent>
 #include <QCloseEvent>
 #include <QtWidgets>
+#include <QDockWidget>
 
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsBrowserWidget.hpp"
@@ -74,6 +75,10 @@ public:
 
 private:
 	void UpdateCoords();
+	QDockWidget *GetOwningDockWidget() const;
+	bool IsHostContainerActuallyVisible() const;
+	void SyncBrowserViewVisibility();
+	void SyncVideoCompositionViewVisibility();
 
 	void ShutdownApiMessagehandler()
 	{
@@ -117,14 +122,24 @@ private:
 protected:
 	virtual bool event(QEvent* event) override
 	{
+		const bool hostHidden = !IsHostContainerActuallyVisible();
+
 		if (!m_isWidgetInitialized) {
-			AdviseHostWidgetHiddenChange(!isVisible());
+			AdviseHostWidgetHiddenChange(hostHidden);
 
 			m_isWidgetInitialized = true;
 		}
 
 		if (event->type() == QEvent::Polish) {
-			AdviseHostWidgetHiddenChange(!isVisible());
+			AdviseHostWidgetHiddenChange(hostHidden);
+		}
+
+		if (event->type() == QEvent::ShowToParent ||
+		    event->type() == QEvent::HideToParent ||
+		    event->type() == QEvent::Show ||
+		    event->type() == QEvent::Hide) {
+			SyncBrowserViewVisibility();
+			SyncVideoCompositionViewVisibility();
 		}
 
 		return QWidget::event(event);
@@ -135,8 +150,10 @@ protected:
 		QWidget::showEvent(showEvent);
 
 		UpdateCoords();
+		SyncBrowserViewVisibility();
+		SyncVideoCompositionViewVisibility();
 
-		AdviseHostWidgetHiddenChange(!isVisible());
+		AdviseHostWidgetHiddenChange(!IsHostContainerActuallyVisible());
 
 		emit browserStateChanged();
 	}
@@ -145,7 +162,10 @@ protected:
 	{
 		QWidget::hideEvent(hideEvent);
 
-		AdviseHostWidgetHiddenChange(!isVisible());
+		SyncBrowserViewVisibility();
+		SyncVideoCompositionViewVisibility();
+
+		AdviseHostWidgetHiddenChange(!IsHostContainerActuallyVisible());
 
 		emit browserStateChanged();
 	}
@@ -155,6 +175,8 @@ protected:
 		QWidget::resizeEvent(event);
 
 		UpdateCoords();
+		SyncBrowserViewVisibility();
+		SyncVideoCompositionViewVisibility();
 
 		emit browserStateChanged();
 	}
@@ -162,6 +184,8 @@ protected:
 	virtual void moveEvent(QMoveEvent* event) override
 	{
 		QWidget::moveEvent(event);
+		SyncBrowserViewVisibility();
+		SyncVideoCompositionViewVisibility();
 
 		emit browserStateChanged();
 	}
@@ -177,7 +201,7 @@ protected:
 	void AdviseHostWidgetHiddenChange(bool isHidden)
 	{
 		if (m_requestedApiMessageHandler) {
-			m_requestedApiMessageHandler->setInitialHiddenState(!isVisible());
+			m_requestedApiMessageHandler->setInitialHiddenState(isHidden);
 		}
 
 		if (m_advisedHostWidgetHiddenChange) {

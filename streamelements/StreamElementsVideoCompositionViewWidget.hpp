@@ -421,11 +421,13 @@ public:
 private:
 	void ResizeDisplay();
 	void CreateDisplay();
+	void DestroyDisplay();
 
 	void OnMove();
 	void OnDisplayChange();
 
 protected:
+	virtual bool event(QEvent *event) override;
 	virtual void paintEvent(QPaintEvent *event) override;
 	virtual void moveEvent(QMoveEvent *event) override;
 	virtual void resizeEvent(QResizeEvent *event) override;

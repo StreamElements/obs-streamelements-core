@@ -683,11 +683,23 @@ void StreamElementsGlobalStateManager::Shutdown()
 		return;
 	}
 
+	m_isShuttingDown = true;
+
 	obs_frontend_remove_event_callback(handle_obs_frontend_event, nullptr);
 
 	PersistState(false);
 
 	m_persistStateEnabled = false;
+
+	// Tear down StreamElements UI widgets early while the Qt main window
+	// and event loop are still fully alive. Doing this late from destructors
+	// during app shutdown has shown unstable behavior on Wayland.
+	if (m_widgetManager) {
+		m_widgetManager->HideNotificationBar();
+		m_widgetManager->RemoveAllDockWidgets();
+		m_widgetManager->DestroyCurrentCentralBrowserWidget();
+		QApplication::sendPostedEvents();
+	}
 
 	streamelements_updater_shutdown();
 
