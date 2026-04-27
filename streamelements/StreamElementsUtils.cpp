@@ -1090,9 +1090,18 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 		if (requiredType == OBS_SOURCE_TYPE_SCENE &&
 			(requireAnyOfOutputFlagsMask & OBS_SOURCE_VIDEO) ==
 				OBS_SOURCE_VIDEO) {
-			OBSCanvasAutoRelease canvas =
-				SETRACE_SCOPEREF(obs_get_main_canvas());
-			add("scene", "scene", canvas);
+
+			obs_video_info ovi;
+
+			if (obs_get_video_info(&ovi)) {
+				OBSCanvasAutoRelease canvas = SETRACE_SCOPEREF(
+					obs_canvas_create_private(
+						CreateGloballyUniqueIdString()
+							.c_str(),
+						&ovi, PROGRAM | EPHEMERAL));
+
+				add("scene", "scene", canvas);
+			}
 
 			break;
 		}
