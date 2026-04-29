@@ -1250,6 +1250,21 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 				"obs_video_encoder_create() failed");
 		}
 
+		if (m_canvas) {
+			switch (video_output_get_format(
+				obs_canvas_get_video(m_canvas)))
+			{
+			case VIDEO_FORMAT_I420:
+			case VIDEO_FORMAT_NV12:
+			case VIDEO_FORMAT_I010:
+			case VIDEO_FORMAT_P010:
+				break;
+			default:
+				obs_encoder_set_preferred_video_format(
+					created_encoder, VIDEO_FORMAT_NV12);
+			}
+		}
+
 		m_streamingVideoEncoders.push_back(created_encoder);
 	}
 
@@ -1401,6 +1416,20 @@ void StreamElementsCustomVideoComposition::SetRecordingEncoders(
 			m_recordingVideoEncoders.clear();
 
 			return;
+		}
+
+		if (m_canvas) {
+			switch (video_output_get_format(
+				obs_canvas_get_video(m_canvas))) {
+			case VIDEO_FORMAT_I420:
+			case VIDEO_FORMAT_NV12:
+			case VIDEO_FORMAT_I010:
+			case VIDEO_FORMAT_P010:
+				break;
+			default:
+				obs_encoder_set_preferred_video_format(
+					created_encoder, VIDEO_FORMAT_NV12);
+			}
 		}
 
 		//
@@ -2282,6 +2311,17 @@ void StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetRecordingEnco
 			m_recordingVideoEncoders.clear();
 
 			return;
+		}
+
+		switch (video_output_get_format(obs_get_video())) {
+		case VIDEO_FORMAT_I420:
+		case VIDEO_FORMAT_NV12:
+		case VIDEO_FORMAT_I010:
+		case VIDEO_FORMAT_P010:
+			break;
+		default:
+			obs_encoder_set_preferred_video_format(
+				created_encoder, VIDEO_FORMAT_NV12);
 		}
 
 		//
