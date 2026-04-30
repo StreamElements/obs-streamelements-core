@@ -23,6 +23,38 @@ public:
 	//virtual void StopOutputRequested();
 };
 
+class SELazyOBSEncoderProvider
+	: public SELazyObjectProviderBase<obs_encoder_t> {
+private:
+	std::string m_id;
+	std::string m_name;
+	OBSDataAutoRelease m_settings;
+	OBSDataAutoRelease m_hotkeys;
+
+
+public:
+	SELazyOBSEncoderProvider(std::string id, std::string name, obs_data_t* settings, obs_data_t* hotkeys)
+	{
+		m_id = id;
+		m_name = name;
+		m_settings = settings;
+		m_hotkeys = hotkeys;
+	}
+
+protected:
+	virtual obs_encoder_t* AllocRef() override {
+		return SETRACE_ADDREF(obs_video_encoder_create(
+			m_id.c_str(), m_name.c_str(), m_settings, m_hotkeys));
+	}
+	virtual obs_encoder_t* AddRef(obs_encoder_t* encoder) override {
+		return SETRACE_ADDREF(obs_encoder_get_ref(encoder));
+	}
+
+	virtual void ReleaseRef(obs_encoder_t* encoder) override {
+		return obs_encoder_release(SETRACE_DECREF(encoder));
+	}
+};
+
 class StreamElementsVideoCompositionBase {
 public:
 	class scenes_t : public std::vector<obs_scene_t*> {
