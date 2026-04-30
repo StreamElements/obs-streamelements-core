@@ -44,6 +44,12 @@ public:
 		m_width = width;
 		m_height = height;
 		m_video = video;
+
+		if (m_settings)
+			obs_data_addref(m_settings);
+
+		if (m_hotkeys)
+			obs_data_addref(m_hotkeys);
 	}
 
 	SELazyOBSVideoEncoderProvider(obs_encoder_t *externallyAllocatedObject)
@@ -67,7 +73,7 @@ public:
 	{
 		auto ref = TryGetLazyObjectReference();
 
-		if (ref) {
+		if (ref && ref->Get()) {
 			return obs_encoder_get_settings(ref->Get());
 		}
 
@@ -75,6 +81,10 @@ public:
 			obs_data_addref(m_settings);
 
 			return m_settings;
+		}
+
+		if (m_id.size() > 0) {
+			return obs_encoder_defaults(m_id.c_str());
 		}
 
 		return obs_data_create();
