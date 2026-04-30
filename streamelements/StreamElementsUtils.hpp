@@ -18,6 +18,8 @@
 #include <functional>
 #include <future>
 
+#include <shared_mutex>
+
 #include <util/threading.h>
 #include <util/platform.h>
 #include <curl/curl.h>
@@ -544,3 +546,90 @@ obs_encoder_t *DeserializeObsAudioEncoder(CefRefPtr<CefValue> input,
 void SerializeLoadedObsModules(CefRefPtr<CefValue> &output);
 void DeserializeRevealFileInGraphicalShell(CefRefPtr<CefValue> input,
 					   CefRefPtr<CefValue> &output);
+
+/* ========================================================= */
+
+template<typename T> class SELazyObjectReference;
+
+template<typename T> class SELazyObjectProviderBase {
+	friend class SELazyObjectReference<T>;
+
+private:
+	std::shared_mutex m_mutex;
+	int m_refCount = 0;
+	T *m_object = nullptr;
+
+public:
+	SELazyObjectProviderBase() {}
+	~SELazyObjectProviderBase()
+	{
+		std::shared_lock lock(m_mutex);
+
+		if (m_refCount > 0) {
+			blog(LOG_ERROR,
+			     "[obs-streamelements-core]: SEObjectProvider is destroyed while there are active references to the underlying object");
+		}
+	}
+
+	std::shared_ptr<SELazyObjectReference<T>> GetLazyObjectReference()
+	{
+		return std::make_shared<SELazyObjectReference<T>>(this);
+	}
+
+protected:
+	inline T *GetPtr() const { return m_object; }
+
+	void AddConsumer()
+	{
+		std::unique_lock lock(m_mutex);
+
+		if (!m_object) {
+			m_object = SETRACE_ADDREF(AllocRef());
+			++m_refCount;
+		}
+
+		m_object = SETRACE_ADDREF(AddRef(m_object));
+		++m_refCount;
+	}
+
+	void RemoveConsumer()
+	{
+		std::unique_lock lock(m_mutex);
+
+		ReleaseRef(SETRACE_DECREF(m_object));
+		--m_refCount;
+
+		if (m_refCount <= 1 && m_object) {
+			ReleaseRef(SETRACE_DECREF(m_object));
+			m_refCount = 0;
+		}
+	}
+
+protected:
+	virtual T *AllocRef() = 0;
+	virtual T *AddRef(T *object) = 0;
+	virtual void ReleaseRef(T *object) = 0;
+};
+
+template<typename T> class SELazyObjectReference {
+	friend class SELazyObjectProviderBase<T>;
+
+private:
+	SELazyObjectProviderBase<T> *m_provider;
+
+public:
+	SELazyObjectReference(SELazyObjectProviderBase<T> *provider) : m_provider(provider)
+	{
+		m_provider->AddConsumer();
+	}
+
+	~SELazyObjectReference() { m_provider->RemoveConsumer(); }
+
+	inline operator T() const { return m_provider->GetPtr(); }
+	inline T *Get() const { return m_provider->GetPtr(); }
+
+	inline bool operator==(T p) const { return m_provider->GetPtr() == p; }
+	inline bool operator!=(T p) const { return m_provider->GetPtr() != p; }
+};
+
+/* ========================================================= */
