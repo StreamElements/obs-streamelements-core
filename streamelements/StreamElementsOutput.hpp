@@ -88,8 +88,13 @@ public:
 				}
 			}
 
-			result = videoCompositionBase
-					 ->GetStreamingVideoEncoderRef(m_index);
+			auto ref =
+				videoCompositionBase
+					->GetStreamingVideoEncoderRef(m_index);
+
+			if (ref) {
+				result = SETRACE_ADDREF(obs_encoder_get_ref(ref->Get()));
+			}
 
 			return result;
 		}
@@ -114,8 +119,13 @@ public:
 				}
 			}
 
-			result = videoCompositionBase
-					 ->GetRecordingVideoEncoderRef(m_index);
+			auto ref =
+				videoCompositionBase
+					->GetRecordingVideoEncoderRef(m_index);
+
+			if (ref) {
+				result = SETRACE_ADDREF(obs_encoder_get_ref(ref->Get()));
+			}
 
 			return result;
 		}

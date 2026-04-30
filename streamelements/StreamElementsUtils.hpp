@@ -559,8 +559,13 @@ private:
 	int m_refCount = 0;
 	T *m_object = nullptr;
 
+	T *m_externallyAllocatedObject = nullptr;
+
 public:
-	SELazyObjectProviderBase() {}
+	SELazyObjectProviderBase(T *externallyAllocatedObject = nullptr) : m_externallyAllocatedObject(externallyAllocatedObject)
+	{
+	}
+
 	~SELazyObjectProviderBase()
 	{
 		std::shared_lock lock(m_mutex);
@@ -576,6 +581,14 @@ public:
 		return std::make_shared<SELazyObjectReference<T>>(this);
 	}
 
+	std::shared_ptr<SELazyObjectReference<T>> TryGetLazyObjectReference()
+	{
+		if (!m_object && !m_externallyAllocatedObject)
+			return nullptr;
+
+		return GetLazyObjectReference();
+	}
+
 protected:
 	inline T *GetPtr() const { return m_object; }
 
@@ -584,7 +597,11 @@ protected:
 		std::unique_lock lock(m_mutex);
 
 		if (!m_object) {
-			m_object = SETRACE_ADDREF(AllocRef());
+			if (m_externallyAllocatedObject) {
+				m_object = AddRef(m_externallyAllocatedObject);
+			} else {
+				m_object = SETRACE_ADDREF(AllocRef());
+			}
 			++m_refCount;
 		}
 
