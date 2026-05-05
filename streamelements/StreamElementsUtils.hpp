@@ -619,6 +619,8 @@ protected:
 		if (m_refCount <= 1 && m_object) {
 			ReleaseRef(SETRACE_DECREF(m_object));
 			m_refCount = 0;
+
+			ReleaseAuxiliaryResources();
 		}
 	}
 
@@ -626,6 +628,7 @@ protected:
 	virtual T *AllocRef() = 0;
 	virtual T *AddRef(T *object) = 0;
 	virtual void ReleaseRef(T *object) = 0;
+	virtual void ReleaseAuxiliaryResources() {}
 };
 
 template<typename T> class SELazyObjectReference {

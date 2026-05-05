@@ -19,6 +19,11 @@ private:
 	CefRefPtr<CefValue> m_obsEncoderInfo;
 	ObsOutputType m_outputType;
 
+	std::shared_ptr<SELazyObjectProviderBase<obs_encoder_t>>
+		m_encoderProviderRef = nullptr;
+	std::shared_ptr<SELazyObjectReference<obs_encoder_t>> m_encoderRef =
+		nullptr;
+
 public:
 	SEVideoCompositionVideoEncoderProvider(
 		std::shared_ptr<
@@ -39,6 +44,10 @@ protected:
 	virtual obs_encoder_t *AllocRef() override
 	{
 		obs_encoder_t *result = nullptr;
+
+		// Release previously held resources if any
+		m_encoderRef = nullptr;
+		m_encoderProviderRef = nullptr;
 
 		if (m_obsEncoderInfo.get()) {
 			result = DeserializeObsVideoEncoder(
@@ -72,27 +81,42 @@ protected:
 				obs_encoder_set_video(
 					result, m_videoCompositionBase
 							->GetVideo());
+
+				return result;
 			}
 		}
 
-		std::shared_ptr<SELazyObjectReference<obs_encoder_t>> ref =
-			nullptr;
-
 		if (m_outputType != StreamingOutput)
 		{
-			ref = m_videoCompositionBase
-				      ->GetRecordingVideoEncoderRef(m_index);
+			m_encoderProviderRef =
+				m_videoCompositionBase
+					->GetRecordingVideoEncoderProvider(m_index);
 
+			if (m_encoderProviderRef) {
+				m_encoderRef =
+					m_encoderProviderRef
+						->GetLazyObjectReference();
+			}
 		}
 
-		if (!ref) {
-			ref = m_videoCompositionBase
-				      ->GetStreamingVideoEncoderRef(m_index);
+		if (!m_encoderRef) {
+			m_encoderProviderRef =
+				m_videoCompositionBase
+					->GetStreamingVideoEncoderProvider(
+						m_index);
+
+			if (m_encoderProviderRef) {
+				m_encoderRef =
+					m_encoderProviderRef
+						->GetLazyObjectReference();
+			}
 		}
 
-		if (ref) {
+		if (m_encoderRef) {
 			result = SETRACE_ADDREF(
-				obs_encoder_get_ref(ref->Get()));
+				obs_encoder_get_ref(m_encoderRef->Get()));
+		} else {
+			m_encoderProviderRef = nullptr;
 		}
 
 		return result;
@@ -106,6 +130,13 @@ protected:
 	virtual void ReleaseRef(obs_encoder_t *encoder) override
 	{
 		return obs_encoder_release(SETRACE_DECREF(encoder));
+	}
+
+	virtual void ReleaseAuxiliaryResources() override
+	{
+		// When last reference to the encoder is released, we want to release the internal reference as well
+		m_encoderRef = nullptr;
+		m_encoderProviderRef = nullptr;
 	}
 };
 

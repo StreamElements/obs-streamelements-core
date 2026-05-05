@@ -875,6 +875,7 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 		if (!encoder)
 			break;
 
+		m_videoEncoderProviders.push_back(provider);
 		m_videoEncoders.push_back(encoder);
 	}
 
@@ -1426,6 +1427,7 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 		if (!encoder)
 			break;
 
+		m_videoEncoderProviders.push_back(provider);
 		m_videoEncoders.push_back(encoder);
 	}
 
@@ -1923,6 +1925,7 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 		if (!encoder)
 			break;
 
+		m_videoEncoderProviders.push_back(provider);
 		m_videoEncoders.push_back(encoder);
 	}
 
