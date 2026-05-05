@@ -146,7 +146,7 @@ protected:
 		// This will prevent obs_encoder_get_width & obs_encoder_get_height from crashing due to video output being improperly initialized for SOME REASON
 		// https://app.bugsplat.com/v2/crash?database=OBS_Live&id=1488897
 		//
-		obs_encoder_set_scaled_size(created_encoder, m_width, m_width);
+		obs_encoder_set_scaled_size(created_encoder, m_width, m_height);
 
 		obs_encoder_set_video(created_encoder, m_video);
 

@@ -9,7 +9,7 @@
 class StreamElementsOutputManager {
 private:
 	std::shared_mutex m_mutex;
-	std::map<StreamElementsOutputBase::ObsOutputType,
+	std::map<ObsOutputType,
 		 std::shared_ptr<std::map<std::string, std::shared_ptr<StreamElementsOutputBase>>>>
 		m_map;
 	std::shared_ptr<StreamElementsVideoCompositionManager>
@@ -26,21 +26,18 @@ public:
 	~StreamElementsOutputManager();
 
 public:
-	void
-	DeserializeOutput(StreamElementsOutputBase::ObsOutputType outputType,
+	void DeserializeOutput(ObsOutputType outputType,
 			  CefRefPtr<CefValue> input,
 			  CefRefPtr<CefValue> &output);
-	void SerializeAllOutputs(StreamElementsOutputBase::ObsOutputType outputType, CefRefPtr<CefValue> &output);
-	void
-	RemoveOutputsByIds(StreamElementsOutputBase::ObsOutputType outputType,
+	void SerializeAllOutputs(ObsOutputType outputType,
+				 CefRefPtr<CefValue> &output);
+	void RemoveOutputsByIds(ObsOutputType outputType,
 			   CefRefPtr<CefValue> input,
 			   CefRefPtr<CefValue> &output);
-	void
-	EnableOutputsByIds(StreamElementsOutputBase::ObsOutputType outputType,
+	void EnableOutputsByIds(ObsOutputType outputType,
 			   CefRefPtr<CefValue> input,
 			   CefRefPtr<CefValue> &output);
-	void
-	DisableOutputsByIds(StreamElementsOutputBase::ObsOutputType outputType,
+	void DisableOutputsByIds(ObsOutputType outputType,
 			    CefRefPtr<CefValue> input,
 			    CefRefPtr<CefValue> &output);
 
@@ -53,7 +50,7 @@ public:
 	void Reset();
 
 private:
-	bool GetValidIds(StreamElementsOutputBase::ObsOutputType outputType,
+	bool GetValidIds(ObsOutputType outputType,
 			 CefRefPtr<CefValue> input,
 			 std::map<std::string, bool> &output, bool testRemove,
 			 bool testDisable);
