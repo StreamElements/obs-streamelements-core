@@ -549,107 +549,354 @@ void DeserializeRevealFileInGraphicalShell(CefRefPtr<CefValue> input,
 
 /* ========================================================= */
 
-template<typename T> class SELazyObjectReference;
+class SELazyOBSVideoEncoderAllocatorBase {
+public:
+	SELazyOBSVideoEncoderAllocatorBase() {}
+	virtual ~SELazyOBSVideoEncoderAllocatorBase() {}
 
-template<typename T> class SELazyObjectProviderBase {
-	friend class SELazyObjectReference<T>;
+	virtual obs_encoder_t *AllocRef() = 0;
+	virtual void Reset() = 0;
+	virtual obs_data_t *GetSettingsRef() = 0;
+
+	virtual std::string GetId() const = 0;
+	virtual std::string GetName() const = 0;
+};
+
+class SELazyOBSVideoEncoderProvider
+	: public std::enable_shared_from_this<SELazyOBSVideoEncoderProvider> {
+public:
+	class SELazyOBSEncoderReference {
+	private:
+		std::shared_ptr<SELazyOBSVideoEncoderProvider> m_provider =
+			nullptr;
+
+	public:
+		SELazyOBSEncoderReference(
+			std::shared_ptr<SELazyOBSVideoEncoderProvider> provider)
+			: m_provider(provider)
+		{
+			m_provider->AddConsumer();
+		}
+
+		~SELazyOBSEncoderReference() { m_provider->RemoveConsumer(); }
+
+		inline operator obs_encoder_t *() const
+		{
+			return m_provider->GetPtr();
+		}
+		obs_encoder_t *Get() const { return m_provider->GetPtr(); }
+
+		inline bool operator==(obs_encoder_t *p) const
+		{
+			return m_provider->GetPtr() == p;
+		}
+		inline bool operator!=(obs_encoder_t *p) const
+		{
+			return m_provider->GetPtr() != p;
+		}
+	};
+
+public:
+	class ExternallyAllocatedEncoderAllocator : public SELazyOBSVideoEncoderAllocatorBase {
+	private:
+		struct Private {};
+
+	private:
+		obs_encoder_t *m_externallyAllocatedObject;
+
+	public:
+		static std::shared_ptr<ExternallyAllocatedEncoderAllocator>
+		Create(obs_encoder_t* externallyAllocatedObject)
+		{
+			if (!externallyAllocatedObject)
+				return nullptr;
+			return std::make_shared<ExternallyAllocatedEncoderAllocator>(
+				Private{}, externallyAllocatedObject);
+		}
+
+		ExternallyAllocatedEncoderAllocator(
+			Private,
+			obs_encoder_t *externallyAllocatedObject)
+		{
+			m_externallyAllocatedObject = SETRACE_ADDREF(
+				obs_encoder_get_ref(externallyAllocatedObject));
+		}
+
+		virtual ~ExternallyAllocatedEncoderAllocator()
+		{
+			if (m_externallyAllocatedObject) {
+				obs_encoder_release(SETRACE_DECREF(
+					m_externallyAllocatedObject));
+
+				m_externallyAllocatedObject = nullptr;
+			}
+		}
+
+		virtual obs_encoder_t* AllocRef() override {
+			return SETRACE_ADDREF(
+				obs_encoder_get_ref(m_externallyAllocatedObject));
+		}
+
+		virtual void Reset() override {}
+
+		virtual obs_data_t* GetSettingsRef() override
+		{
+			return obs_encoder_get_settings(
+				m_externallyAllocatedObject);
+		}
+
+		virtual std::string GetId() const override
+		{
+			const auto id = obs_encoder_get_id(m_externallyAllocatedObject);
+
+			if (id)
+				return id;
+			else
+				return "";
+		}
+
+		virtual std::string GetName() const
+		{
+			const auto name = obs_encoder_get_name(m_externallyAllocatedObject);
+
+			if (name)
+				return name;
+			else
+				return GetId();
+		}
+	};
+
+	class CreateEncoderAllocator : public SELazyOBSVideoEncoderAllocatorBase {
+	private:
+		struct Private {};
+
+	private:
+		std::string m_id;
+		std::string m_name;
+		obs_data_t *m_settings = nullptr;
+		obs_data_t *m_hotkeys = nullptr;
+		uint32_t m_width;
+		uint32_t m_height;
+		video_t *m_video;
+
+	public:
+		static std::shared_ptr<CreateEncoderAllocator>
+		Create(std::string id, std::string name, obs_data_t *settings,
+		       obs_data_t *hotkeys, uint32_t width, uint32_t height,
+		       video_t *video)
+		{
+			return std::make_shared<CreateEncoderAllocator>(
+				Private{}, id, name, settings, hotkeys, width, height, video);
+		}
+
+ 		CreateEncoderAllocator(Private, std::string id,
+				       std::string name,
+				       obs_data_t *settings,
+				       obs_data_t *hotkeys, uint32_t width,
+				       uint32_t height, video_t *video)
+		{
+			m_id = id;
+			m_name = name;
+			m_width = width;
+			m_height = height;
+			m_video = video;
+
+			if (settings) {
+				obs_data_addref(SETRACE_ADDREF(settings));
+
+				m_settings = settings;
+			}
+
+			if (hotkeys) {
+				obs_data_addref(SETRACE_ADDREF(hotkeys));
+
+				m_hotkeys = hotkeys;
+			}
+		}
+
+		virtual ~CreateEncoderAllocator()
+		{
+			if (m_settings) {
+				obs_data_release(SETRACE_DECREF(m_settings));
+				m_settings = nullptr;
+			}
+			if (m_hotkeys) {
+				obs_data_release(SETRACE_DECREF(m_hotkeys));
+				m_hotkeys = nullptr;
+			}
+		}
+
+		virtual obs_encoder_t *AllocRef() override
+		{
+			auto created_encoder =
+				SETRACE_ADDREF(obs_video_encoder_create(
+					m_id.c_str(), m_name.c_str(),
+					m_settings, m_hotkeys));
+
+			if (!created_encoder) {
+				blog(LOG_ERROR,
+				     "[obs-streamelements-core]: failed lazy-creating video encoder: %s (%s)",
+				     m_id.c_str(), m_name.c_str());
+
+				return nullptr;
+			}
+
+			switch (video_output_get_format(obs_get_video())) {
+			case VIDEO_FORMAT_I420:
+			case VIDEO_FORMAT_NV12:
+			case VIDEO_FORMAT_I010:
+			case VIDEO_FORMAT_P010:
+				break;
+			default:
+				obs_encoder_set_preferred_video_format(
+					created_encoder, VIDEO_FORMAT_NV12);
+			}
+
+			//
+			// This will prevent obs_encoder_get_width & obs_encoder_get_height from crashing due to video output being improperly initialized for SOME REASON
+			// https://app.bugsplat.com/v2/crash?database=OBS_Live&id=1488897
+			//
+			obs_encoder_set_scaled_size(created_encoder, m_width,
+						    m_height);
+
+			obs_encoder_set_video(created_encoder, m_video);
+
+			return created_encoder;
+		}
+
+		virtual void Reset() override {}
+
+		virtual obs_data_t *GetSettingsRef() override
+		{
+			if (m_settings) {
+				obs_data_addref(m_settings);
+
+				return m_settings;
+			}
+
+			if (m_id.size() > 0) {
+				return obs_encoder_defaults(m_id.c_str());
+			}
+
+			return obs_data_create();
+		}
+
+		virtual std::string GetId() const override
+		{
+			return m_id;
+		}
+
+		virtual std::string GetName() const
+		{
+			return m_name;
+		}
+	};
 
 private:
 	std::shared_mutex m_mutex;
 	int m_refCount = 0;
-	T *m_object = nullptr;
+	obs_encoder_t *m_object = nullptr;
 
-	T *m_externallyAllocatedObject = nullptr;
+	std::shared_ptr<SELazyOBSVideoEncoderAllocatorBase> m_allocator = nullptr;
 
 public:
-	SELazyObjectProviderBase(T *externallyAllocatedObject = nullptr) : m_externallyAllocatedObject(externallyAllocatedObject)
+	SELazyOBSVideoEncoderProvider(std::shared_ptr<SELazyOBSVideoEncoderAllocatorBase> allocator)
 	{
+		m_allocator = allocator;
 	}
 
-	~SELazyObjectProviderBase()
+	virtual ~SELazyOBSVideoEncoderProvider()
 	{
-		std::shared_lock lock(m_mutex);
-
 		if (m_refCount > 0) {
 			blog(LOG_ERROR,
-			     "[obs-streamelements-core]: SEObjectProvider is destroyed while there are active references to the underlying object");
+			     "[obs-streamelements-core]: warning: SELazyOBSVideoEncoderProvider is destroyed while there are active references to the underlying object");
 		}
 	}
 
-	std::shared_ptr<SELazyObjectReference<T>> GetLazyObjectReference()
+	obs_data_t *GetSettingsRef()
 	{
-		return std::make_shared<SELazyObjectReference<T>>(this);
+		auto ref = TryGetLazyObjectReference();
+
+		if (ref && ref->Get()) {
+			return obs_encoder_get_settings(ref->Get());
+		}
+
+		return m_allocator->GetSettingsRef();
 	}
 
-	std::shared_ptr<SELazyObjectReference<T>> TryGetLazyObjectReference()
+	std::shared_ptr<SELazyOBSVideoEncoderProvider::SELazyOBSEncoderReference>
+	GetLazyObjectReference()
 	{
-		if (!m_object && !m_externallyAllocatedObject)
+		auto shared = this->shared_from_this();
+
+		return std::make_shared<SELazyOBSVideoEncoderProvider::SELazyOBSEncoderReference>(
+			shared);
+	}
+
+	std::shared_ptr<SELazyOBSVideoEncoderProvider::SELazyOBSEncoderReference>
+	TryGetLazyObjectReference()
+	{
+		if (!m_object)
 			return nullptr;
 
 		return GetLazyObjectReference();
 	}
 
-protected:
-	inline T *GetPtr() const { return m_object; }
+	std::string GetId() const { return m_allocator->GetId(); }
 
+	std::string GetName() const { return m_allocator->GetName(); }
+
+protected:
+	inline obs_encoder_t *GetPtr() const {
+		return m_object;
+	}
+
+private:
 	void AddConsumer()
 	{
 		std::unique_lock lock(m_mutex);
 
 		if (!m_object) {
-			if (m_externallyAllocatedObject) {
-				m_object = AddRef(m_externallyAllocatedObject);
-			} else {
-				m_object = SETRACE_ADDREF(AllocRef());
-			}
+			m_object = SETRACE_ADDREF(m_allocator->AllocRef());
+
 			++m_refCount;
 		}
-
-		m_object = SETRACE_ADDREF(AddRef(m_object));
-		++m_refCount;
 	}
 
 	void RemoveConsumer()
 	{
 		std::unique_lock lock(m_mutex);
 
-		ReleaseRef(SETRACE_DECREF(m_object));
+		ReleaseRef(m_object);
 		--m_refCount;
 
-		if (m_refCount <= 1 && m_object) {
-			ReleaseRef(SETRACE_DECREF(m_object));
-			m_refCount = 0;
+		if (m_refCount <= 0 && m_object) {
+			m_object = nullptr;
 
-			ReleaseAuxiliaryResources();
+			m_allocator->Reset();
+		}
+
+		if (m_refCount < 0) {
+			blog(LOG_ERROR,
+			     "[obs-streamelements-core]: warning: SELazyOBSVideoEncoderProvider::RemoveConsumer call results in negative reference count");
 		}
 	}
 
 protected:
-	virtual T *AllocRef() = 0;
-	virtual T *AddRef(T *object) = 0;
-	virtual void ReleaseRef(T *object) = 0;
-	virtual void ReleaseAuxiliaryResources() {}
-};
-
-template<typename T> class SELazyObjectReference {
-	friend class SELazyObjectProviderBase<T>;
-
-private:
-	SELazyObjectProviderBase<T> *m_provider;
-
-public:
-	SELazyObjectReference(SELazyObjectProviderBase<T> *provider) : m_provider(provider)
+	obs_encoder_t* AddRef(obs_encoder_t* object)
 	{
-		m_provider->AddConsumer();
+		return SETRACE_ADDREF(obs_encoder_get_ref(object));
 	}
 
-	~SELazyObjectReference() { m_provider->RemoveConsumer(); }
+	void ReleaseRef(obs_encoder_t* object)
+	{
+		obs_encoder_release(SETRACE_DECREF(object));
+	}
 
-	inline operator T() const { return m_provider->GetPtr(); }
-	inline T *Get() const { return m_provider->GetPtr(); }
+	void ReleaseAuxiliaryResources()
+	{
 
-	inline bool operator==(T p) const { return m_provider->GetPtr() == p; }
-	inline bool operator!=(T p) const { return m_provider->GetPtr() != p; }
+	}
 };
 
 /* ========================================================= */

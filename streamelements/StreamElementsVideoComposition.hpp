@@ -23,144 +23,6 @@ public:
 	//virtual void StopOutputRequested();
 };
 
-class SELazyOBSVideoEncoderProvider
-	: public SELazyObjectProviderBase<obs_encoder_t> {
-private:
-	std::string m_id;
-	std::string m_name;
-	OBSDataAutoRelease m_settings = nullptr;
-	OBSDataAutoRelease m_hotkeys = nullptr;
-	uint32_t m_width;
-	uint32_t m_height;
-	video_t *m_video;
-
-public:
-	SELazyOBSVideoEncoderProvider(std::string id, std::string name, obs_data_t* settings, obs_data_t* hotkeys, uint32_t width, uint32_t height, video_t* video)
-	{
-		m_id = id;
-		m_name = name;
-		m_settings = settings;
-		m_hotkeys = hotkeys;
-		m_width = width;
-		m_height = height;
-		m_video = video;
-
-		if (m_settings)
-			obs_data_addref(m_settings);
-
-		if (m_hotkeys)
-			obs_data_addref(m_hotkeys);
-	}
-
-	SELazyOBSVideoEncoderProvider(obs_encoder_t *externallyAllocatedObject)
-		: SELazyObjectProviderBase<obs_encoder_t>(externallyAllocatedObject)
-	{
-		if (!externallyAllocatedObject)
-			return;
-
-		m_id = obs_encoder_get_id(externallyAllocatedObject);
-		m_name = obs_encoder_get_name(externallyAllocatedObject);
-		m_settings =
-			obs_encoder_get_settings(externallyAllocatedObject);
-		m_hotkeys = nullptr;
-	}
-
-	~SELazyOBSVideoEncoderProvider() {
-		SetVideo(nullptr);
-	}
-
-	obs_data_t *GetSettingsRef()
-	{
-		auto ref = TryGetLazyObjectReference();
-
-		if (ref && ref->Get()) {
-			return obs_encoder_get_settings(ref->Get());
-		}
-
-		if (m_settings) {
-			obs_data_addref(m_settings);
-
-			return m_settings;
-		}
-
-		if (m_id.size() > 0) {
-			return obs_encoder_defaults(m_id.c_str());
-		}
-
-		return obs_data_create();
-	}
-
-	/*
-	obs_data_t *GetHotkeyDataRef()
-	{
-		if (m_hotkeys) {
-			obs_data_addref(m_hotkeys);
-
-			return m_hotkeys;
-		}
-
-		return obs_data_create();
-	}
-	*/
-
-	std::string GetId() const { return m_id; }
-	std::string GetName() const { return m_name; }
-
-	void SetVideo(video_t* video)
-	{
-		m_video = video;
-
-		auto ref = TryGetLazyObjectReference();
-
-		if (!ref)
-			return;
-
-		obs_encoder_set_video(ref->Get(), m_video);
-	}
-
-protected:
-	virtual obs_encoder_t* AllocRef() override {
-		auto created_encoder = SETRACE_ADDREF(obs_video_encoder_create(
-			m_id.c_str(), m_name.c_str(), m_settings, m_hotkeys));
-
-		if (!created_encoder) {
-			blog(LOG_ERROR,
-			     "[obs-streamelements-core]: failed lazy-creating video encoder: %s (%s)",
-			     m_id.c_str(), m_name.c_str());
-
-			return nullptr;
-		}
-		
-		switch (video_output_get_format(obs_get_video())) {
-		case VIDEO_FORMAT_I420:
-		case VIDEO_FORMAT_NV12:
-		case VIDEO_FORMAT_I010:
-		case VIDEO_FORMAT_P010:
-			break;
-		default:
-			obs_encoder_set_preferred_video_format(
-				created_encoder, VIDEO_FORMAT_NV12);
-		}
-
-		//
-		// This will prevent obs_encoder_get_width & obs_encoder_get_height from crashing due to video output being improperly initialized for SOME REASON
-		// https://app.bugsplat.com/v2/crash?database=OBS_Live&id=1488897
-		//
-		obs_encoder_set_scaled_size(created_encoder, m_width, m_height);
-
-		obs_encoder_set_video(created_encoder, m_video);
-
-		return created_encoder;
-	}
-	virtual obs_encoder_t* AddRef(obs_encoder_t* encoder) override {
-		return SETRACE_ADDREF(obs_encoder_get_ref(encoder));
-	}
-
-	virtual void ReleaseRef(obs_encoder_t* encoder) override {
-		return obs_encoder_release(SETRACE_DECREF(encoder));
-	}
-};
-
 class StreamElementsVideoCompositionBase {
 public:
 	class scenes_t : public std::vector<obs_scene_t*> {
@@ -237,7 +99,7 @@ public:
 		virtual void Render() = 0;
 
 		
-		std::shared_ptr<SELazyObjectReference<obs_encoder_t>>
+		std::shared_ptr<SELazyOBSVideoEncoderProvider::SELazyOBSEncoderReference>
 		GetStreamingVideoEncoderRef(size_t index)
 		{
 			auto prov = GetStreamingVideoEncoderProvider(index);
@@ -248,7 +110,7 @@ public:
 			return prov->GetLazyObjectReference();
 		}
 
-		std::shared_ptr<SELazyObjectReference<obs_encoder_t>> 
+		std::shared_ptr<SELazyOBSVideoEncoderProvider::SELazyOBSEncoderReference> 
 		GetRecordingVideoEncoderRef(size_t index)
 		{
 			auto prov = GetRecordingVideoEncoderProvider(index);

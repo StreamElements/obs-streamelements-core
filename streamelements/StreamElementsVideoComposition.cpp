@@ -861,7 +861,13 @@ public:
 			result = obs_output_get_video_encoder2(output, index);
 		}
 
-		return std::make_shared<SELazyOBSVideoEncoderProvider>(result);
+		if (!result)
+			return nullptr;
+
+		return std::make_shared<SELazyOBSVideoEncoderProvider>(
+			SELazyOBSVideoEncoderProvider::
+				ExternallyAllocatedEncoderAllocator::Create(
+					result));
 	}
 
 	virtual std::shared_ptr<SELazyOBSVideoEncoderProvider>
@@ -907,8 +913,14 @@ public:
 			return GetStreamingVideoEncoderProvider(
 				index);
 		} else {
-			return std::make_shared<SELazyOBSVideoEncoderProvider>(
-				result);
+			if (!result)
+				return nullptr;
+			else
+				return std::make_shared<
+					SELazyOBSVideoEncoderProvider>(
+					SELazyOBSVideoEncoderProvider::
+						ExternallyAllocatedEncoderAllocator::
+							Create(result));
 		}
 	}
 
@@ -1368,12 +1380,15 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 		char buf[32];
 		sprintf(buf, "%d", (int)idx + 1);
 
-		auto encoderProvider =
-			std::make_shared<SELazyOBSVideoEncoderProvider>(
-				streamingVideoEncoderIds[idx],
-				(name + ": streaming video encoder " +
-				 std::string(buf)),
-				settings, streamingVideoEncoderHotkeyData[idx], m_baseWidth, m_baseHeight, m_video);
+		auto encoderProvider = std::make_shared<
+			SELazyOBSVideoEncoderProvider>(
+			SELazyOBSVideoEncoderProvider::CreateEncoderAllocator::
+				Create(streamingVideoEncoderIds[idx],
+				       (name + ": streaming video encoder " +
+					std::string(buf)),
+				       settings,
+				       streamingVideoEncoderHotkeyData[idx],
+				       m_baseWidth, m_baseHeight, m_video));
 
 		m_streamingVideoEncoders.push_back(encoderProvider);
 	}
@@ -1400,14 +1415,16 @@ void StreamElementsCustomVideoComposition::SetRecordingEncoders(
 		char buf[32];
 		sprintf(buf, "%d", (int)idx + 1);
 
-		auto encoderProvider =
-			std::make_shared<SELazyOBSVideoEncoderProvider>(
-				recordingVideoEncoderIds[idx],
-				(GetName() + ": recording video encoder " +
-				 std::string(buf)),
-				recordingVideoEncoderSettings[idx],
-				recordingVideoEncoderHotkeyData[idx],
-				m_baseWidth, m_baseHeight, m_video);
+		auto encoderProvider = std::make_shared<
+			SELazyOBSVideoEncoderProvider>(
+			SELazyOBSVideoEncoderProvider::CreateEncoderAllocator::
+				Create(recordingVideoEncoderIds[idx],
+				       (GetName() +
+					": recording video encoder " +
+					std::string(buf)),
+				       recordingVideoEncoderSettings[idx],
+				       recordingVideoEncoderHotkeyData[idx],
+				       m_baseWidth, m_baseHeight, m_video));
 
 		m_recordingVideoEncoders.push_back(encoderProvider);
 	}
@@ -2146,15 +2163,19 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 			char buf[32];
 			sprintf(buf, "%d", (int)idx + 1);
 
-			auto encoderProvider =
-				std::make_shared<SELazyOBSVideoEncoderProvider>(
-					streamingVideoEncoderIds[idx],
-					(name + ": streaming video encoder " +
-					 std::string(buf)),
-					settings,
-					streamingVideoEncoderHotkeyData[idx],
-					ovi.base_width, ovi.base_height,
-					obs_get_video());
+			auto encoderProvider = std::make_shared<
+				SELazyOBSVideoEncoderProvider>(
+				SELazyOBSVideoEncoderProvider::
+					CreateEncoderAllocator::Create(
+						streamingVideoEncoderIds[idx],
+						(name +
+						 ": streaming video encoder " +
+						 std::string(buf)),
+						settings,
+						streamingVideoEncoderHotkeyData
+							[idx],
+						ovi.base_width, ovi.base_height,
+						obs_get_video()));
 
 			m_streamingVideoEncoders.push_back(encoderProvider);
 		}
@@ -2222,13 +2243,16 @@ void StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetRecordingEnco
 
 		auto encoderProvider =
 			std::make_shared<SELazyOBSVideoEncoderProvider>(
-				recordingVideoEncoderIds[idx],
-				(GetName() + ": recording video encoder " +
-				 std::string(buf)),
-				recordingVideoEncoderSettings[idx],
-				recordingVideoEncoderHotkeyData[idx],
-				ovi.base_width, ovi.base_height,
-				obs_get_video());
+				SELazyOBSVideoEncoderProvider::
+							 CreateEncoderAllocator::Create(
+					recordingVideoEncoderIds[idx],
+					(GetName() +
+					 ": recording video encoder " +
+					 std::string(buf)),
+					recordingVideoEncoderSettings[idx],
+					recordingVideoEncoderHotkeyData[idx],
+					ovi.base_width, ovi.base_height,
+					obs_get_video()));
 
 		m_recordingVideoEncoders.push_back(encoderProvider);
 	}
