@@ -68,6 +68,18 @@ public:
 				size_t index,
 				CefRefPtr<CefValue> obsEncoderInfo,
 				ObsOutputType outputType)
+				: SELazyOBSVideoEncoderAllocatorBase(FormatString(
+					  "VideoCompositionEncoderAllocator: [index: %d] [outputType: %s] %s - %s",
+					  index,
+					  outputType == StreamingOutput
+						  ? "StreamingOutput"
+						  : (outputType == RecordingOutput
+							     ? "RecordingOutput"
+							     : "ReplayBufferOutput"),
+					  videoCompositionBase->GetComposition()->GetId().c_str(),
+					  videoCompositionBase->GetComposition()
+						  ->GetName()
+						  .c_str()))
 			{
 				m_index = index;
 				m_videoCompositionBase = videoCompositionBase;
@@ -85,8 +97,9 @@ public:
 				Reset();
 
 				if (m_obsEncoderInfo.get()) {
-					result = DeserializeObsVideoEncoder(
-						m_obsEncoderInfo);
+					result =
+						SETRACE_AUTODECREF(DeserializeObsVideoEncoder(
+						m_obsEncoderInfo));
 
 					if (result) {
 						switch (video_output_get_format(
@@ -140,9 +153,8 @@ public:
 				}
 
 				if (m_encoderRef) {
-					result = SETRACE_ADDREF(
-						obs_encoder_get_ref(
-							m_encoderRef->Get()));
+					result = obs_encoder_get_ref(
+							m_encoderRef->Get());
 				} else {
 					m_encoderProviderRef = nullptr;
 				}

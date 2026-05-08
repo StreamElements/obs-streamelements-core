@@ -247,8 +247,6 @@ public:
 
 	std::string GetName()
 	{
-		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
-
 		return m_name;
 	}
 

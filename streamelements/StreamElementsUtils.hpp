@@ -550,8 +550,11 @@ void DeserializeRevealFileInGraphicalShell(CefRefPtr<CefValue> input,
 /* ========================================================= */
 
 class SELazyOBSVideoEncoderAllocatorBase {
+private:
+	std::string m_slug;
+
 public:
-	SELazyOBSVideoEncoderAllocatorBase() {}
+	SELazyOBSVideoEncoderAllocatorBase(std::string slug): m_slug(slug) {}
 	virtual ~SELazyOBSVideoEncoderAllocatorBase() {}
 
 	virtual obs_encoder_t *AllocRef() = 0;
@@ -560,6 +563,9 @@ public:
 
 	virtual std::string GetId() const = 0;
 	virtual std::string GetName() const = 0;
+
+public:
+	std::string slug() { return m_slug; }
 };
 
 class SELazyOBSVideoEncoderProvider
@@ -615,8 +621,8 @@ public:
 		}
 
 		ExternallyAllocatedEncoderAllocator(
-			Private,
-			obs_encoder_t *externallyAllocatedObject)
+			Private, obs_encoder_t *externallyAllocatedObject)
+			: SELazyOBSVideoEncoderAllocatorBase(FormatString("externallyAllocatedObject: %s", GetIdFromPointer(externallyAllocatedObject).c_str()))
 		{
 			m_externallyAllocatedObject = SETRACE_ADDREF(
 				obs_encoder_get_ref(externallyAllocatedObject));
@@ -633,8 +639,7 @@ public:
 		}
 
 		virtual obs_encoder_t* AllocRef() override {
-			return SETRACE_ADDREF(
-				obs_encoder_get_ref(m_externallyAllocatedObject));
+			return obs_encoder_get_ref(m_externallyAllocatedObject);
 		}
 
 		virtual void Reset() override {}
@@ -690,10 +695,11 @@ public:
 		}
 
  		CreateEncoderAllocator(Private, std::string id,
-				       std::string name,
-				       obs_data_t *settings,
+				       std::string name, obs_data_t *settings,
 				       obs_data_t *hotkeys, uint32_t width,
 				       uint32_t height, video_t *video)
+			: SELazyOBSVideoEncoderAllocatorBase(
+				  FormatString("CreateEncoderAllocator: [%d x %d] %s - %s", width, height, id.c_str(), name.c_str()))
 		{
 			m_id = id;
 			m_name = name;
@@ -729,14 +735,14 @@ public:
 		virtual obs_encoder_t *AllocRef() override
 		{
 			auto created_encoder =
-				SETRACE_ADDREF(obs_video_encoder_create(
+				obs_video_encoder_create(
 					m_id.c_str(), m_name.c_str(),
-					m_settings, m_hotkeys));
+					m_settings, m_hotkeys);
 
 			if (!created_encoder) {
 				blog(LOG_ERROR,
-				     "[obs-streamelements-core]: failed lazy-creating video encoder: %s (%s)",
-				     m_id.c_str(), m_name.c_str());
+				     "[obs-streamelements-core]: failed lazy-creating video encoder: %s",
+				     slug().c_str());
 
 				return nullptr;
 			}
@@ -809,7 +815,8 @@ public:
 	{
 		if (m_refCount > 0) {
 			blog(LOG_ERROR,
-			     "[obs-streamelements-core]: warning: SELazyOBSVideoEncoderProvider is destroyed while there are active references to the underlying object");
+			     "[obs-streamelements-core]: warning: SELazyOBSVideoEncoderProvider is destroyed while there are active references to the underlying object: %s",
+			     m_allocator->slug().c_str());
 		}
 	}
 
@@ -846,6 +853,55 @@ public:
 
 	std::string GetName() const { return m_allocator->GetName(); }
 
+	CefRefPtr<CefDictionaryValue> SerializeEncoder()
+	{
+		std::shared_lock lock(m_mutex);
+
+		if (m_object) {
+			return SerializeObsEncoder(m_object);
+		}
+
+		auto result = CefDictionaryValue::Create();
+
+		result->SetString("class", GetId());
+		result->SetString("name", GetName());
+		result->SetString("label", GetName());
+
+		auto codec = obs_get_encoder_codec(GetId().c_str());
+
+		if (codec)
+			result->SetString("codec", codec);
+		else
+			result->SetNull("codec");
+
+		auto encoder_type = obs_get_encoder_type(GetId().c_str());
+
+		if (encoder_type == OBS_ENCODER_VIDEO) {
+			result->SetString("type", "video");
+		} else if (encoder_type == OBS_ENCODER_AUDIO) {
+			result->SetString("type", "audio");
+		}
+
+		// Settings & properties
+
+		obs_data_t *settings = SETRACE_ADDREF(GetSettingsRef());
+
+		result->SetValue(
+			"settings",
+			CefParseJSON(settings ? obs_data_get_json(settings)
+					      : "null",
+				     JSON_PARSER_ALLOW_TRAILING_COMMAS));
+
+		result->SetValue("properties", SerializeObsEncoderProperties(
+						       GetId(), settings));
+
+		if (settings) {
+			obs_data_release(SETRACE_DECREF(settings));
+		}
+
+		return result;
+	}
+
 protected:
 	inline obs_encoder_t *GetPtr() const {
 		return m_object;
@@ -856,10 +912,15 @@ private:
 	{
 		std::unique_lock lock(m_mutex);
 
+		++m_refCount;
+
 		if (!m_object) {
 			m_object = SETRACE_ADDREF(m_allocator->AllocRef());
 
-			++m_refCount;
+			blog(LOG_INFO,
+			     "[obs-streamelements-core]: SELazyOBSVideoEncoderProvider::AddConsumer called allocator->AllocRef(): (refCount: %d, object: %s): %s",
+			     m_refCount, GetIdFromPointer(m_object).c_str(),
+			     m_allocator->slug().c_str());
 		}
 	}
 
@@ -871,14 +932,20 @@ private:
 		--m_refCount;
 
 		if (m_refCount <= 0 && m_object) {
-			m_object = nullptr;
+			blog(LOG_INFO,
+			     "[obs-streamelements-core]: error: SELazyOBSVideoEncoderProvider::RemoveConsumer calling allocator->Reset(): (refCount: %d, object: %s): %s",
+			     m_refCount, GetIdFromPointer(m_object).c_str(),
+			     m_allocator->slug().c_str());
 
 			m_allocator->Reset();
+
+			m_object = nullptr;
 		}
 
 		if (m_refCount < 0) {
 			blog(LOG_ERROR,
-			     "[obs-streamelements-core]: warning: SELazyOBSVideoEncoderProvider::RemoveConsumer call results in negative reference count");
+			     "[obs-streamelements-core]: error: SELazyOBSVideoEncoderProvider::RemoveConsumer call results in negative reference count (%d): %s",
+			     m_refCount, m_allocator->slug().c_str());
 		}
 	}
 
@@ -891,11 +958,6 @@ protected:
 	void ReleaseRef(obs_encoder_t* object)
 	{
 		obs_encoder_release(SETRACE_DECREF(object));
-	}
-
-	void ReleaseAuxiliaryResources()
-	{
-
 	}
 };
 

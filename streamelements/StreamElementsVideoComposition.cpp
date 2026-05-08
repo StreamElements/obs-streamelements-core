@@ -262,48 +262,6 @@ ParseEncodersList(CefRefPtr<CefValue> encodersList,
 	return encoderIds.size() > 0;
 }
 
-static CefRefPtr<CefDictionaryValue> SerializeObsEncoder(std::shared_ptr<SELazyOBSVideoEncoderProvider> e)
-{
-	auto existing = e->TryGetLazyObjectReference();
-
-	if (existing) {
-		return SerializeObsEncoder(existing->Get());
-	}
-
-	auto result = CefDictionaryValue::Create();
-
-	OBSDataAutoRelease settings = SETRACE_SCOPEREF(e->GetSettingsRef());
-
-	result->SetString("class", e->GetId());
-	result->SetString("name", e->GetName());
-	result->SetString("label", e->GetName());
-
-	auto codec = obs_get_encoder_codec(e->GetId().c_str());
-
-	if (codec)
-		result->SetString("codec", codec);
-	else
-		result->SetNull("codec");
-
-	auto encoder_type = obs_get_encoder_type(e->GetId().c_str());
-
-	if (encoder_type == OBS_ENCODER_VIDEO) {
-		result->SetString("type", "video");
-	} else if (encoder_type == OBS_ENCODER_AUDIO) {
-		result->SetString("type", "audio");
-	}
-
-	result->SetValue("settings",
-			 CefParseJSON(obs_data_get_json(settings),
-				      JSON_PARSER_ALLOW_TRAILING_COMMAS));
-
-	result->SetValue("properties",
-			 SerializeObsEncoderProperties(e->GetId(),
-						       settings));
-
-	return result;
-}
-
 static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* composition, CefRefPtr<CefDictionaryValue>& root)
 {
 	auto info = composition->GetCompositionInfo(nullptr, "SerializeObsVideoEncoders");
@@ -320,7 +278,7 @@ static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* compos
 
 		streamingVideoEncoders->SetDictionary(
 			streamingVideoEncoders->GetSize(),
-			SerializeObsEncoder(streamingVideoEncoder));
+			streamingVideoEncoder->SerializeEncoder());
 	}
 
 	if (streamingVideoEncoders->GetSize() == 0)
@@ -352,7 +310,7 @@ static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* compos
 
 		recordingVideoEncoders->SetDictionary(
 			recordingVideoEncoders->GetSize(),
-			SerializeObsEncoder(recordingVideoEncoder));
+			recordingVideoEncoder->SerializeEncoder());
 	}
 
 	if (recordingVideoEncoders->GetSize() > 0 && !allEqual) {
