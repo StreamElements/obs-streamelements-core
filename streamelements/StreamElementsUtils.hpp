@@ -772,7 +772,8 @@ public:
 
 		virtual void Reset() override {}
 
-		virtual obs_data_t *GetSettingsRef() override
+		virtual obs_data_t *
+		GetSettingsRef() override
 		{
 			if (m_settings) {
 				obs_data_addref(m_settings);
@@ -834,10 +835,10 @@ public:
 
 	obs_data_t *GetSettingsRef()
 	{
-		auto ref = TryGetLazyObjectReference();
+		std::shared_lock lock(m_mutex);
 
-		if (ref && ref->Get()) {
-			return obs_encoder_get_settings(ref->Get());
+		if (m_object) {
+			return obs_encoder_get_settings(m_object);
 		}
 
 		return m_allocator->GetSettingsRef();

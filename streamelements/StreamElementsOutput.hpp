@@ -192,6 +192,22 @@ public:
 					auto d = m_obsEncoderInfo
 							 ->GetDictionary();
 
+					CefRefPtr<CefValue> settingsInfo;
+
+					if (d->HasKey("settings") &&
+					    d->GetType("settings") ==
+						    VTYPE_DICTIONARY) {
+						obs_data_t* data =
+							obs_data_create();
+
+						if (DeserializeObsData(d->GetValue("settings"), data)) {
+							return data;
+						}
+						else {
+							obs_data_release(data);
+						}
+					}
+
 					if (d->HasKey("class") &&
 					    d->GetType("class") ==
 						    VTYPE_STRING) {
