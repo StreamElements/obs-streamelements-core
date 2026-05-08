@@ -334,6 +334,7 @@ public:
 						CompositionInfo> videoCompositionBase)
 		{
 			return std::make_shared<SELazyOBSVideoEncoderProvider>(
+				"StreamElementsOutputBase::VideoEncoderTemplate::CreateStreamingEncoderProvider()",
 				VideoCompositionEncoderAllocator::Create(
 					videoCompositionBase, m_index,
 					m_obsEncoderInfo, StreamingOutput));
@@ -346,7 +347,7 @@ public:
 				videoCompositionBase)
 		{
 			return std::make_shared<SELazyOBSVideoEncoderProvider>(
-
+				"StreamElementsOutputBase::VideoEncoderTemplate::CreateRecordingEncoderProvider()",
 				VideoCompositionEncoderAllocator::Create(
 					videoCompositionBase, m_index,
 					m_obsEncoderInfo, RecordingOutput));

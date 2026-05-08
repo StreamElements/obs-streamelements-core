@@ -823,6 +823,7 @@ public:
 			return nullptr;
 
 		return std::make_shared<SELazyOBSVideoEncoderProvider>(
+			FormatString("StreamElementsDefaultVideoCompositionInfo::GetStreamingVideoEncoderProvider(%d)", index),
 			SELazyOBSVideoEncoderProvider::
 				ExternallyAllocatedEncoderAllocator::Create(
 					result));
@@ -876,6 +877,9 @@ public:
 			else
 				return std::make_shared<
 					SELazyOBSVideoEncoderProvider>(
+					FormatString(
+						"StreamElementsDefaultVideoCompositionInfo::GetRecordingVideoEncoderProvider(%d)",
+						index),
 					SELazyOBSVideoEncoderProvider::
 						ExternallyAllocatedEncoderAllocator::
 							Create(result));
@@ -1335,15 +1339,16 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 		obs_data_t *settings =
 			SETRACE_NOREF(streamingVideoEncoderSettings[idx]);
 
-		char buf[32];
-		sprintf(buf, "%d", (int)idx + 1);
-
 		auto encoderProvider = std::make_shared<
 			SELazyOBSVideoEncoderProvider>(
+			FormatString(
+				"StreamElementsCustomVideoComposition::ctor(streamingVideoEncoder[%d])",
+				idx),
 			SELazyOBSVideoEncoderProvider::CreateEncoderAllocator::
 				Create(streamingVideoEncoderIds[idx],
-				       (name + ": streaming video encoder " +
-					std::string(buf)),
+				       FormatString(
+					       "%s: streaming video encoder %d",
+					       name.c_str(), idx + 1),
 				       settings,
 				       streamingVideoEncoderHotkeyData[idx],
 				       m_baseWidth, m_baseHeight, m_video));
@@ -1375,11 +1380,13 @@ void StreamElementsCustomVideoComposition::SetRecordingEncoders(
 
 		auto encoderProvider = std::make_shared<
 			SELazyOBSVideoEncoderProvider>(
+			FormatString(
+				"StreamElementsCustomVideoComposition::SetRecordingEncoders(recordingVideoEncoder[%d])",
+				idx),
 			SELazyOBSVideoEncoderProvider::CreateEncoderAllocator::
 				Create(recordingVideoEncoderIds[idx],
-				       (GetName() +
-					": recording video encoder " +
-					std::string(buf)),
+				       FormatString("%s: recording video encoder %d",
+						    GetName().c_str(), idx + 1),
 				       recordingVideoEncoderSettings[idx],
 				       recordingVideoEncoderHotkeyData[idx],
 				       m_baseWidth, m_baseHeight, m_video));
@@ -2118,17 +2125,13 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 			obs_data_t *settings =
 				streamingVideoEncoderSettings[idx];
 
-			char buf[32];
-			sprintf(buf, "%d", (int)idx + 1);
-
 			auto encoderProvider = std::make_shared<
 				SELazyOBSVideoEncoderProvider>(
+				FormatString("StreamElementsObsNativeVideoCompositionWithCustomEncoders::ctor(streamingVideoEncoders[%d])", idx),
 				SELazyOBSVideoEncoderProvider::
 					CreateEncoderAllocator::Create(
 						streamingVideoEncoderIds[idx],
-						(name +
-						 ": streaming video encoder " +
-						 std::string(buf)),
+						FormatString("%s: streaming video encoder %d", name.c_str(), idx + 1),
 						settings,
 						streamingVideoEncoderHotkeyData
 							[idx],
@@ -2196,17 +2199,15 @@ void StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetRecordingEnco
 
 	for (size_t idx = 0; idx < recordingVideoEncoderSettings.size();
 	     ++idx) {
-		char buf[32];
-		sprintf(buf, "%d", (int)idx + 1);
-
 		auto encoderProvider =
 			std::make_shared<SELazyOBSVideoEncoderProvider>(
+				FormatString("StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetRecordingEncoders(recordingVideoEncoder[%d])", idx),
 				SELazyOBSVideoEncoderProvider::
 							 CreateEncoderAllocator::Create(
 					recordingVideoEncoderIds[idx],
-					(GetName() +
-					 ": recording video encoder " +
-					 std::string(buf)),
+				       FormatString(
+					       "%s: recoding video encoder %d",
+					       GetName().c_str(), idx + 1),
 					recordingVideoEncoderSettings[idx],
 					recordingVideoEncoderHotkeyData[idx],
 					ovi.base_width, ovi.base_height,

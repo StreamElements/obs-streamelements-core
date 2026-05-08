@@ -565,7 +565,7 @@ public:
 	virtual std::string GetName() const = 0;
 
 public:
-	std::string slug() { return m_slug; }
+	std::string slug() const { return m_slug; }
 };
 
 class SELazyOBSVideoEncoderProvider
@@ -799,6 +799,8 @@ public:
 	};
 
 private:
+	std::string m_slug;
+
 	std::shared_mutex m_mutex;
 	int m_refCount = 0;
 	obs_encoder_t *m_object = nullptr;
@@ -806,9 +808,11 @@ private:
 	std::shared_ptr<SELazyOBSVideoEncoderAllocatorBase> m_allocator = nullptr;
 
 public:
-	SELazyOBSVideoEncoderProvider(std::shared_ptr<SELazyOBSVideoEncoderAllocatorBase> allocator)
+	SELazyOBSVideoEncoderProvider(
+		std::string slug,
+		std::shared_ptr<SELazyOBSVideoEncoderAllocatorBase> allocator)
+		: m_slug(slug), m_allocator(allocator)
 	{
-		m_allocator = allocator;
 	}
 
 	virtual ~SELazyOBSVideoEncoderProvider()
@@ -816,8 +820,16 @@ public:
 		if (m_refCount > 0) {
 			blog(LOG_ERROR,
 			     "[obs-streamelements-core]: warning: SELazyOBSVideoEncoderProvider is destroyed while there are active references to the underlying object: %s",
-			     m_allocator->slug().c_str());
+			     slug().c_str());
 		}
+	}
+
+	std::string slug() const
+	{
+		if (m_slug.size())
+			return m_slug + ": " + m_allocator->slug();
+		else
+			return m_allocator->slug();
 	}
 
 	obs_data_t *GetSettingsRef()
@@ -920,7 +932,7 @@ private:
 			blog(LOG_INFO,
 			     "[obs-streamelements-core]: SELazyOBSVideoEncoderProvider::AddConsumer called allocator->AllocRef(): (refCount: %d, object: %s): %s",
 			     m_refCount, GetIdFromPointer(m_object).c_str(),
-			     m_allocator->slug().c_str());
+			     slug().c_str());
 		}
 	}
 
@@ -935,7 +947,7 @@ private:
 			blog(LOG_INFO,
 			     "[obs-streamelements-core]: error: SELazyOBSVideoEncoderProvider::RemoveConsumer calling allocator->Reset(): (refCount: %d, object: %s): %s",
 			     m_refCount, GetIdFromPointer(m_object).c_str(),
-			     m_allocator->slug().c_str());
+			     slug().c_str());
 
 			m_allocator->Reset();
 
@@ -945,7 +957,7 @@ private:
 		if (m_refCount < 0) {
 			blog(LOG_ERROR,
 			     "[obs-streamelements-core]: error: SELazyOBSVideoEncoderProvider::RemoveConsumer call results in negative reference count (%d): %s",
-			     m_refCount, m_allocator->slug().c_str());
+			     m_refCount, slug().c_str());
 		}
 	}
 
