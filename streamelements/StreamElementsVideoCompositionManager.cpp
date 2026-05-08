@@ -168,6 +168,11 @@ void StreamElementsVideoCompositionManager::DeserializeComposition(
 			    videoFrame->GetType("height") != VTYPE_INT)
 				return;
 
+			blog(LOG_INFO, "[obs-streamelements-core]: ----- StreamElementsVideoCompositionManager::DeserializeComposition(): streamingVideoEncoders: %s",
+			     CefWriteJSON(streamingVideoEncoders,
+					  JSON_WRITER_PRETTY_PRINT)
+				     .c_str());
+
 			composition =
 				StreamElementsCustomVideoComposition::Create(
 					id, name, videoFrame->GetInt("width"),

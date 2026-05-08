@@ -4,6 +4,7 @@
 
 #include <cef-headers.hpp>
 #include <obs.h>
+#include <obs.hpp>
 #include <obs-module.h>
 
 #include <memory>
@@ -707,17 +708,52 @@ public:
 			m_height = height;
 			m_video = video;
 
-			if (settings) {
-				obs_data_addref(SETRACE_ADDREF(settings));
-
-				m_settings = settings;
-			}
-
 			if (hotkeys) {
 				obs_data_addref(SETRACE_ADDREF(hotkeys));
 
 				m_hotkeys = hotkeys;
 			}
+
+			m_settings = SETRACE_ADDREF(obs_data_create());
+
+			OBSEncoderAutoRelease encoder =
+				obs_video_encoder_create(
+					m_id.c_str(),
+					CreateGloballyUniqueIdString().c_str(),
+					settings, nullptr);
+
+			if (encoder) {
+				OBSDataAutoRelease defaults =
+					obs_encoder_get_defaults(encoder);
+
+				blog(LOG_INFO,
+				     "------- %s: ctor(): defaults json: %s",
+				     slug().c_str(),
+				     obs_data_get_json(defaults));
+
+				obs_data_apply(m_settings, defaults);
+
+				OBSDataAutoRelease settingsData =
+					obs_encoder_get_settings(encoder);
+
+				blog(LOG_INFO,
+				     "------- %s: ctor(): settings data json: %s",
+				     slug().c_str(),
+				     obs_data_get_json(settingsData));
+
+				obs_data_apply(m_settings, settingsData);
+			} else if (settings) {
+				blog(LOG_INFO,
+				     "------- %s: ctor(): args settings json: %s",
+				     slug().c_str(),
+				     obs_data_get_json(settings));
+
+				obs_data_apply(m_settings, settings);
+			}
+
+			blog(LOG_INFO,
+			     "------- %s: ctor(): final settings json: %s",
+			     slug().c_str(), obs_data_get_json(m_settings));
 		}
 
 		virtual ~CreateEncoderAllocator()
@@ -775,17 +811,19 @@ public:
 		virtual obs_data_t *
 		GetSettingsRef() override
 		{
-			if (m_settings) {
-				obs_data_addref(m_settings);
-
-				return m_settings;
-			}
+			obs_data_t *result = obs_data_create();
 
 			if (m_id.size() > 0) {
-				return obs_encoder_defaults(m_id.c_str());
+				OBSDataAutoRelease defaults = obs_encoder_defaults(m_id.c_str());
+
+				obs_data_apply(result, defaults);
 			}
 
-			return obs_data_create();
+			if (m_settings) {
+				obs_data_apply(result, m_settings);
+			}
+
+			return result;
 		}
 
 		virtual std::string GetId() const override
@@ -820,7 +858,7 @@ public:
 	{
 		if (m_refCount > 0) {
 			blog(LOG_ERROR,
-			     "[obs-streamelements-core]: warning: SELazyOBSVideoEncoderProvider is destroyed while there are active references to the underlying object: %s",
+			     "[obs-streamelements-core]: error: SELazyOBSVideoEncoderProvider is destroyed while there are active references to the underlying object: %s",
 			     slug().c_str());
 		}
 	}
@@ -899,10 +937,16 @@ public:
 
 		obs_data_t *settings = SETRACE_ADDREF(GetSettingsRef());
 
+		std::string json = settings ? obs_data_get_json(settings)
+					    : "null";
+
+		blog(LOG_INFO,
+		     "[obs-streamelements-core]: encoder settings: %s: %s",
+		     slug().c_str(), json.c_str());
+
 		result->SetValue(
 			"settings",
-			CefParseJSON(settings ? obs_data_get_json(settings)
-					      : "null",
+			CefParseJSON(json,
 				     JSON_PARSER_ALLOW_TRAILING_COMMAS));
 
 		result->SetValue("properties", SerializeObsEncoderProperties(

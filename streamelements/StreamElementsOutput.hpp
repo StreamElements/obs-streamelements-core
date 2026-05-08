@@ -178,13 +178,24 @@ public:
 			virtual obs_data_t *GetSettingsRef() override
 			{
 				if (m_encoderProviderRef) {
-					m_encoderProviderRef->GetSettingsRef();
+					return m_encoderProviderRef->GetSettingsRef();
 				}
 
 				if (m_customEncoder) {
-					return obs_encoder_get_settings(
+					obs_data_t* data =
+						obs_encoder_get_defaults(
+							m_customEncoder);
+
+					OBSDataAutoRelease settings =
+						obs_encoder_get_settings(
 						m_customEncoder);
+
+					obs_data_apply(data, settings);
+
+					return data;
 				}
+
+				obs_data_t *result = obs_data_create();
 
 				if (m_obsEncoderInfo &&
 				    m_obsEncoderInfo->GetType() ==
@@ -194,20 +205,6 @@ public:
 
 					CefRefPtr<CefValue> settingsInfo;
 
-					if (d->HasKey("settings") &&
-					    d->GetType("settings") ==
-						    VTYPE_DICTIONARY) {
-						obs_data_t* data =
-							obs_data_create();
-
-						if (DeserializeObsData(d->GetValue("settings"), data)) {
-							return data;
-						}
-						else {
-							obs_data_release(data);
-						}
-					}
-
 					if (d->HasKey("class") &&
 					    d->GetType("class") ==
 						    VTYPE_STRING) {
@@ -215,13 +212,31 @@ public:
 							d->GetString("class")
 								.ToString();
 
-						if (id.size() > 0)
-							return obs_encoder_defaults(
-								id.c_str());
+						if (id.size() > 0) {
+							OBSDataAutoRelease defaults =
+								obs_encoder_defaults(
+									id.c_str());
+
+							obs_data_apply(
+								result,
+								defaults);
+						}
+					}
+
+					if (d->HasKey("settings") &&
+					    d->GetType("settings") ==
+						    VTYPE_DICTIONARY) {
+						OBSDataAutoRelease data =
+							obs_data_create();
+
+						if (DeserializeObsData(d->GetValue("settings"), data)) {
+							obs_data_apply(result,
+								       data);
+						}
 					}
 				}
 
-				return obs_data_create();
+				return result;
 			}
 
 			virtual std::string GetId() const override
