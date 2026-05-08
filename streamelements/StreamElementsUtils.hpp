@@ -730,35 +730,18 @@ public:
 					obs_data_get_defaults(
 						defaultsContainer);
 
-				blog(LOG_INFO,
-				     "------- %s: ctor(): defaults json: %s",
-				     slug().c_str(),
-				     obs_data_get_json_with_defaults(defaults));
-
 				obs_data_apply(m_settings, defaults);
 
 				OBSDataAutoRelease settingsData =
 					obs_encoder_get_settings(encoder);
 
-				blog(LOG_INFO,
-				     "------- %s: ctor(): settings data json: %s",
-				     slug().c_str(),
-				     obs_data_get_json_with_defaults(settingsData));
-
 				obs_data_apply(m_settings, settingsData);
 			} else if (settings) {
-				blog(LOG_INFO,
-				     "------- %s: ctor(): args settings json: %s",
-				     slug().c_str(),
-				     obs_data_get_json_with_defaults(settings));
+				OBSDataAutoRelease defaults =
+					obs_data_get_defaults(settings);
 
 				obs_data_apply(m_settings, settings);
 			}
-
-			blog(LOG_INFO,
-			     "------- %s: ctor(): final settings json: %s",
-			     slug().c_str(),
-			     obs_data_get_json_with_defaults(m_settings));
 		}
 
 		virtual ~CreateEncoderAllocator()
@@ -941,14 +924,6 @@ public:
 		// Settings & properties
 
 		obs_data_t *settings = SETRACE_ADDREF(GetSettingsRef());
-
-		std::string json =
-			settings ? obs_data_get_json_with_defaults(settings)
-					    : "null";
-
-		blog(LOG_INFO,
-		     "[obs-streamelements-core]: encoder settings: %s: %s",
-		     slug().c_str(), json.c_str());
 
 		result->SetValue("settings", SerializeObsData(settings));
 
