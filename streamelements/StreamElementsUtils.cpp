@@ -3923,7 +3923,8 @@ CefRefPtr<CefValue> SerializeObsData(obs_data_t *data)
 
 		std::unique_lock guard(mutex); // obs_data_get_json is not thread_safe for the same data container
 
-		const char *json = SETRACE_NOREF(obs_data_get_json(data));
+		const char *json =
+			SETRACE_NOREF(obs_data_get_json_with_defaults(data));
 
 		if (json) {
 			return CefParseJSON(json,
@@ -4215,9 +4216,7 @@ CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e)
 
 	auto settings = SETRACE_ADDREF(obs_encoder_get_settings(e));
 
-	result->SetValue("settings",
-			 CefParseJSON(obs_data_get_json(settings),
-				      JSON_PARSER_ALLOW_TRAILING_COMMAS));
+	result->SetValue("settings", SerializeObsData(settings));
 
 	result->SetValue("properties",
 			 SerializeObsEncoderProperties(obs_encoder_get_id(e),
