@@ -661,7 +661,7 @@ public:
 				return "";
 		}
 
-		virtual std::string GetName() const
+		virtual std::string GetName() const override
 		{
 			const auto name = obs_encoder_get_name(m_externallyAllocatedObject);
 
@@ -819,7 +819,7 @@ public:
 			return m_id;
 		}
 
-		virtual std::string GetName() const
+		virtual std::string GetName() const override
 		{
 			return m_name;
 		}
