@@ -1,10 +1,6 @@
 #include "StreamElementsOutputManager.hpp"
 #include "StreamElementsUtils.hpp"
 
-#define StreamingOutput StreamElementsOutputBase::StreamingOutput
-#define RecordingOutput StreamElementsOutputBase::RecordingOutput
-#define ReplayBufferOutput StreamElementsOutputBase::ReplayBufferOutput
-
 StreamElementsOutputManager::StreamElementsOutputManager(
 	std::shared_ptr<StreamElementsVideoCompositionManager>
 		videoCompositionManager,
@@ -72,8 +68,7 @@ void StreamElementsOutputManager::Reset()
 	}
 }
 
-void StreamElementsOutputManager::DeserializeOutput(
-	StreamElementsOutputBase::ObsOutputType outputType,
+void StreamElementsOutputManager::DeserializeOutput(ObsOutputType outputType,
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
 	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
@@ -139,7 +134,7 @@ void StreamElementsOutputManager::DeserializeOutput(
 }
 
 void StreamElementsOutputManager::SerializeAllOutputs(
-	StreamElementsOutputBase::ObsOutputType outputType,
+	ObsOutputType outputType,
 	CefRefPtr<CefValue> &output)
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
@@ -157,8 +152,7 @@ void StreamElementsOutputManager::SerializeAllOutputs(
 	output->SetDictionary(d);
 }
 
-void StreamElementsOutputManager::RemoveOutputsByIds(
-	StreamElementsOutputBase::ObsOutputType outputType,
+void StreamElementsOutputManager::RemoveOutputsByIds(ObsOutputType outputType,
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
 	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
@@ -178,8 +172,7 @@ void StreamElementsOutputManager::RemoveOutputsByIds(
 	output->SetBool(true);
 }
 
-void StreamElementsOutputManager::EnableOutputsByIds(
-	StreamElementsOutputBase::ObsOutputType outputType,
+void StreamElementsOutputManager::EnableOutputsByIds(ObsOutputType outputType,
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
@@ -200,7 +193,7 @@ void StreamElementsOutputManager::EnableOutputsByIds(
 }
 
 void StreamElementsOutputManager::DisableOutputsByIds(
-	StreamElementsOutputBase::ObsOutputType outputType,
+	ObsOutputType outputType,
 	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
@@ -258,7 +251,7 @@ void StreamElementsOutputManager::TriggerSaveReplayBufferById(
 }
 
 bool StreamElementsOutputManager::GetValidIds(
-	StreamElementsOutputBase::ObsOutputType outputType, CefRefPtr<CefValue> input,
+	ObsOutputType outputType, CefRefPtr<CefValue> input,
 	std::map<std::string, bool>& output, bool testRemove, bool testDisable)
 {
 	if (input->GetType() != VTYPE_LIST)

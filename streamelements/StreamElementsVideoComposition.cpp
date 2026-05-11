@@ -269,8 +269,8 @@ static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* compos
 	auto streamingVideoEncoders = CefListValue::Create();
 
 	for (size_t idx = 0;; ++idx) {
-		OBSEncoderAutoRelease streamingVideoEncoder =
-			info->GetStreamingVideoEncoderRef(idx);
+		auto streamingVideoEncoder =
+			info->GetStreamingVideoEncoderProvider(idx);
 
 		// OBS Native composition doesn't have an encoder until we start streaming
 		if (!streamingVideoEncoder)
@@ -278,9 +278,7 @@ static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* compos
 
 		streamingVideoEncoders->SetDictionary(
 			streamingVideoEncoders->GetSize(),
-			SerializeObsEncoder(streamingVideoEncoder));
-
-		SETRACE_DECREF(streamingVideoEncoder.Get());
+			streamingVideoEncoder->SerializeEncoder());
 	}
 
 	if (streamingVideoEncoders->GetSize() == 0)
@@ -295,26 +293,24 @@ static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* compos
 	auto recordingVideoEncoders = CefListValue::Create();
 
 	for (size_t idx = 0;; ++idx) {
-		OBSEncoderAutoRelease recordingVideoEncoder =
-			info->GetRecordingVideoEncoderRef(idx);
-		SETRACE_DECREF(recordingVideoEncoder.Get());
+		auto recordingVideoEncoder =
+			info->GetRecordingVideoEncoderProvider(idx);
 
 		if (!recordingVideoEncoder)
 			break;
 
-		OBSEncoderAutoRelease streamingVideoEncoder =
-			info->GetRecordingVideoEncoderRef(idx);
-		SETRACE_DECREF(streamingVideoEncoder.Get());
+		auto streamingVideoEncoder =
+			info->GetStreamingVideoEncoderProvider(idx);
 
 		if (!streamingVideoEncoder ||
-		    streamingVideoEncoder.Get() !=
-			    recordingVideoEncoder.Get()) {
+		    streamingVideoEncoder !=
+			    recordingVideoEncoder) {
 			allEqual = false;
 		}
 
 		recordingVideoEncoders->SetDictionary(
 			recordingVideoEncoders->GetSize(),
-			SerializeObsEncoder(recordingVideoEncoder));
+			recordingVideoEncoder->SerializeEncoder());
 	}
 
 	if (recordingVideoEncoders->GetSize() > 0 && !allEqual) {
@@ -800,8 +796,9 @@ public:
 
 	virtual ~StreamElementsDefaultVideoCompositionInfo() {}
 
-protected:
-	virtual obs_encoder_t *GetStreamingVideoEncoder(size_t index)
+public:
+	virtual std::shared_ptr<SELazyOBSVideoEncoderProvider>
+	GetStreamingVideoEncoderProvider(size_t index)
 	{
 		if (!obs_frontend_streaming_active())
 			return nullptr;
@@ -822,10 +819,18 @@ protected:
 			result = obs_output_get_video_encoder2(output, index);
 		}
 
-		return result;
+		if (!result)
+			return nullptr;
+
+		return std::make_shared<SELazyOBSVideoEncoderProvider>(
+			FormatString("StreamElementsDefaultVideoCompositionInfo::GetStreamingVideoEncoderProvider(%d)", index),
+			SELazyOBSVideoEncoderProvider::
+				ExternallyAllocatedEncoderAllocator::Create(
+					result));
 	}
 
-	virtual obs_encoder_t *GetRecordingVideoEncoder(size_t index)
+	virtual std::shared_ptr<SELazyOBSVideoEncoderProvider>
+	GetRecordingVideoEncoderProvider(size_t index)
 	{
 		obs_encoder_t *result = nullptr;
 
@@ -864,10 +869,21 @@ protected:
 		}
 
 		if (!result && obs_frontend_streaming_active()) {
-			result = GetStreamingVideoEncoder(index);
+			return GetStreamingVideoEncoderProvider(
+				index);
+		} else {
+			if (!result)
+				return nullptr;
+			else
+				return std::make_shared<
+					SELazyOBSVideoEncoderProvider>(
+					FormatString(
+						"StreamElementsDefaultVideoCompositionInfo::GetRecordingVideoEncoderProvider(%d)",
+						index),
+					SELazyOBSVideoEncoderProvider::
+						ExternallyAllocatedEncoderAllocator::
+							Create(result));
 		}
-
-		return result;
 	}
 
 public:
@@ -1109,8 +1125,9 @@ private:
 	video_t *m_video = nullptr;
 	//obs_view_t *m_view = nullptr;
 	obs_canvas_t *m_canvas = nullptr;
-	std::vector<obs_encoder_t *> m_streamingVideoEncoders;
-	std::vector<obs_encoder_t *> m_recordingVideoEncoders;
+	std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider>> m_streamingVideoEncoders;
+	std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider>>
+		m_recordingVideoEncoders;
 	uint32_t m_baseWidth = 1920;
 	uint32_t m_baseHeight = 1080;
 
@@ -1123,8 +1140,10 @@ public:
 		StreamElementsVideoCompositionEventListener *listener,
 		std::string holder,
 		video_t *video, uint32_t baseWidth, uint32_t baseHeight,
-		std::vector<obs_encoder_t *> streamingVideoEncoders,
-		std::vector<obs_encoder_t *> recordingVideoEncoders,
+		std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider>>
+			streamingVideoEncoders,
+		std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider>>
+			recordingVideoEncoders,
 		obs_canvas_t* canvas
 		/* obs_view_t *view*/)
 		: StreamElementsVideoCompositionBase::CompositionInfo(
@@ -1138,29 +1157,23 @@ public:
 		  //m_view(view)
 	{
 		for (auto encoder : streamingVideoEncoders) {
-			m_streamingVideoEncoders.push_back(
-				SETRACE_ADDREF(obs_encoder_get_ref(encoder)));
+			m_streamingVideoEncoders.push_back(encoder);
 		}
 
 		for (auto encoder : recordingVideoEncoders) {
-			m_recordingVideoEncoders.push_back(
-				SETRACE_ADDREF(obs_encoder_get_ref(encoder)));
+			m_recordingVideoEncoders.push_back(encoder);
 		}
 	}
 
 	virtual ~StreamElementsCustomVideoCompositionInfo()
 	{
-		for (const auto &encoder : m_streamingVideoEncoders) {
-			obs_encoder_release(SETRACE_DECREF(encoder));
-		}
-
-		for (const auto &encoder : m_recordingVideoEncoders) {
-			obs_encoder_release(SETRACE_DECREF(encoder));
-		}
+		m_streamingVideoEncoders.clear();
+		m_recordingVideoEncoders.clear();
 	}
 
-protected:
-	virtual obs_encoder_t *GetStreamingVideoEncoder(size_t index)
+public:
+	virtual std::shared_ptr<SELazyOBSVideoEncoderProvider>
+	GetStreamingVideoEncoderProvider(size_t index)
 	{
 		if (index >= 0 && index < m_streamingVideoEncoders.size())
 			return m_streamingVideoEncoders[index];
@@ -1168,12 +1181,13 @@ protected:
 			return nullptr;
 	}
 
-	virtual obs_encoder_t *GetRecordingVideoEncoder(size_t index)
+	virtual std::shared_ptr<SELazyOBSVideoEncoderProvider>
+	GetRecordingVideoEncoderProvider(size_t index)
 	{
 		if (index >= 0 && index < m_recordingVideoEncoders.size())
 			return m_recordingVideoEncoders[index];
 		else
-			return GetStreamingVideoEncoder(index);
+			return GetStreamingVideoEncoderProvider(index);
 	}
 
 public:
@@ -1219,6 +1233,10 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 		throw std::runtime_error(
 			"mismatch between sizes of passed in vectors");
 
+	if (!streamingVideoEncoderIds.size()) {
+		throw std::runtime_error("Must specify at least one streamingVideoEncoder");
+	}
+
 	/* align to multiple-of-two and SSE alignment sizes */
 	m_baseWidth &= 0xFFFFFFFC;
 	m_baseHeight &= 0xFFFFFFFE;
@@ -1227,58 +1245,6 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 
 	if (!obs_get_video_info(&ovi))
 		throw std::runtime_error("obs_get_video_info() failed");
-
-	for (size_t idx = 0; idx < streamingVideoEncoderSettings.size(); ++idx) {
-		obs_data_t *settings =
-			SETRACE_NOREF(streamingVideoEncoderSettings[idx]);
-
-		char buf[32];
-		sprintf(buf, "%d", (int)idx + 1);
-
-		auto created_encoder = SETRACE_ADDREF(obs_video_encoder_create(
-			streamingVideoEncoderIds[idx].c_str(),
-			(name + ": streaming video encoder " + std::string(buf))
-				.c_str(),
-			settings, streamingVideoEncoderHotkeyData[idx]));
-
-		if (!created_encoder) {
-			for (auto encoder : m_streamingVideoEncoders) {
-				obs_encoder_release(SETRACE_DECREF(encoder));
-			}
-
-			throw std::runtime_error(
-				"obs_video_encoder_create() failed");
-		}
-
-		if (m_canvas) {
-			switch (video_output_get_format(
-				obs_canvas_get_video(m_canvas)))
-			{
-			case VIDEO_FORMAT_I420:
-			case VIDEO_FORMAT_NV12:
-			case VIDEO_FORMAT_I010:
-			case VIDEO_FORMAT_P010:
-				break;
-			default:
-				obs_encoder_set_preferred_video_format(
-					created_encoder, VIDEO_FORMAT_NV12);
-			}
-		}
-
-		m_streamingVideoEncoders.push_back(created_encoder);
-	}
-
-	if (!m_streamingVideoEncoders.size()) {
-		throw std::runtime_error("no encoders were created");
-	}
-
-	//
-	// This will prevent obs_encoder_get_width & obs_encoder_get_height from crashing due to video output being improperly initialized for SOME REASON
-	// https://app.bugsplat.com/v2/crash?database=OBS_Live&id=1488897
-	//
-	for (auto encoder : m_streamingVideoEncoders) {
-		obs_encoder_set_scaled_size(encoder, m_baseWidth, m_baseHeight);
-	}
 
 	m_rootSource = SETRACE_ADDREF(obs_source_create_private(
 		"cut_transition", (name + ": root source").c_str(), nullptr));
@@ -1293,9 +1259,7 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 		if (m_rootSource)
 			obs_source_release(SETRACE_DECREF(m_rootSource));
 
-		for (auto encoder : m_streamingVideoEncoders) {
-			obs_encoder_release(SETRACE_DECREF(encoder));
-		}
+		m_streamingVideoEncoders.clear();
 
 		throw std::runtime_error("obs_source_create_private(cut_transition) failed");
 	}
@@ -1310,18 +1274,10 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 
 	m_video = obs_canvas_get_video(m_canvas);
 
-	//m_view = SETRACE_ADDREF(obs_view_create());
-
-	//m_video = obs_view_add2(m_view, &ovi);
-
 	obs_transition_set(m_rootSource, m_transition);
 
 	//obs_view_set_source(m_view, 0, m_rootSource);
 	obs_canvas_set_channel(m_canvas, 0, m_rootSource);
-
-	for (auto encoder : m_streamingVideoEncoders) {
-		obs_encoder_set_video(encoder, m_video);
-	}
 
 	auto currentScene = scene_create_private_with_custom_size(
 		GetUniqueSceneName("Scene").c_str(), m_baseWidth, m_baseHeight, m_canvas);
@@ -1378,6 +1334,28 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 		}
 	}
 
+	for (size_t idx = 0; idx < streamingVideoEncoderSettings.size();
+	     ++idx) {
+		obs_data_t *settings =
+			SETRACE_NOREF(streamingVideoEncoderSettings[idx]);
+
+		auto encoderProvider = std::make_shared<
+			SELazyOBSVideoEncoderProvider>(
+			FormatString(
+				"StreamElementsCustomVideoComposition::ctor(streamingVideoEncoder[%d])",
+				idx),
+			SELazyOBSVideoEncoderProvider::CreateEncoderAllocator::
+				Create(streamingVideoEncoderIds[idx],
+				       FormatString(
+					       "%s: streaming video encoder %d",
+					       name.c_str(), idx + 1),
+				       settings,
+				       streamingVideoEncoderHotkeyData[idx],
+				       m_baseWidth, m_baseHeight, m_video));
+
+		m_streamingVideoEncoders.push_back(encoderProvider);
+	}
+
 	ConnectTransitionEvents(m_transition);
 }
 
@@ -1400,65 +1378,26 @@ void StreamElementsCustomVideoComposition::SetRecordingEncoders(
 		char buf[32];
 		sprintf(buf, "%d", (int)idx + 1);
 
-		auto created_encoder = SETRACE_ADDREF(obs_video_encoder_create(
-			recordingVideoEncoderIds[idx].c_str(),
-			(GetName() + ": recording video encoder " +
-			 std::string(buf))
-				.c_str(),
-			recordingVideoEncoderSettings[idx],
-			recordingVideoEncoderHotkeyData[idx]));
+		auto encoderProvider = std::make_shared<
+			SELazyOBSVideoEncoderProvider>(
+			FormatString(
+				"StreamElementsCustomVideoComposition::SetRecordingEncoders(recordingVideoEncoder[%d])",
+				idx),
+			SELazyOBSVideoEncoderProvider::CreateEncoderAllocator::
+				Create(recordingVideoEncoderIds[idx],
+				       FormatString("%s: recording video encoder %d",
+						    GetName().c_str(), idx + 1),
+				       recordingVideoEncoderSettings[idx],
+				       recordingVideoEncoderHotkeyData[idx],
+				       m_baseWidth, m_baseHeight, m_video));
 
-		if (!created_encoder) {
-			for (auto encoder : m_recordingVideoEncoders) {
-				obs_encoder_release(SETRACE_DECREF(encoder));
-			}
-
-			m_recordingVideoEncoders.clear();
-
-			return;
-		}
-
-		if (m_canvas) {
-			switch (video_output_get_format(
-				obs_canvas_get_video(m_canvas))) {
-			case VIDEO_FORMAT_I420:
-			case VIDEO_FORMAT_NV12:
-			case VIDEO_FORMAT_I010:
-			case VIDEO_FORMAT_P010:
-				break;
-			default:
-				obs_encoder_set_preferred_video_format(
-					created_encoder, VIDEO_FORMAT_NV12);
-			}
-		}
-
-		//
-		// This will prevent obs_encoder_get_width & obs_encoder_get_height from crashing due to video output being improperly initialized for SOME REASON
-		// https://app.bugsplat.com/v2/crash?database=OBS_Live&id=1488897
-		//
-		obs_encoder_set_scaled_size(created_encoder, m_baseWidth,
-					    m_baseHeight);
-
-		obs_encoder_set_video(created_encoder, m_video);
-
-		m_recordingVideoEncoders.push_back(created_encoder);
+		m_recordingVideoEncoders.push_back(encoderProvider);
 	}
 }
 
 StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 {
-	for (auto encoder : m_streamingVideoEncoders) {
-		obs_encoder_set_video(encoder, nullptr);
-
-		obs_encoder_release(SETRACE_DECREF(encoder));
-	}
 	m_streamingVideoEncoders.clear();
-
-	for (auto encoder : m_recordingVideoEncoders) {
-		obs_encoder_set_video(encoder, nullptr);
-
-		obs_encoder_release(SETRACE_DECREF(encoder));
-	}
 	m_recordingVideoEncoders.clear();
 
 	m_video = nullptr;
@@ -2186,45 +2125,24 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 			obs_data_t *settings =
 				streamingVideoEncoderSettings[idx];
 
-			char buf[32];
-			sprintf(buf, "%d", (int)idx + 1);
+			auto encoderProvider = std::make_shared<
+				SELazyOBSVideoEncoderProvider>(
+				FormatString("StreamElementsObsNativeVideoCompositionWithCustomEncoders::ctor(streamingVideoEncoders[%d])", idx),
+				SELazyOBSVideoEncoderProvider::
+					CreateEncoderAllocator::Create(
+						streamingVideoEncoderIds[idx],
+						FormatString("%s: streaming video encoder %d", name.c_str(), idx + 1),
+						settings,
+						streamingVideoEncoderHotkeyData
+							[idx],
+						ovi.base_width, ovi.base_height,
+						obs_get_video()));
 
-			auto created_encoder =
-				SETRACE_ADDREF(obs_video_encoder_create(
-					streamingVideoEncoderIds[idx].c_str(),
-					(name + ": streaming video encoder " +
-					 std::string(buf))
-						.c_str(),
-					settings,
-					streamingVideoEncoderHotkeyData[idx]));
-
-			if (!created_encoder) {
-				for (auto encoder : m_streamingVideoEncoders) {
-					obs_encoder_release(SETRACE_DECREF(encoder));
-				}
-
-				throw std::runtime_error(
-					"obs_video_encoder_create() failed");
-			}
-
-			m_streamingVideoEncoders.push_back(created_encoder);
+			m_streamingVideoEncoders.push_back(encoderProvider);
 		}
 
 		if (!m_streamingVideoEncoders.size()) {
 			throw std::runtime_error("no encoders were created");
-		}
-
-		//
-		// This will prevent obs_encoder_get_width & obs_encoder_get_height from crashing due to video output being improperly initialized for SOME REASON
-		// https://app.bugsplat.com/v2/crash?database=OBS_Live&id=1488897
-		//
-		for (auto encoder : m_streamingVideoEncoders) {
-			obs_encoder_set_scaled_size(encoder, ovi.base_width,
-						    ovi.base_height);
-		}
-
-		for (auto encoder : m_streamingVideoEncoders) {
-			obs_encoder_set_video(encoder, obs_get_video());
 		}
 
 		m_rootSource = SETRACE_ADDREF(obs_source_create_private(
@@ -2238,18 +2156,7 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 	~StreamElementsObsNativeVideoCompositionWithCustomEncoders()
 {
-	for (auto encoder : m_streamingVideoEncoders) {
-		obs_encoder_set_video(encoder, nullptr);
-
-		obs_encoder_release(SETRACE_DECREF(encoder));
-	}
 	m_streamingVideoEncoders.clear();
-
-	for (auto encoder : m_recordingVideoEncoders) {
-		obs_encoder_set_video(encoder, nullptr);
-
-		obs_encoder_release(SETRACE_DECREF(encoder));
-	}
 	m_recordingVideoEncoders.clear();
 
 	std::unique_lock guard(m_mutex);
@@ -2292,48 +2199,21 @@ void StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetRecordingEnco
 
 	for (size_t idx = 0; idx < recordingVideoEncoderSettings.size();
 	     ++idx) {
-		char buf[32];
-		sprintf(buf, "%d", (int)idx + 1);
+		auto encoderProvider =
+			std::make_shared<SELazyOBSVideoEncoderProvider>(
+				FormatString("StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetRecordingEncoders(recordingVideoEncoder[%d])", idx),
+				SELazyOBSVideoEncoderProvider::
+							 CreateEncoderAllocator::Create(
+					recordingVideoEncoderIds[idx],
+				       FormatString(
+					       "%s: recoding video encoder %d",
+					       GetName().c_str(), idx + 1),
+					recordingVideoEncoderSettings[idx],
+					recordingVideoEncoderHotkeyData[idx],
+					ovi.base_width, ovi.base_height,
+					obs_get_video()));
 
-		auto created_encoder = SETRACE_ADDREF(obs_video_encoder_create(
-			recordingVideoEncoderIds[idx].c_str(),
-			(GetName() + ": recording video encoder " +
-			 std::string(buf))
-				.c_str(),
-			recordingVideoEncoderSettings[idx],
-			recordingVideoEncoderHotkeyData[idx]));
-
-		if (!created_encoder) {
-			for (auto encoder : m_recordingVideoEncoders) {
-				obs_encoder_release(SETRACE_DECREF(encoder));
-			}
-
-			m_recordingVideoEncoders.clear();
-
-			return;
-		}
-
-		switch (video_output_get_format(obs_get_video())) {
-		case VIDEO_FORMAT_I420:
-		case VIDEO_FORMAT_NV12:
-		case VIDEO_FORMAT_I010:
-		case VIDEO_FORMAT_P010:
-			break;
-		default:
-			obs_encoder_set_preferred_video_format(
-				created_encoder, VIDEO_FORMAT_NV12);
-		}
-
-		//
-		// This will prevent obs_encoder_get_width & obs_encoder_get_height from crashing due to video output being improperly initialized for SOME REASON
-		// https://app.bugsplat.com/v2/crash?database=OBS_Live&id=1488897
-		//
-		obs_encoder_set_scaled_size(created_encoder, ovi.base_width,
-					    ovi.base_height);
-
-		obs_encoder_set_video(created_encoder, obs_get_video());
-
-		m_recordingVideoEncoders.push_back(created_encoder);
+		m_recordingVideoEncoders.push_back(encoderProvider);
 	}
 }
 
