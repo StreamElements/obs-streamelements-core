@@ -14,7 +14,7 @@ set(CMAKE_AUTORCC ON)
 
 if(NOT QT_VERSION)
   set(QT_VERSION
-      "5"
+      "6"
       CACHE STRING "OBS Qt version [5, 6]" FORCE)
   set_property(CACHE QT_VERSION PROPERTY STRINGS 5 6)
 endif()
