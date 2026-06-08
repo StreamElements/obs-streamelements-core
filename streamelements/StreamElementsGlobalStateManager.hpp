@@ -98,6 +98,7 @@ public:
 	void Shutdown();
 
 	bool IsInitialized() { return m_initialized; }
+	bool IsShuttingDown() const { return m_isShuttingDown; }
 
 	void Reset(bool deleteAllCookies = true,
 		   UiModifier uiModifier = Default);
@@ -259,6 +260,7 @@ protected:
 private:
 	bool m_persistStateEnabled = false;
 	bool m_initialized = false;
+	bool m_isShuttingDown = false;
 	QMainWindow *m_mainWindow = nullptr;
 	QWidget *m_nativeCentralWidget = nullptr;
 	std::shared_ptr<StreamElementsBrowserWidgetManager> m_widgetManager =

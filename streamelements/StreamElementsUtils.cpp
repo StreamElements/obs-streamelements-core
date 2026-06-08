@@ -1122,6 +1122,47 @@ void SerializeObsSource(obs_source_t *source, CefRefPtr<CefDictionaryValue> dic,
 		     SerializeObsSourceFilters(source, serializeProperties));
 }
 
+static void SerializeObsSourceTypeWithoutInstantiation(
+	const std::string &sourceId, const char *unversioned_id,
+	obs_source_type sourceType, CefRefPtr<CefDictionaryValue> dic)
+{
+	if (!dic.get())
+		return;
+
+	const uint32_t sourceCaps = obs_get_source_output_flags(sourceId.c_str());
+	const std::string unversionedClass =
+		unversioned_id ? unversioned_id : sourceId;
+
+	dic->SetString("class", sourceId);
+	dic->SetString("unversionedClass", unversionedClass);
+	dic->SetBool("isDeprecated", (sourceCaps & OBS_SOURCE_DEPRECATED) != 0);
+	dic->SetString("id", sourceId);
+	dic->SetString("name",
+		       safe_str(obs_source_get_display_name(sourceId.c_str())));
+	dic->SetString("className",
+		       safe_str(obs_source_get_display_name(sourceId.c_str())));
+
+	dic->SetBool("hasVideo",
+		     (sourceCaps & OBS_SOURCE_VIDEO) == OBS_SOURCE_VIDEO);
+	dic->SetBool("hasAudio",
+		     (sourceCaps & OBS_SOURCE_AUDIO) == OBS_SOURCE_AUDIO);
+
+	dic->SetBool("isVideoCaptureDevice",
+		     sourceId == "dshow_input" || sourceId == "decklink-input");
+	dic->SetBool("isGameCaptureDevice", sourceId == "game_capture");
+	dic->SetBool("isBrowserSource", sourceId == "browser_source");
+	dic->SetBool("isGroupSource", false);
+	dic->SetBool("isFilterSource", sourceType == OBS_SOURCE_TYPE_FILTER);
+	dic->SetBool("isInputSource", sourceType == OBS_SOURCE_TYPE_INPUT);
+	dic->SetBool("isTransitionSource",
+		     sourceType == OBS_SOURCE_TYPE_TRANSITION);
+	dic->SetBool("isSceneSource", sourceType == OBS_SOURCE_TYPE_SCENE);
+
+	OBSDataAutoRelease defaultSettings =
+		SETRACE_SCOPEREF(obs_get_source_defaults(sourceId.c_str()));
+	dic->SetValue("defaultSettings", SerializeObsData(defaultSettings));
+}
+
 void SerializeObsSourceProperties(CefRefPtr<CefValue> input, CefRefPtr<CefValue>& output)
 {
 	output->SetNull();
@@ -1174,8 +1215,8 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 	// Response codec collection is our root object
 	output->SetList(list);
 
-	auto add = [&](std::string sourceId,
-		       const char *unversioned_id, obs_canvas_t* canvas) -> void {
+	auto add = [&](std::string sourceId, const char *unversioned_id,
+		       obs_canvas_t *canvas, obs_source_type sourceTypeHint) -> void {
 		existingSourceIds[sourceId] = true;
 
 		// Get source caps
@@ -1192,6 +1233,29 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 		if (cache.count(sourceId)) {
 			// Append dictionary to response list
 			list->SetDictionary(list->GetSize(), cache[sourceId]);
+
+			return;
+		}
+
+		if (!serializeProperties) {
+			bool hasRequiredType = false;
+
+			for (auto requiredType : requiredSourceTypes) {
+				if (requiredType == sourceTypeHint) {
+					hasRequiredType = true;
+					break;
+				}
+			}
+
+			if (!hasRequiredType)
+				return;
+
+			CefRefPtr<CefDictionaryValue> dic =
+				CefDictionaryValue::Create();
+			SerializeObsSourceTypeWithoutInstantiation(
+				sourceId, unversioned_id, sourceTypeHint, dic);
+			list->SetDictionary(list->GetSize(), dic);
+			cache[sourceId] = dic;
 
 			return;
 		}
@@ -1266,7 +1330,8 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 							.c_str(),
 						&ovi, PROGRAM | EPHEMERAL));
 
-				add("scene", "scene", canvas);
+				add("scene", "scene", canvas,
+				    OBS_SOURCE_TYPE_SCENE);
 			}
 
 			break;
@@ -1278,26 +1343,29 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 			const char *sourceId;
 
 			if (requiredType ==
-				OBS_SOURCE_TYPE_INPUT) {
+			    OBS_SOURCE_TYPE_INPUT) {
 				const char *unversioned_id;
 
 				if (!obs_enum_input_types2(idx, &sourceId,
 							   &unversioned_id))
 					break;
 
-				add(sourceId, unversioned_id, nullptr);
+				add(sourceId, unversioned_id, nullptr,
+				    OBS_SOURCE_TYPE_INPUT);
 			} else if (requiredType ==
-					OBS_SOURCE_TYPE_FILTER) {
+				   OBS_SOURCE_TYPE_FILTER) {
 				if (!obs_enum_filter_types(idx, &sourceId))
 					break;
 
-				add(sourceId, nullptr, nullptr);
+				add(sourceId, nullptr, nullptr,
+				    OBS_SOURCE_TYPE_FILTER);
 			} else if (requiredType ==
-					OBS_SOURCE_TYPE_TRANSITION) {
+				   OBS_SOURCE_TYPE_TRANSITION) {
 				if (!obs_enum_transition_types(idx, &sourceId))
 					break;
 
-				add(sourceId, nullptr, nullptr);
+				add(sourceId, nullptr, nullptr,
+				    OBS_SOURCE_TYPE_TRANSITION);
 			} else {
 				break;
 			}

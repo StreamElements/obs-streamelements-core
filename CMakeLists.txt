@@ -14,7 +14,7 @@ set(CMAKE_AUTORCC ON)
 
 if(NOT QT_VERSION)
   set(QT_VERSION
-      "5"
+      "6"
       CACHE STRING "OBS Qt version [5, 6]" FORCE)
   set_property(CACHE QT_VERSION PROPERTY STRINGS 5 6)
 endif()
@@ -72,6 +72,15 @@ include_directories(SYSTEM "${CMAKE_SOURCE_DIR}/UI/obs-frontend-api")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/deps")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/streamelements/deps")
+
+set(OBS_BROWSER_DIR "" CACHE PATH "Path to obs-browser checkout")
+if(OBS_BROWSER_DIR)
+	get_filename_component(OBS_BROWSER_DIR "${OBS_BROWSER_DIR}" ABSOLUTE)
+	get_filename_component(OBS_BROWSER_PARENT_DIR "${OBS_BROWSER_DIR}" DIRECTORY)
+	include_directories("${OBS_BROWSER_DIR}")
+	include_directories("${OBS_BROWSER_PARENT_DIR}")
+endif()
+
 if(EXISTS "${CMAKE_SOURCE_DIR}/plugins")
 	include_directories("${CMAKE_SOURCE_DIR}/plugins")
 endif()
@@ -470,6 +479,14 @@ if (APPLE)
 
   target_compile_options(obs-streamelements-core PRIVATE
     "$<$<CXX_COMPILER_ID:Clang>:-g>"
+  )
+endif()
+
+if(UNIX AND NOT APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+  # OBS headers pull SIMDe aliases; force native intrinsics first to avoid
+  # GCC 15 conflicts when Qt later includes immintrin.h.
+  target_compile_options(obs-streamelements-core PRIVATE
+    "$<$<COMPILE_LANGUAGE:CXX>:-includeimmintrin.h>"
   )
 endif()
 

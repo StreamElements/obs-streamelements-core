@@ -1,59 +1,40 @@
-# Linux Build Notes / Notas de Build Linux
+# Linux Build & Runtime Notes (`obs-streamelements-core`)
 
-This file is available in both languages:
-1. English (first)
-2. Español (below)
+This document is bilingual:
+1. English
+2. Español
 
 ---
 
 ## English
 
-# Linux Build Notes (Usable Phase)
+### 1) Current scope
 
-This document summarizes the Linux migration phase for `obs-streamelements-core`.
+Target of this branch:
+- Linux with native Wayland and X11 behavior.
+- The custom widget bridge selects the platform-specific path at runtime.
 
-It includes:
-- Packages/libraries installed during this phase.
-- Recommended minimum dependencies for building.
-- Usage of the `_scripts/build-linux.sh` helper script.
-
-## Scope
-
-Tested on:
+Validated environment:
 - Fedora 43
 - OBS 32.1.x
 - Qt 6
 
-Validated flow:
-- Plugin compiled and integrated as a module in a Linux environment.
-- Real streaming tests with both horizontal and vertical scenes.
+### 2) Required `obs-browser`
 
-## Packages Installed in This Phase (Fedora)
+This branch depends on custom `obs-browser` changes.
 
-During migration, these packages were installed or validated on the system:
+Use:
+- `clairerb6/obs-browser`
 
-- `obs-studio-devel`
-- `qt6-qttools-devel`
-- `qt6-designer`
-- `qt6-linguist`
-- `qt6-doctools`
-- `qt6-doc-devel`
-- `extra-cmake-modules`
-- `libavutil-free-devel`
-- `libswresample-free-devel`
-- `libavcodec-free-devel`
-- `libavformat-free-devel`
-- `libswscale-free-devel`
-- `libpostproc-free-devel`
-- `libavfilter-free-devel`
-- `swig`
-- `vlc-devel`
+Do not assume upstream `obs-browser` has the same behavior required here.
 
-Note: some packages were installed automatically as `dnf` dependencies.
+`build-linux.sh` supports:
+- auto-detection from sibling folder: `../obs-browser`
+- explicit path: `--obs-browser-dir <path>`
 
-## Recommended Minimum Dependencies (Fedora)
+### 3) Build dependencies (Fedora)
 
-For a clean build from scratch, we recommend at least:
+Recommended minimum:
 
 ```bash
 sudo dnf install \
@@ -66,164 +47,122 @@ sudo dnf install \
   libavfilter-free-devel
 ```
 
-If you build `obs-studio` from source, also install the dependencies recommended by OBS for your distro.
+Note:
+- Keep FFmpeg packages consistent (avoid mixing Fedora `*-free` and RPMFusion stacks blindly).
 
-## Known Conflicts (Fedora + RPMFusion)
+### 4) Build script
 
-During this phase, a common conflict appeared between Fedora FFmpeg variants (`*-free`) and RPMFusion `ffmpeg-libs` while trying to install `x264`:
-
-- Conflict between `libswscale-free` and `ffmpeg-libs`.
-
-Recommendation:
-- Do not mix FFmpeg stacks without reviewing package replacements first.
-- Keep one consistent package family on the build machine.
-
-## Build Script
-
-Path:
-
+Script:
 - `_scripts/build-linux.sh`
 
-Permissions:
-
-```bash
-chmod +x _scripts/build-linux.sh
-```
-
-### Basic usage
-
-```bash
-./_scripts/build-linux.sh
-```
-
-### Clean build
-
-```bash
-./_scripts/build-linux.sh --clean
-```
-
-### Build + install into OBS user plugin directory
-
-```bash
-./_scripts/build-linux.sh --clean --install-user
-```
-
-This copies:
-- `.so` binary to `~/.config/obs-studio/plugins/obs-streamelements-core/bin/64bit/`
-- Plugin data to `~/.config/obs-studio/plugins/obs-streamelements-core/data/obs-plugins/obs-streamelements-core/`
-
-### Help
+Help:
 
 ```bash
 ./_scripts/build-linux.sh --help
 ```
 
-## Script options
-
-- `--build-dir <path>`: build directory.
-- `--build-type <type>`: CMake build type (`RelWithDebInfo`, `Release`, etc).
-- `--generator <name>`: CMake generator (default: `Ninja`).
-- `--target <name>`: build target (default: `obs-streamelements-core`).
-- `--jobs <n>`: build parallelism.
-- `--clean`: remove build directory before configure.
-- `--no-configure`: skip `cmake -S/-B` and only build.
-- `--configure-only`: configure only, do not build.
-- `--cmake-arg <arg>`: extra CMake configure argument (repeatable).
-- `--install-user`: install compiled plugin in OBS user profile.
-- `--user-plugin-dir <path>`: base plugin install path.
-
-## Useful examples
-
-CI build in separate directory:
+Common commands:
 
 ```bash
-./_scripts/build-linux.sh \
-  --build-dir ./build-ci \
-  --build-type RelWithDebInfo \
-  --jobs 2
+# configure + build
+./_scripts/build-linux.sh
+
+# clean build
+./_scripts/build-linux.sh --clean
+
+# clean build + install into user OBS plugins dir
+./_scripts/build-linux.sh --clean --install-user
+
+# explicit obs-browser checkout
+./_scripts/build-linux.sh --clean --install-user \
+  --obs-browser-dir ~/Projects/Others/obs-browser
 ```
 
-Compile without reconfiguring:
+Main options:
+- `--build-dir <path>`
+- `--build-type <type>`
+- `--qt-version <5|6>`
+- `--generator <name>`
+- `--target <name>`
+- `--jobs <n>`
+- `--clean`
+- `--no-configure`
+- `--configure-only`
+- `--cmake-arg <arg>` (repeatable)
+- `--install-user`
+- `--user-plugin-dir <path>`
+- `--obs-browser-dir <path>`
 
-```bash
-./_scripts/build-linux.sh --no-configure --jobs 1
-```
+### 5) Install paths (`--install-user`)
 
-Force compiler:
+With user install enabled, files are copied to:
+- `~/.config/obs-studio/plugins/obs-streamelements-core/bin/64bit/`
+- `~/.config/obs-studio/plugins/obs-streamelements-core/data/obs-plugins/obs-streamelements-core/`
 
-```bash
-./_scripts/build-linux.sh \
-  --clean \
-  --cmake-arg -DCMAKE_C_COMPILER=clang \
-  --cmake-arg -DCMAKE_CXX_COMPILER=clang++
-```
+### 6) Runtime policy for this branch
 
-## GitHub Actions Integration (later)
+- Validate in native Wayland and native X11 sessions.
+- Let OBS/Qt choose the platform normally; avoid forcing `QT_QPA_PLATFORM`
+  unless testing a specific platform path.
+- Do not load two browser plugins at once.
 
-This script was designed to be reusable from CI. Recommended flow:
+Important:
+- Keep only one active `obs-browser` variant in OBS (system OR custom), not both.
 
-1. Checkout repository.
-2. Install Linux runner dependencies.
-3. Run `_scripts/build-linux.sh --clean --build-dir ./build-ci`.
-4. Publish `obs-streamelements-core.so` as an artifact.
+### 7) Status snapshot (2026-04-27)
 
-## Phase status
+What improved:
+- Significant stability progress in panel rendering and interaction.
+- Startup/interaction behavior is much better than initial migration state.
 
-- Current status: **usable** on Linux.
-- Pending work before “stable” status:
-  - reduce remaining warnings.
-  - continue auditing intermittent leaks reported during OBS shutdown.
+Known issues still open:
+- Some docked web panels may still need undock/redock to render correctly in specific layouts.
+- Exit path is not fully stable yet:
+  - Closing OBS from window button can be clean.
+  - `File -> Exit` can still crash in some runs.
+
+### 8) Suggested quick validation loop
+
+After each local build/install:
+1. Open OBS.
+2. Verify docked panel rendering.
+3. Verify typing/input inside web panels.
+4. Exit using window close button.
+5. Exit using `File -> Exit`.
+6. If crash occurs, save OBS log and coredump id for analysis.
 
 ---
 
 ## Español
 
-# Notas de Build Linux (Fase Usable)
+### 1) Alcance actual
 
-Este documento resume la fase de migración Linux de `obs-streamelements-core`.
+Objetivo de esta rama:
+- Linux con comportamiento nativo para Wayland y X11.
+- El bridge de widgets personalizado selecciona la ruta especifica de
+  plataforma en tiempo de ejecucion.
 
-Incluye:
-- Paquetes/librerías instalados durante esta fase.
-- Dependencias mínimas recomendadas para compilar.
-- Uso del script `_scripts/build-linux.sh`.
-
-## Alcance
-
-Probado en:
+Entorno validado:
 - Fedora 43
 - OBS 32.1.x
 - Qt 6
 
-Flujo validado:
-- Plugin compilado e integrado como módulo en entorno Linux.
-- Pruebas reales de streaming con escenas horizontal + vertical.
+### 2) `obs-browser` requerido
 
-## Paquetes Instalados en Esta Fase (Fedora)
+Esta rama depende de cambios personalizados en `obs-browser`.
 
-Durante la migración se instalaron o validaron estos paquetes en el sistema:
+Usar:
+- `clairerb6/obs-browser`
 
-- `obs-studio-devel`
-- `qt6-qttools-devel`
-- `qt6-designer`
-- `qt6-linguist`
-- `qt6-doctools`
-- `qt6-doc-devel`
-- `extra-cmake-modules`
-- `libavutil-free-devel`
-- `libswresample-free-devel`
-- `libavcodec-free-devel`
-- `libavformat-free-devel`
-- `libswscale-free-devel`
-- `libpostproc-free-devel`
-- `libavfilter-free-devel`
-- `swig`
-- `vlc-devel`
+No asumir que el `obs-browser` oficial/upstream tenga el mismo comportamiento requerido aquí.
 
-Nota: algunos paquetes se instalaron como dependencias automáticas de `dnf`.
+`build-linux.sh` soporta:
+- autodetección desde carpeta hermana: `../obs-browser`
+- ruta explícita: `--obs-browser-dir <path>`
 
-## Dependencias Mínimas Recomendadas (Fedora)
+### 3) Dependencias de build (Fedora)
 
-Para una build limpia desde cero, recomendamos al menos:
+Mínimo recomendado:
 
 ```bash
 sudo dnf install \
@@ -236,110 +175,86 @@ sudo dnf install \
   libavfilter-free-devel
 ```
 
-Si trabajas con `obs-studio` desde source, instala además las dependencias indicadas por OBS para tu distro.
+Nota:
+- Mantener consistente la familia FFmpeg (evitar mezclar sin control `*-free` de Fedora con paquetes de RPMFusion).
 
-## Conflictos Conocidos (Fedora + RPMFusion)
+### 4) Script de build
 
-Durante esta fase apareció un conflicto típico entre variantes FFmpeg de Fedora (`*-free`) y `ffmpeg-libs` de RPMFusion al intentar instalar `x264`:
-
-- Conflicto entre `libswscale-free` y `ffmpeg-libs`.
-
-Recomendación:
-- No mezclar stacks FFmpeg sin revisar reemplazos.
-- Preferir mantener consistente una sola familia de paquetes en la máquina de build.
-
-## Script de Build
-
-Ruta:
-
+Script:
 - `_scripts/build-linux.sh`
 
-Permisos:
-
-```bash
-chmod +x _scripts/build-linux.sh
-```
-
-### Uso básico
-
-```bash
-./_scripts/build-linux.sh
-```
-
-### Build limpia
-
-```bash
-./_scripts/build-linux.sh --clean
-```
-
-### Build + instalación en plugin de usuario OBS
-
-```bash
-./_scripts/build-linux.sh --clean --install-user
-```
-
-Esto copia:
-- Binario `.so` a `~/.config/obs-studio/plugins/obs-streamelements-core/bin/64bit/`
-- Datos del plugin a `~/.config/obs-studio/plugins/obs-streamelements-core/data/obs-plugins/obs-streamelements-core/`
-
-### Ayuda
+Ayuda:
 
 ```bash
 ./_scripts/build-linux.sh --help
 ```
 
-## Opciones del script
-
-- `--build-dir <path>`: carpeta de build.
-- `--build-type <type>`: tipo CMake (`RelWithDebInfo`, `Release`, etc).
-- `--generator <name>`: generador CMake (por defecto `Ninja`).
-- `--target <name>`: target a compilar (por defecto `obs-streamelements-core`).
-- `--jobs <n>`: paralelismo para build.
-- `--clean`: elimina la carpeta de build antes de configurar.
-- `--no-configure`: omite `cmake -S/-B` y solo compila.
-- `--configure-only`: solo configura, no compila.
-- `--cmake-arg <arg>`: agrega argumentos extra a CMake (repetible).
-- `--install-user`: instala plugin compilado en perfil de usuario OBS.
-- `--user-plugin-dir <path>`: ruta base de instalación de plugin.
-
-## Ejemplos útiles
-
-Build CI en carpeta separada:
+Comandos comunes:
 
 ```bash
-./_scripts/build-linux.sh \
-  --build-dir ./build-ci \
-  --build-type RelWithDebInfo \
-  --jobs 2
+# configurar + compilar
+./_scripts/build-linux.sh
+
+# build limpia
+./_scripts/build-linux.sh --clean
+
+# build limpia + instalación en plugins de usuario OBS
+./_scripts/build-linux.sh --clean --install-user
+
+# checkout de obs-browser explícito
+./_scripts/build-linux.sh --clean --install-user \
+  --obs-browser-dir ~/Projects/Others/obs-browser
 ```
 
-Compilar sin reconfigurar:
+Opciones principales:
+- `--build-dir <path>`
+- `--build-type <type>`
+- `--qt-version <5|6>`
+- `--generator <name>`
+- `--target <name>`
+- `--jobs <n>`
+- `--clean`
+- `--no-configure`
+- `--configure-only`
+- `--cmake-arg <arg>` (repetible)
+- `--install-user`
+- `--user-plugin-dir <path>`
+- `--obs-browser-dir <path>`
 
-```bash
-./_scripts/build-linux.sh --no-configure --jobs 1
-```
+### 5) Rutas de instalación (`--install-user`)
 
-Forzar compilador:
+Con instalación de usuario activa, se copia a:
+- `~/.config/obs-studio/plugins/obs-streamelements-core/bin/64bit/`
+- `~/.config/obs-studio/plugins/obs-streamelements-core/data/obs-plugins/obs-streamelements-core/`
 
-```bash
-./_scripts/build-linux.sh \
-  --clean \
-  --cmake-arg -DCMAKE_C_COMPILER=clang \
-  --cmake-arg -DCMAKE_CXX_COMPILER=clang++
-```
+### 6) Política runtime de esta rama
 
-## Integración con GitHub Actions (más adelante)
+- Validar en sesiones nativas Wayland y X11.
+- Dejar que OBS/Qt elija la plataforma normalmente; evitar forzar
+  `QT_QPA_PLATFORM` salvo para probar una ruta especifica.
+- No cargar dos variantes de plugin browser al mismo tiempo.
 
-El script se diseñó para ser reutilizable desde CI. Flujo recomendado:
+Importante:
+- Mantener solo una variante activa de `obs-browser` en OBS (sistema O personalizada), no ambas.
 
-1. Checkout del repo.
-2. Instalación de dependencias del runner Linux.
-3. Ejecutar `_scripts/build-linux.sh --clean --build-dir ./build-ci`.
-4. Publicar artefacto `obs-streamelements-core.so`.
+### 7) Estado actual (2026-04-27)
 
-## Estado de esta fase
+Mejoras:
+- Avance fuerte en estabilidad de render e interacción de paneles.
+- El comportamiento de inicio/interacción es mucho mejor que en el estado inicial de la migración.
 
-- Estado actual: **usable** en Linux.
-- Pendiente para estado “estable”:
-  - Reducir warnings residuales.
-  - Seguir auditando leaks intermitentes reportados al cierre de OBS.
+Problemas conocidos pendientes:
+- En ciertos layouts, algunos paneles web acoplados todavía pueden requerir desacoplar/acoplar para renderizar correctamente.
+- La salida aún no está completamente estable:
+  - Cerrar OBS desde el botón de la ventana puede salir limpio.
+  - `Archivo -> Salir` todavía puede crashear en algunas ejecuciones.
+
+### 8) Ciclo rápido de validación recomendado
+
+Después de cada build/install local:
+1. Abrir OBS.
+2. Verificar render de paneles acoplados.
+3. Verificar input de texto dentro de paneles web.
+4. Cerrar desde botón de ventana.
+5. Cerrar desde `Archivo -> Salir`.
+6. Si hay crash, guardar log de OBS y el id de coredump para análisis.

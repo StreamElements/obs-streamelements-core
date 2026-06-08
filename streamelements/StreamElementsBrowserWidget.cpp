@@ -23,11 +23,103 @@
 #include <mutex>
 #include <shared_mutex>
 #include <regex>
+#include <QGuiApplication>
+#include <QMainWindow>
+#include <QPointer>
+#include <QCoreApplication>
+#include <QStackedWidget>
+#include <QStackedLayout>
+#include <QTabBar>
+#include <QTabWidget>
 
 /* ========================================================================= */
 
 static std::shared_mutex s_widgetRegistryMutex;
 static std::map<StreamElementsBrowserWidget *, bool> s_widgetRegistry;
+static QPointer<QDockWidget> s_lastActivatedTabifiedDock;
+
+static bool IsWaylandQtPlatform()
+{
+	const QString platformName = QGuiApplication::platformName().toLower();
+	return platformName.contains("wayland");
+}
+
+static bool IsInActiveStackPath(const QWidget *widget)
+{
+	if (!widget)
+		return false;
+
+	const QWidget *current = widget;
+	while (current) {
+		const QWidget *parent = current->parentWidget();
+		if (!parent)
+			break;
+
+		if (const auto *stacked = qobject_cast<const QStackedWidget *>(parent)) {
+			const QWidget *active = stacked->currentWidget();
+			if (active && active != current)
+				return false;
+		}
+
+		if (const auto *tabs = qobject_cast<const QTabWidget *>(parent)) {
+			const QWidget *active = tabs->currentWidget();
+			if (active && active != current)
+				return false;
+		}
+
+		if (const auto *layout = parent->layout()) {
+			if (const auto *stackedLayout = qobject_cast<const QStackedLayout *>(layout)) {
+				const QWidget *active = stackedLayout->currentWidget();
+				if (active && active != current && !active->isAncestorOf(const_cast<QWidget *>(current)))
+					return false;
+			}
+		}
+
+		current = parent;
+	}
+
+	return true;
+}
+
+static QDockWidget *ResolveActiveTabifiedDockFromTabBar(
+	QMainWindow *mainWindow, const QList<QDockWidget *> &dockGroup)
+{
+	if (!mainWindow || dockGroup.isEmpty())
+		return nullptr;
+
+	const auto tabBars = mainWindow->findChildren<QTabBar *>();
+	for (QTabBar *tabBar : tabBars) {
+		if (!tabBar || !tabBar->isVisible())
+			continue;
+
+		const int currentIndex = tabBar->currentIndex();
+		if (currentIndex < 0)
+			continue;
+
+		const QString activeTitle =
+			tabBar->tabText(currentIndex).trimmed();
+		if (activeTitle.isEmpty())
+			continue;
+
+		QDockWidget *candidate = nullptr;
+		for (QDockWidget *dock : dockGroup) {
+			if (!dock || !dock->isVisible())
+				continue;
+
+			if (dock->windowTitle().trimmed() != activeTitle)
+				continue;
+
+			candidate = dock;
+			if (dock == s_lastActivatedTabifiedDock)
+				return dock;
+		}
+
+		if (candidate)
+			return candidate;
+	}
+
+	return nullptr;
+}
 
 /* ========================================================================= */
 
@@ -197,8 +289,6 @@ static void UnregisterAppActiveTrackerWidget(QWidget *widget)
 
 /* ========================================================================= */
 
-#include <QVBoxLayout>
-
 #ifndef _WIN32
 static const char* itoa(int input, char* buf, int radix)
 {
@@ -232,7 +322,9 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 	std::lock_guard<decltype(s_mutex)> guard(s_mutex);
 
 	// Create native window
-	setAttribute(Qt::WA_NativeWindow);
+	if (!IsWaylandQtPlatform()) {
+		setAttribute(Qt::WA_NativeWindow);
+	}
 
 	// Focus on click
 	setFocusPolicy(Qt::ClickFocus);
@@ -242,8 +334,6 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 	//setMinimumHeight(200);
 
 	setContentsMargins(0, 0, 0, 0);
-	//setLayout(new QVBoxLayout());
-	//layout()->setContentsMargins(0, 0, 0, 0);
 
 	QSizePolicy policy;
 	policy.setHorizontalPolicy(QSizePolicy::MinimumExpanding);
@@ -308,7 +398,9 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 	}
 
 	m_cefWidgetContainer = new QWidget(this);
-	m_cefWidgetContainer->setAttribute(Qt::WA_NativeWindow);
+	if (!IsWaylandQtPlatform()) {
+		m_cefWidgetContainer->setAttribute(Qt::WA_NativeWindow);
+	}
 
 	m_cefWidget =
 		StreamElementsGlobalStateManager::GetInstance()
@@ -456,6 +548,8 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 
 	m_cefWidgetContainer->setContentsMargins(0, 0, 0, 0);
 	m_cefWidget->setContentsMargins(0, 0, 0, 0);
+	m_cefWidgetContainer->show();
+	m_cefWidget->show();
 
 	setContentsMargins(0, 0, 0, 0);
 
@@ -464,6 +558,32 @@ StreamElementsBrowserWidget::StreamElementsBrowserWidget(
 			s_widgetRegistryMutex);
 
 		s_widgetRegistry[this] = true;
+	}
+
+	// Keep track of tabified dock activation to decide which tab content
+	// should be visible under Wayland when Qt does not emit hide/show reliably.
+	if (auto *mainWindow = qobject_cast<QMainWindow *>(
+		    reinterpret_cast<QWidget *>(obs_frontend_get_main_window()))) {
+		connect(mainWindow, &QMainWindow::tabifiedDockWidgetActivated, this,
+			[this](QDockWidget *dock) {
+				s_lastActivatedTabifiedDock = dock;
+				SyncBrowserViewVisibility();
+				SyncVideoCompositionViewVisibility();
+				AdviseHostWidgetHiddenChange(
+					!IsHostContainerActuallyVisible());
+			});
+
+		// Wayland can miss tab activation callbacks during startup restore.
+		// Track QTabBar switches as an additional source of truth.
+		for (QTabBar *tabBar : mainWindow->findChildren<QTabBar *>()) {
+			connect(tabBar, &QTabBar::currentChanged, this,
+				[this](int) {
+					SyncBrowserViewVisibility();
+					SyncVideoCompositionViewVisibility();
+					AdviseHostWidgetHiddenChange(
+						!IsHostContainerActuallyVisible());
+				});
+		}
 	}
 
 	QObject::connect(this, &QObject::destroyed,
@@ -537,8 +657,19 @@ void StreamElementsBrowserWidget::DestroyBrowser()
 		//
 		// QEvent widgetEvent(QEvent::Type(QEvent::User + QEvent::Close));
 		// qApp->sendEvent(m_cefWidget, &widgetEvent);
+		bool appIsShuttingDown = QCoreApplication::closingDown();
+		if (!appIsShuttingDown &&
+		    StreamElementsGlobalStateManager::IsInstanceAvailable()) {
+			appIsShuttingDown =
+				StreamElementsGlobalStateManager::GetInstance()
+					->IsShuttingDown();
+		}
 
-		m_cefWidget->closeBrowser();
+		// Avoid closeBrowser() during global shutdown. It spins a nested Qt
+		// event loop and can race with dock/toolbar destruction on Wayland.
+		if (!appIsShuttingDown) {
+			m_cefWidget->closeBrowser();
+		}
 
 		m_cefWidget = nullptr;
 	}
@@ -654,6 +785,105 @@ void StreamElementsBrowserWidget::UpdateCoords()
 	m_cefWidgetContainer->setGeometry(rect);
 }
 
+QDockWidget *StreamElementsBrowserWidget::GetOwningDockWidget() const
+{
+	QWidget *node = const_cast<StreamElementsBrowserWidget *>(this);
+	while (node) {
+		if (auto *dock = qobject_cast<QDockWidget *>(node))
+			return dock;
+		node = node->parentWidget();
+	}
+
+	return nullptr;
+}
+
+bool StreamElementsBrowserWidget::IsHostContainerActuallyVisible() const
+{
+	if (!isVisible())
+		return false;
+
+	const QWidget *root = window();
+	if (root && !isVisibleTo(root))
+		return false;
+
+	if (!IsInActiveStackPath(this))
+		return false;
+
+	auto *ownerDock = GetOwningDockWidget();
+	if (ownerDock && !ownerDock->isFloating()) {
+		auto *mainWindow = qobject_cast<QMainWindow *>(
+			reinterpret_cast<QWidget *>(
+				obs_frontend_get_main_window()));
+
+		if (mainWindow) {
+			QList<QDockWidget *> tabified =
+				mainWindow->tabifiedDockWidgets(ownerDock);
+			if (!tabified.isEmpty()) {
+				tabified.push_back(ownerDock);
+				if (auto *activeDock =
+					    ResolveActiveTabifiedDockFromTabBar(
+						    mainWindow, tabified)) {
+					s_lastActivatedTabifiedDock =
+						activeDock;
+				}
+
+				if (s_lastActivatedTabifiedDock &&
+				    tabified.contains(
+					    s_lastActivatedTabifiedDock)) {
+					if (s_lastActivatedTabifiedDock !=
+					    ownerDock)
+						return false;
+				}
+			}
+		}
+	}
+
+	return true;
+}
+
+void StreamElementsBrowserWidget::SyncBrowserViewVisibility()
+{
+	if (!m_cefWidgetContainer || !m_cefWidget)
+		return;
+
+	const bool shouldBeVisible = IsHostContainerActuallyVisible();
+
+	if (shouldBeVisible) {
+		if (!m_cefWidgetContainer->isVisible())
+			m_cefWidgetContainer->show();
+		if (!m_cefWidget->isVisible())
+			m_cefWidget->show();
+		m_cefWidget->update();
+		return;
+	}
+
+	m_cefWidget->hide();
+	m_cefWidgetContainer->hide();
+}
+
+void StreamElementsBrowserWidget::SyncVideoCompositionViewVisibility()
+{
+	if (!m_activeVideoCompositionViewWidgetContainer ||
+	    !m_activeVideoCompositionViewWidget)
+		return;
+
+	const bool shouldBeVisible = IsHostContainerActuallyVisible();
+
+	if (shouldBeVisible) {
+		if (!m_activeVideoCompositionViewWidgetContainer->isVisible())
+			m_activeVideoCompositionViewWidgetContainer->show();
+		if (!m_activeVideoCompositionViewWidget->isVisible())
+			m_activeVideoCompositionViewWidget->show();
+
+		m_activeVideoCompositionViewWidget->update();
+		return;
+	}
+
+	// Explicitly hide native surfaces when this panel is not the active tab.
+	m_activeVideoCompositionViewWidget->hide();
+	m_activeVideoCompositionViewWidgetContainer->hide();
+}
+
 void StreamElementsBrowserWidget::SetVideoCompositionView(
 	std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition, QRect &coords)
 {
@@ -666,8 +896,10 @@ void StreamElementsBrowserWidget::SetVideoCompositionView(
 
 	if (!m_activeVideoCompositionViewWidget) {
 		m_activeVideoCompositionViewWidgetContainer = new QWidget(this);
-		m_activeVideoCompositionViewWidgetContainer->setAttribute(
-			Qt::WA_NativeWindow);
+		if (!IsWaylandQtPlatform()) {
+			m_activeVideoCompositionViewWidgetContainer->setAttribute(
+				Qt::WA_NativeWindow);
+		}
 
 		m_activeVideoCompositionViewWidget =
 			new StreamElementsVideoCompositionViewWidget(
@@ -682,6 +914,8 @@ void StreamElementsBrowserWidget::SetVideoCompositionView(
 		QRect subCoords(0, 0, coords.width(), coords.height());
 		m_activeVideoCompositionViewWidget->setGeometry(subCoords);
 		m_activeVideoCompositionViewWidget->show();
+		SyncBrowserViewVisibility();
+		SyncVideoCompositionViewVisibility();
 	}
 }
 

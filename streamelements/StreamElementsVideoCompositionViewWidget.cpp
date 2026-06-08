@@ -10,6 +10,10 @@
 #include <QMouseEvent>
 #include <QColor>
 #include <QGuiApplication>
+#include <QPlatformSurfaceEvent>
+#if QT_VERSION < QT_VERSION_CHECK(6, 9, 0)
+#include <qpa/qplatformnativeinterface.h>
+#endif
 #if !defined(_WIN32) && !defined(__APPLE__)
 #include <obs-nix-platform.h>
 #endif
@@ -378,21 +382,25 @@ static bool QTToGSWindow(QWindow *window, gs_window &gswindow)
 #elif __APPLE__
 	gswindow.view = (id)window->winId();
 #else
-	switch (obs_get_nix_platform()) {
-	case OBS_NIX_PLATFORM_X11_EGL:
-		gswindow.id = window->winId();
+	const enum obs_nix_platform_type platform = obs_get_nix_platform();
+	if (platform == OBS_NIX_PLATFORM_WAYLAND) {
+	#if QT_VERSION < QT_VERSION_CHECK(6, 9, 0)
+		QPlatformNativeInterface *native =
+			QGuiApplication::platformNativeInterface();
+		gswindow.display = native
+					   ? native->nativeResourceForWindow("surface",
+								 window)
+					   : nullptr;
+	#else
+		gswindow.display = reinterpret_cast<void *>(window->winId());
+	#endif
+		success = (gswindow.display != nullptr);
+	} else if (platform == OBS_NIX_PLATFORM_X11_EGL) {
 		gswindow.display = obs_get_nix_platform_display();
-		break;
-#ifdef ENABLE_WAYLAND
-		case OBS_NIX_PLATFORM_WAYLAND: {
-			/* Wayland native surface bridge is not available in this build path. */
-			success = false;
-			break;
-		}
-#endif
-	default:
+		gswindow.id = static_cast<uint32_t>(window->winId());
+		success = (gswindow.display != nullptr && gswindow.id != 0);
+	} else {
 		success = false;
-		break;
 	}
 #endif
 	return success;
@@ -425,7 +433,7 @@ StreamElementsVideoCompositionViewWidget::StreamElementsVideoCompositionViewWidg
 
 		if (!visible) {
 #if !defined(_WIN32) && !defined(__APPLE__)
-			//m_display = nullptr;
+			DestroyDisplay();
 #endif
 			return;
 		}
@@ -438,18 +446,20 @@ StreamElementsVideoCompositionViewWidget::StreamElementsVideoCompositionViewWidg
 	};
 
 	auto screenChanged = [this](QScreen *) {
-		//CreateDisplay();
 		if (os_atomic_load_bool(&m_destroyed))
 			return;
 
-		if (!m_display)
-			return;
+		DestroyDisplay();
+		CreateDisplay();
 
-		ResizeDisplay();
+		if (m_display)
+			ResizeDisplay();
 	};
 
-	connect(windowHandle(), &QWindow::visibleChanged, windowVisible);
-	connect(windowHandle(), &QWindow::screenChanged, screenChanged);
+	if (windowHandle()) {
+		connect(windowHandle(), &QWindow::visibleChanged, windowVisible);
+		connect(windowHandle(), &QWindow::screenChanged, screenChanged);
+	}
 
 	CreateDisplay();
 
@@ -468,16 +478,7 @@ void StreamElementsVideoCompositionViewWidget::Destroy()
 		os_event_timedwait(m_destroy_event, 1000);
 	}
 
-	if (m_display) {
-		obs_display_set_enabled(m_display, false);
-
-		obs_display_remove_draw_callback(
-			m_display, obs_display_draw_callback, this);
-
-		obs_display_destroy(SETRACE_DECREF(m_display));
-
-		m_display = nullptr;
-	}
+	DestroyDisplay();
 
 	{
 		std::unique_lock lock(m_destroy_event_mutex);
@@ -515,6 +516,21 @@ void StreamElementsVideoCompositionViewWidget::ResizeDisplay()
 	obs_display_resize(m_display, size.width(), size.height());
 }
 
+void StreamElementsVideoCompositionViewWidget::DestroyDisplay()
+{
+	if (!m_display)
+		return;
+
+	obs_display_set_enabled(m_display, false);
+
+	obs_display_remove_draw_callback(
+		m_display, obs_display_draw_callback, this);
+
+	obs_display_destroy(SETRACE_DECREF(m_display));
+
+	m_display = nullptr;
+}
+
 void StreamElementsVideoCompositionViewWidget::CreateDisplay()
 {
 	if (os_atomic_load_bool(&m_destroyed))
@@ -530,6 +546,9 @@ void StreamElementsVideoCompositionViewWidget::CreateDisplay()
 		return;
 
 	if (!isVisible())
+		return;
+
+	if (!windowHandle())
 		return;
 
 	if (!windowHandle()->isExposed())
@@ -563,9 +582,9 @@ void StreamElementsVideoCompositionViewWidget::CreateDisplay()
 
 void StreamElementsVideoCompositionViewWidget::paintEvent(QPaintEvent *event)
 {
-	QWidget::paintEvent(event);
-
 	CreateDisplay();
+
+	QWidget::paintEvent(event);
 }
 
 void StreamElementsVideoCompositionViewWidget::moveEvent(QMoveEvent *event)
@@ -596,6 +615,23 @@ bool StreamElementsVideoCompositionViewWidget::nativeEvent(const QByteArray &,
 #endif
 
 	return false;
+}
+
+bool StreamElementsVideoCompositionViewWidget::event(QEvent *event)
+{
+	if (event->type() == QEvent::PlatformSurface) {
+		auto *surfaceEvent = static_cast<QPlatformSurfaceEvent *>(event);
+		if (surfaceEvent->surfaceEventType() ==
+		    QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed) {
+			DestroyDisplay();
+		} else if (surfaceEvent->surfaceEventType() ==
+			   QPlatformSurfaceEvent::SurfaceCreated) {
+			CreateDisplay();
+			ResizeDisplay();
+		}
+	}
+
+	return QWidget::event(event);
 }
 
 void StreamElementsVideoCompositionViewWidget::resizeEvent(QResizeEvent *event)
