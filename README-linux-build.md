@@ -73,6 +73,10 @@ Common commands:
 # clean build + install into user OBS plugins dir
 ./_scripts/build-linux.sh --clean --install-user
 
+# clean build with a specific Qt major version
+./_scripts/build-linux.sh --qt-version 5 --clean
+QT_VERSION=6 ./_scripts/build-linux.sh --clean
+
 # explicit obs-browser checkout
 ./_scripts/build-linux.sh --clean --install-user \
   --obs-browser-dir ~/Projects/Others/obs-browser
@@ -81,7 +85,7 @@ Common commands:
 Main options:
 - `--build-dir <path>`
 - `--build-type <type>`
-- `--qt-version <5|6>`
+- `--qt-version <5|6>` or `QT_VERSION=<5|6>` environment variable
 - `--generator <name>`
 - `--target <name>`
 - `--jobs <n>`
@@ -201,6 +205,10 @@ Comandos comunes:
 # build limpia + instalación en plugins de usuario OBS
 ./_scripts/build-linux.sh --clean --install-user
 
+# build limpia con una version mayor especifica de Qt
+./_scripts/build-linux.sh --qt-version 5 --clean
+QT_VERSION=6 ./_scripts/build-linux.sh --clean
+
 # checkout de obs-browser explícito
 ./_scripts/build-linux.sh --clean --install-user \
   --obs-browser-dir ~/Projects/Others/obs-browser
@@ -209,7 +217,7 @@ Comandos comunes:
 Opciones principales:
 - `--build-dir <path>`
 - `--build-type <type>`
-- `--qt-version <5|6>`
+- `--qt-version <5|6>` o variable de entorno `QT_VERSION=<5|6>`
 - `--generator <name>`
 - `--target <name>`
 - `--jobs <n>`

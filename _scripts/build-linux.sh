@@ -7,7 +7,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 BUILD_DIR="${REPO_ROOT}/build-linux"
 BUILD_TYPE="RelWithDebInfo"
-QT_VERSION="6"
+QT_VERSION="${QT_VERSION:-6}"
 GENERATOR="Ninja"
 TARGET="obs-streamelements-core"
 DETECTED_JOBS="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 1)"
@@ -34,7 +34,7 @@ Build obs-streamelements-core on Linux.
 Options:
   --build-dir <path>          Build directory (default: ${BUILD_DIR})
   --build-type <type>         CMAKE_BUILD_TYPE (default: ${BUILD_TYPE})
-  --qt-version <5|6>          Qt major version for CMake (default: ${QT_VERSION})
+  --qt-version <5|6>          Qt major version for CMake (default: ${QT_VERSION}; env: QT_VERSION)
   --generator <name>          CMake generator (default: ${GENERATOR})
   --target <name>             Build target (default: ${TARGET})
   --jobs <n>                  Parallel jobs for cmake --build (default: ${JOBS}; detected: ${DETECTED_JOBS})
@@ -50,6 +50,8 @@ Options:
 Examples:
   $(basename "$0")
   $(basename "$0") --clean --install-user
+  $(basename "$0") --qt-version 5 --clean
+  QT_VERSION=6 $(basename "$0") --clean
   $(basename "$0") --build-dir ./build-ci --cmake-arg -DCMAKE_CXX_COMPILER=clang++
 USAGE
 }
