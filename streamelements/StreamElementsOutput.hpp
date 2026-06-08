@@ -6,6 +6,9 @@
 
 #include <shared_mutex>
 
+
+enum ObsOutputType { StreamingOutput, RecordingOutput, ReplayBufferOutput };
+
 class StreamElementsOutputBase
 	: public StreamElementsVideoCompositionEventListener,
 	  public StreamElementsAudioCompositionEventListener {
@@ -17,35 +20,322 @@ public:
 		None
 	};
 
-	enum ObsOutputType {
-		StreamingOutput,
-		RecordingOutput,
-		ReplayBufferOutput
-	};
+	class VideoEncoderTemplate {
+	private:
+		class VideoCompositionEncoderAllocator
+			: public SELazyOBSVideoEncoderAllocatorBase {
+		private:
+			struct Private {};
 
-	class VideoEncoder {
+		private:
+			std::shared_ptr<StreamElementsVideoCompositionBase::
+						CompositionInfo>
+				m_videoCompositionBase;
+
+			size_t m_index;
+			CefRefPtr<CefValue> m_obsEncoderInfo;
+			ObsOutputType m_outputType;
+
+			std::shared_ptr<SELazyOBSVideoEncoderProvider>
+				m_encoderProviderRef = nullptr;
+			std::shared_ptr<
+				SELazyOBSVideoEncoderProvider::SELazyOBSEncoderReference>
+				m_encoderRef =
+				nullptr;
+			obs_encoder_t *m_customEncoder = nullptr;
+
+		public:
+			static std::shared_ptr<VideoCompositionEncoderAllocator>
+			Create(std::shared_ptr<
+				       StreamElementsVideoCompositionBase::
+					       CompositionInfo>
+				       videoCompositionBase,
+			       size_t index, CefRefPtr<CefValue> obsEncoderInfo,
+			       ObsOutputType outputType)
+			{
+				return std::make_shared<
+					VideoCompositionEncoderAllocator>(
+					Private{}, videoCompositionBase, index,
+					obsEncoderInfo, outputType);
+			}
+
+			VideoCompositionEncoderAllocator(
+				Private,
+				std::shared_ptr<
+					StreamElementsVideoCompositionBase::
+						CompositionInfo>
+					videoCompositionBase,
+				size_t index,
+				CefRefPtr<CefValue> obsEncoderInfo,
+				ObsOutputType outputType)
+				: SELazyOBSVideoEncoderAllocatorBase(FormatString(
+					  "VideoCompositionEncoderAllocator: [index: %d] [outputType: %s] %s - %s",
+					  index,
+					  outputType == StreamingOutput
+						  ? "StreamingOutput"
+						  : (outputType == RecordingOutput
+							     ? "RecordingOutput"
+							     : "ReplayBufferOutput"),
+					  videoCompositionBase->GetComposition()->GetId().c_str(),
+					  videoCompositionBase->GetComposition()
+						  ->GetName()
+						  .c_str()))
+			{
+				m_index = index;
+				m_videoCompositionBase = videoCompositionBase;
+				m_obsEncoderInfo = obsEncoderInfo;
+				m_outputType = outputType;
+			}
+
+			virtual ~VideoCompositionEncoderAllocator() {}
+
+			virtual obs_encoder_t *AllocRef() override
+			{
+				obs_encoder_t *result = nullptr;
+
+				// Release previously held resources if any
+				Reset();
+
+				if (m_obsEncoderInfo.get()) {
+					result =
+						SETRACE_AUTODECREF(DeserializeObsVideoEncoder(
+						m_obsEncoderInfo));
+
+					if (result) {
+						switch (video_output_get_format(
+							obs_get_video())) {
+						case VIDEO_FORMAT_I420:
+						case VIDEO_FORMAT_NV12:
+						case VIDEO_FORMAT_I010:
+						case VIDEO_FORMAT_P010:
+							break;
+						default:
+							obs_encoder_set_preferred_video_format(
+								result,
+								VIDEO_FORMAT_NV12);
+						}
+
+						uint32_t width, height;
+						m_videoCompositionBase
+							->GetVideoBaseDimensions(
+								&width,
+								&height);
+
+						//
+						// This will prevent obs_encoder_get_width & obs_encoder_get_height from crashing due to video output being improperly initialized for SOME REASON
+						// https://app.bugsplat.com/v2/crash?database=OBS_Live&id=1488897
+						//
+						obs_encoder_set_scaled_size(
+							result, width, height);
+
+						obs_encoder_set_video(
+							result,
+							m_videoCompositionBase
+								->GetVideo());
+
+						m_customEncoder = SETRACE_ADDREF(
+							obs_encoder_get_ref(
+								result));
+
+						return result;
+					}
+				}
+
+				if (!m_encoderProviderRef) {
+					m_encoderProviderRef =
+						GetVideoEncoderProvider();
+				}
+
+				if (m_encoderProviderRef) {
+					m_encoderRef =
+						m_encoderProviderRef
+							->GetLazyObjectReference();
+				}
+
+				if (m_encoderRef) {
+					result = obs_encoder_get_ref(
+							m_encoderRef->Get());
+				} else {
+					m_encoderProviderRef = nullptr;
+				}
+
+				return result;
+			}
+
+			virtual void Reset() override
+			{
+				m_encoderRef = nullptr;
+				m_encoderProviderRef = nullptr;
+
+				if (m_customEncoder) {
+					obs_encoder_release(SETRACE_DECREF(
+						m_customEncoder));
+
+					m_customEncoder = nullptr;
+				}
+			}
+
+			virtual obs_data_t *GetSettingsRef() override
+			{
+				if (m_encoderProviderRef) {
+					return m_encoderProviderRef->GetSettingsRef();
+				}
+
+				if (m_customEncoder) {
+					obs_data_t* data =
+						obs_encoder_get_defaults(
+							m_customEncoder);
+
+					OBSDataAutoRelease settings =
+						obs_encoder_get_settings(
+						m_customEncoder);
+
+					obs_data_apply(data, settings);
+
+					return data;
+				}
+
+				obs_data_t *result = obs_data_create();
+
+				if (m_obsEncoderInfo &&
+				    m_obsEncoderInfo->GetType() ==
+					    VTYPE_DICTIONARY) {
+					auto d = m_obsEncoderInfo
+							 ->GetDictionary();
+
+					CefRefPtr<CefValue> settingsInfo;
+
+					if (d->HasKey("class") &&
+					    d->GetType("class") ==
+						    VTYPE_STRING) {
+						std::string id =
+							d->GetString("class")
+								.ToString();
+
+						if (id.size() > 0) {
+							OBSDataAutoRelease defaults =
+								obs_encoder_defaults(
+									id.c_str());
+
+							obs_data_apply(
+								result,
+								defaults);
+						}
+					}
+
+					if (d->HasKey("settings") &&
+					    d->GetType("settings") ==
+						    VTYPE_DICTIONARY) {
+						OBSDataAutoRelease data =
+							obs_data_create();
+
+						if (DeserializeObsData(d->GetValue("settings"), data)) {
+							obs_data_apply(result,
+								       data);
+						}
+					}
+				}
+
+				return result;
+			}
+
+			virtual std::string GetId() const override
+			{
+				if (m_encoderProviderRef)
+					return m_encoderProviderRef->GetId();
+
+				if (m_customEncoder)
+					return obs_encoder_get_id(
+						m_customEncoder);
+
+				if (m_obsEncoderInfo &&
+				    m_obsEncoderInfo->GetType() ==
+					    VTYPE_DICTIONARY) {
+					auto d = m_obsEncoderInfo
+							 ->GetDictionary();
+
+					if (d->HasKey("class") &&
+					    d->GetType("class") ==
+						    VTYPE_STRING) {
+						return d->GetString("class")
+							.ToString();
+					}
+				}
+
+				return "";
+			}
+
+			virtual std::string GetName() const override
+			{
+				if (m_encoderProviderRef)
+					return m_encoderProviderRef->GetName();
+
+				if (m_customEncoder)
+					return obs_encoder_get_name(
+						m_customEncoder);
+
+				if (m_obsEncoderInfo &&
+				    m_obsEncoderInfo->GetType() ==
+					    VTYPE_DICTIONARY) {
+					auto d = m_obsEncoderInfo
+							 ->GetDictionary();
+
+					if (d->HasKey("name") &&
+					    d->GetType("name") ==
+						    VTYPE_STRING) {
+						return d->GetString("name")
+							.ToString();
+					}
+				}
+
+				return GetId();
+			}
+
+
+		private:
+			std::shared_ptr<SELazyOBSVideoEncoderProvider>
+			GetVideoEncoderProvider()
+			{
+				if (m_encoderProviderRef)
+					return m_encoderProviderRef;
+
+				if (m_outputType != StreamingOutput) {
+					m_encoderProviderRef =
+						m_videoCompositionBase
+							->GetRecordingVideoEncoderProvider(
+								m_index);
+				} else {
+					m_encoderProviderRef =
+						m_videoCompositionBase
+							->GetStreamingVideoEncoderProvider(
+								m_index);
+				}
+				return m_encoderProviderRef;
+			}
+		};
+
 	public:
 		size_t m_index;
 		CefRefPtr<CefValue> m_obsEncoderInfo;
 
 	public:
-		VideoEncoder(size_t index)
+		VideoEncoderTemplate(size_t index)
 			: m_index(index), m_obsEncoderInfo(CefValue::Create())
 		{
 			m_obsEncoderInfo->SetNull();
 		}
 
-		VideoEncoder(CefRefPtr<CefValue> obsEncoderInfo)
+		VideoEncoderTemplate(CefRefPtr<CefValue> obsEncoderInfo)
 			: m_index(0), m_obsEncoderInfo(obsEncoderInfo->Copy())
 		{
 		}
 
-		VideoEncoder(VideoEncoder &other)
+		VideoEncoderTemplate(VideoEncoderTemplate &other)
 			: m_index(other.m_index), m_obsEncoderInfo(other.m_obsEncoderInfo->Copy())
 		{
 		}
 
-		~VideoEncoder() {}
+		~VideoEncoderTemplate() {}
 
 		bool IsMatchingIndex(size_t index) {
 			if (m_obsEncoderInfo.get() &&
@@ -69,55 +359,29 @@ public:
 		}
 
 	public:
-		obs_encoder_t *GetStreamingEncoderRef(
+		std::shared_ptr<SELazyOBSVideoEncoderProvider>
+		CreateStreamingEncoderProvider(
 			std::shared_ptr<StreamElementsVideoCompositionBase::
 						CompositionInfo> videoCompositionBase)
 		{
-			obs_encoder_t *result = nullptr;
-
-			if (m_obsEncoderInfo.get()) {
-				result = DeserializeObsVideoEncoder(
-					m_obsEncoderInfo);
-
-				if (result) {
-					obs_encoder_set_video(
-						result, videoCompositionBase
-								->GetVideo());
-
-					return result;
-				}
-			}
-
-			result = videoCompositionBase
-					 ->GetStreamingVideoEncoderRef(m_index);
-
-			return result;
+			return std::make_shared<SELazyOBSVideoEncoderProvider>(
+				"StreamElementsOutputBase::VideoEncoderTemplate::CreateStreamingEncoderProvider()",
+				VideoCompositionEncoderAllocator::Create(
+					videoCompositionBase, m_index,
+					m_obsEncoderInfo, StreamingOutput));
 		}
 
-		obs_encoder_t *GetRecordingEncoderRef(
+		std::shared_ptr<SELazyOBSVideoEncoderProvider>
+		CreateRecordingEncoderProvider(
 			std::shared_ptr<StreamElementsVideoCompositionBase::
 						CompositionInfo>
 				videoCompositionBase)
 		{
-			obs_encoder_t *result = nullptr;
-
-			if (m_obsEncoderInfo.get()) {
-				result = DeserializeObsVideoEncoder(
-					m_obsEncoderInfo);
-
-				if (result) {
-					obs_encoder_set_video(
-						result, videoCompositionBase
-								->GetVideo());
-
-					return result;
-				}
-			}
-
-			result = videoCompositionBase
-					 ->GetRecordingVideoEncoderRef(m_index);
-
-			return result;
+			return std::make_shared<SELazyOBSVideoEncoderProvider>(
+				"StreamElementsOutputBase::VideoEncoderTemplate::CreateRecordingEncoderProvider()",
+				VideoCompositionEncoderAllocator::Create(
+					videoCompositionBase, m_index,
+					m_obsEncoderInfo, RecordingOutput));
 		}
 	};
 
@@ -179,7 +443,7 @@ public:
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) = 0;
 
 	virtual std::vector<uint32_t> GetAudioTracks() = 0;
-	virtual std::vector<std::shared_ptr<VideoEncoder>> GetVideoEncoders() = 0;
+	virtual std::vector<std::shared_ptr<VideoEncoderTemplate>> GetVideoEncoders() = 0;
 
 	virtual bool CanSplitRecordingOutput() { return false; }
 	virtual bool TriggerSplitRecordingOutput() { return false; }
@@ -245,8 +509,13 @@ private:
 	std::string m_bindToIP;
 
 	std::vector<uint32_t> m_audioTracks = {0};
-	std::vector<std::shared_ptr<VideoEncoder>> m_videoEncoders = {
-		std::make_shared<VideoEncoder>(0)};
+	std::vector<std::shared_ptr<VideoEncoderTemplate>> m_videoEncoderTemplates = {
+		std::make_shared<VideoEncoderTemplate>(0)};
+
+	std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider>>
+		m_videoEncoderProviders;
+	std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider::SELazyOBSEncoderReference>> m_videoEncoders;
+
 
 public:
 	StreamElementsCustomStreamingOutput(
@@ -256,14 +525,14 @@ public:
 		std::shared_ptr<StreamElementsAudioCompositionBase>
 			audioComposition,
 		std::vector<uint32_t> audioTracks,
-		std::vector<std::shared_ptr<VideoEncoder>> videoEncoders, obs_service_t *service,
+		std::vector<std::shared_ptr<VideoEncoderTemplate>> videoEncoders, obs_service_t *service,
 		const char *bindToIP, CefRefPtr<CefDictionaryValue> auxData)
 		: StreamElementsOutputBase(id, name, StreamingOutput, Streaming,
 					   videoComposition, audioComposition,
 					   auxData),
 		  m_service(service),
 		  m_audioTracks(audioTracks),
-		  m_videoEncoders(videoEncoders)
+		  m_videoEncoderTemplates(videoEncoders)
 	{
 		if (bindToIP) {
 			m_bindToIP = bindToIP;
@@ -302,9 +571,9 @@ public:
 		return m_audioTracks;
 	}
 
-	virtual std::vector<std::shared_ptr<VideoEncoder>> GetVideoEncoders() override
+	virtual std::vector<std::shared_ptr<VideoEncoderTemplate>> GetVideoEncoders() override
 	{
-		return m_videoEncoders;
+		return m_videoEncoderTemplates;
 	}
 
 	static std::shared_ptr<StreamElementsCustomStreamingOutput>
@@ -367,7 +636,7 @@ protected:
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
 
 	virtual std::vector<uint32_t> GetAudioTracks() override;
-	virtual std::vector<std::shared_ptr<VideoEncoder>> GetVideoEncoders() override;
+	virtual std::vector<std::shared_ptr<VideoEncoderTemplate>> GetVideoEncoders() override;
 };
 
 class StreamElementsObsNativeRecordingOutput : public StreamElementsOutputBase {
@@ -413,7 +682,7 @@ protected:
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
 
 	virtual std::vector<uint32_t> GetAudioTracks() override;
-	virtual std::vector<std::shared_ptr<VideoEncoder>>
+	virtual std::vector<std::shared_ptr<VideoEncoderTemplate>>
 	GetVideoEncoders() override;
 };
 
@@ -429,8 +698,13 @@ private:
 	CefRefPtr<CefDictionaryValue> m_recordingSettings = CefDictionaryValue::Create();
 
 	std::vector<uint32_t> m_audioTracks;
-	std::vector<std::shared_ptr<VideoEncoder>> m_videoEncoders = {
-		std::make_shared<VideoEncoder>(0)};
+	std::vector<std::shared_ptr<VideoEncoderTemplate>> m_videoEncoderTemplates = {
+		std::make_shared<VideoEncoderTemplate>(0)};
+
+	std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider>>
+		m_videoEncoderProviders;
+	std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider::SELazyOBSEncoderReference>>
+		m_videoEncoders;
 
 public:
 	StreamElementsCustomRecordingOutput(
@@ -441,14 +715,14 @@ public:
 		std::shared_ptr<StreamElementsAudioCompositionBase>
 			audioComposition,
 		std::vector<uint32_t> audioTracks,
-		std::vector<std::shared_ptr<VideoEncoder>> videoEncoders,
+		std::vector<std::shared_ptr<VideoEncoderTemplate>> videoEncoders,
 		CefRefPtr<CefDictionaryValue> auxData)
 		: StreamElementsOutputBase(id, name, RecordingOutput, None,
 					   videoComposition, audioComposition,
 					   auxData),
 		  m_recordingSettings(recordingSettings),
 		  m_audioTracks(audioTracks),
-		  m_videoEncoders(videoEncoders)
+		  m_videoEncoderTemplates(videoEncoders)
 	{
 	}
 
@@ -467,9 +741,9 @@ public:
 		return m_audioTracks;
 	}
 
-	virtual std::vector<std::shared_ptr<VideoEncoder>> GetVideoEncoders() override
+	virtual std::vector<std::shared_ptr<VideoEncoderTemplate>> GetVideoEncoders() override
 	{
-		return m_videoEncoders;
+		return m_videoEncoderTemplates;
 	}
 
 	static std::shared_ptr<StreamElementsCustomRecordingOutput>
@@ -545,7 +819,7 @@ protected:
 	SerializeOutputSettings(CefRefPtr<CefValue> &output) override;
 
 	virtual std::vector<uint32_t> GetAudioTracks() override;
-	virtual std::vector<std::shared_ptr<VideoEncoder>>
+	virtual std::vector<std::shared_ptr<VideoEncoderTemplate>>
 	GetVideoEncoders() override;
 };
 
@@ -562,8 +836,14 @@ private:
 		CefDictionaryValue::Create();
 
 	std::vector<uint32_t> m_audioTracks = {0};
-	std::vector<std::shared_ptr<VideoEncoder>> m_videoEncoders = {
-		std::make_shared<VideoEncoder>(0)};
+	std::vector<std::shared_ptr<VideoEncoderTemplate>> m_videoEncoderTemplates = {
+		std::make_shared<VideoEncoderTemplate>(0)};
+
+	std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider>>
+		m_videoEncoderProviders;
+	std::vector<std::shared_ptr<
+		SELazyOBSVideoEncoderProvider::SELazyOBSEncoderReference>>
+		m_videoEncoders;
 
 public:
 	StreamElementsCustomReplayBufferOutput(
@@ -574,14 +854,14 @@ public:
 		std::shared_ptr<StreamElementsAudioCompositionBase>
 			audioComposition,
 		std::vector<uint32_t> audioTracks,
-		std::vector<std::shared_ptr<VideoEncoder>> videoEncoders,
+		std::vector<std::shared_ptr<VideoEncoderTemplate>> videoEncoders,
 		CefRefPtr<CefDictionaryValue> auxData)
 		: StreamElementsOutputBase(id, name, ReplayBufferOutput, Streaming,
 					   videoComposition, audioComposition,
 					   auxData),
 		  m_recordingSettings(recordingSettings),
 		  m_audioTracks(audioTracks),
-		  m_videoEncoders(videoEncoders)
+		  m_videoEncoderTemplates(videoEncoders)
 	{
 	}
 
@@ -599,9 +879,9 @@ public:
 		return m_audioTracks;
 	}
 
-	virtual std::vector<std::shared_ptr<VideoEncoder>> GetVideoEncoders() override
+	virtual std::vector<std::shared_ptr<VideoEncoderTemplate>> GetVideoEncoders() override
 	{
-		return m_videoEncoders;
+		return m_videoEncoderTemplates;
 	}
 
 	static std::shared_ptr<StreamElementsCustomReplayBufferOutput>

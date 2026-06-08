@@ -38,10 +38,10 @@ static std::string getRecordingsFolderPath()
 	return std::string(path);
 }
 
-static std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoder>>
+static std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoderTemplate>>
 GetVideoEncodersFromOutput(obs_output_t *output)
 {
-	std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoder>>
+	std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoderTemplate>>
 		result;
 
 	if (output) {
@@ -56,13 +56,13 @@ GetVideoEncodersFromOutput(obs_output_t *output)
 
 			result.push_back(
 				std::make_shared <
-				StreamElementsOutputBase::VideoEncoder>(idx));
+				StreamElementsOutputBase::VideoEncoderTemplate>(idx));
 		}
 	}
 
 	if (!result.size()) {
 		result.push_back(std::make_shared <
-				 StreamElementsOutputBase::VideoEncoder>(0));
+				 StreamElementsOutputBase::VideoEncoderTemplate>(0));
 	}
 
 	return result;
@@ -152,10 +152,10 @@ DeserializeAudioTracks(CefRefPtr<CefDictionaryValue> rootDict)
 	return DeserializeTracks(rootDict, "audioTracks", MAX_AUDIO_MIXES);
 }
 
-static std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoder>>
+static std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoderTemplate>>
 DeserializeVideoEncoders(CefRefPtr<CefDictionaryValue> rootDict)
 {
-	std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoder>>
+	std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoderTemplate>>
 		result;
 
 
@@ -179,7 +179,7 @@ DeserializeVideoEncoders(CefRefPtr<CefDictionaryValue> rootDict)
 
 				result.push_back(std::make_shared<
 						 StreamElementsOutputBase::
-							 VideoEncoder>(value));
+							 VideoEncoderTemplate>(value));
 
 			} else if (list->GetType(i) == VTYPE_INT) {
 				auto trackIndex = uint32_t(list->GetInt(i));
@@ -199,7 +199,7 @@ DeserializeVideoEncoders(CefRefPtr<CefDictionaryValue> rootDict)
 						result.push_back(
 							std::make_shared<
 								StreamElementsOutputBase::
-									VideoEncoder>(
+									VideoEncoderTemplate>(
 								trackIndex));
 					}
 				}
@@ -209,7 +209,7 @@ DeserializeVideoEncoders(CefRefPtr<CefDictionaryValue> rootDict)
 
 	if (!result.size()) {
 		result.push_back(
-			std::make_shared<StreamElementsOutputBase::VideoEncoder>(0));
+			std::make_shared<StreamElementsOutputBase::VideoEncoderTemplate>(0));
 	}
 
 	return result;
@@ -217,9 +217,9 @@ DeserializeVideoEncoders(CefRefPtr<CefDictionaryValue> rootDict)
 
 static void dispatch_list_change_event(StreamElementsOutputBase *output)
 {
-	if (output->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+	if (output->GetOutputType() == StreamingOutput)
 		DispatchJSEventGlobal("hostStreamingOutputListChanged", "null");
-	else if (output->GetOutputType() == StreamElementsOutputBase::RecordingOutput)
+	else if (output->GetOutputType() == RecordingOutput)
 		DispatchJSEventGlobal("hostRecordingOutputListChanged", "null");
 	else
 		DispatchJSEventGlobal("hostReplayBufferOutputListChanged", "null");
@@ -246,10 +246,9 @@ void StreamElementsOutputBase::handle_output_start(void *my_data,
 
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+	if (self->GetOutputType() == StreamingOutput)
 		dispatch_event(self, "hostStreamingOutputStarted");
-	else if (self->GetOutputType() ==
-		 StreamElementsOutputBase::RecordingOutput)
+	else if (self->GetOutputType() == RecordingOutput)
 		dispatch_event(self, "hostRecordingOutputStarted");
 	else
 		dispatch_event(self, "hostReplayBufferOutputStarted");
@@ -314,20 +313,17 @@ void StreamElementsOutputBase::handle_output_stop(void *my_data,
 
 		self->SetError(args->GetString("reason"));
 
-		if (self->GetOutputType() ==
-		    StreamElementsOutputBase::StreamingOutput)
+		if (self->GetOutputType() == StreamingOutput)
 			dispatch_event(self, "hostStreamingOutputError", args);
-		else if (self->GetOutputType() ==
-			 StreamElementsOutputBase::RecordingOutput)
+		else if (self->GetOutputType() == RecordingOutput)
 			dispatch_event(self, "hostRecordingOutputError", args);
 		else
 			dispatch_event(self, "hostReplayBufferOutputError", args);
 	}
 
-	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+	if (self->GetOutputType() == StreamingOutput)
 		dispatch_event(self, "hostStreamingOutputStopped");
-	else if (self->GetOutputType() ==
-		 StreamElementsOutputBase::RecordingOutput)
+	else if (self->GetOutputType() == RecordingOutput)
 		dispatch_event(self, "hostRecordingOutputStopped");
 	else
 		dispatch_event(self, "hostReplayBufferOutputStopped");
@@ -342,10 +338,9 @@ void StreamElementsOutputBase::handle_output_pause(void *my_data,
 
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+	if (self->GetOutputType() == StreamingOutput)
 		dispatch_event(self, "hostStreamingOutputPaused");
-	else if (self->GetOutputType() ==
-		 StreamElementsOutputBase::RecordingOutput)
+	else if (self->GetOutputType() == RecordingOutput)
 		dispatch_event(self, "hostRecordingOutputPaused");
 	else
 		dispatch_event(self, "hostReplayBufferOutputPaused");
@@ -360,10 +355,9 @@ void StreamElementsOutputBase::handle_output_unpause(void *my_data,
 
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+	if (self->GetOutputType() == StreamingOutput)
 		dispatch_event(self, "hostStreamingOutputUnpaused");
-	else if (self->GetOutputType() ==
-		 StreamElementsOutputBase::RecordingOutput)
+	else if (self->GetOutputType() == RecordingOutput)
 		dispatch_event(self, "hostRecordingOutputUnpaused");
 	else
 		dispatch_event(self, "hostReplayBufferOutputUnpaused");
@@ -378,10 +372,9 @@ void StreamElementsOutputBase::handle_output_starting(void *my_data,
 
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+	if (self->GetOutputType() == StreamingOutput)
 		dispatch_event(self, "hostStreamingOutputStarting");
-	else if (self->GetOutputType() ==
-		 StreamElementsOutputBase::RecordingOutput)
+	else if (self->GetOutputType() == RecordingOutput)
 		dispatch_event(self, "hostRecordingOutputStarting");
 	else
 		dispatch_event(self, "hostReplayBufferOutputStarting");
@@ -396,10 +389,9 @@ void StreamElementsOutputBase::handle_output_stopping(void *my_data,
 
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+	if (self->GetOutputType() == StreamingOutput)
 		dispatch_event(self, "hostStreamingOutputStopping");
-	else if (self->GetOutputType() ==
-		 StreamElementsOutputBase::RecordingOutput)
+	else if (self->GetOutputType() == RecordingOutput)
 		dispatch_event(self, "hostRecordingOutputStopping");
 	else
 		dispatch_event(self, "hostReplayBufferOutputStopping");
@@ -414,10 +406,9 @@ void StreamElementsOutputBase::handle_output_activate(void *my_data,
 
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+	if (self->GetOutputType() == StreamingOutput)
 		dispatch_event(self, "hostStreamingOutputActivated");
-	else if (self->GetOutputType() ==
-		 StreamElementsOutputBase::RecordingOutput)
+	else if (self->GetOutputType() == RecordingOutput)
 		dispatch_event(self, "hostRecordingOutputActivated");
 	else
 		dispatch_event(self, "hostReplayBufferOutputActivated");
@@ -432,10 +423,9 @@ void StreamElementsOutputBase::handle_output_deactivate(void *my_data,
 
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+	if (self->GetOutputType() == StreamingOutput)
 		dispatch_event(self, "hostStreamingOutputDeactivated");
-	else if (self->GetOutputType() ==
-		 StreamElementsOutputBase::RecordingOutput)
+	else if (self->GetOutputType() == RecordingOutput)
 		dispatch_event(self, "hostRecordingOutputDeactivated");
 	else
 		dispatch_event(self, "hostReplayBufferOutputDeactivated");
@@ -450,10 +440,9 @@ void StreamElementsOutputBase::handle_output_reconnect(void *my_data,
 
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+	if (self->GetOutputType() == StreamingOutput)
 		dispatch_event(self, "hostStreamingOutputReconnecting");
-	else if (self->GetOutputType() ==
-		 StreamElementsOutputBase::RecordingOutput)
+	else if (self->GetOutputType() == RecordingOutput)
 		dispatch_event(self, "hostRecordingOutputReconnecting");
 	else
 		dispatch_event(self, "hostReplayBufferOutputReconnecting");
@@ -469,10 +458,9 @@ StreamElementsOutputBase::handle_output_reconnect_success(void *my_data,
 
 	auto self = (StreamElementsOutputBase *)my_data;
 
-	if (self->GetOutputType() == StreamElementsOutputBase::StreamingOutput)
+	if (self->GetOutputType() == StreamingOutput)
 		dispatch_event(self, "hostStreamingOutputReconnected");
-	else if (self->GetOutputType() ==
-		 StreamElementsOutputBase::RecordingOutput)
+	else if (self->GetOutputType() == RecordingOutput)
 		dispatch_event(self, "hostRecordingOutputReconnected");
 	else
 		dispatch_event(self, "hostReplayBufferOutputReconnected");
@@ -869,20 +857,28 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 	if (!videoCompositionInfo)
 		return false;
 
-	std::vector<obs_encoder_t*> streamingVideoEncoders;
+	m_videoEncoders.clear();
+	m_videoEncoderProviders.clear();
 
-	for (size_t i = 0; i < m_videoEncoders.size(); ++i) {
-		obs_encoder_t* streamingVideoEncoder =
-			m_videoEncoders[i]->GetStreamingEncoderRef(
-				videoCompositionInfo);
+	for (size_t i = 0; i < m_videoEncoderTemplates.size(); ++i) {
 
-		if (!streamingVideoEncoder)
+		auto provider = m_videoEncoderTemplates[i]
+					->CreateStreamingEncoderProvider(
+						videoCompositionInfo);
+
+		if (!provider)
 			break;
 
-		streamingVideoEncoders.push_back(streamingVideoEncoder);
+		auto encoder = provider->GetLazyObjectReference();
+
+		if (!encoder)
+			break;
+
+		m_videoEncoderProviders.push_back(provider);
+		m_videoEncoders.push_back(encoder);
 	}
 
-	if (!streamingVideoEncoders.size() && videoCompositionInfo->IsObsNative()) {
+	if (!m_videoEncoders.size() && videoCompositionInfo->IsObsNative()) {
 		blog(LOG_WARNING,
 		     "obs-streamelements-core: OBS Native streaming video encoders do not exist yet on streaming output '%s'",
 		     GetId().c_str());
@@ -898,6 +894,9 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 		dispatch_event(this, "hostStreamingOutputError", args);
 		dispatch_event(this, "hostStreamingOutputStopped");
 		dispatch_list_change_event(this);
+
+		m_videoEncoders.clear();
+		m_videoEncoderProviders.clear();
 
 		return false;
 	}
@@ -923,11 +922,11 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 
 	if (m_output) {
 		obs_output_set_video_encoder(m_output,
-					     streamingVideoEncoders[0]);
+					     m_videoEncoders[0]->Get());
 
-		for (size_t i = 1; i < streamingVideoEncoders.size(); ++i) {
+		for (size_t i = 1; i < m_videoEncoders.size(); ++i) {
 			obs_output_set_video_encoder2(
-				m_output, streamingVideoEncoders[i], i);
+				m_output, m_videoEncoders[i]->Get(), i);
 		}
 
 		size_t audioEncodersCount = 0;
@@ -993,10 +992,6 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 			"Failed to create output");
 	}
 
-	for (const auto &encoder : streamingVideoEncoders) {
-		obs_encoder_release(SETRACE_DECREF(encoder));
-	}
-
 	return result;
 }
 
@@ -1013,6 +1008,9 @@ void StreamElementsCustomStreamingOutput::StopInternal()
 
 	obs_output_release(SETRACE_DECREF(m_output));
 	m_output = nullptr;
+
+	m_videoEncoders.clear();
+	m_videoEncoderProviders.clear();
 }
 
 void StreamElementsCustomStreamingOutput::SerializeOutputSettings(
@@ -1273,7 +1271,7 @@ std::vector<uint32_t> StreamElementsObsNativeStreamingOutput::GetAudioTracks()
 	return result;
 }
 
-std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoder>>
+std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoderTemplate>>
 StreamElementsObsNativeStreamingOutput::GetVideoEncoders()
 {
 	OBSOutputAutoRelease output = SETRACE_AUTODECREF(GetOutput());
@@ -1347,7 +1345,7 @@ std::vector<uint32_t> StreamElementsObsNativeRecordingOutput::GetAudioTracks()
 	return result;
 }
 
-std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoder>>
+std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoderTemplate>>
 StreamElementsObsNativeRecordingOutput::GetVideoEncoders()
 {
 	OBSOutputAutoRelease output = SETRACE_AUTODECREF(GetOutput());
@@ -1411,20 +1409,28 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 	if (!videoCompositionInfo)
 		return false;
 
-	std::vector<obs_encoder_t*> recordingVideoEncoders;
+	m_videoEncoders.clear();
+	m_videoEncoderProviders.clear();
 
-	for (size_t i = 0; i < m_videoEncoders.size(); ++i) {
-		obs_encoder_t* recordingVideoEncoder =
-			m_videoEncoders[i]
-				->GetRecordingEncoderRef(videoCompositionInfo);
+	for (size_t i = 0; i < m_videoEncoderTemplates.size(); ++i) {
 
-		if (!recordingVideoEncoder)
+		auto provider = m_videoEncoderTemplates[i]
+					->CreateRecordingEncoderProvider(
+						videoCompositionInfo);
+
+		if (!provider)
 			break;
 
-		recordingVideoEncoders.push_back(recordingVideoEncoder);
+		auto encoder = provider->GetLazyObjectReference();
+
+		if (!encoder)
+			break;
+
+		m_videoEncoderProviders.push_back(provider);
+		m_videoEncoders.push_back(encoder);
 	}
 
-	if (!recordingVideoEncoders.size() &&
+	if (!m_videoEncoders.size() &&
 	    videoCompositionInfo->IsObsNative()) {
 		blog(LOG_WARNING,
 		     "obs-streamelements-core: OBS Native recording video encoders do not exist yet on recording output '%s'",
@@ -1441,6 +1447,10 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 		dispatch_event(this, "hostRecordingOutputError", args);
 		dispatch_event(this, "hostRecordingOutputStopped");
 		dispatch_list_change_event(this);
+
+
+		m_videoEncoders.clear();
+		m_videoEncoderProviders.clear();
 
 		return false;
 	}
@@ -1596,12 +1606,12 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 
 	if (m_output) {
 		obs_output_set_video_encoder(m_output,
-					     recordingVideoEncoders[0]);
+					     m_videoEncoders[0]->Get());
 
-		for (size_t i = 1; i < recordingVideoEncoders.size(); ++i) {
+		for (size_t i = 1; i < m_videoEncoders.size(); ++i) {
 			// TODO: Find by request
-			obs_output_set_video_encoder2(
-				m_output, recordingVideoEncoders[i], i);
+			obs_output_set_video_encoder2(m_output,
+						      m_videoEncoders[i]->Get(), i);
 		}
 
 		size_t audioEncodersCount = 0;
@@ -1662,10 +1672,6 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 		     GetId().c_str(), output_type);
 
 		SetError("Failed to create output");
-	}
-
-	for (const auto &encoder : recordingVideoEncoders) {
-		obs_encoder_release(SETRACE_DECREF(encoder));
 	}
 
 	return result;
@@ -1872,7 +1878,7 @@ StreamElementsObsNativeReplayBufferOutput::GetAudioTracks()
 	return result;
 }
 
-std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoder>>
+std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoderTemplate>>
 StreamElementsObsNativeReplayBufferOutput::GetVideoEncoders()
 {
 	OBSOutputAutoRelease output = SETRACE_AUTODECREF(GetOutput());
@@ -1901,20 +1907,28 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 	if (!videoCompositionInfo)
 		return false;
 
-	std::vector<obs_encoder_t*> recordingVideoEncoders;
+	m_videoEncoders.clear();
+	m_videoEncoderProviders.clear();
 
-	for (size_t i = 0; i < m_videoEncoders.size(); ++i) {
-		obs_encoder_t* recordingVideoEncoder =
-			m_videoEncoders[i]->GetRecordingEncoderRef(
+	for (size_t i = 0; i < m_videoEncoderTemplates.size(); ++i) {
+		
+		auto provider =
+			m_videoEncoderTemplates[i]->CreateRecordingEncoderProvider(
 				videoCompositionInfo);
 
-		if (!recordingVideoEncoder)
+		if (!provider)
 			break;
 
-		recordingVideoEncoders.push_back(recordingVideoEncoder);
+		auto encoder = provider->GetLazyObjectReference();
+
+		if (!encoder)
+			break;
+
+		m_videoEncoderProviders.push_back(provider);
+		m_videoEncoders.push_back(encoder);
 	}
 
-	if (!recordingVideoEncoders.size() && videoCompositionInfo->IsObsNative()) {
+	if (!m_videoEncoders.size() && videoCompositionInfo->IsObsNative()) {
 		blog(LOG_WARNING,
 		     "obs-streamelements-core: OBS Native recording video encoders do not exist yet on replay buffer output '%s'",
 		     GetId().c_str());
@@ -1930,6 +1944,9 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 		dispatch_event(this, "hostReplayBufferOutputError", args);
 		dispatch_event(this, "hostReplayBufferOutputStopped");
 		dispatch_list_change_event(this);
+
+		m_videoEncoders.clear();
+		m_videoEncoderProviders.clear();
 
 		return false;
 	}
@@ -2079,12 +2096,12 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 
 	if (m_output) {
 		obs_output_set_video_encoder(m_output,
-					     recordingVideoEncoders[0]);
+					     m_videoEncoders[0]->Get());
 
-		for (size_t i = 1; i < recordingVideoEncoders.size(); ++i) {
+		for (size_t i = 1; i < m_videoEncoders.size(); ++i) {
 			// TODO: Find by request
-			obs_output_set_video_encoder2(
-				m_output, recordingVideoEncoders[i], i);
+			obs_output_set_video_encoder2(m_output,
+						      m_videoEncoders[i]->Get(), i);
 		}
 
 		size_t audioEncodersCount = 0;
@@ -2147,10 +2164,6 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 		SetError("Failed to create output");
 	}
 
-	for (const auto &encoder : recordingVideoEncoders) {
-		obs_encoder_release(SETRACE_DECREF(encoder));
-	}
-
 	return result;
 }
 
@@ -2168,6 +2181,9 @@ void StreamElementsCustomReplayBufferOutput::StopInternal()
 
 	obs_output_release(SETRACE_DECREF(m_output));
 	m_output = nullptr;
+
+	m_videoEncoders.clear();
+	m_videoEncoderProviders.clear();
 }
 
 void StreamElementsCustomReplayBufferOutput::SerializeOutputSettings(

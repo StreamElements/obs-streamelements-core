@@ -1256,9 +1256,18 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 		if (requiredType == OBS_SOURCE_TYPE_SCENE &&
 			(requireAnyOfOutputFlagsMask & OBS_SOURCE_VIDEO) ==
 				OBS_SOURCE_VIDEO) {
-			OBSCanvasAutoRelease canvas =
-				SETRACE_SCOPEREF(obs_get_main_canvas());
-			add("scene", "scene", canvas);
+
+			obs_video_info ovi;
+
+			if (obs_get_video_info(&ovi)) {
+				OBSCanvasAutoRelease canvas = SETRACE_SCOPEREF(
+					obs_canvas_create_private(
+						CreateGloballyUniqueIdString()
+							.c_str(),
+						&ovi, PROGRAM | EPHEMERAL));
+
+				add("scene", "scene", canvas);
+			}
 
 			break;
 		}
@@ -4177,7 +4186,8 @@ CefRefPtr<CefValue> SerializeObsData(obs_data_t *data)
 
 		std::unique_lock guard(mutex); // obs_data_get_json is not thread_safe for the same data container
 
-		const char *json = SETRACE_NOREF(obs_data_get_json(data));
+		const char *json =
+			SETRACE_NOREF(obs_data_get_json_with_defaults(data));
 
 		if (json) {
 			return CefParseJSON(json,
@@ -4469,9 +4479,7 @@ CefRefPtr<CefDictionaryValue> SerializeObsEncoder(obs_encoder_t *e)
 
 	auto settings = SETRACE_ADDREF(obs_encoder_get_settings(e));
 
-	result->SetValue("settings",
-			 CefParseJSON(obs_data_get_json(settings),
-				      JSON_PARSER_ALLOW_TRAILING_COMMAS));
+	result->SetValue("settings", SerializeObsData(settings));
 
 	result->SetValue("properties",
 			 SerializeObsEncoderProperties(obs_encoder_get_id(e),

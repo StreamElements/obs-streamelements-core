@@ -2646,7 +2646,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetOutputManager()
 			->SerializeAllOutputs(
-				StreamElementsOutputBase::StreamingOutput,
+				StreamingOutput,
 				result);
 	}
 	API_HANDLER_END();
@@ -2657,7 +2657,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetOutputManager()
 				->DeserializeOutput(
-					StreamElementsOutputBase::StreamingOutput,
+					StreamingOutput,
 					args->GetValue(0), result);
 		}
 	}
@@ -2669,7 +2669,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetOutputManager()
 				->RemoveOutputsByIds(
-					StreamElementsOutputBase::StreamingOutput,
+					StreamingOutput,
 					args->GetValue(0), result);
 		}
 	}
@@ -2681,7 +2681,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetOutputManager()
 				->EnableOutputsByIds(
-					StreamElementsOutputBase::StreamingOutput,
+					StreamingOutput,
 					args->GetValue(0), result);
 		}
 	}
@@ -2693,7 +2693,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetOutputManager()
 				->DisableOutputsByIds(
-					StreamElementsOutputBase::StreamingOutput,
+					StreamingOutput,
 					args->GetValue(0), result);
 		}
 	}
@@ -2704,7 +2704,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetOutputManager()
 			->SerializeAllOutputs(
-				StreamElementsOutputBase::RecordingOutput,
+				RecordingOutput,
 				result);
 	}
 	API_HANDLER_END();
@@ -2715,7 +2715,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetOutputManager()
 				->DeserializeOutput(
-					StreamElementsOutputBase::RecordingOutput,
+					RecordingOutput,
 					args->GetValue(0), result);
 		}
 	}
@@ -2727,7 +2727,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetOutputManager()
 				->RemoveOutputsByIds(
-					StreamElementsOutputBase::RecordingOutput,
+					RecordingOutput,
 					args->GetValue(0), result);
 		}
 	}
@@ -2739,7 +2739,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetOutputManager()
 				->EnableOutputsByIds(
-					StreamElementsOutputBase::RecordingOutput,
+					RecordingOutput,
 					args->GetValue(0), result);
 		}
 	}
@@ -2751,7 +2751,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetOutputManager()
 				->DisableOutputsByIds(
-					StreamElementsOutputBase::RecordingOutput,
+					RecordingOutput,
 					args->GetValue(0), result);
 		}
 	}
@@ -2773,7 +2773,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetOutputManager()
 			->SerializeAllOutputs(
-				StreamElementsOutputBase::ReplayBufferOutput,
+				ReplayBufferOutput,
 				result);
 	}
 	API_HANDLER_END();
@@ -2783,8 +2783,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetOutputManager()
-				->DeserializeOutput(StreamElementsOutputBase::
-							    ReplayBufferOutput,
+				->DeserializeOutput(ReplayBufferOutput,
 						    args->GetValue(0), result);
 		}
 	}
@@ -2795,8 +2794,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetOutputManager()
-				->RemoveOutputsByIds(StreamElementsOutputBase::
-							     ReplayBufferOutput,
+				->RemoveOutputsByIds(ReplayBufferOutput,
 						     args->GetValue(0), result);
 		}
 	}
@@ -2807,8 +2805,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetOutputManager()
-				->EnableOutputsByIds(StreamElementsOutputBase::
-							     ReplayBufferOutput,
+				->EnableOutputsByIds(ReplayBufferOutput,
 						     args->GetValue(0), result);
 		}
 	}
@@ -2819,10 +2816,9 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			StreamElementsGlobalStateManager::GetInstance()
 				->GetOutputManager()
-				->DisableOutputsByIds(
-					StreamElementsOutputBase::
-						ReplayBufferOutput,
-					args->GetValue(0), result);
+				->DisableOutputsByIds(ReplayBufferOutput,
+						      args->GetValue(0),
+						      result);
 		}
 	}
 	API_HANDLER_END();

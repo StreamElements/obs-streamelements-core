@@ -98,32 +98,34 @@ public:
 
 		virtual void Render() = 0;
 
-		obs_encoder_t* GetStreamingVideoEncoderRef(size_t index) {
-			auto result = GetStreamingVideoEncoder(index);
-
-			if (result) {
-				result = SETRACE_ADDREF(obs_encoder_get_ref(result));
-			}
-
-			return result;
-		}
-
-		obs_encoder_t *GetRecordingVideoEncoderRef(size_t index)
+		
+		std::shared_ptr<SELazyOBSVideoEncoderProvider::SELazyOBSEncoderReference>
+		GetStreamingVideoEncoderRef(size_t index)
 		{
-			auto result = GetRecordingVideoEncoder(index);
+			auto prov = GetStreamingVideoEncoderProvider(index);
 
-			if (result) {
-				result = SETRACE_ADDREF(obs_encoder_get_ref(result));
-			}
+			if (!prov)
+				return nullptr;
 
-			return result;
+			return prov->GetLazyObjectReference();
 		}
 
-	protected:
-		virtual obs_encoder_t *
-		GetStreamingVideoEncoder(size_t index) = 0;
-		virtual obs_encoder_t *
-		GetRecordingVideoEncoder(size_t index) = 0;
+		std::shared_ptr<SELazyOBSVideoEncoderProvider::SELazyOBSEncoderReference> 
+		GetRecordingVideoEncoderRef(size_t index)
+		{
+			auto prov = GetRecordingVideoEncoderProvider(index);
+
+			if (!prov)
+				return nullptr;
+
+			return prov->GetLazyObjectReference();
+		}
+
+		virtual std::shared_ptr<SELazyOBSVideoEncoderProvider>
+		GetStreamingVideoEncoderProvider(size_t index) = 0;
+
+		virtual std::shared_ptr<SELazyOBSVideoEncoderProvider>
+		GetRecordingVideoEncoderProvider(size_t index) = 0;
 	};
 
 private:
@@ -245,8 +247,6 @@ public:
 
 	std::string GetName()
 	{
-		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
-
 		return m_name;
 	}
 
@@ -669,8 +669,8 @@ private:
 			&recordingVideoEncoderHotkeyData);
 
 private:
-	std::vector<obs_encoder_t *> m_streamingVideoEncoders;
-	std::vector<obs_encoder_t *> m_recordingVideoEncoders;
+	std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider>> m_streamingVideoEncoders;
+	std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider>> m_recordingVideoEncoders;
 	video_t *m_video = nullptr;
 
 	obs_source_t* m_transition = nullptr;
@@ -736,8 +736,8 @@ private:
 private:
 	std::shared_mutex m_mutex;
 
-	std::vector<obs_encoder_t *> m_streamingVideoEncoders;
-	std::vector<obs_encoder_t *> m_recordingVideoEncoders;
+	std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider>> m_streamingVideoEncoders;
+	std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider>> m_recordingVideoEncoders;
 
 	obs_source_t *m_rootSource = nullptr;
 
