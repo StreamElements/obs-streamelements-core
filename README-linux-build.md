@@ -73,6 +73,10 @@ Common commands:
 # clean build + install into user OBS plugins dir
 ./_scripts/build-linux.sh --clean --install-user
 
+# clean build + install both obs-browser and obs-streamelements-core
+./_scripts/build-linux.sh --clean --install-user \
+  --obs-browser-dir ~/Projects/Others/obs-browser
+
 # clean build with a specific Qt major version
 ./_scripts/build-linux.sh --qt-version 5 --clean
 QT_VERSION=6 ./_scripts/build-linux.sh --clean
@@ -96,12 +100,19 @@ Main options:
 - `--install-user`
 - `--user-plugin-dir <path>`
 - `--obs-browser-dir <path>`
+- `--obs-browser-build-dir <path>`
+- `--obs-browser-cmake-arg <arg>` (repeatable)
 
 ### 5) Install paths (`--install-user`)
 
 With user install enabled, files are copied to:
 - `~/.config/obs-studio/plugins/obs-streamelements-core/bin/64bit/`
 - `~/.config/obs-studio/plugins/obs-streamelements-core/data/obs-plugins/obs-streamelements-core/`
+
+When `obs-browser` is available through `--obs-browser-dir` or the sibling
+`../obs-browser` checkout, the script also builds and installs:
+- `~/.config/obs-studio/plugins/obs-browser/bin/64bit/`
+- `~/.config/obs-studio/plugins/obs-browser/data/obs-plugins/obs-browser/`
 
 ### 6) Runtime policy for this branch
 
@@ -205,6 +216,10 @@ Comandos comunes:
 # build limpia + instalación en plugins de usuario OBS
 ./_scripts/build-linux.sh --clean --install-user
 
+# build limpia + instalacion de obs-browser y obs-streamelements-core
+./_scripts/build-linux.sh --clean --install-user \
+  --obs-browser-dir ~/Projects/Others/obs-browser
+
 # build limpia con una version mayor especifica de Qt
 ./_scripts/build-linux.sh --qt-version 5 --clean
 QT_VERSION=6 ./_scripts/build-linux.sh --clean
@@ -228,12 +243,19 @@ Opciones principales:
 - `--install-user`
 - `--user-plugin-dir <path>`
 - `--obs-browser-dir <path>`
+- `--obs-browser-build-dir <path>`
+- `--obs-browser-cmake-arg <arg>` (repetible)
 
 ### 5) Rutas de instalación (`--install-user`)
 
 Con instalación de usuario activa, se copia a:
 - `~/.config/obs-studio/plugins/obs-streamelements-core/bin/64bit/`
 - `~/.config/obs-studio/plugins/obs-streamelements-core/data/obs-plugins/obs-streamelements-core/`
+
+Cuando `obs-browser` esta disponible por `--obs-browser-dir` o por el checkout
+hermano `../obs-browser`, el script tambien compila e instala:
+- `~/.config/obs-studio/plugins/obs-browser/bin/64bit/`
+- `~/.config/obs-studio/plugins/obs-browser/data/obs-plugins/obs-browser/`
 
 ### 6) Política runtime de esta rama
 

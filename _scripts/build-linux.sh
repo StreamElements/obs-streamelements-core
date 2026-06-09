@@ -23,7 +23,11 @@ NO_CONFIGURE=0
 INSTALL_USER=0
 USER_PLUGIN_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/obs-studio/plugins/obs-streamelements-core"
 OBS_BROWSER_DIR=""
+OBS_BROWSER_BUILD_DIR=""
+OBS_BROWSER_TARGET="obs-browser"
+OBS_BROWSER_HELPER_TARGET="browser-helper"
 CMAKE_ARGS=()
+OBS_BROWSER_CMAKE_ARGS=()
 
 usage() {
   cat <<USAGE
@@ -45,11 +49,16 @@ Options:
   --install-user              Install built plugin into ~/.config/obs-studio/plugins
   --user-plugin-dir <path>    Install root for plugin (default: ${USER_PLUGIN_DIR})
   --obs-browser-dir <path>    Path to obs-browser checkout (optional; auto-detected as sibling ../obs-browser)
+  --obs-browser-build-dir <path>
+                              Build directory for obs-browser (default: <obs-browser-dir>/build-linux)
+  --obs-browser-cmake-arg <arg>
+                              Extra obs-browser CMake configure argument (repeatable)
   -h, --help                  Show this help
 
 Examples:
   $(basename "$0")
   $(basename "$0") --clean --install-user
+  $(basename "$0") --clean --install-user --obs-browser-dir ../obs-browser
   $(basename "$0") --qt-version 5 --clean
   QT_VERSION=6 $(basename "$0") --clean
   $(basename "$0") --build-dir ./build-ci --cmake-arg -DCMAKE_CXX_COMPILER=clang++
@@ -63,6 +72,14 @@ log() {
 fail() {
   printf '[build-linux] ERROR: %s\n' "$*" >&2
   exit 1
+}
+
+cmake_target_exists() {
+  local build_dir="$1"
+  local target="$2"
+
+  cmake --build "${build_dir}" --target help 2>/dev/null \
+    | grep -Eq "(^|[[:space:]])${target}(:|[[:space:]]|$)"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -128,6 +145,16 @@ while [[ $# -gt 0 ]]; do
       OBS_BROWSER_DIR="$2"
       shift 2
       ;;
+    --obs-browser-build-dir)
+      [[ $# -ge 2 ]] || fail "Missing value for --obs-browser-build-dir"
+      OBS_BROWSER_BUILD_DIR="$2"
+      shift 2
+      ;;
+    --obs-browser-cmake-arg)
+      [[ $# -ge 2 ]] || fail "Missing value for --obs-browser-cmake-arg"
+      OBS_BROWSER_CMAKE_ARGS+=("$2")
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -159,14 +186,33 @@ if [[ -n "${OBS_BROWSER_DIR}" ]]; then
   [[ -d "${OBS_BROWSER_DIR}" ]] || fail "obs-browser directory not found: ${OBS_BROWSER_DIR}"
   log "Using obs-browser from: ${OBS_BROWSER_DIR}"
   CMAKE_ARGS+=("-DOBS_BROWSER_DIR=${OBS_BROWSER_DIR}")
+  if [[ -z "${OBS_BROWSER_BUILD_DIR}" ]]; then
+    OBS_BROWSER_BUILD_DIR="${OBS_BROWSER_DIR}/build-linux"
+  fi
 fi
 
 if [[ "${CLEAN}" -eq 1 ]]; then
   log "Cleaning build directory: ${BUILD_DIR}"
   rm -rf "${BUILD_DIR}"
+  if [[ -n "${OBS_BROWSER_BUILD_DIR}" ]]; then
+    log "Cleaning obs-browser build directory: ${OBS_BROWSER_BUILD_DIR}"
+    rm -rf "${OBS_BROWSER_BUILD_DIR}"
+  fi
 fi
 
 if [[ "${NO_CONFIGURE}" -eq 0 ]]; then
+  if [[ -n "${OBS_BROWSER_DIR}" ]]; then
+    log "Configuring obs-browser: ${OBS_BROWSER_DIR} -> ${OBS_BROWSER_BUILD_DIR}"
+    cmake \
+      -S "${OBS_BROWSER_DIR}" \
+      -B "${OBS_BROWSER_BUILD_DIR}" \
+      -G "${GENERATOR}" \
+      -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
+      -DENABLE_BROWSER=ON \
+      -DENABLE_BROWSER_PANELS=ON \
+      "${OBS_BROWSER_CMAKE_ARGS[@]}"
+  fi
+
   log "Configuring: ${REPO_ROOT} -> ${BUILD_DIR}"
   cmake \
     -S "${REPO_ROOT}" \
@@ -182,10 +228,22 @@ if [[ "${CONFIGURE_ONLY}" -eq 1 ]]; then
   exit 0
 fi
 
+if [[ -n "${OBS_BROWSER_BUILD_DIR}" ]]; then
+  log "Building obs-browser target '${OBS_BROWSER_TARGET}' with ${JOBS} jobs"
+  cmake --build "${OBS_BROWSER_BUILD_DIR}" --target "${OBS_BROWSER_TARGET}" --parallel "${JOBS}"
+
+  if cmake_target_exists "${OBS_BROWSER_BUILD_DIR}" "${OBS_BROWSER_HELPER_TARGET}"; then
+    log "Building obs-browser helper target '${OBS_BROWSER_HELPER_TARGET}' with ${JOBS} jobs"
+    cmake --build "${OBS_BROWSER_BUILD_DIR}" --target "${OBS_BROWSER_HELPER_TARGET}" --parallel "${JOBS}"
+  fi
+fi
+
 log "Building target '${TARGET}' with ${JOBS} jobs"
 cmake --build "${BUILD_DIR}" --target "${TARGET}" --parallel "${JOBS}"
 
 if [[ "${INSTALL_USER}" -eq 1 ]]; then
+  mkdir -p "$(dirname "${USER_PLUGIN_DIR}")"
+  USER_PLUGINS_ROOT="$(cd "$(dirname "${USER_PLUGIN_DIR}")" && pwd)"
   SO_PATH=""
   CANDIDATES=(
     "${BUILD_DIR}/libobs-streamelements-core.so"
@@ -222,6 +280,52 @@ if [[ "${INSTALL_USER}" -eq 1 ]]; then
   rm -rf "${DATA_DIR}"
   mkdir -p "${DATA_DIR}"
   cp -a "${REPO_ROOT}/data/." "${DATA_DIR}/"
+
+  if [[ -n "${OBS_BROWSER_BUILD_DIR}" ]]; then
+    OBS_BROWSER_SO_PATH=""
+    OBS_BROWSER_CANDIDATES=(
+      "${OBS_BROWSER_BUILD_DIR}/obs-browser.so"
+      "${OBS_BROWSER_BUILD_DIR}/libobs-browser.so"
+      "${OBS_BROWSER_BUILD_DIR}/plugins/obs-browser/obs-browser.so"
+      "${OBS_BROWSER_BUILD_DIR}/plugins/obs-browser/libobs-browser.so"
+    )
+
+    for candidate in "${OBS_BROWSER_CANDIDATES[@]}"; do
+      if [[ -f "${candidate}" ]]; then
+        OBS_BROWSER_SO_PATH="${candidate}"
+        break
+      fi
+    done
+
+    if [[ -z "${OBS_BROWSER_SO_PATH}" ]]; then
+      OBS_BROWSER_SO_PATH="$(
+        find "${OBS_BROWSER_BUILD_DIR}" -maxdepth 5 -type f \
+          \( -name 'obs-browser.so' -o -name 'libobs-browser.so' \) \
+          | head -n 1 || true
+      )"
+    fi
+
+    [[ -n "${OBS_BROWSER_SO_PATH}" ]] || fail "Could not locate obs-browser.so under ${OBS_BROWSER_BUILD_DIR}"
+
+    OBS_BROWSER_PLUGIN_DIR="${USER_PLUGINS_ROOT}/obs-browser"
+    OBS_BROWSER_BIN_DIR="${OBS_BROWSER_PLUGIN_DIR}/bin/64bit"
+    OBS_BROWSER_DATA_DIR="${OBS_BROWSER_PLUGIN_DIR}/data/obs-plugins/obs-browser"
+
+    log "Installing obs-browser binary to ${OBS_BROWSER_BIN_DIR}"
+    mkdir -p "${OBS_BROWSER_BIN_DIR}"
+    install -m 0755 "${OBS_BROWSER_SO_PATH}" "${OBS_BROWSER_BIN_DIR}/obs-browser.so"
+
+    rm -f "${OBS_BROWSER_BIN_DIR}/obs-browser-page"
+    if [[ -f "${OBS_BROWSER_BUILD_DIR}/obs-browser-page" ]]; then
+      log "Installing obs-browser helper to ${OBS_BROWSER_BIN_DIR}"
+      install -m 0755 "${OBS_BROWSER_BUILD_DIR}/obs-browser-page" "${OBS_BROWSER_BIN_DIR}/obs-browser-page"
+    fi
+
+    log "Installing obs-browser data files to ${OBS_BROWSER_DATA_DIR}"
+    rm -rf "${OBS_BROWSER_DATA_DIR}"
+    mkdir -p "${OBS_BROWSER_DATA_DIR}"
+    cp -a "${OBS_BROWSER_DIR}/data/." "${OBS_BROWSER_DATA_DIR}/"
+  fi
 
   log "User install complete"
 fi

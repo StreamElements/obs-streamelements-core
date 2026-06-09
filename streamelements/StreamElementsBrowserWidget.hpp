@@ -119,18 +119,18 @@ private:
 private:
 	bool m_isWidgetInitialized = false;
 
-protected:
+	protected:
 	virtual bool event(QEvent* event) override
 	{
-		const bool hostHidden = !IsHostContainerActuallyVisible();
-
 		if (!m_isWidgetInitialized) {
+			const bool hostHidden = !IsHostContainerActuallyVisible();
 			AdviseHostWidgetHiddenChange(hostHidden);
 
 			m_isWidgetInitialized = true;
 		}
 
 		if (event->type() == QEvent::Polish) {
+			const bool hostHidden = !IsHostContainerActuallyVisible();
 			AdviseHostWidgetHiddenChange(hostHidden);
 		}
 

@@ -11,6 +11,8 @@
 #include "StreamElementsWebsocketApiServer.hpp"
 
 #include <QDesktopServices>
+#include <QCoreApplication>
+#include <QMetaObject>
 #include <QUrl>
 
 std::shared_ptr<StreamElementsApiMessageHandler::InvokeHandler>
@@ -561,13 +563,13 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 			local_context *context = new local_context();
 
-			context->self = self;
-			context->message = message;
-			context->args = args;
-			context->result = result;
-			context->target = target;
-			context->cefClientId = context->cefClientId;
-			context->complete_callback = complete_callback;
+				context->self = self;
+				context->message = message;
+				context->args = args;
+				context->result = result;
+				context->target = target;
+				context->cefClientId = cefClientId;
+				context->complete_callback = complete_callback;
 
 			context->queueIndex->SetInt(0);
 			context->queue = args->GetList(0);
@@ -624,15 +626,26 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 								->GetSize(),
 							callResult);
 
-						context->queueIndex->SetInt(
-							context->queueIndex
-								->GetInt() +
-							1);
+							context->queueIndex->SetInt(
+								context->queueIndex
+									->GetInt() +
+								1);
 
-						context->process();
-					},
-					context->cefClientId,
-					IsTraceLogLevel() /* enable_logging */);
+							QObject *app =
+								QCoreApplication::instance();
+							if (app) {
+								QMetaObject::invokeMethod(
+									app,
+									[context]() {
+										context->process();
+									},
+									Qt::QueuedConnection);
+							} else {
+								context->done();
+							}
+						},
+						context->cefClientId,
+						IsTraceLogLevel() /* enable_logging */);
 			};
 
 			obs_frontend_defer_save_begin();
