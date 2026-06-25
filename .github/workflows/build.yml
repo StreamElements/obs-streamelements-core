@@ -1,0 +1,240 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+env:
+  BASE_BUILD_NUMBER: 569
+
+  BUILD_OPTIONS: >
+    -DENABLE_DECKLINK=OFF
+    -DENABLE_SYPHON=OFF
+    -DENABLE_LIBFDK=OFF
+    -DENABLE_NVENC=OFF
+    -DENABLE_QSV11=OFF
+    -DENABLE_VST=OFF
+    -DENABLE_WEBRTC=OFF
+    -DENABLE_WEBSOCKET=OFF
+    -DENABLE_OSS=OFF
+    -DENABLE_SNDIO=OFF
+    -DENABLE_VLC=OFF
+    -DENABLE_VIRTUALCAM=OFF
+    -DENABLE_TEST_INPUT=OFF
+    -DENABLE_AJA=OFF
+    -DENABLE_SCRIPTING=OFF
+    -DENABLE_SCRIPTING_LUA=OFF
+    -DENABLE_UI=OFF
+
+jobs:
+  windows:
+    runs-on: windows-2022
+
+    env:
+      CHECKOUT: 31.1.2
+      BUGSPLAT_USERNAME: ${{ secrets.BUGSPLAT_USERNAME }}
+      BUGSPLAT_PASSWORD: ${{ secrets.BUGSPLAT_PASSWORD }}
+      GS_ACCESS_KEY_ID: ${{ secrets.GS_ACCESS_KEY_ID }}
+      GS_SECRET_ACCESS_KEY: ${{ secrets.GS_SECRET_ACCESS_KEY }}
+      GS_KEY_BASE64: ${{ secrets.GS_KEY_BASE64 }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate build number
+        uses: mlilback/build-number@v1
+        with:
+          base: ${BASE_BUILD_NUMBER}
+          run-id: ${GITHUB_RUN_NUMBER}
+          # Output: BUILD_NUMBER env var
+
+      - name: Clone OBS Studio
+        shell: cmd
+        run: |
+          mkdir C:\local
+          git clone --recursive https://github.com/obsproject/obs-studio.git C:\local\obs-studio
+          cd /d C:\local\obs-studio
+          git checkout %CHECKOUT%
+
+      - name: Install plugin into OBS tree
+        shell: cmd
+        run: |
+          mkdir C:\local\obs-studio\plugins\obs-streamelements-core
+          xcopy "%GITHUB_WORKSPACE%\*.*" "C:\local\obs-studio\plugins\obs-streamelements-core" /S /E /I /Y
+          echo add_obs_plugin(obs-streamelements-core) > C:\local\obs-studio\plugins\CMakeLists.txt
+
+      - name: Setup GCS uploader
+        shell: powershell
+        run: |
+          cd C:\local\obs-studio\plugins\obs-streamelements-core\CI\gcs
+          [System.Text.Encoding]::UTF8.GetString(
+            [System.Convert]::FromBase64String($env:GS_KEY_BASE64)
+          ) | Out-File key.json
+          npm install
+
+      - name: Generate Version
+        shell: powershell
+        run: |
+          $versionInt = (Get-Date).ToUniversalTime().ToString("yyyyMMdd") +
+            "%BUILD_NUMBER%".PadLeft(6,'0')
+
+          "#define STREAMELEMENTS_PLUGIN_VERSION $versionInt" |
+            Out-File C:\local\obs-studio\plugins\obs-streamelements-core\streamelements\Version.generated.hpp
+
+          $versionStr = (Get-Date).ToUniversalTime().ToString("y.M.d") +
+            ".%BUILD_NUMBER%"
+
+          "STREAMELEMENTS_PLUGIN_VERSION=$versionStr" |
+            Out-File $env:GITHUB_ENV -Append
+
+      - name: Configure
+        shell: cmd
+        run: |
+          copy C:\local\obs-studio\plugins\obs-streamelements-core\CMakeUserPresets.json C:\local\obs-studio\CMakeUserPresets.json
+          del C:\local\obs-studio\plugins\obs-streamelements-core\CMakeUserPresets.json
+          cd /d C:\local\obs-studio
+          cmake --preset=windows-x64-streamelements %BUILD_OPTIONS%
+
+      - name: Build
+        shell: cmd
+        run: |
+          cd /d C:\local\obs-studio\build_x64
+          msbuild obs-studio.sln -p:Configuration=RelWithDebInfo
+
+      - name: Upload BugSplat Symbols
+        if: github.event_name != 'pull_request'
+        shell: cmd
+        run: |
+          C:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\Tools\symbol-upload-windows.exe ^
+            -u "%BUGSPLAT_USERNAME%" ^
+            -p "%BUGSPLAT_PASSWORD%" ^
+            -a obs-streamelements-core ^
+            -v "%STREAMELEMENTS_PLUGIN_VERSION%" ^
+            -b OBS_Live ^
+            -d "C:\local\obs-studio\build_x64\rundir\RelWithDebInfo\obs-plugins\64bit" ^
+            -f obs-streamelements*.pdb
+
+      - name: Package
+        shell: cmd
+        run: |
+          cd /d C:\local\obs-studio\build_x64\rundir\RelWithDebInfo
+          7z a %GITHUB_WORKSPACE%\build64_qt6.zip .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build64
+          path: build64_qt6.zip
+
+      - name: Upload to GCS
+        if: github.event_name != 'pull_request'
+        shell: cmd
+        run: |
+          cd /d C:\local\obs-studio\plugins\obs-streamelements-core\CI\gcs
+          node upload.js %GITHUB_WORKSPACE%\build64_qt6.zip se-obs-builds obs-streamelements-core/latest/windows/build64_qt6.zip
+          node upload.js C:\local\obs-studio\plugins\obs-streamelements-core\streamelements\Version.generated.hpp se-obs-builds obs-streamelements-core/latest/windows/Version.generated.hpp
+
+  macos:
+    runs-on: macos-15
+
+    env:
+      CHECKOUT: 31.1.2
+      BUGSPLAT_USERNAME: ${{ secrets.BUGSPLAT_USERNAME }}
+      BUGSPLAT_PASSWORD: ${{ secrets.BUGSPLAT_PASSWORD }}
+      GS_ACCESS_KEY_ID: ${{ secrets.GS_ACCESS_KEY_ID }}
+      GS_SECRET_ACCESS_KEY: ${{ secrets.GS_SECRET_ACCESS_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate build number
+        uses: mlilback/build-number@v1
+        with:
+          base: ${BASE_BUILD_NUMBER}
+          run-id: ${GITHUB_RUN_NUMBER}
+          # Output: BUILD_NUMBER env var
+
+      - name: Clone OBS Studio
+        run: |
+          git clone --recursive https://github.com/obsproject/obs-studio.git ~/src/obs-studio
+          cd ~/src/obs-studio
+          git checkout $CHECKOUT
+
+      - name: Install plugin
+        run: |
+          cp -R "$GITHUB_WORKSPACE" ~/src/obs-studio/plugins/obs-streamelements-core
+          echo "add_obs_plugin(obs-streamelements-core)" >> ~/src/obs-studio/plugins/CMakeLists.txt
+
+      - name: Download BugSplat uploader
+        run: |
+          cd /tmp
+          curl -sL -O https://github.com/BugSplat-Git/symbol-upload/releases/download/v10.1.7/symbol-upload-macos-intel
+          cp symbol-upload-macos-intel symbol-upload-macos
+          chmod +x symbol-upload-macos
+
+      - name: Generate Version
+        run: |
+          VERSION="$(date '+%Y%m%d')$(printf '%06d' ${BUILD_NUMBER})"
+
+          echo "#define STREAMELEMENTS_PLUGIN_VERSION $VERSION" \
+            > ~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp
+
+      - name: Build ARM64
+        run: |
+          cd ~/src/obs-studio
+          cmake --preset=macos \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -B build_macos_arm64 \
+            $BUILD_OPTIONS
+
+          cd build_macos_arm64
+          xcodebuild \
+            -configuration RelWithDebInfo \
+            -scheme obs-streamelements-core \
+            -destination "generic/platform=macOS,name=Any Mac"
+
+      - name: Build x86_64
+        run: |
+          cd ~/src/obs-studio
+          cmake --preset=macos \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -B build_macos_x86_64 \
+            $BUILD_OPTIONS
+
+          cd build_macos_x86_64
+          xcodebuild \
+            -configuration RelWithDebInfo \
+            -scheme obs-streamelements-core \
+            -destination "generic/platform=macOS,name=Any Mac"
+
+      - name: Package
+        run: |
+          cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
+          7z a $GITHUB_WORKSPACE/build_arm64.zip .
+
+          cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core/RelWithDebInfo
+          7z a $GITHUB_WORKSPACE/build_x86_64.zip .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-builds
+          path: |
+            build_arm64.zip
+            build_x86_64.zip
+
+      - name: Upload to GCS
+        if: github.event_name != 'pull_request'
+        run: |
+          curl https://sdk.cloud.google.com > install-google-cloud-sdk.sh
+          bash install-google-cloud-sdk.sh --disable-prompts
+
+          cat > ~/.boto <<EOF
+          [Credentials]
+          gs_access_key_id = $GS_ACCESS_KEY_ID
+          gs_secret_access_key = $GS_SECRET_ACCESS_KEY
+          EOF
+
+          ~/google-cloud-sdk/bin/gsutil cp build_x86_64.zip gs://se-obs-builds/obs-streamelements-core/latest/macos/build_x86_64.zip
+          ~/google-cloud-sdk/bin/gsutil cp build_arm64.zip gs://se-obs-builds/obs-streamelements-core/latest/macos/build_arm64.zip
+          ~/google-cloud-sdk/bin/gsutil cp ~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp gs://se-obs-builds/obs-streamelements-core/latest/macos/Version.generated.hpp
