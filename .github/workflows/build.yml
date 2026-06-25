@@ -171,6 +171,12 @@ jobs:
           cp -R "$GITHUB_WORKSPACE" ~/src/obs-studio/plugins/obs-streamelements-core
           echo "add_obs_plugin(obs-streamelements-core)" >> ~/src/obs-studio/plugins/CMakeLists.txt
 
+      - name: Prepare bugsplat Framework # we store it as a ZIP since on Windows the resulting paths of the unpacked archive are just way too long
+        run: |
+          cd ~/src/obs-studio/plugins/obs-streamelements-core/deps
+
+          unzip BugSplat.xcframework.zip
+
       - name: Download BugSplat uploader
         run: |
           cd /tmp
