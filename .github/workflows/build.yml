@@ -50,6 +50,9 @@ jobs:
           run-id: ${GITHUB_RUN_NUMBER}
           # Output: BUILD_NUMBER env var
 
+      - name: Add msbuild to PATH
+        uses: microsoft/setup-msbuild@v3
+
       - name: Clone OBS Studio
         shell: cmd
         run: |
@@ -77,6 +80,8 @@ jobs:
       - name: Generate Version
         shell: powershell
         run: |
+          echo BUILD_NUMBER=%BUILD_NUMBER%
+
           $versionInt = (Get-Date).ToUniversalTime().ToString("yyyyMMdd") +
             "%BUILD_NUMBER%".PadLeft(6,'0')
 
@@ -175,6 +180,8 @@ jobs:
 
       - name: Generate Version
         run: |
+          echo "BUILD_NUMBER=${BUILD_NUMBER}"
+
           VERSION="$(date '+%Y%m%d')$(printf '%06d' ${BUILD_NUMBER})"
 
           echo "#define STREAMELEMENTS_PLUGIN_VERSION $VERSION" \
