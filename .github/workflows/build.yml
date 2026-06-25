@@ -48,7 +48,7 @@ jobs:
         with:
           base: ${{ env.BASE_BUILD_NUMBER }}
           run-id: ${{ github.run_number }}
-          # Output: ${{ env.BASE_BUILD_NUMBER }} env var
+          # Output: ${{ env.BUILD_NUMBER }} env var
 
       - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v3
@@ -80,16 +80,16 @@ jobs:
       - name: Generate Version
         shell: powershell
         run: |
-          echo BUILD_NUMBER=${{ env.BASE_BUILD_NUMBER }}
+          echo BUILD_NUMBER=${{ env.BUILD_NUMBER }}
 
           $versionInt = (Get-Date).ToUniversalTime().ToString("yyyyMMdd") +
-            "${{ env.BASE_BUILD_NUMBER }}".PadLeft(6,'0')
+            "${{ env.BUILD_NUMBER }}".PadLeft(6,'0')
 
           "#define STREAMELEMENTS_PLUGIN_VERSION $versionInt" |
             Out-File C:\local\obs-studio\plugins\obs-streamelements-core\streamelements\Version.generated.hpp
 
           $versionStr = (Get-Date).ToUniversalTime().ToString("y.M.d") +
-            ".${{ env.BASE_BUILD_NUMBER }}"
+            ".${{ env.BUILD_NUMBER }}"
 
           "STREAMELEMENTS_PLUGIN_VERSION=$versionStr" |
             Out-File $env:GITHUB_ENV -Append
@@ -186,9 +186,9 @@ jobs:
 
       - name: Generate Version
         run: |
-          echo "BUILD_NUMBER=${{ env.BASE_BUILD_NUMBER }}"
+          echo "BUILD_NUMBER=${{ env.BUILD_NUMBER }}"
 
-          VERSION="$(date '+%Y%m%d')$(printf '%06d' ${{ env.BASE_BUILD_NUMBER }})"
+          VERSION="$(date '+%Y%m%d')$(printf '%06d' ${{ env.BUILD_NUMBER }})"
 
           echo "#define STREAMELEMENTS_PLUGIN_VERSION $VERSION" \
             > ~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp
