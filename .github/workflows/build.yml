@@ -113,8 +113,8 @@ jobs:
         shell: cmd
         run: |
           C:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\Tools\symbol-upload-windows.exe ^
-            -u "%BUGSPLAT_USERNAME%" ^
-            -p "%BUGSPLAT_PASSWORD%" ^
+            -u "${{ secrets.BUGSPLAT_USERNAME }}" ^
+            -p "${{ secrets.BUGSPLAT_PASSWORD }}" ^
             -a obs-streamelements-core ^
             -v "%STREAMELEMENTS_PLUGIN_VERSION%" ^
             -b OBS_Live ^
@@ -193,6 +193,8 @@ jobs:
           echo "#define STREAMELEMENTS_PLUGIN_VERSION $VERSION" \
             > ~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp
 
+          echo "STREAMELEMENTS_PLUGIN_VERSION_FULL=$VERSION" >> $GITHUB_ENV
+
       - name: Build ARM64
         run: |
           cd ~/src/obs-studio
@@ -202,11 +204,22 @@ jobs:
             $BUILD_OPTIONS
 
           cd build_macos_arm64
+
           xcodebuild \
             -configuration RelWithDebInfo \
             -scheme obs-streamelements-core \
             -destination "generic/platform=macOS,name=Any Mac"
 
+          cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
+
+          xcrun dsymutil obs-streamelements-core.plugin/Contents/MacOS/obs-streamelements-core -o obs-streamelements-core.dSYM
+
+      - name: Upload ARM64 to BugSplat
+        if: github.event_name != 'pull_request'
+        run: |
+          cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
+
+          /tmp/symbol-upload-macos -a "obs-streamelements-core-macos" -b "OBS_Live" -u "${{ secrets.BUGSPLAT_USERNAME }}" -p "${{ secrets.BUGSPLAT_PASSWORD }}" -f "obs-streamelements-core.dSYM" -d . -v "${{ env.STREAMELEMENTS_PLUGIN_VERSION_FULL }}"
       - name: Build x86_64
         run: |
           cd ~/src/obs-studio
@@ -221,6 +234,16 @@ jobs:
             -scheme obs-streamelements-core \
             -destination "generic/platform=macOS,name=Any Mac"
 
+          cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core/RelWithDebInfo
+
+          xcrun dsymutil obs-streamelements-core.plugin/Contents/MacOS/obs-streamelements-core -o obs-streamelements-core.dSYM
+
+      - name: Upload x86_64 to BugSplat
+        if: github.event_name != 'pull_request'
+        run: |
+          cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core/RelWithDebInfo
+
+          /tmp/symbol-upload-macos -a "obs-streamelements-core-macos" -b "OBS_Live" -u "${{ secrets.BUGSPLAT_USERNAME }}" -p "${{ secrets.BUGSPLAT_PASSWORD }}" -f "obs-streamelements-core.dSYM" -d . -v "${{ env.STREAMELEMENTS_PLUGIN_VERSION_FULL }}"
       - name: Package
         run: |
           cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
@@ -235,7 +258,6 @@ jobs:
           path: |
             build_arm64.zip
             build_x86_64.zip
-
       - name: Upload to GCS
         if: github.event_name != 'pull_request'
         run: |
