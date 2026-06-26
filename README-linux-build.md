@@ -24,7 +24,7 @@ Validated environment:
 This branch depends on custom `obs-browser` changes.
 
 Use:
-- `clairerb6/obs-browser`
+- [clairerb6/obs-browser](https://github.com/clairerb6/obs-browser)
 
 Do not assume upstream `obs-browser` has the same behavior required here.
 
@@ -172,7 +172,7 @@ Entorno validado:
 Esta rama depende de cambios personalizados en `obs-browser`.
 
 Usar:
-- `clairerb6/obs-browser`
+- [clairerb6/obs-browser](https://github.com/clairerb6/obs-browser)
 
 No asumir que el `obs-browser` oficial/upstream tenga el mismo comportamiento requerido aquí.
 
