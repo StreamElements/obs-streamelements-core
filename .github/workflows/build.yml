@@ -179,8 +179,8 @@ jobs:
       - name: Download BugSplat uploader
         run: |
           cd /tmp
-          curl -sL -O https://github.com/BugSplat-Git/symbol-upload/releases/download/v10.1.7/symbol-upload-macos-intel
-          cp symbol-upload-macos-intel symbol-upload-macos
+          curl -sL -O https://github.com/BugSplat-Git/symbol-upload/releases/download/v10.5.0/symbol-upload-macos
+          #cp symbol-upload-macos-intel symbol-upload-macos
           chmod +x symbol-upload-macos
 
       - name: Generate Version
