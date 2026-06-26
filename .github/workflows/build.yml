@@ -34,8 +34,6 @@ jobs:
 
     env:
       CHECKOUT: 31.1.2
-      BUGSPLAT_USERNAME: ${{ secrets.BUGSPLAT_USERNAME }}
-      BUGSPLAT_PASSWORD: ${{ secrets.BUGSPLAT_PASSWORD }}
       GS_ACCESS_KEY_ID: ${{ secrets.GS_ACCESS_KEY_ID }}
       GS_SECRET_ACCESS_KEY: ${{ secrets.GS_SECRET_ACCESS_KEY }}
       GS_KEY_BASE64: ${{ secrets.GS_KEY_BASE64 }}
@@ -115,13 +113,13 @@ jobs:
         shell: cmd
         run: |
           C:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\Tools\symbol-upload-windows.exe ^
-            -u "${{ secrets.BUGSPLAT_USERNAME }}" ^
-            -p "${{ secrets.BUGSPLAT_PASSWORD }}" ^
-            -a obs-streamelements-core ^
-            -v "${{ env. STREAMELEMENTS_PLUGIN_VERSION }}" ^
-            -b OBS_Live ^
-            -d "C:\local\obs-studio\build_x64\rundir\RelWithDebInfo\obs-plugins\64bit" ^
-            -f obs-streamelements*.pdb
+            --clientId "${{ secrets.BUGSPLAT_CLIENTID }}" ^
+            --clientSecret "${{ secrets.BUGSPLAT_CLIENTSECRET }}" ^
+            --application obs-streamelements-core ^
+            --version "${{ env.STREAMELEMENTS_PLUGIN_VERSION }}" ^
+            --database OBS_Live ^
+            --directory "C:\local\obs-studio\build_x64\rundir\RelWithDebInfo\obs-plugins\64bit" ^
+            --files obs-streamelements*.pdb
 
       - name: Package
         shell: cmd
@@ -147,8 +145,6 @@ jobs:
 
     env:
       CHECKOUT: 31.1.2
-      BUGSPLAT_USERNAME: ${{ secrets.BUGSPLAT_USERNAME }}
-      BUGSPLAT_PASSWORD: ${{ secrets.BUGSPLAT_PASSWORD }}
       GS_ACCESS_KEY_ID: ${{ secrets.GS_ACCESS_KEY_ID }}
       GS_SECRET_ACCESS_KEY: ${{ secrets.GS_SECRET_ACCESS_KEY }}
 
@@ -223,7 +219,7 @@ jobs:
         run: |
           cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
 
-          /tmp/symbol-upload-macos -a "obs-streamelements-core-macos" -b "OBS_Live" -u "${{ secrets.BUGSPLAT_USERNAME }}" -p "${{ secrets.BUGSPLAT_PASSWORD }}" -f "obs-streamelements-core.dSYM" -d . -v "${{ env.STREAMELEMENTS_PLUGIN_VERSION_FULL }}"
+          /tmp/symbol-upload-macos -a "obs-streamelements-core-macos" -b "OBS_Live" -i "${{ secrets.BUGSPLAT_CLIENTID }}" -s "${{ secrets.BUGSPLAT_CLIENTSECRET }}" -f "obs-streamelements-core.dSYM" -d . -v "${{ env.STREAMELEMENTS_PLUGIN_VERSION_FULL }}"
       - name: Build x86_64
         run: |
           cd ~/src/obs-studio
@@ -247,7 +243,7 @@ jobs:
         run: |
           cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core/RelWithDebInfo
 
-          /tmp/symbol-upload-macos -a "obs-streamelements-core-macos" -b "OBS_Live" -u "${{ secrets.BUGSPLAT_USERNAME }}" -p "${{ secrets.BUGSPLAT_PASSWORD }}" -f "obs-streamelements-core.dSYM" -d . -v "${{ env.STREAMELEMENTS_PLUGIN_VERSION_FULL }}"
+          /tmp/symbol-upload-macos -a "obs-streamelements-core-macos" -b "OBS_Live" -i "${{ secrets.BUGSPLAT_CLIENTID }}" -s "${{ secrets.BUGSPLAT_CLIENTSECRET }}" -f "obs-streamelements-core.dSYM" -d . -v "${{ env.STREAMELEMENTS_PLUGIN_VERSION_FULL }}"
       - name: Package
         run: |
           cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
