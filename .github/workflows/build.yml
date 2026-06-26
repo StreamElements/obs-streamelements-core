@@ -88,6 +88,8 @@ jobs:
           "#define STREAMELEMENTS_PLUGIN_VERSION $versionInt" |
             Out-File C:\local\obs-studio\plugins\obs-streamelements-core\streamelements\Version.generated.hpp
 
+          type C:\local\obs-studio\plugins\obs-streamelements-core\streamelements\Version.generated.hpp
+
           $versionStr = (Get-Date).ToUniversalTime().ToString("y.M.d") +
             ".${{ env.BUILD_NUMBER }}"
 
@@ -116,7 +118,7 @@ jobs:
             -u "${{ secrets.BUGSPLAT_USERNAME }}" ^
             -p "${{ secrets.BUGSPLAT_PASSWORD }}" ^
             -a obs-streamelements-core ^
-            -v "%STREAMELEMENTS_PLUGIN_VERSION%" ^
+            -v "${{ env. STREAMELEMENTS_PLUGIN_VERSION }}" ^
             -b OBS_Live ^
             -d "C:\local\obs-studio\build_x64\rundir\RelWithDebInfo\obs-plugins\64bit" ^
             -f obs-streamelements*.pdb
@@ -192,6 +194,8 @@ jobs:
 
           echo "#define STREAMELEMENTS_PLUGIN_VERSION $VERSION" \
             > ~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp
+
+          cat ~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp
 
           echo "STREAMELEMENTS_PLUGIN_VERSION_FULL=$VERSION" >> $GITHUB_ENV
 
