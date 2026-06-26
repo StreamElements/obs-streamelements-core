@@ -51,6 +51,15 @@ jobs:
       - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v3
 
+      - name: Download BugSplat uploader
+        run: |
+          md c:\local
+          md c:\local\bugsplat
+          cd /d c:\local\bugsplat
+
+          curl -sL -O https://github.com/BugSplat-Git/symbol-upload/releases/download/v10.5.0/symbol-upload-windows.exe
+
+
       - name: Clone OBS Studio
         shell: cmd
         run: |
@@ -112,7 +121,7 @@ jobs:
         if: github.event_name != 'pull_request'
         shell: cmd
         run: |
-          C:\local\obs-studio\plugins\obs-streamelements-core\deps\BugSplat\Tools\symbol-upload-windows.exe ^
+          c:\local\bugsplat\symbol-upload-windows.exe ^
             -v ^
             --clientId "${{ secrets.BUGSPLAT_CLIENTID }}" ^
             --clientSecret "${{ secrets.BUGSPLAT_CLIENTSECRET }}" ^
