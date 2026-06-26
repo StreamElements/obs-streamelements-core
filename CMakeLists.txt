@@ -81,6 +81,30 @@ if(OBS_BROWSER_DIR)
 	include_directories("${OBS_BROWSER_PARENT_DIR}")
 endif()
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	set(OBS_BROWSER_PANEL_HEADER "")
+	set(OBS_BROWSER_PANEL_HEADER_CANDIDATES
+		"${OBS_BROWSER_DIR}/panel/browser-panel.hpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/../obs-browser/panel/browser-panel.hpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/../../obs-browser/panel/browser-panel.hpp"
+		"${CMAKE_SOURCE_DIR}/plugins/obs-browser/panel/browser-panel.hpp"
+	)
+
+	foreach(candidate IN LISTS OBS_BROWSER_PANEL_HEADER_CANDIDATES)
+		if(candidate AND EXISTS "${candidate}")
+			set(OBS_BROWSER_PANEL_HEADER "${candidate}")
+			break()
+		endif()
+	endforeach()
+
+	if(NOT OBS_BROWSER_PANEL_HEADER)
+		message(FATAL_ERROR
+			"Linux builds require the companion clairerb6/obs-browser checkout "
+			"with panel/browser-panel.hpp available. Place it next to this repo "
+			"as ../obs-browser or configure -DOBS_BROWSER_DIR=/path/to/obs-browser.")
+	endif()
+endif()
+
 if(EXISTS "${CMAKE_SOURCE_DIR}/plugins")
 	include_directories("${CMAKE_SOURCE_DIR}/plugins")
 endif()

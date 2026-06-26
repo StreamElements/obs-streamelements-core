@@ -32,6 +32,11 @@ Do not assume upstream `obs-browser` has the same behavior required here.
 - auto-detection from sibling folder: `../obs-browser`
 - explicit path: `--obs-browser-dir <path>`
 
+Important:
+- If `obs-browser` is missing, the build may otherwise fail later with `QCef`
+  incomplete-type errors. Current scripts now fail earlier with a direct
+  message, but older checkouts may still show the cryptic compiler error.
+
 ### 3) Build dependencies (Fedora)
 
 Recommended minimum:
@@ -174,6 +179,11 @@ No asumir que el `obs-browser` oficial/upstream tenga el mismo comportamiento re
 `build-linux.sh` soporta:
 - autodetección desde carpeta hermana: `../obs-browser`
 - ruta explícita: `--obs-browser-dir <path>`
+
+Importante:
+- Si falta `obs-browser`, el build puede fallar más adelante con errores de
+  tipo incompleto de `QCef`. Los checkouts nuevos cortan antes con un mensaje
+  claro, pero versiones anteriores todavía pueden mostrar ese error críptico.
 
 ### 3) Dependencias de build (Fedora)
 

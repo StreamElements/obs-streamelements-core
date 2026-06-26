@@ -48,7 +48,7 @@ Options:
   --cmake-arg <arg>           Extra CMake configure argument (repeatable)
   --install-user              Install built plugin into ~/.config/obs-studio/plugins
   --user-plugin-dir <path>    Install root for plugin (default: ${USER_PLUGIN_DIR})
-  --obs-browser-dir <path>    Path to obs-browser checkout (optional; auto-detected as sibling ../obs-browser)
+  --obs-browser-dir <path>    Path to obs-browser checkout (required unless auto-detected as sibling ../obs-browser)
   --obs-browser-build-dir <path>
                               Build directory for obs-browser (default: <obs-browser-dir>/build-linux)
   --obs-browser-cmake-arg <arg>
@@ -180,6 +180,10 @@ if [[ -z "${OBS_BROWSER_DIR}" ]]; then
   if [[ -d "${AUTO_OBS_BROWSER_DIR}" ]]; then
     OBS_BROWSER_DIR="${AUTO_OBS_BROWSER_DIR}"
   fi
+fi
+
+if [[ -z "${OBS_BROWSER_DIR}" ]]; then
+  fail "Could not locate the required companion obs-browser checkout. Clone clairerb6/obs-browser next to this repo as ../obs-browser or pass --obs-browser-dir <path>. Without it, the build will later fail with missing/incomplete QCef browser panel types."
 fi
 
 if [[ -n "${OBS_BROWSER_DIR}" ]]; then
