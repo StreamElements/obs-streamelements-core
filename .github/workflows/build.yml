@@ -196,6 +196,16 @@ jobs:
 
           echo "STREAMELEMENTS_PLUGIN_VERSION_FULL=$VERSION" >> $GITHUB_ENV
 
+      - name: Debug Bugsplat Input
+        run: |
+          echo "Client ID length:"
+          
+          echo "${{ secrets.BUGSPLAT_CLIENTID }}" |wc -c
+          
+          echo "Client Secret length:"
+
+          echo "${{ secrets.BUGSPLAT_CLIENTSECRET }}" |wc -c
+
       - name: Build ARM64
         run: |
           cd ~/src/obs-studio
