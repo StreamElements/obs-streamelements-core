@@ -34,11 +34,13 @@ the right place to start.
 The operational guide for this fork is:
 
 - [README-linux-build.md](README-linux-build.md)
+- [README-linux-release.md](README-linux-release.md)
 
 That document covers:
 
 - build dependencies;
 - usage of the `_scripts/build-linux.sh` script;
+- packaging of Linux prebuilt release artifacts;
 - integration with the custom `obs-browser` checkout;
 - OBS installation paths;
 - runtime recommendations;
@@ -105,11 +107,13 @@ su documentacion son el punto correcto.
 La guia operativa de este fork esta en:
 
 - [README-linux-build.md](README-linux-build.md)
+- [README-linux-release.md](README-linux-release.md)
 
 Ese documento concentra:
 
 - dependencias de compilacion;
 - uso del script `_scripts/build-linux.sh`;
+- empaquetado de artefactos precompilados para Linux;
 - integracion con el checkout personalizado de `obs-browser`;
 - rutas de instalacion en OBS;
 - recomendaciones de runtime;
