@@ -51,15 +51,6 @@ jobs:
       - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v3
 
-      - name: Download BugSplat uploader
-        run: |
-          md c:\local
-          md c:\local\bugsplat
-          cd /d c:\local\bugsplat
-
-          curl -sL -O https://github.com/BugSplat-Git/symbol-upload/releases/download/v10.5.0/symbol-upload-windows.exe
-
-
       - name: Clone OBS Studio
         shell: cmd
         run: |
@@ -83,6 +74,14 @@ jobs:
             [System.Convert]::FromBase64String($env:GS_KEY_BASE64)
           ) | Out-File key.json
           npm install
+
+      - name: Download BugSplat uploader
+        run: |
+          mkdir c:\local\bugsplat
+
+          cd /d c:\local\bugsplat
+
+          curl -sL -O https://github.com/BugSplat-Git/symbol-upload/releases/download/v10.5.0/symbol-upload-windows.exe
 
       - name: Generate Version
         shell: powershell
