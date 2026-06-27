@@ -79,7 +79,9 @@ jobs:
         run: |
           mkdir c:\local\bugsplat
 
-          cd /d c:\local\bugsplat
+          c:
+
+          cd c:\local\bugsplat
 
           curl -sL -O https://github.com/BugSplat-Git/symbol-upload/releases/download/v10.5.0/symbol-upload-windows.exe
 
