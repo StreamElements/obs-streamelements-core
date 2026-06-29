@@ -39,6 +39,11 @@ jobs:
       GS_KEY_BASE64: ${{ secrets.GS_KEY_BASE64 }}
 
     steps:
+      - name: Auth Google API
+        uses: 'google-github-actions/auth@v3'
+        with:
+          credentials_json: ${{ secrets.GOOGLE_API_KEY }}
+
       - uses: actions/checkout@v4
 
       - name: Generate build number
@@ -160,6 +165,11 @@ jobs:
       GS_SECRET_ACCESS_KEY: ${{ secrets.GS_SECRET_ACCESS_KEY }}
 
     steps:
+      - name: Auth Google API
+        uses: 'google-github-actions/auth@v3'
+        with:
+          credentials_json: ${{ secrets.GOOGLE_API_KEY }}
+
       - uses: actions/checkout@v4
 
       - name: Generate build number
