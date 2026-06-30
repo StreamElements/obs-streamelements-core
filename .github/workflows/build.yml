@@ -156,19 +156,21 @@ jobs:
         shell: cmd
         run: |
           cd /d C:\local\obs-studio\build_x64\rundir\RelWithDebInfo
-          7z a %GITHUB_WORKSPACE%\build64_qt6.zip .
+          7z a "${{ github.workspace }}/build64_qt6.zip" .
+
+          copy /y C:\local\obs-studio\plugins\obs-streamelements-core\streamelements\Version.generated.hpp "${{ github.workspace }}/Version.generated.hpp"
 
       - uses: actions/upload-artifact@v4
         with:
           name: build64
-          path: build64_qt6.zip
+          path: '${{ github.workspace }}/build64_qt6.zip'
 
       - name: Upload 64bit build artifact to GCS
         if: github.event_name != 'pull_request'
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
-          path: '${{ env.GITHUB_WORKSPACE }}/build64_qt6.zip'
+          path: '${{ github.workspace }}/build64_qt6.zip'
           destination: 'se-obs-builds/obs-streamelements-core/latest/windows/build64_qt6.zip'
 
       - name: Upload version header to GCS
@@ -176,7 +178,7 @@ jobs:
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
-          path: 'C:\local\obs-studio\plugins\obs-streamelements-core\streamelements\Version.generated.hpp'
+          path: '${{ github.workspace }}/Version.generated.hpp'
           destination: 'se-obs-builds/obs-streamelements-core/latest/windows/Version.generated.hpp'
 
   macos:
@@ -305,10 +307,12 @@ jobs:
       - name: Package
         run: |
           cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
-          7z a $GITHUB_WORKSPACE/build_arm64.zip .
+          7z a '${{ github.workspace }}/build_arm64.zip' .
 
           cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core/RelWithDebInfo
-          7z a $GITHUB_WORKSPACE/build_x86_64.zip .
+          7z a '${{ github.workspace }}/build_x86_64.zip' .
+
+          cp ~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp '${{ github.workspace }}/Version.generated.hpp'
 
       - uses: actions/upload-artifact@v4
         with:
@@ -322,7 +326,7 @@ jobs:
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
-          path: '~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo/build_arm64.zip'
+          path: '${{ github.workspace }}/build_arm64.zip'
           destination: 'se-obs-builds/obs-streamelements-core/latest/macos/build_arm64.zip'
 
       - name: Upload x86_64 build artifact to GCS
@@ -330,7 +334,7 @@ jobs:
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
-          path: '~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core/RelWithDebInfo/build_x86_64.zip'
+          path: '${{ github.workspace }}/build_x86_64.zip'
           destination: 'se-obs-builds/obs-streamelements-core/latest/macos/build_x86_64.zip'
 
       - name: Upload version header to GCS
@@ -338,5 +342,5 @@ jobs:
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
-          path: '~/src/obs-studio/plugins/obs-streamelements-core/streamelements/Version.generated.hpp'
+          path: '${{ github.workspace }}/Version.generated.hpp'
           destination: 'se-obs-builds/obs-streamelements-core/latest/macos/Version.generated.hpp'
