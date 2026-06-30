@@ -41,6 +41,7 @@ jobs:
       GS_ACCESS_KEY_ID: ${{ secrets.GS_ACCESS_KEY_ID }}
       GS_SECRET_ACCESS_KEY: ${{ secrets.GS_SECRET_ACCESS_KEY }}
       GS_KEY_BASE64: ${{ secrets.GS_KEY_BASE64 }}
+      GITHUB_WORKSPACE: $GITHUB_WORKSPACE
 
     steps:
       - name: Debug
@@ -48,6 +49,7 @@ jobs:
           echo "1. ${{ vars.GITHUB_WORKSPACE }}"
           echo "2. $GITHUB_WORKSPACE"
           echo "3. %GITHUB_WORKSPACE%"
+          echo "4. ${{ env.GITHUB_WORKSPACE }}"
           env
       - uses: actions/checkout@v4
 
@@ -190,6 +192,7 @@ jobs:
           echo "1. ${{ vars.GITHUB_WORKSPACE }}"
           echo "2. $GITHUB_WORKSPACE"
           echo "3. %GITHUB_WORKSPACE%"
+          echo "4. ${{ env.GITHUB_WORKSPACE }}"
           set
 
       - uses: actions/checkout@v4
