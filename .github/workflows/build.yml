@@ -42,7 +42,9 @@ jobs:
       - name: Auth Google API
         uses: 'google-github-actions/auth@v3'
         with:
-          credentials_json: ${{ secrets.GOOGLE_API_KEY }}
+          project_id: streamelements-core
+          workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
+          service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
 
       - uses: actions/checkout@v4
 
