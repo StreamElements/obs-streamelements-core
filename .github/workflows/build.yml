@@ -232,34 +232,43 @@ jobs:
 
           echo "STREAMELEMENTS_PLUGIN_VERSION_FULL=$VERSION" >> $GITHUB_ENV
 
-      - name: Debug Bugsplat Input
-        run: |
-          echo "Client ID length:"
-          
-          echo "${{ secrets.BUGSPLAT_CLIENTID }}" |wc -c
-          
-          echo "Client Secret length:"
+      - name: Build Plugin
+        parallel:
+          build-arm64:
+            run: |
+              cd ~/src/obs-studio
+              cmake --preset=macos \
+                -DCMAKE_OSX_ARCHITECTURES=arm64 \
+                -B build_macos_arm64 \
+                $BUILD_OPTIONS
 
-          echo "${{ secrets.BUGSPLAT_CLIENTSECRET }}" |wc -c
+              cd build_macos_arm64
 
-      - name: Build ARM64
-        run: |
-          cd ~/src/obs-studio
-          cmake --preset=macos \
-            -DCMAKE_OSX_ARCHITECTURES=arm64 \
-            -B build_macos_arm64 \
-            $BUILD_OPTIONS
+              xcodebuild \
+                -configuration RelWithDebInfo \
+                -scheme obs-streamelements-core \
+                -destination "generic/platform=macOS,name=Any Mac"
 
-          cd build_macos_arm64
+              cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
 
-          xcodebuild \
-            -configuration RelWithDebInfo \
-            -scheme obs-streamelements-core \
-            -destination "generic/platform=macOS,name=Any Mac"
+              xcrun dsymutil obs-streamelements-core.plugin/Contents/MacOS/obs-streamelements-core -o obs-streamelements-core.dSYM
+          build-x86_64:
+            run: |
+              cd ~/src/obs-studio
+              cmake --preset=macos \
+                -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+                -B build_macos_x86_64 \
+                $BUILD_OPTIONS
 
-          cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
+              cd build_macos_x86_64
+              xcodebuild \
+                -configuration RelWithDebInfo \
+                -scheme obs-streamelements-core \
+                -destination "generic/platform=macOS,name=Any Mac"
 
-          xcrun dsymutil obs-streamelements-core.plugin/Contents/MacOS/obs-streamelements-core -o obs-streamelements-core.dSYM
+              cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core/RelWithDebInfo
+
+              xcrun dsymutil obs-streamelements-core.plugin/Contents/MacOS/obs-streamelements-core -o obs-streamelements-core.dSYM
 
       - name: Upload ARM64 to BugSplat
         if: github.event_name != 'pull_request'
@@ -267,23 +276,6 @@ jobs:
           cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
 
           /tmp/symbol-upload-macos -v -a "obs-streamelements-core-macos" -b "OBS_Live" -i "${{ secrets.BUGSPLAT_CLIENTID }}" -s "${{ secrets.BUGSPLAT_CLIENTSECRET }}" -f "obs-streamelements-core.dSYM" -d . -v "${{ env.STREAMELEMENTS_PLUGIN_VERSION_FULL }}"
-      - name: Build x86_64
-        run: |
-          cd ~/src/obs-studio
-          cmake --preset=macos \
-            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
-            -B build_macos_x86_64 \
-            $BUILD_OPTIONS
-
-          cd build_macos_x86_64
-          xcodebuild \
-            -configuration RelWithDebInfo \
-            -scheme obs-streamelements-core \
-            -destination "generic/platform=macOS,name=Any Mac"
-
-          cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core/RelWithDebInfo
-
-          xcrun dsymutil obs-streamelements-core.plugin/Contents/MacOS/obs-streamelements-core -o obs-streamelements-core.dSYM
 
       - name: Upload x86_64 to BugSplat
         if: github.event_name != 'pull_request'
