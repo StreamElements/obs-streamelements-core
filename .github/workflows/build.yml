@@ -43,14 +43,14 @@ jobs:
       GS_KEY_BASE64: ${{ secrets.GS_KEY_BASE64 }}
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Auth Google API
         uses: 'google-github-actions/auth@v2'
         with:
           project_id: streamelements-core
           workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
           service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
-
-      - uses: actions/checkout@v4
 
       - name: Generate build number
         uses: mlilback/build-number@v1
@@ -171,14 +171,14 @@ jobs:
       GS_SECRET_ACCESS_KEY: ${{ secrets.GS_SECRET_ACCESS_KEY }}
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Auth Google API
         uses: 'google-github-actions/auth@v2'
         with:
           project_id: streamelements-core
           workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
           service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
-
-      - uses: actions/checkout@v4
 
       - name: Generate build number
         uses: mlilback/build-number@v1
