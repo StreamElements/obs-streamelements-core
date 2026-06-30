@@ -43,6 +43,11 @@ jobs:
       GS_KEY_BASE64: ${{ secrets.GS_KEY_BASE64 }}
 
     steps:
+      - name: Debug
+        run: |
+          echo "1. ${{ vars.GITHUB_WORKSPACE }}"
+          echo "2. $GITHUB_WORKSPACE"
+          echo "3. %GITHUB_WORKSPACE%"
       - uses: actions/checkout@v4
 
       - name: Auth Google API
@@ -179,6 +184,12 @@ jobs:
       GS_SECRET_ACCESS_KEY: ${{ secrets.GS_SECRET_ACCESS_KEY }}
 
     steps:
+      - name: Debug
+        run: |
+          echo "1. ${{ vars.GITHUB_WORKSPACE }}"
+          echo "2. $GITHUB_WORKSPACE"
+          echo "3. %GITHUB_WORKSPACE%"
+
       - uses: actions/checkout@v4
 
       - name: Auth Google API
