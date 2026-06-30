@@ -168,8 +168,7 @@ jobs:
         with:
           parent: false
           path: 'C:\local\obs-studio\plugins\obs-streamelements-core\streamelements\Version.generated.hpp'
-          destination: 'se-obs-builds/obs-streamelements-core/latest/windows/Version.generated.hpp
-
+          destination: 'se-obs-builds/obs-streamelements-core/latest/windows/Version.generated.hpp'
 
   macos:
     runs-on: macos-15
