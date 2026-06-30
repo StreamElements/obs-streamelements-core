@@ -170,16 +170,18 @@ jobs:
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
+          process_gcloudignore: false
           path: '${{ github.workspace }}/build64_qt6.zip'
-          destination: 'se-obs-builds/obs-streamelements-core/latest/windows/build64_qt6.zip'
+          destination: 'se-obs-builds/obs-streamelements-core/latest/windows'
 
       - name: Upload version header to GCS
         if: github.event_name != 'pull_request'
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
+          process_gcloudignore: false
           path: '${{ github.workspace }}/Version.generated.hpp'
-          destination: 'se-obs-builds/obs-streamelements-core/latest/windows/Version.generated.hpp'
+          destination: 'se-obs-builds/obs-streamelements-core/latest/windows'
 
   macos:
     runs-on: macos-15
@@ -326,21 +328,24 @@ jobs:
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
+          process_gcloudignore: false
           path: '${{ github.workspace }}/build_arm64.zip'
-          destination: 'se-obs-builds/obs-streamelements-core/latest/macos/build_arm64.zip'
+          destination: 'se-obs-builds/obs-streamelements-core/latest/macos'
 
       - name: Upload x86_64 build artifact to GCS
         if: github.event_name != 'pull_request'
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
+          process_gcloudignore: false
           path: '${{ github.workspace }}/build_x86_64.zip'
-          destination: 'se-obs-builds/obs-streamelements-core/latest/macos/build_x86_64.zip'
+          destination: 'se-obs-builds/obs-streamelements-core/latest/macos'
 
       - name: Upload version header to GCS
         if: github.event_name != 'pull_request'
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
+          process_gcloudignore: false
           path: '${{ github.workspace }}/Version.generated.hpp'
-          destination: 'se-obs-builds/obs-streamelements-core/latest/macos/Version.generated.hpp'
+          destination: 'se-obs-builds/obs-streamelements-core/latest/macos'
