@@ -177,9 +177,9 @@ jobs:
         uses: 'google-github-actions/auth@v2'
         with:
           project_id: streamelements-core
-          workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
-          service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
-
+          workload_identity_provider: projects/710581594781/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-obs-selive@streamelements-core.iam.gserviceaccount.com
+          
       - name: Generate build number
         uses: mlilback/build-number@v1
         with:
