@@ -1,5 +1,8 @@
 name: Build
 
+permissions:
+  contents: read
+  id-token: write    # lets the job mint a GitHub OIDC token for WIF
 on:
   push:
     branches:
