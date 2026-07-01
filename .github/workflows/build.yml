@@ -39,19 +39,10 @@ jobs:
     env:
       CHECKOUT: 31.1.2
       GS_ACCESS_KEY_ID: ${{ secrets.GS_ACCESS_KEY_ID }}
-      GS_SECRET_ACCESS_KEY: ${{ secrets.GS_SECRET_ACCESS_KEY }}
       GS_KEY_BASE64: ${{ secrets.GS_KEY_BASE64 }}
       GITHUB_WORKSPACE: $GITHUB_WORKSPACE
 
     steps:
-      - name: Debug
-        run: |
-          echo "0. ${{ github.workspace }}"
-          echo "1. ${{ vars.GITHUB_WORKSPACE }}"
-          echo "2. $GITHUB_WORKSPACE"
-          echo "3. %GITHUB_WORKSPACE%"
-          echo "4. ${{ env.GITHUB_WORKSPACE }}"
-          env
       - uses: actions/checkout@v4
 
       - name: Auth Google API
@@ -188,19 +179,9 @@ jobs:
 
     env:
       CHECKOUT: 31.1.2
-      GS_ACCESS_KEY_ID: ${{ secrets.GS_ACCESS_KEY_ID }}
       GS_SECRET_ACCESS_KEY: ${{ secrets.GS_SECRET_ACCESS_KEY }}
 
     steps:
-      - name: Debug
-        run: |
-          echo "0. ${{ github.workspace }}"
-          echo "1. ${{ vars.GITHUB_WORKSPACE }}"
-          echo "2. $GITHUB_WORKSPACE"
-          echo "3. %GITHUB_WORKSPACE%"
-          echo "4. ${{ env.GITHUB_WORKSPACE }}"
-          set
-
       - uses: actions/checkout@v4
 
       - name: Auth Google API
@@ -215,7 +196,7 @@ jobs:
         with:
           base: ${{ env.BASE_BUILD_NUMBER }}
           run-id: ${{ github.run_number }}
-          # Output: ${{ env.BASE_BUILD_NUMBER }} env var
+          # Output: ${{ env.BUILD_NUMBER }} env var
 
       - name: Clone OBS Studio
         run: |
@@ -342,7 +323,7 @@ jobs:
           destination: 'se-obs-builds/obs-streamelements-core/latest/macos'
 
       - name: Upload version header to GCS
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
