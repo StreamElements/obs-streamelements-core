@@ -34,6 +34,17 @@ jobs:
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@v1
+        # Force Task subagents to run in the foreground. Claude Code >= 2.1.198 launches
+        # them in the background by default; on runs where the model takes that default
+        # and ends its turn to wait for the completion notification, the CLI emits an
+        # interim result event and claude-code-action stops reading the stream right
+        # there (an explicit break in base-action/src/run-claude-sdk.ts), reporting
+        # success with the work unposted. Runs where the model happens to run its
+        # subagents synchronously survive, which is why the failure looks intermittent.
+        # Upstream: anthropics/claude-code-action#1499. Root-cause analysis and
+        # before/after evidence: StreamElements/pricing_clusters_prod#149.
+        env:
+          CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1'
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
