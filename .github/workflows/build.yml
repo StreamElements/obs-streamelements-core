@@ -55,7 +55,7 @@ jobs:
           echo "BUILD_NUMBER=${{ env.BUILD_NUMBER }}"
 
           VERSION_ENCODED="$(date '+%Y%m%d')$(printf '%06d' ${{ env.BUILD_NUMBER }})"
-          VERSION_STRING="$(date '+%y.%-m.%-d')$(printf '%d' ${{ env.BUILD_NUMBER }})"
+          VERSION_STRING="$(date '+%y.%-m.%-d')$(printf '.%d' ${{ env.BUILD_NUMBER }})"
 
           echo "version_encoded=$VERSION_ENCODED" >> $GITHUB_OUTPUT
           echo "version_string=$VERSION_STRING" >> $GITHUB_OUTPUT
