@@ -60,14 +60,6 @@ jobs:
           echo "version_encoded=$VERSION_ENCODED" >> $GITHUB_OUTPUT
           echo "version_string=$VERSION_STRING" >> $GITHUB_OUTPUT
 
-  debug:
-    needs: version
-    runs-on: ubuntu-latest
-    steps:
-      - name: Debug
-        run: |
-          echo "needs.version.outputs.version_encoded: ${{ needs.version.outputs.version_encoded }}"
-          echo "needs.version.outputs.version_string: ${{ needs.version.outputs.version_string }}"
   windows:
     needs: version
     runs-on: windows-2022
