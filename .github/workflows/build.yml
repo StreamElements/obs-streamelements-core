@@ -7,6 +7,8 @@ on:
   push:
     branches:
       - master
+    tags-ignore:
+      - '**'
   pull_request:
   workflow_dispatch:
 
@@ -330,3 +332,11 @@ jobs:
           process_gcloudignore: false
           path: '${{ github.workspace }}/Version.generated.hpp'
           destination: 'se-obs-builds/obs-streamelements-core/latest/macos'
+
+      - name: Tag commit
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        uses: tvdias/github-tagger@v0.0.1
+        with:
+          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          tag: "${{ env.STREAMELEMENTS_PLUGIN_VERSION }}"
+
