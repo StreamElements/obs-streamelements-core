@@ -1,7 +1,7 @@
 name: Build
 
 permissions:
-  contents: read
+  contents: write    # lets GITHUB_TOKEN push tags
   id-token: write    # lets the job mint a GitHub OIDC token for WIF
 on:
   push:
