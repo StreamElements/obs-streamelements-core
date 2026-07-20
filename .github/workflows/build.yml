@@ -187,6 +187,15 @@ jobs:
           path: '${{ github.workspace }}/Version.generated.hpp'
           destination: 'se-obs-builds/obs-streamelements-core/latest/windows'
 
+      - name: Upload RELEASE_NOTES.md to GCS
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        uses: 'google-github-actions/upload-cloud-storage@v3'
+        with:
+          parent: false
+          process_gcloudignore: false
+          path: '${{ github.workspace }}/RELEASE_NOTES.md'
+          destination: 'se-obs-builds/obs-streamelements-core/latest/macos'
+
   macos:
     needs: version
     runs-on: macos-15
@@ -330,6 +339,15 @@ jobs:
           parent: false
           process_gcloudignore: false
           path: '${{ github.workspace }}/Version.generated.hpp'
+          destination: 'se-obs-builds/obs-streamelements-core/latest/macos'
+
+      - name: Upload RELEASE_NOTES.md to GCS
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        uses: 'google-github-actions/upload-cloud-storage@v3'
+        with:
+          parent: false
+          process_gcloudignore: false
+          path: '${{ github.workspace }}/RELEASE_NOTES.md'
           destination: 'se-obs-builds/obs-streamelements-core/latest/macos'
 
   tag-master-commit:
