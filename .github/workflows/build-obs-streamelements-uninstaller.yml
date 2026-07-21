@@ -57,30 +57,30 @@ jobs:
           if exist nsis\Plugins\x86-ansi\NSISLockDetector.dll del nsis\Plugins\x86-ansi\NSISLockDetector.dll
           if exist nsis\Plugins\x86-unicode\NSISLockDetector.dll del nsis\Plugins\x86-unicode\NSISLockDetector.dll
 
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x64-ansi/NSISLockDetector.dll --output nsis\Plugins\x64-ansi\NSISLockDetector.dll
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x64-unicode/NSISLockDetector.dll --output nsis\Plugins\x64-unicode\NSISLockDetector.dll
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x86-ansi/NSISLockDetector.dll --output nsis\Plugins\x86-ansi\NSISLockDetector.dll
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x86-unicode/NSISLockDetector.dll --output nsis\Plugins\x86-unicode\NSISLockDetector.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x64-ansi/NSISLockDetector.dll --output ${{ env.ROOT }}\nsis\Plugins\x64-ansi\NSISLockDetector.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x64-unicode/NSISLockDetector.dll --output ${{ env.ROOT }}\nsis\Plugins\x64-unicode\NSISLockDetector.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x86-ansi/NSISLockDetector.dll --output ${{ env.ROOT }}\nsis\Plugins\x86-ansi\NSISLockDetector.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x86-unicode/NSISLockDetector.dll --output ${{ env.ROOT }}\nsis\Plugins\x86-unicode\NSISLockDetector.dll
 
           if exist nsis\Plugins\x64-ansi\NSISHTTP.dll del nsis\Plugins\x64-ansi\NSISHTTP.dll
           if exist nsis\Plugins\x64-unicode\NSISHTTP.dll del nsis\Plugins\x64-unicode\NSISHTTP.dll
           if exist nsis\Plugins\x86-ansi\NSISHTTP.dll del nsis\Plugins\x86-ansi\NSISHTTP.dll
           if exist nsis\Plugins\x86-unicode\NSISHTTP.dll del nsis\Plugins\x86-unicode\NSISHTTP.dll
 
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x64-ansi/NSISHTTP.dll --output nsis\Plugins\x64-ansi\NSISHTTP.dll
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x64-unicode/NSISHTTP.dll --output nsis\Plugins\x64-unicode\NSISHTTP.dll
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x86-ansi/NSISHTTP.dll --output nsis\Plugins\x86-ansi\NSISHTTP.dll
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x86-unicode/NSISHTTP.dll --output nsis\Plugins\x86-unicode\NSISHTTP.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x64-ansi/NSISHTTP.dll --output ${{ env.ROOT }}\nsis\Plugins\x64-ansi\NSISHTTP.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x64-unicode/NSISHTTP.dll --output ${{ env.ROOT }}\nsis\Plugins\x64-unicode\NSISHTTP.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x86-ansi/NSISHTTP.dll --output ${{ env.ROOT }}\nsis\Plugins\x86-ansi\NSISHTTP.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x86-unicode/NSISHTTP.dll --output ${{ env.ROOT }}\nsis\Plugins\x86-unicode\NSISHTTP.dll
 
           if exist nsis\Plugins\x64-ansi\NSISConfig.dll del nsis\Plugins\x64-ansi\NSISConfig.dll
           if exist nsis\Plugins\x64-unicode\NSISConfig.dll del nsis\Plugins\x64-unicode\NSISConfig.dll
           if exist nsis\Plugins\x86-ansi\NSISConfig.dll del nsis\Plugins\x86-ansi\NSISConfig.dll
           if exist nsis\Plugins\x86-unicode\NSISConfig.dll del nsis\Plugins\x86-unicode\NSISConfig.dll
 
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x64-ansi/NSISConfig.dll --output nsis\Plugins\x64-ansi\NSISConfig.dll
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x64-unicode/NSISConfig.dll --output nsis\Plugins\x64-unicode\NSISConfig.dll
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x86-ansi/NSISConfig.dll --output nsis\Plugins\x86-ansi\NSISConfig.dll
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x86-unicode/NSISConfig.dll --output nsis\Plugins\x86-unicode\NSISConfig.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x64-ansi/NSISConfig.dll --output ${{ env.ROOT }}\nsis\Plugins\x64-ansi\NSISConfig.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x64-unicode/NSISConfig.dll --output ${{ env.ROOT }}\nsis\Plugins\x64-unicode\NSISConfig.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x86-ansi/NSISConfig.dll --output ${{ env.ROOT }}\nsis\Plugins\x86-ansi\NSISConfig.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x86-unicode/NSISConfig.dll --output ${{ env.ROOT }}\nsis\Plugins\x86-unicode\NSISConfig.dll
 
           xcopy nsis "%ProgramFiles(x86)%\NSIS" /S /E /I /Y
 
