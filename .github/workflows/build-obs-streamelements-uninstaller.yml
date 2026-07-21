@@ -44,6 +44,8 @@ jobs:
         run: |
           cd /d "${{ env.ROOT }}"
 
+          if not exist resources mkdir resources
+
           curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-probe-libobs-version/windows/qa/obs-probe-libobs-version-32.exe --output resources\obs-probe-libobs-version-32.exe
           curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-probe-libobs-version/windows/qa/obs-probe-libobs-version-64.exe --output resources\obs-probe-libobs-version-64.exe
 
@@ -51,6 +53,14 @@ jobs:
         shell: cmd
         run: |
           cd /d "${{ env.ROOT }}"
+
+          if not exist nsis mkdir nsis
+          if not exist nsis\Plugins mkdir nsis\Plugins
+
+          if not exist nsis\Plugins\x64-ansi mkdir nsis\Plugins\x64-ansi
+          if not exist nsis\Plugins\x64-unicode mkdir nsis\Plugins\x64-unicode
+          if not exist nsis\Plugins\x86-ansi mkdir nsis\Plugins\x86-ansi
+          if not exist nsis\Plugins\x64-unicode mkdir nsis\Plugins\x64-unicode
 
           if exist nsis\Plugins\x64-ansi\NSISLockDetector.dll del nsis\Plugins\x64-ansi\NSISLockDetector.dll
           if exist nsis\Plugins\x64-unicode\NSISLockDetector.dll del nsis\Plugins\x64-unicode\NSISLockDetector.dll
