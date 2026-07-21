@@ -34,6 +34,12 @@ env:
     -DENABLE_SCRIPTING_LUA=OFF
     -DENABLE_UI=OFF
 
+  BUILD_UNINSTALLER: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
+  BUILD_INSTALLER: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
+  UPLOAD_SYMBOLS: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
+  UPLOAD_BINARIES: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
+  TAG_COMMIT: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
+
 jobs:
   version:
     runs-on: ubuntu-latest
@@ -143,7 +149,7 @@ jobs:
           msbuild obs-studio.sln -p:Configuration=RelWithDebInfo
 
       - name: Upload BugSplat Symbols
-        if: github.event_name != 'pull_request'
+        if: ${{ env.UPLOAD_SYMBOLS }}
         shell: cmd
         run: |
           c:\local\bugsplat\symbol-upload-windows.exe ^
@@ -186,15 +192,6 @@ jobs:
           process_gcloudignore: false
           path: '${{ github.workspace }}/Version.generated.hpp'
           destination: 'se-obs-builds/obs-streamelements-core/latest/windows'
-
-      - name: Upload RELEASE_NOTES.md to GCS
-        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
-        uses: 'google-github-actions/upload-cloud-storage@v3'
-        with:
-          parent: false
-          process_gcloudignore: false
-          path: '${{ github.workspace }}/RELEASE_NOTES.md'
-          destination: 'se-obs-builds/obs-streamelements-core/latest/macos'
 
   macos:
     needs: version
@@ -285,14 +282,14 @@ jobs:
           xcrun dsymutil obs-streamelements-core.plugin/Contents/MacOS/obs-streamelements-core -o obs-streamelements-core.dSYM
 
       - name: Upload ARM64 to BugSplat
-        if: github.event_name != 'pull_request'
+        if: ${{ env.UPLOAD_SYMBOLS }}
         run: |
           cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
 
           /tmp/symbol-upload-macos -v -a "obs-streamelements-core-macos" -b "OBS_Live" -i "${{ secrets.BUGSPLAT_CLIENTID }}" -s "${{ secrets.BUGSPLAT_CLIENTSECRET }}" -f "obs-streamelements-core.dSYM" -d . -v "${{ needs.version.outputs.version_encoded }}"
 
       - name: Upload x86_64 to BugSplat
-        if: github.event_name != 'pull_request'
+        if: ${{ env.UPLOAD_SYMBOLS }}
         run: |
           cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core/RelWithDebInfo
 
@@ -341,23 +338,20 @@ jobs:
           path: '${{ github.workspace }}/Version.generated.hpp'
           destination: 'se-obs-builds/obs-streamelements-core/latest/macos'
 
-      - name: Upload RELEASE_NOTES.md to GCS
-        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
-        uses: 'google-github-actions/upload-cloud-storage@v3'
-        with:
-          parent: false
-          process_gcloudignore: false
-          path: '${{ github.workspace }}/RELEASE_NOTES.md'
-          destination: 'se-obs-builds/obs-streamelements-core/latest/macos'
-
+  build-uninstaller:
+    needs: [ version ]
+    permissions:
+      contents: read
+      id-token: write # lets the job mint a GitHub OIDC token for WIF
+    uses: ./.github/workflows/build-obs-streamelements-uninstaller.yml
+    secrets: inherit
   tag-master-commit:
-    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
-    needs: [version, windows, macos]
+    if: ${{ env.TAG_COMMIT }}
+    needs: [version, windows, macos, build-uninstaller]
     runs-on: ubuntu-latest
 
     steps:
       - name: Tag master commit
-        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
         uses: tvdias/github-tagger@v0.0.1
         with:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>We are sad to see you go...</title>
+        <style>
+            * {
+                font-family: Arial;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Farewell</h1>
+        <button onclick="window.close(); return false">Close</button>
+        <button onclick="location.href = 'http://www.streamelements.com/'; return false">Redirect</button>
+        <button onclick="addIframe(); return false">IFRAME</button>
+        <div id="container"></div>
+        <script>
+            function addIframe()
+            {
+                var f = document.createElement("IFRAME");
+                f.src = "http://www.streamelements.com";
+                f.width = "100%";
+                f.height = "400";
+
+                document.getElementById("container").appendChild(f);
+            }
+        </script>
+    </body>
+</html>
