@@ -38,7 +38,6 @@ env:
   BUILD_INSTALLER: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
   UPLOAD_SYMBOLS: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
   UPLOAD_BINARIES: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
-  TAG_COMMIT: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
 
 jobs:
   version:
@@ -346,7 +345,7 @@ jobs:
     uses: ./.github/workflows/build-obs-streamelements-uninstaller.yml
     secrets: inherit
   tag-master-commit:
-    if: ${{ env.TAG_COMMIT }}
+    if: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
     needs: [version, windows, macos, build-uninstaller]
     runs-on: ubuntu-latest
 
