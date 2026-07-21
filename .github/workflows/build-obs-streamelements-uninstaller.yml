@@ -6,6 +6,13 @@ permissions:
 
 on:
   workflow_call:
+    secrets:
+      AZURE_TENANT_ID:
+        required: true
+      AZURE_CLIENT_ID:
+        required: true
+      AZURE_CLIENT_SECRET:
+        required: true
 
 env:
   ROOT: ${{ github.workspace }}\CI\obs-streamelements-uninstaller
