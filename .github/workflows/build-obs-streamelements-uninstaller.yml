@@ -60,7 +60,7 @@ jobs:
           if not exist nsis\Plugins\x64-ansi mkdir nsis\Plugins\x64-ansi
           if not exist nsis\Plugins\x64-unicode mkdir nsis\Plugins\x64-unicode
           if not exist nsis\Plugins\x86-ansi mkdir nsis\Plugins\x86-ansi
-          if not exist nsis\Plugins\x64-unicode mkdir nsis\Plugins\x64-unicode
+          if not exist nsis\Plugins\x86-unicode mkdir nsis\Plugins\x86-unicode
 
           if exist nsis\Plugins\x64-ansi\NSISLockDetector.dll del nsis\Plugins\x64-ansi\NSISLockDetector.dll
           if exist nsis\Plugins\x64-unicode\NSISLockDetector.dll del nsis\Plugins\x64-unicode\NSISLockDetector.dll
