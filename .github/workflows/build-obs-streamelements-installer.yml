@@ -9,10 +9,10 @@ on:
     inputs:
       SKIP_WINDOWS_SIGNING:
         required: true
-        type: boolean
+        type: string
       SKIP_APPLE_SIGNING_AND_NOTARIZATION:
         required: true
-        type: boolean
+        type: string
 
     secrets:
       AZURE_TENANT_ID:
