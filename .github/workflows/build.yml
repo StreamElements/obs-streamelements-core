@@ -343,10 +343,15 @@ jobs:
       contents: read
       id-token: write # lets the job mint a GitHub OIDC token for WIF
     uses: ./.github/workflows/build-obs-streamelements-uninstaller.yml
-    secrets: inherit
+  build-installer:
+    needs: [ version, build-uninstaller, windows, macos ]
+    permissions:
+      contents: read
+      id-token: write # lets the job mint a GitHub OIDC token for WIF
+    uses: ./.github/workflows/build-obs-streamelements-installer.yml
   tag-master-commit:
     if: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
-    needs: [version, windows, macos, build-uninstaller]
+    needs: [version, windows, macos, build-uninstaller, build-installer]
     runs-on: ubuntu-latest
 
     steps:
