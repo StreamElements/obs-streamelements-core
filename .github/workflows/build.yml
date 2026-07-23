@@ -407,14 +407,22 @@ jobs:
             ${{ github.workspace }}/*.exe
             ${{ github.workspace }}/*.manifest
 
-      - name: Upload to CDN Google Storage
+      - name: Upload Binaries to CDN Google Storage
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
           process_gcloudignore: false
-          path: |
-            ${{ github.workspace }}/*.exe
-            ${{ github.workspace }}/*.manifest
+          path: ${{ github.workspace }}
+          glob: '*.exe'
+          destination: 'gs://cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed'
+
+      - name: Upload Manifests to CDN Google Storage
+        uses: 'google-github-actions/upload-cloud-storage@v3'
+        with:
+          parent: false
+          process_gcloudignore: false
+          path: ${{ github.workspace }}
+          glob: '*.manifest'
           destination: 'gs://cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed'
 
   deploy-signed--macos:
@@ -456,14 +464,22 @@ jobs:
             ${{ github.workspace }}/*.pkg
             ${{ github.workspace }}/*.manifest
           
-      - name: Upload to CDN Google Storage
+      - name: Upload Binaries to CDN Google Storage
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
           process_gcloudignore: false
-          path: |
-            ${{ github.workspace }}/*.pkg
-            ${{ github.workspace }}/*.manifest
+          path: ${{ github.workspace }}
+          glob: '*.pkg'
+          destination: 'gs://cdn.streamelements.com/obs/dist/obs-streamelements/macos/signed'
+
+      - name: Upload Manifests to CDN Google Storage
+        uses: 'google-github-actions/upload-cloud-storage@v3'
+        with:
+          parent: false
+          process_gcloudignore: false
+          path: ${{ github.workspace }}
+          glob: '*.manifest'
           destination: 'gs://cdn.streamelements.com/obs/dist/obs-streamelements/macos/signed'
   tag-master-commit:
     if: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
