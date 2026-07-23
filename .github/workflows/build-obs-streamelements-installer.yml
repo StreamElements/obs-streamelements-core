@@ -641,7 +641,7 @@ jobs:
         shell: pwsh
         run: |
           echo "${{ inputs.PLUGIN_VERSION_STRING }}" >> /tmp/history.md
-          cat /tmp/RELEASE_NOTES.md >> /tmp/history.md
+          cat "${{ env.ROOT }}/RELEASE_NOTES.md" >> /tmp/history.md
           echo "" >> /tmp/history.md
           cat "${{ env.ROOT }}/RELEASE_NOTES.history.macos.md" >> /tmp/history.md
           rm "${{ env.ROOT }}/RELEASE_NOTES.history.macos.md"

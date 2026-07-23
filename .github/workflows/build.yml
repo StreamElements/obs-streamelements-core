@@ -345,7 +345,7 @@ jobs:
     uses: ./.github/workflows/build-obs-streamelements-uninstaller.yml
     secrets: inherit
   build-installer:
-    needs: [ version, build-uninstaller ] # TODO: windows, macos
+    needs: [ version ] # TODO: build-uninstaller, windows, macos
     permissions:
       contents: read
       id-token: write # lets the job mint a GitHub OIDC token for WIF
