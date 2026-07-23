@@ -275,6 +275,8 @@ jobs:
             
             type ${{ env.ROOT }}\version.generated.nsh
 
+            dir /s resources
+
             makensis /V4 /DSKIP_64BIT_CONTENT main.nsi
 
             ren obs-streamelements-setup.exe $StreamElementsExe32bit
@@ -437,11 +439,7 @@ jobs:
 
       - name: Build installer
         run: |
-          # Extract version number
-
-          export STREAMELEMENTS_PLUGIN_VERSION=$(cat /tmp/Version.generated.hpp| awk '/#define STREAMELEMENTS_PLUGIN_VERSION [0-9]+/ { str = $0; sub(/#define STREAMELEMENTS_PLUGIN_VERSION /, "", str); sub(/[^0-9]/, "", str); print str }')
-
-          if [ $? -ne 0 ]; then exit 1; fi
+          cd ${{ env.ROOT }}
 
           # Compose release notes
 
@@ -519,6 +517,8 @@ jobs:
       - name: Sign plugin code
         if: inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes'
         run: |
+          cd ${{ env.ROOT }}
+
           # Create universal package
 
           echo Removing existing signature...
@@ -539,12 +539,16 @@ jobs:
 
       - name: Create plugin package
         run: |
+          cd ${{ env.ROOT }}
+
           pkgbuild --identifier com.streamelements.selive-core --version ${{ inputs.PLUGIN_VERSION_STRING }} --install-location "/Library/Application Support/obs-studio/plugins" --component /tmp/obs-streamelements-core.plugin /tmp/plugin.pkg
 
           if [ $? -ne 0 ]; then exit 1; fi
 
       - name: Create product installer
         run: |
+          cd ${{ env.ROOT }}
+
           mkdir /tmp/resources
 
           if [ $? -ne 0 ]; then exit 1; fi
@@ -564,6 +568,8 @@ jobs:
       - name: Sign product installer
         if: inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes'
         run: |
+          cd ${{ env.ROOT }}
+
           productsign --timestamp --sign "${{ secrets.CODESIGN_DEVIDINST_IDENTITY }}" /tmp/obs-streamelements-core-unsigned.pkg /tmp/obs-streamelements-core.pkg
 
           if [ $? -ne 0 ]; then exit 1; fi
@@ -571,6 +577,8 @@ jobs:
       - name: Mock product installer signature
         if: inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes'
         run: |
+          cd ${{ env.ROOT }}
+
           cp /tmp/obs-streamelements-core-unsigned.pkg /tmp/obs-streamelements-core.pkg
 
           if [ $? -ne 0 ]; then exit 1; fi
@@ -579,6 +587,8 @@ jobs:
       - name: Notarize product installer
         if: inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes'
         run: |
+          cd ${{ env.ROOT }}
+
           xcrun notarytool submit --force /tmp/obs-streamelements-core.pkg  --keychain-profile "notarytool-password" --wait
 
           if [ $? -ne 0 ]; then exit 1; fi
@@ -586,12 +596,16 @@ jobs:
       - name: Staple product installer
         if: inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes'
         run: |
+          cd ${{ env.ROOT }}
+
           xcrun stapler staple /tmp/obs-streamelements-core.pkg
 
           if [ $? -ne 0 ]; then exit 1; fi
 
       - name: Prepare product installer for upload
         run: |
+          cd ${{ env.ROOT }}
+
           cp /tmp/obs-streamelements-core.pkg ${{ env.ROOT }}/obs-streamelements-core.pkg
 
           if [ $? -ne 0 ]; then exit 1; fi
