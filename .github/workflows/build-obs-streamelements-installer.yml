@@ -67,7 +67,7 @@ jobs:
         
         run: |
           echo "${{ inputs.PLUGIN_VERSION_STRING }}" >> /tmp/release_notes_raw.md
-          cat /tmp/RELEASE_NOTES.md >> /tmp/release_notes_raw.md
+          cat "RELEASE_NOTES.md" >> /tmp/release_notes_raw.md
           cat "RELEASE_NOTES.history.md" >> /tmp/release_notes_raw.md
 
 
@@ -373,8 +373,6 @@ jobs:
           if [ $? -ne 0 ]; then exit 1; fi
 
           curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/macos/Version.generated.hpp --output /tmp/Version.generated.hpp
-
-          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/macos/RELEASE_NOTES.md --output /tmp/RELEASE_NOTES.md
 
           7z x -y /tmp/build_x86_64.zip -o/tmp/build_x86_64
 
