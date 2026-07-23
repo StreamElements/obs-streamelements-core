@@ -345,7 +345,7 @@ jobs:
     uses: ./.github/workflows/build-obs-streamelements-uninstaller.yml
     secrets: inherit
   build-installer:
-    needs: [ version ] # TODO: build-uninstaller, windows, macos
+    needs: [ version, build-uninstaller, windows, macos ]
     permissions:
       contents: read
       id-token: write # lets the job mint a GitHub OIDC token for WIF
@@ -356,6 +356,54 @@ jobs:
       SKIP_APPLE_SIGNING_AND_NOTARIZATION: ${{ vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION }}
       PLUGIN_VERSION_STRING: ${{ needs.version.outputs.version_string }}
       PLUGIN_VERSION_ENCODED: ${{ needs.version.outputs.version_encoded }}
+
+
+  upload-signed-binaries-to-cdn:
+    needs: [ version ] # TODO: build-installer
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+
+    steps:
+      - name: Auth Google API
+        uses: 'google-github-actions/auth@v2'
+        with:
+          project_id: streamelements-core
+          workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
+          service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
+
+      - name: macos
+        if: (vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes')
+        run: |
+          export signedPackageFilename=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}.pkg
+
+          for $manifest in obs-streamelements.manifest obs-streamelements.qa.manifest obs-streamelements.beta.manifest obs-streamelements.latest.manifest obs-streamelements.stable.manifest
+          do
+            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/$manifest --output $manifest
+
+            sed -i 's/\$\{PACKAGE_FILENAME\}/$signedPackageFilename/' $manifest
+            sed -i 's/\$\{PACKAGE_FILENAME_32_BIT\}/$signedPackageFilename/' $manifest
+            sed -i 's/\$\{PACKAGE_FILENAME_64_BIT\}/$signedPackageFilename/' $manifest
+
+            cat $manifest
+          done
+
+      - name: windows
+        if: (vars.SKIP_WINDOWS_SIGNING != 'true' && vars.SKIP_WINDOWS_SIGNING != '1' && vars.SKIP_WINDOWS_SIGNING != 'yes')
+        run: |
+          export signedPackageFilename=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}.exe
+          export signedPackageFilename64=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}-64bit.exe
+          export signedPackageFilename32=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}.exe
+
+          for $manifest in obs-streamelements.manifest obs-streamelements.qa.manifest obs-streamelements.beta.manifest obs-streamelements.latest.manifest obs-streamelements.stable.manifest
+          do
+            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/$manifest --output $manifest
+
+            sed -i 's/\$\{PACKAGE_FILENAME\}/$signedPackageFilename/' $manifest
+            sed -i 's/\$\{PACKAGE_FILENAME_64_BIT\}/$signedPackageFilename64/' $manifest
+            sed -i 's/\$\{PACKAGE_FILENAME_32_BIT\}/$signedPackageFilename32/' $manifest
+
+            type $manifest
+          done
 
   tag-master-commit:
     if: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}

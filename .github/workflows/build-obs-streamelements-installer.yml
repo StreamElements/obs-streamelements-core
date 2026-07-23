@@ -342,12 +342,6 @@ jobs:
             '${{ env.ROOT }}\..\download\obs-streamelements-core\Version.generated.hpp'
           destination: 'se-obs-builds/obs-streamelements-installer/latest/windows'
 
-      - name: Prepare artifacts for upload to CDN
-        if: env.UPLOAD_BINARIES == 'true' && env.SIGN_WINDOWS_BINARIES == 'true'
-        shell: pwsh
-        run: |
-          # TODO: Add release notes, rename artifacts and modify manifests
-
   macos:
     needs: [release_notes]
     runs-on: macos-latest
@@ -630,37 +624,3 @@ jobs:
             '${{ env.ROOT }}/obs-streamelements.manifest'
             '${{ env.ROOT }}/obs-streamelements.*.manifest'
           destination: 'se-obs-builds/obs-streamelements-installer/latest/macos'
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-      - name: Prepare artifacts for upload to CDN
-        if: env.UPLOAD_BINARIES == 'true' && env.SIGN_MACOS_BINARIES == 'true'
-        shell: pwsh
-        run: |
-          # TODO: Add release notes, rename artifacts and modify manifests
-
-      - name: Commit changes to RELEASE_NOTES.history.macos.md
-        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && (inputs.SKIP_WINDOWS_SIGNING != 'true' && inputs.SKIP_WINDOWS_SIGNING != '1' && inputs.SKIP_WINDOWS_SIGNING != 'yes')
-        shell: pwsh
-        run: |
-          echo "${{ inputs.PLUGIN_VERSION_STRING }}" >> /tmp/history.md
-          cat "${{ env.ROOT }}/RELEASE_NOTES.md" >> /tmp/history.md
-          echo "" >> /tmp/history.md
-          cat "${{ env.ROOT }}/RELEASE_NOTES.history.macos.md" >> /tmp/history.md
-          rm "${{ env.ROOT }}/RELEASE_NOTES.history.macos.md"
-          cp /tmp/history.md "${{ env.ROOT }}/RELEASE_NOTES.history.macos.md"
-
-          git add "${{ env.ROOT }}/RELEASE_NOTES.history.macos.md"
-          git commit -m "ADD RELEASE_NOTES.md to RELEASE_NOTES.history.macos.md"
-          git push
