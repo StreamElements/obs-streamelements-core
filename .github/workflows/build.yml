@@ -376,7 +376,7 @@ jobs:
         run: |
           export signedPackageFilename=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}.pkg
 
-          for $manifest in obs-streamelements.manifest obs-streamelements.qa.manifest obs-streamelements.beta.manifest obs-streamelements.latest.manifest obs-streamelements.stable.manifest
+          for manifest in obs-streamelements.manifest obs-streamelements.qa.manifest obs-streamelements.beta.manifest obs-streamelements.latest.manifest obs-streamelements.stable.manifest
           do
             curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/$manifest --output $manifest
 
@@ -394,7 +394,7 @@ jobs:
           export signedPackageFilename64=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}-64bit.exe
           export signedPackageFilename32=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}.exe
 
-          for $manifest in obs-streamelements.manifest obs-streamelements.qa.manifest obs-streamelements.beta.manifest obs-streamelements.latest.manifest obs-streamelements.stable.manifest
+          for manifest in obs-streamelements.manifest obs-streamelements.qa.manifest obs-streamelements.beta.manifest obs-streamelements.latest.manifest obs-streamelements.stable.manifest
           do
             curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/$manifest --output $manifest
 
