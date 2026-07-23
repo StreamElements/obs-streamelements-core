@@ -357,11 +357,10 @@ jobs:
       PLUGIN_VERSION_STRING: ${{ needs.version.outputs.version_string }}
       PLUGIN_VERSION_ENCODED: ${{ needs.version.outputs.version_encoded }}
 
-
   deploy-signed-windows:
-    needs: [ version ] # TODO: build-installer
+    needs: [ version, windows, build-installer ]
     runs-on: ubuntu-latest
-    # if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && (vars.SKIP_WINDOWS_SIGNING != 'true' && vars.SKIP_WINDOWS_SIGNING != '1' && vars.SKIP_WINDOWS_SIGNING != 'yes')
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && (vars.SKIP_WINDOWS_SIGNING != 'true' && vars.SKIP_WINDOWS_SIGNING != '1' && vars.SKIP_WINDOWS_SIGNING != 'yes')
 
     steps:
       - name: Auth Google API
@@ -426,7 +425,7 @@ jobs:
           destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed'
 
   deploy-signed--macos:
-    needs: [ version ] # TODO: build-installer
+    needs: [ version, macos, build-installer ]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && (vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes')
 
