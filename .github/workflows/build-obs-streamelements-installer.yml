@@ -276,6 +276,7 @@ jobs:
             type ${{ env.ROOT }}\version.generated.nsh
 
             dir resources
+            dir resources\vcruntime
             dir resources\vcruntime\x64
             dir resources\vcruntime\x64\ucrtbase.dll
 
