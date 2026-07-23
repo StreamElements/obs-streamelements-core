@@ -575,7 +575,7 @@ jobs:
           if [ $? -ne 0 ]; then exit 1; fi
 
       - name: Mock product installer signature
-        if: inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes'
+        if: inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION == 'true' || inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION == '1' || inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION == 'yes'
         run: |
           cd ${{ env.ROOT }}
 
