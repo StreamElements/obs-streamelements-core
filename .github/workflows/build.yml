@@ -400,10 +400,10 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: build64
+          name: windows-signed-installer
           path: |
-            '*.exe'
-            '*.manifest'
+            ${{ github.workspace }}/*.exe
+            ${{ github.workspace }}/*.manifest
 
       - name: Upload to CDN Google Storage
         uses: 'google-github-actions/upload-cloud-storage@v3'
@@ -411,8 +411,8 @@ jobs:
           parent: false
           process_gcloudignore: false
           path: |
-            '*.exe'
-            '*.manifest'
+            ${{ github.workspace }}/*.exe
+            ${{ github.workspace }}/*.manifest
           destination: 'gs://cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed'
 
   deploy-signed--macos:
@@ -456,10 +456,10 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: build64
+          name: macos-signed-installer
           path: |
-            '*.pkg'
-            '*.manifest'
+            ${{ github.workspace }}/*.pkg
+            ${{ github.workspace }}/*.manifest
           
       - name: Upload to CDN Google Storage
         uses: 'google-github-actions/upload-cloud-storage@v3'
@@ -467,8 +467,8 @@ jobs:
           parent: false
           process_gcloudignore: false
           path: |
-            '*.pkg'
-            '*.manifest'
+            ${{ github.workspace }}/*.pkg
+            ${{ github.workspace }}/*.manifest
           destination: 'gs://cdn.streamelements.com/obs/dist/obs-streamelements/macos/signed'
   tag-master-commit:
     if: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
