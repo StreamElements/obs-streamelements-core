@@ -275,13 +275,6 @@ jobs:
             
             type ${{ env.ROOT }}\version.generated.nsh
 
-            dir resources
-            dir resources\vcruntime
-            dir resources\vcruntime\x64
-            dir resources\vcruntime\x64\ucrtbase.dll
-
-            exit 0
-
             makensis /V4 /DSKIP_64BIT_CONTENT main.nsi
 
             ren obs-streamelements-setup.exe $StreamElementsExe32bit
