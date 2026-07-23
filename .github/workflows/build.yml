@@ -374,7 +374,7 @@ jobs:
       - name: macos
         if: (vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes')
         run: |
-          export signedPackageFilename=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}.pkg
+          export signedPackageFilename=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}
 
           for manifest in obs-streamelements.manifest obs-streamelements.qa.manifest obs-streamelements.beta.manifest obs-streamelements.latest.manifest obs-streamelements.stable.manifest
           do
@@ -391,7 +391,7 @@ jobs:
         if: (vars.SKIP_WINDOWS_SIGNING != 'true' && vars.SKIP_WINDOWS_SIGNING != '1' && vars.SKIP_WINDOWS_SIGNING != 'yes')
         run: |
           export signedPackageFilename=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}.exe
-          export signedPackageFilename64=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}-64bit.exe
+          export signedPackageFilename64=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}-64bit
           export signedPackageFilename32=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}.exe
 
           for manifest in obs-streamelements.manifest obs-streamelements.qa.manifest obs-streamelements.beta.manifest obs-streamelements.latest.manifest obs-streamelements.stable.manifest
