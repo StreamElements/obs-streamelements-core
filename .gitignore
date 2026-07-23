@@ -63,7 +63,7 @@ tags
 *.tlog
 *.sdf
 *.opensdf
-*.xml
+#*.xml
 *.ipch
 *.css
 *.xslt
