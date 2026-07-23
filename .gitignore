@@ -2,8 +2,8 @@
 node_modules/
 
 #binaries
-*.exe
-*.dll
+#*.exe
+#*.dll
 *.dylib
 *.so
 
