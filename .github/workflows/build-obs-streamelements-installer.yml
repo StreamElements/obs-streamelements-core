@@ -83,6 +83,8 @@ jobs:
           echo "release_notes_full_base64=$(base64 /tmp/release_notes_full.md)" >> $GITHUB_OUTPUT
           echo "release_notes_raw_base64=$(base64 /tmp/release_notes_raw.md)" >> $GITHUB_OUTPUT
 
+          cat $GITHUB_OUTPUT
+
   windows:
     needs: [release_notes]
     runs-on: windows-2022
