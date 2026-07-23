@@ -387,14 +387,23 @@ jobs:
             cat $manifest
           done
 
-          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-setup.pkg --output obs-streamelements-setup.pkg
+          cp obs-streamelements.manifest obs-streamelements-${{ needs.version.outputs.version_encoded }}.manifest
+
+          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-core.pkg --output obs-streamelements-core.pkg
+
+          mv obs-streamelements-core.pkg $signedPackageFilename.pkg
+
+          for i in *.exe *.manifest
+          do
+            gsutil cp $i gs://cdn.streamelements.com/obs/dist/obs-streamelements/macos/signed/$i
+          done
 
       - name: windows
         if: (vars.SKIP_WINDOWS_SIGNING != 'true' && vars.SKIP_WINDOWS_SIGNING != '1' && vars.SKIP_WINDOWS_SIGNING != 'yes')
         run: |
-          export signedPackageFilename=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}.exe
+          export signedPackageFilename=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}
           export signedPackageFilename64=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}-64bit
-          export signedPackageFilename32=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}.exe
+          export signedPackageFilename32=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}
 
           for manifest in obs-streamelements.manifest obs-streamelements.qa.manifest obs-streamelements.beta.manifest obs-streamelements.latest.manifest obs-streamelements.stable.manifest
           do
@@ -407,7 +416,20 @@ jobs:
             cat $manifest
           done
 
+          cp obs-streamelements.manifest obs-streamelements-${{ needs.version.outputs.version_encoded }}.manifest
+
           curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-setup.exe --output obs-streamelements-setup.exe
+          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-setup-x64.exe --output obs-streamelements-setup-x64.exe
+          # curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-setup-x86.exe --output obs-streamelements-setup-x86.exe
+
+          cp obs-streamelements-setup-x64.exe $signedPackageFilename64.exe
+          cp obs-streamelements-setup-x64.exe $signedPackageFilename32.exe # This is not a mistake, we no longer support 32bit builds
+          mv obs-streamelements-setup.exe $signedPackageFilename.exe
+
+          for i in *.exe *.manifest
+          do
+            gsutil cp $i gs://cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed/$i
+          done
 
   tag-master-commit:
     if: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
