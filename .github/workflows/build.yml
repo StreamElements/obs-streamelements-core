@@ -406,8 +406,8 @@ jobs:
         with:
           name: windows-signed-installer
           path: |
-            ${{ github.workspace }}/*.exe
-            ${{ github.workspace }}/*.manifest
+            *.exe
+            *.manifest
 
       - name: Upload Binaries to CDN Google Storage
         uses: 'google-github-actions/upload-cloud-storage@v3'
@@ -463,8 +463,8 @@ jobs:
         with:
           name: macos-signed-installer
           path: |
-            ${{ github.workspace }}/*.pkg
-            ${{ github.workspace }}/*.manifest
+            *.pkg
+            *.manifest
           
       - name: Upload Binaries to CDN Google Storage
         uses: 'google-github-actions/upload-cloud-storage@v3'
