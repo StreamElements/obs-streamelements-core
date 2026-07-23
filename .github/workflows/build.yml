@@ -345,7 +345,7 @@ jobs:
     uses: ./.github/workflows/build-obs-streamelements-uninstaller.yml
     secrets: inherit
   build-installer:
-    needs: [ version, build-uninstaller, windows, macos ]
+    needs: [ version, build-uninstaller ] # TODO: windows, macos
     permissions:
       contents: read
       id-token: write # lets the job mint a GitHub OIDC token for WIF
@@ -354,6 +354,8 @@ jobs:
     with:
       SKIP_WINDOWS_SIGNING: ${{ vars.SKIP_WINDOWS_SIGNING }}
       SKIP_APPLE_SIGNING_AND_NOTARIZATION: ${{ vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION }}
+      PLUGIN_VERSION_STRING: ${{ needs.version.outputs.version_string }}
+      PLUGIN_VERSION_ENCODED: ${{ needs.version.outputs.version_encoded }}
 
   tag-master-commit:
     if: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}

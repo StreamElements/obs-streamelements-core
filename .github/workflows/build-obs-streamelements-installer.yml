@@ -14,6 +14,14 @@ on:
         required: true
         type: string
 
+      PLUGIN_VERSION_STRING:
+        required: true
+        type: string
+
+      PLUGIN_VERSION_ENCODED:
+        required: true
+        type: string
+
     secrets:
       AZURE_TENANT_ID:
         required: true
@@ -42,7 +50,39 @@ env:
   UPLOAD_BINARIES: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
 
 jobs:
+  release_notes:
+    runs-on: ubuntu-latest
+
+    outputs:
+      release_notes_html_base64: ${{ steps.release_notes_step.outputs.release_notes_html_base64 }}
+      release_notes_full_base64: ${{ steps.release_notes_step.outputs.release_notes_full_base64 }}
+      release_notes_raw_base64: ${{ steps.release_notes_step.outputs.release_notes_raw_base64 }}
+
+    steps:
+      - name: Install markdown-to-html-cli
+        run: |
+          npm i markdown-to-html-cli -g
+      - name: Create release notes
+        id: release_notes_step
+        
+        run: |
+          echo "${{ inputs.PLUGIN_VERSION_STRING }}" >> /tmp/release_notes_raw.md
+          cat /tmp/RELEASE_NOTES.md >> /tmp/release_notes_raw.md
+          cat "RELEASE_NOTES.history.md" >> /tmp/release_notes_raw.md
+
+
+          cat "RELEASE_NOTES.header.md" >> /tmp/release_notes_full.md
+          cat /tmp/release_notes_raw.md >> /tmp/release_notes_full.md
+          cat "RELEASE_NOTES.footer.md" >> /tmp/release_notes_full.md
+
+          markdown-to-html-cli --source /tmp/release_notes_full.md --output /tmp/release_notes.html --no-dark-mode --markdown-style-theme dark --no-corners --style ".markdown-style { max-width: 100% !important; }"
+
+          echo "release_notes_html_base64=$(base64 /tmp/release_notes.html)" >> $GITHUB_OUTPUT
+          echo "release_notes_full_base64=$(BASE64 /tmp/release_notes_full.md)" >> $GITHUB_OUTPUT
+          echo "release_notes_raw_base64=$(BASE64 /tmp/release_notes_raw.md)" >> $GITHUB_OUTPUT
+
   windows:
+    needs: [release_notes]
     runs-on: windows-2022
 
     env:
@@ -68,6 +108,8 @@ jobs:
       - name: Download SE.Live
         shell: cmd
         run: |
+            cd /d ${{ env.ROOT }}
+
             if not exist ${{ env.ROOT }}\..\obs-studio\build64_qt6\rundir\${{ env.BUILD_CONFIG }} md ${{ env.ROOT }}\..\obs-studio\build64_qt6\rundir\${{ env.BUILD_CONFIG }}
 
             if not exist ${{ env.ROOT }}\..\obs-studio\build32_qt6\rundir\${{ env.BUILD_CONFIG }} md ${{ env.ROOT }}\..\obs-studio\build32_qt6\rundir\${{ env.BUILD_CONFIG }}
@@ -130,6 +172,8 @@ jobs:
       - name: Download resources
         shell: cmd
         run: |
+          cd /d ${{ env.ROOT }}
+
           curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-probe-libobs-version/windows/qa/obs-probe-libobs-version-32.exe --output resources\obs-probe-libobs-version-32.exe
           curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-probe-libobs-version/windows/qa/obs-probe-libobs-version-64.exe --output resources\obs-probe-libobs-version-64.exe
 
@@ -181,7 +225,7 @@ jobs:
       - name: Build installer
         shell: powershell
         run: |
-            $StreamElementsVersion = ((Get-Content -Path ${{ env.ROOT }}\..\download\obs-streamelements-core\Version.generated.hpp) | Where-Object {$_ -like '#define STREAMELEMENTS_PLUGIN_VERSION *'} | Select-Object -first 1).Split(' ') | Select-Object -last 1
+            cd /d ${{ env.ROOT }}
 
             $StreamElementsExeMain = 'obs-streamelements-setup.exe'
 
@@ -191,15 +235,25 @@ jobs:
 
 
 
-            (Get-Content -Path ${{ env.ROOT }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', $StreamElementsVersion) | Set-Content -Path ${{ env.ROOT }}\obs-streamelements.manifest
+            echo "" >> ${{ env.ROOT }}\template.manifest
+            echo "" >> ${{ env.ROOT }}\template.manifest
+            echo "[[[BEGIN_RELEASE_NOTES]]]" >> ${{ env.ROOT }}\template.manifest
+            echo ([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String("${{ needs.release_notes.outputs.release_notes_html_base64 }}"))) >> ${{ env.ROOT }}\template.manifest
+            echo "" >> ${{ env.ROOT }}/template.manifest
+            echo "[[[END_RELEASE_NOTES]]]" >> ${{ env.ROOT }}\template.manifest
 
-            (Get-Content -Path ${{ env.ROOT }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', $StreamElementsVersion) | Set-Content -Path ${{ env.ROOT }}\obs-streamelements.qa.manifest
+            type ${{ env.ROOT }}\template.manifest
 
-            (Get-Content -Path ${{ env.ROOT }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', $StreamElementsVersion) | Set-Content -Path ${{ env.ROOT }}\obs-streamelements.beta.manifest
 
-            (Get-Content -Path ${{ env.ROOT }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', $StreamElementsVersion) | Set-Content -Path ${{ env.ROOT }}\obs-streamelements.latest.manifest
+            (Get-Content -Path ${{ env.ROOT }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', ${{ inputs.PLUGIN_VERSION_ENCODED }}) | Set-Content -Path ${{ env.ROOT }}\obs-streamelements.manifest
 
-            (Get-Content -Path ${{ env.ROOT }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', $StreamElementsVersion) | Set-Content -Path ${{ env.ROOT }}\obs-streamelements.stable.manifest
+            (Get-Content -Path ${{ env.ROOT }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', ${{ inputs.PLUGIN_VERSION_ENCODED }}) | Set-Content -Path ${{ env.ROOT }}\obs-streamelements.qa.manifest
+
+            (Get-Content -Path ${{ env.ROOT }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', ${{ inputs.PLUGIN_VERSION_ENCODED }}) | Set-Content -Path ${{ env.ROOT }}\obs-streamelements.beta.manifest
+
+            (Get-Content -Path ${{ env.ROOT }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', ${{ inputs.PLUGIN_VERSION_ENCODED }}) | Set-Content -Path ${{ env.ROOT }}\obs-streamelements.latest.manifest
+
+            (Get-Content -Path ${{ env.ROOT }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', ${{ inputs.PLUGIN_VERSION_ENCODED }}) | Set-Content -Path ${{ env.ROOT }}\obs-streamelements.stable.manifest
 
 
             type ${{ env.ROOT }}\obs-streamelements.qa.manifest
@@ -211,16 +265,11 @@ jobs:
             type ${{ env.ROOT }}\obs-streamelements.stable.manifest
 
 
-            $ProductVersionString = (
-                $StreamElementsVersion.Substring(2, 2).TrimStart('0') + '.' +
-                $StreamElementsVersion.Substring(4, 2).TrimStart('0') + '.' + 
-                $StreamElementsVersion.Substring(6, 2).TrimStart('0') + '.' +
-                $StreamElementsVersion.Substring(8).TrimStart('0')
-            )
+            # Add version number to installer
 
-            echo ( '!define PRODUCT_VERSION "' + $ProductVersionString + '"' ) > ${{ env.ROOT }}\version.generated.nsh
+            echo ( '!define PRODUCT_VERSION "${{inputs.PLUGIN_VERSION_STRING}}"' ) > ${{ env.ROOT }}\version.generated.nsh
 
-            echo ( '!define SETUP_VERSION "${{ needs.version.outputs.version_string }}"' ) >> ${{ env.ROOT }}\version.generated.nsh
+            echo ( '!define SETUP_VERSION "${{inputs.PLUGIN_VERSION_STRING}}"' ) >> ${{ env.ROOT }}\version.generated.nsh
             
             type ${{ env.ROOT }}\version.generated.nsh
 
@@ -260,19 +309,21 @@ jobs:
         if: ${{ env.SIGN_WINDOWS_BINARIES == 'true'}}
         shell: cmd
         run: |
+          cd /d ${{ env.ROOT }}
+
           signtool verify /pa /v "${{ env.ROOT }}\\obs-streamelements-setup*.exe"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-setup
-          path: obs-streamelements-setup*.exe
+          path: '${{ env.ROOT }}/obs-streamelements-setup*.exe'
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-manifest
-          path: obs-streamelements*.manifest
+          path: '${{ env.ROOT }}/obs-streamelements*.manifest'
 
       - name: Upload to Google Storage
         if: ${{ env.UPLOAD_BINARIES == 'true' }}
@@ -294,6 +345,7 @@ jobs:
           # TODO: Add release notes, rename artifacts and modify manifests
 
   macos:
+    needs: [release_notes]
     runs-on: macos-latest
 
     env:
@@ -391,54 +443,24 @@ jobs:
 
           if [ $? -ne 0 ]; then exit 1; fi
 
-          export STREAMELEMENTS_PLUGIN_VERSION_MAJOR=$(echo $STREAMELEMENTS_PLUGIN_VERSION | awk '{ str = substr($1, 3, 2); sub(/^0+/, "", str); print str }')
-
-          if [ $? -ne 0 ]; then exit 1; fi
-
-          export STREAMELEMENTS_PLUGIN_VERSION_MINOR=$(echo $STREAMELEMENTS_PLUGIN_VERSION | awk '{ str = substr($1, 5, 2); sub(/^0+/, "", str); print str }')
-
-          if [ $? -ne 0 ]; then exit 1; fi
-
-          export STREAMELEMENTS_PLUGIN_VERSION_PATCH=$(echo $STREAMELEMENTS_PLUGIN_VERSION | awk '{ str = substr($1, 7, 2); sub(/^0+/, "", str); print str }')
-
-          if [ $? -ne 0 ]; then exit 1; fi
-
-          export STREAMELEMENTS_PLUGIN_VERSION_BUILD=$(echo $STREAMELEMENTS_PLUGIN_VERSION | awk '{ str = substr($1, 9, 6); sub(/^0+/, "", str); print str }')
-
-          if [ $? -ne 0 ]; then exit 1; fi
-
-          export STREAMELEMENTS_PLUGIN_VERSION_FULL=$STREAMELEMENTS_PLUGIN_VERSION_MAJOR.$STREAMELEMENTS_PLUGIN_VERSION_MINOR.$STREAMELEMENTS_PLUGIN_VERSION_PATCH.$STREAMELEMENTS_PLUGIN_VERSION_BUILD
-
           # Compose release notes
 
           [ -e /tmp/readme.md ] && rm /tmp/readme.md
 
-          cat "${{ env.ROOT }}/RELEASE_NOTES.header.md" >> /tmp/readme.md
-          echo "$STREAMELEMENTS_PLUGIN_VERSION_FULL" >> /tmp/readme.md
-          cat /tmp/RELEASE_NOTES.md >> /tmp/readme.md
-          cat "${{ env.ROOT }}/RELEASE_NOTES.history.macos.md" >> /tmp/readme.md
-          cat "${{ env.ROOT }}/RELEASE_NOTES.footer.md" >> /tmp/readme.md
-
-          npm i markdown-to-html-cli -g
-
-          markdown-to-html-cli --source /tmp/readme.md --output /tmp/readme.html --no-dark-mode --markdown-style-theme dark --no-corners --style ".markdown-style { max-width: 100% !important; }"
-
           # Create version manifest
 
-          sed -e "s/\${STREAMELEMENTS_PLUGIN_VERSION}/$STREAMELEMENTS_PLUGIN_VERSION/g" ${{ env.ROOT }}/template.macos.manifest >${{ env.ROOT }}/obs-streamelements.manifest
+          sed -e "s/\${STREAMELEMENTS_PLUGIN_VERSION}/${{ inputs.PLUGIN_VERSION_ENCODED }}/g" ${{ env.ROOT }}/template.macos.manifest >${{ env.ROOT }}/obs-streamelements.manifest
 
           if [ $? -ne 0 ]; then exit 1; fi
 
           echo "" >> ${{ env.ROOT }}/obs-streamelements.manifest
           echo "" >> ${{ env.ROOT }}/obs-streamelements.manifest
           echo "[[[BEGIN_RELEASE_NOTES]]]" >> ${{ env.ROOT }}/obs-streamelements.manifest
-          cat /tmp/readme.html >> ${{ env.ROOT }}/obs-streamelements.manifest
+          echo "${{ needs.release_notes.outputs.release_notes_html_base64 }}" |base64 -d>> ${{ env.ROOT }}/obs-streamelements.manifest
           echo "" >> ${{ env.ROOT }}/obs-streamelements.manifest
           echo "[[[END_RELEASE_NOTES]]]" >> ${{ env.ROOT }}/obs-streamelements.manifest
 
           cat ${{ env.ROOT }}/obs-streamelements.manifest
-
-
 
           # Create universal binary from ARM64 and x86_64
 
@@ -471,11 +493,11 @@ jobs:
 
           plutil -replace CFBundleIdentifier -string com.streamelements.selive-core /tmp/obs-streamelements-core.plugin/Contents/Info.plist
           
-          plutil -replace CFBundleShortVersionString -string $STREAMELEMENTS_PLUGIN_VERSION_FULL /tmp/obs-streamelements-core.plugin/Contents/Info.plist
+          plutil -replace CFBundleShortVersionString -string ${{ inputs.PLUGIN_VERSION_STRING }} /tmp/obs-streamelements-core.plugin/Contents/Info.plist
 
-          plutil -replace CFBundleLongVersionString -string $STREAMELEMENTS_PLUGIN_VERSION_FULL /tmp/obs-streamelements-core.plugin/Contents/Info.plist
+          plutil -replace CFBundleLongVersionString -string ${{ inputs.PLUGIN_VERSION_STRING }} /tmp/obs-streamelements-core.plugin/Contents/Info.plist
 
-          plutil -replace CFBundleVersion -string $STREAMELEMENTS_PLUGIN_VERSION /tmp/obs-streamelements-core.plugin/Contents/Info.plist
+          plutil -replace CFBundleVersion -string ${{ inputs.PLUGIN_VERSION_ENCODED }} /tmp/obs-streamelements-core.plugin/Contents/Info.plist
 
           plutil -replace NSHumanReadableCopyright -string "(c) StreamElements, Inc." /tmp/obs-streamelements-core.plugin/Contents/Info.plist
 
@@ -493,9 +515,6 @@ jobs:
           [ ! -e /tmp/obs-streamelements-core.plugin/Contents/Resources/en.lproj ] && mkdir -pv /tmp/obs-streamelements-core.plugin/Contents/Resources/en.lproj
 
           echo 'RequiredBundlesDescription = "Could not find OBS installed, Please download and install OBS from https://obsproject.com and run SE.Live setup again"' >/tmp/obs-streamelements-core.plugin/Contents/Resources/en.lproj/InfoPlist.strings
-
-          echo "STREAMELEMENTS_PLUGIN_VERSION_FULL=$STREAMELEMENTS_PLUGIN_VERSION_FULL" >> $GITHUB_ENV
-          echo "STREAMELEMENTS_PLUGIN_VERSION=$STREAMELEMENTS_PLUGIN_VERSION" >> $GITHUB_ENV
 
       - name: Sign plugin code
         if: inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes'
@@ -598,6 +617,19 @@ jobs:
             '${{ env.ROOT }}/obs-streamelements.*.manifest'
           destination: 'se-obs-builds/obs-streamelements-installer/latest/macos'
 
+
+
+
+
+
+
+
+
+
+
+
+
+
       - name: Prepare artifacts for upload to CDN
         if: env.UPLOAD_BINARIES == 'true' && env.SIGN_MACOS_BINARIES == 'true'
         shell: pwsh
@@ -608,7 +640,7 @@ jobs:
         if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && (inputs.SKIP_WINDOWS_SIGNING != 'true' && inputs.SKIP_WINDOWS_SIGNING != '1' && inputs.SKIP_WINDOWS_SIGNING != 'yes')
         shell: pwsh
         run: |
-          echo "$STREAMELEMENTS_PLUGIN_VERSION_FULL" >> /tmp/history.md
+          echo "${{ inputs.PLUGIN_VERSION_STRING }}" >> /tmp/history.md
           cat /tmp/RELEASE_NOTES.md >> /tmp/history.md
           echo "" >> /tmp/history.md
           cat "${{ env.ROOT }}/RELEASE_NOTES.history.macos.md" >> /tmp/history.md
