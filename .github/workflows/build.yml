@@ -361,7 +361,7 @@ jobs:
   upload-signed-binaries-to-cdn:
     needs: [ version ] # TODO: build-installer
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    # if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
 
     steps:
       - name: Auth Google API
