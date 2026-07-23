@@ -427,7 +427,7 @@ jobs:
           glob: '*.manifest'
           destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed'
 
-  deploy-signed--macos:
+  deploy-signed-macos:
     needs: [ version, macos, build-installer ]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && (vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes')
@@ -485,7 +485,7 @@ jobs:
           destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/macos/signed'
   tag-master-commit:
     if: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
-    needs: [version, windows, macos, build-uninstaller, build-installer, deploy-signed--macos, deploy-signed-windows]
+    needs: [version, windows, macos, build-uninstaller, build-installer, deploy-signed-macos, deploy-signed-windows]
     runs-on: ubuntu-latest
 
     steps:
