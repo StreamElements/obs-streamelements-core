@@ -83,8 +83,6 @@ jobs:
           echo "release_notes_full_base64=$(base64 --wrap=0 /tmp/release_notes_full.md)" >> $GITHUB_OUTPUT
           echo "release_notes_raw_base64=$(base64 --wrap=0 /tmp/release_notes_raw.md)" >> $GITHUB_OUTPUT
 
-          cat $GITHUB_OUTPUT
-
   windows:
     needs: [release_notes]
     runs-on: windows-2022
@@ -229,7 +227,7 @@ jobs:
       - name: Build installer
         shell: powershell
         run: |
-            cd /d ${{ env.ROOT }}
+            cd ${{ env.ROOT }}
 
             $StreamElementsExeMain = 'obs-streamelements-setup.exe'
 
@@ -541,7 +539,7 @@ jobs:
 
       - name: Create plugin package
         run: |
-          pkgbuild --identifier com.streamelements.selive-core --version ${{ env.STREAMELEMENTS_PLUGIN_VERSION_FULL }} --install-location "/Library/Application Support/obs-studio/plugins" --component /tmp/obs-streamelements-core.plugin /tmp/plugin.pkg
+          pkgbuild --identifier com.streamelements.selive-core --version ${{ inputs.PLUGIN_VERSION_STRING }} --install-location "/Library/Application Support/obs-studio/plugins" --component /tmp/obs-streamelements-core.plugin /tmp/plugin.pkg
 
           if [ $? -ne 0 ]; then exit 1; fi
 
