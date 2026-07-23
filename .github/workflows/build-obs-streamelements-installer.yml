@@ -59,6 +59,8 @@ jobs:
       release_notes_raw_base64: ${{ steps.release_notes_step.outputs.release_notes_raw_base64 }}
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Install markdown-to-html-cli
         run: |
           npm i markdown-to-html-cli -g
