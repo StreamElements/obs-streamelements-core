@@ -275,6 +275,8 @@ jobs:
             
             type ${{ env.ROOT }}\version.generated.nsh
 
+            cd "${{ env.ROOT }}"
+
             makensis /V4 /DSKIP_64BIT_CONTENT main.nsi
 
             ren obs-streamelements-setup.exe $StreamElementsExe32bit

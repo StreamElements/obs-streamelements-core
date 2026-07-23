@@ -569,12 +569,12 @@ Section "${PRODUCT_SHORT_NAME} Add-On" section_install_streamelements
     !ifndef SKIP_64BIT_CONTENT
         SetOutPath $INSTDIR\data\obs-plugins\obs-streamelements-core
 
-        File /r ..\obs-studio\build64_qt6\rundir\RelWithDebInfo\data\obs-plugins\obs-streamelements-core\*.*
+        File /r ..\download\obs-streamelements-core\build64_qt6\data\obs-plugins\obs-streamelements-core\*.*
     !else
         !ifndef SKIP_32BIT_CONTENT
             SetOutPath $INSTDIR\data\obs-plugins\obs-streamelements-core
 
-            File /r ..\obs-studio\build32_qt6\rundir\RelWithDebInfo\data\obs-plugins\obs-streamelements-core\*.*
+            File /r ..\download\obs-streamelements-core\build32_qt6\data\obs-plugins\obs-streamelements-core\*.*
         !endif
     !endif
 
@@ -584,23 +584,21 @@ Section "${PRODUCT_SHORT_NAME} Add-On" section_install_streamelements
 !ifndef SKIP_64BIT_CONTENT
     SetOutPath $INSTDIR\bin\64bit
 
-    File ..\obs-studio\build64_qt6\rundir\RelWithDebInfo\bin\64bit\BsSndRpt64.exe
-    File ..\obs-studio\build64_qt6\rundir\RelWithDebInfo\bin\64bit\BugSplat64.dll
-    File ..\obs-studio\build64_qt6\rundir\RelWithDebInfo\bin\64bit\BugSplatHD64.exe
-    File ..\obs-studio\build64_qt6\rundir\RelWithDebInfo\bin\64bit\BugSplatRc64.dll
+    File ..\download\obs-streamelements-core\build64_qt6\bin\64bit\BsSndRpt64.exe
+    File ..\download\obs-streamelements-core\build64_qt6\bin\64bit\BugSplat64.dll
+    File ..\download\obs-streamelements-core\build64_qt6\bin\64bit\BugSplatHD64.exe
+    File ..\download\obs-streamelements-core\build64_qt6\bin\64bit\BugSplatRc64.dll
 
     SetOutPath $INSTDIR\obs-plugins\64bit\locales
 
-    File /nonfatal ..\obs-studio\build64_qt6\rundir\RelWithDebInfo\obs-plugins\64bit\locales\*.*
+    File /nonfatal ..\download\obs-streamelements-core\build64_qt6\obs-plugins\64bit\locales\*.*
 
     SetOutPath $INSTDIR\obs-plugins\64bit
 
-    File /oname=obs-streamelements-core.dll ..\obs-studio\build64_qt6\rundir\RelWithDebInfo\obs-plugins\64bit\obs-streamelements-core.dll
-    File /oname=obs-streamelements-core.pdb ..\obs-studio\build64_qt6\rundir\RelWithDebInfo\obs-plugins\64bit\obs-streamelements-core.pdb
+    File /oname=obs-streamelements-core.dll ..\download\obs-streamelements-core\build64_qt6\obs-plugins\64bit\obs-streamelements-core.dll
+    File /oname=obs-streamelements-core.pdb ..\download\obs-streamelements-core\build64_qt6\obs-plugins\64bit\obs-streamelements-core.pdb
     
-    # File /nonfatal ..\obs-studio\build64_qt6\rundir\RelWithDebInfo\bin\64bit\obs-streamelements-core-streamelements-restore-script-host.*
-
-    File /nonfatal ..\obs-studio\build64_qt6\rundir\RelWithDebInfo\obs-plugins\64bit\obs-streamelements-set-machine-config.*
+    File /nonfatal ..\download\obs-streamelements-core\build64_qt6\obs-plugins\64bit\obs-streamelements-set-machine-config.*
 
     Delete /REBOOTOK "$OUTDIR\obs-streamelements.dll"
     Delete /REBOOTOK "$OUTDIR\obs-streamelements.pdb"
@@ -628,23 +626,21 @@ Section "${PRODUCT_SHORT_NAME} Add-On" section_install_streamelements
 !ifndef SKIP_32BIT_CONTENT
     SetOutPath $INSTDIR\bin\32bit
 
-    File ..\obs-studio\build32_qt6\rundir\RelWithDebInfo\bin\32bit\BsSndRpt.exe
-    File ..\obs-studio\build32_qt6\rundir\RelWithDebInfo\bin\32bit\BugSplat.dll
-    File ..\obs-studio\build32_qt6\rundir\RelWithDebInfo\bin\32bit\BugSplatHD.exe
-    File ..\obs-studio\build32_qt6\rundir\RelWithDebInfo\bin\32bit\BugSplatRc.dll
+    File ..\download\obs-streamelements-core\build32_qt6\bin\32bit\BsSndRpt.exe
+    File ..\download\obs-streamelements-core\build32_qt6\bin\32bit\BugSplat.dll
+    File ..\download\obs-streamelements-core\build32_qt6\bin\32bit\BugSplatHD.exe
+    File ..\download\obs-streamelements-core\build32_qt6\bin\32bit\BugSplatRc.dll
 
     SetOutPath $INSTDIR\obs-plugins\32bit\locales
 
-    File /nonfatal ..\obs-studio\build32_qt6\rundir\RelWithDebInfo\obs-plugins\32bit\locales\*.*
+    File /nonfatal ..\download\obs-streamelements-core\build32_qt6\obs-plugins\32bit\locales\*.*
 
     SetOutPath $INSTDIR\obs-plugins\32bit
 
-    File /oname=obs-streamelements-core.dll ..\obs-studio\build32_qt6\rundir\RelWithDebInfo\obs-plugins\32bit\obs-streamelements-core.dll
-    File /oname=obs-streamelements-core.pdb ..\obs-studio\build32_qt6\rundir\RelWithDebInfo\obs-plugins\32bit\obs-streamelements-core.pdb
+    File /oname=obs-streamelements-core.dll ..\download\obs-streamelements-core\build32_qt6\obs-plugins\32bit\obs-streamelements-core.dll
+    File /oname=obs-streamelements-core.pdb ..\download\obs-streamelements-core\build32_qt6\obs-plugins\32bit\obs-streamelements-core.pdb
     
-    # File /nonfatal ..\obs-studio\build32_qt6\rundir\RelWithDebInfo\bin\32bit\obs-streamelements-core-streamelements-restore-script-host.*
-
-    File /nonfatal ..\obs-studio\build32_qt6\rundir\RelWithDebInfo\obs-plugins\32bit\obs-streamelements-set-machine-config.*
+    File /nonfatal ..\download\obs-streamelements-core\build32_qt6\obs-plugins\32bit\obs-streamelements-set-machine-config.*
 
     Delete /REBOOTOK "$OUTDIR\obs-streamelements.dll"
     Delete /REBOOTOK "$OUTDIR\obs-streamelements.pdb"
