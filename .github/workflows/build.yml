@@ -398,8 +398,14 @@ jobs:
           cp obs-streamelements-setup-x64.exe $signedPackageFilename32.exe # This is not a mistake, we no longer support 32bit builds
           mv obs-streamelements-setup.exe $signedPackageFilename.exe
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build64
+          path: |
+            '*.exe'
+            '*.manifest'
+
       - name: Upload to CDN Google Storage
-        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
@@ -448,8 +454,14 @@ jobs:
             gsutil cp $i gs://cdn.streamelements.com/obs/dist/obs-streamelements/macos/signed/$i
           done
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build64
+          path: |
+            '*.pkg'
+            '*.manifest'
+          
       - name: Upload to CDN Google Storage
-        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
