@@ -65,6 +65,8 @@ jobs:
         run: |
           sudo apt update && sudo apt install coreutils
 
+          which base64
+
       - name: Install markdown-to-html-cli
         run: |
           npm i markdown-to-html-cli -g
