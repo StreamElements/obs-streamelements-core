@@ -1,5 +1,8 @@
 name: Build
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: write    # lets GITHUB_TOKEN push tags
   id-token: write    # lets the job mint a GitHub OIDC token for WIF
