@@ -336,7 +336,7 @@ jobs:
           parent: false
           process_gcloudignore: false
           path: ${{ env.ROOT }}
-          glob: '{obs-streamelements-setup*.exe,obs-streamelements.manifest,obs-streamelements.*.manifest,..\download\obs-streamelements-core\Version.generated.hpp}'
+          glob: '{obs-streamelements-setup*.exe,obs-streamelements.manifest,obs-streamelements.*.manifest,Version.generated.hpp}'
           destination: 'se-obs-builds/obs-streamelements-installer/latest/windows'
 
   macos:
@@ -368,6 +368,8 @@ jobs:
           if [ $? -ne 0 ]; then exit 1; fi
 
           curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/macos/Version.generated.hpp --output /tmp/Version.generated.hpp
+
+          cp /tmp/Version.generated.hpp ${{ env.ROOT }}/Version.generated.hpp
 
           7z x -y /tmp/build_x86_64.zip -o/tmp/build_x86_64
 
@@ -617,5 +619,5 @@ jobs:
           parent: false
           process_gcloudignore: false
           path: ${{ env.ROOT }}
-          glob: '{obs-streamelements-core.pkg,obs-streamelements.manifest,obs-streamelements.*.manifest,/tmp/Version.generated.hpp}'
+          glob: '{obs-streamelements-core.pkg,obs-streamelements.manifest,obs-streamelements.*.manifest,Version.generated.hpp}'
           destination: 'se-obs-builds/obs-streamelements-installer/latest/macos'
