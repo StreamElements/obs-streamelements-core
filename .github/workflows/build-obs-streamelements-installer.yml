@@ -335,11 +335,8 @@ jobs:
         with:
           parent: false
           process_gcloudignore: false
-          path: |
-            '${{ env.ROOT }}/obs-streamelements-setup*.exe'
-            '${{ env.ROOT }}/obs-streamelements.manifest'
-            '${{ env.ROOT }}/obs-streamelements.*.manifest'
-            '${{ env.ROOT }}\..\download\obs-streamelements-core\Version.generated.hpp'
+          path: ${{ env.ROOT }}
+          glob: '{obs-streamelements-setup*.exe,obs-streamelements.manifest,obs-streamelements.*.manifest,..\download\obs-streamelements-core\Version.generated.hpp}'
           destination: 'se-obs-builds/obs-streamelements-installer/latest/windows'
 
   macos:
@@ -619,8 +616,6 @@ jobs:
         with:
           parent: false
           process_gcloudignore: false
-          path: |
-            '${{ env.ROOT }}/obs-streamelements-core.pkg'
-            '${{ env.ROOT }}/obs-streamelements.manifest'
-            '${{ env.ROOT }}/obs-streamelements.*.manifest'
+          path: ${{ env.ROOT }}
+          glob: '{obs-streamelements-core.pkg,obs-streamelements.manifest,obs-streamelements.*.manifest,/tmp/Version.generated.hpp}'
           destination: 'se-obs-builds/obs-streamelements-installer/latest/macos'
