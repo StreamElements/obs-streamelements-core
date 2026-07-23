@@ -394,10 +394,12 @@ jobs:
           curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-setup-x64.exe --output obs-streamelements-setup-x64.exe
           # curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-setup-x86.exe --output obs-streamelements-setup-x86.exe
 
-          cp obs-streamelements-setup-x64.exe $signedPackageFilename64.exe
-          cp obs-streamelements-setup-x64.exe $signedPackageFilename32.exe # This is not a mistake, we no longer support 32bit builds
-          mv obs-streamelements-setup.exe $signedPackageFilename.exe
+          cp obs-streamelements-setup-x64.exe ${signedPackageFilename64}.exe
+          cp obs-streamelements-setup-x64.exe ${signedPackageFilename32}.exe # This is not a mistake, we no longer support 32bit builds
+          mv obs-streamelements-setup.exe ${signedPackageFilename}.exe
 
+          ls *.exe
+          ls *.manifest
       - uses: actions/upload-artifact@v4
         with:
           name: windows-signed-installer
@@ -445,14 +447,7 @@ jobs:
 
           cp obs-streamelements.manifest obs-streamelements-${{ needs.version.outputs.version_encoded }}.manifest
 
-          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-core.pkg --output obs-streamelements-core.pkg
-
-          mv obs-streamelements-core.pkg $signedPackageFilename.pkg
-
-          for i in *.exe *.manifest
-          do
-            gsutil cp $i gs://cdn.streamelements.com/obs/dist/obs-streamelements/macos/signed/$i
-          done
+          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-core.pkg --output ${signedPackageFilename}.pkg
 
       - uses: actions/upload-artifact@v4
         with:
