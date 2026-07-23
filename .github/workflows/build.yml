@@ -380,9 +380,9 @@ jobs:
           do
             curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/$manifest --output $manifest
 
-            sed -i 's/\$\{PACKAGE_FILENAME\}/$signedPackageFilename/' $manifest
-            sed -i 's/\$\{PACKAGE_FILENAME_32_BIT\}/$signedPackageFilename/' $manifest
-            sed -i 's/\$\{PACKAGE_FILENAME_64_BIT\}/$signedPackageFilename/' $manifest
+            sed -i "s/\${PACKAGE_FILENAME}/$signedPackageFilename/" $manifest
+            sed -i "s/\${PACKAGE_FILENAME_64_BIT}/$signedPackageFilename/" $manifest
+            sed -i "s/\${PACKAGE_FILENAME_32_BIT}/$signedPackageFilename/" $manifest
 
             cat $manifest
           done
@@ -398,9 +398,9 @@ jobs:
           do
             curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/$manifest --output $manifest
 
-            sed -i 's/\$\{PACKAGE_FILENAME\}/$signedPackageFilename/' $manifest
-            sed -i 's/\$\{PACKAGE_FILENAME_64_BIT\}/$signedPackageFilename64/' $manifest
-            sed -i 's/\$\{PACKAGE_FILENAME_32_BIT\}/$signedPackageFilename32/' $manifest
+            sed -i "s/\${PACKAGE_FILENAME}/$signedPackageFilename/" $manifest
+            sed -i "s/\${PACKAGE_FILENAME_64_BIT}/$signedPackageFilename64/" $manifest
+            sed -i "s/\${PACKAGE_FILENAME_32_BIT}/$signedPackageFilename32/" $manifest
 
             type $manifest
           done
