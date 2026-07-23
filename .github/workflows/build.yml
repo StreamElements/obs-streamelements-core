@@ -387,6 +387,8 @@ jobs:
             cat $manifest
           done
 
+          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-setup.pkg --output obs-streamelements-setup.pkg
+
       - name: windows
         if: (vars.SKIP_WINDOWS_SIGNING != 'true' && vars.SKIP_WINDOWS_SIGNING != '1' && vars.SKIP_WINDOWS_SIGNING != 'yes')
         run: |
@@ -404,6 +406,8 @@ jobs:
 
             cat $manifest
           done
+
+          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-setup.exe --output obs-streamelements-setup.exe
 
   tag-master-commit:
     if: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
