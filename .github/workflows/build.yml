@@ -414,7 +414,7 @@ jobs:
           process_gcloudignore: false
           path: ${{ github.workspace }}
           glob: '*.exe'
-          destination: 'gs://cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed'
+          destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed'
 
       - name: Upload Manifests to CDN Google Storage
         uses: 'google-github-actions/upload-cloud-storage@v3'
@@ -423,7 +423,7 @@ jobs:
           process_gcloudignore: false
           path: ${{ github.workspace }}
           glob: '*.manifest'
-          destination: 'gs://cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed'
+          destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed'
 
   deploy-signed--macos:
     needs: [ version ] # TODO: build-installer
@@ -471,7 +471,7 @@ jobs:
           process_gcloudignore: false
           path: ${{ github.workspace }}
           glob: '*.pkg'
-          destination: 'gs://cdn.streamelements.com/obs/dist/obs-streamelements/macos/signed'
+          destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/macos/signed'
 
       - name: Upload Manifests to CDN Google Storage
         uses: 'google-github-actions/upload-cloud-storage@v3'
@@ -480,7 +480,7 @@ jobs:
           process_gcloudignore: false
           path: ${{ github.workspace }}
           glob: '*.manifest'
-          destination: 'gs://cdn.streamelements.com/obs/dist/obs-streamelements/macos/signed'
+          destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/macos/signed'
   tag-master-commit:
     if: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
     needs: [version, windows, macos, build-uninstaller, build-installer, deploy-signed--macos, deploy-signed-windows]
