@@ -396,13 +396,13 @@ jobs:
 
           for manifest in obs-streamelements.manifest obs-streamelements.qa.manifest obs-streamelements.beta.manifest obs-streamelements.latest.manifest obs-streamelements.stable.manifest
           do
-            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/$manifest --output $manifest
+            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/windows/$manifest --output $manifest
 
             sed -i "s/\${PACKAGE_FILENAME}/$signedPackageFilename/" $manifest
             sed -i "s/\${PACKAGE_FILENAME_64_BIT}/$signedPackageFilename64/" $manifest
             sed -i "s/\${PACKAGE_FILENAME_32_BIT}/$signedPackageFilename32/" $manifest
 
-            type $manifest
+            cat $manifest
           done
 
   tag-master-commit:
