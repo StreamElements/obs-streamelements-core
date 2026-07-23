@@ -1,5 +1,8 @@
 name: Build
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: write    # lets GITHUB_TOKEN push tags
   id-token: write    # lets the job mint a GitHub OIDC token for WIF
@@ -33,6 +36,11 @@ env:
     -DENABLE_SCRIPTING=OFF
     -DENABLE_SCRIPTING_LUA=OFF
     -DENABLE_UI=OFF
+
+  BUILD_UNINSTALLER: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
+  BUILD_INSTALLER: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
+  UPLOAD_SYMBOLS: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
+  UPLOAD_BINARIES: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
 
 jobs:
   version:
@@ -143,7 +151,7 @@ jobs:
           msbuild obs-studio.sln -p:Configuration=RelWithDebInfo
 
       - name: Upload BugSplat Symbols
-        if: github.event_name != 'pull_request'
+        if: ${{ env.UPLOAD_SYMBOLS }}
         shell: cmd
         run: |
           c:\local\bugsplat\symbol-upload-windows.exe ^
@@ -186,15 +194,6 @@ jobs:
           process_gcloudignore: false
           path: '${{ github.workspace }}/Version.generated.hpp'
           destination: 'se-obs-builds/obs-streamelements-core/latest/windows'
-
-      - name: Upload RELEASE_NOTES.md to GCS
-        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
-        uses: 'google-github-actions/upload-cloud-storage@v3'
-        with:
-          parent: false
-          process_gcloudignore: false
-          path: '${{ github.workspace }}/RELEASE_NOTES.md'
-          destination: 'se-obs-builds/obs-streamelements-core/latest/macos'
 
   macos:
     needs: version
@@ -285,14 +284,14 @@ jobs:
           xcrun dsymutil obs-streamelements-core.plugin/Contents/MacOS/obs-streamelements-core -o obs-streamelements-core.dSYM
 
       - name: Upload ARM64 to BugSplat
-        if: github.event_name != 'pull_request'
+        if: ${{ env.UPLOAD_SYMBOLS }}
         run: |
           cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
 
           /tmp/symbol-upload-macos -v -a "obs-streamelements-core-macos" -b "OBS_Live" -i "${{ secrets.BUGSPLAT_CLIENTID }}" -s "${{ secrets.BUGSPLAT_CLIENTSECRET }}" -f "obs-streamelements-core.dSYM" -d . -v "${{ needs.version.outputs.version_encoded }}"
 
       - name: Upload x86_64 to BugSplat
-        if: github.event_name != 'pull_request'
+        if: ${{ env.UPLOAD_SYMBOLS }}
         run: |
           cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core/RelWithDebInfo
 
@@ -341,23 +340,156 @@ jobs:
           path: '${{ github.workspace }}/Version.generated.hpp'
           destination: 'se-obs-builds/obs-streamelements-core/latest/macos'
 
-      - name: Upload RELEASE_NOTES.md to GCS
-        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+  build-uninstaller:
+    needs: [ version ]
+    permissions:
+      contents: read
+      id-token: write # lets the job mint a GitHub OIDC token for WIF
+    uses: ./.github/workflows/build-obs-streamelements-uninstaller.yml
+    secrets: inherit
+  build-installer:
+    needs: [ version, build-uninstaller, windows, macos ]
+    permissions:
+      contents: read
+      id-token: write # lets the job mint a GitHub OIDC token for WIF
+    uses: ./.github/workflows/build-obs-streamelements-installer.yml
+    secrets: inherit
+    with:
+      SKIP_WINDOWS_SIGNING: ${{ vars.SKIP_WINDOWS_SIGNING }}
+      SKIP_APPLE_SIGNING_AND_NOTARIZATION: ${{ vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION }}
+      PLUGIN_VERSION_STRING: ${{ needs.version.outputs.version_string }}
+      PLUGIN_VERSION_ENCODED: ${{ needs.version.outputs.version_encoded }}
+
+  deploy-signed-windows:
+    needs: [ version, windows, build-installer ]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && (vars.SKIP_WINDOWS_SIGNING != 'true' && vars.SKIP_WINDOWS_SIGNING != '1' && vars.SKIP_WINDOWS_SIGNING != 'yes')
+
+    steps:
+      - name: Auth Google API
+        uses: 'google-github-actions/auth@v2'
+        with:
+          project_id: streamelements-core
+          workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
+          service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
+
+      - name: Prepare files
+        run: |
+          export signedPackageFilename=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}
+          export signedPackageFilename64=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}-64bit
+          export signedPackageFilename32=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}
+
+          for manifest in obs-streamelements.manifest obs-streamelements.qa.manifest obs-streamelements.beta.manifest obs-streamelements.latest.manifest obs-streamelements.stable.manifest
+          do
+            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/windows/$manifest --output $manifest
+
+            sed -i "s/\${PACKAGE_FILENAME}/$signedPackageFilename/" $manifest
+            sed -i "s/\${PACKAGE_FILENAME_64_BIT}/$signedPackageFilename64/" $manifest
+            sed -i "s/\${PACKAGE_FILENAME_32_BIT}/$signedPackageFilename32/" $manifest
+
+            cat $manifest
+          done
+
+          cp obs-streamelements.manifest obs-streamelements-${{ needs.version.outputs.version_encoded }}.manifest
+
+          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-setup.exe --output obs-streamelements-setup.exe
+          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-setup-x64.exe --output obs-streamelements-setup-x64.exe
+          # curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-setup-x86.exe --output obs-streamelements-setup-x86.exe
+
+          cp obs-streamelements-setup-x64.exe ${signedPackageFilename64}.exe
+          cp obs-streamelements-setup-x64.exe ${signedPackageFilename32}.exe # This is not a mistake, we no longer support 32bit builds
+          mv obs-streamelements-setup.exe ${signedPackageFilename}.exe
+
+          ls *.exe
+          ls *.manifest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-signed-installer
+          path: |
+            ${{ github.workspace }}/*.exe
+            ${{ github.workspace }}/*.manifest
+
+      - name: Upload Binaries to CDN Google Storage
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
           process_gcloudignore: false
-          path: '${{ github.workspace }}/RELEASE_NOTES.md'
-          destination: 'se-obs-builds/obs-streamelements-core/latest/macos'
+          path: ${{ github.workspace }}
+          glob: '*.exe'
+          destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed'
 
+      - name: Upload Manifests to CDN Google Storage
+        uses: 'google-github-actions/upload-cloud-storage@v3'
+        with:
+          parent: false
+          process_gcloudignore: false
+          path: ${{ github.workspace }}
+          glob: '*.manifest'
+          destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed'
+
+  deploy-signed-macos:
+    needs: [ version, macos, build-installer ]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && (vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes')
+
+    steps:
+      - name: Auth Google API
+        uses: 'google-github-actions/auth@v2'
+        with:
+          project_id: streamelements-core
+          workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
+          service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
+
+      - name: Prepare files
+        run: |
+          export signedPackageFilename=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}
+
+          for manifest in obs-streamelements.manifest obs-streamelements.qa.manifest obs-streamelements.beta.manifest obs-streamelements.latest.manifest obs-streamelements.stable.manifest
+          do
+            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/$manifest --output $manifest
+
+            sed -i "s/\${PACKAGE_FILENAME}/$signedPackageFilename/" $manifest
+            sed -i "s/\${PACKAGE_FILENAME_64_BIT}/$signedPackageFilename/" $manifest
+            sed -i "s/\${PACKAGE_FILENAME_32_BIT}/$signedPackageFilename/" $manifest
+
+            cat $manifest
+          done
+
+          cp obs-streamelements.manifest obs-streamelements-${{ needs.version.outputs.version_encoded }}.manifest
+
+          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-core.pkg --output ${signedPackageFilename}.pkg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-signed-installer
+          path: |
+            ${{ github.workspace }}/*.pkg
+            ${{ github.workspace }}/*.manifest
+          
+      - name: Upload Binaries to CDN Google Storage
+        uses: 'google-github-actions/upload-cloud-storage@v3'
+        with:
+          parent: false
+          process_gcloudignore: false
+          path: ${{ github.workspace }}
+          glob: '*.pkg'
+          destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/macos/signed'
+
+      - name: Upload Manifests to CDN Google Storage
+        uses: 'google-github-actions/upload-cloud-storage@v3'
+        with:
+          parent: false
+          process_gcloudignore: false
+          path: ${{ github.workspace }}
+          glob: '*.manifest'
+          destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/macos/signed'
   tag-master-commit:
-    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
-    needs: [version, windows, macos]
+    if: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
+    needs: [version, windows, macos, build-uninstaller, build-installer, deploy-signed-macos, deploy-signed-windows]
     runs-on: ubuntu-latest
 
     steps:
       - name: Tag master commit
-        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
         uses: tvdias/github-tagger@v0.0.1
         with:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"

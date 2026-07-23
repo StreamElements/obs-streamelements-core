@@ -1,0 +1,626 @@
+name: Build
+
+permissions:
+  contents: read
+  id-token: write    # lets the job mint a GitHub OIDC token for WIF
+
+on:
+  workflow_call:
+    inputs:
+      SKIP_WINDOWS_SIGNING:
+        required: true
+        type: string
+      SKIP_APPLE_SIGNING_AND_NOTARIZATION:
+        required: true
+        type: string
+
+      PLUGIN_VERSION_STRING:
+        required: true
+        type: string
+
+      PLUGIN_VERSION_ENCODED:
+        required: true
+        type: string
+
+    secrets:
+      AZURE_TENANT_ID:
+        required: true
+      AZURE_CLIENT_ID:
+        required: true
+      AZURE_CLIENT_SECRET:
+        required: true
+      CODESIGN_DEVIDAPP_CERT_P12_BASE64:
+        required: false
+      CODESIGN_DEVIDINST_CERT_P12_BASE64:
+        required: false
+      CODESIGN_DEVIDAPP_CERT_PWD:
+        required: false
+      CODESIGN_DEVIDINST_CERT_PWD:
+        required: false
+      NOTARIZE_APPLE_APP_PWD:
+        required: false
+      CODESIGN_DEVIDAPP_IDENTITY:
+        required: false
+      CODESIGN_DEVIDINST_IDENTITY:
+        required: false
+
+env:
+  SIGN_WINDOWS_BINARIES: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && (inputs.SKIP_WINDOWS_SIGNING != 'true' && inputs.SKIP_WINDOWS_SIGNING != '1' && inputs.SKIP_WINDOWS_SIGNING != 'yes') }}
+  SIGN_MACOS_BINARIES: ${{ inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes' }}
+  UPLOAD_BINARIES: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
+
+jobs:
+  release_notes:
+    runs-on: ubuntu-latest
+
+    outputs:
+      release_notes_html_base64: ${{ steps.release_notes_step.outputs.release_notes_html_base64 }}
+      release_notes_full_base64: ${{ steps.release_notes_step.outputs.release_notes_full_base64 }}
+      release_notes_raw_base64: ${{ steps.release_notes_step.outputs.release_notes_raw_base64 }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install markdown-to-html-cli
+        run: |
+          npm i markdown-to-html-cli -g
+      - name: Create release notes
+        id: release_notes_step
+        
+        run: |
+          echo "${{ inputs.PLUGIN_VERSION_STRING }}" >> /tmp/release_notes_raw.md
+          cat "RELEASE_NOTES.md" >> /tmp/release_notes_raw.md
+          cat "RELEASE_NOTES.history.md" >> /tmp/release_notes_raw.md
+
+
+          cat "RELEASE_NOTES.header.md" >> /tmp/release_notes_full.md
+          cat /tmp/release_notes_raw.md >> /tmp/release_notes_full.md
+          cat "RELEASE_NOTES.footer.md" >> /tmp/release_notes_full.md
+
+          markdown-to-html-cli --source /tmp/release_notes_full.md --output /tmp/release_notes.html --no-dark-mode --markdown-style-theme dark --no-corners --style ".markdown-style { max-width: 100% !important; }"
+
+          echo "release_notes_html_base64=$(base64 --wrap=0 /tmp/release_notes.html)" >> $GITHUB_OUTPUT
+          echo "release_notes_full_base64=$(base64 --wrap=0 /tmp/release_notes_full.md)" >> $GITHUB_OUTPUT
+          echo "release_notes_raw_base64=$(base64 --wrap=0 /tmp/release_notes_raw.md)" >> $GITHUB_OUTPUT
+
+  windows:
+    needs: [release_notes]
+    runs-on: windows-2022
+
+    env:
+      ROOT: ${{ github.workspace }}\CI\obs-streamelements-installer
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auth Google API
+        uses: 'google-github-actions/auth@v2'
+        with:
+          project_id: streamelements-core
+          workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
+          service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
+
+      - name: Install Chocolatey packages
+        shell: cmd
+        run: |
+          choco install -y archiver
+          choco install -y nsis --version=3.03 --force
+
+      - name: Download SE.Live
+        shell: cmd
+        run: |
+            cd /d ${{ env.ROOT }}
+
+            if not exist ${{ env.ROOT }}\..\obs-studio\build64_qt6\rundir\${{ env.BUILD_CONFIG }} md ${{ env.ROOT }}\..\obs-studio\build64_qt6\rundir\${{ env.BUILD_CONFIG }}
+
+            if not exist ${{ env.ROOT }}\..\obs-studio\build32_qt6\rundir\${{ env.BUILD_CONFIG }} md ${{ env.ROOT }}\..\obs-studio\build32_qt6\rundir\${{ env.BUILD_CONFIG }}
+
+            if not exist ${{ env.ROOT }}\..\download md ${{ env.ROOT }}\..\download
+
+            if not exist ${{ env.ROOT }}\..\download\obs-streamelements-core md ${{ env.ROOT }}\..\download\obs-streamelements-core
+
+            if not exist ${{ env.ROOT }}\..\download\obs-streamelements-core\build32_qt6 md ${{ env.ROOT }}\..\download\obs-streamelements-core\build32_qt6
+
+            if not exist ${{ env.ROOT }}\..\download\obs-streamelements-core\build64_qt6 md ${{ env.ROOT }}\..\download\obs-streamelements-core\build64_qt6
+
+            if not exist ${{ env.ROOT }}\..\download\obs-streamelements\build32_qt6 md ${{ env.ROOT }}\..\download\obs-streamelements\build32_qt6
+
+            if not exist ${{ env.ROOT }}\..\download\obs-streamelements\build64_qt6 md ${{ env.ROOT }}\..\download\obs-streamelements\build64_qt6
+
+            if not exist ${{ env.ROOT }}\..\obs-streamelements-uninstaller md ${{ env.ROOT }}\..\obs-streamelements-uninstaller
+
+
+
+
+            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/windows/build32_qt6.zip --output ${{ env.ROOT }}\..\download\obs-streamelements-core\build32_qt6.zip
+
+            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/windows/build64_qt6.zip --output ${{ env.ROOT }}\..\download\obs-streamelements-core\build64_qt6.zip
+
+            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/windows/Version.generated.hpp --output ${{ env.ROOT }}\..\download\obs-streamelements-core\Version.generated.hpp
+
+            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/windows/RELEASE_NOTES.md --output ${{ env.ROOT }}\..\download\obs-streamelements-core\RELEASE_NOTES.md
+
+
+
+
+            curl -kL -o ${{ env.ROOT }}\..\obs-streamelements-uninstaller\obs-streamelements-uninstaller.exe https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/qa/obs-streamelements-uninstaller.exe -f --retry 5 -C -
+
+
+
+
+            7z x -y ${{ env.ROOT }}\..\download\obs-streamelements-core\build32_qt6.zip -o${{ env.ROOT }}\..\download\obs-streamelements-core\build32_qt6
+
+            7z x -y ${{ env.ROOT }}\..\download\obs-streamelements-core\build64_qt6.zip -o${{ env.ROOT }}\..\download\obs-streamelements-core\build64_qt6
+
+
+
+
+            xcopy ${{ env.ROOT }}\..\download\obs-streamelements-core\build32_qt6\*.* ${{ env.ROOT }}\..\obs-studio\build32_qt6\rundir\${{ env.BUILD_CONFIG }} /S /E /I /Y
+
+            xcopy ${{ env.ROOT }}\..\download\obs-streamelements-core\build64_qt6\*.* ${{ env.ROOT }}\..\obs-studio\build64_qt6\rundir\${{ env.BUILD_CONFIG }} /S /E /I /Y
+
+            xcopy ${{ env.ROOT }}\..\download\obs-streamelements\build32_qt6\*.* ${{ env.ROOT }}\..\obs-studio\build32_qt6\rundir\${{ env.BUILD_CONFIG }} /S /E /I /Y
+
+            xcopy ${{ env.ROOT }}\..\download\obs-streamelements\build64_qt6\*.* ${{ env.ROOT }}\..\obs-studio\build64_qt6\rundir\${{ env.BUILD_CONFIG }} /S /E /I /Y
+
+
+
+
+            curl https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-streamelements-set-machine-config/windows/qa/obs-streamelements-set-machine-config-32.exe --output ${{ env.ROOT }}\..\obs-studio\build32_qt6\rundir\${{ env.BUILD_CONFIG }}\obs-plugins\32bit\obs-streamelements-set-machine-config.exe
+
+            curl https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-streamelements-set-machine-config/windows/qa/obs-streamelements-set-machine-config-64.exe --output ${{ env.ROOT }}\..\obs-studio\build64_qt6\rundir\${{ env.BUILD_CONFIG }}\obs-plugins\64bit\obs-streamelements-set-machine-config.exe
+
+      - name: Download resources
+        shell: cmd
+        run: |
+          cd /d ${{ env.ROOT }}
+
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-probe-libobs-version/windows/qa/obs-probe-libobs-version-32.exe --output resources\obs-probe-libobs-version-32.exe
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-probe-libobs-version/windows/qa/obs-probe-libobs-version-64.exe --output resources\obs-probe-libobs-version-64.exe
+
+      - name: Install NSIS plugins
+        shell: cmd
+        run: |
+          cd /d "${{ env.ROOT }}"
+
+          if not exist nsis mkdir nsis
+          if not exist nsis\Plugins mkdir nsis\Plugins
+
+          if not exist nsis\Plugins\x64-ansi mkdir nsis\Plugins\x64-ansi
+          if not exist nsis\Plugins\x64-unicode mkdir nsis\Plugins\x64-unicode
+          if not exist nsis\Plugins\x86-ansi mkdir nsis\Plugins\x86-ansi
+          if not exist nsis\Plugins\x86-unicode mkdir nsis\Plugins\x86-unicode
+
+          if exist nsis\Plugins\x64-ansi\NSISLockDetector.dll del nsis\Plugins\x64-ansi\NSISLockDetector.dll
+          if exist nsis\Plugins\x64-unicode\NSISLockDetector.dll del nsis\Plugins\x64-unicode\NSISLockDetector.dll
+          if exist nsis\Plugins\x86-ansi\NSISLockDetector.dll del nsis\Plugins\x86-ansi\NSISLockDetector.dll
+          if exist nsis\Plugins\x86-unicode\NSISLockDetector.dll del nsis\Plugins\x86-unicode\NSISLockDetector.dll
+
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x64-ansi/NSISLockDetector.dll --output nsis\Plugins\x64-ansi\NSISLockDetector.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x64-unicode/NSISLockDetector.dll --output nsis\Plugins\x64-unicode\NSISLockDetector.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x86-ansi/NSISLockDetector.dll --output nsis\Plugins\x86-ansi\NSISLockDetector.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x86-unicode/NSISLockDetector.dll --output nsis\Plugins\x86-unicode\NSISLockDetector.dll
+
+          if exist nsis\Plugins\x64-ansi\NSISHTTP.dll del nsis\Plugins\x64-ansi\NSISHTTP.dll
+          if exist nsis\Plugins\x64-unicode\NSISHTTP.dll del nsis\Plugins\x64-unicode\NSISHTTP.dll
+          if exist nsis\Plugins\x86-ansi\NSISHTTP.dll del nsis\Plugins\x86-ansi\NSISHTTP.dll
+          if exist nsis\Plugins\x86-unicode\NSISHTTP.dll del nsis\Plugins\x86-unicode\NSISHTTP.dll
+
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x64-ansi/NSISHTTP.dll --output nsis\Plugins\x64-ansi\NSISHTTP.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x64-unicode/NSISHTTP.dll --output nsis\Plugins\x64-unicode\NSISHTTP.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x86-ansi/NSISHTTP.dll --output nsis\Plugins\x86-ansi\NSISHTTP.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x86-unicode/NSISHTTP.dll --output nsis\Plugins\x86-unicode\NSISHTTP.dll
+
+          if exist nsis\Plugins\x64-ansi\NSISConfig.dll del nsis\Plugins\x64-ansi\NSISConfig.dll
+          if exist nsis\Plugins\x64-unicode\NSISConfig.dll del nsis\Plugins\x64-unicode\NSISConfig.dll
+          if exist nsis\Plugins\x86-ansi\NSISConfig.dll del nsis\Plugins\x86-ansi\NSISConfig.dll
+          if exist nsis\Plugins\x86-unicode\NSISConfig.dll del nsis\Plugins\x86-unicode\NSISConfig.dll
+
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x64-ansi/NSISConfig.dll --output nsis\Plugins\x64-ansi\NSISConfig.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x64-unicode/NSISConfig.dll --output nsis\Plugins\x64-unicode\NSISConfig.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x86-ansi/NSISConfig.dll --output nsis\Plugins\x86-ansi\NSISConfig.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x86-unicode/NSISConfig.dll --output nsis\Plugins\x86-unicode\NSISConfig.dll
+
+          xcopy nsis "%ProgramFiles(x86)%\NSIS" /S /E /I /Y
+
+      - name: Build installer
+        shell: powershell
+        run: |
+            cd ${{ env.ROOT }}
+
+            $StreamElementsExeMain = 'obs-streamelements-setup.exe'
+
+            $StreamElementsExe64bit = 'obs-streamelements-setup-x64.exe'
+
+            $StreamElementsExe32bit = 'obs-streamelements-setup-x86.exe'
+
+
+
+            echo "" >> ${{ env.ROOT }}\template.manifest
+            echo "" >> ${{ env.ROOT }}\template.manifest
+            echo "[[[BEGIN_RELEASE_NOTES]]]" >> ${{ env.ROOT }}\template.manifest
+            echo ([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String("${{ needs.release_notes.outputs.release_notes_html_base64 }}"))) >> ${{ env.ROOT }}\template.manifest
+            echo "" >> ${{ env.ROOT }}/template.manifest
+            echo "[[[END_RELEASE_NOTES]]]" >> ${{ env.ROOT }}\template.manifest
+
+            type ${{ env.ROOT }}\template.manifest
+
+
+            (Get-Content -Path ${{ env.ROOT }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', ${{ inputs.PLUGIN_VERSION_ENCODED }}) | Set-Content -Path ${{ env.ROOT }}\obs-streamelements.manifest
+
+            (Get-Content -Path ${{ env.ROOT }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', ${{ inputs.PLUGIN_VERSION_ENCODED }}) | Set-Content -Path ${{ env.ROOT }}\obs-streamelements.qa.manifest
+
+            (Get-Content -Path ${{ env.ROOT }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', ${{ inputs.PLUGIN_VERSION_ENCODED }}) | Set-Content -Path ${{ env.ROOT }}\obs-streamelements.beta.manifest
+
+            (Get-Content -Path ${{ env.ROOT }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', ${{ inputs.PLUGIN_VERSION_ENCODED }}) | Set-Content -Path ${{ env.ROOT }}\obs-streamelements.latest.manifest
+
+            (Get-Content -Path ${{ env.ROOT }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', ${{ inputs.PLUGIN_VERSION_ENCODED }}) | Set-Content -Path ${{ env.ROOT }}\obs-streamelements.stable.manifest
+
+
+            type ${{ env.ROOT }}\obs-streamelements.qa.manifest
+
+            type ${{ env.ROOT }}\obs-streamelements.beta.manifest
+
+            type ${{ env.ROOT }}\obs-streamelements.latest.manifest
+
+            type ${{ env.ROOT }}\obs-streamelements.stable.manifest
+
+
+            # Add version number to installer
+
+            echo ( '!define PRODUCT_VERSION "${{inputs.PLUGIN_VERSION_STRING}}"' ) > ${{ env.ROOT }}\version.generated.nsh
+
+            echo ( '!define SETUP_VERSION "${{inputs.PLUGIN_VERSION_STRING}}"' ) >> ${{ env.ROOT }}\version.generated.nsh
+            
+            type ${{ env.ROOT }}\version.generated.nsh
+
+            cd "${{ env.ROOT }}"
+
+            makensis /V4 /DSKIP_64BIT_CONTENT main.nsi
+
+            ren obs-streamelements-setup.exe $StreamElementsExe32bit
+
+            makensis /V4 /DSKIP_32BIT_CONTENT main.nsi
+
+            ren obs-streamelements-setup.exe $StreamElementsExe64bit
+
+            makensis /V4 main.nsi
+
+      - name: Sign Windows binaries
+        uses: azure/artifact-signing-action@v2
+        if: ${{ env.SIGN_WINDOWS_BINARIES == 'true'}}
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: https://eus.codesigning.azure.net/
+          signing-account-name: SE-Live
+          certificate-profile-name: SE-Live
+          files-folder: '${{ env.ROOT }}'
+          files-folder-filter: exe,dll,msi
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+# Automatically finds signtool.exe and exposes its path
+      - name: Find SignTool
+        if: ${{ env.SIGN_WINDOWS_BINARIES == 'true'}}
+        uses: KamaranL/add-signtool-action@v1
+        id: signtool
+
+      - name: Verify Windows binaries code signature
+        if: ${{ env.SIGN_WINDOWS_BINARIES == 'true'}}
+        shell: cmd
+        run: |
+          cd /d ${{ env.ROOT }}
+
+          signtool verify /pa /v "${{ env.ROOT }}\\obs-streamelements-setup*.exe"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-setup
+          path: '${{ env.ROOT }}/obs-streamelements-setup*.exe'
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-manifest
+          path: '${{ env.ROOT }}/obs-streamelements*.manifest'
+
+      - name: Upload to Google Storage
+        if: ${{ env.UPLOAD_BINARIES == 'true' }}
+        uses: 'google-github-actions/upload-cloud-storage@v3'
+        with:
+          parent: false
+          process_gcloudignore: false
+          path: |
+            '${{ env.ROOT }}/obs-streamelements-setup*.exe'
+            '${{ env.ROOT }}/obs-streamelements.manifest'
+            '${{ env.ROOT }}/obs-streamelements.*.manifest'
+            '${{ env.ROOT }}\..\download\obs-streamelements-core\Version.generated.hpp'
+          destination: 'se-obs-builds/obs-streamelements-installer/latest/windows'
+
+  macos:
+    needs: [release_notes]
+    runs-on: macos-latest
+
+    env:
+      ROOT: ${{ github.workspace }}/CI/obs-streamelements-installer
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auth Google API
+        uses: 'google-github-actions/auth@v2'
+        with:
+          project_id: streamelements-core
+          workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
+          service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
+
+      - name: Download SE.Live
+        run: |
+          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/macos/build_x86_64.zip --output /tmp/build_x86_64.zip
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/macos/build_arm64.zip --output /tmp/build_arm64.zip
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/macos/Version.generated.hpp --output /tmp/Version.generated.hpp
+
+          7z x -y /tmp/build_x86_64.zip -o/tmp/build_x86_64
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          7z x -y /tmp/build_arm64.zip -o/tmp/build_arm64
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+      - name: Prepare for code signing and notarization
+        if: inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes'
+        run: |
+          # Create temporary keychain
+
+          security create-keychain -p secret my_keychain
+
+          
+          
+          # Append keychain to the search list
+
+          security list-keychains -d user -s my_keychain $(security list-keychains -d user | sed s/\"//g)
+
+          security list-keychains
+
+          
+          
+          # Unlock keychain
+
+          security set-keychain-settings my_keychain
+
+          security unlock-keychain -p secret my_keychain
+
+          
+          
+          # Import certificates
+          
+          echo ${{ secrets.CODESIGN_DEVIDAPP_CERT_P12_BASE64 }} |base64 -D -o devidapp.p12
+          
+          echo ${{ secrets.CODESIGN_DEVIDINST_CERT_P12_BASE64 }} |base64 -D -o devidinst.p12
+
+          security import ./devidapp.p12 -k my_keychain -P ${{ secrets.CODESIGN_DEVIDAPP_CERT_PWD }} -T "/usr/bin/codesign"
+
+          security import ./devidinst.p12 -k my_keychain -P ${{ secrets.CODESIGN_DEVIDINST_CERT_PWD }} -T "/usr/bin/productsign"
+
+          rm devidapp.p12
+
+          rm devidinst.p12
+
+
+
+          # New requirement for MacOS 10.12
+
+          security set-key-partition-list -S apple-tool:,apple: -s -k secret my_keychain
+
+          
+          
+          # Store notarytool credentials
+
+          xcrun notarytool store-credentials "notarytool-password" --apple-id "${{ secrets.NOTARIZE_APPLE_ID }}" --team-id "${{ secrets.NOTARIZE_APPLE_TEAM_ID }}" --password "${{ secrets.NOTARIZE_APPLE_APP_PWD }}"
+
+      - name: Build installer
+        run: |
+          cd ${{ env.ROOT }}
+
+          # Compose release notes
+
+          [ -e /tmp/readme.md ] && rm /tmp/readme.md
+
+          # Create version manifest
+
+          sed -e "s/\${STREAMELEMENTS_PLUGIN_VERSION}/${{ inputs.PLUGIN_VERSION_ENCODED }}/g" ${{ env.ROOT }}/template.macos.manifest >${{ env.ROOT }}/obs-streamelements.manifest
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          echo "" >> ${{ env.ROOT }}/obs-streamelements.manifest
+          echo "" >> ${{ env.ROOT }}/obs-streamelements.manifest
+          echo "[[[BEGIN_RELEASE_NOTES]]]" >> ${{ env.ROOT }}/obs-streamelements.manifest
+          echo "${{ needs.release_notes.outputs.release_notes_html_base64 }}" |base64 -d>> ${{ env.ROOT }}/obs-streamelements.manifest
+          echo "" >> ${{ env.ROOT }}/obs-streamelements.manifest
+          echo "[[[END_RELEASE_NOTES]]]" >> ${{ env.ROOT }}/obs-streamelements.manifest
+
+          cat ${{ env.ROOT }}/obs-streamelements.manifest
+
+          # Create universal binary from ARM64 and x86_64
+
+          cp -R /tmp/build_arm64/obs-streamelements-core.plugin /tmp/obs-streamelements-core.plugin
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          cd /tmp/obs-streamelements-core.plugin/Contents/MacOS
+
+          mv obs-streamelements-core obs-streamelements-core_arm64
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          cp /tmp/build_x86_64/obs-streamelements-core.plugin/Contents/MacOS/obs-streamelements-core obs-streamelements-core_x86_64
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          lipo -create -output obs-streamelements-core obs-streamelements-core_arm64 obs-streamelements-core_x86_64
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          rm -f obs-streamelements-core_arm64 obs-streamelements-core_x86_64
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+
+
+
+          # Update Info.plist
+
+          plutil -replace CFBundleIdentifier -string com.streamelements.selive-core /tmp/obs-streamelements-core.plugin/Contents/Info.plist
+          
+          plutil -replace CFBundleShortVersionString -string ${{ inputs.PLUGIN_VERSION_STRING }} /tmp/obs-streamelements-core.plugin/Contents/Info.plist
+
+          plutil -replace CFBundleLongVersionString -string ${{ inputs.PLUGIN_VERSION_STRING }} /tmp/obs-streamelements-core.plugin/Contents/Info.plist
+
+          plutil -replace CFBundleVersion -string ${{ inputs.PLUGIN_VERSION_ENCODED }} /tmp/obs-streamelements-core.plugin/Contents/Info.plist
+
+          plutil -replace NSHumanReadableCopyright -string "(c) StreamElements, Inc." /tmp/obs-streamelements-core.plugin/Contents/Info.plist
+
+          plutil -replace CFBundleDisplayName -string "StreamElements SE.Live" /tmp/obs-streamelements-core.plugin/Contents/Info.plist
+
+          plutil -insert BundleIsRelocatable -bool false /tmp/obs-streamelements-core.plugin/Contents/Info.plist
+          
+
+
+
+          # Create localizable resources
+
+          plutil -insert RequiredBundlesDescription -string "Could not find OBS installed, Please download and install OBS from https://obsproject.com/ and run SE.Live setup again" /tmp/obs-streamelements-core.plugin/Contents/Info.plist
+          
+          [ ! -e /tmp/obs-streamelements-core.plugin/Contents/Resources/en.lproj ] && mkdir -pv /tmp/obs-streamelements-core.plugin/Contents/Resources/en.lproj
+
+          echo 'RequiredBundlesDescription = "Could not find OBS installed, Please download and install OBS from https://obsproject.com and run SE.Live setup again"' >/tmp/obs-streamelements-core.plugin/Contents/Resources/en.lproj/InfoPlist.strings
+
+      - name: Sign plugin code
+        if: inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes'
+        run: |
+          cd ${{ env.ROOT }}
+
+          # Create universal package
+
+          echo Removing existing signature...
+
+          codesign --remove-signature /tmp/obs-streamelements-core.plugin
+
+          echo Signing plugin code...
+
+          codesign --force --options runtime --sign "${{ secrets.CODESIGN_DEVIDAPP_IDENTITY }}" --deep /tmp/obs-streamelements-core.plugin
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          echo Verifying plugin code signature...
+
+          codesign -dvv /tmp/obs-streamelements-core.plugin
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+      - name: Create plugin package
+        run: |
+          cd ${{ env.ROOT }}
+
+          pkgbuild --identifier com.streamelements.selive-core --version ${{ inputs.PLUGIN_VERSION_STRING }} --install-location "/Library/Application Support/obs-studio/plugins" --component /tmp/obs-streamelements-core.plugin /tmp/plugin.pkg
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+      - name: Create product installer
+        run: |
+          cd ${{ env.ROOT }}
+
+          mkdir /tmp/resources
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          cp macos_*.html /tmp/resources
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          cp resources/macos_setup.png /tmp/resources
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          productbuild --distribution ${{ env.ROOT }}/macos_distribution.xml --package-path /tmp --resources /tmp/resources /tmp/obs-streamelements-core-unsigned.pkg
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+      - name: Sign product installer
+        if: inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes'
+        run: |
+          cd ${{ env.ROOT }}
+
+          productsign --timestamp --sign "${{ secrets.CODESIGN_DEVIDINST_IDENTITY }}" /tmp/obs-streamelements-core-unsigned.pkg /tmp/obs-streamelements-core.pkg
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+      - name: Mock product installer signature
+        if: inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION == 'true' || inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION == '1' || inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION == 'yes'
+        run: |
+          cd ${{ env.ROOT }}
+
+          cp /tmp/obs-streamelements-core-unsigned.pkg /tmp/obs-streamelements-core.pkg
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+
+      - name: Notarize product installer
+        if: inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes'
+        run: |
+          cd ${{ env.ROOT }}
+
+          xcrun notarytool submit --force /tmp/obs-streamelements-core.pkg  --keychain-profile "notarytool-password" --wait
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+      - name: Staple product installer
+        if: inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && inputs.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes'
+        run: |
+          cd ${{ env.ROOT }}
+
+          xcrun stapler staple /tmp/obs-streamelements-core.pkg
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+      - name: Prepare product installer for upload
+        run: |
+          cd ${{ env.ROOT }}
+
+          cp /tmp/obs-streamelements-core.pkg ${{ env.ROOT }}/obs-streamelements-core.pkg
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: setup-windows
+          path: |
+            '${{ env.ROOT }}/obs-streamelements-core.pkg'
+            '${{ env.ROOT }}/obs-streamelements.manifest'
+            '${{ env.ROOT }}/obs-streamelements.*.manifest'
+
+      - name: Upload to Google Storage
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        uses: 'google-github-actions/upload-cloud-storage@v3'
+        with:
+          parent: false
+          process_gcloudignore: false
+          path: |
+            '${{ env.ROOT }}/obs-streamelements-core.pkg'
+            '${{ env.ROOT }}/obs-streamelements.manifest'
+            '${{ env.ROOT }}/obs-streamelements.*.manifest'
+          destination: 'se-obs-builds/obs-streamelements-installer/latest/macos'

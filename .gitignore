@@ -2,8 +2,8 @@
 node_modules/
 
 #binaries
-*.exe
-*.dll
+#*.exe
+#*.dll
 *.dylib
 *.so
 
@@ -63,7 +63,7 @@ tags
 *.tlog
 *.sdf
 *.opensdf
-*.xml
+#*.xml
 *.ipch
 *.css
 *.xslt

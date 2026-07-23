@@ -1,0 +1,10 @@
+
+[obs-browser]
+version_number=${STREAMELEMENTS_PLUGIN_VERSION}
+package_url=https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed/${PACKAGE_FILENAME}.exe
+package_url_64=https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed/${PACKAGE_FILENAME_64_BIT}.exe
+package_url_32=https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed/${PACKAGE_FILENAME_32_BIT}.exe
+package_arguments_g2=/AUTOSTART /D=${OBS_INSTALL_DIR}
+force_install=false
+allow_downgrade=true
+disable_auto_use_last_response=false
