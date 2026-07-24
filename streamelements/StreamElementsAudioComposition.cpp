@@ -322,7 +322,7 @@ public:
 protected:
 	virtual obs_encoder_t *GetStreamingAudioEncoder(size_t index)
 	{
-		if (index > MAX_AUDIO_MIXES)
+		if (index >= MAX_AUDIO_MIXES)
 			return nullptr;
 
 		return m_streamingAudioEncoders[index];
@@ -330,7 +330,7 @@ protected:
 
 	virtual obs_encoder_t *GetRecordingAudioEncoder(size_t index)
 	{
-		if (index > MAX_AUDIO_MIXES)
+		if (index >= MAX_AUDIO_MIXES)
 			return nullptr;
 
 		return m_recordingAudioEncoders[index];
