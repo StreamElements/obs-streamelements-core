@@ -494,3 +494,27 @@ jobs:
         with:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
           tag: "${{ needs.version.outputs.version_string }}"
+
+  linear-release:
+    # Mirrors every shipped master build into Linear (CORE-266): scans the
+    # commits since the last release for CORE-xxx references and attaches
+    # those issues to a Linear release named after the build version.
+    # Uses a "scheduled" pipeline on the Linear side — stages map to the
+    # qa/beta/stable channels once channel promotion moves into CI.
+    if: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
+    needs: [version, tag-master-commit]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # linear-release scans commit history
+
+      - name: Sync release to Linear
+        uses: linear/linear-release-action@v0
+        with:
+          access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
+          version: ${{ needs.version.outputs.version_string }}
+          release_notes: RELEASE_NOTES.md
