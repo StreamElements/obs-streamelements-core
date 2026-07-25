@@ -139,10 +139,6 @@ jobs:
 
             curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/windows/Version.generated.hpp --output ${{ env.ROOT }}\..\download\obs-streamelements-core\Version.generated.hpp
 
-            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/windows/RELEASE_NOTES.md --output ${{ env.ROOT }}\..\download\obs-streamelements-core\RELEASE_NOTES.md
-
-
-
 
             curl -kL -o ${{ env.ROOT }}\..\obs-streamelements-uninstaller\obs-streamelements-uninstaller.exe https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/qa/obs-streamelements-uninstaller.exe -f --retry 5 -C -
 

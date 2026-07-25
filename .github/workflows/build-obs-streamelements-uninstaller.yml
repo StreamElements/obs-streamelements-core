@@ -25,11 +25,6 @@ jobs:
     runs-on: windows-2022
 
     steps:
-      - name: Debug
-        shell: cmd
-        run: |
-          echo "${{ github.event.repository.updated_at }}"
-
       - name: Checkout
         uses: actions/checkout@v4
 

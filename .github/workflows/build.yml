@@ -74,9 +74,6 @@ jobs:
 
     env:
       CHECKOUT: 31.1.2
-      GS_ACCESS_KEY_ID: ${{ secrets.GS_ACCESS_KEY_ID }}
-      GS_KEY_BASE64: ${{ secrets.GS_KEY_BASE64 }}
-      GITHUB_WORKSPACE: $GITHUB_WORKSPACE
 
     steps:
       - uses: actions/checkout@v4
@@ -95,9 +92,7 @@ jobs:
         shell: cmd
         run: |
           mkdir C:\local
-          git clone --recursive https://github.com/obsproject/obs-studio.git C:\local\obs-studio
-          cd /d C:\local\obs-studio
-          git checkout %CHECKOUT%
+          git clone --depth 1 --branch %CHECKOUT% --recursive --shallow-submodules https://github.com/obsproject/obs-studio.git C:\local\obs-studio
 
       - name: Install plugin into OBS tree
         shell: cmd
@@ -105,15 +100,6 @@ jobs:
           mkdir C:\local\obs-studio\plugins\obs-streamelements-core
           xcopy "%GITHUB_WORKSPACE%\*.*" "C:\local\obs-studio\plugins\obs-streamelements-core" /S /E /I /Y
           echo add_obs_plugin(obs-streamelements-core) > C:\local\obs-studio\plugins\CMakeLists.txt
-
-      - name: Setup GCS uploader
-        shell: powershell
-        run: |
-          cd C:\local\obs-studio\plugins\obs-streamelements-core\CI\gcs
-          [System.Text.Encoding]::UTF8.GetString(
-            [System.Convert]::FromBase64String($env:GS_KEY_BASE64)
-          ) | Out-File key.json
-          npm install
 
       - name: Download BugSplat uploader
         run: |
@@ -201,7 +187,6 @@ jobs:
 
     env:
       CHECKOUT: 31.1.2
-      GS_SECRET_ACCESS_KEY: ${{ secrets.GS_SECRET_ACCESS_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -215,9 +200,7 @@ jobs:
 
       - name: Clone OBS Studio
         run: |
-          git clone --recursive https://github.com/obsproject/obs-studio.git ~/src/obs-studio
-          cd ~/src/obs-studio
-          git checkout $CHECKOUT
+          git clone --depth 1 --branch "$CHECKOUT" --recursive --shallow-submodules https://github.com/obsproject/obs-studio.git ~/src/obs-studio
 
       - name: Install plugin
         run: |
