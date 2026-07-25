@@ -381,7 +381,7 @@ jobs:
 
           for manifest in obs-streamelements.manifest obs-streamelements.qa.manifest obs-streamelements.beta.manifest obs-streamelements.latest.manifest obs-streamelements.stable.manifest
           do
-            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/windows/$manifest --output $manifest
+            curl -f https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/windows/$manifest --output $manifest
 
             sed -i "s/\${PACKAGE_FILENAME}/$signedPackageFilename/" $manifest
             sed -i "s/\${PACKAGE_FILENAME_64_BIT}/$signedPackageFilename64/" $manifest
@@ -392,9 +392,9 @@ jobs:
 
           cp obs-streamelements.manifest obs-streamelements-${{ needs.version.outputs.version_encoded }}.manifest
 
-          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-setup.exe --output obs-streamelements-setup.exe
-          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-setup-x64.exe --output obs-streamelements-setup-x64.exe
-          # curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-setup-x86.exe --output obs-streamelements-setup-x86.exe
+          curl -f https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/windows/obs-streamelements-setup.exe --output obs-streamelements-setup.exe
+          curl -f https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/windows/obs-streamelements-setup-x64.exe --output obs-streamelements-setup-x64.exe
+          # curl -f https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/windows/obs-streamelements-setup-x86.exe --output obs-streamelements-setup-x86.exe
 
           cp obs-streamelements-setup-x64.exe ${signedPackageFilename64}.exe
           cp obs-streamelements-setup-x64.exe ${signedPackageFilename32}.exe # This is not a mistake, we no longer support 32bit builds
@@ -446,7 +446,7 @@ jobs:
 
           for manifest in obs-streamelements.manifest obs-streamelements.qa.manifest obs-streamelements.beta.manifest obs-streamelements.latest.manifest obs-streamelements.stable.manifest
           do
-            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/$manifest --output $manifest
+            curl -f https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/$manifest --output $manifest
 
             sed -i "s/\${PACKAGE_FILENAME}/$signedPackageFilename/" $manifest
             sed -i "s/\${PACKAGE_FILENAME_64_BIT}/$signedPackageFilename/" $manifest
@@ -457,7 +457,7 @@ jobs:
 
           cp obs-streamelements.manifest obs-streamelements-${{ needs.version.outputs.version_encoded }}.manifest
 
-          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-core.pkg --output ${signedPackageFilename}.pkg
+          curl -f https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-core.pkg --output ${signedPackageFilename}.pkg
 
       - uses: actions/upload-artifact@v4
         with:
