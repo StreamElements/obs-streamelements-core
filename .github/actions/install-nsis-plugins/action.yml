@@ -1,0 +1,41 @@
+name: Install NSIS plugins
+description: >
+  Download the StreamElements NSIS plugins (NSISLockDetector, NSISHTTP,
+  NSISConfig) from the CDN and install them into the system NSIS Plugins
+  directory. Shared by the installer and uninstaller builds so the plugin
+  list only lives in one place. curl runs with -f so a missing CDN object
+  fails the build instead of a 404 body getting signed into the installer.
+
+inputs:
+  working-directory:
+    description: Directory in which to stage the nsis/ tree before copying it into NSIS
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Download and install NSIS plugins
+      shell: cmd
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        if not exist nsis\Plugins\x64-ansi mkdir nsis\Plugins\x64-ansi
+        if not exist nsis\Plugins\x64-unicode mkdir nsis\Plugins\x64-unicode
+        if not exist nsis\Plugins\x86-ansi mkdir nsis\Plugins\x86-ansi
+        if not exist nsis\Plugins\x86-unicode mkdir nsis\Plugins\x86-unicode
+
+        curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x64-ansi/NSISLockDetector.dll --output nsis\Plugins\x64-ansi\NSISLockDetector.dll || exit /b 1
+        curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x64-unicode/NSISLockDetector.dll --output nsis\Plugins\x64-unicode\NSISLockDetector.dll || exit /b 1
+        curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x86-ansi/NSISLockDetector.dll --output nsis\Plugins\x86-ansi\NSISLockDetector.dll || exit /b 1
+        curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x86-unicode/NSISLockDetector.dll --output nsis\Plugins\x86-unicode\NSISLockDetector.dll || exit /b 1
+
+        curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x64-ansi/NSISHTTP.dll --output nsis\Plugins\x64-ansi\NSISHTTP.dll || exit /b 1
+        curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x64-unicode/NSISHTTP.dll --output nsis\Plugins\x64-unicode\NSISHTTP.dll || exit /b 1
+        curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x86-ansi/NSISHTTP.dll --output nsis\Plugins\x86-ansi\NSISHTTP.dll || exit /b 1
+        curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x86-unicode/NSISHTTP.dll --output nsis\Plugins\x86-unicode\NSISHTTP.dll || exit /b 1
+
+        curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x64-ansi/NSISConfig.dll --output nsis\Plugins\x64-ansi\NSISConfig.dll || exit /b 1
+        curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x64-unicode/NSISConfig.dll --output nsis\Plugins\x64-unicode\NSISConfig.dll || exit /b 1
+        curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x86-ansi/NSISConfig.dll --output nsis\Plugins\x86-ansi\NSISConfig.dll || exit /b 1
+        curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x86-unicode/NSISConfig.dll --output nsis\Plugins\x86-unicode\NSISConfig.dll || exit /b 1
+
+        xcopy nsis "%ProgramFiles(x86)%\NSIS" /S /E /I /Y
