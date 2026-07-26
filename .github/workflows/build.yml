@@ -446,13 +446,15 @@ jobs:
 
           for manifest in obs-streamelements.manifest obs-streamelements.qa.manifest obs-streamelements.beta.manifest obs-streamelements.latest.manifest obs-streamelements.stable.manifest
           do
+            echo "Downloading manifest '$manifest' ..."
+
             curl -f https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/$manifest --output $manifest
 
             sed -i "s/\${PACKAGE_FILENAME}/$signedPackageFilename/" $manifest
             sed -i "s/\${PACKAGE_FILENAME_64_BIT}/$signedPackageFilename/" $manifest
             sed -i "s/\${PACKAGE_FILENAME_32_BIT}/$signedPackageFilename/" $manifest
 
-            cat $manifest
+            #cat $manifest
           done
 
           cp obs-streamelements.manifest obs-streamelements-${{ needs.version.outputs.version_encoded }}.manifest
