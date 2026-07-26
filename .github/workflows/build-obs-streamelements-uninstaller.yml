@@ -110,7 +110,7 @@ jobs:
 
       - name: Sign Windows binaries
         uses: azure/artifact-signing-action@v2
-        if: ${{ env.SIGN_BINARIES }}
+        if: ${{ env.SIGN_BINARIES == 'true' }}
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -126,12 +126,12 @@ jobs:
 
 # Automatically finds signtool.exe and exposes its path
       - name: Find SignTool
-        if: ${{ env.SIGN_BINARIES }}
+        if: ${{ env.SIGN_BINARIES == 'true' }}
         uses: KamaranL/add-signtool-action@v1
         id: signtool
 
       - name: Verify Windows binaries code signature
-        if: ${{ env.SIGN_BINARIES }}
+        if: ${{ env.SIGN_BINARIES == 'true' }}
         shell: cmd
         run: |
           signtool verify /pa /v "${{ env.ROOT }}\\obs-streamelements-uninstaller.exe"
@@ -140,10 +140,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: uninstaller
-          path: obs-streamelements-uninstaller.exe
+          path: ${{ env.ROOT }}/obs-streamelements-uninstaller.exe
+          if-no-files-found: error
 
       - name: Upload to Google Artifact Storage
-        if: ${{ env.UPLOAD_BINARIES }}
+        if: ${{ env.UPLOAD_BINARIES == 'true' }}
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
@@ -152,7 +153,7 @@ jobs:
           destination: 'se-obs-builds/obs-streamelements-uninstaller/latest/windows'
 
       - name: Upload to CDN Signed Artifact Storage
-        if: ${{ env.UPLOAD_BINARIES }}
+        if: ${{ env.UPLOAD_BINARIES == 'true' }}
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
@@ -161,7 +162,7 @@ jobs:
           destination: 'cdn.streamelements.com/obs/dist/obs-streamelements-uninstaller/windows/signed'
 
       - name: Upload to CDN QA Artifact Storage
-        if: ${{ env.UPLOAD_BINARIES }}
+        if: ${{ env.UPLOAD_BINARIES == 'true' }}
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
@@ -170,7 +171,7 @@ jobs:
           destination: 'cdn.streamelements.com/obs/dist/obs-streamelements-uninstaller/windows/qa'
 
       - name: Upload to CDN Latest Artifact Storage
-        if: ${{ env.UPLOAD_BINARIES }}
+        if: ${{ env.UPLOAD_BINARIES == 'true' }}
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false

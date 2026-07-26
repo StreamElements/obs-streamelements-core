@@ -151,7 +151,7 @@ jobs:
           msbuild obs-studio.sln -p:Configuration=RelWithDebInfo
 
       - name: Upload BugSplat Symbols
-        if: ${{ env.UPLOAD_SYMBOLS }}
+        if: ${{ env.UPLOAD_SYMBOLS == 'true' }}
         shell: cmd
         run: |
           c:\local\bugsplat\symbol-upload-windows.exe ^
@@ -284,14 +284,14 @@ jobs:
           xcrun dsymutil obs-streamelements-core.plugin/Contents/MacOS/obs-streamelements-core -o obs-streamelements-core.dSYM
 
       - name: Upload ARM64 to BugSplat
-        if: ${{ env.UPLOAD_SYMBOLS }}
+        if: ${{ env.UPLOAD_SYMBOLS == 'true' }}
         run: |
           cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
 
           /tmp/symbol-upload-macos -v -a "obs-streamelements-core-macos" -b "OBS_Live" -i "${{ secrets.BUGSPLAT_CLIENTID }}" -s "${{ secrets.BUGSPLAT_CLIENTSECRET }}" -f "obs-streamelements-core.dSYM" -d . -v "${{ needs.version.outputs.version_encoded }}"
 
       - name: Upload x86_64 to BugSplat
-        if: ${{ env.UPLOAD_SYMBOLS }}
+        if: ${{ env.UPLOAD_SYMBOLS == 'true' }}
         run: |
           cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core/RelWithDebInfo
 
