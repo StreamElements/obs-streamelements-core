@@ -123,7 +123,7 @@ jobs:
 
           cd c:\local\bugsplat
 
-          curl -sL -O https://github.com/BugSplat-Git/symbol-upload/releases/download/v10.5.0/symbol-upload-windows.exe
+          curl -sL -f -O https://github.com/BugSplat-Git/symbol-upload/releases/download/v10.5.0/symbol-upload-windows.exe
 
       - name: Generate Version
         shell: powershell
@@ -233,7 +233,7 @@ jobs:
       - name: Download BugSplat uploader
         run: |
           cd /tmp
-          curl -sL -O https://github.com/BugSplat-Git/symbol-upload/releases/download/v10.5.0/symbol-upload-macos
+          curl -sL -f -O https://github.com/BugSplat-Git/symbol-upload/releases/download/v10.5.0/symbol-upload-macos
           #cp symbol-upload-macos-intel symbol-upload-macos
           chmod +x symbol-upload-macos
 
@@ -454,7 +454,7 @@ jobs:
             sed -i "s/\${PACKAGE_FILENAME_64_BIT}/$signedPackageFilename/" $manifest
             sed -i "s/\${PACKAGE_FILENAME_32_BIT}/$signedPackageFilename/" $manifest
 
-            #cat $manifest
+            cat $manifest
           done
 
           cp obs-streamelements.manifest obs-streamelements-${{ needs.version.outputs.version_encoded }}.manifest
