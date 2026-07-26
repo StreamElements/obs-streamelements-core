@@ -133,16 +133,16 @@ jobs:
 
 
 
-            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/windows/build32_qt6.zip --output ${{ env.ROOT }}\..\download\obs-streamelements-core\build32_qt6.zip
+            curl -f https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/windows/build32_qt6.zip --output ${{ env.ROOT }}\..\download\obs-streamelements-core\build32_qt6.zip
 
-            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/windows/build64_qt6.zip --output ${{ env.ROOT }}\..\download\obs-streamelements-core\build64_qt6.zip
+            curl -f https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/windows/build64_qt6.zip --output ${{ env.ROOT }}\..\download\obs-streamelements-core\build64_qt6.zip
 
-            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/windows/Version.generated.hpp --output ${{ env.ROOT }}\..\download\obs-streamelements-core\Version.generated.hpp
-
-
+            curl -f https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/windows/Version.generated.hpp --output ${{ env.ROOT }}\..\download\obs-streamelements-core\Version.generated.hpp
 
 
-            curl -kL -o ${{ env.ROOT }}\..\obs-streamelements-uninstaller\obs-streamelements-uninstaller.exe https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/qa/obs-streamelements-uninstaller.exe -f --retry 5 -C -
+
+
+            curl -f -kL -o ${{ env.ROOT }}\..\obs-streamelements-uninstaller\obs-streamelements-uninstaller.exe https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/qa/obs-streamelements-uninstaller.exe -f --retry 5 -C -
 
 
 
@@ -165,17 +165,17 @@ jobs:
 
 
 
-            curl https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-streamelements-set-machine-config/windows/qa/obs-streamelements-set-machine-config-32.exe --output ${{ env.ROOT }}\..\obs-studio\build32_qt6\rundir\${{ env.BUILD_CONFIG }}\obs-plugins\32bit\obs-streamelements-set-machine-config.exe
+            curl -f https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-streamelements-set-machine-config/windows/qa/obs-streamelements-set-machine-config-32.exe --output ${{ env.ROOT }}\..\obs-studio\build32_qt6\rundir\${{ env.BUILD_CONFIG }}\obs-plugins\32bit\obs-streamelements-set-machine-config.exe
 
-            curl https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-streamelements-set-machine-config/windows/qa/obs-streamelements-set-machine-config-64.exe --output ${{ env.ROOT }}\..\obs-studio\build64_qt6\rundir\${{ env.BUILD_CONFIG }}\obs-plugins\64bit\obs-streamelements-set-machine-config.exe
+            curl -f https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-streamelements-set-machine-config/windows/qa/obs-streamelements-set-machine-config-64.exe --output ${{ env.ROOT }}\..\obs-studio\build64_qt6\rundir\${{ env.BUILD_CONFIG }}\obs-plugins\64bit\obs-streamelements-set-machine-config.exe
 
       - name: Download resources
         shell: cmd
         run: |
           cd /d ${{ env.ROOT }}
 
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-probe-libobs-version/windows/qa/obs-probe-libobs-version-32.exe --output resources\obs-probe-libobs-version-32.exe
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-probe-libobs-version/windows/qa/obs-probe-libobs-version-64.exe --output resources\obs-probe-libobs-version-64.exe
+          curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-probe-libobs-version/windows/qa/obs-probe-libobs-version-32.exe --output resources\obs-probe-libobs-version-32.exe
+          curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-probe-libobs-version/windows/qa/obs-probe-libobs-version-64.exe --output resources\obs-probe-libobs-version-64.exe
 
       - name: Install NSIS plugins
         shell: cmd
@@ -195,30 +195,30 @@ jobs:
           if exist nsis\Plugins\x86-ansi\NSISLockDetector.dll del nsis\Plugins\x86-ansi\NSISLockDetector.dll
           if exist nsis\Plugins\x86-unicode\NSISLockDetector.dll del nsis\Plugins\x86-unicode\NSISLockDetector.dll
 
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x64-ansi/NSISLockDetector.dll --output nsis\Plugins\x64-ansi\NSISLockDetector.dll
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x64-unicode/NSISLockDetector.dll --output nsis\Plugins\x64-unicode\NSISLockDetector.dll
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x86-ansi/NSISLockDetector.dll --output nsis\Plugins\x86-ansi\NSISLockDetector.dll
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x86-unicode/NSISLockDetector.dll --output nsis\Plugins\x86-unicode\NSISLockDetector.dll
+          curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x64-ansi/NSISLockDetector.dll --output nsis\Plugins\x64-ansi\NSISLockDetector.dll
+          curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x64-unicode/NSISLockDetector.dll --output nsis\Plugins\x64-unicode\NSISLockDetector.dll
+          curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x86-ansi/NSISLockDetector.dll --output nsis\Plugins\x86-ansi\NSISLockDetector.dll
+          curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x86-unicode/NSISLockDetector.dll --output nsis\Plugins\x86-unicode\NSISLockDetector.dll
 
           if exist nsis\Plugins\x64-ansi\NSISHTTP.dll del nsis\Plugins\x64-ansi\NSISHTTP.dll
           if exist nsis\Plugins\x64-unicode\NSISHTTP.dll del nsis\Plugins\x64-unicode\NSISHTTP.dll
           if exist nsis\Plugins\x86-ansi\NSISHTTP.dll del nsis\Plugins\x86-ansi\NSISHTTP.dll
           if exist nsis\Plugins\x86-unicode\NSISHTTP.dll del nsis\Plugins\x86-unicode\NSISHTTP.dll
 
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x64-ansi/NSISHTTP.dll --output nsis\Plugins\x64-ansi\NSISHTTP.dll
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x64-unicode/NSISHTTP.dll --output nsis\Plugins\x64-unicode\NSISHTTP.dll
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x86-ansi/NSISHTTP.dll --output nsis\Plugins\x86-ansi\NSISHTTP.dll
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x86-unicode/NSISHTTP.dll --output nsis\Plugins\x86-unicode\NSISHTTP.dll
+          curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x64-ansi/NSISHTTP.dll --output nsis\Plugins\x64-ansi\NSISHTTP.dll
+          curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x64-unicode/NSISHTTP.dll --output nsis\Plugins\x64-unicode\NSISHTTP.dll
+          curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x86-ansi/NSISHTTP.dll --output nsis\Plugins\x86-ansi\NSISHTTP.dll
+          curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x86-unicode/NSISHTTP.dll --output nsis\Plugins\x86-unicode\NSISHTTP.dll
 
           if exist nsis\Plugins\x64-ansi\NSISConfig.dll del nsis\Plugins\x64-ansi\NSISConfig.dll
           if exist nsis\Plugins\x64-unicode\NSISConfig.dll del nsis\Plugins\x64-unicode\NSISConfig.dll
           if exist nsis\Plugins\x86-ansi\NSISConfig.dll del nsis\Plugins\x86-ansi\NSISConfig.dll
           if exist nsis\Plugins\x86-unicode\NSISConfig.dll del nsis\Plugins\x86-unicode\NSISConfig.dll
 
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x64-ansi/NSISConfig.dll --output nsis\Plugins\x64-ansi\NSISConfig.dll
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x64-unicode/NSISConfig.dll --output nsis\Plugins\x64-unicode\NSISConfig.dll
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x86-ansi/NSISConfig.dll --output nsis\Plugins\x86-ansi\NSISConfig.dll
-          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x86-unicode/NSISConfig.dll --output nsis\Plugins\x86-unicode\NSISConfig.dll
+          curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x64-ansi/NSISConfig.dll --output nsis\Plugins\x64-ansi\NSISConfig.dll
+          curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x64-unicode/NSISConfig.dll --output nsis\Plugins\x64-unicode\NSISConfig.dll
+          curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x86-ansi/NSISConfig.dll --output nsis\Plugins\x86-ansi\NSISConfig.dll
+          curl -f -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x86-unicode/NSISConfig.dll --output nsis\Plugins\x86-unicode\NSISConfig.dll
 
           xcopy nsis "%ProgramFiles(x86)%\NSIS" /S /E /I /Y
 
@@ -357,15 +357,15 @@ jobs:
 
       - name: Download SE.Live
         run: |
-          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/macos/build_x86_64.zip --output /tmp/build_x86_64.zip
+          curl -f https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/macos/build_x86_64.zip --output /tmp/build_x86_64.zip
 
           if [ $? -ne 0 ]; then exit 1; fi
 
-          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/macos/build_arm64.zip --output /tmp/build_arm64.zip
+          curl -f https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/macos/build_arm64.zip --output /tmp/build_arm64.zip
 
           if [ $? -ne 0 ]; then exit 1; fi
 
-          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/macos/Version.generated.hpp --output /tmp/Version.generated.hpp
+          curl -f https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/macos/Version.generated.hpp --output /tmp/Version.generated.hpp
 
           cp /tmp/Version.generated.hpp ${{ env.ROOT }}/Version.generated.hpp
 
