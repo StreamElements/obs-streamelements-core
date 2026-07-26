@@ -449,6 +449,11 @@ jobs:
           echo "" >> ${{ env.ROOT }}/obs-streamelements.manifest
           echo "[[[END_RELEASE_NOTES]]]" >> ${{ env.ROOT }}/obs-streamelements.manifest
 
+          cp ${{ env.ROOT }}/obs-streamelements.manifest ${{ env.ROOT }}/obs-streamelements.qa.manifest
+          cp ${{ env.ROOT }}/obs-streamelements.manifest ${{ env.ROOT }}/obs-streamelements.beta.manifest
+          cp ${{ env.ROOT }}/obs-streamelements.manifest ${{ env.ROOT }}/obs-streamelements.latest.manifest
+          cp ${{ env.ROOT }}/obs-streamelements.manifest ${{ env.ROOT }}/obs-streamelements.stable.manifest
+
           cat ${{ env.ROOT }}/obs-streamelements.manifest
 
           # Create universal binary from ARM64 and x86_64
