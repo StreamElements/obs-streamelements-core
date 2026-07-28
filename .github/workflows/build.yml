@@ -518,6 +518,6 @@ jobs:
       - name: Clear RELEASE_NOTES.md
         run: |
           echo "" >> RELEASE_NOTES.md
-          git add RELEASE_NODES.md
+          git add RELEASE_NOTES.md
           git commit -m "[WORKFLOW-AUTOMATION] Clear RELEASE_NOTES.md"
           git push
