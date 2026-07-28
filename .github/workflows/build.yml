@@ -518,6 +518,10 @@ jobs:
       - name: Clear RELEASE_NOTES.md
         run: |
           echo "" >> RELEASE_NOTES.md
+          
+          git config --global user.email "noreply@streamelements.com"
+          git config --global user.name "Build Workflow"
+
           git add RELEASE_NOTES.md
           git commit -m "[WORKFLOW-AUTOMATION] Clear RELEASE_NOTES.md"
           git push
