@@ -485,14 +485,32 @@ jobs:
           path: ${{ github.workspace }}
           glob: '*.manifest'
           destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/macos/signed'
-  tag-master-commit:
+
+  finalize:
     if: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
     needs: [version, windows, macos, build-uninstaller, build-installer, deploy-signed-macos, deploy-signed-windows]
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check if last commit is result of workflow automation
+        run: |
+          COMMIT_TITLE=$(git log -1 --pretty=%s)
+          IS_WORKFLOW_AUTOMATION=$(echo "$COMMIT_TITLE" |grep -c "\[WORKFLOW-AUTOMATION\]")
+
+          echo "IS_WORKFLOW_AUTOMATION=$IS_WORKFLOW_AUTOMATION" >> $GITHUB_ENV
+
       - name: Tag master commit
         uses: tvdias/github-tagger@v0.0.1
+        if: ${{ env.IS_WORKFLOW_AUTOMATION != '1' }}
         with:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
           tag: "${{ needs.version.outputs.version_string }}"
+
+      - uses: actions/checkout@v4
+        if: ${{ env.IS_WORKFLOW_AUTOMATION != '1' }}
+      - name: Clear RELEASE_NOTES.md
+        run: |
+          echo "" >> RELEASE_NOTES.md
+          git add RELEASE_NODES.md
+          git commit -m "[WORKFLOW-AUTOMATION] Clear RELEASE_NOTES.md"
+          git push
