@@ -79,6 +79,8 @@ jobs:
 
           echo "is_workflow_automation=$IS_WORKFLOW_AUTOMATION" >> $GITHUB_OUTPUT
 
+      - uses: actions/checkout@v4
+
       - name: Check if RELEASE_NOTES.md has content
         id: has_release_notes_step
         run: |
