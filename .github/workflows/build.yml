@@ -533,11 +533,24 @@ jobs:
       - name: Clear RELEASE_NOTES.md
         if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
         run: |
+          git config --global user.email "release-bot@obs-streamelements-core"
+          git config --global user.name "SE.Live Release Bot"
+
+          # Prepend current relase notes to release notes history
+
+          echo "## ${{ needs.version.outputs.version_string }}" >> /tmp/RELEASE_NOTES.history.md
+          echo "" >> /tmp/RELEASE_NOTES.history.md
+          cat RELEASE_NOTES.md >> /tmp/RELEASE_NOTES.history.md
+          echo "" >> /tmp/RELEASE_NOTES.history.md
+          cat RELEASE_NOTES.history.md >> /tmp/RELEASE_NOTES.history.md
+          cp /tmp/RELEASE_NOTES.history.md RELEASE_NOTES.history.md
+
+          # clear current release notes
+
           rm -rf RELEASE_NOTES.md
           touch RELEASE_NOTES.md
           
-          git config --global user.email "release-bot@obs-streamelements-core"
-          git config --global user.name "SE.Live Release Bot"
+          # Commit the changes to git
 
           git add RELEASE_NOTES.md
           git commit -m "[WORKFLOW-AUTOMATION] ${{ needs.version.outputs.version_string }} finalize build"
