@@ -81,7 +81,11 @@ jobs:
           echo "" >> /tmp/release_notes_full.md
           cat "RELEASE_NOTES.footer.md" >> /tmp/release_notes_full.md
 
-          markdown-to-html-cli --source /tmp/release_notes_full.md --output /tmp/release_notes.html --no-dark-mode --markdown-style-theme dark --no-corners --style ".markdown-style { max-width: 100% !important; }"
+          # Generate HTML
+          markdown-to-html-cli --source /tmp/release_notes_full.md --output /tmp/release_notes.raw.html --no-dark-mode --markdown-style-theme dark --no-corners --style ".markdown-style { max-width: 100% !important; }"
+
+          # Remove javascript from HTML
+          awk '/<script/,/<\/script>/ {next} 1' /tmp/release_notes.raw.html > /tmp/release_notes.html
 
           echo "release_notes_html_base64=$(base64 --wrap=0 /tmp/release_notes.html)" >> $GITHUB_OUTPUT
           echo "release_notes_full_base64=$(base64 --wrap=0 /tmp/release_notes_full.md)" >> $GITHUB_OUTPUT
