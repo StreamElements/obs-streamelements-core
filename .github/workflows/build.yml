@@ -519,11 +519,12 @@ jobs:
           ssh-key: ${{ secrets.RELEASE_BOT_SSH_KEY }}
       - name: Clear RELEASE_NOTES.md
         run: |
-          echo "" >> RELEASE_NOTES.md
+          rm -rf RELEASE_NOTES.md
+          touch RELEASE_NOTES.md
           
           git config --global user.email "release-bot@obs-streamelements-core"
           git config --global user.name "SE.Live Release Bot"
 
           git add RELEASE_NOTES.md
-          git commit -m "[WORKFLOW-AUTOMATION] Clear RELEASE_NOTES.md"
+          git commit -m "[WORKFLOW-AUTOMATION] ${{ needs.version.outputs.version_string }} finalize build"
           git push
