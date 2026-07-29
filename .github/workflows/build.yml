@@ -1,7 +1,7 @@
 name: Build
 
 concurrency:
-  group: ${{ github.workflow }}-${{ startsWith(github.event.head_commit.message, '[WORKFLOW-AUTOMATION]') || github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ case(startsWith(github.event.head_commit.message, '[WORKFLOW-AUTOMATION]'), 'automation', github.event.pull_request.number || github.ref) }}
   cancel-in-progress: true
 permissions:
   contents: write    # lets GITHUB_TOKEN push tags
