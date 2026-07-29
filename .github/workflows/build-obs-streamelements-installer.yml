@@ -68,13 +68,17 @@ jobs:
         id: release_notes_step
         
         run: |
-          echo "${{ inputs.PLUGIN_VERSION_STRING }}" >> /tmp/release_notes_raw.md
+          echo "## ${{ inputs.PLUGIN_VERSION_STRING }}" >> /tmp/release_notes_raw.md
+          echo "" >> /tmp/release_notes_raw.md
           cat "RELEASE_NOTES.md" >> /tmp/release_notes_raw.md
+          echo "" >> /tmp/release_notes_raw.md
           cat "RELEASE_NOTES.history.md" >> /tmp/release_notes_raw.md
 
 
           cat "RELEASE_NOTES.header.md" >> /tmp/release_notes_full.md
+          echo "" >> /tmp/release_notes_full.md
           cat /tmp/release_notes_raw.md >> /tmp/release_notes_full.md
+          echo "" >> /tmp/release_notes_full.md
           cat "RELEASE_NOTES.footer.md" >> /tmp/release_notes_full.md
 
           markdown-to-html-cli --source /tmp/release_notes_full.md --output /tmp/release_notes.html --no-dark-mode --markdown-style-theme dark --no-corners --style ".markdown-style { max-width: 100% !important; }"
@@ -234,6 +238,12 @@ jobs:
             $StreamElementsExe32bit = 'obs-streamelements-setup-x86.exe'
 
 
+            # One encoding object for everything: UTF-8, and $false = no BOM, ever.
+            $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
+            $PSDefaultParameterValues['*:Encoding'] = 'utf8'
+            $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+            [Console]::OutputEncoding = $utf8NoBom   # what we print
+            $OutputEncoding           = $utf8NoBom   # what we pipe to native tools
 
             echo "" >> ${{ env.ROOT }}\template.manifest
             echo "" >> ${{ env.ROOT }}\template.manifest
