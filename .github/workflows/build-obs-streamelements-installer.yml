@@ -327,15 +327,27 @@ jobs:
           name: windows-manifest
           path: '${{ env.ROOT }}/obs-streamelements*.manifest'
 
-      - name: Upload to Google Storage
+      - name: Upload Binaries to Google Storage
         if: ${{ env.UPLOAD_BINARIES == 'true' }}
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
           process_gcloudignore: false
           path: ${{ env.ROOT }}
-          glob: '{obs-streamelements-setup*.exe,obs-streamelements.manifest,obs-streamelements.*.manifest,Version.generated.hpp}'
+          glob: '{obs-streamelements-setup*.exe}'
           destination: 'se-obs-builds/obs-streamelements-installer/latest/windows'
+
+      - name: Upload Text to Google Storage
+        if: ${{ env.UPLOAD_BINARIES == 'true' }}
+        uses: 'google-github-actions/upload-cloud-storage@v3'
+        with:
+          parent: false
+          process_gcloudignore: false
+          path: ${{ env.ROOT }}
+          glob: '{obs-streamelements.manifest,obs-streamelements.*.manifest,Version.generated.hpp}'
+          destination: 'se-obs-builds/obs-streamelements-installer/latest/windows'
+          headers: |
+            content-type: text/plain; charset=utf-8
 
   macos:
     needs: [release_notes]
@@ -616,12 +628,24 @@ jobs:
             ${{ env.ROOT }}/obs-streamelements.manifest
             ${{ env.ROOT }}/obs-streamelements.*.manifest
 
-      - name: Upload to Google Storage
+      - name: Upload Binaries to Google Storage
         if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
           process_gcloudignore: false
           path: ${{ env.ROOT }}
-          glob: '{obs-streamelements-core.pkg,obs-streamelements.manifest,obs-streamelements.*.manifest,Version.generated.hpp}'
+          glob: '{obs-streamelements-core.pkg}'
           destination: 'se-obs-builds/obs-streamelements-installer/latest/macos'
+
+      - name: Upload Text to Google Storage
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        uses: 'google-github-actions/upload-cloud-storage@v3'
+        with:
+          parent: false
+          process_gcloudignore: false
+          path: ${{ env.ROOT }}
+          glob: '{obs-streamelements.manifest,obs-streamelements.*.manifest,Version.generated.hpp}'
+          destination: 'se-obs-builds/obs-streamelements-installer/latest/macos'
+          headers: |
+            content-type: text/plain; charset=utf-8

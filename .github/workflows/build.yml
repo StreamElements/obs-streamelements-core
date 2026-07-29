@@ -455,6 +455,8 @@ jobs:
           path: ${{ github.workspace }}
           glob: '*.manifest'
           destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed'
+          headers: |
+            content-type: text/plain; charset=utf-8
 
   deploy-signed-macos:
     needs: [ version, macos, build-installer ]
@@ -514,6 +516,8 @@ jobs:
           path: ${{ github.workspace }}
           glob: '*.manifest'
           destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/macos/signed'
+          headers: |
+            content-type: text/plain; charset=utf-8
 
   finalize:
     if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
