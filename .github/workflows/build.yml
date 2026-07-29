@@ -555,5 +555,6 @@ jobs:
           # Commit the changes to git
 
           git add RELEASE_NOTES.md
+          git add RELEASE_NOTES.history.md
           git commit -m "[WORKFLOW-AUTOMATION] ${{ needs.version.outputs.version_string }} finalize build"
           git push
