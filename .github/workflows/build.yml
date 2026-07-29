@@ -49,6 +49,7 @@ jobs:
       version_encoded: ${{ steps.version_step.outputs.version_encoded }}
       version_string: ${{ steps.version_step.outputs.version_string }}
       is_workflow_automation: ${{ steps.is_workflow_automation_step.outputs.is_workflow_automation }}
+      has_release_notes: ${{ steps.has_release_notes_step.outputs.has_release_notes }}
 
     steps:
       - name: Generate build number
@@ -77,6 +78,17 @@ jobs:
           echo "IS_WORKFLOW_AUTOMATION=$IS_WORKFLOW_AUTOMATION"
 
           echo "is_workflow_automation=$IS_WORKFLOW_AUTOMATION" >> $GITHUB_OUTPUT
+
+      - name: Check if last commit is result of workflow automation
+        id: has_release_notes_step
+        run: |
+          IS_WORKFLOW_AUTOMATION=${{ startsWith(github.event.head_commit.message, '[WORKFLOW-AUTOMATION]') }}
+
+          if [[ $(grep -c "" RELEASE_NOTES.md) -eq 0 ]]; then
+            echo "has_release_notes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_release_notes=true" >> $GITHUB_OUTPUT
+          fi
 
   windows:
     needs: version
@@ -508,16 +520,17 @@ jobs:
     steps:
       - name: Tag master commit
         uses: tvdias/github-tagger@v0.0.1
-        if: needs.version.outputs.is_workflow_automation != 'true'
+        if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
         with:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
           tag: "${{ needs.version.outputs.version_string }}"
 
       - uses: actions/checkout@v4
-        if: needs.version.outputs.is_workflow_automation != 'true'
+        if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
         with:
           ssh-key: ${{ secrets.RELEASE_BOT_SSH_KEY }}
       - name: Clear RELEASE_NOTES.md
+        if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
         run: |
           rm -rf RELEASE_NOTES.md
           touch RELEASE_NOTES.md
