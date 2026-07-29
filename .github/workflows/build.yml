@@ -2,7 +2,7 @@ name: Build
 
 concurrency:
   group: ${{ github.workflow }}-${{ case(startsWith(github.event.head_commit.message, '[WORKFLOW-AUTOMATION]'), 'automation', github.event.pull_request.number || github.ref) }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !startsWith(github.event.head_commit.message, '[WORKFLOW-AUTOMATION]') }}
 permissions:
   contents: write    # lets GITHUB_TOKEN push tags
   id-token: write    # lets the job mint a GitHub OIDC token for WIF
