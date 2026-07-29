@@ -544,7 +544,7 @@ jobs:
 
           # Prepend current relase notes to release notes history
 
-          echo "## ${{ needs.version.outputs.version_string }}" >> /tmp/RELEASE_NOTES.history.md
+          echo "### ${{ needs.version.outputs.version_string }}" >> /tmp/RELEASE_NOTES.history.md
           echo "" >> /tmp/RELEASE_NOTES.history.md
           cat RELEASE_NOTES.md >> /tmp/RELEASE_NOTES.history.md
           echo "" >> /tmp/RELEASE_NOTES.history.md

@@ -68,7 +68,7 @@ jobs:
         id: release_notes_step
         
         run: |
-          echo "## ${{ inputs.PLUGIN_VERSION_STRING }}" >> /tmp/release_notes_raw.md
+          echo "### ${{ inputs.PLUGIN_VERSION_STRING }}" >> /tmp/release_notes_raw.md
           echo "" >> /tmp/release_notes_raw.md
           cat "RELEASE_NOTES.md" >> /tmp/release_notes_raw.md
           echo "" >> /tmp/release_notes_raw.md
