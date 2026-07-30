@@ -26,3 +26,38 @@ jobs:
       - name: debug
         run: |
           echo "${{ github.event.inputs.from }} -> ${{ github.event.inputs.to }}"
+      - name: Prune old versions from VirusTotal Monitor
+        uses: StreamElements/virustotal-monitor-action@v1
+        with:
+          # The action has no default and reads no environment variable — the key is always
+          # passed in. Point this at whatever your repo or org calls the secret.
+          api-key: ${{ secrets.VIRTUSTOTAL_MONITOR_API_KEY }}
+          mode: prune
+          managed-prefixes: /obs-streamelements/windows
+          quota-bytes: ${{ vars.VT_MONITOR_QUOTA_BYTES || '1GiB' }}
+          high-watermark: ${{ inputs.high-watermark || vars.VT_MONITOR_HIGH_WATERMARK || '80' }}
+          target-watermark: ${{ inputs.target-watermark || vars.VT_MONITOR_TARGET_WATERMARK || '60' }}
+          keep-versions: ${{ vars.VT_MONITOR_KEEP_VERSIONS || '10' }}
+          # Anything these point at is never deleted. If any of them cannot be fetched, the
+          # step fails rather than pruning with an incomplete picture of what is live.
+          #
+          # Each channel is its own directory holding one obs-streamelements.manifest; signed/
+          # additionally pins the most recent signed build. The channels disagree about
+          # installer filenames (signed/ uses -<version>.exe and -<version>-64bit.exe, qa/beta/
+          # latest use -x86-/-x64-, stable drops the version from the filename entirely), so
+          # matching keys off version_number, which all five carry.
+          manifest-urls: |
+            https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed/obs-streamelements.manifest
+            https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/qa/obs-streamelements.manifest
+            https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/beta/obs-streamelements.manifest
+            https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/latest/obs-streamelements.manifest
+            https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/stable/obs-streamelements.manifest
+          # Public-API allowances by default. A prune walks the tree and deletes per version, so
+          # at 4/minute expect a few minutes of wall clock; raise these if the key allows more.
+          rate-limit-per-minute: ${{ vars.VT_MONITOR_RATE_PER_MINUTE || '4' }}
+          rate-limit-per-day: ${{ vars.VT_MONITOR_RATE_PER_DAY || '500' }}
+          rate-limit-per-month: ${{ vars.VT_MONITOR_RATE_PER_MONTH || '15500' }}
+          # Scheduled runs default to enforcing; manual runs default to previewing.
+          dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run || 'false' }}
+          # Storage housekeeping must never take a release down with it.
+          on-error: warn
