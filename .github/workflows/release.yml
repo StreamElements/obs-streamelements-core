@@ -14,9 +14,11 @@ on:
       from:
         type: environment
         required: true
+        default: signed
       to:
         type: environment
         required: true
+        default: qa
 
       dry-run:
         type: boolean
@@ -39,7 +41,7 @@ jobs:
           api-key: ${{ secrets.VT_MONITOR_API_KEY }}
           mode: prune
           managed-prefixes: /obs-streamelements/windows
-          quota-bytes: ${{ vars.VT_MONITOR_QUOTA_BYTES || '1GiB' }}
+          quota-bytes: ${{ vars.VT_MONITOR_QUOTA_BYTES || '100GiB' }}
           high-watermark: ${{ inputs.high-watermark || vars.VT_MONITOR_HIGH_WATERMARK || '80' }}
           target-watermark: ${{ inputs.target-watermark || vars.VT_MONITOR_TARGET_WATERMARK || '60' }}
           keep-versions: ${{ vars.VT_MONITOR_KEEP_VERSIONS || '10' }}
