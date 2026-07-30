@@ -68,3 +68,4 @@ jobs:
           dry-run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry-run || 'false' }}
           # Storage housekeeping must never take a release down with it.
           on-error: warn
+          verbose: true

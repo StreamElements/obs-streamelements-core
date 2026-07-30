@@ -491,6 +491,7 @@ jobs:
             ${{ github.workspace }}/obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}-64bit.exe
           # Upload failures are loud: a release that AV vendors never see is the problem this solves.
           on-error: fail
+          verbose: true
 
   deploy-signed-macos:
     needs: [ version, macos, build-installer ]
@@ -648,3 +649,4 @@ jobs:
           dry-run: false
           # Storage housekeeping must never take a release down with it.
           on-error: warn
+          verbose: true
