@@ -18,6 +18,11 @@ on:
         type: environment
         required: true
 
+      dry-run:
+        type: boolean
+        default: true
+        required: true
+
 jobs:
   main:
     runs-on: ubuntu-latest
@@ -58,6 +63,6 @@ jobs:
           rate-limit-per-day: ${{ vars.VT_MONITOR_RATE_PER_DAY || '500' }}
           rate-limit-per-month: ${{ vars.VT_MONITOR_RATE_PER_MONTH || '15500' }}
           # Scheduled runs default to enforcing; manual runs default to previewing.
-          dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run || 'false' }}
+          dry-run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry-run || 'false' }}
           # Storage housekeeping must never take a release down with it.
           on-error: warn
