@@ -27,7 +27,7 @@ jobs:
         run: |
           echo "${{ github.event.inputs.from }} -> ${{ github.event.inputs.to }}"
       - name: Prune old versions from VirusTotal Monitor
-        uses: StreamElements/virustotal-monitor-action@v1
+        uses: streamelements/virustotal-monitor-action@v1
         with:
           # The action has no default and reads no environment variable — the key is always
           # passed in. Point this at whatever your repo or org calls the secret.
