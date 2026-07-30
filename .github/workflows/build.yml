@@ -402,6 +402,15 @@ jobs:
           workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
           service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
 
+      - name: Create Custom Status Badge
+        uses: emibcn/badge-action@v2.0.2
+        with:
+          label: 'Version'
+          status: '${{ needs.version.outputs.version_string }}'
+          color: 'blue'
+          style: 'flat'
+          path: '${{ github.workspace }}/version-badge.svg' # Saves the badge image inside your workspace          
+
       - name: Prepare files
         run: |
           export signedPackageFilename=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}
@@ -429,14 +438,24 @@ jobs:
           cp obs-streamelements-setup-x64.exe ${signedPackageFilename32}.exe # This is not a mistake, we no longer support 32bit builds
           mv obs-streamelements-setup.exe ${signedPackageFilename}.exe
 
+          cp version-badge.svg obs-streamelements.version.svg
+          cp version-badge.svg obs-streamelements.signed.version.svg
+          cp version-badge.svg obs-streamelements.qa.version.svg
+          cp version-badge.svg obs-streamelements.beta.version.svg
+          cp version-badge.svg obs-streamelements.latest.version.svg
+          cp version-badge.svg obs-streamelements.stable.version.svg
+
           ls *.exe
           ls *.manifest
+
       - uses: actions/upload-artifact@v4
         with:
           name: windows-signed-installer
           path: |
             *.exe
             *.manifest
+            *.version.svg
+            *.*.version.svg
 
       - name: Upload Binaries to CDN Google Storage
         uses: 'google-github-actions/upload-cloud-storage@v3'
@@ -444,7 +463,7 @@ jobs:
           parent: false
           process_gcloudignore: false
           path: ${{ github.workspace }}
-          glob: '*.exe'
+          glob: '{*.exe,obs-streamelements.version.svg,obs-streamelements.*.version.svg}'
           destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed'
 
       - name: Upload Manifests to CDN Google Storage
@@ -486,6 +505,15 @@ jobs:
           workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
           service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
 
+      - name: Create Custom Status Badge
+        uses: emibcn/badge-action@v2.0.2
+        with:
+          label: 'Version'
+          status: '${{ needs.version.outputs.version_string }}'
+          color: 'blue'
+          style: 'flat'
+          path: '${{ github.workspace }}/version-badge.svg' # Saves the badge image inside your workspace          
+
       - name: Prepare files
         run: |
           export signedPackageFilename=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}
@@ -507,6 +535,13 @@ jobs:
 
           curl -f https://storage.googleapis.com/se-obs-builds/obs-streamelements-installer/latest/macos/obs-streamelements-core.pkg --output ${signedPackageFilename}.pkg
 
+          cp version-badge.svg obs-streamelements.version.svg
+          cp version-badge.svg obs-streamelements.signed.version.svg
+          cp version-badge.svg obs-streamelements.qa.version.svg
+          cp version-badge.svg obs-streamelements.beta.version.svg
+          cp version-badge.svg obs-streamelements.latest.version.svg
+          cp version-badge.svg obs-streamelements.stable.version.svg
+
       - uses: actions/upload-artifact@v4
         with:
           name: macos-signed-installer
@@ -520,7 +555,7 @@ jobs:
           parent: false
           process_gcloudignore: false
           path: ${{ github.workspace }}
-          glob: '*.pkg'
+          glob: '{*.pkg,obs-streamelements.version.svg,obs-streamelements.*.version.svg}'
           destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/macos/signed'
 
       - name: Upload Manifests to CDN Google Storage
