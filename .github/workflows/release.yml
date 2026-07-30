@@ -31,7 +31,7 @@ jobs:
         with:
           # The action has no default and reads no environment variable — the key is always
           # passed in. Point this at whatever your repo or org calls the secret.
-          api-key: ${{ secrets.VIRTUSTOTAL_MONITOR_API_KEY }}
+          api-key: ${{ secrets.VT_MONITOR_API_KEY }}
           mode: prune
           managed-prefixes: /obs-streamelements/windows
           quota-bytes: ${{ vars.VT_MONITOR_QUOTA_BYTES || '1GiB' }}
