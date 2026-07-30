@@ -1,4 +1,4 @@
-name: Build
+name: Release Signed Binary
 
 concurrency:
   group: ${{ github.workflow }}-${{ case(startsWith(github.event.head_commit.message, '[WORKFLOW-AUTOMATION]'), 'automation', github.event.pull_request.number || github.ref) }}

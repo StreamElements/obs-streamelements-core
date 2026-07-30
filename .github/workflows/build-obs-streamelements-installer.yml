@@ -1,4 +1,4 @@
-name: Build
+name: Build / Installer
 
 permissions:
   contents: read

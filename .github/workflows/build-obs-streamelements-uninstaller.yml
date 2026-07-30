@@ -1,4 +1,4 @@
-name: Build
+name: Build / Uninstaller
 
 permissions:
   contents: read
