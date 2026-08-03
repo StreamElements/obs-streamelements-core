@@ -153,7 +153,7 @@ jobs:
           glob: '{obs-streamelements.version.svg,obs-streamelements.*.version.svg}'
           destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.to }}'
           headers: |
-            cache-control: 'public, max-age=60'
+            cache-control: 'no-store, no-cache, must-revalidate'
 
       - name: Prune old versions from VirusTotal Monitor
         uses: streamelements/virustotal-monitor-action@v1
