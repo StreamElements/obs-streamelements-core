@@ -141,6 +141,7 @@ jobs:
           destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.to }}'
           headers: |
             content-type: text/plain; charset=utf-8
+            cache-control: 'public, max-age=60'
 
       - name: Upload SVGs to CDN Google Storage
         if: ${{ github.event.inputs.dry-run == 'false' }}
@@ -151,6 +152,8 @@ jobs:
           path: ${{ github.workspace }}
           glob: '{obs-streamelements.version.svg,obs-streamelements.*.version.svg}'
           destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.to }}'
+          headers: |
+            cache-control: 'public, max-age=60'
 
       - name: Prune old versions from VirusTotal Monitor
         uses: streamelements/virustotal-monitor-action@v1
