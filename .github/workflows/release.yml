@@ -46,8 +46,6 @@ jobs:
       - name: debug
         run: |
           echo "${{ github.event.inputs.platform }}: ${{ github.event.inputs.from }} -> ${{ github.event.inputs.to }}   (dry-run: ${{ github.event.inputs.dry-run }} ${{ github.event.inputs.dry-run == 'true' }})"
-      - uses: actions/checkout@v4
-
       - name: Validate Input
         run: |
           if [ "${{ github.event.inputs.from }}" = "${{ github.event.inputs.to }}" ]; then
@@ -117,6 +115,8 @@ jobs:
 
           echo "::notice::validation passed for transfer from '${{ github.event.inputs.from }}' to '${{ github.event.inputs.to}}' on ${{ github.event.inputs.platform}} (dry-run: ${{ github.event.inputs.dry-run }}; is-rollback: ${{ github.event.inputs.is-rollback }})"
 
+      - uses: actions/checkout@v4
+
       - name: Auth Google API
         uses: 'google-github-actions/auth@v2'
         with:
@@ -124,9 +124,37 @@ jobs:
           workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
           service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
 
+      - name: Download manifest and version SVG
+        run: |
+          curl -f --output obs-streamelements.manifest https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}.${{ github.event.inputs.from }}/obs-streamelements.manifest
+
+          curl -f --output obs-streamelements.version.svg https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.from }}/obs-streamelements.version.svg
+
+      - name: Upload Manifests to CDN Google Storage
+        if: ${{ github.event.inputs.dry-run == 'false' }}
+        uses: 'google-github-actions/upload-cloud-storage@v3'
+        with:
+          parent: false
+          process_gcloudignore: false
+          path: ${{ github.workspace }}
+          glob: 'obs-streamelements.manifest'
+          destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.to }}'
+          headers: |
+            content-type: text/plain; charset=utf-8
+
+      - name: Upload SVGs to CDN Google Storage
+        if: ${{ github.event.inputs.dry-run == 'false' }}
+        uses: 'google-github-actions/upload-cloud-storage@v3'
+        with:
+          parent: false
+          process_gcloudignore: false
+          path: ${{ github.workspace }}
+          glob: '{obs-streamelements.version.svg,obs-streamelements.*.version.svg}'
+          destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.to }}'
+
       - name: Prune old versions from VirusTotal Monitor
         uses: streamelements/virustotal-monitor-action@v1
-        if: ${{ false }}
+        if: ${{ github.event.inputs.dry-run == 'false' }}
         with:
           # The action has no default and reads no environment variable — the key is always
           # passed in. Point this at whatever your repo or org calls the secret.
