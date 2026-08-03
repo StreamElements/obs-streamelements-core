@@ -11,6 +11,14 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
+      platform:
+        type: choice
+        options:
+          - windows
+          - macos
+        required: true
+        default: windows
+
       from:
         type: environment
         required: true
@@ -32,7 +40,7 @@ jobs:
     steps:
       - name: debug
         run: |
-          echo "${{ github.event.inputs.from }} -> ${{ github.event.inputs.to }}   (dry-run: ${{ github.event.inputs.dry-run }} ${{ github.event.inputs.dry-run == 'true' }})"
+          echo "${{ github.event.inputs.platform }}: ${{ github.event.inputs.from }} -> ${{ github.event.inputs.to }}   (dry-run: ${{ github.event.inputs.dry-run }} ${{ github.event.inputs.dry-run == 'true' }})"
       - uses: actions/checkout@v4
 
       - name: Auth Google API
