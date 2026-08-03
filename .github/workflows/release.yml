@@ -65,6 +65,11 @@ jobs:
                 echo "::error::we can only roll-back from 'stable' to 'latest'"
                 exit 1
             fi
+
+            if [ "${{ github.event.inputs.is-rollback }}" = "false" ]; then
+                echo "::error::there is nowhere to promote to from 'stable'"
+                exit 1
+            fi
           elif [ "${{ github.event.inputs.from }}" = "latest" ]; then
             if [ "${{ github.event.inputs.to }}" != "stable" ]; then
               if [ "${{ github.event.inputs.is-rollback }}" = "false" ]; then
