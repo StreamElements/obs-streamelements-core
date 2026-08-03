@@ -32,9 +32,19 @@ jobs:
     steps:
       - name: debug
         run: |
-          echo "${{ github.event.inputs.from }} -> ${{ github.event.inputs.to }}"
+          echo "${{ github.event.inputs.from }} -> ${{ github.event.inputs.to }}   (dry-run: ${{ github.event.inputs.dry-run }} ${{ github.event.inputs.dry-run == 'true' }})"
+      - uses: actions/checkout@v4
+
+      - name: Auth Google API
+        uses: 'google-github-actions/auth@v2'
+        with:
+          project_id: streamelements-core
+          workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
+          service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
+
       - name: Prune old versions from VirusTotal Monitor
         uses: streamelements/virustotal-monitor-action@v1
+        if: ${{ false }}
         with:
           # The action has no default and reads no environment variable — the key is always
           # passed in. Point this at whatever your repo or org calls the secret.
