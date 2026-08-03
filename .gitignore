@@ -86,3 +86,19 @@ tags
 .DS_Store
 */.DS_Store
 */**/.DS_Store
+
+#cmake/msbuild output from an in-tree build. leading slashes anchor these to the
+#repo root so vendored project files under deps/ and CI/*/nsis/ stay tracked.
+/ALL_BUILD.vcxproj*
+/INSTALL.vcxproj*
+/PACKAGE.vcxproj*
+/obs-streamelements-core.sln
+/obs-streamelements-core.vcxproj*
+/obs-streamelements-core-streamelements-restore-script-host.vcxproj*
+/cmake_install.cmake
+/qrc_streamelements.cpp
+/CMakeCache.txt
+/CMakeFiles/
+/RelWithDebInfo/
+/*.dir/
+/*_autogen/
