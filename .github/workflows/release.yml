@@ -33,6 +33,11 @@ on:
         default: true
         required: true
 
+      is-rollback:
+        type: boolean
+        default: false
+        required: true
+
 jobs:
   main:
     runs-on: ubuntu-latest
@@ -42,6 +47,70 @@ jobs:
         run: |
           echo "${{ github.event.inputs.platform }}: ${{ github.event.inputs.from }} -> ${{ github.event.inputs.to }}   (dry-run: ${{ github.event.inputs.dry-run }} ${{ github.event.inputs.dry-run == 'true' }})"
       - uses: actions/checkout@v4
+
+      - name: Validate Input
+        run: |
+          if [ "${{ github.event.inputs.from }}" = "${{ github.event.inputs.to }}" ]; then
+            echo "::error::from and to must to be the same"
+            exit 1
+          fi
+
+          if [ "${{ github.event.inputs.to }}" = "signed" ]; then
+            echo "::error::to must never be 'signed'"
+            exit 1
+          fi
+
+          if [ "${{ github.event.inputs.from }}" = "stable" ]; then
+            if [ "${{ github.event.inputs.to }}" != "latest" ]; then
+                echo "::error::we can only roll-back from 'stable' to 'latest'"
+                exit 1
+            fi
+          elif [ "${{ github.event.inputs.from }}" = "latest" ]; then
+            if [ "${{ github.event.inputs.to }}" != "stable" ]; then
+              if [ "${{ github.event.inputs.is-rollback }}" = "false" ]; then
+                echo "::error::we can only promote from 'latest' to 'stable'"
+                exit 1
+              elif [ "${{ github.event.inputs.to }}" != "beta" ]; then
+                echo "::error::we can only roll-back from 'latest' to 'beta'"
+                exit 1
+              fi
+            fi
+          elif [ "${{ github.event.inputs.from }}" = "beta" ]; then
+            if [ "${{ github.event.inputs.to }}" != "latest" ]; then
+              if [ "${{ github.event.inputs.is-rollback }}" = "false" ]; then
+                echo "::error::we can only promote from 'beta' to 'latest'"
+                exit 1
+              else
+                echo "::error::we can never roll-back from 'beta'"
+                exit 1
+              fi
+            fi
+          elif [ "${{ github.event.inputs.from }}" = "qa" ]; then
+            if [ "${{ github.event.inputs.to }}" != "beta" ]; then
+              if [ "${{ github.event.inputs.is-rollback }}" = "false" ]; then
+                echo "::error::we can only promote from 'qa' to 'beta'"
+                exit 1
+              else
+                echo "::error::we can never roll-back from 'qa'"
+                exit 1
+              fi
+            fi
+          elif [ "${{ github.event.inputs.from }}" = "signed" ]; then
+            if [ "${{ github.event.inputs.to }}" != "qa" ]; then
+              if [ "${{ github.event.inputs.is-rollback }}" = "false" ]; then
+                echo "::error::we can only promote from 'signed' to 'qa'"
+                exit 1
+              else
+                echo "::error::we can never roll-back from 'signed': there is nowhere to roll-back to"
+                exit 1
+              fi
+            fi
+          else
+              echo "::error::unexpected from value '${{ github.event.inputs.from }}'"
+              exit 1
+          fi
+
+          echo "::notice::validation passed for transfer from '${{ github.event.inputs.from }}' to '${{ github.event.inputs.to}}' on ${{ github.event.inputs.platform}} (dry-run: ${{ github.event.inputs.dry-run }}; is-rollback: ${{ github.event.inputs.is-rollback }})"
 
       - name: Auth Google API
         uses: 'google-github-actions/auth@v2'
