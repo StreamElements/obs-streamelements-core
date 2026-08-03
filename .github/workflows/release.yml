@@ -126,7 +126,7 @@ jobs:
 
       - name: Download manifest and version SVG
         run: |
-          curl -f --output obs-streamelements.manifest https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}.${{ github.event.inputs.from }}/obs-streamelements.manifest
+          curl -f --output obs-streamelements.manifest https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.from }}/obs-streamelements.manifest
 
           curl -f --output obs-streamelements.version.svg https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.from }}/obs-streamelements.version.svg
 
