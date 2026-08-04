@@ -86,3 +86,6 @@ tags
 .DS_Store
 */.DS_Store
 */**/.DS_Store
+
+#scratch dir the release workflows write recovered notes and changelogs into
+/.release-input/
