@@ -587,6 +587,92 @@ jobs:
         if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
         with:
           ssh-key: ${{ secrets.RELEASE_BOT_SSH_KEY }}
+          # The prerelease changelog is `git log <previous full release>..<sha>`, which
+          # needs the whole history and every tag. blob:none keeps it cheap: git log
+          # never reads file contents, and this repo's .git is ~120 MB.
+          fetch-depth: 0
+          filter: blob:none
+
+      # The four steps below must stay between the checkout above (which puts
+      # RELEASE_NOTES.md on disk) and "Clear RELEASE_NOTES.md" below (which truncates it
+      # and pushes the truncation). This is the last point at which the notes for this
+      # build exist anywhere.
+      - name: Resolve previous full release
+        id: prevtag
+        if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
+        uses: ./.github/actions/se-release
+        with:
+          mode: prevtag
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ needs.version.outputs.version_string }}
+          version-encoded: ${{ needs.version.outputs.version_encoded }}
+
+      - name: Build changelog
+        if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
+        uses: ./.github/actions/se-release
+        with:
+          mode: changelog
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ needs.version.outputs.version_string }}
+          previous-tag: ${{ steps.prevtag.outputs.previous_tag }}
+          # Walk to the built commit rather than the tag: the tagger step ran seconds ago
+          # and the tag may not have reached this clone yet.
+          head-ref: ${{ github.sha }}
+          changelog-file: ${{ github.workspace }}/.release-input/changelog.md
+
+      - name: Generate release summary with Claude
+        id: claude_summary
+        if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
+        # Optional by construction: on failure or timeout the guarded expression below
+        # yields an empty summary and the prerelease is composed from notes + changelog.
+        continue-on-error: true
+        timeout-minutes: 10
+        uses: anthropics/claude-code-action@v1
+        # Force Task subagents to run in the foreground; same rationale as
+        # claude-code-review.yml, which documents the mechanism.
+        # Upstream: anthropics/claude-code-action#1499.
+        env:
+          CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1'
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Write the "What's new" blurb for SE.Live (the StreamElements OBS plugin)
+            release ${{ needs.version.outputs.version_string }}.
+
+            Read these files, relative to the repository root:
+              - RELEASE_NOTES.md               release notes written by the team
+              - .release-input/changelog.md    PRs and commits since the last release
+
+            Write 2-4 sentences, or up to 4 short bullets, aimed at OBS streamers rather
+            than developers. Lead with what changed for them.
+
+            Rules:
+            - Use only what is in those files. Invent nothing.
+            - Do not restate the notes verbatim; they are published directly below your
+              text.
+            - Skip CI, build-system, refactor and dependency work entirely.
+            - No heading: the workflow adds "## What's new" itself.
+            - Plain Markdown, no code fences.
+
+            Return the text as the "summary" field of the JSON response.
+          claude_args: >-
+            --allowedTools "Read,Glob,Grep"
+            --json-schema '{"type":"object","additionalProperties":false,"required":["summary"],"properties":{"summary":{"type":"string","maxLength":1200}}}'
+
+      - name: Create GitHub prerelease
+        if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
+        uses: ./.github/actions/se-release
+        with:
+          mode: prerelease
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ needs.version.outputs.version_string }}
+          notes-file: RELEASE_NOTES.md
+          changelog-file: ${{ github.workspace }}/.release-input/changelog.md
+          # Empty when the step above timed out, failed, or produced no structured
+          # output. Model text reaches the script only as an environment variable.
+          summary: ${{ (steps.claude_summary.outcome == 'success' && steps.claude_summary.outputs.structured_output != '' && fromJSON(steps.claude_summary.outputs.structured_output).summary) || '' }}
+          dry-run: 'false'
+
       - name: Clear RELEASE_NOTES.md
         if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
         run: |
