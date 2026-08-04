@@ -1,0 +1,5 @@
+# The release automation scripts are executed with `sh` on the CI runners, where /bin/sh
+# is dash. Dash does not tolerate CR characters -- a CRLF checkout turns every line into
+# a syntax error or a variable with a trailing \r. This repo is developed on Windows with
+# core.autocrlf=true, so pin these to LF rather than relying on that staying true.
+/.github/actions/se-release/*.sh text eol=lf

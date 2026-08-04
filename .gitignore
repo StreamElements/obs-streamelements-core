@@ -105,3 +105,6 @@ tags
 /RelWithDebInfo/
 /*.dir/
 /*_autogen/
+
+#scratch dir the release workflows write recovered notes and changelogs into
+/.release-input/

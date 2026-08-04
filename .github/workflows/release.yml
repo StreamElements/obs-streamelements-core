@@ -5,7 +5,7 @@ concurrency:
   cancel-in-progress: ${{ !startsWith(github.event.head_commit.message, '[WORKFLOW-AUTOMATION]') }}
 
 permissions:
-  contents: read     # lets GITHUB_TOKEN push tags
+  contents: write    # lets GITHUB_TOKEN create and edit GitHub Releases
   id-token: write    # lets the job mint a GitHub OIDC token for WIF
 
 on:
@@ -41,6 +41,22 @@ on:
 jobs:
   main:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    # Only two of the five transitions that "Validate Input" permits touch a GitHub
+    # release at all. Naming them once here keeps the same boolean out of several `if:`
+    # expressions further down.
+    #
+    #   beta -> latest     a build reaches users: cut the full release (req 1)
+    #   stable -> latest   an older build is restored onto `latest`, displacing whatever
+    #                      was there: that displaced release goes back to [BETA] (req 11)
+    #
+    # latest -> beta is deliberately absent. It copies latest's manifest onto `beta` and
+    # leaves `latest` serving the same build, so nothing is taken away from users and no
+    # release changes.
+    env:
+      SE_PROMOTE: ${{ github.event.inputs.to == 'latest' && github.event.inputs.is-rollback != 'true' }}
+      SE_ROLLBACK: ${{ github.event.inputs.is-rollback == 'true' && github.event.inputs.from == 'stable' && github.event.inputs.to == 'latest' }}
 
     steps:
       - name: debug
@@ -116,6 +132,12 @@ jobs:
           echo "::notice::validation passed for transfer from '${{ github.event.inputs.from }}' to '${{ github.event.inputs.to}}' on ${{ github.event.inputs.platform}} (dry-run: ${{ github.event.inputs.dry-run }}; is-rollback: ${{ github.event.inputs.is-rollback }})"
 
       - uses: actions/checkout@v4
+        with:
+          # The changelog is `git log <previous full release>..<tag>`, which needs the
+          # whole history and every tag. blob:none keeps it cheap: git log never reads
+          # file contents, and this repo's .git is ~120 MB.
+          fetch-depth: 0
+          filter: blob:none
 
       - name: Auth Google API
         uses: 'google-github-actions/auth@v2'
@@ -129,6 +151,43 @@ jobs:
           curl -f --output obs-streamelements.manifest https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.from }}/obs-streamelements.manifest
 
           curl -f --output obs-streamelements.version.svg https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.from }}/obs-streamelements.version.svg
+
+      # ---------------------------------------------------------------------------
+      # MUST stay above "Upload Manifests to CDN Google Storage". Two independent
+      # reasons, and reordering silently breaks both:
+      #
+      #   promote   with no full release yet, the previous version is bootstrapped from
+      #             the live `latest` manifests. After the upload that read returns the
+      #             very version being promoted, and the changelog diffs against itself.
+      #   rollback  L is the current `latest` manifest's version_number, which the upload
+      #             is about to overwrite with S. Read afterwards, `S < L` compares S with
+      #             itself and the guard never fires.
+      #
+      # It also front-loads the "no release for this version" failure, so a promotion
+      # that cannot be recorded fails before anything reaches the CDN.
+      # ---------------------------------------------------------------------------
+      - name: Resolve version, tag and previous full release
+        id: version
+        if: env.SE_PROMOTE == 'true' || env.SE_ROLLBACK == 'true'
+        uses: ./.github/actions/se-release
+        with:
+          mode: resolve
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          manifest: ${{ github.workspace }}/obs-streamelements.manifest
+          platform: ${{ github.event.inputs.platform }}
+          to: ${{ github.event.inputs.to }}
+          is-rollback: ${{ github.event.inputs.is-rollback }}
+          output-dir: ${{ github.workspace }}/.release-input
+
+      - name: Build changelog
+        if: env.SE_PROMOTE == 'true'
+        uses: ./.github/actions/se-release
+        with:
+          mode: changelog
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ steps.version.outputs.version_string }}
+          previous-tag: ${{ steps.version.outputs.previous_tag }}
+          changelog-file: ${{ github.workspace }}/.release-input/changelog.md
 
       - name: Upload Manifests to CDN Google Storage
         if: ${{ github.event.inputs.dry-run == 'false' }}
@@ -154,6 +213,76 @@ jobs:
           destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.to }}'
           headers: |
             cache-control: 'no-store, no-cache, must-revalidate'
+
+      # Deliberately after the CDN uploads: the promotion users actually see completes
+      # before any model call, so a slow or failing generation can never delay it.
+      - name: Generate release summary with Claude
+        id: claude_summary
+        if: env.SE_PROMOTE == 'true'
+        continue-on-error: true
+        timeout-minutes: 10
+        uses: anthropics/claude-code-action@v1
+        # Force Task subagents to run in the foreground; same rationale as
+        # claude-code-review.yml, which documents the mechanism.
+        # Upstream: anthropics/claude-code-action#1499.
+        env:
+          CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1'
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Write the "What's new" blurb for SE.Live (the StreamElements OBS plugin)
+            release ${{ steps.version.outputs.version_string }}, which is being promoted
+            to the `latest` channel where ordinary users receive it.
+
+            Read these files, relative to the repository root:
+              - .release-input/notes.md        release notes written by the team
+              - .release-input/changelog.md    PRs and commits since the last release
+
+            The changelog covers everything since the previous full release, which may
+            span several builds. Summarise the whole span, not just the newest change.
+
+            Write 2-4 sentences, or up to 4 short bullets, aimed at OBS streamers rather
+            than developers. Lead with what changed for them.
+
+            Rules:
+            - Use only what is in those files. Invent nothing.
+            - Do not restate the notes verbatim; they are published directly below your
+              text.
+            - Skip CI, build-system, refactor and dependency work entirely.
+            - No heading: the workflow adds "## What's new" itself.
+            - Plain Markdown, no code fences.
+
+            Return the text as the "summary" field of the JSON response.
+          claude_args: >-
+            --allowedTools "Read,Glob,Grep"
+            --json-schema '{"type":"object","additionalProperties":false,"required":["summary"],"properties":{"summary":{"type":"string","maxLength":1200}}}'
+
+      - name: Publish GitHub release
+        if: env.SE_PROMOTE == 'true'
+        uses: ./.github/actions/se-release
+        with:
+          mode: publish
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ steps.version.outputs.version_string }}
+          previous-tag: ${{ steps.version.outputs.previous_tag }}
+          notes-file: ${{ github.workspace }}/.release-input/notes.md
+          changelog-file: ${{ github.workspace }}/.release-input/changelog.md
+          # Empty when the step above timed out, failed, or produced no structured
+          # output; the body is then composed from notes + changelog alone. Model text
+          # reaches the script only as an environment variable, never as shell code.
+          summary: ${{ (steps.claude_summary.outcome == 'success' && steps.claude_summary.outputs.structured_output != '' && fromJSON(steps.claude_summary.outputs.structured_output).summary) || '' }}
+          dry-run: ${{ github.event.inputs.dry-run }}
+
+      - name: Revert displaced GitHub release
+        if: env.SE_ROLLBACK == 'true'
+        uses: ./.github/actions/se-release
+        with:
+          mode: rollback
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ steps.version.outputs.version_string }}
+          displaced-tag: ${{ steps.version.outputs.displaced_tag }}
+          should-revert: ${{ steps.version.outputs.should_revert }}
+          dry-run: ${{ github.event.inputs.dry-run }}
 
       - name: Prune old versions from VirusTotal Monitor
         uses: streamelements/virustotal-monitor-action@v1
