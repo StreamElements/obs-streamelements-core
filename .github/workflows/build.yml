@@ -392,7 +392,13 @@ jobs:
   deploy-signed-windows:
     needs: [ version, windows, build-installer ]
     runs-on: ubuntu-latest
-    if: needs.version.outputs.is_workflow_automation != 'true' && github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && (vars.SKIP_WINDOWS_SIGNING != 'true' && vars.SKIP_WINDOWS_SIGNING != '1' && vars.SKIP_WINDOWS_SIGNING != 'yes')
+    # has_release_notes gates this whole job: a build with an empty RELEASE_NOTES.md must
+    # put nothing new on signed/ -- no binaries, no manifest, no version SVG. Such a build
+    # gets no tag and no GitHub release either, so publishing it would advance the channel
+    # to a version that can never be promoted to `latest` (the promotion fails by design)
+    # and would leave signed/ serving a manifest whose release notes belong to an earlier
+    # build.
+    if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true' && github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && (vars.SKIP_WINDOWS_SIGNING != 'true' && vars.SKIP_WINDOWS_SIGNING != '1' && vars.SKIP_WINDOWS_SIGNING != 'yes')
 
     steps:
       - name: Auth Google API
@@ -496,7 +502,8 @@ jobs:
   deploy-signed-macos:
     needs: [ version, macos, build-installer ]
     runs-on: ubuntu-latest
-    if: needs.version.outputs.is_workflow_automation != 'true' && github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && (vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes')
+    # Gated on has_release_notes for the same reason as deploy-signed-windows above.
+    if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true' && github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && (vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes')
 
     steps:
       - name: Auth Google API
@@ -571,6 +578,15 @@ jobs:
             content-type: text/plain; charset=utf-8
 
   finalize:
+    # Note this job is now skipped entirely for a build with an empty RELEASE_NOTES.md:
+    # it needs deploy-signed-*, those are gated on has_release_notes, and GitHub skips a
+    # job whose dependencies were skipped. That is the intended outcome -- every step
+    # below is already individually gated on has_release_notes, with one exception, the
+    # VirusTotal prune. Losing the prune on notes-less builds is consistent rather than a
+    # gap: the matching VirusTotal upload lives in deploy-signed-windows and is skipped
+    # too, so no new files were submitted, and release.yml prunes again on every
+    # non-dry-run promotion. The same implicit skip already happens when
+    # SKIP_WINDOWS_SIGNING or SKIP_APPLE_SIGNING_AND_NOTARIZATION is set.
     if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
     needs: [version, windows, macos, build-uninstaller, build-installer, deploy-signed-macos, deploy-signed-windows]
     runs-on: ubuntu-latest
