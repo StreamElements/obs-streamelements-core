@@ -627,7 +627,13 @@ jobs:
         # yields an empty summary and the prerelease is composed from notes + changelog.
         continue-on-error: true
         timeout-minutes: 10
-        uses: anthropics/claude-code-action@v1
+        # The base action, NOT anthropics/claude-code-action. The wrapper parses the
+        # GitHub event context and rejects anything it does not recognise -- on this job
+        # it fails immediately with "Unsupported event type: push", because finalize runs
+        # inside the push-triggered Build workflow. The base action has no such gate; it
+        # just runs Claude Code, which is all this step needs.
+        # Pinned to an exact version: the base action publishes no moving major tag.
+        uses: anthropics/claude-code-base-action@v0.0.63
         # Force Task subagents to run in the foreground; same rationale as
         # claude-code-review.yml, which documents the mechanism.
         # Upstream: anthropics/claude-code-action#1499.
