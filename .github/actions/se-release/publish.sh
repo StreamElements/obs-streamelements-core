@@ -68,17 +68,39 @@ if [ "$WAS_PRERELEASE" = "false" ] && grep -qF "$PUBLISHED_MARKER" "$cur"; then
 	exit 0
 fi
 
+# Decide the notes source and log it BEFORE composing. note()/warn() write to stdout so
+# GitHub renders them as annotations, which means they must never be called inside the
+# redirection below or they end up inside the published release body.
+if [ -n "${SE_RELEASE_NOTES_FILE:-}" ] && [ -s "${SE_RELEASE_NOTES_FILE:-}" ] &&
+	! grep -qF "$NOTES_UNAVAILABLE_MARKER" "$SE_RELEASE_NOTES_FILE"; then
+	# The artifact that travelled with the manifest from `signed/`: Claude's blurb plus
+	# the hand-written notes, composed at build time. Reused verbatim, so the text a user
+	# sees on `latest` is exactly what was reviewed on the prerelease and no second model
+	# call is needed.
+	note "using the release notes artifact that travelled with the manifest"
+	USE_ARTIFACT=true
+else
+	# Fallback for builds predating the artifact, or where the CDN copy is missing:
+	# rebuild from the notes recovered out of the prerelease body. No blurb on this path.
+	warn "no release notes artifact for $TAG; composing from the recovered notes instead"
+	USE_ARTIFACT=false
+fi
+
 body="$TMP/se-release-body.md"
 {
 	printf '%s\n\n' "$PUBLISHED_MARKER"
-	if [ -n "${SE_SUMMARY:-}" ]; then
-		printf "## What's new\n\n%s\n\n" "$SE_SUMMARY"
+
+	if [ "$USE_ARTIFACT" = "true" ]; then
+		cat "$SE_RELEASE_NOTES_FILE"
+		printf '\n'
+	else
+		printf '%s\n' "$RELEASE_NOTES_BEGIN"
+		if [ -n "${SE_NOTES_FILE:-}" ] && [ -s "${SE_NOTES_FILE:-}" ]; then cat "$SE_NOTES_FILE"; fi
+		printf '%s\n\n' "$RELEASE_NOTES_END"
 	fi
-	# The hand-written notes are preserved verbatim and still fenced, so every later
-	# recomposition starts from the same pristine text (requirement 5: AUGMENT).
-	printf '%s\n' "$RELEASE_NOTES_BEGIN"
-	if [ -n "${SE_NOTES_FILE:-}" ] && [ -s "${SE_NOTES_FILE:-}" ]; then cat "$SE_NOTES_FILE"; fi
-	printf '%s\n\n' "$RELEASE_NOTES_END"
+
+	# Always recomputed rather than taken from the artifact: the range is relative to the
+	# previous full release, which can have moved since this build was made.
 	if [ -n "${SE_CHANGELOG_FILE:-}" ] && [ -s "${SE_CHANGELOG_FILE:-}" ]; then cat "$SE_CHANGELOG_FILE"; fi
 } > "$body"
 

@@ -146,11 +146,34 @@ jobs:
           workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
           service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
 
-      - name: Download manifest and version SVG
+      - name: Download manifest, version SVG and release notes
+        id: download
         run: |
           curl -f --output obs-streamelements.manifest https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.from }}/obs-streamelements.manifest
 
           curl -f --output obs-streamelements.version.svg https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.from }}/obs-streamelements.version.svg
+
+          # The release notes travel with the manifest, in both directions, so a channel
+          # always serves the notes belonging to the build it points at.
+          #
+          # When the source has none -- builds predating this file, or a finalize whose
+          # upload failed -- a placeholder is synthesised rather than skipping the upload.
+          # The manifest and the version SVG are replaced unconditionally, so leaving the
+          # destination's previous notes in place would leave it describing a build it no
+          # longer points at. Writing the placeholder keeps all three in step.
+          if curl -fsS --output obs-streamelements.release_notes.md \
+              "https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.from }}/obs-streamelements.release_notes.md"; then
+            echo "::notice::fetched release notes from '${{ github.event.inputs.from }}'"
+            echo "has_release_notes=true" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::no obs-streamelements.release_notes.md on '${{ github.event.inputs.from }}'; writing a placeholder so '${{ github.event.inputs.to }}' does not keep notes from a different build"
+            {
+              echo "<!-- SE_RELEASE_NOTES_UNAVAILABLE -->"
+              echo
+              echo "_No release notes were published for this build._"
+            } > obs-streamelements.release_notes.md
+            echo "has_release_notes=false" >> $GITHUB_OUTPUT
+          fi
 
       # ---------------------------------------------------------------------------
       # MUST stay above "Upload Manifests to CDN Google Storage". Two independent
@@ -202,6 +225,28 @@ jobs:
             content-type: text/plain; charset=utf-8
             cache-control: 'public, max-age=60'
 
+      # Moves in lockstep with the manifest above, on promotions and rollbacks alike, so
+      # every channel serves the notes belonging to the build it is actually pointing at.
+      # Same 60s max-age as the manifest for the same reason: a channel's contents can
+      # change at any time and stale notes would describe the wrong build.
+      #
+      # Guarded only on dry-run, exactly like the manifest and SVG uploads. The download
+      # step guarantees the file exists -- real notes or a placeholder -- because skipping
+      # this upload would leave the destination's previous notes beside a manifest that
+      # has moved on.
+      - name: Upload release notes to CDN Google Storage
+        if: ${{ github.event.inputs.dry-run == 'false' }}
+        uses: 'google-github-actions/upload-cloud-storage@v3'
+        with:
+          parent: false
+          process_gcloudignore: false
+          path: ${{ github.workspace }}
+          glob: 'obs-streamelements.release_notes.md'
+          destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.to }}'
+          headers: |
+            content-type: text/markdown; charset=utf-8
+            cache-control: 'public, max-age=60'
+
       - name: Upload SVGs to CDN Google Storage
         if: ${{ github.event.inputs.dry-run == 'false' }}
         uses: 'google-github-actions/upload-cloud-storage@v3'
@@ -214,49 +259,6 @@ jobs:
           headers: |
             cache-control: 'no-store, no-cache, must-revalidate'
 
-      # Deliberately after the CDN uploads: the promotion users actually see completes
-      # before any model call, so a slow or failing generation can never delay it.
-      - name: Generate release summary with Claude
-        id: claude_summary
-        if: env.SE_PROMOTE == 'true'
-        continue-on-error: true
-        timeout-minutes: 10
-        uses: anthropics/claude-code-action@v1
-        # Force Task subagents to run in the foreground; same rationale as
-        # claude-code-review.yml, which documents the mechanism.
-        # Upstream: anthropics/claude-code-action#1499.
-        env:
-          CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1'
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: |
-            Write the "What's new" blurb for SE.Live (the StreamElements OBS plugin)
-            release ${{ steps.version.outputs.version_string }}, which is being promoted
-            to the `latest` channel where ordinary users receive it.
-
-            Read these files, relative to the repository root:
-              - .release-input/notes.md        release notes written by the team
-              - .release-input/changelog.md    PRs and commits since the last release
-
-            The changelog covers everything since the previous full release, which may
-            span several builds. Summarise the whole span, not just the newest change.
-
-            Write 2-4 sentences, or up to 4 short bullets, aimed at OBS streamers rather
-            than developers. Lead with what changed for them.
-
-            Rules:
-            - Use only what is in those files. Invent nothing.
-            - Do not restate the notes verbatim; they are published directly below your
-              text.
-            - Skip CI, build-system, refactor and dependency work entirely.
-            - No heading: the workflow adds "## What's new" itself.
-            - Plain Markdown, no code fences.
-
-            Return the text as the "summary" field of the JSON response.
-          claude_args: >-
-            --allowedTools "Read,Glob,Grep"
-            --json-schema '{"type":"object","additionalProperties":false,"required":["summary"],"properties":{"summary":{"type":"string","maxLength":1200}}}'
-
       - name: Publish GitHub release
         if: env.SE_PROMOTE == 'true'
         uses: ./.github/actions/se-release
@@ -265,12 +267,16 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ steps.version.outputs.version_string }}
           previous-tag: ${{ steps.version.outputs.previous_tag }}
+          # The blurb + notes composed at build time, fetched from the source channel
+          # above. Reused verbatim, which is why there is no Claude step in this
+          # workflow: the text was generated once, when the build was made, and has
+          # travelled with the manifest ever since.
+          release-notes-file: ${{ github.workspace }}/obs-streamelements.release_notes.md
+          # Fallback source, used only when the artifact is absent (builds predating it).
           notes-file: ${{ github.workspace }}/.release-input/notes.md
+          # Always recomputed: the range is relative to the previous full release, which
+          # can have moved since the build was made.
           changelog-file: ${{ github.workspace }}/.release-input/changelog.md
-          # Empty when the step above timed out, failed, or produced no structured
-          # output; the body is then composed from notes + changelog alone. Model text
-          # reaches the script only as an environment variable, never as shell code.
-          summary: ${{ (steps.claude_summary.outcome == 'success' && steps.claude_summary.outputs.structured_output != '' && fromJSON(steps.claude_summary.outputs.structured_output).summary) || '' }}
           dry-run: ${{ github.event.inputs.dry-run }}
 
       - name: Revert displaced GitHub release

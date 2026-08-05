@@ -17,16 +17,35 @@ is_version_tag "$TAG" || die "'$TAG' does not look like a version tag (yy.m.d.bu
 # that gate is broken rather than that there is nothing to say.
 [ -s "$NOTES" ] || die "$NOTES is empty -- build.yml should not have reached this step"
 
-BODY="${RUNNER_TEMP:-/tmp}/se-prerelease-body.md"
+# The reusable artifact: the version-pinned half of the release body -- Claude's blurb
+# plus the hand-written notes verbatim. This is published to the CDN next to the manifest
+# as obs-streamelements.release_notes.md and travels with it through the channels, so
+# promoting a build to `latest` reuses this text instead of paying for another model call.
+#
+# The changelog is deliberately NOT in here. It is cheap to recompute and it is relative
+# to the previous full release, which can differ between build time and promotion time;
+# freezing it would publish a stale range.
+ARTIFACT="${RUNNER_TEMP:-/tmp}/obs-streamelements.release_notes.md"
 {
 	if [ -n "${SE_SUMMARY:-}" ]; then
 		printf "## What's new\n\n%s\n\n" "$SE_SUMMARY"
 	fi
-	# The hand-written notes are preserved verbatim between the fence markers, so the
-	# promotion to a full release can recover them exactly and recompose (requirement 5).
+	# The notes are fenced so a later promotion can recover them exactly (requirement 5).
 	printf '%s\n' "$RELEASE_NOTES_BEGIN"
 	cat "$NOTES"
-	printf '\n%s\n\n' "$RELEASE_NOTES_END"
+	printf '\n%s\n' "$RELEASE_NOTES_END"
+} > "$ARTIFACT"
+
+if [ -n "${SE_OUTPUT_DIR:-}" ]; then
+	mkdir -p "$SE_OUTPUT_DIR"
+	cp "$ARTIFACT" "$SE_OUTPUT_DIR/obs-streamelements.release_notes.md"
+	note "wrote $SE_OUTPUT_DIR/obs-streamelements.release_notes.md for upload to the CDN"
+fi
+
+BODY="${RUNNER_TEMP:-/tmp}/se-prerelease-body.md"
+{
+	cat "$ARTIFACT"
+	printf '\n'
 	if [ -n "${SE_CHANGELOG_FILE:-}" ] && [ -s "${SE_CHANGELOG_FILE:-}" ]; then
 		cat "$SE_CHANGELOG_FILE"
 	fi
