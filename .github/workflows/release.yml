@@ -151,7 +151,24 @@ jobs:
         run: |
           curl -f --output obs-streamelements.manifest https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.from }}/obs-streamelements.manifest
 
-          curl -f --output obs-streamelements.version.svg https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.from }}/obs-streamelements.version.svg
+          # The version badge is cosmetic -- it is the image the README embeds -- and it
+          # is missing from beta, latest and stable on both platforms. Fetching it with
+          # `curl -f` under `bash -e` therefore killed the job before it reached any
+          # promotion logic, which blocked beta -> latest, latest -> stable and both
+          # rollbacks outright. Its absence must not stop a release from being promoted.
+          #
+          # Unlike the release notes below, a missing badge cannot be substituted: the
+          # notes have a meaningful placeholder, whereas an SVG stating the wrong version
+          # would be worse than none. So the upload is skipped instead and the
+          # destination keeps whatever badge it had.
+          if curl -fsS --output obs-streamelements.version.svg \
+              "https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.from }}/obs-streamelements.version.svg"; then
+            echo "has_version_svg=true" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::no obs-streamelements.version.svg on '${{ github.event.inputs.from }}'; the version badge on '${{ github.event.inputs.to }}' will not be updated"
+            rm -f obs-streamelements.version.svg
+            echo "has_version_svg=false" >> $GITHUB_OUTPUT
+          fi
 
           # The release notes travel with the manifest, in both directions, so a channel
           # always serves the notes belonging to the build it points at.
@@ -247,8 +264,11 @@ jobs:
             content-type: text/markdown; charset=utf-8
             cache-control: 'public, max-age=60'
 
+      # Conditional, unlike the manifest and release notes above: when the source channel
+      # has no badge there is nothing meaningful to publish, and an empty glob would fail
+      # the upload action.
       - name: Upload SVGs to CDN Google Storage
-        if: ${{ github.event.inputs.dry-run == 'false' }}
+        if: ${{ github.event.inputs.dry-run == 'false' && steps.download.outputs.has_version_svg == 'true' }}
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
