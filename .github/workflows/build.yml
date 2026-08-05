@@ -668,10 +668,51 @@ jobs:
           tag: ${{ needs.version.outputs.version_string }}
           notes-file: RELEASE_NOTES.md
           changelog-file: ${{ github.workspace }}/.release-input/changelog.md
+          # Also makes the step write obs-streamelements.release_notes.md here, for the
+          # CDN upload below.
+          output-dir: ${{ github.workspace }}/.release-input
           # Empty when the step above timed out, failed, or produced no structured
           # output. Model text reaches the script only as an environment variable.
           summary: ${{ (steps.claude_summary.outcome == 'success' && steps.claude_summary.outputs.structured_output != '' && fromJSON(steps.claude_summary.outputs.structured_output).summary) || '' }}
           dry-run: 'false'
+
+      # Publish the blurb + notes next to the manifest in signed/, so promotion can reuse
+      # the text instead of regenerating it, and so the notes for a given build follow
+      # that build through the channels. Uploaded here rather than from deploy-signed-*
+      # because the blurb does not exist until the step above has run.
+      - name: Auth Google API
+        if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          project_id: streamelements-core
+          workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
+          service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
+
+      - name: Upload release notes to windows/signed
+        if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
+        uses: 'google-github-actions/upload-cloud-storage@v3'
+        with:
+          parent: false
+          process_gcloudignore: false
+          path: ${{ github.workspace }}/.release-input
+          glob: 'obs-streamelements.release_notes.md'
+          destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed'
+          headers: |
+            content-type: text/markdown; charset=utf-8
+            cache-control: 'public, max-age=60'
+
+      - name: Upload release notes to macos/signed
+        if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
+        uses: 'google-github-actions/upload-cloud-storage@v3'
+        with:
+          parent: false
+          process_gcloudignore: false
+          path: ${{ github.workspace }}/.release-input
+          glob: 'obs-streamelements.release_notes.md'
+          destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/macos/signed'
+          headers: |
+            content-type: text/markdown; charset=utf-8
+            cache-control: 'public, max-age=60'
 
       - name: Clear RELEASE_NOTES.md
         if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
