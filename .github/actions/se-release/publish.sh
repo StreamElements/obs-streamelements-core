@@ -71,7 +71,8 @@ fi
 # Decide the notes source and log it BEFORE composing. note()/warn() write to stdout so
 # GitHub renders them as annotations, which means they must never be called inside the
 # redirection below or they end up inside the published release body.
-if [ -n "${SE_RELEASE_NOTES_FILE:-}" ] && [ -s "${SE_RELEASE_NOTES_FILE:-}" ]; then
+if [ -n "${SE_RELEASE_NOTES_FILE:-}" ] && [ -s "${SE_RELEASE_NOTES_FILE:-}" ] &&
+	! grep -qF "$NOTES_UNAVAILABLE_MARKER" "$SE_RELEASE_NOTES_FILE"; then
 	# The artifact that travelled with the manifest from `signed/`: Claude's blurb plus
 	# the hand-written notes, composed at build time. Reused verbatim, so the text a user
 	# sees on `latest` is exactly what was reviewed on the prerelease and no second model

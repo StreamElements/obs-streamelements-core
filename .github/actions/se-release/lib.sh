@@ -21,6 +21,15 @@ RELEASE_NOTES_END='<!-- SE_RELEASE_NOTES_END -->'
 # second platform's promotion of the same version.
 PUBLISHED_MARKER='<!-- SE_RELEASE_PUBLISHED -->'
 
+# Written to a channel when the build being published there has no notes of its own.
+#
+# The manifest and the version SVG are always replaced on a promotion, so the notes file
+# has to be replaced too -- leaving the previous one behind would make the channel serve
+# notes describing a build it no longer points at. A placeholder keeps the three in step
+# without pretending the notes exist; publish.sh treats a file carrying this marker as
+# absent and falls back to the notes recovered from the prerelease.
+NOTES_UNAVAILABLE_MARKER='<!-- SE_RELEASE_NOTES_UNAVAILABLE -->'
+
 CDN_BASE='https://cdn.streamelements.com/obs/dist/obs-streamelements'
 
 die() { printf '::error::%s\n' "$*" >&2; exit 1; }

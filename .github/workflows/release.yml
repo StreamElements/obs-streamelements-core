@@ -153,17 +153,25 @@ jobs:
 
           curl -f --output obs-streamelements.version.svg https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.from }}/obs-streamelements.version.svg
 
-          # The release notes travel with the manifest so the text always matches the
-          # build on the channel. Builds from before this was introduced have no such
-          # file, so a 404 is expected and must not fail the promotion -- the release
-          # body then falls back to the notes recovered from the prerelease.
+          # The release notes travel with the manifest, in both directions, so a channel
+          # always serves the notes belonging to the build it points at.
+          #
+          # When the source has none -- builds predating this file, or a finalize whose
+          # upload failed -- a placeholder is synthesised rather than skipping the upload.
+          # The manifest and the version SVG are replaced unconditionally, so leaving the
+          # destination's previous notes in place would leave it describing a build it no
+          # longer points at. Writing the placeholder keeps all three in step.
           if curl -fsS --output obs-streamelements.release_notes.md \
               "https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.from }}/obs-streamelements.release_notes.md"; then
             echo "::notice::fetched release notes from '${{ github.event.inputs.from }}'"
             echo "has_release_notes=true" >> $GITHUB_OUTPUT
           else
-            echo "::warning::no obs-streamelements.release_notes.md on '${{ github.event.inputs.from }}'; it will not be promoted and the release body will omit the summary"
-            rm -f obs-streamelements.release_notes.md
+            echo "::warning::no obs-streamelements.release_notes.md on '${{ github.event.inputs.from }}'; writing a placeholder so '${{ github.event.inputs.to }}' does not keep notes from a different build"
+            {
+              echo "<!-- SE_RELEASE_NOTES_UNAVAILABLE -->"
+              echo
+              echo "_No release notes were published for this build._"
+            } > obs-streamelements.release_notes.md
             echo "has_release_notes=false" >> $GITHUB_OUTPUT
           fi
 
@@ -221,8 +229,13 @@ jobs:
       # every channel serves the notes belonging to the build it is actually pointing at.
       # Same 60s max-age as the manifest for the same reason: a channel's contents can
       # change at any time and stale notes would describe the wrong build.
+      #
+      # Guarded only on dry-run, exactly like the manifest and SVG uploads. The download
+      # step guarantees the file exists -- real notes or a placeholder -- because skipping
+      # this upload would leave the destination's previous notes beside a manifest that
+      # has moved on.
       - name: Upload release notes to CDN Google Storage
-        if: ${{ github.event.inputs.dry-run == 'false' && steps.download.outputs.has_release_notes == 'true' }}
+        if: ${{ github.event.inputs.dry-run == 'false' }}
         uses: 'google-github-actions/upload-cloud-storage@v3'
         with:
           parent: false
