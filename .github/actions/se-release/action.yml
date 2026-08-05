@@ -43,6 +43,13 @@ inputs:
     description: 'Path to RELEASE_NOTES.md (mode=prerelease) or recovered notes (mode=publish).'
     required: false
     default: ''
+  release-notes-file:
+    description: >-
+      Path to obs-streamelements.release_notes.md fetched from the source channel
+      (mode=publish). Contains the blurb and notes composed at build time; when present it
+      is reused verbatim and no summary is regenerated.
+    required: false
+    default: ''
   changelog-file:
     description: 'Path the changelog is written to, then read from.'
     required: false
@@ -116,6 +123,7 @@ runs:
         SE_IS_ROLLBACK: ${{ inputs.is-rollback }}
         SE_OUTPUT_DIR: ${{ inputs.output-dir }}
         SE_NOTES_FILE: ${{ inputs.notes-file }}
+        SE_RELEASE_NOTES_FILE: ${{ inputs.release-notes-file }}
         SE_CHANGELOG_FILE: ${{ inputs.changelog-file }}
         SE_PREVIOUS_TAG: ${{ inputs.previous-tag }}
         SE_HEAD_REF: ${{ inputs.head-ref }}
