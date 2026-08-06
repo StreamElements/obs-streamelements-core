@@ -141,7 +141,12 @@ jobs:
           ) | Out-File key.json
           npm install
 
+      # Symbol upload is best-effort: BugSplat being unreachable must not fail a build
+      # that otherwise compiled and signed correctly. The only consequence is that crash
+      # reports for this build are not symbolicated. BugSplat is slated to be replaced by
+      # Sentry, so this path is deliberately tolerant rather than hardened.
       - name: Download BugSplat uploader
+        shell: pwsh
         run: |
           mkdir c:\local\bugsplat
 
@@ -149,7 +154,13 @@ jobs:
 
           cd c:\local\bugsplat
 
-          curl -sL -f -O https://github.com/BugSplat-Git/symbol-upload/releases/download/v10.5.0/symbol-upload-windows.exe
+          curl.exe -sL -f -O https://github.com/BugSplat-Git/symbol-upload/releases/download/v10.5.0/symbol-upload-windows.exe
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::warning title=BugSplat uploader unavailable::Could not download symbol-upload-windows.exe (curl exit $LASTEXITCODE). Windows symbols will not be uploaded for this build and its crash reports will not be symbolicated."
+          }
+
+          exit 0
 
       - name: Generate Version
         shell: powershell
@@ -189,6 +200,14 @@ jobs:
             --database OBS_Live ^
             --directory "C:\local\obs-studio\build_x64\rundir\RelWithDebInfo\obs-plugins\64bit" ^
             --files obs-streamelements*.pdb
+
+          rem Captured on its own line: %ERRORLEVEL% inside an if-block would expand at
+          rem parse time, before the exe has run, because delayed expansion is off.
+          set "RC=%ERRORLEVEL%"
+
+          if not "%RC%"=="0" echo ::warning title=BugSplat symbol upload failed::symbol-upload-windows.exe exited with %RC%. Windows crash reports for ${{ needs.version.outputs.version_string }} will not be symbolicated. The build itself is unaffected.
+
+          exit /b 0
 
       - name: Package
         shell: cmd
@@ -257,12 +276,18 @@ jobs:
 
           unzip BugSplat.xcframework.zip
 
+      # Best-effort, as on Windows: a BugSplat outage must not fail an otherwise good
+      # build. chmod moved inside the success branch -- it would fail on a missing file
+      # and take the step down with it.
       - name: Download BugSplat uploader
         run: |
           cd /tmp
-          curl -sL -f -O https://github.com/BugSplat-Git/symbol-upload/releases/download/v10.5.0/symbol-upload-macos
-          #cp symbol-upload-macos-intel symbol-upload-macos
-          chmod +x symbol-upload-macos
+          if curl -sL -f -O https://github.com/BugSplat-Git/symbol-upload/releases/download/v10.5.0/symbol-upload-macos; then
+            #cp symbol-upload-macos-intel symbol-upload-macos
+            chmod +x symbol-upload-macos
+          else
+            echo "::warning title=BugSplat uploader unavailable::Could not download symbol-upload-macos. macOS symbols will not be uploaded for this build and its crash reports will not be symbolicated."
+          fi
 
       - name: Generate Version
         run: |
@@ -310,19 +335,27 @@ jobs:
 
           xcrun dsymutil obs-streamelements-core.plugin/Contents/MacOS/obs-streamelements-core -o obs-streamelements-core.dSYM
 
+      # The subshell covers the cd as well as the upload: a missing build directory would
+      # otherwise fail the step before the uploader ever ran.
       - name: Upload ARM64 to BugSplat
         if: env.UPLOAD_SYMBOLS == 'true'
         run: |
-          cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
-
-          /tmp/symbol-upload-macos -v -a "obs-streamelements-core-macos" -b "OBS_Live" -i "${{ secrets.BUGSPLAT_CLIENTID }}" -s "${{ secrets.BUGSPLAT_CLIENTSECRET }}" -f "obs-streamelements-core.dSYM" -d . -v "${{ needs.version.outputs.version_encoded }}"
+          if ! (
+            cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo &&
+            /tmp/symbol-upload-macos -v -a "obs-streamelements-core-macos" -b "OBS_Live" -i "${{ secrets.BUGSPLAT_CLIENTID }}" -s "${{ secrets.BUGSPLAT_CLIENTSECRET }}" -f "obs-streamelements-core.dSYM" -d . -v "${{ needs.version.outputs.version_encoded }}"
+          ); then
+            echo "::warning title=BugSplat symbol upload failed (macOS arm64)::arm64 symbols for ${{ needs.version.outputs.version_string }} were not uploaded, so its crash reports will not be symbolicated. The build itself is unaffected."
+          fi
 
       - name: Upload x86_64 to BugSplat
         if: env.UPLOAD_SYMBOLS == 'true'
         run: |
-          cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core/RelWithDebInfo
-
-          /tmp/symbol-upload-macos -v -a "obs-streamelements-core-macos" -b "OBS_Live" -i "${{ secrets.BUGSPLAT_CLIENTID }}" -s "${{ secrets.BUGSPLAT_CLIENTSECRET }}" -f "obs-streamelements-core.dSYM" -d . -v "${{ needs.version.outputs.version_encoded }}"
+          if ! (
+            cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core/RelWithDebInfo &&
+            /tmp/symbol-upload-macos -v -a "obs-streamelements-core-macos" -b "OBS_Live" -i "${{ secrets.BUGSPLAT_CLIENTID }}" -s "${{ secrets.BUGSPLAT_CLIENTSECRET }}" -f "obs-streamelements-core.dSYM" -d . -v "${{ needs.version.outputs.version_encoded }}"
+          ); then
+            echo "::warning title=BugSplat symbol upload failed (macOS x86_64)::x86_64 symbols for ${{ needs.version.outputs.version_string }} were not uploaded, so its crash reports will not be symbolicated. The build itself is unaffected."
+          fi
       - name: Package
         run: |
           cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
