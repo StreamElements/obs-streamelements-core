@@ -76,6 +76,13 @@ inputs:
     description: 'Claude-generated blurb. Empty when generation failed; the release is then composed without it.'
     required: false
     default: ''
+  summary-file:
+    description: >-
+      Path to a file holding the Claude-generated blurb. Preferred over `summary`:
+      the text never passes through GitHub expression interpolation. Missing or empty
+      means no blurb, and the release is composed without one.
+    required: false
+    default: ''
   dry-run:
     description: 'When true, every mutating gh call is logged instead of executed.'
     required: false
@@ -132,6 +139,7 @@ runs:
         # Model-generated text. Passed as an environment variable and never interpolated
         # into the script body, so it cannot reach the shell as code.
         SE_SUMMARY: ${{ inputs.summary }}
+        SE_SUMMARY_FILE: ${{ inputs.summary-file }}
         DRY_RUN: ${{ inputs.dry-run }}
         GH_TOKEN: ${{ inputs.github-token }}
       run: sh "$SE_ACTION_PATH/dispatch.sh"
