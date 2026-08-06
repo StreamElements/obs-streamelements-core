@@ -94,6 +94,7 @@ body="$TMP/se-release-body.md"
 		cat "$SE_RELEASE_NOTES_FILE"
 		printf '\n'
 	else
+		printf '## Release Notes\n\n'
 		printf '%s\n' "$RELEASE_NOTES_BEGIN"
 		if [ -n "${SE_NOTES_FILE:-}" ] && [ -s "${SE_NOTES_FILE:-}" ]; then cat "$SE_NOTES_FILE"; fi
 		printf '%s\n\n' "$RELEASE_NOTES_END"

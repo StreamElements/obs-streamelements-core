@@ -28,9 +28,11 @@ is_version_tag "$TAG" || die "'$TAG' does not look like a version tag (yy.m.d.bu
 ARTIFACT="${RUNNER_TEMP:-/tmp}/obs-streamelements.release_notes.md"
 {
 	if [ -n "${SE_SUMMARY:-}" ]; then
-		printf "## What's new\n\n%s\n\n" "$SE_SUMMARY"
+		printf "## What's New\n\n%s\n\n" "$SE_SUMMARY"
 	fi
-	# The notes are fenced so a later promotion can recover them exactly (requirement 5).
+	# The heading sits outside the fence on purpose: the fence must hold the pristine
+	# RELEASE_NOTES.md and nothing else, so a promotion can recover it byte for byte.
+	printf '## Release Notes\n\n'
 	printf '%s\n' "$RELEASE_NOTES_BEGIN"
 	cat "$NOTES"
 	printf '\n%s\n' "$RELEASE_NOTES_END"
