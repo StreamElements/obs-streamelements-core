@@ -691,22 +691,28 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
-            Write the "What's new" blurb for SE.Live (the StreamElements OBS plugin)
+            Write the "What's New" section for SE.Live (the StreamElements OBS plugin)
             release ${{ needs.version.outputs.version_string }}.
+
+            The audience is creators -- people who stream and record with OBS. They are
+            not developers and do not know this codebase. Write about what they will
+            notice: what works better, what is new, what no longer breaks.
 
             Read these files, relative to the repository root:
               - RELEASE_NOTES.md               release notes written by the team
-              - .release-input/changelog.md    PRs and commits since the last release
+              - .release-input/changelog.md    PRs merged since the last release
 
-            Write 2-4 sentences, or up to 4 short bullets, aimed at OBS streamers rather
-            than developers. Lead with what changed for them.
+            Write 2-4 sentences, or up to 4 short bullets.
 
             Rules:
             - Use only what is in those files. Invent nothing.
             - Do not restate the notes verbatim; they are published directly below your
-              text.
-            - Skip CI, build-system, refactor and dependency work entirely.
-            - No heading: the workflow adds "## What's new" itself.
+              text under a "Release Notes" heading.
+            - Skip CI, build-system, refactor and dependency work entirely -- none of it
+              is visible to a creator.
+            - Avoid internal jargon: say "scene switching" rather than naming a class,
+              and describe an effect rather than a code path.
+            - No heading: the workflow adds "## What's New" itself.
             - Plain Markdown, no code fences.
 
             Return the text as the "summary" field of the JSON response.

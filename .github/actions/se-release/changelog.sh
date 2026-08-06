@@ -47,28 +47,14 @@ else
 	warn "continuing with the git-log section only"
 fi
 
-# ---- git log ----------------------------------------------------------------------
-# tformat (not format) terminates every entry with a newline, so wc -l and head -n are
-# honest about the count. --invert-grep drops CI's own commits at the source.
-commits="$TMP/se-commits.md"
-git log --no-merges --invert-grep --grep='^\[WORKFLOW-AUTOMATION\]' \
-	--pretty=tformat:'- %s (%an)' "$PREV..$HEAD_REF" > "$commits" 2>/dev/null || : > "$commits"
-
-if [ -s "$commits" ]; then
-	total=$(wc -l < "$commits" | tr -d ' ')
-	printf '### All commits\n\n' >> "$OUT"
-	head -n 200 "$commits" >> "$OUT"
-	if [ "$total" -gt 200 ]; then
-		printf '\n_...and %d more commits._\n' "$((total - 200))" >> "$OUT"
-	fi
-	printf '\n' >> "$OUT"
-else
-	warn "no non-automation commits found in $PREV..$TAG"
-fi
-
 # ---- contributors -----------------------------------------------------------------
-# The bot's commits are already excluded above; the name filter is belt-and-braces and
-# survives a future change to the commit-message prefix.
+# Derived from git log rather than from the generated notes above, because a large share
+# of this repo's work lands as direct pushes to master, whose authors PR-based generation
+# cannot see. The per-commit list this used to print was dropped: the generated section
+# already covers what changed, and a raw commit dump is noise in a user-facing release.
+#
+# --invert-grep drops CI's own commits at the source; the bot name filter below is
+# belt-and-braces and survives a future change to the commit-message prefix.
 # Joined with awk rather than `paste -sd ', '`: paste treats the delimiter argument as a
 # LIST of single characters used cyclically, so ', ' yields "a,b c" instead of "a, b, c".
 people=$(
