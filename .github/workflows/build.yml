@@ -715,16 +715,29 @@ jobs:
             - No heading: the workflow adds "## What's New" itself.
             - Plain Markdown, no code fences.
 
-            Return the text as the "summary" field of the JSON response.
-          # --model is pinned because the base action's own default is
-          # claude-sonnet-4-20250514, which is retired -- it fails the run with
-          # `API Error: 404 {"type":"not_found_error","message":"model:
-          # claude-sonnet-4-20250514"}`. Without this the step always fails and
-          # the release publishes with no "What's New" section.
-          claude_args: >-
-            --model claude-opus-5
-            --allowedTools "Read,Glob,Grep"
-            --json-schema '{"type":"object","additionalProperties":false,"required":["summary"],"properties":{"summary":{"type":"string","maxLength":1200}}}'
+            Reply with the blurb text and nothing else -- no preamble, no JSON, no
+            explanation of what you did. Your entire reply is published verbatim.
+          # These are v0.0.63's real inputs. `claude_args` belongs to a newer interface
+          # that exists only on the action's main branch: passing it to this tag logs
+          # "Unexpected input(s) 'claude_args'" and drops it wholesale -- which is why
+          # earlier attempts still ran on the action's default model,
+          # claude-sonnet-4-20250514, and failed with a 404 because that model is
+          # retired. `model` must therefore be set as its own input.
+          model: claude-opus-5
+          allowed_tools: Read,Glob,Grep
+          timeout_minutes: '10'
+
+      # v0.0.63 exposes only `conclusion` and `execution_file` -- there is no
+      # `structured_output`, so the blurb is recovered from the transcript. Writing it
+      # to a file rather than a step output keeps model text out of GitHub expression
+      # interpolation entirely.
+      - name: Extract release summary
+        if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
+        continue-on-error: true
+        run: |
+          node .github/actions/se-release/extract-summary.js \
+            "${{ steps.claude_summary.outputs.execution_file }}" \
+            "${{ github.workspace }}/.release-input/summary.txt"
 
       - name: Create GitHub prerelease
         if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
@@ -738,9 +751,9 @@ jobs:
           # Also makes the step write obs-streamelements.release_notes.md here, for the
           # CDN upload below.
           output-dir: ${{ github.workspace }}/.release-input
-          # Empty when the step above timed out, failed, or produced no structured
-          # output. Model text reaches the script only as an environment variable.
-          summary: ${{ (steps.claude_summary.outcome == 'success' && steps.claude_summary.outputs.structured_output != '' && fromJSON(steps.claude_summary.outputs.structured_output).summary) || '' }}
+          # Absent or empty whenever generation failed; the body is then composed from
+          # notes + changelog alone.
+          summary-file: ${{ github.workspace }}/.release-input/summary.txt
           dry-run: 'false'
 
       # Publish the blurb + notes next to the manifest in signed/, so promotion can reuse

@@ -25,10 +25,22 @@ is_version_tag "$TAG" || die "'$TAG' does not look like a version tag (yy.m.d.bu
 # The changelog is deliberately NOT in here. It is cheap to recompute and it is relative
 # to the previous full release, which can differ between build time and promotion time;
 # freezing it would publish a stale range.
+# The blurb arrives either inline or as a file. The file form is preferred: model
+# output never passes through GitHub expression interpolation on that path.
+SUMMARY="${SE_SUMMARY:-}"
+if [ -z "$SUMMARY" ] && [ -n "${SE_SUMMARY_FILE:-}" ] && [ -s "${SE_SUMMARY_FILE:-}" ]; then
+	SUMMARY=$(cat "$SE_SUMMARY_FILE")
+fi
+if [ -n "$SUMMARY" ]; then
+	note "composing the release body with a What's New section"
+else
+	warn "no release summary available; composing from notes and changelog only"
+fi
+
 ARTIFACT="${RUNNER_TEMP:-/tmp}/obs-streamelements.release_notes.md"
 {
-	if [ -n "${SE_SUMMARY:-}" ]; then
-		printf "## What's New\n\n%s\n\n" "$SE_SUMMARY"
+	if [ -n "$SUMMARY" ]; then
+		printf "## What's New\n\n%s\n\n" "$SUMMARY"
 	fi
 	# The heading sits outside the fence on purpose: the fence must hold the pristine
 	# RELEASE_NOTES.md and nothing else, so a promotion can recover it byte for byte.
