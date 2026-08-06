@@ -655,3 +655,10 @@ if (ENABLE_ANGELSCRIPT)
 		set_target_properties_obs(obs-streamelements-core-streamelements-restore-script-host PROPERTIES FOLDER "plugins/streamelements" PREFIX "")
 	endif()
 endif()
+
+# Standalone regression tests. Off by default; they do not link libobs/Qt
+# and can be built without an obs-studio tree. See tests/CMakeLists.txt.
+option(SE_ENABLE_TESTS "Build standalone regression tests" OFF)
+if(SE_ENABLE_TESTS)
+	add_subdirectory(tests)
+endif()

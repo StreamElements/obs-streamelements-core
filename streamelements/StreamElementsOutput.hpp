@@ -342,7 +342,7 @@ public:
 			    m_obsEncoderInfo->GetType() == VTYPE_DICTIONARY)
 				return false;
 
-			return m_index = index;
+			return m_index == index;
 		}
 
 		CefRefPtr<CefValue> Serialize() {

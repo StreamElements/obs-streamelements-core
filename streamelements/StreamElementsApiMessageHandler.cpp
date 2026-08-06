@@ -85,6 +85,11 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 					args->GetString(i),
 					JSON_PARSER_ALLOW_TRAILING_COMMAS);
 
+				if (!parsedValue) {
+					parsedValue = CefValue::Create();
+					parsedValue->SetNull();
+				}
+
 				callArgs->SetValue(callArgs->GetSize(),
 						   parsedValue);
 			}
@@ -566,7 +571,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			context->args = args;
 			context->result = result;
 			context->target = target;
-			context->cefClientId = context->cefClientId;
+			context->cefClientId = cefClientId;
 			context->complete_callback = complete_callback;
 
 			context->queueIndex->SetInt(0);
@@ -2385,18 +2390,6 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		StreamElementsGlobalStateManager::GetInstance()
 			->GetProfilesManager()
 			->SerializeCurrentProfile(result);
-	}
-	API_HANDLER_END();
-
-	API_HANDLER_BEGIN("setCurrentProfile");
-	{
-		if (args->GetSize()) {
-			result->SetBool(
-				StreamElementsGlobalStateManager::GetInstance()
-					->GetProfilesManager()
-					->DeserializeCurrentProfileById(
-						args->GetValue(0)));
-		}
 	}
 	API_HANDLER_END();
 

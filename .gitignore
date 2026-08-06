@@ -19,6 +19,7 @@ node_modules/
 /debug32/
 /debug64/
 /builds/
+tests/build/
 *.o.d
 *.ninja
 .ninja*
