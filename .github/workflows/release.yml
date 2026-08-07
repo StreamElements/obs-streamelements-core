@@ -33,6 +33,15 @@ on:
         default: true
         required: true
 
+      linear-dry-run:
+        description: >-
+          Scan commits and read from Linear, but write nothing to it. Separate from
+          dry-run so a real promotion can still leave Linear untouched while the issue
+          detection is being validated. A dry-run promotion forces this on regardless.
+        type: boolean
+        default: true
+        required: true
+
       is-rollback:
         type: boolean
         default: false
@@ -54,9 +63,20 @@ jobs:
     # latest -> beta is deliberately absent. It copies latest's manifest onto `beta` and
     # leaves `latest` serving the same build, so nothing is taken away from users and no
     # release changes.
+    #
+    # Linear tracks one more hop than GitHub does. `qa -> beta` creates no release here --
+    # nothing has shipped to anyone yet -- but it is the point at which the build is worth
+    # announcing, so it is where the Linear release is created and its issues attached.
     env:
       SE_PROMOTE: ${{ github.event.inputs.to == 'latest' && github.event.inputs.is-rollback != 'true' }}
       SE_ROLLBACK: ${{ github.event.inputs.is-rollback == 'true' && github.event.inputs.from == 'stable' && github.event.inputs.to == 'latest' }}
+      SE_LINEAR_BETA: ${{ github.event.inputs.to == 'beta' && github.event.inputs.is-rollback != 'true' }}
+      # Skips the Linear steps entirely rather than failing them, so the workflow stays
+      # usable in a fork or a clone that has no pipeline access key.
+      SE_HAS_LINEAR: ${{ secrets.LINEAR_ACCESS_KEY != '' }}
+      # A dry-run promotion must not write to Linear either -- otherwise rehearsing a
+      # promotion would leave a real release behind.
+      SE_LINEAR_DRY_RUN: ${{ (github.event.inputs.dry-run == 'true' || github.event.inputs.linear-dry-run == 'true') && 'true' || 'false' }}
 
     steps:
       - name: debug
@@ -208,7 +228,7 @@ jobs:
       # ---------------------------------------------------------------------------
       - name: Resolve version, tag and previous full release
         id: version
-        if: env.SE_PROMOTE == 'true' || env.SE_ROLLBACK == 'true'
+        if: env.SE_PROMOTE == 'true' || env.SE_ROLLBACK == 'true' || (env.SE_LINEAR_BETA == 'true' && env.SE_HAS_LINEAR == 'true')
         uses: ./.github/actions/se-release
         with:
           mode: resolve
@@ -309,6 +329,101 @@ jobs:
           displaced-tag: ${{ steps.version.outputs.displaced_tag }}
           should-revert: ${{ steps.version.outputs.should_revert }}
           dry-run: ${{ github.event.inputs.dry-run }}
+
+      # ---------------------------------------------------------------------------
+      # Linear release tracking. Two hops matter, mirroring how the channels are used:
+      #
+      #   qa -> beta      the build becomes announceable: create the Linear release for
+      #                   this version and attach every issue resolved since the build
+      #                   beta served until a moment ago
+      #   beta -> latest  the build reaches everyone: complete that release
+      #
+      # All of it runs after the CDN uploads and after the GitHub release, and every step
+      # is continue-on-error. Issue bookkeeping must never be able to hold up a promotion,
+      # least of all during an incident.
+      #
+      # Issue detection is the part to watch. Linear keys do not appear in this repo's
+      # commit subjects -- master is squash-merged, so subjects read `feat(ci): ... (#93)`
+      # and the branch name that carried the key is gone. The CLI bridges that by
+      # resolving the `(#93)` reference to its pull request and reading the issues Linear
+      # linked to it, which works only for PRs whose branch carried a key. Coverage is
+      # therefore a branch-naming question; issue_pattern is additive and catches keys
+      # written into the subject by hand.
+      # ---------------------------------------------------------------------------
+      - name: Check out the promoted build
+        id: linear_checkout
+        if: env.SE_HAS_LINEAR == 'true' && env.SE_LINEAR_BETA == 'true'
+        continue-on-error: true
+        env:
+          TAG: ${{ steps.version.outputs.version_string }}
+        run: |
+          # The commit scan is relative to HEAD, and HEAD is master -- which has moved on
+          # since this build was made. Detach onto the tag so the range is the one that
+          # was actually promoted.
+          if git rev-parse -q --verify "refs/tags/$TAG^{commit}" > /dev/null; then
+            git checkout --detach --quiet "refs/tags/$TAG"
+            echo "ok=true" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::tag $TAG is not present in this clone; skipping the Linear sync"
+            echo "ok=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Sync Linear release
+        id: linear_sync
+        if: env.SE_HAS_LINEAR == 'true' && env.SE_LINEAR_BETA == 'true' && steps.linear_checkout.outputs.ok == 'true'
+        continue-on-error: true
+        uses: linear/linear-release-action@v0
+        with:
+          access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
+          command: sync
+          # Only `sync` sets a version on a release; `update` and `complete` select an
+          # existing one. Passing it explicitly at every hop is what lets the beta and
+          # latest promotions of the same build agree on which release they mean.
+          version: ${{ steps.version.outputs.version_string }}
+          name: SE.Live ${{ steps.version.outputs.version_string }}
+          # Empty when the previous beta version is unknown or untagged, in which case the
+          # CLI falls back to its own scan base.
+          base_ref: ${{ steps.version.outputs.previous_channel_tag }}
+          # The blurb and notes composed at build time, which have travelled with the
+          # manifest through every channel. Skipped when the source channel only had the
+          # "no release notes" placeholder -- there is no point copying that into Linear.
+          release_notes: ${{ steps.download.outputs.has_release_notes == 'true' && format('{0}/obs-streamelements.release_notes.md', github.workspace) || '' }}
+          links: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.version.outputs.version_string }}
+          # Scoped to the team prefix on purpose. A generic [A-Z]+-[0-9]+ also matches
+          # UTF-8, SHA-256 and every other hyphenated token in a commit subject.
+          issue_pattern: ${{ vars.LINEAR_ISSUE_PATTERN || '\b(CORE-[0-9]+)\b' }}
+          dry_run: ${{ env.SE_LINEAR_DRY_RUN }}
+          log_level: verbose
+
+      # The SE.Live pipeline currently has only Planned / In Progress / Released, so there
+      # is no stage that means "on the beta channel" and this step stays dormant. Add one
+      # in Linear and set the LINEAR_BETA_STAGE repository variable to its name to switch
+      # it on; nothing here needs to change.
+      - name: Move Linear release to the beta stage
+        if: env.SE_HAS_LINEAR == 'true' && env.SE_LINEAR_BETA == 'true' && vars.LINEAR_BETA_STAGE != '' && steps.linear_sync.outcome == 'success'
+        continue-on-error: true
+        uses: linear/linear-release-action@v0
+        with:
+          access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
+          command: update
+          version: ${{ steps.version.outputs.version_string }}
+          stage: ${{ vars.LINEAR_BETA_STAGE }}
+          dry_run: ${{ env.SE_LINEAR_DRY_RUN }}
+          log_level: verbose
+
+      # Reaching `latest` on either platform is what makes a build everyone's, so this
+      # mirrors requirement 1: the first platform through completes the release and the
+      # second one is a no-op on an already-completed release.
+      - name: Complete Linear release
+        if: env.SE_HAS_LINEAR == 'true' && env.SE_PROMOTE == 'true'
+        continue-on-error: true
+        uses: linear/linear-release-action@v0
+        with:
+          access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
+          command: complete
+          version: ${{ steps.version.outputs.version_string }}
+          dry_run: ${{ env.SE_LINEAR_DRY_RUN }}
+          log_level: verbose
 
       - name: Prune old versions from VirusTotal Monitor
         uses: streamelements/virustotal-monitor-action@v1

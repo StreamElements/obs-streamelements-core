@@ -106,6 +106,12 @@ outputs:
   previous_tag:
     description: 'Tag of the previous full release, or empty.'
     value: ${{ steps.run.outputs.previous_tag }}
+  previous_channel_tag:
+    description: >-
+      Tag the destination channel served before this promotion, read before the upload
+      overwrote it. Used as the Linear commit-scan base on `qa -> beta`. Empty when that
+      version is unknown, untagged, or not older than the one being promoted.
+    value: ${{ steps.run.outputs.previous_channel_tag }}
   is_prerelease:
     description: 'Whether the release for this tag is currently a prerelease.'
     value: ${{ steps.run.outputs.is_prerelease }}
