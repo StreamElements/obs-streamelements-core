@@ -389,8 +389,12 @@ jobs:
           # "no release notes" placeholder -- there is no point copying that into Linear.
           release_notes: ${{ steps.download.outputs.has_release_notes == 'true' && format('{0}/obs-streamelements.release_notes.md', github.workspace) || '' }}
           links: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.version.outputs.version_string }}
-          # Scoped to the team prefix on purpose. A generic [A-Z]+-[0-9]+ also matches
-          # UTF-8, SHA-256 and every other hyphenated token in a commit subject.
+          # Additive to the CLI's built-in detection, and scoped to the team prefix so it
+          # contributes nothing but CORE keys. It does not suppress the built-in subject
+          # scan, which is broader: the first dry-run over this range reported an issue
+          # named UTF-8, matched out of `fix: UTF-8 output into manifests`. That is
+          # cosmetic -- identifiers absent from the workspace are ignored server-side --
+          # and it is not something this input can turn off.
           issue_pattern: ${{ vars.LINEAR_ISSUE_PATTERN || '\b(CORE-[0-9]+)\b' }}
           dry_run: ${{ env.SE_LINEAR_DRY_RUN }}
           log_level: verbose
