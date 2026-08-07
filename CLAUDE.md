@@ -43,6 +43,7 @@ Format only the files you edited: `clang-format -i -style=file -fallback-style=n
 ## Git
 
 - Never commit to `master`. Branch and open a PR (`gh pr create`), even for small fixes.
+- **Put the Linear issue key in the branch name** (`jacob/core-266-track-selive-releases`). Linear links the PR to the issue from that name, and the `qa -> beta` promotion attaches those issues to the Linear release. master is squash-merged, so a branch without a key leaves the work untraceable — the commit subject keeps only `(#93)`, and that PR links to nothing. `linear-issue-key.yml` enforces this and will suggest an issue when it fails; label a PR `no-linear-issue` if there genuinely isn't one. A key in the PR title or a `Fixes CORE-266` line in the body works too.
 - Conventional Commits: `fix:`, `feat:`, with scopes where they apply (`fix(ci):`, `fix(workflow):`).
 - **Never start a commit message with `[WORKFLOW-AUTOMATION]`** — CI uses that prefix to recognize its own commits and skip the build.
 - `RELEASE_NOTES.md` must be non-empty for a master build to tag a release. Use `/release-prep`.

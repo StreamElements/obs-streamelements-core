@@ -79,6 +79,50 @@ if [ "$IS_ROLLBACK" = "true" ]; then
 	exit 0
 fi
 
+# -------------------------------------------------------------------- Linear sync base
+# `qa -> beta` is the hop at which a build becomes something worth announcing, so that is
+# where release.yml creates the Linear release for it. The commit scan needs a lower
+# bound, and the honest one is "whatever beta served until a moment ago" -- which is the
+# version sitting on the destination channel right now. Reading it here rather than after
+# the upload is the same ordering constraint the rollback path has, for the same reason:
+# the upload is about to overwrite it with the version being promoted.
+#
+# Windows and macOS promote separately, so the second platform through reads back the
+# first one's upload and resolves an empty range. That is correct rather than a bug: the
+# issues were attached on the first pass and `sync` for the same version adds nothing.
+#
+# Nothing below this point applies to a beta promotion -- no release is created or
+# relabelled there, so requirement 10 must not fire and there is no changelog to base.
+if [ "${SE_TO:-}" = "beta" ]; then
+	BASE=""
+	beta="${RUNNER_TEMP:-/tmp}/se-beta-$PLATFORM.manifest"
+	# stderr is dropped because manifest_version_number reports a parse failure with
+	# die(), and an ::error:: annotation would misrepresent what is only a missing lower
+	# bound: the CLI falls back to its own scan base and the sync still happens.
+	if fetch_channel_manifest "$PLATFORM" beta "$beta" && B=$(manifest_version_number "$beta" 2> /dev/null); then
+		if [ "$B" -ge "$ENCODED" ]; then
+			note "linear: $PLATFORM/beta already serves $B (>= $ENCODED); no new commits to scan"
+		else
+			BASE=$(decode_version "$B")
+			note "linear: $PLATFORM/beta serves $B; scanning $BASE..$TAG"
+		fi
+	else
+		warn "linear: no readable version on $PLATFORM/beta; the CLI will choose its own scan base"
+	fi
+
+	# The scan is `git log <base>..<tag>`, so the lower bound has to exist as a tag in
+	# this clone. Not every version that reached a channel was tagged -- windows/stable
+	# references 20241127000268 and tag 24.11.27.268 was never pushed -- so this is a live
+	# condition rather than a hypothetical.
+	if [ -n "$BASE" ] && ! git rev-parse -q --verify "refs/tags/$BASE^{commit}" > /dev/null 2>&1; then
+		warn "linear: tag '$BASE' is not present in this clone; the CLI will choose its own scan base"
+		BASE=""
+	fi
+
+	emit previous_channel_tag "$BASE"
+	exit 0
+fi
+
 # ------------------------------------------------------------------ requirement 10
 # A version may not reach `latest` without a release. The usual cause is a build whose
 # RELEASE_NOTES.md was empty: build.yml then skips both the tag and the prerelease, so
