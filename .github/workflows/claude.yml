@@ -33,6 +33,14 @@ jobs:
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
+        # Force Task subagents to run in the foreground. Same fix as in
+        # claude-code-review.yml, which documents the mechanism: the action stops
+        # reading Claude's stream at the first result event, and a backgrounded
+        # subagent produces an interim result while the model waits, so a task
+        # whose model backgrounds a subagent dies half-done while reporting
+        # success. Upstream: anthropics/claude-code-action#1499.
+        env:
+          CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1'
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 

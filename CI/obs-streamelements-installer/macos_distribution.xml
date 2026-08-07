@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!--
+https://developer.apple.com/library/archive/documentation/DeveloperTools/Reference/DistributionDefinitionRef/Chapters/Distribution_XML_Ref.html
+https://developer.apple.com/library/mac/documentation/DeveloperTools/Reference/DistributionDefinitionRef/
+https://developer.apple.com/library/mac/documentation/DeveloperTools/Reference/InstallerJavaScriptRef/
+-->
+<installer-gui-script minSpecVersion="1">
+    <choices-outline>
+        <line choice="default" />
+    </choices-outline>
+    <choice id="default" title="SE.Live for OBS Studio" description="SE.Live for OBS Studio" selected="true" start_selected="true" start_enabled="true" start_visible="true">
+        <pkg-ref id="com.streamelements.selive-core" />
+    </choice>
+    <title>StreamElements SE.Live for OBS Studio</title>
+    <product id="com.streamelements.selive-core" />
+    <domains enable_anywhere="false" enable_currentUserHome="true" enabled_localSystem="false" />
+    <options customize="never" mpkg="com.streamelements.selive-core" rootVolumeOnly="true" hostArchitectures="x86_64,arm64" />
+    <pkg-ref id="com.streamelements.selive-core" active="true">plugin.pkg</pkg-ref>
+    <pkg-ref id="com.streamelements.selive-core">
+        <must-close>
+            <app id="com.obsproject.obs-studio" />
+        </must-close>
+    </pkg-ref>
+
+    <script>
+    <![CDATA[
+        function check_obs_present() {
+            system.log("check_obs_present: START");
+
+            const MIN_OBS_VERSION = "31.1.0";
+
+            system.log("check_obs_present: MIN_OBS_VERSION: " + MIN_OBS_VERSION);
+
+            system.log("check_obs_present: my.target: " + JSON.stringify(my.target));
+
+            let mountPointPrefix = (my.target || {}).mountPoint || "/";
+            if (mountPointPrefix[mountPointPrefix.length - 1] !== "/") {
+                mountPointPrefix += "/";
+            }
+
+            system.log("check_obs_present: mountPointPrefix: " + mountPointPrefix);
+
+            const obsPath = mountPointPrefix + "Applications/OBS.app";
+
+            system.log("check_obs_present: obsPath: " + obsPath);
+
+            const obsInfo = system.files.bundleAtPath(obsPath);
+
+            system.log("check_obs_present: obsInfo: " + JSON.stringify(obsInfo));
+
+            if (!obsInfo) {
+                system.log("check_obs_present: obsInfo is null");
+
+                my.result.title = "OBS Studio not found.";
+                my.result.message = "Please install the latest version of OBS Studio from https://obsproject.com before installing SE.Live.";
+                my.result.type = "Fatal";
+
+                return true;
+            }
+
+            const obsVersion = obsInfo.CFBundleShortVersionString || '0.0.0';
+
+            system.log("check_obs_present: obsVersion: " + obsVersion);
+
+            if (system.compareVersions(obsVersion, MIN_OBS_VERSION) < 0) {
+                system.log("check_obs_present: obsVersion < MIN_OBS_VERSION");
+
+                my.result.title = "OBS Studio is too old.";
+                my.result.message = "Please install the latest version of OBS Studio from https://obsproject.com before installing SE.Live.";
+                my.result.type = "Fatal";
+
+                return true;
+            }
+
+            system.log("check_obs_present: all OK");
+
+            return true;
+        }
+    ]]>
+    </script>
+    <installation-check script="check_obs_present()" />
+    <!-- <volume-check script="check_obs_present()" /> -->
+    <!--
+    <volume-check script="true">
+        <required-bundles all="true" description="RequiredBundlesDescription">
+            <bundle id="com.obsproject.obs-studio" version="31.0.1" path="/Applications/OBS.app" search="true" />
+        </required-bundles>
+    </volume-check>
+    -->
+    <welcome file="macos_welcome.html" mime-type="text/html" />
+    <!--
+    <readme file="macos_readme.html" mime-type="text/html" />
+    <license file="macos_license.html" mime-type="text/html" />
+    -->
+    <conclusion file="macos_conclusion.html" mime-type="text/html" />
+    <!--
+    <background file="macos_setup.png" mime-type="image/png" alignment="bottomleft" scaling="proportional" />
+    <background-darkAqua file="macos_setup.png" mime-type="image/png" alignment="bottomleft" scaling="proportional" />
+    -->
+</installer-gui-script>
+

@@ -1,0 +1,8 @@
+#pragma once
+
+// Generated from source_paths.hpp.in — do not edit by hand.
+// Points the source-invariant tests at the production source tree.
+
+namespace se_tests {
+constexpr const char *kRepoRoot = "@REPO_ROOT@";
+}

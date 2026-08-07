@@ -1,0 +1,613 @@
+name: Build
+
+permissions:
+  contents: read
+  id-token: write    # lets the job mint a GitHub OIDC token for WIF
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+env:
+  BASE_BUILD_NUMBER: 746
+  BUILD_CONFIG: RelWithDebInfo
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version_encoded: ${{ steps.version_step.outputs.version_encoded }}
+      version_string: ${{ steps.version_step.outputs.version_string }}
+
+    steps:
+      - name: Generate build number
+        uses: mlilback/build-number@v1
+        with:
+          base: ${{ env.BASE_BUILD_NUMBER }}
+          run-id: ${{ github.run_number }}
+          # Output: ${{ env.BUILD_NUMBER }} env var
+
+      - name: Generate Version
+        id: version_step
+        run: |
+          echo "BUILD_NUMBER=${{ env.BUILD_NUMBER }}"
+
+          VERSION_ENCODED="$(date '+%Y%m%d')$(printf '%06d' ${{ env.BUILD_NUMBER }})"
+          VERSION_STRING="$(date '+%y.%-m.%-d')$(printf '.%d' ${{ env.BUILD_NUMBER }})"
+
+          echo "version_encoded=$VERSION_ENCODED" >> $GITHUB_OUTPUT
+          echo "version_string=$VERSION_STRING" >> $GITHUB_OUTPUT
+  windows:
+    runs-on: windows-2022
+    needs: [version]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auth Google API
+        uses: 'google-github-actions/auth@v2'
+        with:
+          project_id: streamelements-core
+          workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
+          service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
+
+      - name: Install Chocolatey packages
+        shell: cmd
+        run: |
+          choco install -y archiver
+          choco install -y nsis --version=3.03 --force
+
+      - name: Download SE.Live
+        shell: cmd
+        run: |
+            if not exist ${{ github.workspace }}\..\obs-studio\build64_qt6\rundir\${{ env.BUILD_CONFIG }} md ${{ github.workspace }}\..\obs-studio\build64_qt6\rundir\${{ env.BUILD_CONFIG }}
+
+            if not exist ${{ github.workspace }}\..\obs-studio\build32_qt6\rundir\${{ env.BUILD_CONFIG }} md ${{ github.workspace }}\..\obs-studio\build32_qt6\rundir\${{ env.BUILD_CONFIG }}
+
+            if not exist ${{ github.workspace }}\..\download md ${{ github.workspace }}\..\download
+
+            if not exist ${{ github.workspace }}\..\download\obs-streamelements-core md ${{ github.workspace }}\..\download\obs-streamelements-core
+
+            if not exist ${{ github.workspace }}\..\download\obs-streamelements-core\build32_qt6 md ${{ github.workspace }}\..\download\obs-streamelements-core\build32_qt6
+
+            if not exist ${{ github.workspace }}\..\download\obs-streamelements-core\build64_qt6 md ${{ github.workspace }}\..\download\obs-streamelements-core\build64_qt6
+
+            if not exist ${{ github.workspace }}\..\download\obs-streamelements\build32_qt6 md ${{ github.workspace }}\..\download\obs-streamelements\build32_qt6
+
+            if not exist ${{ github.workspace }}\..\download\obs-streamelements\build64_qt6 md ${{ github.workspace }}\..\download\obs-streamelements\build64_qt6
+
+            if not exist ${{ github.workspace }}\..\obs-streamelements-uninstaller md ${{ github.workspace }}\..\obs-streamelements-uninstaller
+
+
+
+
+            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/windows/build32_qt6.zip --output ${{ github.workspace }}\..\download\obs-streamelements-core\build32_qt6.zip
+
+            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/windows/build64_qt6.zip --output ${{ github.workspace }}\..\download\obs-streamelements-core\build64_qt6.zip
+
+            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/windows/Version.generated.hpp --output ${{ github.workspace }}\..\download\obs-streamelements-core\Version.generated.hpp
+
+            curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/windows/RELEASE_NOTES.md --output ${{ github.workspace }}\..\download\obs-streamelements-core\RELEASE_NOTES.md
+
+
+
+
+            curl -kL -o ${{ github.workspace }}\..\obs-streamelements-uninstaller\obs-streamelements-uninstaller.exe https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/qa/obs-streamelements-uninstaller.exe -f --retry 5 -C -
+
+
+
+
+            7z x -y ${{ github.workspace }}\..\download\obs-streamelements-core\build32_qt6.zip -o${{ github.workspace }}\..\download\obs-streamelements-core\build32_qt6
+
+            7z x -y ${{ github.workspace }}\..\download\obs-streamelements-core\build64_qt6.zip -o${{ github.workspace }}\..\download\obs-streamelements-core\build64_qt6
+
+
+
+
+            xcopy ${{ github.workspace }}\..\download\obs-streamelements-core\build32_qt6\*.* ${{ github.workspace }}\..\obs-studio\build32_qt6\rundir\${{ env.BUILD_CONFIG }} /S /E /I /Y
+
+            xcopy ${{ github.workspace }}\..\download\obs-streamelements-core\build64_qt6\*.* ${{ github.workspace }}\..\obs-studio\build64_qt6\rundir\${{ env.BUILD_CONFIG }} /S /E /I /Y
+
+            xcopy ${{ github.workspace }}\..\download\obs-streamelements\build32_qt6\*.* ${{ github.workspace }}\..\obs-studio\build32_qt6\rundir\${{ env.BUILD_CONFIG }} /S /E /I /Y
+
+            xcopy ${{ github.workspace }}\..\download\obs-streamelements\build64_qt6\*.* ${{ github.workspace }}\..\obs-studio\build64_qt6\rundir\${{ env.BUILD_CONFIG }} /S /E /I /Y
+
+
+
+
+            curl https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-streamelements-set-machine-config/windows/qa/obs-streamelements-set-machine-config-32.exe --output ${{ github.workspace }}\..\obs-studio\build32_qt6\rundir\${{ env.BUILD_CONFIG }}\obs-plugins\32bit\obs-streamelements-set-machine-config.exe
+
+            curl https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-streamelements-set-machine-config/windows/qa/obs-streamelements-set-machine-config-64.exe --output ${{ github.workspace }}\..\obs-studio\build64_qt6\rundir\${{ env.BUILD_CONFIG }}\obs-plugins\64bit\obs-streamelements-set-machine-config.exe
+
+      - name: Download resources
+        shell: cmd
+        run: |
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-probe-libobs-version/windows/qa/obs-probe-libobs-version-32.exe --output resources\obs-probe-libobs-version-32.exe
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-probe-libobs-version/windows/qa/obs-probe-libobs-version-64.exe --output resources\obs-probe-libobs-version-64.exe
+
+      - name: Install NSIS plugins
+        shell: cmd
+        run: |
+
+          if exist nsis\Plugins\x64-ansi\NSISLockDetector.dll del nsis\Plugins\x64-ansi\NSISLockDetector.dll
+          if exist nsis\Plugins\x64-unicode\NSISLockDetector.dll del nsis\Plugins\x64-unicode\NSISLockDetector.dll
+          if exist nsis\Plugins\x86-ansi\NSISLockDetector.dll del nsis\Plugins\x86-ansi\NSISLockDetector.dll
+          if exist nsis\Plugins\x86-unicode\NSISLockDetector.dll del nsis\Plugins\x86-unicode\NSISLockDetector.dll
+
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x64-ansi/NSISLockDetector.dll --output nsis\Plugins\x64-ansi\NSISLockDetector.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x64-unicode/NSISLockDetector.dll --output nsis\Plugins\x64-unicode\NSISLockDetector.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x86-ansi/NSISLockDetector.dll --output nsis\Plugins\x86-ansi\NSISLockDetector.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-lockdetector/windows/qa/x86-unicode/NSISLockDetector.dll --output nsis\Plugins\x86-unicode\NSISLockDetector.dll
+
+          if exist nsis\Plugins\x64-ansi\NSISHTTP.dll del nsis\Plugins\x64-ansi\NSISHTTP.dll
+          if exist nsis\Plugins\x64-unicode\NSISHTTP.dll del nsis\Plugins\x64-unicode\NSISHTTP.dll
+          if exist nsis\Plugins\x86-ansi\NSISHTTP.dll del nsis\Plugins\x86-ansi\NSISHTTP.dll
+          if exist nsis\Plugins\x86-unicode\NSISHTTP.dll del nsis\Plugins\x86-unicode\NSISHTTP.dll
+
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x64-ansi/NSISHTTP.dll --output nsis\Plugins\x64-ansi\NSISHTTP.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x64-unicode/NSISHTTP.dll --output nsis\Plugins\x64-unicode\NSISHTTP.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x86-ansi/NSISHTTP.dll --output nsis\Plugins\x86-ansi\NSISHTTP.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-http/windows/qa/x86-unicode/NSISHTTP.dll --output nsis\Plugins\x86-unicode\NSISHTTP.dll
+
+          if exist nsis\Plugins\x64-ansi\NSISConfig.dll del nsis\Plugins\x64-ansi\NSISConfig.dll
+          if exist nsis\Plugins\x64-unicode\NSISConfig.dll del nsis\Plugins\x64-unicode\NSISConfig.dll
+          if exist nsis\Plugins\x86-ansi\NSISConfig.dll del nsis\Plugins\x86-ansi\NSISConfig.dll
+          if exist nsis\Plugins\x86-unicode\NSISConfig.dll del nsis\Plugins\x86-unicode\NSISConfig.dll
+
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x64-ansi/NSISConfig.dll --output nsis\Plugins\x64-ansi\NSISConfig.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x64-unicode/NSISConfig.dll --output nsis\Plugins\x64-unicode\NSISConfig.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x86-ansi/NSISConfig.dll --output nsis\Plugins\x86-ansi\NSISConfig.dll
+          curl -L https://storage.googleapis.com/cdn.streamelements.com/obs/dist/nsis-config/windows/qa/x86-unicode/NSISConfig.dll --output nsis\Plugins\x86-unicode\NSISConfig.dll
+
+          xcopy nsis "%ProgramFiles(x86)%\NSIS" /S /E /I /Y
+
+      - name: Build installer
+        shell: powershell
+        run: |
+            $StreamElementsVersion = ((Get-Content -Path ${{ github.workspace }}\..\download\obs-streamelements-core\Version.generated.hpp) | Where-Object {$_ -like '#define STREAMELEMENTS_PLUGIN_VERSION *'} | Select-Object -first 1).Split(' ') | Select-Object -last 1
+
+            $StreamElementsExeMain = 'obs-streamelements-setup.exe'
+
+            $StreamElementsExe64bit = 'obs-streamelements-setup-x64.exe'
+
+            $StreamElementsExe32bit = 'obs-streamelements-setup-x86.exe'
+
+
+
+            (Get-Content -Path ${{ github.workspace }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', $StreamElementsVersion) | Set-Content -Path ${{ github.workspace }}\obs-streamelements.manifest
+
+            (Get-Content -Path ${{ github.workspace }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', $StreamElementsVersion) | Set-Content -Path ${{ github.workspace }}\obs-streamelements.qa.manifest
+
+            (Get-Content -Path ${{ github.workspace }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', $StreamElementsVersion) | Set-Content -Path ${{ github.workspace }}\obs-streamelements.beta.manifest
+
+            (Get-Content -Path ${{ github.workspace }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', $StreamElementsVersion) | Set-Content -Path ${{ github.workspace }}\obs-streamelements.latest.manifest
+
+            (Get-Content -Path ${{ github.workspace }}\template.manifest).replace('${STREAMELEMENTS_PLUGIN_VERSION}', $StreamElementsVersion) | Set-Content -Path ${{ github.workspace }}\obs-streamelements.stable.manifest
+
+
+            type ${{ github.workspace }}\obs-streamelements.qa.manifest
+
+            type ${{ github.workspace }}\obs-streamelements.beta.manifest
+
+            type ${{ github.workspace }}\obs-streamelements.latest.manifest
+
+            type ${{ github.workspace }}\obs-streamelements.stable.manifest
+
+
+            $ProductVersionString = (
+                $StreamElementsVersion.Substring(2, 2).TrimStart('0') + '.' +
+                $StreamElementsVersion.Substring(4, 2).TrimStart('0') + '.' + 
+                $StreamElementsVersion.Substring(6, 2).TrimStart('0') + '.' +
+                $StreamElementsVersion.Substring(8).TrimStart('0')
+            )
+
+            echo ( '!define PRODUCT_VERSION "' + $ProductVersionString + '"' ) > ${{ github.workspace }}\version.generated.nsh
+
+            echo ( '!define SETUP_VERSION "${{ needs.version.outputs.version_string }}"' ) >> ${{ github.workspace }}\version.generated.nsh
+            
+            type ${{ github.workspace }}\version.generated.nsh
+
+            makensis /V4 /DSKIP_64BIT_CONTENT main.nsi
+
+            ren obs-streamelements-setup.exe $StreamElementsExe32bit
+
+            makensis /V4 /DSKIP_32BIT_CONTENT main.nsi
+
+            ren obs-streamelements-setup.exe $StreamElementsExe64bit
+
+            makensis /V4 main.nsi
+
+      - name: Sign Windows binaries
+        uses: azure/artifact-signing-action@v2
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && (vars.SKIP_WINDOWS_SIGNING != 'true' && vars.SKIP_WINDOWS_SIGNING != '1' && vars.SKIP_WINDOWS_SIGNING != 'yes')
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: https://eus.codesigning.azure.net/
+          signing-account-name: SE-Live
+          certificate-profile-name: SE-Live
+          files-folder: '${{ github.workspace }}'
+          files-folder-filter: exe,dll,msi
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+# Automatically finds signtool.exe and exposes its path
+      - name: Find SignTool
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && (vars.SKIP_WINDOWS_SIGNING != 'true' && vars.SKIP_WINDOWS_SIGNING != '1' && vars.SKIP_WINDOWS_SIGNING != 'yes')
+        uses: KamaranL/add-signtool-action@v1
+        id: signtool
+
+      - name: Verify Windows binaries code signature
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && (vars.SKIP_WINDOWS_SIGNING != 'true' && vars.SKIP_WINDOWS_SIGNING != '1' && vars.SKIP_WINDOWS_SIGNING != 'yes')
+        shell: cmd
+        run: |
+          signtool verify /pa /v "${{ github.workspace }}\\obs-streamelements-setup*.exe"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-setup
+          path: obs-streamelements-setup*.exe
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-manifest
+          path: obs-streamelements*.manifest
+
+      - name: Upload to Google Storage
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        uses: 'google-github-actions/upload-cloud-storage@v3'
+        with:
+          parent: false
+          process_gcloudignore: false
+          path: |
+            '${{ github.workspace }}/obs-streamelements-setup*.exe'
+            '${{ github.workspace }}/obs-streamelements.manifest'
+            '${{ github.workspace }}/obs-streamelements.*.manifest'
+            '${{ github.workspace }}\..\download\obs-streamelements-core\Version.generated.hpp'
+          destination: 'se-obs-builds/obs-streamelements-installer/latest/windows'
+
+      - name: Prepare artifacts for upload to CDN
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && (vars.SKIP_WINDOWS_SIGNING != 'true' && vars.SKIP_WINDOWS_SIGNING != '1' && vars.SKIP_WINDOWS_SIGNING != 'yes')
+        shell: pwsh
+        run: |
+          # TODO: Add release notes, rename artifacts and modify manifests
+
+  macos:
+    runs-on: macos-latest
+    needs: [version]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auth Google API
+        uses: 'google-github-actions/auth@v2'
+        with:
+          project_id: streamelements-core
+          workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
+          service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
+
+      - name: Download SE.Live
+        run: |
+          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/macos/build_x86_64.zip --output /tmp/build_x86_64.zip
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/macos/build_arm64.zip --output /tmp/build_arm64.zip
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/macos/Version.generated.hpp --output /tmp/Version.generated.hpp
+
+          curl https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/macos/RELEASE_NOTES.md --output /tmp/RELEASE_NOTES.md
+
+          7z x -y /tmp/build_x86_64.zip -o/tmp/build_x86_64
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          7z x -y /tmp/build_arm64.zip -o/tmp/build_arm64
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+      - name: Prepare for code signing and notarization
+        if: vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes'
+        run: |
+          # Create temporary keychain
+
+          security create-keychain -p secret my_keychain
+
+          
+          
+          # Append keychain to the search list
+
+          security list-keychains -d user -s my_keychain $(security list-keychains -d user | sed s/\"//g)
+
+          security list-keychains
+
+          
+          
+          # Unlock keychain
+
+          security set-keychain-settings my_keychain
+
+          security unlock-keychain -p secret my_keychain
+
+          
+          
+          # Import certificates
+          
+          echo ${{ secrets.CODESIGN_DEVIDAPP_CERT_P12_BASE64 }} |base64 -D -o devidapp.p12
+          
+          echo ${{ secrets.CODESIGN_DEVIDINST_CERT_P12_BASE64 }} |base64 -D -o devidinst.p12
+
+          security import ./devidapp.p12 -k my_keychain -P ${{ secrets.CODESIGN_DEVIDAPP_CERT_PWD }} -T "/usr/bin/codesign"
+
+          security import ./devidinst.p12 -k my_keychain -P ${{ secrets.CODESIGN_DEVIDINST_CERT_PWD }} -T "/usr/bin/productsign"
+
+          rm devidapp.p12
+
+          rm devidinst.p12
+
+
+
+          # New requirement for MacOS 10.12
+
+          security set-key-partition-list -S apple-tool:,apple: -s -k secret my_keychain
+
+          
+          
+          # Store notarytool credentials
+
+          xcrun notarytool store-credentials "notarytool-password" --apple-id "${{ secrets.NOTARIZE_APPLE_ID }}" --team-id "${{ secrets.NOTARIZE_APPLE_TEAM_ID }}" --password "${{ secrets.NOTARIZE_APPLE_APP_PWD }}"
+
+      - name: Build installer
+        run: |
+          # Extract version number
+
+          export STREAMELEMENTS_PLUGIN_VERSION=$(cat /tmp/Version.generated.hpp| awk '/#define STREAMELEMENTS_PLUGIN_VERSION [0-9]+/ { str = $0; sub(/#define STREAMELEMENTS_PLUGIN_VERSION /, "", str); sub(/[^0-9]/, "", str); print str }')
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          export STREAMELEMENTS_PLUGIN_VERSION_MAJOR=$(echo $STREAMELEMENTS_PLUGIN_VERSION | awk '{ str = substr($1, 3, 2); sub(/^0+/, "", str); print str }')
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          export STREAMELEMENTS_PLUGIN_VERSION_MINOR=$(echo $STREAMELEMENTS_PLUGIN_VERSION | awk '{ str = substr($1, 5, 2); sub(/^0+/, "", str); print str }')
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          export STREAMELEMENTS_PLUGIN_VERSION_PATCH=$(echo $STREAMELEMENTS_PLUGIN_VERSION | awk '{ str = substr($1, 7, 2); sub(/^0+/, "", str); print str }')
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          export STREAMELEMENTS_PLUGIN_VERSION_BUILD=$(echo $STREAMELEMENTS_PLUGIN_VERSION | awk '{ str = substr($1, 9, 6); sub(/^0+/, "", str); print str }')
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          export STREAMELEMENTS_PLUGIN_VERSION_FULL=$STREAMELEMENTS_PLUGIN_VERSION_MAJOR.$STREAMELEMENTS_PLUGIN_VERSION_MINOR.$STREAMELEMENTS_PLUGIN_VERSION_PATCH.$STREAMELEMENTS_PLUGIN_VERSION_BUILD
+
+          # Compose release notes
+
+          [ -e /tmp/readme.md ] && rm /tmp/readme.md
+
+          cat "${{ github.workspace }}/RELEASE_NOTES.header.md" >> /tmp/readme.md
+          echo "$STREAMELEMENTS_PLUGIN_VERSION_FULL" >> /tmp/readme.md
+          cat /tmp/RELEASE_NOTES.md >> /tmp/readme.md
+          cat "${{ github.workspace }}/RELEASE_NOTES.history.macos.md" >> /tmp/readme.md
+          cat "${{ github.workspace }}/RELEASE_NOTES.footer.md" >> /tmp/readme.md
+
+          npm i markdown-to-html-cli -g
+
+          markdown-to-html-cli --source /tmp/readme.md --output /tmp/readme.html --no-dark-mode --markdown-style-theme dark --no-corners --style ".markdown-style { max-width: 100% !important; }"
+
+          # Create version manifest
+
+          sed -e "s/\${STREAMELEMENTS_PLUGIN_VERSION}/$STREAMELEMENTS_PLUGIN_VERSION/g" ${{ github.workspace }}/template.macos.manifest >${{ github.workspace }}/obs-streamelements.manifest
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          echo "" >> ${{ github.workspace }}/obs-streamelements.manifest
+          echo "" >> ${{ github.workspace }}/obs-streamelements.manifest
+          echo "[[[BEGIN_RELEASE_NOTES]]]" >> ${{ github.workspace }}/obs-streamelements.manifest
+          cat /tmp/readme.html >> ${{ github.workspace }}/obs-streamelements.manifest
+          echo "" >> ${{ github.workspace }}/obs-streamelements.manifest
+          echo "[[[END_RELEASE_NOTES]]]" >> ${{ github.workspace }}/obs-streamelements.manifest
+
+          cat ${{ github.workspace }}/obs-streamelements.manifest
+
+
+
+          # Create universal binary from ARM64 and x86_64
+
+          cp -R /tmp/build_arm64/obs-streamelements-core.plugin /tmp/obs-streamelements-core.plugin
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          cd /tmp/obs-streamelements-core.plugin/Contents/MacOS
+
+          mv obs-streamelements-core obs-streamelements-core_arm64
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          cp /tmp/build_x86_64/obs-streamelements-core.plugin/Contents/MacOS/obs-streamelements-core obs-streamelements-core_x86_64
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          lipo -create -output obs-streamelements-core obs-streamelements-core_arm64 obs-streamelements-core_x86_64
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          rm -f obs-streamelements-core_arm64 obs-streamelements-core_x86_64
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+
+
+
+          # Update Info.plist
+
+          plutil -replace CFBundleIdentifier -string com.streamelements.selive-core /tmp/obs-streamelements-core.plugin/Contents/Info.plist
+          
+          plutil -replace CFBundleShortVersionString -string $STREAMELEMENTS_PLUGIN_VERSION_FULL /tmp/obs-streamelements-core.plugin/Contents/Info.plist
+
+          plutil -replace CFBundleLongVersionString -string $STREAMELEMENTS_PLUGIN_VERSION_FULL /tmp/obs-streamelements-core.plugin/Contents/Info.plist
+
+          plutil -replace CFBundleVersion -string $STREAMELEMENTS_PLUGIN_VERSION /tmp/obs-streamelements-core.plugin/Contents/Info.plist
+
+          plutil -replace NSHumanReadableCopyright -string "(c) StreamElements, Inc." /tmp/obs-streamelements-core.plugin/Contents/Info.plist
+
+          plutil -replace CFBundleDisplayName -string "StreamElements SE.Live" /tmp/obs-streamelements-core.plugin/Contents/Info.plist
+
+          plutil -insert BundleIsRelocatable -bool false /tmp/obs-streamelements-core.plugin/Contents/Info.plist
+          
+
+
+
+          # Create localizable resources
+
+          plutil -insert RequiredBundlesDescription -string "Could not find OBS installed, Please download and install OBS from https://obsproject.com/ and run SE.Live setup again" /tmp/obs-streamelements-core.plugin/Contents/Info.plist
+          
+          [ ! -e /tmp/obs-streamelements-core.plugin/Contents/Resources/en.lproj ] && mkdir -pv /tmp/obs-streamelements-core.plugin/Contents/Resources/en.lproj
+
+          echo 'RequiredBundlesDescription = "Could not find OBS installed, Please download and install OBS from https://obsproject.com and run SE.Live setup again"' >/tmp/obs-streamelements-core.plugin/Contents/Resources/en.lproj/InfoPlist.strings
+
+          echo "STREAMELEMENTS_PLUGIN_VERSION_FULL=$STREAMELEMENTS_PLUGIN_VERSION_FULL" >> $GITHUB_ENV
+          echo "STREAMELEMENTS_PLUGIN_VERSION=$STREAMELEMENTS_PLUGIN_VERSION" >> $GITHUB_ENV
+
+      - name: Sign plugin code
+        if: vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes'
+        run: |
+          # Create universal package
+
+          echo Removing existing signature...
+
+          codesign --remove-signature /tmp/obs-streamelements-core.plugin
+
+          echo Signing plugin code...
+
+          codesign --force --options runtime --sign "${{ secrets.CODESIGN_DEVIDAPP_IDENTITY }}" --deep /tmp/obs-streamelements-core.plugin
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          echo Verifying plugin code signature...
+
+          codesign -dvv /tmp/obs-streamelements-core.plugin
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+      - name: Create plugin package
+        run: |
+          pkgbuild --identifier com.streamelements.selive-core --version ${{ env.STREAMELEMENTS_PLUGIN_VERSION_FULL }} --install-location "/Library/Application Support/obs-studio/plugins" --component /tmp/obs-streamelements-core.plugin /tmp/plugin.pkg
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+      - name: Create product installer
+        run: |
+          mkdir /tmp/resources
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          cp macos_*.html /tmp/resources
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          cp resources/macos_setup.png /tmp/resources
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          productbuild --distribution ${{ github.workspace }}/macos_distribution.xml --package-path /tmp --resources /tmp/resources /tmp/obs-streamelements-core-unsigned.pkg
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+      - name: Sign product installer
+        if: vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes'
+        run: |
+          productsign --timestamp --sign "${{ secrets.CODESIGN_DEVIDINST_IDENTITY }}" /tmp/obs-streamelements-core-unsigned.pkg /tmp/obs-streamelements-core.pkg
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+      - name: Mock product installer signature
+        if: vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION == 'true' || vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION == '1' || vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION == 'yes'
+        run: |
+          cp /tmp/obs-streamelements-core-unsigned.pkg /tmp/obs-streamelements-core.pkg
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+
+      - name: Notarize product installer
+        if: vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes'
+        run: |
+          xcrun notarytool submit --force /tmp/obs-streamelements-core.pkg  --keychain-profile "notarytool-password" --wait
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+      - name: Staple product installer
+        if: vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'true' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != '1' && vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION != 'yes'
+        run: |
+          xcrun stapler staple /tmp/obs-streamelements-core.pkg
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+      - name: Prepare product installer for upload
+        run: |
+          cp /tmp/obs-streamelements-core.pkg ${{ github.workspace }}/obs-streamelements-core.pkg
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: setup-windows
+          path: |
+            '${{ github.workspace }}/obs-streamelements-core.pkg'
+            '${{ github.workspace }}/obs-streamelements.manifest'
+            '${{ github.workspace }}/obs-streamelements.*.manifest'
+
+      - name: Upload to Google Storage
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        uses: 'google-github-actions/upload-cloud-storage@v3'
+        with:
+          parent: false
+          process_gcloudignore: false
+          path: |
+            '${{ github.workspace }}/obs-streamelements-core.pkg'
+            '${{ github.workspace }}/obs-streamelements.manifest'
+            '${{ github.workspace }}/obs-streamelements.*.manifest'
+          destination: 'se-obs-builds/obs-streamelements-installer/latest/macos'
+
+      - name: Commit changes to RELEASE_NOTES.history.macos.md
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && (vars.SKIP_WINDOWS_SIGNING != 'true' && vars.SKIP_WINDOWS_SIGNING != '1' && vars.SKIP_WINDOWS_SIGNING != 'yes')
+        shell: pwsh
+        run: |
+          echo "$STREAMELEMENTS_PLUGIN_VERSION_FULL" >> /tmp/history.md
+          cat /tmp/RELEASE_NOTES.md >> /tmp/history.md
+          echo "" >> /tmp/history.md
+          cat "${{ github.workspace }}/RELEASE_NOTES.history.macos.md" >> /tmp/history.md
+          rm "${{ github.workspace }}/RELEASE_NOTES.history.macos.md"
+          cp /tmp/history.md "${{ github.workspace }}/RELEASE_NOTES.history.macos.md"
+
+          git add "${{ github.workspace }}/RELEASE_NOTES.history.macos.md"
+          git commit -m "ADD RELEASE_NOTES.md to RELEASE_NOTES.history.macos.md"
+          git push
+
+
+  tag-master-commit:
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && false
+    needs: [version, windows, macos]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Tag master commit
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        uses: tvdias/github-tagger@v0.0.1
+        with:
+          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          tag: "${{ needs.version.outputs.version_string }}"

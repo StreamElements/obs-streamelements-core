@@ -1,0 +1,8 @@
+
+[obs-browser]
+version_number=${STREAMELEMENTS_PLUGIN_VERSION}
+package_url=https://cdn.streamelements.com/obs/dist/obs-streamelements/macos/signed/obs-streamelements-setup-${STREAMELEMENTS_PLUGIN_VERSION}.pkg
+package_arguments_g2=
+force_install=false
+allow_downgrade=true
+disable_auto_use_last_response=false

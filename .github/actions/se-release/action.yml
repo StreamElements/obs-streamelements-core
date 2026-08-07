@@ -1,0 +1,161 @@
+name: 'SE.Live GitHub Release'
+description: >-
+  Create, promote and roll back the GitHub Releases that mirror SE.Live channel state.
+  A build with release notes gets a [BETA] prerelease; reaching the `latest` channel on
+  either platform turns it into a full release.
+
+inputs:
+  mode:
+    description: 'prevtag | prerelease | assets | resolve | changelog | publish | rollback'
+    required: true
+  platforms:
+    description: 'Space-separated platforms to attach installers for (mode=assets).'
+    required: false
+    default: 'windows macos'
+  channel:
+    description: 'CDN channel the installers are read from (mode=assets).'
+    required: false
+    default: 'signed'
+  github-token:
+    description: 'Token used for all gh calls. Needs contents: write.'
+    required: true
+  tag:
+    description: 'Version tag in dotted form, e.g. 26.2.5.549.'
+    required: false
+    default: ''
+  version-encoded:
+    description: 'Raw 14-digit version_number, e.g. 20260205000549 (mode=prevtag).'
+    required: false
+    default: ''
+  manifest:
+    description: 'Path to the downloaded channel manifest (mode=resolve).'
+    required: false
+    default: ''
+  platform:
+    description: 'windows | macos (mode=resolve).'
+    required: false
+    default: ''
+  to:
+    description: 'Destination channel of the promotion (mode=resolve).'
+    required: false
+    default: ''
+  is-rollback:
+    description: 'Whether this dispatch is a rollback (mode=resolve).'
+    required: false
+    default: 'false'
+  output-dir:
+    description: 'Directory for recovered notes and the composed changelog.'
+    required: false
+    default: ''
+  notes-file:
+    description: 'Path to RELEASE_NOTES.md (mode=prerelease) or recovered notes (mode=publish).'
+    required: false
+    default: ''
+  release-notes-file:
+    description: >-
+      Path to obs-streamelements.release_notes.md fetched from the source channel
+      (mode=publish). Contains the blurb and notes composed at build time; when present it
+      is reused verbatim and no summary is regenerated.
+    required: false
+    default: ''
+  changelog-file:
+    description: 'Path the changelog is written to, then read from.'
+    required: false
+    default: ''
+  previous-tag:
+    description: 'Tag of the previous full release, used as the changelog base.'
+    required: false
+    default: ''
+  head-ref:
+    description: >-
+      Commit-ish the changelog walks to. Defaults to `tag`; build.yml passes the SHA
+      because its tag was created moments earlier and may not be in the clone yet.
+    required: false
+    default: ''
+  displaced-tag:
+    description: 'Release being displaced from `latest` (mode=rollback).'
+    required: false
+    default: ''
+  should-revert:
+    description: 'Whether the displaced release may be reverted (mode=rollback).'
+    required: false
+    default: 'false'
+  summary:
+    description: 'Claude-generated blurb. Empty when generation failed; the release is then composed without it.'
+    required: false
+    default: ''
+  summary-file:
+    description: >-
+      Path to a file holding the Claude-generated blurb. Preferred over `summary`:
+      the text never passes through GitHub expression interpolation. Missing or empty
+      means no blurb, and the release is composed without one.
+    required: false
+    default: ''
+  dry-run:
+    description: 'When true, every mutating gh call is logged instead of executed.'
+    required: false
+    default: 'true'
+
+outputs:
+  version_string:
+    description: 'Dotted tag decoded from the manifest.'
+    value: ${{ steps.run.outputs.version_string }}
+  version_encoded:
+    description: 'Raw 14-digit version_number read from the manifest.'
+    value: ${{ steps.run.outputs.version_encoded }}
+  previous_tag:
+    description: 'Tag of the previous full release, or empty.'
+    value: ${{ steps.run.outputs.previous_tag }}
+  previous_channel_tag:
+    description: >-
+      Tag the destination channel served before this promotion, read before the upload
+      overwrote it. Used as the Linear commit-scan base on `qa -> beta`. Empty when that
+      version is unknown, untagged, or not older than the one being promoted.
+    value: ${{ steps.run.outputs.previous_channel_tag }}
+  is_prerelease:
+    description: 'Whether the release for this tag is currently a prerelease.'
+    value: ${{ steps.run.outputs.is_prerelease }}
+  displaced_tag:
+    description: 'Release displaced from `latest` by a rollback, or empty.'
+    value: ${{ steps.run.outputs.displaced_tag }}
+  should_revert:
+    description: 'Whether the displaced release may be reverted to a prerelease.'
+    value: ${{ steps.run.outputs.should_revert }}
+  release_action:
+    description: 'created | refreshed | skipped (mode=prerelease).'
+    value: ${{ steps.run.outputs.release_action }}
+
+runs:
+  using: composite
+  steps:
+    # Invoked through `sh <path>` rather than executing the file directly: this repo is
+    # developed on Windows, where the executable bit is easily lost in the index, and a
+    # non-executable hook would fail here in a confusing way.
+    - id: run
+      shell: bash
+      env:
+        SE_ACTION_PATH: ${{ github.action_path }}
+        SE_MODE: ${{ inputs.mode }}
+        SE_TAG: ${{ inputs.tag }}
+        SE_VERSION_ENCODED: ${{ inputs.version-encoded }}
+        SE_MANIFEST: ${{ inputs.manifest }}
+        SE_PLATFORM: ${{ inputs.platform }}
+        SE_PLATFORMS: ${{ inputs.platforms }}
+        SE_CHANNEL: ${{ inputs.channel }}
+        SE_TO: ${{ inputs.to }}
+        SE_IS_ROLLBACK: ${{ inputs.is-rollback }}
+        SE_OUTPUT_DIR: ${{ inputs.output-dir }}
+        SE_NOTES_FILE: ${{ inputs.notes-file }}
+        SE_RELEASE_NOTES_FILE: ${{ inputs.release-notes-file }}
+        SE_CHANGELOG_FILE: ${{ inputs.changelog-file }}
+        SE_PREVIOUS_TAG: ${{ inputs.previous-tag }}
+        SE_HEAD_REF: ${{ inputs.head-ref }}
+        SE_DISPLACED_TAG: ${{ inputs.displaced-tag }}
+        SE_SHOULD_REVERT: ${{ inputs.should-revert }}
+        # Model-generated text. Passed as an environment variable and never interpolated
+        # into the script body, so it cannot reach the shell as code.
+        SE_SUMMARY: ${{ inputs.summary }}
+        SE_SUMMARY_FILE: ${{ inputs.summary-file }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: sh "$SE_ACTION_PATH/dispatch.sh"

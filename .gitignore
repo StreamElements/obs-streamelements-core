@@ -2,8 +2,8 @@
 node_modules/
 
 #binaries
-*.exe
-*.dll
+#*.exe
+#*.dll
 *.dylib
 *.so
 
@@ -19,6 +19,7 @@ node_modules/
 /debug32/
 /debug64/
 /builds/
+tests/build/
 *.o.d
 *.ninja
 .ninja*
@@ -63,7 +64,7 @@ tags
 *.tlog
 *.sdf
 *.opensdf
-*.xml
+#*.xml
 *.ipch
 *.css
 *.xslt
@@ -107,3 +108,25 @@ __pycache__/
 venv/
 github_activity_daily.csv
 github_activity_daily.png
+
+#claude code (settings.json, skills and hooks are shared; local overrides are not)
+.claude/settings.local.json
+
+#cmake/msbuild output from an in-tree build. leading slashes anchor these to the
+#repo root so vendored project files under deps/ and CI/*/nsis/ stay tracked.
+/ALL_BUILD.vcxproj*
+/INSTALL.vcxproj*
+/PACKAGE.vcxproj*
+/obs-streamelements-core.sln
+/obs-streamelements-core.vcxproj*
+/obs-streamelements-core-streamelements-restore-script-host.vcxproj*
+/cmake_install.cmake
+/qrc_streamelements.cpp
+/CMakeCache.txt
+/CMakeFiles/
+/RelWithDebInfo/
+/*.dir/
+/*_autogen/
+
+#scratch dir the release workflows write recovered notes and changelogs into
+/.release-input/
