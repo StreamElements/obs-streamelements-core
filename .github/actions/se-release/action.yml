@@ -6,8 +6,16 @@ description: >-
 
 inputs:
   mode:
-    description: 'prevtag | prerelease | resolve | changelog | publish | rollback'
+    description: 'prevtag | prerelease | assets | resolve | changelog | publish | rollback'
     required: true
+  platforms:
+    description: 'Space-separated platforms to attach installers for (mode=assets).'
+    required: false
+    default: 'windows macos'
+  channel:
+    description: 'CDN channel the installers are read from (mode=assets).'
+    required: false
+    default: 'signed'
   github-token:
     description: 'Token used for all gh calls. Needs contents: write.'
     required: true
@@ -126,6 +134,8 @@ runs:
         SE_VERSION_ENCODED: ${{ inputs.version-encoded }}
         SE_MANIFEST: ${{ inputs.manifest }}
         SE_PLATFORM: ${{ inputs.platform }}
+        SE_PLATFORMS: ${{ inputs.platforms }}
+        SE_CHANNEL: ${{ inputs.channel }}
         SE_TO: ${{ inputs.to }}
         SE_IS_ROLLBACK: ${{ inputs.is-rollback }}
         SE_OUTPUT_DIR: ${{ inputs.output-dir }}

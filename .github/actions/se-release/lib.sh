@@ -66,6 +66,26 @@ manifest_version_number() {
 	printf '%s\n' "$_n"
 }
 
+# Echo every distinct package_url* value from an INI manifest, one per line.
+#
+# Logs nothing: callers capture stdout, so a stray note() here would end up in the
+# returned list. Same parsing traps as manifest_version_number -- CRLF, and the HTML
+# release-notes blob that follows the marker. The ?ts= cache-buster is stripped so the
+# value can be used as a filename; it plays no part in fetching.
+#
+# Windows manifests repeat a URL across fields (package_url and package_url_32 are the
+# same installer), and on macOS all three point at the same .pkg, so the list is deduped
+# with the first occurrence winning.
+manifest_package_urls() {
+	_f="$1"
+	[ -r "$_f" ] || return 1
+	tr -d '\r' < "$_f" |
+		awk '/^\[\[\[BEGIN_RELEASE_NOTES\]\]\]/ { exit } { print }' |
+		sed -n 's#^[[:space:]]*package_url[a-z0-9_]*[[:space:]]*=[[:space:]]*\(https\{0,1\}://[^[:space:]]*\).*$#\1#p' |
+		sed 's/?.*$//' |
+		awk 'NF && !seen[$0]++'
+}
+
 # Fetch a channel manifest to a local path. Cache-busted: the promotion upload sets
 # cache-control max-age=60, so a read shortly after a promotion can otherwise be stale.
 # Returns non-zero (without dying) when the channel has no manifest.

@@ -455,6 +455,7 @@ jobs:
           export signedPackageFilename=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}
           export signedPackageFilename64=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}-64bit
           export signedPackageFilename32=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}
+          export manifestTs=${{ needs.version.outputs.version_encoded }}
 
           for manifest in obs-streamelements.manifest obs-streamelements.qa.manifest obs-streamelements.beta.manifest obs-streamelements.latest.manifest obs-streamelements.stable.manifest
           do
@@ -463,6 +464,14 @@ jobs:
             sed -i "s/\${PACKAGE_FILENAME}/$signedPackageFilename/" $manifest
             sed -i "s/\${PACKAGE_FILENAME_64_BIT}/$signedPackageFilename64/" $manifest
             sed -i "s/\${PACKAGE_FILENAME_32_BIT}/$signedPackageFilename32/" $manifest
+
+            # Cache-buster, appended once the URLs are final. It matters most on
+            # `stable`, whose installer filename carries no version -- without it a CDN
+            # or client cache can keep serving the previous build from an unchanged URL.
+            # Keyed to the build rather than the clock so the same build always yields
+            # the same URL and stays cacheable. Only package_url* lines are touched, and
+            # only those that don't already carry a query string.
+            sed -i -E "s#^(package_url[a-z0-9_]*=[^?[:space:]]+)(\r?)\$#\1?ts=$manifestTs\2#" $manifest
 
             cat $manifest
           done
@@ -558,6 +567,7 @@ jobs:
       - name: Prepare files
         run: |
           export signedPackageFilename=obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}
+          export manifestTs=${{ needs.version.outputs.version_encoded }}
 
           for manifest in obs-streamelements.manifest obs-streamelements.qa.manifest obs-streamelements.beta.manifest obs-streamelements.latest.manifest obs-streamelements.stable.manifest
           do
@@ -568,6 +578,9 @@ jobs:
             sed -i "s/\${PACKAGE_FILENAME}/$signedPackageFilename/" $manifest
             sed -i "s/\${PACKAGE_FILENAME_64_BIT}/$signedPackageFilename/" $manifest
             sed -i "s/\${PACKAGE_FILENAME_32_BIT}/$signedPackageFilename/" $manifest
+
+            # Cache-buster; see the matching comment in deploy-signed-windows.
+            sed -i -E "s#^(package_url[a-z0-9_]*=[^?[:space:]]+)(\r?)\$#\1?ts=$manifestTs\2#" $manifest
 
             cat $manifest
           done
@@ -754,6 +767,22 @@ jobs:
           # Absent or empty whenever generation failed; the body is then composed from
           # notes + changelog alone.
           summary-file: ${{ github.workspace }}/.release-input/summary.txt
+          dry-run: 'false'
+
+      # Attach the signed installers. Runs after the release exists and after
+      # deploy-signed-* has published them, reading the URLs from the manifest rather
+      # than rebuilding them from the version -- the manifest is the contract the
+      # in-app updater already follows, so the release ships exactly what it points at.
+      # Best-effort: a failure here leaves the release valid, just without binaries.
+      - name: Attach installers to the release
+        if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
+        continue-on-error: true
+        uses: ./.github/actions/se-release
+        with:
+          mode: assets
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ needs.version.outputs.version_string }}
+          version-encoded: ${{ needs.version.outputs.version_encoded }}
           dry-run: 'false'
 
       # Publish the blurb + notes next to the manifest in signed/, so promotion can reuse
