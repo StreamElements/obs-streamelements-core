@@ -121,12 +121,17 @@ endif(APPLE)
 # instructions -- CMake does it, so a plain configure works everywhere. The
 # extraction is guarded on the marker file so it only runs once per build tree.
 if (ENABLE_SENTRY)
-	# Baked in at build time like the backend choice itself. A DSN is not a
-	# secret -- it ships inside every client -- but it is environment-specific,
-	# so CI supplies it. Left empty the handler skips sentry_init() entirely and
-	# behaves as if the backend were 'none', rather than initializing against a
-	# bad DSN and failing at runtime.
-	set(STREAMELEMENTS_SENTRY_DSN ""
+	# Baked in rather than supplied by CI from a repository secret. A DSN is not
+	# a credential: it authorises submitting events and nothing else -- it cannot
+	# read them -- and it ships inside every copy of every Sentry client by
+	# design. Treating it as a secret would buy nothing and would mean a build
+	# without the secret silently reports nowhere.
+	#
+	# Overridable so a build can be pointed at a different Sentry project. Set it
+	# empty and the handler skips sentry_init() entirely, behaving as though the
+	# backend were 'none' rather than initialising against a bad DSN.
+	set(STREAMELEMENTS_SENTRY_DSN
+		"https://7e8322d21ed36c33376671007a2b99f7@o127985.ingest.us.sentry.io/4511887226830848"
 		CACHE STRING "Sentry DSN compiled into the plugin")
 	add_compile_definitions(SE_SENTRY_DSN="${STREAMELEMENTS_SENTRY_DSN}")
 
