@@ -351,8 +351,12 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 {
 	m_mainWindow = obs_main_window;
 
-	// Initialize on the main thread
-	m_crashHandler = new StreamElementsCrashHandler();
+	// Initialize on the main thread.
+	//
+	// Which backend this is -- BugSplat, Sentry, or none at all -- is decided
+	// at build time by the STREAMELEMENTS_CRASH_HANDLER CMake variable. Create()
+	// returns nullptr when crash reporting is compiled out.
+	m_crashHandler = StreamElementsCrashHandler::Create();
 
 	/*
 	struct local_context {
@@ -653,15 +657,14 @@ void StreamElementsGlobalStateManager::Shutdown()
 
 	streamelements_updater_shutdown();
 
-#ifdef WIN32
-	// Shutdown on the main thread
+	// Shutdown on the main thread. No platform guard: StopAsyncHangDetection()
+	// is a no-op on backends that have no hang detection.
 	if (m_crashHandler) {
 		m_crashHandler->StopAsyncHangDetection();
 
 		//delete m_crashHandler; // TODO: Shutting down the crash handler might be contributing to us missing some exceptions during shutdown
 		//m_crashHandler = nullptr;
 	}
-#endif
 	
 	//mainWindow()->removeDockWidget(m_themeChangeListener);
 	if (m_themeChangeListener) {

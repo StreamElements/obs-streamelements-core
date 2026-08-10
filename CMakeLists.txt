@@ -24,8 +24,29 @@ else()
   find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
 endif()
 
-if (WIN32)
+# Which crash-reporting backend is compiled in. CI drives this; it decides in
+# one place which implementation compiles, which SDK is linked, and which
+# SE_CRASH_HANDLER_* definition the factory in StreamElementsCrashHandler.cpp
+# sees -- so those three can never disagree. Exactly one backend is ever linked,
+# which is what keeps two of them from contending for the process-wide
+# exception filter.
+set(STREAMELEMENTS_CRASH_HANDLER "bugsplat"
+	CACHE STRING "Crash-reporting backend: bugsplat | none")
+set_property(CACHE STREAMELEMENTS_CRASH_HANDLER PROPERTY STRINGS bugsplat none)
+
+if (STREAMELEMENTS_CRASH_HANDLER STREQUAL "bugsplat")
 	set(ENABLE_BUGSPLAT TRUE)
+	add_compile_definitions(SE_CRASH_HANDLER_BUGSPLAT)
+elseif (STREAMELEMENTS_CRASH_HANDLER STREQUAL "none")
+	set(ENABLE_BUGSPLAT FALSE)
+else()
+	message(FATAL_ERROR
+		"STREAMELEMENTS_CRASH_HANDLER must be 'bugsplat' or 'none', got '${STREAMELEMENTS_CRASH_HANDLER}'")
+endif()
+
+message(STATUS "obs-streamelements-core: crash handler backend: ${STREAMELEMENTS_CRASH_HANDLER}")
+
+if (WIN32)
 	set(ENABLE_ANGELSCRIPT TRUE)
 
 	add_compile_options(
@@ -39,7 +60,6 @@ if (WIN32)
 		/wd4018
 	)
 else()
-	set(ENABLE_BUGSPLAT FALSE)
 	set(ENABLE_ANGELSCRIPT FALSE)
 
 	add_compile_options(
@@ -86,7 +106,10 @@ endif(APPLE)
 
 # ----------------------------------------------------------------------------
 
-if (ENABLE_BUGSPLAT)
+# WIN32 is part of the condition now that ENABLE_BUGSPLAT tracks the selected
+# backend rather than the platform: this block finds the Windows .lib/.dll SDK,
+# while macOS links the xcframework further down.
+if (WIN32 AND ENABLE_BUGSPLAT)
 	set(BUGSPLAT_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/BugSplat/BugSplat")
 	set(BUGSPLAT_INCLUDE_DIR "${BUGSPLAT_ROOT_DIR}/inc")
 
@@ -261,15 +284,29 @@ set(obs-streamelements-core_SOURCES
 if (APPLE)
     list(APPEND obs-streamelements-core_SOURCES
         streamelements/StreamElementsUtils.mm
-        streamelements/StreamElementsCrashHandler.mm
 		streamelements/mach_excServer.c
 		streamelements/mach_excUser.c
     )
-else()
-    list(APPEND obs-streamelements-core_SOURCES
-        streamelements/StreamElementsCrashHandler.cpp
-    )
 endif(APPLE)
+
+# The factory is platform-agnostic and always compiles; the selected backend
+# contributes its own platform-specific implementation. A 'none' build gets the
+# factory alone, which returns nullptr.
+list(APPEND obs-streamelements-core_SOURCES
+	streamelements/StreamElementsCrashHandler.cpp
+)
+
+if (ENABLE_BUGSPLAT)
+	if (APPLE)
+		list(APPEND obs-streamelements-core_SOURCES
+			streamelements/StreamElementsBugSplatCrashHandler.mm
+		)
+	else()
+		list(APPEND obs-streamelements-core_SOURCES
+			streamelements/StreamElementsBugSplatCrashHandler.cpp
+		)
+	endif(APPLE)
+endif()
 
 set(obs-streamelements-core_HEADERS
 	deps/json11/json11.hpp
@@ -312,6 +349,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/StreamElementsNetworkDialog.hpp
 	streamelements/StreamElementsAnalyticsEventsManager.hpp
 	streamelements/StreamElementsCrashHandler.hpp
+	streamelements/StreamElementsBugSplatCrashHandler.hpp
 	streamelements/StreamElementsMessageBus.hpp
 	streamelements/StreamElementsControllerServer.hpp
 	streamelements/StreamElementsObsSceneManager.hpp
@@ -419,38 +457,47 @@ if (APPLE)
 	list(APPEND obs-streamelements-core_LIBRARIES
 			${COREFOUNDATION})
 
-	message("--------------------------------------------------")
-	message("Looking for BugSplat framework here: ${CMAKE_CURRENT_SOURCE_DIR}/deps")
-
+	# Hoisted out of the BugSplat branch below: the bundle needs its Info.plist
+	# and an rpath for embedded frameworks whichever crash backend is selected,
+	# including none at all.
 	set (MACOS_INFO_PLIST_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/MacOSXBundleInfo.plist.in")
 
-	find_library(BUGSPLATMAC_FRAMEWORK
-		NAMES BugSplat
-		PATHS "${CMAKE_CURRENT_SOURCE_DIR}/deps"
-		PATH_SUFFIXES framework xcframework
-		NO_DEFAULT_PATH
-		REQUIRED
-	)
-
-	message("BugSplat: ${BUGSPLATMAC_FRAMEWORK}")
 	message("MACOS_INFO_PLIST_TEMPLATE: ${MACOS_INFO_PLIST_TEMPLATE}")
 
-	if (${BUGSPLATMAC_FRAMEWORK} STREQUAL BUGSPLAT_FRAMEWORK-NOTFOUND)
-		message(FATAL_ERROR "BugSplat framework not found")
-	else()
-		message("BugSplat framework found: ${BUGSPLATMAC_FRAMEWORK}")
+	set_target_properties(obs-streamelements-core PROPERTIES
+		XCODE_ATTRIBUTE_LD_RUNPATH_SEARCH_PATHS "@loader_path/../Frameworks"
+		MACOSX_BUNDLE_INFO_PLIST "${MACOS_INFO_PLIST_TEMPLATE}"
+	)
 
-		list(APPEND obs-streamelements-code_LIBRARIES "$<LINK_LIBRARY:FRAMEWORK,${BUGSPLATMAC_FRAMEWORK}>")
+	if (ENABLE_BUGSPLAT)
+		message("--------------------------------------------------")
+		message("Looking for BugSplat framework here: ${CMAKE_CURRENT_SOURCE_DIR}/deps")
 
-		set_source_files_properties(streamelements/StreamElementsCrashHandler.mm PROPERTIES COMPILE_FLAGS "-fmodules -fcxx-modules")
-		
-		set_target_properties(obs-streamelements-core PROPERTIES
-			XCODE_EMBED_FRAMEWORKS "${BUGSPLATMAC_FRAMEWORK}"
-			XCODE_ATTRIBUTE_LD_RUNPATH_SEARCH_PATHS "@loader_path/../Frameworks"
-			MACOSX_BUNDLE_INFO_PLIST "${MACOS_INFO_PLIST_TEMPLATE}"
+		find_library(BUGSPLATMAC_FRAMEWORK
+			NAMES BugSplat
+			PATHS "${CMAKE_CURRENT_SOURCE_DIR}/deps"
+			PATH_SUFFIXES framework xcframework
+			NO_DEFAULT_PATH
+			REQUIRED
 		)
+
+		message("BugSplat: ${BUGSPLATMAC_FRAMEWORK}")
+
+		if (${BUGSPLATMAC_FRAMEWORK} STREQUAL BUGSPLAT_FRAMEWORK-NOTFOUND)
+			message(FATAL_ERROR "BugSplat framework not found")
+		else()
+			message("BugSplat framework found: ${BUGSPLATMAC_FRAMEWORK}")
+
+			list(APPEND obs-streamelements-code_LIBRARIES "$<LINK_LIBRARY:FRAMEWORK,${BUGSPLATMAC_FRAMEWORK}>")
+
+			set_source_files_properties(streamelements/StreamElementsBugSplatCrashHandler.mm PROPERTIES COMPILE_FLAGS "-fmodules -fcxx-modules")
+
+			set_target_properties(obs-streamelements-core PROPERTIES
+				XCODE_EMBED_FRAMEWORKS "${BUGSPLATMAC_FRAMEWORK}"
+			)
+		endif()
+		message("--------------------------------------------------")
 	endif()
-	message("--------------------------------------------------")
 endif()
 
 if (${QT_VERSION} EQUAL "6")

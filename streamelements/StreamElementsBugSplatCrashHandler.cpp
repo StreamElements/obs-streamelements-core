@@ -29,7 +29,7 @@
  * 7. Next the program is terminated
  */
 
-#include "StreamElementsCrashHandler.hpp"
+#include "StreamElementsBugSplatCrashHandler.hpp"
 
 #include "cef-headers.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
@@ -1290,7 +1290,7 @@ static LONG CALLBACK CustomExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
 
 /* ================================================================= */
 
-StreamElementsCrashHandler::StreamElementsCrashHandler()
+StreamElementsBugSplatCrashHandler::StreamElementsBugSplatCrashHandler()
 {
 	if (IsDebuggerPresent()) {
 		return;
@@ -1351,14 +1351,14 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
 #endif
 }
 
-void StreamElementsCrashHandler::StopAsyncHangDetection()
+void StreamElementsBugSplatCrashHandler::StopAsyncHangDetection()
 {
 #if HANG_DETECTION_ENABLED
 	StopHangDetection();
 #endif
 }
 
-StreamElementsCrashHandler::~StreamElementsCrashHandler()
+StreamElementsBugSplatCrashHandler::~StreamElementsBugSplatCrashHandler()
 {
 	StopAsyncHangDetection();
 
