@@ -41,7 +41,7 @@
  * file and implemented my handlers. I then built my app and was good to go.
  */
 
-#include "StreamElementsCrashHandler.hpp"
+#include "StreamElementsBugSplatCrashHandler.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
 
 //#include <stdio.h>
@@ -282,7 +282,7 @@ extern "C" {
 
 @end
 
-StreamElementsCrashHandler::StreamElementsCrashHandler()
+StreamElementsBugSplatCrashHandler::StreamElementsBugSplatCrashHandler()
 {
     static std::mutex mutex;
 
@@ -304,7 +304,14 @@ StreamElementsCrashHandler::StreamElementsCrashHandler()
     }
 }
 
-StreamElementsCrashHandler::~StreamElementsCrashHandler()
+void StreamElementsBugSplatCrashHandler::StopAsyncHangDetection()
+{
+    // There is no hang detection on macOS. Previously the declaration existed
+    // without a definition and StreamElementsGlobalStateManager guarded the
+    // call with #ifdef WIN32; defining it here lets the guard go away.
+}
+
+StreamElementsBugSplatCrashHandler::~StreamElementsBugSplatCrashHandler()
 {
     // We never destroy the exception handler
     initialized = false;
