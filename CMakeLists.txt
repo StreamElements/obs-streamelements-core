@@ -31,17 +31,23 @@ endif()
 # which is what keeps two of them from contending for the process-wide
 # exception filter.
 set(STREAMELEMENTS_CRASH_HANDLER "bugsplat"
-	CACHE STRING "Crash-reporting backend: bugsplat | none")
-set_property(CACHE STREAMELEMENTS_CRASH_HANDLER PROPERTY STRINGS bugsplat none)
+	CACHE STRING "Crash-reporting backend: bugsplat | sentry | none")
+set_property(CACHE STREAMELEMENTS_CRASH_HANDLER PROPERTY STRINGS bugsplat sentry none)
+
+set(ENABLE_BUGSPLAT FALSE)
+set(ENABLE_SENTRY FALSE)
 
 if (STREAMELEMENTS_CRASH_HANDLER STREQUAL "bugsplat")
 	set(ENABLE_BUGSPLAT TRUE)
 	add_compile_definitions(SE_CRASH_HANDLER_BUGSPLAT)
+elseif (STREAMELEMENTS_CRASH_HANDLER STREQUAL "sentry")
+	set(ENABLE_SENTRY TRUE)
+	add_compile_definitions(SE_CRASH_HANDLER_SENTRY)
 elseif (STREAMELEMENTS_CRASH_HANDLER STREQUAL "none")
-	set(ENABLE_BUGSPLAT FALSE)
+	# Nothing to enable -- the factory returns nullptr.
 else()
 	message(FATAL_ERROR
-		"STREAMELEMENTS_CRASH_HANDLER must be 'bugsplat' or 'none', got '${STREAMELEMENTS_CRASH_HANDLER}'")
+		"STREAMELEMENTS_CRASH_HANDLER must be 'bugsplat', 'sentry' or 'none', got '${STREAMELEMENTS_CRASH_HANDLER}'")
 endif()
 
 message(STATUS "obs-streamelements-core: crash handler backend: ${STREAMELEMENTS_CRASH_HANDLER}")
@@ -106,6 +112,99 @@ endif(APPLE)
 
 # ----------------------------------------------------------------------------
 
+# sentry-native is vendored as the upstream release archive rather than an
+# unpacked tree: 1 file instead of 3780, and upgrading is a matter of dropping in
+# a new zip. It is extracted into the build directory, not the source tree, so
+# nothing generated ever lands in git.
+#
+# Unlike deps/BugSplat.xcframework.zip this needs no CI unzip step and no README
+# instructions -- CMake does it, so a plain configure works everywhere. The
+# extraction is guarded on the marker file so it only runs once per build tree.
+if (ENABLE_SENTRY)
+	# Baked in at build time like the backend choice itself. A DSN is not a
+	# secret -- it ships inside every client -- but it is environment-specific,
+	# so CI supplies it. Left empty the handler skips sentry_init() entirely and
+	# behaves as if the backend were 'none', rather than initializing against a
+	# bad DSN and failing at runtime.
+	set(STREAMELEMENTS_SENTRY_DSN ""
+		CACHE STRING "Sentry DSN compiled into the plugin")
+	add_compile_definitions(SE_SENTRY_DSN="${STREAMELEMENTS_SENTRY_DSN}")
+
+	if (STREAMELEMENTS_SENTRY_DSN STREQUAL "")
+		message(WARNING
+			"obs-streamelements-core: STREAMELEMENTS_CRASH_HANDLER=sentry but STREAMELEMENTS_SENTRY_DSN is empty; crash reporting will be inert")
+	endif()
+
+	set(SENTRY_ARCHIVE "${CMAKE_CURRENT_SOURCE_DIR}/deps/sentry-native.zip")
+	set(SENTRY_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/sentry-native")
+
+	if (NOT EXISTS "${SENTRY_SOURCE_DIR}/CMakeLists.txt")
+		message(STATUS "obs-streamelements-core: extracting ${SENTRY_ARCHIVE}")
+		file(MAKE_DIRECTORY "${SENTRY_SOURCE_DIR}")
+		file(ARCHIVE_EXTRACT
+			INPUT "${SENTRY_ARCHIVE}"
+			DESTINATION "${SENTRY_SOURCE_DIR}")
+	endif()
+
+	# The `native` backend, not crashpad: it hands control back to WER rather than
+	# swallowing the host's crash handling, its hooks work on macOS, and it is the
+	# only backend offering sentry_options_set_minidump_flags. See CORE-554.
+	set(SENTRY_BACKEND "native" CACHE STRING "" FORCE)
+	set(SENTRY_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+	set(SENTRY_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+	set(SENTRY_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+	set(SENTRY_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+
+	if (MSVC)
+		# Explicitly OFF, and not merely left at its default.
+		#
+		# The string(REPLACE "/MD" "/MT" ...) block further down this file looks
+		# like it makes this project static-runtime, which would call for
+		# SENTRY_BUILD_RUNTIMESTATIC=ON. It does not: obs-studio sets the runtime
+		# through the MSVC_RUNTIME_LIBRARY target property, so CMAKE_CXX_FLAGS
+		# never literally contains /MD and there is nothing for that replace to
+		# match. The generated obs-streamelements-core.vcxproj says
+		# MultiThreadedDLL, same as libobs.
+		#
+		# Turning this ON builds sentry /MT against a /MD host and the link fails
+		# with LNK4098 (defaultlib 'LIBCMT' conflicts), which /WX promotes to
+		# LNK1218. Match the host instead.
+		set(SENTRY_BUILD_RUNTIMESTATIC OFF CACHE BOOL "" FORCE)
+	endif()
+
+	if (WIN32)
+		# Syncs tags and attachments into Windows Error Reporting, so fast-fail
+		# crashes -- which bypass SEH, and therefore bypass our exception filter
+		# entirely -- still carry what was armed on the scope.
+		set(SENTRY_INTEGRATION_WER ON CACHE BOOL "" FORCE)
+	endif()
+
+	add_subdirectory("${SENTRY_SOURCE_DIR}" sentry_build EXCLUDE_FROM_ALL)
+
+	# obs-studio's dependency bundler walks the whole link graph to decide which
+	# DLLs to copy, and _handle_generator_expression_dependency
+	# (cmake/common/helpers_common.cmake:146) rejects $<LINK_ONLY:...> outright:
+	#
+	#   $<LINK_ONLY:Threads::Threads> is an unsupported generator expression for
+	#   linked libraries.
+	#
+	# CMake generates that wrapper itself for a static library's PRIVATE
+	# dependencies, so sentry is not doing anything unusual -- obs's parser
+	# simply does not handle the form. Unwrapping it keeps Threads::Threads
+	# linked while leaving the bundler something it can read.
+	foreach(sentry_target sentry sentry_crashpad)
+		if (TARGET ${sentry_target})
+			get_target_property(sentry_iface_libs ${sentry_target} INTERFACE_LINK_LIBRARIES)
+			if (sentry_iface_libs)
+				string(REGEX REPLACE "\\$<LINK_ONLY:([^>]+)>" "\\1"
+					sentry_iface_libs "${sentry_iface_libs}")
+				set_target_properties(${sentry_target} PROPERTIES
+					INTERFACE_LINK_LIBRARIES "${sentry_iface_libs}")
+			endif()
+		endif()
+	endforeach()
+endif()
+
 # WIN32 is part of the condition now that ENABLE_BUGSPLAT tracks the selected
 # backend rather than the platform: this block finds the Windows .lib/.dll SDK,
 # while macOS links the xcframework further down.
@@ -146,22 +245,28 @@ if (WIN32 AND ENABLE_BUGSPLAT)
 	set(BUGSPLAT_LIBRARIES
 			optimized ${BUGSPLAT_LIBRARY})
 
-	set(obs-streamelements-core_LIBRARIES
-		libobs
-		obs-frontend-api
-		#Qt::Core
-		Qt::Widgets
-		w32-pthreads
-		${BUGSPLAT_LIBRARIES}
-	)
-else()
-	set(obs-streamelements-core_LIBRARIES
-		libobs
-		obs-frontend-api
-		#Qt::Core
-		Qt::Widgets
-		#w32-pthreads
-		)
+endif()
+
+# The base link set is a platform question; the crash backend only appends to it.
+# These used to be tangled: the BugSplat branch was also what added w32-pthreads
+# on Windows, so selecting any other backend silently dropped it from the link.
+set(obs-streamelements-core_LIBRARIES
+	libobs
+	obs-frontend-api
+	#Qt::Core
+	Qt::Widgets
+)
+
+if (WIN32)
+	list(APPEND obs-streamelements-core_LIBRARIES w32-pthreads)
+endif()
+
+if (WIN32 AND ENABLE_BUGSPLAT)
+	list(APPEND obs-streamelements-core_LIBRARIES ${BUGSPLAT_LIBRARIES})
+endif()
+
+if (ENABLE_SENTRY)
+	list(APPEND obs-streamelements-core_LIBRARIES sentry::sentry)
 endif()
 
 set(CMAKE_AUTOMOC TRUE)
@@ -308,6 +413,12 @@ if (ENABLE_BUGSPLAT)
 	endif(APPLE)
 endif()
 
+if (ENABLE_SENTRY)
+	list(APPEND obs-streamelements-core_SOURCES
+		streamelements/StreamElementsSentryCrashHandler.cpp
+	)
+endif()
+
 set(obs-streamelements-core_HEADERS
 	deps/json11/json11.hpp
 	deps/base64/base64.hpp
@@ -350,6 +461,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/StreamElementsAnalyticsEventsManager.hpp
 	streamelements/StreamElementsCrashHandler.hpp
 	streamelements/StreamElementsBugSplatCrashHandler.hpp
+	streamelements/StreamElementsSentryCrashHandler.hpp
 	streamelements/StreamElementsMessageBus.hpp
 	streamelements/StreamElementsControllerServer.hpp
 	streamelements/StreamElementsObsSceneManager.hpp
