@@ -24,7 +24,9 @@ on:
   pull_request:
     # `edited` matters: it is what lets an author fix a failing check by editing the
     # title or body, rather than having to push a commit.
-    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+    #
+    # `closed` drives the keep-open job below, which is the only one that runs on it.
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled, closed]
 
 permissions:
   contents: read
@@ -32,6 +34,7 @@ permissions:
 jobs:
   check:
     name: Linear issue key present
+    if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -76,7 +79,16 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           if [ -n "$key" ]; then
-            echo "::notice::$key found; Linear will link this PR to it"
+            # Surfaced before merge, not only after, so the author can see which
+            # behaviour their PR has bought.
+            case "$TITLE$BODY" in
+            *'#partial'*)
+              echo "::notice::$key found, and this PR is marked #partial: $key will be restored to In Progress if Linear closes it on merge"
+              ;;
+            *)
+              echo "::notice::$key found; Linear will link this PR to it, and will close $key when this merges. Add #partial to the title or body if this is only part of the work."
+              ;;
+            esac
             exit 0
           fi
 
@@ -88,8 +100,107 @@ jobs:
           echo "::error::No ${TEAM_KEY}-nnn key in the branch name, PR title, or PR body. Linear links a PR to an issue from one of those three, and master is squash-merged -- once this lands, the branch name is gone and the work cannot be traced to an issue. Fix it by renaming the branch to carry the key (jacob/core-266-short-description), or by adding a line like 'Fixes ${TEAM_KEY}-266' to the PR body. Label the PR 'no-linear-issue' if it genuinely has no issue behind it."
           exit 1
 
+  # Linear's GitHub integration moves an issue to a completed state when a linked
+  # PR merges. That is right for the common case and wrong for work split across
+  # several PRs under one issue -- CORE-554 was closed by its first PR of three.
+  #
+  # Nothing here can stop Linear's automation: it fires on the same merge event we
+  # do. What this does is put the issue back, which is why it waits first rather
+  # than racing. Marking a PR #partial is a statement that merging it does not
+  # finish the issue.
+  keep-open:
+    name: Keep a #partial PR's issue open
+    if: >-
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true &&
+      contains(format('{0} {1}', github.event.pull_request.title, github.event.pull_request.body), '#partial')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Restore the issue to In Progress
+        env:
+          # LINEAR_ACCESS_KEY is deliberately not used: it is a release-pipeline
+          # key and cannot write issues.
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+          TEAM_KEY: ${{ vars.LINEAR_TEAM_KEY || 'CORE' }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -eu
+
+          if [ -z "${LINEAR_API_KEY:-}" ]; then
+            echo "::warning::LINEAR_API_KEY is not set, so a #partial PR cannot reopen its issue. Add a Linear API key to repository secrets."
+            exit 0
+          fi
+
+          key=$(printf '%s\n%s\n%s\n' "$BRANCH" "$TITLE" "$BODY" |
+                grep -oiE "\\b${TEAM_KEY}-[0-9]+\\b" | head -n 1 | tr '[:lower:]' '[:upper:]')
+
+          if [ -z "$key" ]; then
+            echo "::warning::PR #$PR is marked #partial but carries no ${TEAM_KEY} key; nothing to restore"
+            exit 0
+          fi
+
+          # Linear's automation reacts to the same merge webhook. Setting the state
+          # first would simply be overwritten, so wait for it to land.
+          sleep 30
+
+          api() {
+            jq -n --arg q "$1" --argjson v "$2" '{query:$q, variables:$v}' > /tmp/q.json
+            curl -sS --fail-with-body -X POST https://api.linear.app/graphql \
+              -H 'Content-Type: application/json' \
+              -H "Authorization: $LINEAR_API_KEY" \
+              -d @/tmp/q.json
+          }
+
+          read -r -d '' Q <<'GQL' || true
+          query($id:String!){ issue(id:$id){ id identifier state{ name type }
+            team{ states(filter:{type:{eq:"started"}}){ nodes{ id name } } } } }
+          GQL
+
+          api "$Q" "$(jq -n --arg id "$key" '{id:$id}')" > /tmp/issue.json
+
+          if jq -e '.errors' /tmp/issue.json > /dev/null 2>&1; then
+            echo "::error::Linear API error looking up $key:"; jq -c '.errors' /tmp/issue.json; exit 1
+          fi
+
+          state_type=$(jq -r '.data.issue.state.type // empty' /tmp/issue.json)
+          issue_id=$(jq -r '.data.issue.id // empty' /tmp/issue.json)
+
+          if [ -z "$issue_id" ]; then
+            echo "::error::$key was not found in Linear"; exit 1
+          fi
+
+          # Only undo an automated close. If a human deliberately completed the
+          # issue, or it was never closed, leave it alone.
+          if [ "$state_type" != "completed" ]; then
+            echo "::notice::$key is in a '$state_type' state, not completed; leaving it as it is"
+            exit 0
+          fi
+
+          target=$(jq -r '[.data.issue.team.states.nodes[]] | (map(select(.name=="In Progress")) + .) | .[0].id // empty' /tmp/issue.json)
+
+          if [ -z "$target" ]; then
+            echo "::error::no started-type workflow state found on $key's team"; exit 1
+          fi
+
+          read -r -d '' M <<'GQL' || true
+          mutation($id:String!,$stateId:String!){ issueUpdate(id:$id, input:{stateId:$stateId}){ success } }
+          GQL
+
+          api "$M" "$(jq -n --arg id "$issue_id" --arg s "$target" '{id:$id,stateId:$s}')" > /tmp/upd.json
+
+          if [ "$(jq -r '.data.issueUpdate.success // false' /tmp/upd.json)" != "true" ]; then
+            echo "::error::failed to restore $key:"; jq -c '.' /tmp/upd.json; exit 1
+          fi
+
+          echo "::notice::PR #$PR was marked #partial, so $key was restored to In Progress after Linear closed it on merge"
+
   suggest:
     name: Suggest a Linear issue key
+    if: github.event.action != 'closed'
     needs: check
     # always(), because `check` fails by design when there is no key -- which is exactly
     # when this job is useful. Fork PRs are excluded: they get no secrets and only a
