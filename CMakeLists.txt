@@ -406,6 +406,15 @@ list(APPEND obs-streamelements-core_SOURCES
 	streamelements/StreamElementsCrashHandler.cpp
 )
 
+# Backend-agnostic crash-time collection, shared by whichever backend is
+# selected. Windows only for now: the macOS integrations gather nothing beyond a
+# single attribute set at startup, so there is no macOS implementation yet.
+if (WIN32 AND (ENABLE_BUGSPLAT OR ENABLE_SENTRY))
+	list(APPEND obs-streamelements-core_SOURCES
+		streamelements/StreamElementsCrashContext.cpp
+	)
+endif()
+
 if (ENABLE_BUGSPLAT)
 	if (APPLE)
 		list(APPEND obs-streamelements-core_SOURCES
@@ -465,6 +474,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/StreamElementsNetworkDialog.hpp
 	streamelements/StreamElementsAnalyticsEventsManager.hpp
 	streamelements/StreamElementsCrashHandler.hpp
+	streamelements/StreamElementsCrashContext.hpp
 	streamelements/StreamElementsBugSplatCrashHandler.hpp
 	streamelements/StreamElementsSentryCrashHandler.hpp
 	streamelements/StreamElementsMessageBus.hpp

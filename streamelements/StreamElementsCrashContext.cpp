@@ -1,0 +1,864 @@
+#include "StreamElementsCrashContext.hpp"
+
+#include "cef-headers.hpp"
+#include "StreamElementsGlobalStateManager.hpp"
+#include "StreamElementsUtils.hpp"
+#include "deps/StackWalker/StackWalker.h"
+#include "deps/zip/zip.h"
+
+#include <util/base.h>
+#include <util/platform.h>
+#include <obs.h>
+
+#include <time.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <io.h>
+#include <string>
+#include <vector>
+#include <map>
+#include <filesystem>
+#include <algorithm>
+
+#include <windows.h>
+#include <winuser.h>
+
+#include <QString>
+
+/* ================================================================= */
+
+//
+// Walks the crashing thread's stack, and decides on the way whether the crash
+// is ours to report.
+//
+// The module list starts as our own two modules and is replaced wholesale by
+// the remote settings.json when that fetch succeeds -- which is why the fetch
+// happens in the constructor, at plugin startup, and not on the crash path.
+//
+static class MyStackWalker : public StackWalker {
+public:
+	MyStackWalker(int options) : StackWalker(options)
+	{
+		output.reserve(1024 * 16);
+
+		//////////////////////////////////////////////////////
+		// Extract modules of interest from external JSON
+		//////////////////////////////////////////////////////
+		//
+		// JSON format:
+		//
+		//     {
+		//       "obs.live": {
+		//         "features": {
+		//           "diag": {
+		//             "modules" : ["obs-browser"]
+		//           }
+		//         }
+		//       }
+		//     }
+		//
+		//////////////////////////////////////////////////////
+
+		modulesOfInterest.push_back("obs-streamelements-core");
+		modulesOfInterest.push_back("obs-streamelements");
+
+		auto httpResponseReceivedCallback = [&](char *data,
+							void *userdata,
+							char *error_msg,
+							int http_code) {
+			if (!data)
+				return;
+
+			std::string json_string = data;
+
+			CefRefPtr<CefValue> root =
+				CefParseJSON(json_string.c_str(),
+					     JSON_PARSER_ALLOW_TRAILING_COMMAS);
+
+			if (!root.get() || root->GetType() != VTYPE_DICTIONARY)
+				return;
+
+			CefRefPtr<CefDictionaryValue> rootDict =
+				root->GetDictionary();
+
+			if (!rootDict->HasKey("obs.live") ||
+			    rootDict->GetType("obs.live") != VTYPE_DICTIONARY)
+				return;
+
+			CefRefPtr<CefDictionaryValue> obsliveDict =
+				rootDict->GetDictionary("obs.live");
+
+			if (!obsliveDict->HasKey("features") ||
+			    obsliveDict->GetType("features") !=
+				    VTYPE_DICTIONARY)
+				return;
+
+			CefRefPtr<CefDictionaryValue> featDict =
+				obsliveDict->GetDictionary("features");
+
+			if (!featDict->HasKey("diag") ||
+			    featDict->GetType("diag") != VTYPE_DICTIONARY)
+				return;
+
+			CefRefPtr<CefDictionaryValue> diagDict =
+				featDict->GetDictionary("diag");
+
+			if (!diagDict->HasKey("modules") ||
+			    diagDict->GetType("modules") != VTYPE_LIST)
+				return;
+
+			CefRefPtr<CefListValue> modulesList =
+				diagDict->GetList("modules");
+
+			modulesOfInterest.clear();
+
+			for (int index = 0; index < modulesList->GetSize();
+			     ++index) {
+				if (modulesList->GetType(index) != VTYPE_STRING)
+					continue;
+
+				std::string module =
+					modulesList->GetString(index).ToString();
+
+				if (IsTraceLogLevel()) {
+					blog(LOG_INFO,
+					     "StreamElementsCrashContext: added module of interest: %s",
+					     module.c_str());
+				}
+
+				modulesOfInterest.push_back(module);
+			}
+		};
+
+		time_t tv;
+		time(&tv);
+		time_t gmtv = mktime(gmtime(&tv));
+
+		char url[128];
+
+		sprintf(url,
+			"https://obslive-external-assets.streamelements.com/settings.json?_nc=%lu",
+			(unsigned long)(gmtv - (gmtv % (time_t)60)));
+
+		http_client_headers_t request_headers;
+
+		HttpGetString(url, request_headers,
+			      httpResponseReceivedCallback, nullptr);
+	}
+
+protected:
+	virtual void OnCallstackEntry(CallstackEntryType eType,
+				      CallstackEntry &entry) override
+	{
+		StackWalker::OnCallstackEntry(eType, entry);
+
+		if (!entry.offset)
+			return;
+
+#define LOCAL_SPACE "\t"
+		output += entry.loadedImageName;
+		output += LOCAL_SPACE;
+		output += entry.undFullName;
+		output += LOCAL_SPACE;
+		output += entry.lineFileName;
+		output += " (";
+		char numbuf[32];
+		output += ltoa(entry.lineNumber, numbuf, 10);
+		output += ")";
+		output += "\n";
+#undef LOCAL_SPACE
+
+		if (!hasMatchModuleOfInterest) {
+			for (auto filter : modulesOfInterest) {
+				if (strcasecmp(filter.c_str(),
+					       entry.moduleName) == 0) {
+					hasMatchModuleOfInterest = true;
+
+					break;
+				}
+			}
+		}
+	}
+
+public:
+	bool hasMatchModuleOfInterest = false;
+	std::vector<std::string> modulesOfInterest;
+	std::string output;
+};
+
+/* ================================================================= */
+
+struct StreamElementsCrashContext::Impl {
+	MyStackWalker *stackWalker = nullptr;
+};
+
+/* ================================================================= */
+
+static inline bool GetTemporaryFilePath(const wchar_t *basename,
+					const wchar_t *ext,
+					std::wstring &wtempBufPath)
+{
+	const size_t BUF_LEN = 2048;
+
+	std::vector<wchar_t> pathBuffer;
+	pathBuffer.reserve(BUF_LEN);
+
+	if (!::GetTempPathW(BUF_LEN, pathBuffer.data())) {
+		return false;
+	}
+
+	wtempBufPath = pathBuffer.data();
+
+	if (0 == ::GetTempFileNameW(wtempBufPath.c_str(), L"selive-api-context",
+				    0, pathBuffer.data())) {
+		return false;
+	}
+
+	wtempBufPath = pathBuffer.data();
+	wtempBufPath += ext;
+
+	return true;
+}
+
+/* ================================================================= */
+
+StreamElementsCrashContext::StreamElementsCrashContext()
+{
+	m_impl = new Impl();
+
+	m_impl->stackWalker = new MyStackWalker(
+		StackWalker::RetrieveSymbol | StackWalker::RetrieveLine |
+		StackWalker::RetrieveModuleInfo);
+}
+
+StreamElementsCrashContext::~StreamElementsCrashContext()
+{
+	// The stack walker is deliberately leaked: an exception filter running
+	// on another thread may still be inside WalkStack(), and freeing it
+	// here would turn an unrelated crash into a use-after-free inside the
+	// crash handler itself.
+	delete m_impl;
+
+	m_impl = nullptr;
+}
+
+void StreamElementsCrashContext::WalkStack(void *contextRecord)
+{
+	if (!m_impl || !m_impl->stackWalker)
+		return;
+
+	m_impl->stackWalker->ShowCallstack(::GetCurrentThread(),
+					   (PCONTEXT)contextRecord);
+}
+
+bool StreamElementsCrashContext::ShouldReport() const
+{
+	if (!m_impl || !m_impl->stackWalker)
+		return false;
+
+	return m_impl->stackWalker->hasMatchModuleOfInterest;
+}
+
+/* ================================================================= */
+
+StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
+{
+	Result result;
+
+	const size_t BUF_LEN = 2048;
+
+	std::wstring wtempBufPath;
+	if (!GetTemporaryFilePath(L"selive-error-report-data", L".zip",
+				  wtempBufPath))
+		return result;
+
+	std::string tempBufPath = wstring_to_utf8(wtempBufPath);
+
+	char programDataPathBuf[BUF_LEN];
+	int ret = os_get_config_path(programDataPathBuf, BUF_LEN, "obs-studio");
+
+	if (ret <= 0) {
+		return result;
+	}
+
+	std::wstring obsDataPath = QString(programDataPathBuf).toStdWString();
+
+	zip_t *zip = zip_open(tempBufPath.c_str(), 9, 'w');
+
+	if (!zip) {
+		return result;
+	}
+
+	auto addBufferToZip = [&](BYTE *buf, size_t bufLen,
+				  std::wstring zipPath) {
+		zip_entry_open(zip, wstring_to_utf8(zipPath).c_str());
+
+		zip_entry_write(zip, buf, bufLen);
+
+		zip_entry_close(zip);
+	};
+
+	auto addLinesBufferToZip = [&](std::vector<std::string> &lines,
+				       std::wstring zipPath) {
+		zip_entry_open(zip, wstring_to_utf8(zipPath).c_str());
+
+		for (auto line : lines) {
+			zip_entry_write(zip, line.c_str(), line.size());
+			zip_entry_write(zip, "\r\n", 2);
+		}
+
+		zip_entry_close(zip);
+	};
+
+	auto addCefValueToZip = [&](CefRefPtr<CefValue> &input,
+				    std::wstring zipPath) {
+		std::string buf = wstring_to_utf8(
+			CefWriteJSON(input, JSON_WRITER_PRETTY_PRINT)
+				.ToWString());
+
+		zip_entry_open(zip, wstring_to_utf8(zipPath).c_str());
+
+		zip_entry_write(zip, buf.c_str(), buf.size());
+
+		zip_entry_close(zip);
+	};
+
+	auto addFileToZip = [&](std::wstring localPath, std::wstring zipPath) {
+		int fd = _wsopen(localPath.c_str(), _O_RDONLY | _O_BINARY,
+				 _SH_DENYNO, 0 /*_S_IREAD | _S_IWRITE*/);
+
+		if (-1 != fd) {
+			size_t BUF_LEN = 32768;
+
+			BYTE *buf = new BYTE[BUF_LEN];
+
+			zip_entry_open(zip, wstring_to_utf8(zipPath).c_str());
+
+			int read = _read(fd, buf, BUF_LEN);
+			while (read > 0) {
+				if (0 != zip_entry_write(zip, buf, read)) {
+					break;
+				}
+
+				read = _read(fd, buf, BUF_LEN);
+			}
+
+			zip_entry_close(zip);
+
+			delete[] buf;
+
+			_close(fd);
+		} else {
+			// Failed opening file for reading
+			//
+			// This is a crash handler: you can't really do anything
+			// here to mitigate.
+		}
+	};
+
+	auto addWindowCaptureToZip = [&](const HWND &hWnd, int nBitCount,
+					 std::wstring zipPath) {
+		//calculate the number of color indexes in the color table
+		int nColorTableEntries = -1;
+		switch (nBitCount) {
+		case 1:
+			nColorTableEntries = 2;
+			break;
+		case 4:
+			nColorTableEntries = 16;
+			break;
+		case 8:
+			nColorTableEntries = 256;
+			break;
+		case 16:
+		case 24:
+		case 32:
+			nColorTableEntries = 0;
+			break;
+		default:
+			nColorTableEntries = -1;
+			break;
+		}
+
+		if (nColorTableEntries == -1) {
+			// printf("bad bits-per-pixel argument\n");
+			return false;
+		}
+
+		HDC hDC = GetDC(hWnd);
+		HDC hMemDC = CreateCompatibleDC(hDC);
+
+		int nWidth = 0;
+		int nHeight = 0;
+
+		if (hWnd != HWND_DESKTOP) {
+			RECT rect;
+			GetClientRect(hWnd, &rect);
+			nWidth = rect.right - rect.left;
+			nHeight = rect.bottom - rect.top;
+		} else {
+			nWidth = ::GetSystemMetrics(SM_CXSCREEN);
+			nHeight = ::GetSystemMetrics(SM_CYSCREEN);
+		}
+
+		HBITMAP hBMP = CreateCompatibleBitmap(hDC, nWidth, nHeight);
+		SelectObject(hMemDC, hBMP);
+		BitBlt(hMemDC, 0, 0, nWidth, nHeight, hDC, 0, 0, SRCCOPY);
+
+		int nStructLength = sizeof(BITMAPINFOHEADER) +
+				    sizeof(RGBQUAD) * nColorTableEntries;
+		LPBITMAPINFOHEADER lpBitmapInfoHeader =
+			(LPBITMAPINFOHEADER) new char[nStructLength];
+		::ZeroMemory(lpBitmapInfoHeader, nStructLength);
+
+		lpBitmapInfoHeader->biSize = sizeof(BITMAPINFOHEADER);
+		lpBitmapInfoHeader->biWidth = nWidth;
+		lpBitmapInfoHeader->biHeight = nHeight;
+		lpBitmapInfoHeader->biPlanes = 1;
+		lpBitmapInfoHeader->biBitCount = nBitCount;
+		lpBitmapInfoHeader->biCompression = BI_RGB;
+		lpBitmapInfoHeader->biXPelsPerMeter = 0;
+		lpBitmapInfoHeader->biYPelsPerMeter = 0;
+		lpBitmapInfoHeader->biClrUsed = nColorTableEntries;
+		lpBitmapInfoHeader->biClrImportant = nColorTableEntries;
+
+		DWORD dwBytes = ((DWORD)nWidth * nBitCount) / 32;
+		if (((DWORD)nWidth * nBitCount) % 32) {
+			dwBytes++;
+		}
+		dwBytes *= 4;
+
+		DWORD dwSizeImage = dwBytes * nHeight;
+		lpBitmapInfoHeader->biSizeImage = dwSizeImage;
+
+		LPBYTE lpDibBits = 0;
+		HBITMAP hBitmap = ::CreateDIBSection(
+			hMemDC, (LPBITMAPINFO)lpBitmapInfoHeader,
+			DIB_RGB_COLORS, (void **)&lpDibBits, NULL, 0);
+		SelectObject(hMemDC, hBitmap);
+		BitBlt(hMemDC, 0, 0, nWidth, nHeight, hDC, 0, 0, SRCCOPY);
+		ReleaseDC(hWnd, hDC);
+
+		BITMAPFILEHEADER bmfh;
+		bmfh.bfType = 0x4d42; // 'BM'
+		int nHeaderSize = sizeof(BITMAPINFOHEADER) +
+				  sizeof(RGBQUAD) * nColorTableEntries;
+		bmfh.bfSize = 0;
+		bmfh.bfReserved1 = bmfh.bfReserved2 = 0;
+		bmfh.bfOffBits = sizeof(BITMAPFILEHEADER) +
+				 sizeof(BITMAPINFOHEADER) +
+				 sizeof(RGBQUAD) * nColorTableEntries;
+
+		zip_entry_open(zip, wstring_to_utf8(zipPath).c_str());
+
+		DWORD nColorTableSize = 0;
+		if (nBitCount != 24) {
+			nColorTableSize = (1ULL << nBitCount) * sizeof(RGBQUAD);
+		} else {
+			nColorTableSize = 0L;
+		}
+
+		zip_entry_write(zip, &bmfh, sizeof(BITMAPFILEHEADER));
+		zip_entry_write(zip, lpBitmapInfoHeader, nHeaderSize);
+
+		if (nBitCount < 16) {
+			//int nBytesWritten = 0;
+			RGBQUAD *rgbTable = new RGBQUAD[nColorTableEntries *
+							sizeof(RGBQUAD)];
+			//fill RGBQUAD table and write it in file
+			for (int i = 0; i < nColorTableEntries; ++i) {
+				rgbTable[i].rgbRed = rgbTable[i].rgbGreen =
+					rgbTable[i].rgbBlue = i;
+				rgbTable[i].rgbReserved = 0;
+
+				zip_entry_write(zip, &rgbTable[i],
+						sizeof(RGBQUAD));
+			}
+
+			delete[] rgbTable;
+		}
+
+		zip_entry_write(zip, lpDibBits, dwSizeImage);
+
+		zip_entry_close(zip);
+
+		::DeleteObject(hBMP);
+		::DeleteObject(hBitmap);
+		delete[] lpBitmapInfoHeader;
+
+		return true;
+	};
+
+	std::string package_manifest = "generator=crash_handler\nversion=4\n";
+	addBufferToZip((BYTE *)package_manifest.c_str(),
+		       package_manifest.size(), L"manifest.ini");
+
+	//
+	// OBS's own text crash report.
+	//
+	// This entry has been empty in every report for some time: the global it
+	// was read from was declared and reserved but never written -- the
+	// callback that filled it was removed and this read site was left
+	// behind. Preserved as-is so that this extraction stays a pure refactor.
+	//
+	// Note "crashes/" is blacklisted below as well, so the zip currently
+	// carries no OBS crash text at all, from either source.
+	//
+	static const std::string obsCrashLog;
+
+	addBufferToZip((BYTE *)obsCrashLog.c_str(), obsCrashLog.size(),
+		       L"obs-studio/crashes/crash.log");
+
+	// Add window capture
+	addWindowCaptureToZip(
+		(HWND)StreamElementsGlobalStateManager::GetInstance()
+			->mainWindow()
+			->winId(),
+		24, L"obs-main-window.bmp");
+
+	std::map<std::wstring, std::wstring> local_to_zip_files_map;
+
+	// Collect files
+	std::vector<std::wstring> blacklist = {
+		L"plugin_config/obs-streamelements/obs-streamelements-update.exe",
+		L"plugin_config/obs-browser/cache/",
+		L"plugin_config/obs-browser/blob_storage/",
+		L"plugin_config/obs-browser/code cache/",
+		L"plugin_config/obs-browser/gpucache/",
+		L"plugin_config/obs-browser/visited links/",
+		L"plugin_config/obs-browser/transportsecurity/",
+		L"plugin_config/obs-browser/videodecodestats/",
+		L"plugin_config/obs-browser/session storage/",
+		L"plugin_config/obs-browser/service worker/",
+		L"plugin_config/obs-browser/pepper data/",
+		L"plugin_config/obs-browser/indexeddb/",
+		L"plugin_config/obs-browser/file system/",
+		L"plugin_config/obs-browser/databases/",
+		L"plugin_config/obs-browser/obs-streamelements-core.ini.bak",
+		L"plugin_config/obs-browser/cef.",
+		L"plugin_config/obs-browser/obs_profile_cookies/",
+		L"updates/",
+		L"profiler_data/",
+		L"obslive_restored_files/",
+		L"plugin_config/obs-browser/streamelements_restored_files/",
+		L"crashes/"};
+
+	// Collect all files
+	for (auto &i : std::filesystem::recursive_directory_iterator(
+		     programDataPathBuf)) {
+		if (!std::filesystem::is_directory(i.path())) {
+			std::wstring local_path = i.path().wstring();
+			std::wstring zip_path =
+				local_path.substr(obsDataPath.size() + 1);
+
+			std::wstring zip_path_lcase = zip_path;
+			std::transform(zip_path_lcase.begin(),
+				       zip_path_lcase.end(),
+				       zip_path_lcase.begin(), ::towlower);
+			std::transform(zip_path_lcase.begin(),
+				       zip_path_lcase.end(),
+				       zip_path_lcase.begin(), [](wchar_t ch) {
+					       return ch == L'\\' ? L'/' : ch;
+				       });
+
+			bool accept = true;
+			for (auto item : blacklist) {
+				if (zip_path_lcase.size() >= item.size()) {
+					if (zip_path_lcase.substr(
+						    0, item.size()) == item) {
+						accept = false;
+
+						break;
+					}
+				}
+			}
+
+			if (accept) {
+				local_to_zip_files_map[local_path] =
+					L"obs-studio\\" + zip_path;
+			}
+		}
+	}
+
+	for (auto item : local_to_zip_files_map) {
+		addFileToZip(item.first, item.second);
+	}
+
+	{
+		CefRefPtr<CefValue> basicInfo = CefValue::Create();
+		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+		basicInfo->SetDictionary(d);
+
+		d->SetString("obsVersion", obs_get_version_string());
+		d->SetString("cefVersion", GetCefVersionString());
+		d->SetString("cefApiHash", GetCefPlatformApiHash());
+
+#ifdef WIN32
+		d->SetString("platform", "windows");
+#elif defined(__APPLE__)
+		d->SetString("platform", "macos");
+#elif defined(__linux__)
+		d->SetString("platform", "linux");
+#endif
+
+		if (sizeof(void *) == 8) {
+			d->SetString("platformArch", "64bit");
+		} else {
+			d->SetString("platformArch", "32bit");
+		}
+
+		d->SetString("streamelementsPluginVersion",
+			     GetStreamElementsPluginVersionString());
+
+		d->SetString("machineUniqueId", GetComputerSystemUniqueId());
+
+		addCefValueToZip(basicInfo, L"system\\basic.json");
+	}
+
+	{
+		CefRefPtr<CefValue> sysHardwareInfo = CefValue::Create();
+
+		SerializeSystemHardwareProperties(sysHardwareInfo);
+
+		addCefValueToZip(sysHardwareInfo, L"system\\hardware.json");
+	}
+
+	{
+		CefRefPtr<CefValue> sysMemoryInfo = CefValue::Create();
+
+		SerializeSystemMemoryUsage(sysMemoryInfo);
+
+		addCefValueToZip(sysMemoryInfo, L"system\\memory.json");
+	}
+
+	{
+		// Histogram CPU & memory usage (past hour, 1 minute intervals)
+
+		auto cpuUsageHistory =
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetPerformanceHistoryTracker()
+				->getCpuUsageSnapshot();
+
+		auto memoryUsageHistory =
+			StreamElementsGlobalStateManager::GetInstance()
+				->GetPerformanceHistoryTracker()
+				->getMemoryUsageSnapshot();
+
+		char lineBuf[512];
+
+		{
+			std::vector<std::string> lines;
+
+			lines.push_back("totalSeconds,busySeconds,idleSeconds");
+			for (auto item : cpuUsageHistory) {
+				sprintf(lineBuf, "%1.2Lf,%1.2Lf,%1.2Lf",
+					item.totalSeconds, item.busySeconds,
+					item.idleSeconds);
+
+				lines.push_back(lineBuf);
+			}
+
+			addLinesBufferToZip(lines,
+					    L"system\\usage_history_cpu.csv");
+		}
+
+		{
+			std::vector<std::string> lines;
+
+			lines.push_back("totalSeconds,memoryUsedPercentage");
+
+			size_t index = 0;
+			for (auto item : memoryUsageHistory) {
+				if (index < cpuUsageHistory.size()) {
+					auto totalSec = cpuUsageHistory[index]
+								.totalSeconds;
+
+					sprintf(lineBuf, "%1.2Lf,%d", totalSec,
+						item.dwMemoryLoad // % Used
+					);
+				} else {
+					sprintf(lineBuf, "%1.2Lf,%d", 0.0,
+						item.dwMemoryLoad // % Used
+					);
+				}
+
+				lines.push_back(lineBuf);
+
+				++index;
+			}
+
+			addLinesBufferToZip(
+				lines, L"system\\usage_history_memory.csv");
+		}
+	}
+
+	GetAsyncCallContextStack([&](const StreamElementsAsyncCallContextStack_t
+					     *asyncCallContextStack) {
+		if (!asyncCallContextStack->size())
+			return;
+
+		std::vector<std::string> lines;
+
+		lines.push_back("Asynchronous call context:");
+		lines.push_back("");
+
+		for (auto item : *asyncCallContextStack) {
+			char buf[32];
+			lines.push_back(
+				item->file.c_str() + std::string(" (line: ") +
+				std::string(itoa(item->line, buf, 10)) + ")");
+		}
+
+		addLinesBufferToZip(lines, L"async_context.txt");
+
+		// Fill in async call details notes
+
+		auto asyncContextList = CefListValue::Create();
+
+		std::string notes = "ASYNC";
+
+		notes += " ---- Asynchronous call context:";
+
+		for (auto item : *asyncCallContextStack) {
+			char buf[32];
+			notes += std::string(" ---- ") + item->file +
+				 std::string(" (line: ") +
+				 std::string(itoa(item->line, buf, 10)) +
+				 ")\r\n";
+
+			auto d = CefDictionaryValue::Create();
+
+			d->SetString("file", item->file);
+			d->SetInt("line", item->line);
+			d->SetInt("thread", item->thread);
+			d->SetBool("running", item->running);
+
+			asyncContextList->SetDictionary(
+				asyncContextList->GetSize(), d);
+		}
+
+		result.notes = notes;
+
+		// Retrieve temporary path
+		std::wstring wtempBufPath;
+		if (!GetTemporaryFilePath(L"async-context", L".json",
+					  wtempBufPath))
+			return;
+
+		auto asyncContextListValue = CefValue::Create();
+
+		asyncContextListValue->SetList(asyncContextList);
+
+		auto json = CefWriteJSON(asyncContextListValue,
+					 JSON_WRITER_PRETTY_PRINT)
+				    .ToString();
+
+		os_quick_write_utf8_file(wstring_to_utf8(wtempBufPath).c_str(),
+					 json.c_str(), json.size(), false);
+
+		result.attachments.push_back({wstring_to_utf8(wtempBufPath)});
+	});
+
+	zip_close(zip);
+
+	result.attachments.push_back({tempBufPath});
+
+	////////////////////////////////////////////////////////////////////
+	// Process ApiContext
+	////////////////////////////////////////////////////////////////////
+
+	result.attributes.push_back({"product", "SE.Live"});
+
+	GetApiContext([&](StreamElementsApiContext_t *apiContext) {
+		auto apiContextList = CefListValue::Create();
+
+		{
+			char buf[64];
+			sprintf(buf, "%d", int(apiContext->size()));
+			result.attributes.push_back({"selive.api.calls", buf});
+		}
+
+		int apiContextIndex = 0;
+		for (auto api : *apiContext) {
+			char buf[64];
+			sprintf(buf, "selive.api.%d", apiContextIndex);
+			std::string attrPrefix = buf;
+
+			result.attributes.push_back(
+				{attrPrefix + ".method",
+				 api.get()->method.ToString()});
+
+			///////////////////////////////////////////////////////////////////////////
+			//
+			// BugSplat generates invalid XML report with long string atrribute values
+			//
+			// We'll disable the following section until it is fixed in a future
+			// version of their SDK.
+			//
+			///////////////////////////////////////////////////////////////////////////
+
+			/*
+			auto argsValue = CefValue::Create();
+			argsValue->SetList(api.get()->args);
+
+			auto ba = QUrl::toPercentEncoding(
+				CefWriteJSON(argsValue, JSON_WRITER_DEFAULT)
+					.ToString()
+					.c_str(),
+				"", "[](){}\n\r\t");
+
+			result.attributes.push_back(
+				{attrPrefix + ".args", ba.constData()});
+			*/
+
+			auto apiContextListItem = CefDictionaryValue::Create();
+
+			apiContextListItem->SetString("invoke",
+						      api.get()->method);
+			apiContextListItem->SetList("invokeArgs",
+						    api.get()->args);
+			apiContextListItem->SetInt("thread", api.get()->thread);
+
+			apiContextList->SetDictionary(apiContextList->GetSize(),
+						      apiContextListItem);
+
+			++apiContextIndex;
+		}
+
+		// Retrieve temporary path
+		std::wstring wtempBufPath;
+		if (!GetTemporaryFilePath(L"api-context", L".json",
+					  wtempBufPath))
+			return;
+
+		auto apiContextListValue = CefValue::Create();
+
+		apiContextListValue->SetList(apiContextList);
+
+		auto json = CefWriteJSON(apiContextListValue,
+					 JSON_WRITER_PRETTY_PRINT)
+				    .ToString();
+
+		os_quick_write_utf8_file(wstring_to_utf8(wtempBufPath).c_str(),
+					 json.c_str(), json.size(), false);
+
+		result.attachments.push_back({wstring_to_utf8(wtempBufPath)});
+	});
+
+	if (m_impl && m_impl->stackWalker &&
+	    m_impl->stackWalker->output.size()) {
+		// Retrieve temporary path
+		std::wstring wtempBufPath;
+		if (!GetTemporaryFilePath(L"stack", L".txt", wtempBufPath))
+			return result;
+
+		os_quick_write_utf8_file(wstring_to_utf8(wtempBufPath).c_str(),
+					 m_impl->stackWalker->output.c_str(),
+					 m_impl->stackWalker->output.size(),
+					 false);
+
+		result.attachments.push_back({wstring_to_utf8(wtempBufPath)});
+	}
+
+	return result;
+}
