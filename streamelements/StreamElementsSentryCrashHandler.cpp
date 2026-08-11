@@ -1,32 +1,261 @@
 #include "StreamElementsSentryCrashHandler.hpp"
 
+#include "StreamElementsCrashContext.hpp"
 #include "StreamElementsUtils.hpp"
 
 #include <util/base.h>
 #include <obs.h>
+#include <obs-frontend-api.h>
 
 #include <sentry.h>
 
 #include <string>
+#include <vector>
 
-//
-// Scaffolding only. This initializes the SDK and proves the integration links;
-// the crash-time work -- the module-of-interest gate, StreamElementsCrashContext,
-// the consent dialog and sentry_handle_exception() -- lands in the next commit.
-//
+#include <windows.h>
 
 // Empty means crash reporting is inert: sentry_init() is skipped entirely rather
-// than run against a bad DSN, so a build without the secret behaves like
+// than run against a bad DSN, so a build without the DSN behaves like
 // STREAMELEMENTS_CRASH_HANDLER=none instead of failing at runtime.
 #ifndef SE_SENTRY_DSN
 #define SE_SENTRY_DSN ""
 #endif
 
+/* ================================================================= */
+
 static bool s_initialized = false;
+static StreamElementsCrashContext *s_crashContext = nullptr;
+
+// The filter sentry-native installed during sentry_init(). Running it is what
+// emits the event and has the daemon write the minidump.
+static LPTOP_LEVEL_EXCEPTION_FILTER s_sentryExceptionFilter = nullptr;
+
+// The filter that was in place before sentry_init() -- OBS's own, which writes
+// %appdata%\obs-studio\crashes\ and then exits the process. Captured separately
+// because sentry's filter stores it but never calls it.
+static LPTOP_LEVEL_EXCEPTION_FILTER s_hostExceptionFilter = nullptr;
+
+static LONG s_insideExceptionFilter = 0L;
+
+static HWND s_messageWindow = NULL;
+
+/* ================================================================= */
+
+//
+// Reads the currently installed top-level exception filter without permanently
+// disturbing it. Win32 offers no getter, so the only way to read it is to
+// install something and put back what came out.
+//
+// There is a window here in which no filter is installed. This runs once, on the
+// UI thread, while the plugin is loading, so a crash landing inside it would
+// have to be exquisitely timed; the alternative -- not knowing OBS's filter --
+// means losing OBS's crash log on every crash, which is strictly worse.
+//
+static LPTOP_LEVEL_EXCEPTION_FILTER PeekUnhandledExceptionFilter()
+{
+	auto current = SetUnhandledExceptionFilter(nullptr);
+
+	SetUnhandledExceptionFilter(current);
+
+	return current;
+}
+
+//
+// Directory containing this DLL.
+//
+// The daemon path matters: left unset, sentry-native looks for sentry-crash.exe
+// next to the *host executable* (obs64.exe), which is not a directory this
+// plugin installs into. We ship the daemon beside our own binary and point the
+// SDK at it.
+//
+static bool GetOwnModuleDirectory(std::wstring &result)
+{
+	HMODULE module = NULL;
+
+	if (!::GetModuleHandleExW(
+		    GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+			    GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+		    (LPCWSTR)&GetOwnModuleDirectory, &module)) {
+		return false;
+	}
+
+	wchar_t path[MAX_PATH];
+	DWORD len = ::GetModuleFileNameW(module, path, MAX_PATH);
+
+	if (!len || len >= MAX_PATH)
+		return false;
+
+	wchar_t *lastSlash = wcsrchr(path, L'\\');
+
+	if (!lastSlash)
+		return false;
+
+	*(lastSlash + 1) = L'\0';
+
+	result = path;
+
+	return true;
+}
+
+/* ================================================================= */
+
+static void CreateMessageWindow()
+{
+	if (s_messageWindow)
+		return;
+
+	auto mainWindowHandle = (HWND)obs_frontend_get_main_window_handle();
+
+	if (!mainWindowHandle)
+		return;
+
+	RECT r;
+	GetWindowRect(mainWindowHandle, &r);
+
+	const int width = 600;
+	const int height = 85;
+	const int x = (r.left + r.right) / 2 - (width / 2);
+	const int y = (r.top + r.bottom) / 2 - (height / 2);
+
+	s_messageWindow = CreateWindowA(
+		"Button",
+		"Oops, something is not right. Please wait while a crash report is being prepared...",
+		0, x, y, width, height, mainWindowHandle, NULL,
+		GetModuleHandle(0), NULL);
+
+	if (!s_messageWindow)
+		return;
+
+	SetWindowLong(s_messageWindow, GWL_STYLE, WS_VISIBLE);
+	SetWindowLong(s_messageWindow, GWL_EXSTYLE, WS_EX_TOPMOST);
+	EnableWindow(s_messageWindow, FALSE);
+	ShowWindow(s_messageWindow, SW_SHOWNORMAL);
+	UpdateWindow(s_messageWindow);
+}
+
+/* ================================================================= */
+
+//
+// Attributes that are worth having as searchable tags.
+//
+// Everything collected also goes into a structured context below, so this list
+// is about query-ability, not completeness. It is kept short on purpose: with
+// SENTRY_INTEGRATION_WER enabled, sentry_set_tag maps onto
+// WerRegisterCustomMetadata, which is capped at WER_MAX_REGISTERED_METADATA (8)
+// entries. The open-ended selive.api.<n>.* attributes must never become tags.
+//
+static bool IsTagWorthyAttribute(const std::string &name)
+{
+	return name == "product" || name == "selive.api.calls";
+}
+
+//
+// Puts everything StreamElementsCrashContext gathered onto the Sentry scope, so
+// that the event sentry's filter builds a moment later carries it.
+//
+static void ArmSentryScope(const StreamElementsCrashContext::Result &context)
+{
+	// Complete record, unabridged: a context is JSON in the event body, so
+	// it has neither the WER entry cap nor BugSplat's hostility to long
+	// attribute values.
+	sentry_value_t attributes = sentry_value_new_object();
+
+	for (auto &attribute : context.attributes) {
+		sentry_value_set_by_key(
+			attributes, attribute.name.c_str(),
+			sentry_value_new_string(attribute.value.c_str()));
+
+		if (IsTagWorthyAttribute(attribute.name)) {
+			sentry_set_tag(attribute.name.c_str(),
+				       attribute.value.c_str());
+		}
+	}
+
+	sentry_set_context("selive", attributes);
+
+	if (context.notes.size()) {
+		sentry_value_t async = sentry_value_new_object();
+
+		sentry_value_set_by_key(
+			async, "callStack",
+			sentry_value_new_string(context.notes.c_str()));
+
+		sentry_set_context("async_call_context", async);
+	}
+
+	for (auto &attachment : context.attachments) {
+		// The wide-char entry point, so paths with non-ANSI characters
+		// in the user's temp directory survive.
+		sentry_attach_filew(utf8_to_wstring(attachment.path).c_str());
+	}
+}
+
+/* ================================================================= */
+
+static LONG CALLBACK SentryExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
+{
+	if (pExceptionInfo->ExceptionRecord->ExceptionCode ==
+	    EXCEPTION_STACK_OVERFLOW) {
+		static ULONG stack_size = 0L;
+		if (SetThreadStackGuarantee(&stack_size)) {
+			stack_size += 1024 * 32; // add another 32KB
+
+			SetThreadStackGuarantee(&stack_size);
+		}
+	}
+
+	if (s_crashContext)
+		s_crashContext->WalkStack(pExceptionInfo->ContextRecord);
+
+	if (InterlockedIncrement(&s_insideExceptionFilter) == 1L) {
+		CreateMessageWindow();
+
+		// The gate. A stack that never passed through our code is not
+		// ours to report: we skip sentry's filter entirely, so no event
+		// and no minidump are produced, and go straight to the host
+		// filter below.
+		if (s_initialized && s_crashContext &&
+		    s_crashContext->ShouldReport()) {
+			ArmSentryScope(s_crashContext->Collect());
+
+			if (s_sentryExceptionFilter) {
+				// Emits the event and signals the sentry-crash
+				// daemon, which writes and uploads the minidump
+				// out of process. Returns once the daemon has
+				// captured it, or on timeout.
+				s_sentryExceptionFilter(pExceptionInfo);
+			}
+		}
+
+		atexit([](void) {
+			TerminateProcess(GetCurrentProcess(), 2);
+			abort();
+		});
+
+		if (s_hostExceptionFilter) {
+			// OBS's own handler: writes its crash log, then exits.
+			// This does not return.
+			s_hostExceptionFilter(pExceptionInfo);
+		}
+
+		// exit(-1); // <-- calling exit() may cause normal shutdown code to run, and we definitely do not want that in an exception handler
+		TerminateProcess(GetCurrentProcess(), 1);
+		abort();
+	}
+
+	InterlockedDecrement(&s_insideExceptionFilter);
+
+	return EXCEPTION_CONTINUE_SEARCH;
+}
+
+/* ================================================================= */
 
 StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 {
 	if (s_initialized)
+		return;
+
+	if (IsDebuggerPresent())
 		return;
 
 	const std::string dsn = SE_SENTRY_DSN;
@@ -36,6 +265,10 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 		     "obs-streamelements-core: StreamElements: Crash Handler: no Sentry DSN was compiled in; crash reporting is disabled");
 		return;
 	}
+
+	// Must be read before sentry_init(), which replaces it and never calls
+	// it again.
+	s_hostExceptionFilter = PeekUnhandledExceptionFilter();
 
 	sentry_options_t *options = sentry_options_new();
 
@@ -47,11 +280,55 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 				    GetStreamElementsPluginVersionString();
 	sentry_options_set_release(options, release.c_str());
 
+	std::wstring moduleDirectory;
+
+	if (GetOwnModuleDirectory(moduleDirectory)) {
+		const std::wstring daemonPath =
+			moduleDirectory + L"sentry-crash.exe";
+
+		sentry_options_set_handler_pathw(options, daemonPath.c_str());
+	} else {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: StreamElements: Crash Handler: could not resolve own module directory; falling back to the SDK's default sentry-crash.exe lookup, which searches next to obs64.exe");
+	}
+
+	// Stack plus heap around the crash site, roughly 5-10MB. BugSplat was
+	// configured for full memory dumps, which on an OBS process carrying
+	// browser sources is large enough to risk the upload cap; this is the
+	// SDK's recommended middle setting and the one to revisit if crashes
+	// turn out to need more.
+	sentry_options_set_minidump_mode(options, SENTRY_MINIDUMP_MODE_SMART);
+
+	// Client-side stackwalk as the primary event, with the minidump attached
+	// for deep debugging. Keeps the server-side symbolication path available
+	// without giving up a readable stack when symbols are missing.
+	sentry_options_set_crash_reporting_mode(
+		options, SENTRY_CRASH_REPORTING_MODE_NATIVE_WITH_MINIDUMP);
+
+	sentry_set_user(([] {
+		sentry_value_t user = sentry_value_new_object();
+
+		sentry_value_set_by_key(
+			user, "id",
+			sentry_value_new_string(
+				GetComputerSystemUniqueId().c_str()));
+
+		return user;
+	})());
+
 	if (sentry_init(options) != 0) {
 		blog(LOG_ERROR,
 		     "obs-streamelements-core: StreamElements: Crash Handler: sentry_init() failed");
 		return;
 	}
+
+	// Whatever sentry_init() installed. Ours goes on top, so ours runs
+	// first and this one is invoked by us, deliberately, only when the
+	// module-of-interest gate passes.
+	s_sentryExceptionFilter =
+		SetUnhandledExceptionFilter(SentryExceptionFilter);
+
+	s_crashContext = new StreamElementsCrashContext();
 
 	s_initialized = true;
 
@@ -63,8 +340,8 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 void StreamElementsSentryCrashHandler::StopAsyncHangDetection()
 {
 	// No hang detection yet. sentry-native has its own app-hang tracking
-	// (enable_app_hang_tracking) which is worth evaluating against the
-	// currently disabled HANG_DETECTION_ENABLED path in the BugSplat handler.
+	// which is worth evaluating against the currently disabled
+	// HANG_DETECTION_ENABLED path in the BugSplat handler.
 }
 
 StreamElementsSentryCrashHandler::~StreamElementsSentryCrashHandler()
@@ -73,4 +350,8 @@ StreamElementsSentryCrashHandler::~StreamElementsSentryCrashHandler()
 	// never tears down, on the grounds that shutting the reporter down early
 	// loses exceptions thrown during shutdown. See
 	// StreamElementsGlobalStateManager::Shutdown().
+	//
+	// The exception filter is left installed for the same reason, and
+	// s_crashContext is left alive because a filter running on another
+	// thread may still be inside it.
 }
