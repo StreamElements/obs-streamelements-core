@@ -76,7 +76,16 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           if [ -n "$key" ]; then
-            echo "::notice::$key found; Linear will link this PR to it"
+            # Surfaced before merge, not only after, so the author can see which
+            # behaviour their PR has bought.
+            case "$TITLE$BODY" in
+            *'#partial'*)
+              echo "::notice::$key found, and this PR is marked #partial. Linear will still close $key when this merges -- reopen it by hand afterwards. Nothing in CI can undo that: doing so needs a Linear API key, and a workspace-scoped key in CI was rejected on security grounds."
+              ;;
+            *)
+              echo "::notice::$key found; Linear will link this PR to it, and will close $key when this merges. Add #partial to the title or body if this is only part of the work."
+              ;;
+            esac
             exit 0
           fi
 
@@ -87,7 +96,6 @@ jobs:
 
           echo "::error::No ${TEAM_KEY}-nnn key in the branch name, PR title, or PR body. Linear links a PR to an issue from one of those three, and master is squash-merged -- once this lands, the branch name is gone and the work cannot be traced to an issue. Fix it by renaming the branch to carry the key (jacob/core-266-short-description), or by adding a line like 'Fixes ${TEAM_KEY}-266' to the PR body. Label the PR 'no-linear-issue' if it genuinely has no issue behind it."
           exit 1
-
   suggest:
     name: Suggest a Linear issue key
     needs: check
