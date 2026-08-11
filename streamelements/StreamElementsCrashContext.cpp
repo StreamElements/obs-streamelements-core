@@ -2,6 +2,7 @@
 
 #include "cef-headers.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
+#include "StreamElementsSecretRedactor.hpp"
 #include "StreamElementsUtils.hpp"
 #include "deps/StackWalker/StackWalker.h"
 #include "deps/zip/zip.h"
@@ -324,6 +325,13 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 	};
 
 	auto addFileToZip = [&](std::wstring localPath, std::wstring zipPath) {
+		// service.json carries the stream key in plaintext, so it is
+		// buffered whole and sanitized rather than streamed straight
+		// through. It is a few hundred bytes; everything else keeps the
+		// chunked path.
+		const bool redact =
+			StreamElementsSecretRedactor::IsSensitivePath(zipPath);
+
 		int fd = _wsopen(localPath.c_str(), _O_RDONLY | _O_BINARY,
 				 _SH_DENYNO, 0 /*_S_IREAD | _S_IWRITE*/);
 
@@ -334,13 +342,33 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 
 			zip_entry_open(zip, wstring_to_utf8(zipPath).c_str());
 
-			int read = _read(fd, buf, BUF_LEN);
-			while (read > 0) {
-				if (0 != zip_entry_write(zip, buf, read)) {
-					break;
+			if (redact) {
+				std::string content;
+
+				int read = _read(fd, buf, BUF_LEN);
+				while (read > 0) {
+					content.append((const char *)buf,
+						       (size_t)read);
+
+					read = _read(fd, buf, BUF_LEN);
 				}
 
-				read = _read(fd, buf, BUF_LEN);
+				const std::string sanitized =
+					StreamElementsSecretRedactor::Redact(
+						content);
+
+				zip_entry_write(zip, sanitized.c_str(),
+						sanitized.size());
+			} else {
+				int read = _read(fd, buf, BUF_LEN);
+				while (read > 0) {
+					if (0 !=
+					    zip_entry_write(zip, buf, read)) {
+						break;
+					}
+
+					read = _read(fd, buf, BUF_LEN);
+				}
 			}
 
 			zip_entry_close(zip);
