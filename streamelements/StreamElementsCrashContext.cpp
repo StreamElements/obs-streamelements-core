@@ -494,15 +494,22 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 		       package_manifest.size(), L"manifest.ini");
 
 	//
-	// OBS's own text crash report.
+	// OBS's own text crash report -- always empty, and structurally so.
 	//
-	// This entry has been empty in every report for some time: the global it
-	// was read from was declared and reserved but never written -- the
-	// callback that filled it was removed and this read site was left
-	// behind. Preserved as-is so that this extraction stays a pure refactor.
+	// libobs' crash handler writes its log and then exits the process
+	// immediately: it never returns to its caller. So there is no point at
+	// which we could capture what it wrote and still be running to put it
+	// into this zip.
 	//
-	// Note "crashes/" is blacklisted below as well, so the zip currently
-	// carries no OBS crash text at all, from either source.
+	// That is precisely why our exception filter does all of its own work
+	// first and only then chains downstream -- see CustomExceptionFilter in
+	// StreamElementsBugSplatCrashHandler.cpp, where the call to
+	// s_prevExceptionFilter carries the note "This will exit(0)".
+	//
+	// The entry is kept so the zip layout does not change. "crashes/" is
+	// blacklisted below as well, but that would not help either: those are
+	// earlier crashes' logs, and the current one does not exist yet at this
+	// point.
 	//
 	static const std::string obsCrashLog;
 
