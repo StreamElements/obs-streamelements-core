@@ -3,6 +3,7 @@
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsGlobalStateManager.hpp"
 #include "StreamElementsNetworkDialog.hpp"
+#include "StreamElementsSecretRedactor.hpp"
 #include "StreamElementsConfig.hpp"
 #include "Version.hpp"
 #include "ui_StreamElementsReportIssueDialog.h"
@@ -284,13 +285,40 @@ void StreamElementsReportIssueDialog::accept()
 
 				zip_entry_open(zip, wstring_to_utf8(zipPath).c_str());
 
-				int read = ::read(fd, buf, BUF_LEN);
-				while (read > 0) {
-					if (0 != zip_entry_write(zip, buf, read)) {
-						break;
+				// service.json carries the stream key in
+				// plaintext, so it is buffered whole and
+				// sanitized rather than streamed straight
+				// through to the upload.
+				if (StreamElementsSecretRedactor::IsSensitivePath(
+					    zipPath)) {
+					std::string content;
+
+					int read = ::read(fd, buf, BUF_LEN);
+					while (read > 0) {
+						content.append(
+							(const char *)buf,
+							(size_t)read);
+
+						read = ::read(fd, buf, BUF_LEN);
 					}
 
-					read = ::read(fd, buf, BUF_LEN);
+					const std::string sanitized =
+						StreamElementsSecretRedactor::
+							Redact(content);
+
+					zip_entry_write(zip, sanitized.c_str(),
+							sanitized.size());
+				} else {
+					int read = ::read(fd, buf, BUF_LEN);
+					while (read > 0) {
+						if (0 !=
+						    zip_entry_write(zip, buf,
+								    read)) {
+							break;
+						}
+
+						read = ::read(fd, buf, BUF_LEN);
+					}
 				}
 
 				zip_entry_close(zip);

@@ -348,6 +348,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/StreamElementsUtils.cpp
 	streamelements/StreamElementsHotkeyManager.cpp
 	streamelements/StreamElementsReportIssueDialog.cpp
+	streamelements/StreamElementsSecretRedactor.cpp
 	streamelements/StreamElementsProgressDialog.cpp
 	streamelements/StreamElementsPerformanceHistoryTracker.cpp
 	streamelements/StreamElementsNetworkDialog.cpp
@@ -469,6 +470,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/StreamElementsBrowserDialog.hpp
 	streamelements/StreamElementsHotkeyManager.hpp
 	streamelements/StreamElementsReportIssueDialog.hpp
+	streamelements/StreamElementsSecretRedactor.hpp
 	streamelements/StreamElementsProgressDialog.hpp
 	streamelements/StreamElementsPerformanceHistoryTracker.hpp
 	streamelements/StreamElementsNetworkDialog.hpp
