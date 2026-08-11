@@ -22,6 +22,15 @@ on:
         required: true
         type: string
 
+      # The Claude-written "What's New" blurb, base64-encoded, from build.yml's summary
+      # job. Base64 because it is multi-line, and because it keeps model-authored text
+      # out of GitHub expression interpolation. Empty when no summary was produced, in
+      # which case the release notes are composed exactly as they were before.
+      WHATS_NEW_BASE64:
+        required: false
+        default: ''
+        type: string
+
     secrets:
       AZURE_TENANT_ID:
         required: true
@@ -67,9 +76,34 @@ jobs:
       - name: Create release notes
         id: release_notes_step
         
+        env:
+          # Never interpolated into the script: decoded from an environment variable so
+          # model-authored text cannot reach the shell as code.
+          WHATS_NEW_BASE64: ${{ inputs.WHATS_NEW_BASE64 }}
         run: |
           echo "### ${{ inputs.PLUGIN_VERSION_STRING }}" >> /tmp/release_notes_raw.md
           echo "" >> /tmp/release_notes_raw.md
+
+          # "What's New" above "Release Notes", matching the GitHub release body, so a
+          # creator reads the same words in the in-app updater and on the release page.
+          # Both headings appear only when there is a blurb; without one the notes keep
+          # their previous unheaded shape rather than growing a lone "Release Notes".
+          if [ -n "${WHATS_NEW_BASE64:-}" ]; then
+            echo "$WHATS_NEW_BASE64" | base64 -d > /tmp/whats_new.md
+
+            if [ -s /tmp/whats_new.md ]; then
+              echo "#### What's New" >> /tmp/release_notes_raw.md
+              echo "" >> /tmp/release_notes_raw.md
+              cat /tmp/whats_new.md >> /tmp/release_notes_raw.md
+              # printf, not echo: the blurb has no trailing newline, so a single echo
+              # only terminates its last line and leaves the next heading glued to it
+              # with no blank line between -- which Markdown will not read as a heading.
+              printf '\n\n' >> /tmp/release_notes_raw.md
+              echo "#### Release Notes" >> /tmp/release_notes_raw.md
+              echo "" >> /tmp/release_notes_raw.md
+            fi
+          fi
+
           cat "RELEASE_NOTES.md" >> /tmp/release_notes_raw.md
           echo "" >> /tmp/release_notes_raw.md
           cat "RELEASE_NOTES.history.md" >> /tmp/release_notes_raw.md

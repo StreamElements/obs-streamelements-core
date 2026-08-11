@@ -93,6 +93,130 @@ jobs:
 
             echo "has_release_notes=true" >> $GITHUB_OUTPUT
           fi
+
+  # The Claude-written "What's New" blurb, generated once and consumed twice: the
+  # in-app updater reads it out of the manifest (via build-installer), and the
+  # GitHub prerelease body reads it in finalize.
+  #
+  # It is its own job because of ordering. build-installer composes the manifests and
+  # runs *before* finalize, so a blurb generated in finalize does not exist yet when
+  # the manifest is built. Generating it in both places instead would mean two model
+  # calls whose output can differ -- and the point is that a creator reads the same
+  # words in the updater and on the release page.
+  #
+  # Needs no build artifacts: the prompt reads RELEASE_NOTES.md and a changelog
+  # computed from git history, both available immediately after `version`.
+  summary:
+    needs: version
+    if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      # Base64 so a multi-line blurb survives as a job output, and so model text never
+      # passes through GitHub expression interpolation as shell.
+      whats_new_base64: ${{ steps.encode.outputs.whats_new_base64 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The changelog is `git log <previous full release>..<head>`.
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Resolve previous full release
+        id: prevtag
+        uses: ./.github/actions/se-release
+        with:
+          mode: prevtag
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ needs.version.outputs.version_string }}
+          version-encoded: ${{ needs.version.outputs.version_encoded }}
+
+      - name: Build changelog
+        uses: ./.github/actions/se-release
+        with:
+          mode: changelog
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ needs.version.outputs.version_string }}
+          previous-tag: ${{ steps.prevtag.outputs.previous_tag }}
+          head-ref: ${{ github.sha }}
+          changelog-file: ${{ github.workspace }}/.release-input/changelog.md
+
+      - name: Generate release summary with Claude
+        id: claude_summary
+        # Optional by construction: on failure or timeout the encode step yields an
+        # empty output, the manifest keeps only its notes, and the prerelease is
+        # composed from notes + changelog.
+        continue-on-error: true
+        timeout-minutes: 10
+        # The base action, NOT anthropics/claude-code-action. The wrapper parses the
+        # GitHub event context and rejects anything it does not recognise -- here it
+        # fails immediately with "Unsupported event type: push". The base action has no
+        # such gate. Pinned exactly: it publishes no moving major tag.
+        uses: anthropics/claude-code-base-action@v0.0.63
+        # Force Task subagents to run in the foreground; same rationale as
+        # claude-code-review.yml. Upstream: anthropics/claude-code-action#1499.
+        env:
+          CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1'
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Write the "What's New" section for SE.Live (the StreamElements OBS plugin)
+            release ${{ needs.version.outputs.version_string }}.
+
+            The audience is creators -- people who stream and record with OBS. They are
+            not developers and do not know this codebase. Write about what they will
+            notice: what works better, what is new, what no longer breaks.
+
+            Read these files, relative to the repository root:
+              - RELEASE_NOTES.md               release notes written by the team
+              - .release-input/changelog.md    PRs merged since the last release
+
+            Write 2-4 sentences, or up to 4 short bullets.
+
+            Rules:
+            - Use only what is in those files. Invent nothing.
+            - Do not restate the notes verbatim; they are published directly below your
+              text under a "Release Notes" heading.
+            - Skip CI, build-system, refactor and dependency work entirely -- none of it
+              is visible to a creator.
+            - Avoid internal jargon: say "scene switching" rather than naming a class,
+              and describe an effect rather than a code path.
+            - No heading: the workflow adds "What's New" itself.
+            - Plain Markdown, no code fences.
+
+            Reply with the blurb text and nothing else -- no preamble, no JSON, no
+            explanation of what you did. Your entire reply is published verbatim.
+          # v0.0.63's real inputs. `claude_args` belongs to a newer interface that
+          # exists only on the action's main branch; passing it to this tag logs
+          # "Unexpected input(s)" and drops it, which is how earlier attempts silently
+          # ran on the action's retired default model and 404'd. `model` must be its own
+          # input.
+          model: claude-opus-5
+          allowed_tools: Read,Glob,Grep
+          timeout_minutes: '10'
+
+      # v0.0.63 exposes only `conclusion` and `execution_file` -- there is no
+      # `structured_output`, so the blurb is recovered from the transcript.
+      - name: Extract and encode release summary
+        id: encode
+        continue-on-error: true
+        run: |
+          set -eu
+          SUMMARY="${{ github.workspace }}/.release-input/summary.txt"
+
+          node .github/actions/se-release/extract-summary.js \
+            "${{ steps.claude_summary.outputs.execution_file }}" "$SUMMARY" || true
+
+          if [ -s "$SUMMARY" ]; then
+            echo "whats_new_base64=$(base64 --wrap=0 "$SUMMARY")" >> "$GITHUB_OUTPUT"
+            echo "::notice::What's New summary generated ($(wc -c < "$SUMMARY") bytes)"
+          else
+            echo "whats_new_base64=" >> "$GITHUB_OUTPUT"
+            echo "::warning::no What's New summary was produced; the manifest and release will carry release notes only"
+          fi
+
   windows:
     needs: version
     runs-on: windows-2022
@@ -409,8 +533,13 @@ jobs:
     uses: ./.github/workflows/build-obs-streamelements-uninstaller.yml
     secrets: inherit
   build-installer:
-    needs: [ version, build-uninstaller, windows, macos ]
-    if: needs.version.outputs.is_workflow_automation != 'true'
+    # `summary` is a dependency so the blurb reaches the manifest, but always() keeps
+    # the installer building when summary was skipped (no release notes) or failed.
+    # Release prose must never be able to stop a build shipping.
+    needs: [ version, build-uninstaller, windows, macos, summary ]
+    if: always() && needs.version.outputs.is_workflow_automation != 'true' &&
+        needs.build-uninstaller.result == 'success' &&
+        needs.windows.result == 'success' && needs.macos.result == 'success'
     permissions:
       contents: read
       id-token: write # lets the job mint a GitHub OIDC token for WIF
@@ -421,6 +550,9 @@ jobs:
       SKIP_APPLE_SIGNING_AND_NOTARIZATION: ${{ vars.SKIP_APPLE_SIGNING_AND_NOTARIZATION }}
       PLUGIN_VERSION_STRING: ${{ needs.version.outputs.version_string }}
       PLUGIN_VERSION_ENCODED: ${{ needs.version.outputs.version_encoded }}
+      # Empty when summary was skipped or failed; release_notes then composes the
+      # manifest exactly as it did before.
+      WHATS_NEW_BASE64: ${{ needs.summary.outputs.whats_new_base64 }}
 
   deploy-signed-windows:
     needs: [ version, windows, build-installer ]
@@ -634,7 +766,7 @@ jobs:
     # non-dry-run promotion. The same implicit skip already happens when
     # SKIP_WINDOWS_SIGNING or SKIP_APPLE_SIGNING_AND_NOTARIZATION is set.
     if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
-    needs: [version, windows, macos, build-uninstaller, build-installer, deploy-signed-macos, deploy-signed-windows]
+    needs: [version, windows, macos, build-uninstaller, build-installer, deploy-signed-macos, deploy-signed-windows, summary]
     runs-on: ubuntu-latest
 
     steps:
@@ -682,75 +814,28 @@ jobs:
           head-ref: ${{ github.sha }}
           changelog-file: ${{ github.workspace }}/.release-input/changelog.md
 
-      - name: Generate release summary with Claude
-        id: claude_summary
+      # The blurb is not generated here. It comes from the `summary` job, which runs
+      # early enough for build-installer to bake the same text into the manifests, so
+      # the in-app updater and the release page cannot disagree. Decoding it into the
+      # file the prerelease step already reads leaves that step unchanged.
+      - name: Decode release summary
         if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
-        # Optional by construction: on failure or timeout the guarded expression below
-        # yields an empty summary and the prerelease is composed from notes + changelog.
         continue-on-error: true
-        timeout-minutes: 10
-        # The base action, NOT anthropics/claude-code-action. The wrapper parses the
-        # GitHub event context and rejects anything it does not recognise -- on this job
-        # it fails immediately with "Unsupported event type: push", because finalize runs
-        # inside the push-triggered Build workflow. The base action has no such gate; it
-        # just runs Claude Code, which is all this step needs.
-        # Pinned to an exact version: the base action publishes no moving major tag.
-        uses: anthropics/claude-code-base-action@v0.0.63
-        # Force Task subagents to run in the foreground; same rationale as
-        # claude-code-review.yml, which documents the mechanism.
-        # Upstream: anthropics/claude-code-action#1499.
         env:
-          CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1'
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: |
-            Write the "What's New" section for SE.Live (the StreamElements OBS plugin)
-            release ${{ needs.version.outputs.version_string }}.
-
-            The audience is creators -- people who stream and record with OBS. They are
-            not developers and do not know this codebase. Write about what they will
-            notice: what works better, what is new, what no longer breaks.
-
-            Read these files, relative to the repository root:
-              - RELEASE_NOTES.md               release notes written by the team
-              - .release-input/changelog.md    PRs merged since the last release
-
-            Write 2-4 sentences, or up to 4 short bullets.
-
-            Rules:
-            - Use only what is in those files. Invent nothing.
-            - Do not restate the notes verbatim; they are published directly below your
-              text under a "Release Notes" heading.
-            - Skip CI, build-system, refactor and dependency work entirely -- none of it
-              is visible to a creator.
-            - Avoid internal jargon: say "scene switching" rather than naming a class,
-              and describe an effect rather than a code path.
-            - No heading: the workflow adds "## What's New" itself.
-            - Plain Markdown, no code fences.
-
-            Reply with the blurb text and nothing else -- no preamble, no JSON, no
-            explanation of what you did. Your entire reply is published verbatim.
-          # These are v0.0.63's real inputs. `claude_args` belongs to a newer interface
-          # that exists only on the action's main branch: passing it to this tag logs
-          # "Unexpected input(s) 'claude_args'" and drops it wholesale -- which is why
-          # earlier attempts still ran on the action's default model,
-          # claude-sonnet-4-20250514, and failed with a 404 because that model is
-          # retired. `model` must therefore be set as its own input.
-          model: claude-opus-5
-          allowed_tools: Read,Glob,Grep
-          timeout_minutes: '10'
-
-      # v0.0.63 exposes only `conclusion` and `execution_file` -- there is no
-      # `structured_output`, so the blurb is recovered from the transcript. Writing it
-      # to a file rather than a step output keeps model text out of GitHub expression
-      # interpolation entirely.
-      - name: Extract release summary
-        if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
-        continue-on-error: true
+          # Model-authored text: passed as an environment variable and decoded, never
+          # interpolated into the script body.
+          WHATS_NEW_BASE64: ${{ needs.summary.outputs.whats_new_base64 }}
         run: |
-          node .github/actions/se-release/extract-summary.js \
-            "${{ steps.claude_summary.outputs.execution_file }}" \
-            "${{ github.workspace }}/.release-input/summary.txt"
+          set -eu
+          mkdir -p "${{ github.workspace }}/.release-input"
+
+          if [ -n "${WHATS_NEW_BASE64:-}" ]; then
+            echo "$WHATS_NEW_BASE64" | base64 -d > "${{ github.workspace }}/.release-input/summary.txt"
+            echo "::notice::reusing the What's New summary from the summary job"
+          else
+            : > "${{ github.workspace }}/.release-input/summary.txt"
+            echo "::warning::no What's New summary was produced; composing from notes and changelog only"
+          fi
 
       - name: Create GitHub prerelease
         if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
@@ -829,7 +914,13 @@ jobs:
           git config --global user.email "release-bot@obs-streamelements-core"
           git config --global user.name "SE.Live Release Bot"
 
-          # Prepend current relase notes to release notes history
+          # Prepend current relase notes to release notes history.
+          #
+          # RELEASE_NOTES.md only -- the "What's New" blurb is deliberately NOT archived.
+          # It is model-authored prose regenerated per release for the manifest and the
+          # GitHub release body; persisting it here would bake it into every future
+          # build's notes and grow the history with text nobody wrote. Keep this reading
+          # from RELEASE_NOTES.md and never from the composed release_notes_raw.md.
 
           echo "### ${{ needs.version.outputs.version_string }}" >> /tmp/RELEASE_NOTES.history.md
           echo "" >> /tmp/RELEASE_NOTES.history.md
