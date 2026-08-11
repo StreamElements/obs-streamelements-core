@@ -37,6 +37,12 @@ env:
     -DENABLE_SCRIPTING_LUA=OFF
     -DENABLE_UI=OFF
 
+  # Which crash-reporting backend every job compiles in. Single source of truth:
+  # it feeds -DSTREAMELEMENTS_CRASH_HANDLER at each configure site, and symbol
+  # upload will be gated on the same value, so a build's binary and its symbols
+  # cannot end up pointing at different services.
+  SE_CRASH_HANDLER: bugsplat
+
   BUILD_UNINSTALLER: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
   BUILD_INSTALLER: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
   UPLOAD_SYMBOLS: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
@@ -303,7 +309,7 @@ jobs:
           copy C:\local\obs-studio\plugins\obs-streamelements-core\CMakeUserPresets.json C:\local\obs-studio\CMakeUserPresets.json
           del C:\local\obs-studio\plugins\obs-streamelements-core\CMakeUserPresets.json
           cd /d C:\local\obs-studio
-          cmake --preset=windows-x64-streamelements %BUILD_OPTIONS%
+          cmake --preset=windows-x64-streamelements %BUILD_OPTIONS% -DSTREAMELEMENTS_CRASH_HANDLER=%SE_CRASH_HANDLER%
 
       - name: Build
         shell: cmd
@@ -427,6 +433,7 @@ jobs:
           cmake --preset=macos \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -B build_macos_arm64 \
+            -DSTREAMELEMENTS_CRASH_HANDLER=$SE_CRASH_HANDLER \
             $BUILD_OPTIONS
 
           cd build_macos_arm64
@@ -447,6 +454,7 @@ jobs:
           cmake --preset=macos \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
             -B build_macos_x86_64 \
+            -DSTREAMELEMENTS_CRASH_HANDLER=$SE_CRASH_HANDLER \
             $BUILD_OPTIONS
 
           cd build_macos_x86_64
