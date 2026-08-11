@@ -209,6 +209,53 @@ public:
 		SaveConfig();
 	}
 
+	//
+	// Contact details the user supplied on a previous crash report.
+	//
+	// Kept so the crash-time prompt can prefill them and the user does not
+	// retype their details every time, and so that events can carry the user
+	// even when a crash never reaches the prompt.
+	//
+	// These are written from the crash path, where the process is already
+	// dying -- deliberately a single small ini write, and only after the
+	// user has actually typed something.
+	//
+	std::string GetCrashReportUserName()
+	{
+		const char *value = config_get_string(
+			StreamElementsConfig::GetInstance()->GetConfig(),
+			"CrashReporting", "UserName");
+
+		return !!value ? value : "";
+	}
+
+	void SetCrashReportUserName(std::string value)
+	{
+		config_set_string(
+			StreamElementsConfig::GetInstance()->GetConfig(),
+			"CrashReporting", "UserName", value.c_str());
+
+		SaveConfig();
+	}
+
+	std::string GetCrashReportUserEmail()
+	{
+		const char *value = config_get_string(
+			StreamElementsConfig::GetInstance()->GetConfig(),
+			"CrashReporting", "UserEmail");
+
+		return !!value ? value : "";
+	}
+
+	void SetCrashReportUserEmail(std::string value)
+	{
+		config_set_string(
+			StreamElementsConfig::GetInstance()->GetConfig(),
+			"CrashReporting", "UserEmail", value.c_str());
+
+		SaveConfig();
+	}
+
 	std::string GetSceneItemsAuxActionsConfig()
 	{
 		const char *value = config_get_string(
