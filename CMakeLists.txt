@@ -813,6 +813,26 @@ if (WIN32)
 			)
 		endforeach( bugsplat_bin_file )
 	endif()
+
+	if(ENABLE_SENTRY)
+		# The sentry-crash daemon writes and uploads the minidump out of
+		# process, so it has to ship with the plugin or the Sentry build
+		# reports events with no dump attached.
+		#
+		# It goes beside our own binary rather than beside obs64.exe,
+		# where the BugSplat DLLs above go. The SDK's default lookup is
+		# next to the host executable, which would let any other plugin
+		# shipping a sentry-crash.exe of its own shadow ours -- so the
+		# handler passes this exact location to
+		# sentry_options_set_handler_pathw() instead of relying on it.
+		add_dependencies(obs-streamelements-core sentry-crash)
+
+		add_custom_command(TARGET obs-streamelements-core POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"$<TARGET_FILE:sentry-crash>"
+			"$<TARGET_FILE_DIR:obs-streamelements-core>"
+		)
+	endif()
 endif()
 
 
