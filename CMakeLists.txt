@@ -432,6 +432,14 @@ if (ENABLE_SENTRY)
 	list(APPEND obs-streamelements-core_SOURCES
 		streamelements/StreamElementsSentryCrashHandler.cpp
 	)
+
+	# The crash-time consent prompt. Only Sentry needs it: BugSplat's SDK
+	# shows a prompt of its own, whereas Sentry uploads silently.
+	if (WIN32)
+		list(APPEND obs-streamelements-core_SOURCES
+			streamelements/StreamElementsCrashConsentDialog.cpp
+		)
+	endif()
 endif()
 
 set(obs-streamelements-core_HEADERS
@@ -477,6 +485,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/StreamElementsAnalyticsEventsManager.hpp
 	streamelements/StreamElementsCrashHandler.hpp
 	streamelements/StreamElementsCrashContext.hpp
+	streamelements/StreamElementsCrashConsentDialog.hpp
 	streamelements/StreamElementsBugSplatCrashHandler.hpp
 	streamelements/StreamElementsSentryCrashHandler.hpp
 	streamelements/StreamElementsMessageBus.hpp

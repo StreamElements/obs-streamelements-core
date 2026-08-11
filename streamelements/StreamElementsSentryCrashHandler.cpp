@@ -1,5 +1,7 @@
 #include "StreamElementsSentryCrashHandler.hpp"
 
+#include "StreamElementsConfig.hpp"
+#include "StreamElementsCrashConsentDialog.hpp"
 #include "StreamElementsCrashContext.hpp"
 #include "StreamElementsUtils.hpp"
 
@@ -38,6 +40,12 @@ static LPTOP_LEVEL_EXCEPTION_FILTER s_hostExceptionFilter = nullptr;
 static LONG s_insideExceptionFilter = 0L;
 
 static HWND s_messageWindow = NULL;
+
+// Contact details from the last report the user filled in. Read once at
+// startup, so the crash path never has to touch the config to prefill the
+// prompt.
+static std::string s_userName;
+static std::string s_userEmail;
 
 /* ================================================================= */
 
@@ -150,10 +158,71 @@ static bool IsTagWorthyAttribute(const std::string &name)
 }
 
 //
+// Identifies the reporter on every event.
+//
+// The machine id is always present; name and email only once the user has
+// supplied them on some earlier crash report. Called both at startup -- so a
+// crash that never reaches the prompt still says who it came from -- and again
+// after the prompt, with whatever was just typed.
+//
+static void SetSentryUser(const std::string &name, const std::string &email)
+{
+	sentry_value_t user = sentry_value_new_object();
+
+	sentry_value_set_by_key(
+		user, "id",
+		sentry_value_new_string(GetComputerSystemUniqueId().c_str()));
+
+	if (name.size()) {
+		sentry_value_set_by_key(user, "username",
+					sentry_value_new_string(name.c_str()));
+	}
+
+	if (email.size()) {
+		sentry_value_set_by_key(user, "email",
+					sentry_value_new_string(email.c_str()));
+	}
+
+	sentry_set_user(user);
+}
+
+//
+// Writes back what the user typed, so the next prompt starts prefilled.
+//
+// This runs on the crashing thread and writes the plugin's ini. It is one small
+// file write, guarded so it only happens when there is something to store, and
+// it sits on a path that is already about to zip the entire configuration tree
+// -- but it is still file I/O on a dying process, which is why it is not done
+// unconditionally.
+//
+static void PersistContactDetails(const std::string &name,
+				  const std::string &email)
+{
+	auto config = StreamElementsConfig::GetInstance();
+
+	if (!config)
+		return;
+
+	if (name.size() && name != s_userName) {
+		config->SetCrashReportUserName(name);
+
+		s_userName = name;
+	}
+
+	if (email.size() && email != s_userEmail) {
+		config->SetCrashReportUserEmail(email);
+
+		s_userEmail = email;
+	}
+}
+
+//
 // Puts everything StreamElementsCrashContext gathered onto the Sentry scope, so
 // that the event sentry's filter builds a moment later carries it.
 //
-static void ArmSentryScope(const StreamElementsCrashContext::Result &context)
+static void
+ArmSentryScope(const StreamElementsCrashContext::Result &context,
+	       const StreamElementsCrashConsentDialog::Result &consent)
 {
 	// Complete record, unabridged: a context is JSON in the event body, so
 	// it has neither the WER entry cap nor BugSplat's hostility to long
@@ -188,6 +257,26 @@ static void ArmSentryScope(const StreamElementsCrashContext::Result &context)
 		// in the user's temp directory survive.
 		sentry_attach_filew(utf8_to_wstring(attachment.path).c_str());
 	}
+
+	//
+	// What the user told us.
+	//
+	// Not sentry_capture_feedback(): that needs an event_id to attach to,
+	// and the event is created downstream by sentry's own filter, so there
+	// is no id to hand it at this point. On the scope it travels with the
+	// event that filter builds.
+	//
+	SetSentryUser(consent.name, consent.email);
+
+	if (consent.description.size()) {
+		sentry_value_t report = sentry_value_new_object();
+
+		sentry_value_set_by_key(
+			report, "description",
+			sentry_value_new_string(consent.description.c_str()));
+
+		sentry_set_context("user_report", report);
+	}
 }
 
 /* ================================================================= */
@@ -208,22 +297,42 @@ static LONG CALLBACK SentryExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
 		s_crashContext->WalkStack(pExceptionInfo->ContextRecord);
 
 	if (InterlockedIncrement(&s_insideExceptionFilter) == 1L) {
-		CreateMessageWindow();
-
 		// The gate. A stack that never passed through our code is not
 		// ours to report: we skip sentry's filter entirely, so no event
 		// and no minidump are produced, and go straight to the host
-		// filter below.
+		// filter below. The user is not asked about a crash we were
+		// never going to send.
 		if (s_initialized && s_crashContext &&
 		    s_crashContext->ShouldReport()) {
-			ArmSentryScope(s_crashContext->Collect());
+			// Ask first. Sentry uploads silently by default, and
+			// going to Sentry without this would start sending
+			// crash data from users who never agreed to it -- and
+			// would lose the descriptions, which are frequently the
+			// only account of what the user was actually doing.
+			const auto consent =
+				StreamElementsCrashConsentDialog::Prompt(
+					s_userName, s_userEmail);
 
-			if (s_sentryExceptionFilter) {
-				// Emits the event and signals the sentry-crash
-				// daemon, which writes and uploads the minidump
-				// out of process. Returns once the daemon has
-				// captured it, or on timeout.
-				s_sentryExceptionFilter(pExceptionInfo);
+			if (consent.consented) {
+				PersistContactDetails(consent.name,
+						      consent.email);
+
+				// Only now: collecting the payload and waiting
+				// on the daemon takes a moment, and there is
+				// nothing to wait for if the user declined.
+				CreateMessageWindow();
+
+				ArmSentryScope(s_crashContext->Collect(),
+					       consent);
+
+				if (s_sentryExceptionFilter) {
+					// Emits the event and signals the
+					// sentry-crash daemon, which writes and
+					// uploads the minidump out of process.
+					// Returns once the daemon has captured
+					// it, or on timeout.
+					s_sentryExceptionFilter(pExceptionInfo);
+				}
 			}
 		}
 
@@ -305,22 +414,24 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 	sentry_options_set_crash_reporting_mode(
 		options, SENTRY_CRASH_REPORTING_MODE_NATIVE_WITH_MINIDUMP);
 
-	sentry_set_user(([] {
-		sentry_value_t user = sentry_value_new_object();
-
-		sentry_value_set_by_key(
-			user, "id",
-			sentry_value_new_string(
-				GetComputerSystemUniqueId().c_str()));
-
-		return user;
-	})());
-
 	if (sentry_init(options) != 0) {
 		blog(LOG_ERROR,
 		     "obs-streamelements-core: StreamElements: Crash Handler: sentry_init() failed");
 		return;
 	}
+
+	// Contact details the user gave on some previous crash report, if any.
+	// Read here rather than on the crash path, both to prefill the prompt
+	// and so that a crash which never reaches the prompt -- a fast-fail
+	// caught by WER, say -- still says who it came from.
+	auto config = StreamElementsConfig::GetInstance();
+
+	if (config) {
+		s_userName = config->GetCrashReportUserName();
+		s_userEmail = config->GetCrashReportUserEmail();
+	}
+
+	SetSentryUser(s_userName, s_userEmail);
 
 	// Whatever sentry_init() installed. Ours goes on top, so ours runs
 	// first and this one is invoked by us, deliberately, only when the
