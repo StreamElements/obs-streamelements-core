@@ -31,6 +31,7 @@ static const wchar_t *const CONTACT_TEXT =
 #define IDC_DESCRIPTION 1001
 #define IDC_NAME 1002
 #define IDC_EMAIL 1003
+#define IDC_ERRORICON 1004
 
 // System window class atoms, as used inside a dialog template.
 #define ATOM_BUTTON 0x0080
@@ -158,9 +159,35 @@ static INT_PTR CALLBACK ConsentDialogProc(HWND dialog, UINT message,
 					  state->email.c_str());
 		}
 
-		// Nothing else is going to bring this forward: it has no owner
-		// window (see Prompt), and the application it belongs to is in
-		// the middle of dying.
+		// The system error icon, in the body next to the message and
+		// again in the title bar. Loaded rather than named in the
+		// template so it follows the OS rather than shipping our own
+		// bitmap.
+		// LoadIcon rather than LoadIconW: IDI_ERROR is itself a
+		// TCHAR-generic macro, so the two have to match or the build
+		// breaks wherever UNICODE is not defined.
+		HICON icon = ::LoadIcon(NULL, IDI_ERROR);
+
+		if (icon) {
+			::SendDlgItemMessageW(dialog, IDC_ERRORICON,
+					      STM_SETICON, (WPARAM)icon, 0);
+
+			::SendMessageW(dialog, WM_SETICON, ICON_SMALL,
+				       (LPARAM)icon);
+			::SendMessageW(dialog, WM_SETICON, ICON_BIG,
+				       (LPARAM)icon);
+		}
+
+		// Always on top.
+		//
+		// WS_EX_TOPMOST is already in the template, but it is set again
+		// here because it is load-bearing rather than cosmetic: this
+		// window has no owner (see Prompt), so nothing else will raise
+		// it, and OBS is in the middle of dying behind it. A prompt the
+		// user never sees is a crash report never sent.
+		::SetWindowPos(dialog, HWND_TOPMOST, 0, 0, 0, 0,
+			       SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
 		::SetForegroundWindow(dialog);
 
 		::SetFocus(::GetDlgItem(dialog, IDC_DESCRIPTION));
@@ -208,7 +235,7 @@ static void BuildConsentDialogTemplate(DialogTemplateBuilder &builder)
 
 	builder.AddDword(dialogStyle);
 	builder.AddDword(WS_EX_TOPMOST);
-	builder.AddWord(9); // control count
+	builder.AddWord(10); // control count
 	builder.AddShort(0);
 	builder.AddShort(0);
 	builder.AddShort(320);
@@ -225,7 +252,13 @@ static void BuildConsentDialogTemplate(DialogTemplateBuilder &builder)
 	const DWORD editStyle = visibleChild | WS_TABSTOP | WS_BORDER |
 				ES_AUTOHSCROLL;
 
-	AddControl(builder, visibleChild, 7, 7, 306, 26, (WORD)-1, ATOM_STATIC,
+	// The icon sizes itself to the system icon; cx/cy here are only a hint.
+	// The message clears it and both share a right edge with everything
+	// below (7 + 306 == 36 + 277).
+	AddControl(builder, visibleChild | SS_ICON, 7, 9, 21, 20, IDC_ERRORICON,
+		   ATOM_STATIC, L"");
+
+	AddControl(builder, visibleChild, 36, 7, 277, 30, (WORD)-1, ATOM_STATIC,
 		   PROMPT_TEXT);
 
 	AddControl(builder,
