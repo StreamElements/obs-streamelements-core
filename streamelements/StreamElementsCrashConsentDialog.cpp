@@ -24,7 +24,23 @@ static const wchar_t *const PROMPT_TEXT =
 	L"What were you doing just before this happened?";
 
 static const wchar_t *const CONTACT_TEXT =
-	L"Name and email are optional. They let us follow up about this crash, and are remembered for next time.";
+	L"All three are optional. They let us follow up about this crash, and are remembered for next time.";
+
+//
+// What the report actually contains.
+//
+// The archive is the whole OBS configuration tree plus a picture of the OBS
+// main window, which can show a camera preview, a browser source or anything
+// else on screen at the moment of the crash. That is personal information by
+// any reasonable reading, and the user is entitled to know before consenting.
+//
+// The stream-key claim is load-bearing and true: service.json is redacted in
+// place before it enters the archive. If that redaction is ever removed or
+// bypassed, this sentence has to go with it.
+//
+static const wchar_t *const PRIVACY_TEXT =
+	L"The report includes your OBS Studio and SE.Live configuration and an image of the OBS window. "
+	L"These may contain personal information, and are used only to diagnose this crash. Stream keys are removed.";
 
 /* ================================================================= */
 
@@ -32,6 +48,7 @@ static const wchar_t *const CONTACT_TEXT =
 #define IDC_NAME 1002
 #define IDC_EMAIL 1003
 #define IDC_ERRORICON 1004
+#define IDC_DISCORD 1005
 
 // System window class atoms, as used inside a dialog template.
 #define ATOM_BUTTON 0x0080
@@ -119,6 +136,7 @@ static void AddControl(DialogTemplateBuilder &builder, DWORD style, short x,
 struct DialogState {
 	std::wstring name;
 	std::wstring email;
+	std::wstring discord;
 
 	std::wstring description;
 	bool consented = false;
@@ -157,6 +175,8 @@ static INT_PTR CALLBACK ConsentDialogProc(HWND dialog, UINT message,
 					  state->name.c_str());
 			::SetDlgItemTextW(dialog, IDC_EMAIL,
 					  state->email.c_str());
+			::SetDlgItemTextW(dialog, IDC_DISCORD,
+					  state->discord.c_str());
 		}
 
 		// The system error icon, in the body next to the message and
@@ -209,6 +229,7 @@ static INT_PTR CALLBACK ConsentDialogProc(HWND dialog, UINT message,
 				GetControlText(dialog, IDC_DESCRIPTION);
 			state->name = GetControlText(dialog, IDC_NAME);
 			state->email = GetControlText(dialog, IDC_EMAIL);
+			state->discord = GetControlText(dialog, IDC_DISCORD);
 			state->consented = true;
 		}
 
@@ -235,11 +256,11 @@ static void BuildConsentDialogTemplate(DialogTemplateBuilder &builder)
 
 	builder.AddDword(dialogStyle);
 	builder.AddDword(WS_EX_TOPMOST);
-	builder.AddWord(10); // control count
+	builder.AddWord(13); // control count
 	builder.AddShort(0);
 	builder.AddShort(0);
 	builder.AddShort(320);
-	builder.AddShort(200);
+	builder.AddShort(232);
 
 	builder.AddWord(0); // no menu
 	builder.AddWord(0); // default dialog class
@@ -263,25 +284,36 @@ static void BuildConsentDialogTemplate(DialogTemplateBuilder &builder)
 
 	AddControl(builder,
 		   editStyle | ES_MULTILINE | ES_WANTRETURN | WS_VSCROLL, 7, 37,
-		   306, 62, IDC_DESCRIPTION, ATOM_EDIT, L"");
+		   306, 58, IDC_DESCRIPTION, ATOM_EDIT, L"");
 
-	AddControl(builder, visibleChild, 7, 108, 40, 10, (WORD)-1, ATOM_STATIC,
+	// Labels are 44 wide rather than 40 so "Discord:" is not clipped; the
+	// edits start past them at 54 and share a right edge with everything
+	// else at 313.
+	AddControl(builder, visibleChild, 7, 102, 44, 10, (WORD)-1, ATOM_STATIC,
 		   L"Name:");
-	AddControl(builder, editStyle, 50, 106, 263, 13, IDC_NAME, ATOM_EDIT,
+	AddControl(builder, editStyle, 54, 100, 259, 13, IDC_NAME, ATOM_EDIT,
 		   L"");
 
-	AddControl(builder, visibleChild, 7, 128, 40, 10, (WORD)-1, ATOM_STATIC,
+	AddControl(builder, visibleChild, 7, 120, 44, 10, (WORD)-1, ATOM_STATIC,
 		   L"Email:");
-	AddControl(builder, editStyle, 50, 126, 263, 13, IDC_EMAIL, ATOM_EDIT,
+	AddControl(builder, editStyle, 54, 118, 259, 13, IDC_EMAIL, ATOM_EDIT,
 		   L"");
 
-	AddControl(builder, visibleChild, 7, 146, 306, 20, (WORD)-1,
+	AddControl(builder, visibleChild, 7, 138, 44, 10, (WORD)-1, ATOM_STATIC,
+		   L"Discord:");
+	AddControl(builder, editStyle, 54, 136, 259, 13, IDC_DISCORD, ATOM_EDIT,
+		   L"");
+
+	AddControl(builder, visibleChild, 7, 155, 306, 10, (WORD)-1,
 		   ATOM_STATIC, CONTACT_TEXT);
 
-	AddControl(builder, visibleChild | WS_TABSTOP | BS_DEFPUSHBUTTON, 185,
-		   176, 60, 16, IDOK, ATOM_BUTTON, L"Send report");
+	AddControl(builder, visibleChild, 7, 170, 306, 30, (WORD)-1,
+		   ATOM_STATIC, PRIVACY_TEXT);
 
-	AddControl(builder, visibleChild | WS_TABSTOP | BS_PUSHBUTTON, 253, 176,
+	AddControl(builder, visibleChild | WS_TABSTOP | BS_DEFPUSHBUTTON, 185,
+		   208, 60, 16, IDOK, ATOM_BUTTON, L"Send report");
+
+	AddControl(builder, visibleChild | WS_TABSTOP | BS_PUSHBUTTON, 253, 208,
 		   60, 16, IDCANCEL, ATOM_BUTTON, L"Don't send");
 }
 
@@ -289,13 +321,15 @@ static void BuildConsentDialogTemplate(DialogTemplateBuilder &builder)
 
 StreamElementsCrashConsentDialog::Result
 StreamElementsCrashConsentDialog::Prompt(const std::string &name,
-					 const std::string &email)
+					 const std::string &email,
+					 const std::string &discord)
 {
 	Result result;
 
 	DialogState state;
 	state.name = utf8_to_wstring(name);
 	state.email = utf8_to_wstring(email);
+	state.discord = utf8_to_wstring(discord);
 
 	DialogTemplateBuilder builder;
 
@@ -325,6 +359,7 @@ StreamElementsCrashConsentDialog::Prompt(const std::string &name,
 	result.description = wstring_to_utf8(state.description);
 	result.name = wstring_to_utf8(state.name);
 	result.email = wstring_to_utf8(state.email);
+	result.discord = wstring_to_utf8(state.discord);
 
 	return result;
 }

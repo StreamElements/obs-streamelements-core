@@ -46,6 +46,7 @@ static HWND s_messageWindow = NULL;
 // prompt.
 static std::string s_userName;
 static std::string s_userEmail;
+static std::string s_userDiscord;
 
 /* ================================================================= */
 
@@ -165,7 +166,8 @@ static bool IsTagWorthyAttribute(const std::string &name)
 // crash that never reaches the prompt still says who it came from -- and again
 // after the prompt, with whatever was just typed.
 //
-static void SetSentryUser(const std::string &name, const std::string &email)
+static void SetSentryUser(const std::string &name, const std::string &email,
+			  const std::string &discord)
 {
 	sentry_value_t user = sentry_value_new_object();
 
@@ -183,6 +185,15 @@ static void SetSentryUser(const std::string &name, const std::string &email)
 					sentry_value_new_string(email.c_str()));
 	}
 
+	// Not one of Sentry's recognised user fields, but the user object
+	// preserves and displays additional keys -- and this belongs with the
+	// rest of the reporter's identity rather than off in a context.
+	if (discord.size()) {
+		sentry_value_set_by_key(
+			user, "discord",
+			sentry_value_new_string(discord.c_str()));
+	}
+
 	sentry_set_user(user);
 }
 
@@ -196,7 +207,8 @@ static void SetSentryUser(const std::string &name, const std::string &email)
 // unconditionally.
 //
 static void PersistContactDetails(const std::string &name,
-				  const std::string &email)
+				  const std::string &email,
+				  const std::string &discord)
 {
 	auto config = StreamElementsConfig::GetInstance();
 
@@ -213,6 +225,12 @@ static void PersistContactDetails(const std::string &name,
 		config->SetCrashReportUserEmail(email);
 
 		s_userEmail = email;
+	}
+
+	if (discord.size() && discord != s_userDiscord) {
+		config->SetCrashReportUserDiscord(discord);
+
+		s_userDiscord = discord;
 	}
 }
 
@@ -266,7 +284,7 @@ ArmSentryScope(const StreamElementsCrashContext::Result &context,
 	// is no id to hand it at this point. On the scope it travels with the
 	// event that filter builds.
 	//
-	SetSentryUser(consent.name, consent.email);
+	SetSentryUser(consent.name, consent.email, consent.discord);
 
 	if (consent.description.size()) {
 		sentry_value_t report = sentry_value_new_object();
@@ -311,11 +329,12 @@ static LONG CALLBACK SentryExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
 			// only account of what the user was actually doing.
 			const auto consent =
 				StreamElementsCrashConsentDialog::Prompt(
-					s_userName, s_userEmail);
+					s_userName, s_userEmail, s_userDiscord);
 
 			if (consent.consented) {
 				PersistContactDetails(consent.name,
-						      consent.email);
+						      consent.email,
+						      consent.discord);
 
 				// Only now: collecting the payload and waiting
 				// on the daemon takes a moment, and there is
@@ -429,9 +448,10 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 	if (config) {
 		s_userName = config->GetCrashReportUserName();
 		s_userEmail = config->GetCrashReportUserEmail();
+		s_userDiscord = config->GetCrashReportUserDiscord();
 	}
 
-	SetSentryUser(s_userName, s_userEmail);
+	SetSentryUser(s_userName, s_userEmail, s_userDiscord);
 
 	// Whatever sentry_init() installed. Ours goes on top, so ours runs
 	// first and this one is invoked by us, deliberately, only when the

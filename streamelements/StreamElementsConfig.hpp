@@ -256,6 +256,24 @@ public:
 		SaveConfig();
 	}
 
+	std::string GetCrashReportUserDiscord()
+	{
+		const char *value = config_get_string(
+			StreamElementsConfig::GetInstance()->GetConfig(),
+			"CrashReporting", "UserDiscord");
+
+		return !!value ? value : "";
+	}
+
+	void SetCrashReportUserDiscord(std::string value)
+	{
+		config_set_string(
+			StreamElementsConfig::GetInstance()->GetConfig(),
+			"CrashReporting", "UserDiscord", value.c_str());
+
+		SaveConfig();
+	}
+
 	std::string GetSceneItemsAuxActionsConfig()
 	{
 		const char *value = config_get_string(
