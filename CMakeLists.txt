@@ -435,9 +435,11 @@ list(APPEND obs-streamelements-core_SOURCES
 )
 
 # Backend-agnostic crash-time collection, shared by whichever backend is
-# selected. Windows only for now: the macOS integrations gather nothing beyond a
-# single attribute set at startup, so there is no macOS implementation yet.
-if (WIN32 AND (ENABLE_BUGSPLAT OR ENABLE_SENTRY))
+# selected and by both platforms. The collection itself is portable -- the same
+# zip, the same system and performance snapshots, the same async- and API-call
+# context; only the stack walk, the temporary-file dance and the window capture
+# fork, and those are #ifdef'd inside.
+if (ENABLE_BUGSPLAT OR ENABLE_SENTRY)
 	list(APPEND obs-streamelements-core_SOURCES
 		streamelements/StreamElementsCrashContext.cpp
 	)

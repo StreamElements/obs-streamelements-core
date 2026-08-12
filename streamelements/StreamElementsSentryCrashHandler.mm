@@ -2,6 +2,7 @@
 
 #include "StreamElementsConfig.hpp"
 #include "StreamElementsCrashConsentDialog.hpp"
+#include "StreamElementsCrashContext.hpp"
 #include "StreamElementsUtils.hpp"
 
 #include <util/base.h>
@@ -47,37 +48,55 @@ static struct sigaction
 
 static volatile sig_atomic_t s_handledCrash = 0;
 
+// Owns the stack walker and the remote module-of-interest list. Built at
+// startup, because building it fetches that list over HTTP.
+static StreamElementsCrashContext *s_crashContext = nullptr;
+
 /* ================================================================= */
 
 //
-// Whether the crashing stack passed through our code.
+// Attributes worth having as searchable tags. Same reasoning and same short
+// list as the Windows handler: tags are capped under WER there, and keeping the
+// two platforms queryable the same way matters more than the cap does here.
 //
-// This is not the Windows gate. On Windows a full stack walk decides it, and a
-// crash that never touched us is never reported at all. macOS has never had
-// that gate -- the BugSplat integration reports every OBS crash -- so this does
-// not narrow what is reported; it exists so the *event* can say whether we were
-// on the stack, which is the part that costs nothing to know.
-//
-static bool StackTouchesOurModule()
+static bool IsTagWorthyAttribute(const std::string &name)
 {
-	void *callstack[128];
+	return name == "product" || name == "selive.api.calls";
+}
 
-	const int frames = backtrace(callstack, 128);
+//
+// Puts everything StreamElementsCrashContext gathered onto the scope, so the
+// event sentry builds a moment later carries it. Mirrors the Windows handler.
+//
+static void ArmSentryScope(const StreamElementsCrashContext::Result &context)
+{
+	sentry_value_t attributes = sentry_value_new_object();
 
-	Dl_info info;
+	for (auto &attribute : context.attributes) {
+		sentry_value_set_by_key(
+			attributes, attribute.name.c_str(),
+			sentry_value_new_string(attribute.value.c_str()));
 
-	for (int i = 0; i < frames; ++i) {
-		if (!dladdr(callstack[i], &info) || !info.dli_fname)
-			continue;
-
-		const std::string path = info.dli_fname;
-
-		if (path.find("obs-streamelements-core") != std::string::npos ||
-		    path.find("obs-streamelements") != std::string::npos)
-			return true;
+		if (IsTagWorthyAttribute(attribute.name)) {
+			sentry_set_tag(attribute.name.c_str(),
+				       attribute.value.c_str());
+		}
 	}
 
-	return false;
+	sentry_set_context("selive", attributes);
+
+	if (context.notes.size()) {
+		sentry_value_t async = sentry_value_new_object();
+
+		sentry_value_set_by_key(
+			async, "callStack",
+			sentry_value_new_string(context.notes.c_str()));
+
+		sentry_set_context("async_call_context", async);
+	}
+
+	for (auto &attachment : context.attachments)
+		sentry_attach_file(attachment.path.c_str());
 }
 
 //
@@ -160,8 +179,20 @@ static sentry_value_t OnCrash(const sentry_ucontext_t *uctx,
 	// call). Suppression is the consent gate's job instead -- see the class
 	// comment.
 	//
-	sentry_value_set_by_key(event, "selive_module_on_stack",
-				sentry_value_new_bool(StackTouchesOurModule()));
+	// It is, however, the last point at which the scope can still be
+	// changed: the envelope is written immediately after, and there is no
+	// public API to add to one that already exists. So the whole payload is
+	// gathered here rather than alongside the prompt.
+	//
+	if (s_crashContext) {
+		s_crashContext->WalkStack(nullptr);
+
+		sentry_value_set_by_key(
+			event, "selive_module_on_stack",
+			sentry_value_new_bool(s_crashContext->ShouldReport()));
+
+		ArmSentryScope(s_crashContext->Collect());
+	}
 
 	return event;
 }
@@ -320,6 +351,11 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 	}
 
 	SetSentryUser(s_userName, s_userEmail, s_userDiscord);
+
+	// After sentry_init, and deliberately: constructing this fetches the
+	// remote module-of-interest list over HTTP, which is not something to
+	// do while a signal handler might already be arriving.
+	s_crashContext = new StreamElementsCrashContext();
 
 	s_initialized = true;
 

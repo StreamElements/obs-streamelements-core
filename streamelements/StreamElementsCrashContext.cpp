@@ -4,7 +4,6 @@
 #include "StreamElementsGlobalStateManager.hpp"
 #include "StreamElementsSecretRedactor.hpp"
 #include "StreamElementsUtils.hpp"
-#include "deps/StackWalker/StackWalker.h"
 #include "deps/zip/zip.h"
 
 #include <util/base.h>
@@ -14,17 +13,31 @@
 #include <time.h>
 #include <stdio.h>
 #include <fcntl.h>
-#include <io.h>
 #include <string>
 #include <vector>
 #include <map>
 #include <filesystem>
 #include <algorithm>
 
+#ifdef WIN32
+#include "deps/StackWalker/StackWalker.h"
+#include <io.h>
 #include <windows.h>
 #include <winuser.h>
-
 #include <QString>
+#else
+#include <unistd.h>
+#include <execinfo.h>
+#include <dlfcn.h>
+#include <sys/types.h>
+
+// Windows spellings used throughout the collection below, so the shared code
+// does not have to fork for the sake of a type name or an underscore.
+typedef unsigned char BYTE;
+
+#define _read read
+#define _close close
+#endif
 
 /* ================================================================= */
 
@@ -36,6 +49,8 @@
 // the remote settings.json when that fetch succeeds -- which is why the fetch
 // happens in the constructor, at plugin startup, and not on the crash path.
 //
+#ifdef WIN32
+
 static class MyStackWalker : public StackWalker {
 public:
 	MyStackWalker(int options) : StackWalker(options)
@@ -187,6 +202,74 @@ public:
 	std::string output;
 };
 
+#else
+
+//
+// macOS equivalent of the walker above.
+//
+// backtrace() rather than StackWalker: it is async-signal-safe, needs no symbol
+// server, and dladdr gives the owning image per frame, which is all the
+// module-of-interest test requires. The symbol names are less complete than a
+// Windows walk with a PDB -- the minidump and Sentry's own symbolication cover
+// that -- so this exists for the gate and for a human-readable stack.txt.
+//
+class MyStackWalker {
+public:
+	MyStackWalker()
+	{
+		output.reserve(1024 * 16);
+
+		modulesOfInterest.push_back("obs-streamelements-core");
+		modulesOfInterest.push_back("obs-streamelements");
+	}
+
+	void Walk()
+	{
+		void *frames[128];
+
+		const int count = backtrace(frames, 128);
+
+		char **symbols = backtrace_symbols(frames, count);
+
+		for (int i = 0; i < count; ++i) {
+			Dl_info info;
+
+			const char *image = "";
+
+			if (dladdr(frames[i], &info) && info.dli_fname)
+				image = info.dli_fname;
+
+			output += image;
+			output += "\t";
+			output += (symbols && symbols[i]) ? symbols[i] : "";
+			output += "\n";
+
+			if (hasMatchModuleOfInterest || !*image)
+				continue;
+
+			const std::string path = image;
+
+			for (auto &filter : modulesOfInterest) {
+				if (path.find(filter) != std::string::npos) {
+					hasMatchModuleOfInterest = true;
+
+					break;
+				}
+			}
+		}
+
+		if (symbols)
+			free(symbols);
+	}
+
+public:
+	bool hasMatchModuleOfInterest = false;
+	std::vector<std::string> modulesOfInterest;
+	std::string output;
+};
+
+#endif
+
 /* ================================================================= */
 
 struct StreamElementsCrashContext::Impl {
@@ -199,6 +282,7 @@ static inline bool GetTemporaryFilePath(const wchar_t *basename,
 					const wchar_t *ext,
 					std::wstring &wtempBufPath)
 {
+#ifdef WIN32
 	const size_t BUF_LEN = 2048;
 
 	std::vector<wchar_t> pathBuffer;
@@ -219,6 +303,27 @@ static inline bool GetTemporaryFilePath(const wchar_t *basename,
 	wtempBufPath += ext;
 
 	return true;
+#else
+	// mkstemp rather than tmpnam: it creates the file atomically, so two
+	// crashing processes cannot land on the same name. The suffix is
+	// appended afterwards because mkstemp owns the tail of the template.
+	std::string path = "/tmp/" + wstring_to_utf8(basename) + "-XXXXXX";
+
+	std::vector<char> buffer(path.begin(), path.end());
+	buffer.push_back('\0');
+
+	const int fd = mkstemp(buffer.data());
+
+	if (fd < 0)
+		return false;
+
+	close(fd);
+
+	wtempBufPath = utf8_to_wstring(std::string(buffer.data()) +
+				       wstring_to_utf8(ext));
+
+	return true;
+#endif
 }
 
 /* ================================================================= */
@@ -227,9 +332,13 @@ StreamElementsCrashContext::StreamElementsCrashContext()
 {
 	m_impl = new Impl();
 
+#ifdef WIN32
 	m_impl->stackWalker = new MyStackWalker(
 		StackWalker::RetrieveSymbol | StackWalker::RetrieveLine |
 		StackWalker::RetrieveModuleInfo);
+#else
+	m_impl->stackWalker = new MyStackWalker();
+#endif
 }
 
 StreamElementsCrashContext::~StreamElementsCrashContext()
@@ -248,8 +357,16 @@ void StreamElementsCrashContext::WalkStack(void *contextRecord)
 	if (!m_impl || !m_impl->stackWalker)
 		return;
 
+#ifdef WIN32
 	m_impl->stackWalker->ShowCallstack(::GetCurrentThread(),
 					   (PCONTEXT)contextRecord);
+#else
+	// The context record is ignored: backtrace() walks the calling thread,
+	// which on the crash path is the thread that faulted.
+	UNUSED_PARAMETER(contextRecord);
+
+	m_impl->stackWalker->Walk();
+#endif
 }
 
 bool StreamElementsCrashContext::ShouldReport() const
@@ -282,7 +399,11 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 		return result;
 	}
 
+#ifdef WIN32
 	std::wstring obsDataPath = QString(programDataPathBuf).toStdWString();
+#else
+	std::wstring obsDataPath = utf8_to_wstring(programDataPathBuf);
+#endif
 
 	zip_t *zip = zip_open(tempBufPath.c_str(), 9, 'w');
 
@@ -332,8 +453,12 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 		const bool redact =
 			StreamElementsSecretRedactor::IsSensitivePath(zipPath);
 
+#ifdef WIN32
 		int fd = _wsopen(localPath.c_str(), _O_RDONLY | _O_BINARY,
 				 _SH_DENYNO, 0 /*_S_IREAD | _S_IWRITE*/);
+#else
+		int fd = open(wstring_to_utf8(localPath).c_str(), O_RDONLY);
+#endif
 
 		if (-1 != fd) {
 			size_t BUF_LEN = 32768;
@@ -384,6 +509,7 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 		}
 	};
 
+#ifdef WIN32
 	auto addWindowCaptureToZip = [&](const HWND &hWnd, int nBitCount,
 					 std::wstring zipPath) {
 		//calculate the number of color indexes in the color table
@@ -516,6 +642,7 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 
 		return true;
 	};
+#endif
 
 	std::string package_manifest = "generator=crash_handler\nversion=4\n";
 	addBufferToZip((BYTE *)package_manifest.c_str(),
@@ -545,11 +672,19 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 		       L"obs-studio/crashes/crash.log");
 
 	// Add window capture
+	//
+	// Windows only. The equivalent on macOS is CGWindowListCreateImage,
+	// which since Catalina requires the Screen Recording entitlement --
+	// and if it has not already been granted, the first call puts up a
+	// system permission prompt. Doing that from a crashing process would
+	// be both useless and hostile, so macOS reports go without.
+#ifdef WIN32
 	addWindowCaptureToZip(
 		(HWND)StreamElementsGlobalStateManager::GetInstance()
 			->mainWindow()
 			->winId(),
 		24, L"obs-main-window.bmp");
+#endif
 
 	std::map<std::wstring, std::wstring> local_to_zip_files_map;
 
