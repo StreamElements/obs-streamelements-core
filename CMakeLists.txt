@@ -445,15 +445,30 @@ if (ENABLE_BUGSPLAT)
 endif()
 
 if (ENABLE_SENTRY)
-	list(APPEND obs-streamelements-core_SOURCES
-		streamelements/StreamElementsSentryCrashHandler.cpp
-	)
+	# One handler per platform. They share the header and the overall shape --
+	# arm, hand off, ask -- but not the mechanism: Windows chains SEH filters,
+	# macOS chains signal handlers and leans on sentry's own consent gate,
+	# because sentry's macOS handler chains to its predecessor and its Windows
+	# one does not. See StreamElementsSentryCrashHandler.hpp.
+	if (APPLE)
+		list(APPEND obs-streamelements-core_SOURCES
+			streamelements/StreamElementsSentryCrashHandler.mm
+		)
+	else()
+		list(APPEND obs-streamelements-core_SOURCES
+			streamelements/StreamElementsSentryCrashHandler.cpp
+		)
+	endif()
 
 	# The crash-time consent prompt. Only Sentry needs it: BugSplat's SDK
 	# shows a prompt of its own, whereas Sentry uploads silently.
 	if (WIN32)
 		list(APPEND obs-streamelements-core_SOURCES
 			streamelements/StreamElementsCrashConsentDialog.cpp
+		)
+	elseif (APPLE)
+		list(APPEND obs-streamelements-core_SOURCES
+			streamelements/StreamElementsCrashConsentDialog.mm
 		)
 	endif()
 endif()
