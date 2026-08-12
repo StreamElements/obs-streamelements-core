@@ -229,7 +229,7 @@ jobs:
     if: needs.version.outputs.is_workflow_automation != 'true'
 
     env:
-      CHECKOUT: 31.1.2
+      CHECKOUT: 32.2.1
       GS_ACCESS_KEY_ID: ${{ secrets.GS_ACCESS_KEY_ID }}
       GS_KEY_BASE64: ${{ secrets.GS_KEY_BASE64 }}
       GITHUB_WORKSPACE: $GITHUB_WORKSPACE
@@ -372,11 +372,11 @@ jobs:
 
   macos:
     needs: version
-    runs-on: macos-15
+    runs-on: macos-26
     if: needs.version.outputs.is_workflow_automation != 'true'
 
     env:
-      CHECKOUT: 31.1.2
+      CHECKOUT: 32.2.1
       GS_SECRET_ACCESS_KEY: ${{ secrets.GS_SECRET_ACCESS_KEY }}
 
     steps:
@@ -388,6 +388,19 @@ jobs:
           project_id: streamelements-core
           workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
           service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
+
+      # OBS 32.2.x refuses to configure on anything below the macOS 26.5 SDK --
+      # cmake/macos/compilerconfig.cmake fails outright, before any of our code
+      # is reached. The macos-26 image ships several Xcodes and does not
+      # necessarily default to one new enough, so select it explicitly. This
+      # mirrors what obs-studio's own build-project.yaml does.
+      - name: Select Xcode
+        run: |
+          if [ -d /Applications/Xcode_26.5.app ]; then
+            sudo xcode-select --switch /Applications/Xcode_26.5.app/Contents/Developer
+          fi
+          xcodebuild -version
+          echo "macOS SDK: $(xcrun --sdk macosx --show-sdk-platform-version)"
 
       - name: Clone OBS Studio
         run: |
