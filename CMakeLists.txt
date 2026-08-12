@@ -596,6 +596,15 @@ if (APPLE)
   target_compile_options(obs-streamelements-core PRIVATE
     "$<$<CXX_COMPILER_ID:Clang>:-g>"
   )
+
+  # Applied to the target rather than through add_compile_options above: the
+  # directory-level options do not survive onto this target under the Xcode
+  # generator, so the suppression has to be attached here to take effect.
+  if (HAVE_WNO_DEPRECATED_LITERAL_OPERATOR)
+    target_compile_options(obs-streamelements-core PRIVATE
+      "-Wno-deprecated-literal-operator"
+    )
+  endif()
 endif()
 
 if (APPLE)
