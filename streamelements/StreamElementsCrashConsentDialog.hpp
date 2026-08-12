@@ -34,15 +34,17 @@ public:
 		std::string description;
 		std::string name;
 		std::string email;
+		std::string discord;
 	};
 
 public:
 	// Shows the prompt modally on the calling thread, which is the crashing
-	// thread. `name` and `email` prefill their fields; pass what was saved
-	// from the last report.
+	// thread. `name`, `email` and `discord` prefill their fields; pass what
+	// was saved from the last report.
 	//
 	// Returns consented=false if the dialog cannot be created, so a failure
 	// here suppresses the report rather than silently sending one the user
 	// never agreed to.
-	static Result Prompt(const std::string &name, const std::string &email);
+	static Result Prompt(const std::string &name, const std::string &email,
+			     const std::string &discord);
 };
