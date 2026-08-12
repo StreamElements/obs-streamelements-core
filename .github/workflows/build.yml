@@ -225,7 +225,7 @@ jobs:
 
   windows:
     needs: version
-    runs-on: windows-2022
+    runs-on: windows-2025-vs2026
     if: needs.version.outputs.is_workflow_automation != 'true'
 
     env:
