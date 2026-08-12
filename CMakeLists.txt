@@ -899,6 +899,25 @@ if (WIN32)
 	endif()
 endif()
 
+if (APPLE AND ENABLE_SENTRY)
+	# Same requirement as the Windows copy above -- without the daemon beside
+	# the binary, Sentry produces events with no minidump attached -- but the
+	# destination is inside the plugin bundle, next to the loadable module in
+	# Contents/MacOS. $<TARGET_FILE_DIR:...> already resolves to that
+	# directory for a MODULE inside a bundle.
+	#
+	# It has to be signed as its own executable when the bundle is signed:
+	# --deep does not reliably cover nested executables and is deprecated by
+	# Apple, so the packaging step signs this explicitly.
+	add_dependencies(obs-streamelements-core sentry-crash)
+
+	add_custom_command(TARGET obs-streamelements-core POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		"$<TARGET_FILE:sentry-crash>"
+		"$<TARGET_FILE_DIR:obs-streamelements-core>"
+	)
+endif()
+
 
 if(BUILD_OUT_OF_TREE)
 	install_obs_plugin_with_data(obs-streamelements-core data)

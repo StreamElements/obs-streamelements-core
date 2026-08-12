@@ -55,6 +55,35 @@ static StreamElementsCrashContext *s_crashContext = nullptr;
 /* ================================================================= */
 
 //
+// Directory containing this dylib, inside the plugin bundle.
+//
+// Left unset, sentry-native looks for the sentry-crash daemon next to the host
+// executable -- OBS.app/Contents/MacOS -- which is not a directory this plugin
+// installs into. We ship the daemon beside our own binary and point the SDK at
+// it, exactly as the Windows handler does.
+//
+static bool GetOwnModuleDirectory(std::string &result)
+{
+	Dl_info info;
+
+	// Any symbol in this image will do; this function is a convenient one.
+	if (!dladdr((const void *)&GetOwnModuleDirectory, &info) ||
+	    !info.dli_fname)
+		return false;
+
+	const std::string path = info.dli_fname;
+
+	const size_t slash = path.rfind('/');
+
+	if (slash == std::string::npos)
+		return false;
+
+	result = path.substr(0, slash + 1);
+
+	return true;
+}
+
+//
 // Attributes worth having as searchable tags. Same reasoning and same short
 // list as the Windows handler: tags are capped under WER there, and keeping the
 // two platforms queryable the same way matters more than the cap does here.
@@ -328,6 +357,17 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 	// process may not survive long enough to finish the upload.
 	//
 	sentry_options_set_require_user_consent(options, 1);
+
+	std::string moduleDirectory;
+
+	if (GetOwnModuleDirectory(moduleDirectory)) {
+		const std::string daemonPath = moduleDirectory + "sentry-crash";
+
+		sentry_options_set_handler_path(options, daemonPath.c_str());
+	} else {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: StreamElements: Crash Handler: could not resolve own module directory; falling back to the SDK's default sentry-crash lookup, which searches next to the host executable");
+	}
 
 	sentry_options_set_minidump_mode(options, SENTRY_MINIDUMP_MODE_SMART);
 
