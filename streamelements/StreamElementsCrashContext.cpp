@@ -35,9 +35,31 @@
 // does not have to fork for the sake of a type name or an underscore.
 typedef unsigned char BYTE;
 
-#define _read read
-#define _close close
+// Functions rather than macros on purpose: the read loops below keep their
+// byte count in a local called `read`, which a macro would rewrite into a call
+// on an int.
+static inline int _read(int fd, void *buffer, size_t count)
+{
+	return (int)::read(fd, buffer, count);
+}
+
+static inline int _close(int fd)
+{
+	return ::close(fd);
+}
 #endif
+
+/* ================================================================= */
+
+//
+// itoa is an MSVC extension. snprintf is not, and is just as safe here.
+//
+static inline const char *IntToBuf(int value, char *buffer, size_t size)
+{
+	snprintf(buffer, size, "%d", value);
+
+	return buffer;
+}
 
 /* ================================================================= */
 
@@ -847,7 +869,7 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 						item.dwMemoryLoad // % Used
 					);
 				} else {
-					sprintf(lineBuf, "%1.2Lf,%d", 0.0,
+					sprintf(lineBuf, "%1.2Lf,%d", 0.0L,
 						item.dwMemoryLoad // % Used
 					);
 				}
@@ -874,9 +896,11 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 
 		for (auto item : *asyncCallContextStack) {
 			char buf[32];
-			lines.push_back(
-				item->file.c_str() + std::string(" (line: ") +
-				std::string(itoa(item->line, buf, 10)) + ")");
+			lines.push_back(item->file.c_str() +
+					std::string(" (line: ") +
+					std::string(IntToBuf(item->line, buf,
+							     sizeof(buf))) +
+					")");
 		}
 
 		addLinesBufferToZip(lines, L"async_context.txt");
@@ -893,7 +917,8 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 			char buf[32];
 			notes += std::string(" ---- ") + item->file +
 				 std::string(" (line: ") +
-				 std::string(itoa(item->line, buf, 10)) +
+				 std::string(IntToBuf(item->line, buf,
+						      sizeof(buf))) +
 				 ")\r\n";
 
 			auto d = CefDictionaryValue::Create();
