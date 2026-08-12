@@ -75,6 +75,22 @@ else()
 
 		"-fvisibility=default"
 	)
+
+	# Xcode 26's clang added -Wdeprecated-literal-operator, which fires inside
+	# vendored nlohmann/json (deps/cef-stub/../json.hpp) on its `operator ""_json`
+	# declarations. Xcode builds with -Werror, so on that toolchain the plugin
+	# cannot compile at all -- and deps/ is vendored, so the fix belongs here
+	# rather than in the header.
+	#
+	# Probed rather than added blindly: older clang, including the one on CI's
+	# macos-15 runners, does not know this flag, and -Werror turns an unknown
+	# -Wno-* into an error of its own.
+	include(CheckCXXCompilerFlag)
+	check_cxx_compiler_flag("-Wno-deprecated-literal-operator"
+		HAVE_WNO_DEPRECATED_LITERAL_OPERATOR)
+	if (HAVE_WNO_DEPRECATED_LITERAL_OPERATOR)
+		add_compile_options("-Wno-deprecated-literal-operator")
+	endif()
 endif(WIN32)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -395,9 +411,20 @@ set(obs-streamelements-core_SOURCES
 if (APPLE)
     list(APPEND obs-streamelements-core_SOURCES
         streamelements/StreamElementsUtils.mm
-		streamelements/mach_excServer.c
-		streamelements/mach_excUser.c
     )
+
+	# The mig-generated Mach exception server belongs to the BugSplat handler,
+	# not to the platform: the catch_mach_exception_* callbacks it dispatches
+	# to are defined in StreamElementsBugSplatCrashHandler.mm and nowhere
+	# else. Compiled unconditionally they leave those symbols undefined in any
+	# macOS build that selects another backend, which is why this only
+	# surfaced once one was built.
+	if (ENABLE_BUGSPLAT)
+		list(APPEND obs-streamelements-core_SOURCES
+			streamelements/mach_excServer.c
+			streamelements/mach_excUser.c
+		)
+	endif()
 endif(APPLE)
 
 # The factory is platform-agnostic and always compiles; the selected backend
@@ -408,9 +435,11 @@ list(APPEND obs-streamelements-core_SOURCES
 )
 
 # Backend-agnostic crash-time collection, shared by whichever backend is
-# selected. Windows only for now: the macOS integrations gather nothing beyond a
-# single attribute set at startup, so there is no macOS implementation yet.
-if (WIN32 AND (ENABLE_BUGSPLAT OR ENABLE_SENTRY))
+# selected and by both platforms. The collection itself is portable -- the same
+# zip, the same system and performance snapshots, the same async- and API-call
+# context; only the stack walk, the temporary-file dance and the window capture
+# fork, and those are #ifdef'd inside.
+if (ENABLE_BUGSPLAT OR ENABLE_SENTRY)
 	list(APPEND obs-streamelements-core_SOURCES
 		streamelements/StreamElementsCrashContext.cpp
 	)
@@ -429,15 +458,30 @@ if (ENABLE_BUGSPLAT)
 endif()
 
 if (ENABLE_SENTRY)
-	list(APPEND obs-streamelements-core_SOURCES
-		streamelements/StreamElementsSentryCrashHandler.cpp
-	)
+	# One handler per platform. They share the header and the overall shape --
+	# arm, hand off, ask -- but not the mechanism: Windows chains SEH filters,
+	# macOS chains signal handlers and leans on sentry's own consent gate,
+	# because sentry's macOS handler chains to its predecessor and its Windows
+	# one does not. See StreamElementsSentryCrashHandler.hpp.
+	if (APPLE)
+		list(APPEND obs-streamelements-core_SOURCES
+			streamelements/StreamElementsSentryCrashHandler.mm
+		)
+	else()
+		list(APPEND obs-streamelements-core_SOURCES
+			streamelements/StreamElementsSentryCrashHandler.cpp
+		)
+	endif()
 
 	# The crash-time consent prompt. Only Sentry needs it: BugSplat's SDK
 	# shows a prompt of its own, whereas Sentry uploads silently.
 	if (WIN32)
 		list(APPEND obs-streamelements-core_SOURCES
 			streamelements/StreamElementsCrashConsentDialog.cpp
+		)
+	elseif (APPLE)
+		list(APPEND obs-streamelements-core_SOURCES
+			streamelements/StreamElementsCrashConsentDialog.mm
 		)
 	endif()
 endif()
@@ -580,6 +624,15 @@ if (APPLE)
   target_compile_options(obs-streamelements-core PRIVATE
     "$<$<CXX_COMPILER_ID:Clang>:-g>"
   )
+
+  # Applied to the target rather than through add_compile_options above: the
+  # directory-level options do not survive onto this target under the Xcode
+  # generator, so the suppression has to be attached here to take effect.
+  if (HAVE_WNO_DEPRECATED_LITERAL_OPERATOR)
+    target_compile_options(obs-streamelements-core PRIVATE
+      "-Wno-deprecated-literal-operator"
+    )
+  endif()
 endif()
 
 if (APPLE)
@@ -844,6 +897,25 @@ if (WIN32)
 			"$<TARGET_FILE_DIR:obs-streamelements-core>"
 		)
 	endif()
+endif()
+
+if (APPLE AND ENABLE_SENTRY)
+	# Same requirement as the Windows copy above -- without the daemon beside
+	# the binary, Sentry produces events with no minidump attached -- but the
+	# destination is inside the plugin bundle, next to the loadable module in
+	# Contents/MacOS. $<TARGET_FILE_DIR:...> already resolves to that
+	# directory for a MODULE inside a bundle.
+	#
+	# It has to be signed as its own executable when the bundle is signed:
+	# --deep does not reliably cover nested executables and is deprecated by
+	# Apple, so the packaging step signs this explicitly.
+	add_dependencies(obs-streamelements-core sentry-crash)
+
+	add_custom_command(TARGET obs-streamelements-core POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		"$<TARGET_FILE:sentry-crash>"
+		"$<TARGET_FILE_DIR:obs-streamelements-core>"
+	)
 endif()
 
 

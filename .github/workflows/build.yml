@@ -45,7 +45,11 @@ env:
 
   BUILD_UNINSTALLER: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
   BUILD_INSTALLER: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
-  UPLOAD_SYMBOLS: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
+  # UPLOAD_SYMBOLS is deliberately NOT defined here. It also depends on
+  # has_release_notes, and workflow-level env cannot read `needs`, so it is
+  # defined in the windows and macos jobs instead. Defining a weaker version
+  # here as well would mean any future job that forgot to redefine it silently
+  # uploaded symbols for builds that are never released.
   UPLOAD_BINARIES: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
 
 jobs:
@@ -225,14 +229,25 @@ jobs:
 
   windows:
     needs: version
-    runs-on: windows-2022
+    runs-on: windows-2025-vs2026
     if: needs.version.outputs.is_workflow_automation != 'true'
 
     env:
-      CHECKOUT: 31.1.2
+      CHECKOUT: 32.2.1
       GS_ACCESS_KEY_ID: ${{ secrets.GS_ACCESS_KEY_ID }}
       GS_KEY_BASE64: ${{ secrets.GS_KEY_BASE64 }}
       GITHUB_WORKSPACE: $GITHUB_WORKSPACE
+
+      # Redefined here rather than taken from the workflow-level env, because
+      # that one cannot see `needs` -- only job-level env can. Same condition
+      # plus the release-notes gate.
+      #
+      # A master build with an empty RELEASE_NOTES.md is tagged by nothing,
+      # released by nothing and published by nothing: deploy-signed-* and
+      # finalize are gated on exactly the same output. Uploading its symbols
+      # would file them under a version that does not exist as far as anything
+      # downstream is concerned.
+      UPLOAD_SYMBOLS: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && needs.version.outputs.has_release_notes == 'true' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -314,8 +329,8 @@ jobs:
       - name: Build
         shell: cmd
         run: |
-          cd /d C:\local\obs-studio\build_x64
-          msbuild obs-studio.sln -p:Configuration=RelWithDebInfo
+          cd /d C:\local\obs-studio
+          cmake --build build_x64 --config RelWithDebInfo
 
       - name: Upload BugSplat Symbols
         if: ${{ env.UPLOAD_SYMBOLS == 'true' }}
@@ -372,12 +387,17 @@ jobs:
 
   macos:
     needs: version
-    runs-on: macos-15
+    runs-on: macos-26
     if: needs.version.outputs.is_workflow_automation != 'true'
 
     env:
-      CHECKOUT: 31.1.2
+      CHECKOUT: 32.2.1
       GS_SECRET_ACCESS_KEY: ${{ secrets.GS_SECRET_ACCESS_KEY }}
+
+      # See the matching comment in the windows job: job-level env is the only
+      # scope that can read `needs`, so the release-notes gate has to be applied
+      # here rather than at workflow level.
+      UPLOAD_SYMBOLS: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && needs.version.outputs.has_release_notes == 'true' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -388,6 +408,19 @@ jobs:
           project_id: streamelements-core
           workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
           service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
+
+      # OBS 32.2.x refuses to configure on anything below the macOS 26.5 SDK --
+      # cmake/macos/compilerconfig.cmake fails outright, before any of our code
+      # is reached. The macos-26 image ships several Xcodes and does not
+      # necessarily default to one new enough, so select it explicitly. This
+      # mirrors what obs-studio's own build-project.yaml does.
+      - name: Select Xcode
+        run: |
+          if [ -d /Applications/Xcode_26.5.app ]; then
+            sudo xcode-select --switch /Applications/Xcode_26.5.app/Contents/Developer
+          fi
+          xcodebuild -version
+          echo "macOS SDK: $(xcrun --sdk macosx --show-sdk-platform-version)"
 
       - name: Clone OBS Studio
         run: |

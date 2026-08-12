@@ -20,7 +20,21 @@ This plugin does **not** build standalone. It must sit at `obs-studio/plugins/ob
 
 ## Tests
 
-There are none — no ctest, gtest, or catch2 anywhere in project code. The only gates are that it compiles and that `CI/check-format.sh` passes. Don't describe a change as verified on the basis of tests.
+`tests/` holds a small ctest suite, off by default (`-DSE_ENABLE_TESTS=ON`, or configure `tests/` directly). It is **not** part of the plugin build: the tests are standalone C++17 executables that link neither libobs nor Qt, so they build and run without an obs-studio tree — on any platform, in seconds.
+
+```sh
+cmake -S tests -B tests/build && cmake --build tests/build
+ctest --test-dir tests/build --output-on-failure
+```
+
+Two kinds live there, and `se_add_test(<name> <sources>)` in `tests/CMakeLists.txt` registers both:
+
+- **Behavioural** — exercise real logic directly, or a minimal mirror of it where the real thing is entangled with libobs.
+- **Source-invariant** — open the production sources and assert a fixed bug pattern is absent, so a regression is caught without needing the OBS build to succeed.
+
+Anything self-contained enough to compile without libobs/Qt belongs here rather than in a throwaway harness — parsers, redaction, string handling, pure helpers. Deliberately keeping a unit under test free of OBS dependencies is a good reason to structure it that way.
+
+CI does **not** run these yet, so they are a local gate: the pipeline still only proves that it compiles and that `CI/check-format.sh` passes. Don't call a change verified on the basis of tests that were never run against it.
 
 ## Formatting
 
