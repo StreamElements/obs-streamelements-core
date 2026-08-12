@@ -45,7 +45,11 @@ env:
 
   BUILD_UNINSTALLER: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
   BUILD_INSTALLER: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
-  UPLOAD_SYMBOLS: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
+  # UPLOAD_SYMBOLS is deliberately NOT defined here. It also depends on
+  # has_release_notes, and workflow-level env cannot read `needs`, so it is
+  # defined in the windows and macos jobs instead. Defining a weaker version
+  # here as well would mean any future job that forgot to redefine it silently
+  # uploaded symbols for builds that are never released.
   UPLOAD_BINARIES: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
 
 jobs:
@@ -234,6 +238,17 @@ jobs:
       GS_KEY_BASE64: ${{ secrets.GS_KEY_BASE64 }}
       GITHUB_WORKSPACE: $GITHUB_WORKSPACE
 
+      # Redefined here rather than taken from the workflow-level env, because
+      # that one cannot see `needs` -- only job-level env can. Same condition
+      # plus the release-notes gate.
+      #
+      # A master build with an empty RELEASE_NOTES.md is tagged by nothing,
+      # released by nothing and published by nothing: deploy-signed-* and
+      # finalize are gated on exactly the same output. Uploading its symbols
+      # would file them under a version that does not exist as far as anything
+      # downstream is concerned.
+      UPLOAD_SYMBOLS: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && needs.version.outputs.has_release_notes == 'true' }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -378,6 +393,11 @@ jobs:
     env:
       CHECKOUT: 32.2.1
       GS_SECRET_ACCESS_KEY: ${{ secrets.GS_SECRET_ACCESS_KEY }}
+
+      # See the matching comment in the windows job: job-level env is the only
+      # scope that can read `needs`, so the release-notes gate has to be applied
+      # here rather than at workflow level.
+      UPLOAD_SYMBOLS: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && needs.version.outputs.has_release_notes == 'true' }}
 
     steps:
       - uses: actions/checkout@v4
