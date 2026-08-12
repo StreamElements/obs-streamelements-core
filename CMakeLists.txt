@@ -411,9 +411,20 @@ set(obs-streamelements-core_SOURCES
 if (APPLE)
     list(APPEND obs-streamelements-core_SOURCES
         streamelements/StreamElementsUtils.mm
-		streamelements/mach_excServer.c
-		streamelements/mach_excUser.c
     )
+
+	# The mig-generated Mach exception server belongs to the BugSplat handler,
+	# not to the platform: the catch_mach_exception_* callbacks it dispatches
+	# to are defined in StreamElementsBugSplatCrashHandler.mm and nowhere
+	# else. Compiled unconditionally they leave those symbols undefined in any
+	# macOS build that selects another backend, which is why this only
+	# surfaced once one was built.
+	if (ENABLE_BUGSPLAT)
+		list(APPEND obs-streamelements-core_SOURCES
+			streamelements/mach_excServer.c
+			streamelements/mach_excUser.c
+		)
+	endif()
 endif(APPLE)
 
 # The factory is platform-agnostic and always compiles; the selected backend
