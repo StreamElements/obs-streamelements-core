@@ -75,6 +75,22 @@ else()
 
 		"-fvisibility=default"
 	)
+
+	# Xcode 26's clang added -Wdeprecated-literal-operator, which fires inside
+	# vendored nlohmann/json (deps/cef-stub/../json.hpp) on its `operator ""_json`
+	# declarations. Xcode builds with -Werror, so on that toolchain the plugin
+	# cannot compile at all -- and deps/ is vendored, so the fix belongs here
+	# rather than in the header.
+	#
+	# Probed rather than added blindly: older clang, including the one on CI's
+	# macos-15 runners, does not know this flag, and -Werror turns an unknown
+	# -Wno-* into an error of its own.
+	include(CheckCXXCompilerFlag)
+	check_cxx_compiler_flag("-Wno-deprecated-literal-operator"
+		HAVE_WNO_DEPRECATED_LITERAL_OPERATOR)
+	if (HAVE_WNO_DEPRECATED_LITERAL_OPERATOR)
+		add_compile_options("-Wno-deprecated-literal-operator")
+	endif()
 endif(WIN32)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}")
