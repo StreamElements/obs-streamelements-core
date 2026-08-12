@@ -62,7 +62,7 @@ bool StreamElementsBandwidthTestManager::BeginBandwidthTest(CefRefPtr<CefValue> 
 				m_isTestInProgress = true;
 
 				// Signal test started
-				DispatchJSEventContainer(target, "hostBandwidthTestStarted", nullptr);
+				DispatchJSEventContainer(target, "hostBandwidthTestStarted", "null");
 
 				struct local_context {
 					StreamElementsBandwidthTestManager* self;
@@ -88,7 +88,7 @@ bool StreamElementsBandwidthTestManager::BeginBandwidthTest(CefRefPtr<CefValue> 
 						context->self->m_last_test_results = *results;
 
 						// Signal test progress
-						DispatchJSEventContainer(context->target, "hostBandwidthTestProgress", nullptr);
+						DispatchJSEventContainer(context->target, "hostBandwidthTestProgress", "null");
 					},
 					[](std::vector<StreamElementsBandwidthTestClient::Result>* results, void* data) {
 						local_context* context = (local_context*)data;
@@ -101,7 +101,7 @@ bool StreamElementsBandwidthTestManager::BeginBandwidthTest(CefRefPtr<CefValue> 
 						context->self->m_isTestInProgress = false;
 
 						// Signal test completed
-						DispatchJSEventContainer(context->target, "hostBandwidthTestCompleted", nullptr);
+						DispatchJSEventContainer(context->target, "hostBandwidthTestCompleted", "null");
 
 						delete context;
 					},
