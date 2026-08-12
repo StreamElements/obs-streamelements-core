@@ -314,8 +314,8 @@ jobs:
       - name: Build
         shell: cmd
         run: |
-          cd /d C:\local\obs-studio\build_x64
-          msbuild obs-studio.sln -p:Configuration=RelWithDebInfo
+          cd /d C:\local\obs-studio
+          cmake --build build_x64 --config RelWithDebInfo
 
       - name: Upload BugSplat Symbols
         if: ${{ env.UPLOAD_SYMBOLS == 'true' }}
