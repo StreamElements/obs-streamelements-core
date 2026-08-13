@@ -355,6 +355,29 @@ jobs:
 
           exit /b 0
 
+      # Fatal on failure, unlike the BugSplat step above. An unsymbolicated
+      # minidump is a wall of addresses, so a build whose symbols never arrived
+      # is not one worth shipping -- better a red build than a release whose
+      # crash reports cannot be read.
+      #
+      # The directory is scanned rather than named file by file: it holds the
+      # DLL, its PDB and the sentry-crash daemon, and sentry-cli picks up all
+      # three. The DLL matters as much as the PDB -- Sentry matches a minidump's
+      # modules by code ID first, which only the PE carries, and debug files
+      # alone leave those modules unresolved.
+      - name: Upload Sentry symbols
+        if: ${{ env.UPLOAD_SYMBOLS == 'true' && env.SE_CRASH_HANDLER == 'sentry' }}
+        shell: bash
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        run: |
+          set -euo pipefail
+
+          npx -y @sentry/cli debug-files upload \
+            "/c/local/obs-studio/build_x64/rundir/RelWithDebInfo/obs-plugins/64bit"
+
       - name: Package
         shell: cmd
         run: |
@@ -523,6 +546,28 @@ jobs:
           ); then
             echo "::warning title=BugSplat symbol upload failed (macOS x86_64)::x86_64 symbols for ${{ needs.version.outputs.version_string }} were not uploaded, so its crash reports will not be symbolicated. The build itself is unaffected."
           fi
+
+      # Fatal on failure, unlike the BugSplat steps above -- see the matching
+      # comment in the windows job.
+      #
+      # Both slices are uploaded, and each directory is scanned rather than
+      # named file by file: it holds the .dSYM, the plugin bundle whose Mach-O
+      # carries the code ID Sentry matches minidump modules by, and the
+      # sentry-crash daemon inside that bundle.
+      - name: Upload Sentry symbols
+        if: env.UPLOAD_SYMBOLS == 'true' && env.SE_CRASH_HANDLER == 'sentry'
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        run: |
+          set -euo pipefail
+
+          for arch in arm64 x86_64; do
+            npx -y @sentry/cli debug-files upload \
+              ~/src/obs-studio/build_macos_${arch}/plugins/obs-streamelements-core/RelWithDebInfo
+          done
+
       - name: Package
         run: |
           cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo
