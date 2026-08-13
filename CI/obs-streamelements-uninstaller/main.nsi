@@ -178,10 +178,15 @@ Section "section_main" section_main
     Delete "$INSTDIR\obs-plugins\64bit\obs-streamelements-core_qt6.dll"
     Delete "$INSTDIR\obs-plugins\64bit\obs-streamelements-core_qt6.pdb"
 
+    # Both backends' runtimes are removed regardless of which one this build
+    # ships. An upgrade that switches backends would otherwise leave the
+    # previous install's files on disk forever -- a stale BugSplat64.dll next
+    # to a Sentry build, or the reverse.
     Delete "$INSTDIR\bin\64bit\BsSndRpt64.exe"
     Delete "$INSTDIR\bin\64bit\BugSplat64.dll"
     Delete "$INSTDIR\bin\64bit\BugSplatHD64.exe"
     Delete "$INSTDIR\bin\64bit\BugSplatRc64.dll"
+    Delete "$INSTDIR\obs-plugins\64bit\sentry-crash.exe"
 
     Delete "$INSTDIR\obs-plugins\32bit\obs-streamelements.qt5.dymod"
     Delete "$INSTDIR\obs-plugins\32bit\obs-streamelements.qt5.pdb"

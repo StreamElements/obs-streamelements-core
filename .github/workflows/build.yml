@@ -41,7 +41,7 @@ env:
   # it feeds -DSTREAMELEMENTS_CRASH_HANDLER at each configure site, and symbol
   # upload will be gated on the same value, so a build's binary and its symbols
   # cannot end up pointing at different services.
-  SE_CRASH_HANDLER: bugsplat
+  SE_CRASH_HANDLER: sentry
 
   BUILD_UNINSTALLER: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
   BUILD_INSTALLER: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' }}
@@ -291,6 +291,7 @@ jobs:
       # reports for this build are not symbolicated. BugSplat is slated to be replaced by
       # Sentry, so this path is deliberately tolerant rather than hardened.
       - name: Download BugSplat uploader
+        if: env.SE_CRASH_HANDLER == 'bugsplat'
         shell: pwsh
         run: |
           mkdir c:\local\bugsplat
@@ -333,7 +334,7 @@ jobs:
           cmake --build build_x64 --config RelWithDebInfo
 
       - name: Upload BugSplat Symbols
-        if: ${{ env.UPLOAD_SYMBOLS == 'true' }}
+        if: ${{ env.UPLOAD_SYMBOLS == 'true' && env.SE_CRASH_HANDLER == 'bugsplat' }}
         shell: cmd
         run: |
           c:\local\bugsplat\symbol-upload-windows.exe ^
@@ -443,6 +444,7 @@ jobs:
       # build. chmod moved inside the success branch -- it would fail on a missing file
       # and take the step down with it.
       - name: Download BugSplat uploader
+        if: env.SE_CRASH_HANDLER == 'bugsplat'
         run: |
           cd /tmp
           if curl -sL -f -O https://github.com/BugSplat-Git/symbol-upload/releases/download/v10.5.0/symbol-upload-macos; then
@@ -503,7 +505,7 @@ jobs:
       # The subshell covers the cd as well as the upload: a missing build directory would
       # otherwise fail the step before the uploader ever ran.
       - name: Upload ARM64 to BugSplat
-        if: env.UPLOAD_SYMBOLS == 'true'
+        if: env.UPLOAD_SYMBOLS == 'true' && env.SE_CRASH_HANDLER == 'bugsplat'
         run: |
           if ! (
             cd ~/src/obs-studio/build_macos_arm64/plugins/obs-streamelements-core/RelWithDebInfo &&
@@ -513,7 +515,7 @@ jobs:
           fi
 
       - name: Upload x86_64 to BugSplat
-        if: env.UPLOAD_SYMBOLS == 'true'
+        if: env.UPLOAD_SYMBOLS == 'true' && env.SE_CRASH_HANDLER == 'bugsplat'
         run: |
           if ! (
             cd ~/src/obs-studio/build_macos_x86_64/plugins/obs-streamelements-core/RelWithDebInfo &&

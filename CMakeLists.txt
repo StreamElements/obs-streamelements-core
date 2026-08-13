@@ -891,10 +891,28 @@ if (WIN32)
 		# sentry_options_set_handler_pathw() instead of relying on it.
 		add_dependencies(obs-streamelements-core sentry-crash)
 
+		# Next to the freshly built DLL, for running out of the build tree.
 		add_custom_command(TARGET obs-streamelements-core POST_BUILD
 			COMMAND ${CMAKE_COMMAND} -E copy_if_different
 			"$<TARGET_FILE:sentry-crash>"
 			"$<TARGET_FILE_DIR:obs-streamelements-core>"
+		)
+
+		# And into the rundir, which is what CI zips and the installer
+		# packages. $<TARGET_FILE_DIR:...> above is the build tree, not the
+		# rundir -- obs-studio populates that separately, and it copies the
+		# plugin module but knows nothing about a daemon sitting beside it.
+		# Without this the daemon never reaches the installer, and a Sentry
+		# build reports events with no minidump attached.
+		#
+		# obs-plugins, not bin: the handler resolves the daemon relative to
+		# its own module, which is what lands here.
+		add_custom_command(TARGET obs-streamelements-core POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E make_directory
+			"${CMAKE_BINARY_DIR}/rundir/$<CONFIGURATION>/obs-plugins/${BITS}bit"
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"$<TARGET_FILE:sentry-crash>"
+			"${CMAKE_BINARY_DIR}/rundir/$<CONFIGURATION>/obs-plugins/${BITS}bit/"
 		)
 	endif()
 endif()

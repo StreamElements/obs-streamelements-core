@@ -584,10 +584,14 @@ Section "${PRODUCT_SHORT_NAME} Add-On" section_install_streamelements
 !ifndef SKIP_64BIT_CONTENT
     SetOutPath $INSTDIR\bin\64bit
 
-    File ..\download\obs-streamelements-core\build64_qt6\bin\64bit\BsSndRpt64.exe
-    File ..\download\obs-streamelements-core\build64_qt6\bin\64bit\BugSplat64.dll
-    File ..\download\obs-streamelements-core\build64_qt6\bin\64bit\BugSplatHD64.exe
-    File ..\download\obs-streamelements-core\build64_qt6\bin\64bit\BugSplatRc64.dll
+    # /nonfatal on the crash-reporting runtime: which of these exists depends on
+    # STREAMELEMENTS_CRASH_HANDLER at build time, and the installer has no way to
+    # know which backend was compiled. A Sentry build ships no BugSplat DLLs, a
+    # BugSplat build ships no sentry-crash.exe, and neither should fail packaging.
+    File /nonfatal ..\download\obs-streamelements-core\build64_qt6\bin\64bit\BsSndRpt64.exe
+    File /nonfatal ..\download\obs-streamelements-core\build64_qt6\bin\64bit\BugSplat64.dll
+    File /nonfatal ..\download\obs-streamelements-core\build64_qt6\bin\64bit\BugSplatHD64.exe
+    File /nonfatal ..\download\obs-streamelements-core\build64_qt6\bin\64bit\BugSplatRc64.dll
 
     SetOutPath $INSTDIR\obs-plugins\64bit\locales
 
@@ -599,6 +603,12 @@ Section "${PRODUCT_SHORT_NAME} Add-On" section_install_streamelements
     File /oname=obs-streamelements-core.pdb ..\download\obs-streamelements-core\build64_qt6\obs-plugins\64bit\obs-streamelements-core.pdb
     
     File /nonfatal ..\download\obs-streamelements-core\build64_qt6\obs-plugins\64bit\obs-streamelements-set-machine-config.*
+
+    # The Sentry crash daemon. It writes and uploads the minidump out of
+    # process, and the handler looks for it beside its own module -- so it has
+    # to land here, next to obs-streamelements-core.dll, not in bin\64bit.
+    # /nonfatal because a BugSplat build does not produce it.
+    File /nonfatal ..\download\obs-streamelements-core\build64_qt6\obs-plugins\64bit\sentry-crash.exe
 
     Delete /REBOOTOK "$OUTDIR\obs-streamelements.dll"
     Delete /REBOOTOK "$OUTDIR\obs-streamelements.pdb"
