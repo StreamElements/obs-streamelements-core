@@ -142,6 +142,10 @@ StreamElementsCrashConsentDialog::Prompt(const std::string &name,
 
 		const NSModalResponse response = [alert runModal];
 
+		// Asked and answered, whichever button it was. Only a prompt
+		// that never appeared leaves this false.
+		result.prompted = true;
+
 		if (response != NSAlertFirstButtonReturn)
 			return result;
 

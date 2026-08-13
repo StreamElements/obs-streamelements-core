@@ -191,6 +191,20 @@ void GetApiContext(std::function<void(StreamElementsApiContext_t*)> callback)
 	callback(&s_apiContext);
 }
 
+// Non-blocking variant, for the crash path. Same reasoning as
+// TryGetAsyncCallContextStack.
+bool TryGetApiContext(std::function<void(StreamElementsApiContext_t *)> callback)
+{
+	std::shared_lock lock(s_apiContextMutex, std::try_to_lock);
+
+	if (!lock.owns_lock())
+		return false;
+
+	callback(&s_apiContext);
+
+	return true;
+}
+
 std::shared_ptr<StreamElementsApiContextItem> PushApiContext(CefString method, CefRefPtr<CefListValue> args)
 {
 	std::unique_lock lock(s_apiContextMutex);
@@ -221,11 +235,42 @@ void RemoveApiContext(std::shared_ptr<StreamElementsApiContextItem> item)
 static StreamElementsAsyncCallContextStack_t s_asyncCallContextStack;
 static std::shared_mutex s_asyncCallContextStackMutex;
 
-void GetAsyncCallContextStack(std::function<void(const StreamElementsAsyncCallContextStack_t *)> callback)
+void GetAsyncCallContextStack(
+	std::function<void(const StreamElementsAsyncCallContextStack_t *)>
+		callback)
 {
 	std::shared_lock lock(s_asyncCallContextStackMutex);
 
 	callback(&s_asyncCallContextStack);
+}
+
+//
+// As above, but never blocks. Returns false, without invoking the callback, if
+// the lock is held.
+//
+// For the crash path only. This lock is taken exclusively by
+// AsyncCallContextPush and AsyncCallContextRemove, which run on every
+// QtPostTask, QtExecSync and QtDelayTask -- hundreds of call sites, constantly.
+// A crashing thread that blocks on it waits on whichever thread holds it, and
+// that thread may itself be stuck or already gone; worse, std::shared_mutex is
+// not recursive, so a thread that faulted while holding it exclusively would
+// deadlock against itself.
+//
+// Losing this section of a crash report is a far better outcome than a handler
+// that never returns, which produces no report at all.
+//
+bool TryGetAsyncCallContextStack(
+	std::function<void(const StreamElementsAsyncCallContextStack_t *)>
+		callback)
+{
+	std::shared_lock lock(s_asyncCallContextStackMutex, std::try_to_lock);
+
+	if (!lock.owns_lock())
+		return false;
+
+	callback(&s_asyncCallContextStack);
+
+	return true;
 }
 
 std::shared_ptr<StreamElementsAsyncCallContextItem>
@@ -259,11 +304,24 @@ std::future<void> __QtDelayTask_Impl(std::function<void()> task, int delayMs,
 	QTimer::singleShot(std::chrono::milliseconds(delayMs), qApp, [=]() {
 		item->running = true;
 
-		task();
+		// Same reasoning as __QtPostTask_Impl: cleanup must survive a
+		// throwing task, or the context entry leaks into every later
+		// crash report.
+		auto finish = [=]() {
+			AsyncCallContextRemove(item);
 
-		AsyncCallContextRemove(item);
+			promise->set_value();
+		};
 
-		promise->set_value();
+		try {
+			task();
+		} catch (...) {
+			finish();
+
+			throw;
+		}
+
+		finish();
 	});
 
 	return promise->get_future();
@@ -278,13 +336,37 @@ std::future<void> __QtPostTask_Impl(std::function<void()> task,
 	auto item = AsyncCallContextPush(file, line, false);
 
 	auto executor = [=]() {
-		task();
-
+		// Before the task, not after.
+		//
+		// This flag is what tells a crash report which queued call was
+		// executing at the moment of the fault -- the crash handler
+		// writes it into async-context.json. Setting it afterwards meant
+		// the one task that actually was running reported running=false,
+		// which is precisely backwards, and on the macro used at most of
+		// the call sites in this codebase. QtDelayTask below has always
+		// had it the right way round.
 		item->running = true;
 
-		AsyncCallContextRemove(item);
+		// The entry has to come off the stack, and the waiter has to be
+		// released, even if the task throws. Otherwise the entry stays
+		// for the life of the process and appears in every later crash
+		// report, and any QtExecSync blocked on this never learns it
+		// finished.
+		auto finish = [=]() {
+			AsyncCallContextRemove(item);
 
-		promise->set_value();
+			promise->set_value();
+		};
+
+		try {
+			task();
+		} catch (...) {
+			finish();
+
+			throw;
+		}
+
+		finish();
 	};
 
 	QMetaObject::invokeMethod(qApp, executor, Qt::QueuedConnection);

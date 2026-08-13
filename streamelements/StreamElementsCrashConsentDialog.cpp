@@ -349,9 +349,13 @@ StreamElementsCrashConsentDialog::Prompt(const std::string &name,
 		::GetModuleHandleW(NULL), builder.Get(), NULL,
 		ConsentDialogProc, (LPARAM)&state);
 
+	// IDOK and IDCANCEL both mean the dialog appeared and was answered; -1
+	// means Windows refused the template and it never did.
+	result.prompted = (outcome == IDOK || outcome == IDCANCEL);
+
 	if (outcome != IDOK) {
-		// Declined, dismissed, or the dialog could not be created
-		// (outcome -1). All three mean the same thing here.
+		// Declined, dismissed, or the dialog could not be created. All
+		// three mean do not send.
 		return result;
 	}
 

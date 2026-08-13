@@ -13,9 +13,13 @@
 #include <string>
 #include <vector>
 
+#include <util/platform.h>
+
 #include <signal.h>
 #include <dlfcn.h>
 #include <execinfo.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <mach-o/dyld.h>
 
 // Empty means crash reporting is inert: sentry_init() is skipped entirely rather
@@ -51,6 +55,11 @@ static volatile sig_atomic_t s_handledCrash = 0;
 // Owns the stack walker and the remote module-of-interest list. Built at
 // startup, because building it fetches that list over HTTP.
 static StreamElementsCrashContext *s_crashContext = nullptr;
+
+// Marker left behind when a crash could not be consented to at the time --
+// see ChainedSignalHandler. Resolved once at init so the signal handler only
+// has to open a path that already exists as a string.
+static char s_pendingMarkerPath[512] = {0};
 
 /* ================================================================= */
 
@@ -233,15 +242,39 @@ static sentry_value_t OnCrash(const sentry_ucontext_t *uctx,
 // written, which is what makes this ordering possible at all -- dump first, ask
 // second. Its Windows counterpart never does this.
 //
+//
+// Restores the default disposition for `signum` and re-raises it, which
+// terminates the process the way the signal would have.
+//
+// Returning from a handler for a fault signal does not: the faulting
+// instruction simply re-executes, faults again, and the process spins forever.
+// Every path out of the handler below that cannot hand the signal on has to
+// come through here instead.
+//
+static void DieWithSignal(int signum)
+{
+	struct sigaction dfl = {};
+
+	dfl.sa_handler = SIG_DFL;
+	sigemptyset(&dfl.sa_mask);
+
+	sigaction(signum, &dfl, NULL);
+
+	raise(signum);
+}
+
 static void ChainedSignalHandler(int signum, siginfo_t *info, void *context)
 {
-	// One crash only. A fault raised while the prompt is up must not
-	// re-enter this.
-	if (s_handledCrash) {
+	// One crash only, and only one thread's. A plain read-then-write would
+	// let two threads faulting at once both pass, and put up two dialogs.
+	if (!__sync_bool_compare_and_swap(&s_handledCrash, 0, 1)) {
+		// Another thread is already handling a crash. Do not return:
+		// this thread's fault is unresolved, so returning would spin on
+		// the faulting instruction.
+		DieWithSignal(signum);
+
 		return;
 	}
-
-	s_handledCrash = 1;
 
 	if (s_initialized) {
 		const auto consent = StreamElementsCrashConsentDialog::Prompt(
@@ -270,13 +303,40 @@ static void ChainedSignalHandler(int signum, siginfo_t *info, void *context)
 			// call the envelope sits in the cache unsent, which is
 			// what makes "Don't send" mean it.
 			sentry_user_consent_give();
-		} else {
+		} else if (consent.prompted) {
+			// An actual "Don't send". Drop it.
 			sentry_user_consent_revoke();
+		} else {
+			// We could not ask -- the crash was off the main
+			// thread, where AppKit cannot be driven. Revoking here
+			// would discard the report, and since most crashes
+			// happen on worker threads that would silently throw
+			// away the majority of them.
+			//
+			// Leave consent untouched so the envelope stays cached,
+			// and drop a marker for the next launch to notice and
+			// ask about. open/write/close are async-signal-safe;
+			// the path was resolved at init precisely so nothing
+			// here has to build it.
+			if (s_pendingMarkerPath[0]) {
+				const int fd = open(
+					s_pendingMarkerPath,
+					O_WRONLY | O_CREAT | O_TRUNC, 0600);
+
+				if (fd >= 0)
+					close(fd);
+			}
 		}
 	}
 
 	// Hand on to whoever held this signal before we did, so OBS's own
 	// handling still runs.
+	//
+	// Normally this handler is not the one the kernel invoked: sentry's is,
+	// and it calls us back after the daemon has captured the dump, then
+	// re-raises once we return. But if sentry_init() failed we are still
+	// installed and there is nobody behind us, so every path that does not
+	// actually hand the signal on must terminate rather than return.
 	const size_t count = sizeof(s_signals) / sizeof(s_signals[0]);
 
 	for (size_t i = 0; i < count; ++i) {
@@ -285,16 +345,27 @@ static void ChainedSignalHandler(int signum, siginfo_t *info, void *context)
 
 		struct sigaction *previous = &s_previousHandlers[i];
 
-		if (previous->sa_flags & SA_SIGINFO) {
-			if (previous->sa_sigaction)
-				previous->sa_sigaction(signum, info, context);
-		} else if (previous->sa_handler != SIG_DFL &&
-			   previous->sa_handler != SIG_IGN) {
+		if ((previous->sa_flags & SA_SIGINFO) &&
+		    previous->sa_sigaction) {
+			previous->sa_sigaction(signum, info, context);
+
+			return;
+		}
+
+		if (!(previous->sa_flags & SA_SIGINFO) &&
+		    previous->sa_handler != SIG_DFL &&
+		    previous->sa_handler != SIG_IGN) {
 			previous->sa_handler(signum);
+
+			return;
 		}
 
 		break;
 	}
+
+	// Nothing to hand on to -- the previous disposition was SIG_DFL or
+	// SIG_IGN. Returning here would spin on the faulting instruction.
+	DieWithSignal(signum);
 }
 
 static void InstallChainedHandlers()
@@ -391,6 +462,51 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 	}
 
 	SetSentryUser(s_userName, s_userEmail, s_userDiscord);
+
+	// Resolved here, once, so the signal handler never has to build a path.
+	{
+		char configPath[512];
+
+		if (os_get_config_path(
+			    configPath, sizeof(configPath),
+			    "obs-studio/plugin_config/obs-streamelements") >
+		    0) {
+			os_mkdirs(configPath);
+
+			snprintf(s_pendingMarkerPath,
+				 sizeof(s_pendingMarkerPath),
+				 "%s/sentry-consent-pending", configPath);
+		}
+	}
+
+	//
+	// A crash from a previous run that we could not ask about at the time,
+	// because it happened off the main thread. Its envelope is still in the
+	// cache, unsent. We are on the main thread now, so ask.
+	//
+	// This is what keeps "could not ask" from meaning "silently dropped":
+	// most crashes happen on worker threads, so without this the majority
+	// of reports would never be offered to the user at all.
+	//
+	if (s_pendingMarkerPath[0] && os_file_exists(s_pendingMarkerPath)) {
+		os_unlink(s_pendingMarkerPath);
+
+		const auto consent = StreamElementsCrashConsentDialog::Prompt(
+			s_userName, s_userEmail, s_userDiscord);
+
+		if (consent.consented) {
+			PersistContactDetails(consent.name, consent.email,
+					      consent.discord);
+
+			SetSentryUser(consent.name, consent.email,
+				      consent.discord);
+
+			// Flushes whatever the previous run left cached.
+			sentry_user_consent_give();
+		} else {
+			sentry_user_consent_revoke();
+		}
+	}
 
 	// After sentry_init, and deliberately: constructing this fetches the
 	// remote module-of-interest list over HTTP, which is not something to
