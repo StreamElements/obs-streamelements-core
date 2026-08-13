@@ -609,6 +609,24 @@ jobs:
 
           codesign --remove-signature /tmp/obs-streamelements-core.plugin
 
+          # Nested executables are signed before the bundle that contains them.
+          # Code signatures seal inside-out, so anything nested must already be
+          # signed when the enclosing bundle is sealed. --deep is retained below
+          # for any embedded frameworks, but it is deprecated by Apple and does
+          # not reliably cover nested executables -- which is precisely what
+          # sentry-crash is.
+          DAEMON=/tmp/obs-streamelements-core.plugin/Contents/MacOS/sentry-crash
+
+          if [ -f "$DAEMON" ]; then
+            echo Signing nested sentry-crash daemon...
+
+            codesign --force --options runtime --timestamp --sign "${{ secrets.CODESIGN_DEVIDAPP_IDENTITY }}" "$DAEMON"
+
+            if [ $? -ne 0 ]; then exit 1; fi
+          else
+            echo "No sentry-crash daemon in the bundle (BugSplat build); skipping."
+          fi
+
           echo Signing plugin code...
 
           codesign --force --options runtime --sign "${{ secrets.CODESIGN_DEVIDAPP_IDENTITY }}" --deep /tmp/obs-streamelements-core.plugin
@@ -620,6 +638,21 @@ jobs:
           codesign -dvv /tmp/obs-streamelements-core.plugin
 
           if [ $? -ne 0 ]; then exit 1; fi
+
+          # --strict walks nested code and fails on anything unsigned or sealed
+          # incorrectly. Without it the daemon could ship unsigned and only be
+          # caught by notarization, or worse, at launch on a user's machine.
+          echo Verifying nested code...
+
+          codesign --verify --strict --verbose=2 /tmp/obs-streamelements-core.plugin
+
+          if [ $? -ne 0 ]; then exit 1; fi
+
+          if [ -f "$DAEMON" ]; then
+            codesign --verify --strict --verbose=2 "$DAEMON"
+
+            if [ $? -ne 0 ]; then exit 1; fi
+          fi
 
       - name: Create plugin package
         run: |
