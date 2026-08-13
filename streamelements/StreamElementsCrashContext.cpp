@@ -899,7 +899,7 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 		}
 	}
 
-	GetAsyncCallContextStack([&](const StreamElementsAsyncCallContextStack_t
+	TryGetAsyncCallContextStack([&](const StreamElementsAsyncCallContextStack_t
 					     *asyncCallContextStack) {
 		if (!asyncCallContextStack->size())
 			return;
@@ -979,7 +979,7 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 
 	result.attributes.push_back({"product", "SE.Live"});
 
-	GetApiContext([&](StreamElementsApiContext_t *apiContext) {
+	TryGetApiContext([&](StreamElementsApiContext_t *apiContext) {
 		auto apiContextList = CefListValue::Create();
 
 		{

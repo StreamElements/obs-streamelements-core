@@ -100,6 +100,10 @@ public:
 };
 
 void GetApiContext(std::function<void(StreamElementsApiContext_t *)> callback);
+
+// Non-blocking variant for the crash path; false means the lock was held
+// and the callback did not run. See the definition for why.
+bool TryGetApiContext(std::function<void(StreamElementsApiContext_t *)> callback);
 std::shared_ptr<StreamElementsApiContextItem> PushApiContext(CefString method, CefRefPtr<CefListValue> args);
 void RemoveApiContext(std::shared_ptr<StreamElementsApiContextItem> item);
 
@@ -135,6 +139,12 @@ public:
 };
 
 void GetAsyncCallContextStack(
+	std::function<void(const StreamElementsAsyncCallContextStack_t *)>
+		callback);
+
+// Non-blocking variant for the crash path; false means the lock was held and
+// the callback did not run. See the definition for why.
+bool TryGetAsyncCallContextStack(
 	std::function<void(const StreamElementsAsyncCallContextStack_t *)>
 		callback);
 

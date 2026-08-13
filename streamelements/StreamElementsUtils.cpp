@@ -191,6 +191,20 @@ void GetApiContext(std::function<void(StreamElementsApiContext_t*)> callback)
 	callback(&s_apiContext);
 }
 
+// Non-blocking variant, for the crash path. Same reasoning as
+// TryGetAsyncCallContextStack.
+bool TryGetApiContext(std::function<void(StreamElementsApiContext_t *)> callback)
+{
+	std::shared_lock lock(s_apiContextMutex, std::try_to_lock);
+
+	if (!lock.owns_lock())
+		return false;
+
+	callback(&s_apiContext);
+
+	return true;
+}
+
 std::shared_ptr<StreamElementsApiContextItem> PushApiContext(CefString method, CefRefPtr<CefListValue> args)
 {
 	std::unique_lock lock(s_apiContextMutex);
@@ -221,11 +235,42 @@ void RemoveApiContext(std::shared_ptr<StreamElementsApiContextItem> item)
 static StreamElementsAsyncCallContextStack_t s_asyncCallContextStack;
 static std::shared_mutex s_asyncCallContextStackMutex;
 
-void GetAsyncCallContextStack(std::function<void(const StreamElementsAsyncCallContextStack_t *)> callback)
+void GetAsyncCallContextStack(
+	std::function<void(const StreamElementsAsyncCallContextStack_t *)>
+		callback)
 {
 	std::shared_lock lock(s_asyncCallContextStackMutex);
 
 	callback(&s_asyncCallContextStack);
+}
+
+//
+// As above, but never blocks. Returns false, without invoking the callback, if
+// the lock is held.
+//
+// For the crash path only. This lock is taken exclusively by
+// AsyncCallContextPush and AsyncCallContextRemove, which run on every
+// QtPostTask, QtExecSync and QtDelayTask -- hundreds of call sites, constantly.
+// A crashing thread that blocks on it waits on whichever thread holds it, and
+// that thread may itself be stuck or already gone; worse, std::shared_mutex is
+// not recursive, so a thread that faulted while holding it exclusively would
+// deadlock against itself.
+//
+// Losing this section of a crash report is a far better outcome than a handler
+// that never returns, which produces no report at all.
+//
+bool TryGetAsyncCallContextStack(
+	std::function<void(const StreamElementsAsyncCallContextStack_t *)>
+		callback)
+{
+	std::shared_lock lock(s_asyncCallContextStackMutex, std::try_to_lock);
+
+	if (!lock.owns_lock())
+		return false;
+
+	callback(&s_asyncCallContextStack);
+
+	return true;
 }
 
 std::shared_ptr<StreamElementsAsyncCallContextItem>
