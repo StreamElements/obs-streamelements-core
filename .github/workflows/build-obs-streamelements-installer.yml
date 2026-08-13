@@ -127,7 +127,14 @@ jobs:
           cat "RELEASE_NOTES.footer.md" >> /tmp/release_notes_full.md
 
           # Generate HTML
-          markdown-to-html-cli --source /tmp/release_notes_full.md --output /tmp/release_notes.raw.html --no-dark-mode --markdown-style-theme dark --no-corners --style ".markdown-style { max-width: 100% !important; }"
+          # Arial throughout, headings and code included. These notes are rendered
+          # inside the updater's embedded browser, whose default font stack does not
+          # match the rest of the product. The universal selector plus !important is
+          # deliberate: the generator's own theme sets font-family on several
+          # elements, and anything less specific loses to it.
+          NOTES_CSS='.markdown-style { max-width: 100% !important; } body, .markdown-style, .markdown-style *, .markdown-style code, .markdown-style pre { font-family: Arial, Helvetica, sans-serif !important; }'
+
+          markdown-to-html-cli --source /tmp/release_notes_full.md --output /tmp/release_notes.raw.html --no-dark-mode --markdown-style-theme dark --no-corners --style "$NOTES_CSS"
 
           # Remove javascript from HTML
           awk '/<script/,/<\/script>/ {next} 1' /tmp/release_notes.raw.html > /tmp/release_notes.html
