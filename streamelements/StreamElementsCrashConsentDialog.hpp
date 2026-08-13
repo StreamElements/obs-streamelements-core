@@ -31,6 +31,17 @@ public:
 		// as "do not send": it is the user's answer, not a hint.
 		bool consented = false;
 
+		// Whether the user was actually asked. False means the prompt
+		// could not be shown -- on macOS, because the crash happened
+		// off the main thread and AppKit cannot be driven from there.
+		//
+		// This is not the same as declining, and conflating the two
+		// throws away most crashes: a caller that treats "could not
+		// ask" as "no" discards every report from a worker thread,
+		// which is where the majority of crashes happen. Callers that
+		// can defer should leave the report pending instead.
+		bool prompted = false;
+
 		std::string description;
 		std::string name;
 		std::string email;
