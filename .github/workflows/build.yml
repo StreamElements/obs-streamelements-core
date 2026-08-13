@@ -18,7 +18,7 @@ on:
 env:
   BASE_BUILD_NUMBER: 569
 
-  BUILD_OPTIONS: >
+  BUILD_OPTIONS: >-
     -DENABLE_DECKLINK=OFF
     -DENABLE_SYPHON=OFF
     -DENABLE_LIBFDK=OFF
@@ -325,7 +325,7 @@ jobs:
           copy C:\local\obs-studio\plugins\obs-streamelements-core\CMakeUserPresets.json C:\local\obs-studio\CMakeUserPresets.json
           del C:\local\obs-studio\plugins\obs-streamelements-core\CMakeUserPresets.json
           cd /d C:\local\obs-studio
-          cmake --preset=windows-x64-streamelements %BUILD_OPTIONS% -DSTREAMELEMENTS_CRASH_HANDLER=%SE_CRASH_HANDLER%
+          cmake --preset=windows-x64-streamelements -DSTREAMELEMENTS_CRASH_HANDLER=%SE_CRASH_HANDLER% %BUILD_OPTIONS%
 
       - name: Build
         shell: cmd
