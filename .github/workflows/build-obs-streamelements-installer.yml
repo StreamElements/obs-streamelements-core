@@ -81,35 +81,46 @@ jobs:
           # model-authored text cannot reach the shell as code.
           WHATS_NEW_BASE64: ${{ inputs.WHATS_NEW_BASE64 }}
         run: |
+          # The per-version notes: this release's heading, its notes, then history.
           echo "### ${{ inputs.PLUGIN_VERSION_STRING }}" >> /tmp/release_notes_raw.md
           echo "" >> /tmp/release_notes_raw.md
-
-          # "What's New" above "Release Notes", matching the GitHub release body, so a
-          # creator reads the same words in the in-app updater and on the release page.
-          # Both headings appear only when there is a blurb; without one the notes keep
-          # their previous unheaded shape rather than growing a lone "Release Notes".
-          if [ -n "${WHATS_NEW_BASE64:-}" ]; then
-            echo "$WHATS_NEW_BASE64" | base64 -d > /tmp/whats_new.md
-
-            if [ -s /tmp/whats_new.md ]; then
-              echo "#### What's New" >> /tmp/release_notes_raw.md
-              echo "" >> /tmp/release_notes_raw.md
-              cat /tmp/whats_new.md >> /tmp/release_notes_raw.md
-              # printf, not echo: the blurb has no trailing newline, so a single echo
-              # only terminates its last line and leaves the next heading glued to it
-              # with no blank line between -- which Markdown will not read as a heading.
-              printf '\n\n' >> /tmp/release_notes_raw.md
-              echo "#### Release Notes" >> /tmp/release_notes_raw.md
-              echo "" >> /tmp/release_notes_raw.md
-            fi
-          fi
-
           cat "RELEASE_NOTES.md" >> /tmp/release_notes_raw.md
           echo "" >> /tmp/release_notes_raw.md
           cat "RELEASE_NOTES.history.md" >> /tmp/release_notes_raw.md
 
+          # The product blurb, minus the "## Release Notes" heading it ends with.
+          # That heading is emitted further down instead, so "What's New" can sit
+          # beside it as a sibling section rather than nested inside one release's
+          # notes -- previously it landed as an <h4> under "## Release Notes" >
+          # "### <version>", which read as part of that version's notes rather than
+          # as a section of its own.
+          #
+          # Stripped unconditionally so this stays correct if the header ever stops
+          # carrying the heading.
+          sed -E '/^## Release Notes[[:space:]]*$/d' "RELEASE_NOTES.header.md" > /tmp/header_body.md
 
-          cat "RELEASE_NOTES.header.md" >> /tmp/release_notes_full.md
+          cat /tmp/header_body.md >> /tmp/release_notes_full.md
+          echo "" >> /tmp/release_notes_full.md
+
+          # "What's New" is a top-level section, above Release Notes, and describes
+          # only the release being built -- it is deliberately never archived into
+          # RELEASE_NOTES.history.md. Appears only when there is a blurb; without one
+          # the page keeps exactly its previous shape.
+          if [ -n "${WHATS_NEW_BASE64:-}" ]; then
+            echo "$WHATS_NEW_BASE64" | base64 -d > /tmp/whats_new.md
+
+            if [ -s /tmp/whats_new.md ]; then
+              echo "## What's New" >> /tmp/release_notes_full.md
+              echo "" >> /tmp/release_notes_full.md
+              cat /tmp/whats_new.md >> /tmp/release_notes_full.md
+              # printf, not echo: the blurb has no trailing newline, so a single echo
+              # only terminates its last line and leaves the next heading glued to it
+              # with no blank line between -- which Markdown will not read as a heading.
+              printf '\n\n' >> /tmp/release_notes_full.md
+            fi
+          fi
+
+          echo "## Release Notes" >> /tmp/release_notes_full.md
           echo "" >> /tmp/release_notes_full.md
           cat /tmp/release_notes_raw.md >> /tmp/release_notes_full.md
           echo "" >> /tmp/release_notes_full.md
