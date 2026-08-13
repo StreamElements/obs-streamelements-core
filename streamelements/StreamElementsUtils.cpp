@@ -259,11 +259,24 @@ std::future<void> __QtDelayTask_Impl(std::function<void()> task, int delayMs,
 	QTimer::singleShot(std::chrono::milliseconds(delayMs), qApp, [=]() {
 		item->running = true;
 
-		task();
+		// Same reasoning as __QtPostTask_Impl: cleanup must survive a
+		// throwing task, or the context entry leaks into every later
+		// crash report.
+		auto finish = [=]() {
+			AsyncCallContextRemove(item);
 
-		AsyncCallContextRemove(item);
+			promise->set_value();
+		};
 
-		promise->set_value();
+		try {
+			task();
+		} catch (...) {
+			finish();
+
+			throw;
+		}
+
+		finish();
 	});
 
 	return promise->get_future();
@@ -278,13 +291,37 @@ std::future<void> __QtPostTask_Impl(std::function<void()> task,
 	auto item = AsyncCallContextPush(file, line, false);
 
 	auto executor = [=]() {
-		task();
-
+		// Before the task, not after.
+		//
+		// This flag is what tells a crash report which queued call was
+		// executing at the moment of the fault -- the crash handler
+		// writes it into async-context.json. Setting it afterwards meant
+		// the one task that actually was running reported running=false,
+		// which is precisely backwards, and on the macro used at most of
+		// the call sites in this codebase. QtDelayTask below has always
+		// had it the right way round.
 		item->running = true;
 
-		AsyncCallContextRemove(item);
+		// The entry has to come off the stack, and the waiter has to be
+		// released, even if the task throws. Otherwise the entry stays
+		// for the life of the process and appears in every later crash
+		// report, and any QtExecSync blocked on this never learns it
+		// finished.
+		auto finish = [=]() {
+			AsyncCallContextRemove(item);
 
-		promise->set_value();
+			promise->set_value();
+		};
+
+		try {
+			task();
+		} catch (...) {
+			finish();
+
+			throw;
+		}
+
+		finish();
 	};
 
 	QMetaObject::invokeMethod(qApp, executor, Qt::QueuedConnection);

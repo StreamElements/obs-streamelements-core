@@ -701,11 +701,23 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 	// system permission prompt. Doing that from a crashing process would
 	// be both useless and hostile, so macOS reports go without.
 #ifdef WIN32
-	addWindowCaptureToZip(
-		(HWND)StreamElementsGlobalStateManager::GetInstance()
-			->mainWindow()
-			->winId(),
-		24, L"obs-main-window.bmp");
+	//
+	// Guarded, because this runs while the process is dying and a crash
+	// during shutdown is one of the cases worth reporting most. By then the
+	// global state manager is gone, and dereferencing it here would fault
+	// inside the crash handler -- losing the whole report rather than just
+	// the screenshot.
+	//
+	if (StreamElementsGlobalStateManager::IsInstanceAvailable()) {
+		auto mainWindow =
+			StreamElementsGlobalStateManager::GetInstance()
+				->mainWindow();
+
+		if (mainWindow) {
+			addWindowCaptureToZip((HWND)mainWindow->winId(), 24,
+					      L"obs-main-window.bmp");
+		}
+	}
 #endif
 
 	std::map<std::wstring, std::wstring> local_to_zip_files_map;
@@ -823,18 +835,21 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 		addCefValueToZip(sysMemoryInfo, L"system\\memory.json");
 	}
 
-	{
+	// Same guard as the window capture above: gone during shutdown, and a
+	// null dereference here would cost the entire report.
+	auto performanceTracker =
+		StreamElementsGlobalStateManager::IsInstanceAvailable()
+			? StreamElementsGlobalStateManager::GetInstance()
+				  ->GetPerformanceHistoryTracker()
+			: nullptr;
+
+	if (performanceTracker) {
 		// Histogram CPU & memory usage (past hour, 1 minute intervals)
 
-		auto cpuUsageHistory =
-			StreamElementsGlobalStateManager::GetInstance()
-				->GetPerformanceHistoryTracker()
-				->getCpuUsageSnapshot();
+		auto cpuUsageHistory = performanceTracker->getCpuUsageSnapshot();
 
 		auto memoryUsageHistory =
-			StreamElementsGlobalStateManager::GetInstance()
-				->GetPerformanceHistoryTracker()
-				->getMemoryUsageSnapshot();
+			performanceTracker->getMemoryUsageSnapshot();
 
 		char lineBuf[512];
 
