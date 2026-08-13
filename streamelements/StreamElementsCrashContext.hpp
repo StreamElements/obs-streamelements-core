@@ -83,7 +83,26 @@ public:
 
 	// Called from the exception path with the process already dying. Does no
 	// allocation it can avoid, touches no Qt, and must not throw.
+	//
+	// Releases the guard buffer on entry -- see ReleaseGuardBuffer.
 	Result Collect();
+
+	//
+	// Hands a block of memory reserved at startup back to the allocator, so
+	// that collection has headroom on a process that crashed because it ran
+	// out of it. BugSplat reserved 1MB for the same reason
+	// (setGuardByteBufferSize); this is the equivalent for the Sentry path,
+	// which otherwise has none.
+	//
+	// Safe to call more than once; the second call does nothing.
+	//
+	// This helps with out-of-memory crashes and only those. It does nothing
+	// for a corrupted heap: the allocator is already unsound, and free()
+	// itself may be what faults. Collection still runs entirely on the
+	// process heap, so that crash class remains unserved -- addressing it
+	// means not using the heap at all.
+	//
+	static void ReleaseGuardBuffer();
 
 private:
 	struct Impl;

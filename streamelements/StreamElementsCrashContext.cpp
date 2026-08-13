@@ -52,6 +52,36 @@ static inline int _close(int fd)
 /* ================================================================= */
 
 //
+// Reserved at construction, released the moment collection begins.
+//
+// A process that died of exhaustion has no room for the configuration zip, the
+// JSON or the stack text, so the report it needs most is the one it cannot
+// produce. Handing this block back first buys that room. BugSplat reserved 1MB
+// for the same purpose and the same size; matched here rather than guessed.
+//
+// Deliberately allocated with malloc rather than new: it is released from a
+// crash path, and free() on a raw block is the smallest possible operation to
+// perform there.
+//
+static const size_t GUARD_BUFFER_SIZE = 1024 * 1024;
+
+static void *s_guardBuffer = nullptr;
+
+void StreamElementsCrashContext::ReleaseGuardBuffer()
+{
+	void *buffer = s_guardBuffer;
+
+	if (!buffer)
+		return;
+
+	s_guardBuffer = nullptr;
+
+	free(buffer);
+}
+
+/* ================================================================= */
+
+//
 // itoa is an MSVC extension. snprintf is not, and is just as safe here.
 //
 static inline const char *IntToBuf(int value, char *buffer, size_t size)
@@ -352,6 +382,11 @@ static inline bool GetTemporaryFilePath(const wchar_t *basename,
 
 StreamElementsCrashContext::StreamElementsCrashContext()
 {
+	// Reserved now, while allocation still works, so that Collect() has
+	// something to hand back if the process dies of exhaustion.
+	if (!s_guardBuffer)
+		s_guardBuffer = malloc(GUARD_BUFFER_SIZE);
+
 	m_impl = new Impl();
 
 #ifdef WIN32
@@ -403,6 +438,9 @@ bool StreamElementsCrashContext::ShouldReport() const
 
 StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 {
+	// First thing, before anything below asks the allocator for a byte.
+	ReleaseGuardBuffer();
+
 	Result result;
 
 	const size_t BUF_LEN = 2048;
