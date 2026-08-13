@@ -375,6 +375,16 @@ jobs:
           name: windows-manifest
           path: '${{ env.ROOT }}/obs-streamelements*.manifest'
 
+      # Uploading zero files is not an error as far as the upload action is
+      # concerned, so a glob that matches nothing reports success and quietly
+      # leaves the previous build's installer in place -- which is exactly what
+      # happened between 2026-07-29 and 2026-08-13. Fail loudly instead.
+      - name: Verify installer exists before upload
+        if: ${{ env.UPLOAD_BINARIES == 'true' }}
+        shell: cmd
+        run: |
+          dir /b "${{ env.ROOT }}\obs-streamelements-setup*.exe" || (echo No installer matched obs-streamelements-setup*.exe in "${{ env.ROOT }}" & exit /b 1)
+
       - name: Upload Binaries to Google Storage
         if: ${{ env.UPLOAD_BINARIES == 'true' }}
         uses: 'google-github-actions/upload-cloud-storage@v3'
@@ -382,7 +392,7 @@ jobs:
           parent: false
           process_gcloudignore: false
           path: ${{ env.ROOT }}
-          glob: '{obs-streamelements-setup*.exe}'
+          glob: 'obs-streamelements-setup*.exe'
           destination: 'se-obs-builds/obs-streamelements-installer/latest/windows'
 
       - name: Upload Text to Google Storage
@@ -676,6 +686,15 @@ jobs:
             ${{ env.ROOT }}/obs-streamelements.manifest
             ${{ env.ROOT }}/obs-streamelements.*.manifest
 
+      # See the matching comment in the windows job: a glob that matches nothing
+      # uploads nothing and still succeeds, leaving the previous build's package
+      # published under the new version's name.
+      - name: Verify package exists before upload
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        run: |
+          test -f "${{ env.ROOT }}/obs-streamelements-core.pkg" \
+            || { echo "No package at ${{ env.ROOT }}/obs-streamelements-core.pkg"; exit 1; }
+
       - name: Upload Binaries to Google Storage
         if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
         uses: 'google-github-actions/upload-cloud-storage@v3'
@@ -683,7 +702,7 @@ jobs:
           parent: false
           process_gcloudignore: false
           path: ${{ env.ROOT }}
-          glob: '{obs-streamelements-core.pkg}'
+          glob: 'obs-streamelements-core.pkg'
           destination: 'se-obs-builds/obs-streamelements-installer/latest/macos'
 
       - name: Upload Text to Google Storage
