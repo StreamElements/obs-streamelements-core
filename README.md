@@ -82,7 +82,7 @@ cd build_macos_arm64 && xcodebuild -configuration RelWithDebInfo \
 | MacOS | `latest` | <img src="https://cdn.streamelements.com/obs/dist/obs-streamelements/macos/latest/obs-streamelements.version.svg" /> |
 | MacOS | `stable` | <img src="https://cdn.streamelements.com/obs/dist/obs-streamelements/macos/stable/obs-streamelements.version.svg" /> |
 
-<a href="https://streamelements.github.io/obs-streamelements-core/" target="_blank">Extended Status Page</a> — every channel on both platforms, with build dates, promotion drift and release notes, read live from the CDN manifests. Source: <a href="docs/index.html">docs/index.html</a>.
+<a href="https://streamelements.github.io/obs-streamelements-core/status.html" target="_blank">Extended Status Page</a> — every channel on both platforms, with build dates, promotion drift and release notes, read live from the CDN manifests. Source: <a href="docs/status.html">docs/status.html</a>.
 
 # Deployment
 
