@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SE.Live Release Channels</title>
+<meta name="description" content="Which SE.Live build is in each release channel, on Windows and macOS, read live from the CDN manifests.">
+<!-- Inline so the page stays a single file with no second request; also stops the
+     browser's automatic /favicon.ico probe 404ing in the console. Five rungs,
+     shortening downward: the promotion ladder the page is about. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230B6E78'/%3E%3Cg fill='%23fff'%3E%3Crect x='3' y='3' width='10' height='1.6' rx='.8'/%3E%3Crect x='3' y='6' width='8' height='1.6' rx='.8'/%3E%3Crect x='3' y='9' width='6' height='1.6' rx='.8'/%3E%3Crect x='3' y='12' width='3' height='1.6' rx='.8'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+  :root {
+    --ground:#F6F8FA; --surface:#FFFFFF; --raised:#EEF2F7;
+    --ink:#101822; --muted:#56637A; --line:#DDE3EC;
+    --accent:#0B6E78; --accent-soft:#E2F1F3;
+    --fresh:#197A45; --aging:#96660A; --stale:#A63A2A;
+    --fresh-bg:#E4F4EA; --aging-bg:#FAF0DA; --stale-bg:#FAE7E3;
+    --shadow:0 1px 2px rgba(16,24,34,.06), 0 4px 12px rgba(16,24,34,.04);
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --ui:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#0E1319; --surface:#161C25; --raised:#1D2530;
+      --ink:#DFE6EF; --muted:#8794A8; --line:#232C38;
+      --accent:#45CBD6; --accent-soft:#12333A;
+      --fresh:#4FC97E; --aging:#DCA62B; --stale:#EE7B67;
+      --fresh-bg:#12301F; --aging-bg:#322713; --stale-bg:#351914;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0E1319; --surface:#161C25; --raised:#1D2530;
+    --ink:#DFE6EF; --muted:#8794A8; --line:#232C38;
+    --accent:#45CBD6; --accent-soft:#12333A;
+    --fresh:#4FC97E; --aging:#DCA62B; --stale:#EE7B67;
+    --fresh-bg:#12301F; --aging-bg:#322713; --stale-bg:#351914;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.3);
+  }
+
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink); font-family:var(--ui);
+         font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:1060px; margin:0 auto; padding:28px 20px 72px; }
+
+  header { display:flex; flex-wrap:wrap; align-items:baseline; gap:10px 16px; margin-bottom:6px; }
+  h1 { font-size:25px; font-weight:640; letter-spacing:-.02em; margin:0; text-wrap:balance; }
+  .sub { color:var(--muted); font-size:14px; margin:0 0 26px; max-width:62ch; }
+  .stamp { margin-left:auto; display:flex; align-items:center; gap:10px; font-family:var(--mono);
+           font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--muted); flex:none; }
+  .dot[data-s="ok"] { background:var(--fresh); }
+  .dot[data-s="bad"] { background:var(--stale); }
+  button.reload { font-family:var(--mono); font-size:11.5px; color:var(--ink);
+                  background:var(--surface); border:1px solid var(--line); border-radius:5px;
+                  padding:4px 9px; cursor:pointer; }
+  button.reload:hover { border-color:var(--accent); color:var(--accent); }
+  button.reload:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  button.reload[disabled] { opacity:.5; cursor:default; }
+
+  h2 { font-size:12px; font-weight:660; text-transform:uppercase; letter-spacing:.09em;
+       color:var(--muted); margin:34px 0 12px; display:flex; align-items:center; gap:10px; }
+  h2::after { content:""; flex:1; height:1px; background:var(--line); }
+
+  .scroll { overflow-x:auto; border:1px solid var(--line); border-radius:8px;
+            background:var(--surface); box-shadow:var(--shadow); }
+  table { border-collapse:collapse; width:100%; min-width:660px; }
+  thead th { text-align:left; font-size:11px; font-weight:640; text-transform:uppercase;
+             letter-spacing:.07em; color:var(--muted); padding:11px 14px;
+             border-bottom:1px solid var(--line); white-space:nowrap; }
+  tbody td { padding:12px 14px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  tbody tr:last-child td { border-bottom:0; }
+  tbody tr:hover { background:var(--raised); }
+
+  .rung { display:flex; align-items:center; gap:10px; }
+  .rail { width:3px; height:26px; border-radius:2px; background:var(--line); flex:none; }
+  .rail[data-d="fresh"] { background:var(--fresh); }
+  .rail[data-d="aging"] { background:var(--aging); }
+  .rail[data-d="stale"] { background:var(--stale); }
+  .chan { font-family:var(--mono); font-size:13.5px; font-weight:600; }
+  .step { font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .ver { font-family:var(--mono); font-size:13.5px; font-variant-numeric:tabular-nums; display:block; }
+  .built { font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .miss { color:var(--muted); font-family:var(--mono); font-size:13px; }
+
+  .pill { display:inline-block; font-family:var(--mono); font-size:11.5px; font-weight:600;
+          padding:2px 8px; border-radius:20px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .pill[data-d="fresh"] { color:var(--fresh); background:var(--fresh-bg); }
+  .pill[data-d="aging"] { color:var(--aging); background:var(--aging-bg); }
+  .pill[data-d="stale"] { color:var(--stale); background:var(--stale-bg); }
+  .same { font-size:11.5px; color:var(--muted); font-style:italic; }
+
+  .dl { display:flex; flex-wrap:wrap; gap:8px; }
+  .dl a { display:inline-flex; align-items:baseline; gap:8px; font-family:var(--mono);
+          font-size:13px; text-decoration:none; color:var(--ink); background:var(--surface);
+          border:1px solid var(--line); border-radius:6px; padding:7px 12px;
+          transition:border-color .12s, color .12s; }
+  .dl a:hover { border-color:var(--accent); color:var(--accent); }
+  .dl a:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .dl a span { font-size:11px; color:var(--muted); }
+
+  details { background:var(--surface); border:1px solid var(--line); border-radius:8px;
+            margin-bottom:8px; overflow:hidden; }
+  summary { cursor:pointer; padding:12px 14px; display:flex; align-items:center; gap:12px;
+            font-size:14px; list-style:none; }
+  summary::-webkit-details-marker { display:none; }
+  summary::before { content:"\25B8"; color:var(--muted); font-size:11px;
+                    transition:transform .15s; flex:none; }
+  details[open] summary::before { transform:rotate(90deg); }
+  summary:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+  summary .chan { flex:none; }
+  summary .ver { margin-left:auto; }
+  .nbadge { font-family:var(--mono); font-size:10.5px; color:var(--muted);
+            border:1px solid var(--line); border-radius:10px; padding:1px 7px; flex:none; }
+  .body { padding:0 14px 16px 36px; }
+
+  dl.fields { display:grid; grid-template-columns:minmax(150px,max-content) 1fr; gap:6px 18px;
+              margin:4px 0 0; }
+  dl.fields dt { font-family:var(--mono); font-size:12px; color:var(--muted); }
+  dl.fields dd { margin:0; font-family:var(--mono); font-size:12px; word-break:break-all; }
+  dl.fields dd a { color:var(--accent); }
+
+  .notes-h { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted);
+             margin:20px 0 8px; font-weight:640; display:flex; align-items:center; gap:10px; }
+  .notes-h::after { content:""; flex:1; height:1px; background:var(--line); }
+  iframe.notes { width:100%; height:300px; border:1px solid var(--line); border-radius:6px;
+                 background:var(--surface); display:block; }
+  .isolated { font-size:11.5px; color:var(--muted); margin:7px 0 0; }
+  .isolated code { font-family:var(--mono); font-size:11px; background:var(--raised);
+                   padding:1px 5px; border-radius:3px; }
+  .nonotes { font-size:12.5px; color:var(--muted); font-style:italic; margin:8px 0 0; }
+
+  .state { display:flex; align-items:center; gap:9px; font-size:13px; padding:11px 14px;
+           border-radius:6px; border:1px solid var(--line); background:var(--surface); }
+  .state.err { color:var(--stale); background:var(--stale-bg); border-color:transparent; }
+  .state.load { color:var(--muted); }
+  .spin { width:11px; height:11px; border:2px solid var(--line); border-top-color:var(--accent);
+          border-radius:50%; animation:sp .7s linear infinite; flex:none; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spin { animation:none; } * { transition:none !important; } }
+
+  footer { margin-top:40px; padding-top:18px; border-top:1px solid var(--line);
+           font-size:12.5px; color:var(--muted); }
+  footer a { color:var(--accent); }
+
+  @media (max-width:640px) {
+    .wrap { padding:20px 14px 56px; }
+    h1 { font-size:21px; }
+    .stamp { margin-left:0; width:100%; }
+    .body { padding-left:14px; }
+    dl.fields { grid-template-columns:1fr; gap:2px 0; }
+    dl.fields dd { margin-bottom:8px; }
+    iframe.notes { height:340px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>SE.Live Release Channels</h1>
+    <div class="stamp">
+      <span class="dot" id="dot"></span><span id="stamp">loading&hellip;</span>
+      <button class="reload" id="reload" type="button">Reload</button>
+    </div>
+  </header>
+  <p class="sub">Which build is sitting in each channel, on both platforms, and how far each rung
+     has drifted from the one above it. Read live from the CDN manifests on every load.</p>
+
+  <h2>Promotion ladder</h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Channel</th><th>Windows</th><th>macOS</th><th>Behind previous</th></tr></thead>
+      <tbody id="ladder"></tbody>
+    </table>
+  </div>
+
+  <h2>Windows installers</h2>
+  <div class="dl" id="downloads"></div>
+
+  <h2>Channel detail</h2>
+  <div id="detail"></div>
+
+  <footer>
+    Replaces the hand-uploaded page at
+    <a href="https://cdn.streamelements.com/obs/qa/status.html">cdn.streamelements.com/obs/qa/status.html</a>.
+    Source: <a href="https://github.com/StreamElements/obs-streamelements-core/blob/master/docs/index.html">docs/index.html</a>.
+    Manifests are read cross-origin from the CDN, which serves
+    <span style="font-family:var(--mono)">access-control-allow-origin: *</span>.
+  </footer>
+</div>
+
+<script>
+"use strict";
+
+var BASE = "https://cdn.streamelements.com/obs/dist/obs-streamelements";
+var PLATFORMS = ["windows", "macos"];
+var CHANNELS = ["signed", "qa", "beta", "latest", "stable"];
+
+var WRAPPER = "https://cdn.streamelements.com/obs/dist/obs-streamelements-installer-wrapper/windows";
+var INSTALLERS = [
+  ["QA",      WRAPPER + "/qa/obs-streamelements-setup-qa.exe"],
+  ["Staging", WRAPPER + "/qa/obs-streamelements-setup-staging.exe"],
+  ["Beta",    WRAPPER + "/qa/obs-streamelements-setup-beta.exe"],
+  ["Latest",  WRAPPER + "/latest/obs-streamelements-setup-latest.exe"],
+  ["Stable",  WRAPPER + "/latest/obs-streamelements-setup-stable.exe"]
+];
+
+var BEGIN = "[[[BEGIN_RELEASE_NOTES]]]";
+var END = "[[[END_RELEASE_NOTES]]]";
+var DAY = 86400000;
+
+function manifestUrl(plat, ch) {
+  return BASE + "/" + plat + "/" + ch + "/obs-streamelements.manifest";
+}
+
+// The CDN serves these with `cache-control: public, max-age=31536000` -- a year. Without
+// a unique query string every load after the first would show whatever was current when
+// the browser first fetched it, which for a status page is worse than showing nothing.
+// Named to match the original page's `_nc`, and paired with cache:"no-store" so an
+// intermediary that ignores the query string still revalidates.
+function bust(url) {
+  return url + (url.indexOf("?") < 0 ? "?" : "&") + "_nc=" + Date.now() + "." +
+         Math.random().toString(36).slice(2, 8);
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+  });
+}
+
+// A manifest is an INI-ish head, then the release notes between two markers.
+// Tolerates the UTF-8 BOM, CRLF, comment lines, and a missing notes block.
+function parseManifest(text) {
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  var i = text.indexOf(BEGIN);
+  var head = i < 0 ? text : text.slice(0, i);
+  var notes = "";
+  if (i >= 0) {
+    notes = text.slice(i + BEGIN.length);
+    var j = notes.indexOf(END);
+    if (j >= 0) notes = notes.slice(0, j);
+    notes = notes.trim();
+  }
+  var fields = {};
+  head.split(/\r?\n/).forEach(function (line) {
+    line = line.trim();
+    if (!line || line.charAt(0) === "[" || line.charAt(0) === ";") return;
+    var eq = line.indexOf("=");
+    if (eq < 0) return;
+    fields[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+  });
+  return { fields: fields, notes: notes };
+}
+
+// 20260806000759 -> { date: 2026-08-06, build: 759, display: "26.8.6.759" }.
+// The trailing six digits are a monotonic build counter, NOT a time: 20250619000485
+// read as HH:MM:SS would be 85 seconds. Parsing it as a timestamp yields garbage.
+function parseVersion(v) {
+  if (!/^\d{14}$/.test(v || "")) return null;
+  var y = +v.slice(0, 4), mo = +v.slice(4, 6), d = +v.slice(6, 8), build = +v.slice(8);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  var date = new Date(Date.UTC(y, mo - 1, d));
+  if (isNaN(date.getTime()) || date.getUTCMonth() !== mo - 1 || date.getUTCDate() !== d) return null;
+  return { date: date, build: build, display: String(y).slice(2) + "." + mo + "." + d + "." + build };
+}
+
+function ageDays(dt) { return Math.floor((Date.now() - dt.getTime()) / DAY); }
+function severity(d) { return d <= 14 ? "fresh" : d <= 60 ? "aging" : "stale"; }
+function humanGap(d) {
+  if (d === 0) return "same day";
+  if (d < 0) return Math.abs(d) + "d ahead";
+  if (d < 31) return d + "d";
+  var mo = Math.round(d / 30.44);
+  return mo < 24 ? mo + "mo" : (d / 365.25).toFixed(1) + "y";
+}
+function isoDay(dt) { return dt.toISOString().slice(0, 10); }
+
+// The notes blob is a whole HTML document produced by CI, in one of two shapes: a
+// GitHub-styled render that hardcodes data-color-mode="dark", and a plain one with no
+// colours at all. Left alone the first renders dark-on-light and the second unstyled.
+// Normalise both to the viewer's theme, then hand the result to a frame with sandbox=""
+// -- every privilege withheld, so nothing in it executes or reaches this document.
+function frameNotes(html) {
+  var dark = (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches) ||
+             document.documentElement.getAttribute("data-theme") === "dark";
+  var themed = html.replace(/data-color-mode="[^"]*"/gi,
+                            'data-color-mode="' + (dark ? "dark" : "light") + '"');
+  var ink = dark ? "#DFE6EF" : "#101822";
+  var bg = dark ? "#161C25" : "#FFFFFF";
+  var link = dark ? "#45CBD6" : "#0B6E78";
+  return themed +
+    '<style>html,body{background:' + bg + ' !important;color:' + ink + ' !important;' +
+    'font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif !important;' +
+    'margin:0 !important;padding:14px !important;font-size:14px;line-height:1.55}' +
+    '*{font-family:inherit !important}' +
+    'h1{font-size:17px;margin:0 0 10px}h2,h3{font-size:14px;margin:16px 0 6px}' +
+    'h4{font-size:13px;margin:14px 0 5px}ul{margin:0 0 10px;padding-left:20px}li{margin:3px 0}' +
+    'a{color:' + link + '}.markdown-style{background:transparent !important}</style>';
+}
+
+var results = {};
+
+function fetchChannel(plat, ch) {
+  var key = plat + "/" + ch;
+  var url = manifestUrl(plat, ch);
+  return fetch(bust(url), { cache: "no-store", credentials: "omit" })
+    .then(function (res) {
+      if (!res.ok) throw new Error("HTTP " + res.status + " " + res.statusText);
+      return res.text();
+    })
+    .then(function (text) {
+      var p = parseManifest(text);
+      results[key] = { ok: true, url: url, version: p.fields.version_number || "",
+                       fields: p.fields, notes: p.notes };
+    })
+    .catch(function (err) {
+      results[key] = { ok: false, url: url, error: String(err.message || err) };
+    });
+}
+
+function cell(key) {
+  var rec = results[key];
+  if (!rec) return '<span class="miss">&mdash;</span>';
+  if (!rec.ok) return '<span class="miss" title="' + esc(rec.error) + '">unavailable</span>';
+  var p = parseVersion(rec.version);
+  if (!p) return '<span class="miss">' + esc(rec.version || "no version") + '</span>';
+  return '<span class="ver">' + p.display + '</span><span class="built">built ' +
+         isoDay(p.date) + " · " + ageDays(p.date) + 'd ago</span>';
+}
+
+function renderLadder() {
+  var rows = [], prevDate = null;
+  CHANNELS.forEach(function (ch, idx) {
+    var parsed = PLATFORMS.map(function (p) {
+      var r = results[p + "/" + ch];
+      return r && r.ok ? parseVersion(r.version) : null;
+    }).filter(Boolean);
+    // The laggard, not the leader. A channel has not really received a build until
+    // both platforms have it, and taking the newer of the two would report this rung
+    // as healthier than it is -- with Windows stable 1.7y old and macOS stable 1.2y
+    // old, the newer figure hides the case anyone would actually want to see.
+    var oldest = parsed.sort(function (a, b) { return a.date - b.date; })[0];
+
+    var gapHtml = '<span class="same">&mdash;</span>', sev = "fresh";
+    if (oldest) {
+      sev = severity(ageDays(oldest.date));
+      if (prevDate) {
+        var gap = Math.round((prevDate.getTime() - oldest.date.getTime()) / DAY);
+        gapHtml = gap === 0 ? '<span class="same">in sync</span>'
+          : '<span class="pill" data-d="' + severity(Math.abs(gap)) + '">' +
+            humanGap(gap) + (gap > 0 ? " behind" : "") + "</span>";
+      } else {
+        gapHtml = '<span class="pill" data-d="' + sev + '">head</span>';
+      }
+      prevDate = oldest.date;
+    }
+    rows.push('<tr><td><div class="rung"><div class="rail" data-d="' + sev + '"></div><div>' +
+      '<div class="chan">' + ch + '</div><div class="step">step ' + (idx + 1) + ' of ' +
+      CHANNELS.length + "</div></div></div></td>" +
+      "<td>" + cell("windows/" + ch) + "</td><td>" + cell("macos/" + ch) + "</td>" +
+      "<td>" + gapHtml + "</td></tr>");
+  });
+  document.getElementById("ladder").innerHTML = rows.join("");
+}
+
+function renderDetail() {
+  var host = document.getElementById("detail");
+  host.textContent = "";
+
+  PLATFORMS.forEach(function (plat) {
+    CHANNELS.forEach(function (ch) {
+      var key = plat + "/" + ch;
+      var rec = results[key];
+      var d = document.createElement("details");
+
+      if (!rec || !rec.ok) {
+        d.innerHTML = '<summary><span class="chan">' + key + "</span>" +
+          '<span class="ver" style="color:var(--stale)">unavailable</span></summary>' +
+          '<div class="body"><div class="state err">&#10005;&nbsp;<span>' +
+          esc(rec ? rec.error : "not fetched") + " &mdash; " +
+          '<a href="' + esc(rec ? rec.url : manifestUrl(plat, ch)) + '">open manifest</a>' +
+          "</span></div></div>";
+        host.appendChild(d);
+        return;
+      }
+
+      var p = parseVersion(rec.version);
+
+      // package_url / _64 / _32 are frequently the same string -- every macOS manifest
+      // that carries all three points them at one .pkg. Listing them separately shows
+      // the same download three times, so identical values collapse into one row.
+      var f = {};
+      Object.keys(rec.fields).forEach(function (k) { f[k] = rec.fields[k]; });
+      delete f.version_number;
+
+      var groups = [];
+      ["package_url", "package_url_64", "package_url_32"].forEach(function (k) {
+        if (!(k in f)) return;
+        var v = f[k];
+        delete f[k];
+        var g = groups.filter(function (x) { return x.v === v; })[0];
+        if (!g) { g = { v: v, names: [] }; groups.push(g); }
+        g.names.push(k === "package_url" ? "installer" : k.replace("package_url_", ""));
+      });
+
+      var fields = groups.map(function (g) {
+        return "<dt>" + esc(g.names.join(" · ")) + '</dt><dd><a href="' + esc(g.v) +
+               '">' + esc(g.v) + "</a></dd>";
+      }).join("");
+
+      // Constant across every manifest, so one quiet line rather than three rows.
+      var FLAGS = ["force_install", "allow_downgrade", "disable_auto_use_last_response"];
+      var flags = [];
+      FLAGS.forEach(function (k) {
+        if (k in f) { flags.push(k + "=" + f[k]); delete f[k]; }
+      });
+
+      fields += Object.keys(f).map(function (k) {
+        var v = f[k];
+        return "<dt>" + esc(k) + "</dt><dd>" +
+          (v === "" ? '<span style="color:var(--muted)">(empty)</span>'
+            : /^https?:/.test(v) ? '<a href="' + esc(v) + '">' + esc(v) + "</a>" : esc(v)) +
+          "</dd>";
+      }).join("");
+      if (flags.length) {
+        fields += '<dt>flags</dt><dd style="color:var(--muted)">' +
+                  esc(flags.join("  ")) + "</dd>";
+      }
+
+      d.innerHTML = '<summary><span class="chan">' + key + "</span>" +
+        (rec.notes ? '<span class="nbadge">notes</span>' : "") +
+        '<span class="ver">' + (p ? p.display : esc(rec.version || "&mdash;")) +
+        "</span></summary>" +
+        '<div class="body"><dl class="fields"><dt>version_number</dt><dd>' +
+        esc(rec.version || "—") + (p ? " → build " + p.build : "") + "</dd>" +
+        fields + '</dl><div class="notes-slot"></div></div>';
+
+      var slot = d.querySelector(".notes-slot");
+      var h = document.createElement("div");
+      h.className = "notes-h";
+      h.textContent = "Release notes";
+      slot.appendChild(h);
+
+      if (rec.notes) {
+        var frame = document.createElement("iframe");
+        frame.className = "notes";
+        frame.setAttribute("sandbox", "");
+        frame.setAttribute("loading", "lazy");
+        frame.setAttribute("title", "Release notes for " + key);
+        frame.srcdoc = frameNotes(rec.notes);
+        slot.appendChild(frame);
+
+        var note = document.createElement("p");
+        note.className = "isolated";
+        note.innerHTML = 'Sandboxed frame &mdash; <code>sandbox=""</code> blocks scripts and ' +
+                         "same-origin access to this page.";
+        slot.appendChild(note);
+      } else {
+        var none = document.createElement("p");
+        none.className = "nonotes";
+        none.textContent = "This manifest carries no release notes.";
+        slot.appendChild(none);
+      }
+      host.appendChild(d);
+    });
+  });
+}
+
+function renderLoading() {
+  var host = document.getElementById("detail");
+  host.innerHTML = '<div class="state load"><span class="spin"></span>' +
+    "Fetching " + (PLATFORMS.length * CHANNELS.length) + " manifests&hellip;</div>";
+  document.getElementById("ladder").innerHTML =
+    '<tr><td colspan="4"><div class="state load" style="border:0;background:transparent;padding:6px 0">' +
+    '<span class="spin"></span>Loading&hellip;</div></td></tr>';
+}
+
+function load() {
+  var btn = document.getElementById("reload");
+  btn.disabled = true;
+  results = {};
+  renderLoading();
+
+  var jobs = [];
+  PLATFORMS.forEach(function (p) {
+    CHANNELS.forEach(function (c) { jobs.push(fetchChannel(p, c)); });
+  });
+
+  return Promise.all(jobs).then(function () {
+    renderLadder();
+    renderDetail();
+    var bad = Object.keys(results).filter(function (k) { return !results[k].ok; }).length;
+    var total = Object.keys(results).length;
+    document.getElementById("dot").setAttribute("data-s", bad ? "bad" : "ok");
+    document.getElementById("stamp").textContent =
+      (bad ? (total - bad) + "/" + total + " ok · " : "") +
+      new Date().toISOString().slice(0, 16).replace("T", " ") + "Z";
+    btn.disabled = false;
+  });
+}
+
+document.getElementById("downloads").innerHTML = INSTALLERS.map(function (i) {
+  return '<a href="' + i[1] + '">' + i[0] + "<span>.exe</span></a>";
+}).join("");
+
+document.getElementById("reload").addEventListener("click", load);
+load();
+</script>
+</body>
+</html>
