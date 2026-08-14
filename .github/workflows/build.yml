@@ -10,6 +10,16 @@ on:
   push:
     branches:
       - master
+    # A push to master that reaches this workflow runs the Windows and macOS OBS
+    # matrices, consumes a build number, and -- whenever RELEASE_NOTES.md is non-empty --
+    # tags the commit and publishes a prerelease. None of that should happen because
+    # someone fixed a typo on the status page, so the paths that cannot affect the plugin
+    # binary are excluded. GitHub skips the run only when EVERY changed file matches, so
+    # a commit touching both code and docs still builds.
+    paths-ignore:
+      - 'docs/**'
+      - '.github/workflows/pages.yml'
+      - 'README.md'
     tags-ignore:
       - '**'
   pull_request:

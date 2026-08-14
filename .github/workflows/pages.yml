@@ -1,0 +1,93 @@
+name: Status Page
+
+# The release-channel status page has lived at cdn.streamelements.com/obs/qa/status.html:
+# a single hand-uploaded HTML file, outside version control and outside review. This
+# publishes it from the repo to GitHub Pages instead, so it changes through a PR like
+# everything else and the deployed bytes are always some commit on master.
+#
+# Deliberately its own workflow rather than a job in build.yml. build.yml fans out to
+# Windows and macOS OBS builds that take tens of minutes and, on master, tags and
+# publishes a release; a copy edit to a status page has no business waiting on that, and
+# no business being able to fail it. build.yml's push trigger carries a matching
+# paths-ignore so the reverse is also true.
+#
+# NOTE: this cannot work until a human sets Settings -> Pages -> Source to
+# "GitHub Actions". No workflow can flip that switch for itself. actions/configure-pages
+# can, via its `enablement` input, but only when handed a token with
+# `administration:write` -- a far broader credential than publishing a page is worth.
+# Runs before the switch is flipped fail at "Setup Pages" with a 404.
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'docs/**'
+      - '.github/workflows/pages.yml'
+  # Republish without touching the page. Needed at least once, to deploy after Pages is
+  # enabled by hand, rather than pushing an empty commit to master to trigger it.
+  workflow_dispatch:
+
+# Least privilege: publishing a Pages deployment needs no write access to the repo at
+# all. `pages: write` creates the deployment, `id-token: write` mints the OIDC token that
+# deploy-pages exchanges for the upload credential, and `contents: read` is only for the
+# checkout. Strictly less than the `contents: write` a gh-pages-branch action needs.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Deliberately unlike build.yml and release.yml, which key the group on the ref and
+# cancel in progress. A Pages deployment mutates a live site rather than producing an
+# artifact: there is nothing to reclaim by killing one -- the job takes seconds -- and a
+# cancel mid-swap is the only way to get a half-deployed site. The group is a repo-wide
+# constant, not per-ref, because there is exactly one live site to contend for.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Publish status page
+    # Forks inherit workflows and have a master branch too. Without this, the first push
+    # to a fork's master fires a deployment that can only fail, since Pages is not
+    # enabled there and the fork's token cannot enable it.
+    if: github.repository == 'StreamElements/obs-streamelements-core'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Records the run as a "github-pages" deployment with the live URL attached, so the
+    # Environments tab shows what is currently served and from which commit.
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    # One job, where GitHub's starter template uses two. That split keeps a site build --
+    # untrusted npm deps, a generator running arbitrary code -- away from the job holding
+    # the publish token. There is no build step here: docs/ is served verbatim, so there
+    # is nothing to isolate and a second job would only add a cross-job artifact hop.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # Not strictly required -- deploy-pages works without it -- but it resolves the
+      # site's base URL and fails early with a clear message when Pages has not been
+      # enabled, instead of failing obscurely at the deploy step. `enablement` stays at
+      # its default of false; turning it on would require an admin-scoped credential.
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload docs/ as the Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          # Served at the site root, so docs/index.html becomes
+          # https://streamelements.github.io/obs-streamelements-core/ .
+          # No .nojekyll marker is needed: Jekyll only runs on the legacy branch-source
+          # path, and this tarball is served verbatim.
+          path: docs
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
