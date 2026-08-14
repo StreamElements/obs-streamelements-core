@@ -386,30 +386,41 @@ void StreamElementsReportIssueDialog::accept()
 		std::map<std::wstring, std::wstring> local_to_zip_files_map;
 
 		if (collect_all) {
+			// Kept in step with the list in
+			// StreamElementsCrashContext.cpp, which collects the
+			// same tree for crash reports. Compared against the
+			// lowercased, forward-slashed relative path, so entries
+			// must be lowercase or they silently match nothing.
 			std::vector<std::wstring> blacklist = {
-                L"plugin_config/obs-streamelements/obs-streamelements-update.exe",
-                L"plugin_config/obs-streamelements/obs-streamelements-update.pkg",
-                L"plugin_config/obs-streamelements/obs-streamelements-update.dmg",
-				L"plugin_config/obs-browser/cache/",
-				L"plugin_config/obs-browser/blob_storage/",
-				L"plugin_config/obs-browser/code cache/",
-				L"plugin_config/obs-browser/gpucache/",
-				L"plugin_config/obs-browser/visited links/",
-				L"plugin_config/obs-browser/transportsecurity/",
-				L"plugin_config/obs-browser/videodecodestats/",
-				L"plugin_config/obs-browser/session storage/",
-				L"plugin_config/obs-browser/service worker/",
-				L"plugin_config/obs-browser/pepper data/",
-				L"plugin_config/obs-browser/indexeddb/",
-				L"plugin_config/obs-browser/file system/",
-				L"plugin_config/obs-browser/databases/",
-				L"plugin_config/obs-browser/obs-streamelements-core.ini.bak",
-				L"plugin_config/obs-browser/cef.",
-				L"plugin_config/obs-browser/obs_profile_cookies/",
+				// Both spellings, because both directories exist
+				// on a machine that has been through the
+				// rename: the ~17MB updater sits in
+				// obs-streamelements, and a second ~16MB copy
+				// in obs-streamelements-core. Only the first
+				// was ever listed.
+				L"plugin_config/obs-streamelements/obs-streamelements-update.exe",
+				L"plugin_config/obs-streamelements/obs-streamelements-update.pkg",
+				L"plugin_config/obs-streamelements/obs-streamelements-update.dmg",
+				L"plugin_config/obs-streamelements-core/obs-streamelements-update.exe",
+				L"plugin_config/obs-streamelements-core/obs-streamelements-update.pkg",
+				L"plugin_config/obs-streamelements-core/obs-streamelements-update.dmg",
+				// The Sentry SDK's own database, holding the
+				// minidumps of previous crashes. No trailing
+				// slash, so the same prefix covers the
+				// timestamped copies left by a manual reset.
+				L"plugin_config/obs-streamelements-core/sentry-db",
+				// The whole CEF profile, not the two dozen
+				// individual entries this replaces. Almost
+				// entirely Chromium's own state -- caches,
+				// component-updater payloads, leveldb stores --
+				// large, reproducible from a fresh profile, and
+				// evidence of nothing. The enumerated form was
+				// also permanently one Chromium release behind,
+				// since those directories arrive on demand.
+				L"plugin_config/obs-browser/",
 				L"updates/",
 				L"profiler_data/",
 				L"obslive_restored_files/",
-				L"plugin_config/obs-browser/streamelements_restored_files/",
 				L"crashes/"
 			};
 

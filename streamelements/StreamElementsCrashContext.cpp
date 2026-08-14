@@ -758,31 +758,62 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 	}
 #endif
 
-	std::map<std::wstring, std::wstring> local_to_zip_files_map;
+	// Hard ceilings on what the configuration archive may contain, applied on
+	// top of the blacklist rather than instead of it.
+	//
+	// The blacklist only excludes what someone thought to name, and the cost
+	// of missing one is not a slightly larger archive: Sentry rejects an
+	// envelope over 40MB outright, so a single unlisted directory silently
+	// costs every crash report. That is not hypothetical -- a mis-spelled
+	// entry and a handful of Chromium component directories had the archive at
+	// 62MB, and no report had ever arrived.
+	//
+	// Sized against the observed archive with the blacklist corrected (~5MB).
+	// Anything approaching these limits is a new cache directory to blacklist,
+	// not a budget to raise.
+	const uintmax_t maxFileBytes = 4ull * 1024 * 1024;
+	const uintmax_t maxTotalBytes = 24ull * 1024 * 1024;
+
+	struct CandidateFile {
+		std::wstring localPath;
+		std::wstring zipPath;
+		uintmax_t size;
+	};
+
+	std::vector<CandidateFile> candidates;
 
 	// Collect files
+	//
+	// Compared against the lowercased, forward-slashed relative path, so every
+	// entry here must be lowercase or it silently matches nothing.
 	std::vector<std::wstring> blacklist = {
+		// The whole CEF profile, not the two dozen individual entries this
+		// replaces. It is almost entirely Chromium's own state -- caches,
+		// component-updater payloads, leveldb stores -- which is large,
+		// reproducible from a fresh profile, and evidence of nothing. The
+		// enumerated form was also unmaintainable in the specific way that
+		// matters here: Chromium adds directories on demand, so the list
+		// was permanently one release behind, and each miss was invisible
+		// because the archive was still produced and still reported sent.
+		// component_crx_cache, WidevineCdm and OnDeviceHeadSuggestModel
+		// alone were ~42MB of a 62MB archive.
+		L"plugin_config/obs-browser/",
+		// Both spellings, because both directories exist on a machine
+		// that has been through the rename: the ~17MB updater sits in
+		// obs-streamelements, and a second ~16MB copy in
+		// obs-streamelements-core. Only the first was ever listed, so the
+		// newer copy went into every report.
 		L"plugin_config/obs-streamelements/obs-streamelements-update.exe",
-		L"plugin_config/obs-browser/cache/",
-		L"plugin_config/obs-browser/blob_storage/",
-		L"plugin_config/obs-browser/code cache/",
-		L"plugin_config/obs-browser/gpucache/",
-		L"plugin_config/obs-browser/visited links/",
-		L"plugin_config/obs-browser/transportsecurity/",
-		L"plugin_config/obs-browser/videodecodestats/",
-		L"plugin_config/obs-browser/session storage/",
-		L"plugin_config/obs-browser/service worker/",
-		L"plugin_config/obs-browser/pepper data/",
-		L"plugin_config/obs-browser/indexeddb/",
-		L"plugin_config/obs-browser/file system/",
-		L"plugin_config/obs-browser/databases/",
-		L"plugin_config/obs-browser/obs-streamelements-core.ini.bak",
-		L"plugin_config/obs-browser/cef.",
-		L"plugin_config/obs-browser/obs_profile_cookies/",
+		L"plugin_config/obs-streamelements-core/obs-streamelements-update.exe",
+		// The Sentry SDK's own database, which lives here rather than
+		// beside the binary so a non-elevated user can write it. It holds
+		// the minidumps of previous crashes, so without this every report
+		// carries the ones before it. No trailing slash: the same prefix
+		// covers the timestamped copies left by a manual reset.
+		L"plugin_config/obs-streamelements-core/sentry-db",
 		L"updates/",
 		L"profiler_data/",
 		L"obslive_restored_files/",
-		L"plugin_config/obs-browser/streamelements_restored_files/",
 		L"crashes/"};
 
 	// Collect all files
@@ -816,14 +847,72 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 			}
 
 			if (accept) {
-				local_to_zip_files_map[local_path] =
-					L"obs-studio\\" + zip_path;
+				std::error_code ec;
+				const uintmax_t size = i.file_size(ec);
+
+				candidates.push_back(
+					{local_path, L"obs-studio\\" + zip_path,
+					 ec ? 0 : size});
 			}
 		}
 	}
 
-	for (auto item : local_to_zip_files_map) {
-		addFileToZip(item.first, item.second);
+	// Smallest first, so the budget buys the largest number of files and a
+	// single huge one can never crowd out the small text files that carry
+	// almost all of the diagnostic value.
+	std::sort(candidates.begin(), candidates.end(),
+		  [](const CandidateFile &a, const CandidateFile &b) {
+			  return a.size < b.size;
+		  });
+
+	std::vector<std::string> omitted;
+	uintmax_t totalBytes = 0;
+
+	for (auto &candidate : candidates) {
+		const bool tooBig = candidate.size > maxFileBytes;
+		const bool overBudget = totalBytes + candidate.size >
+					maxTotalBytes;
+
+		if (tooBig || overBudget) {
+			omitted.push_back(
+				wstring_to_utf8(candidate.zipPath) + " (" +
+				std::to_string(candidate.size) + " bytes, " +
+				(tooBig ? "over per-file limit"
+					: "archive budget exhausted") +
+				")");
+
+			continue;
+		}
+
+		totalBytes += candidate.size;
+
+		addFileToZip(candidate.localPath, candidate.zipPath);
+	}
+
+	// Always written, even when nothing was dropped. A truncated archive that
+	// does not say it was truncated reads as a complete picture of the
+	// machine, and someone will eventually conclude a file was missing when it
+	// was only omitted.
+	{
+		std::vector<std::string> manifest;
+
+		manifest.push_back(
+			"Files collected: " +
+			std::to_string(candidates.size() - omitted.size()) +
+			" (" + std::to_string(totalBytes) + " bytes)");
+		manifest.push_back("Files omitted: " +
+				   std::to_string(omitted.size()));
+		manifest.push_back("Per-file limit: " +
+				   std::to_string(maxFileBytes) + " bytes");
+		manifest.push_back("Archive budget: " +
+				   std::to_string(maxTotalBytes) + " bytes");
+		manifest.push_back("");
+
+		for (auto &line : omitted) {
+			manifest.push_back(line);
+		}
+
+		addLinesBufferToZip(manifest, L"omitted-files.txt");
 	}
 
 	{
@@ -884,7 +973,8 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 	if (performanceTracker) {
 		// Histogram CPU & memory usage (past hour, 1 minute intervals)
 
-		auto cpuUsageHistory = performanceTracker->getCpuUsageSnapshot();
+		auto cpuUsageHistory =
+			performanceTracker->getCpuUsageSnapshot();
 
 		auto memoryUsageHistory =
 			performanceTracker->getMemoryUsageSnapshot();
@@ -938,7 +1028,7 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 	}
 
 	TryGetAsyncCallContextStack([&](const StreamElementsAsyncCallContextStack_t
-					     *asyncCallContextStack) {
+						*asyncCallContextStack) {
 		if (!asyncCallContextStack->size())
 			return;
 
