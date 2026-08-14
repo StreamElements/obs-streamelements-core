@@ -710,6 +710,39 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 		     "obs-streamelements-core: StreamElements: Crash Handler: could not resolve own module directory; falling back to the SDK's default sentry-crash.exe lookup, which searches next to obs64.exe");
 	}
 
+	// Where the SDK queues envelopes and minidumps until they are sent.
+	//
+	// Left unset, sentry-native uses `.sentry-native` relative to the
+	// current working directory, which for an installed OBS is
+	// `Program Files\obs-studio\bin\64bit`. A non-elevated user cannot
+	// write there, so reports are lost before they are ever queued. This
+	// was observed on a machine where that directory happened to be
+	// writable: a complete minidump and its envelope sat in Program Files,
+	// never sent.
+	//
+	// The plugin config directory is per-user, writable without elevation,
+	// and already holds the rest of our state. The wide variant is
+	// deliberate -- the narrow one reads the path in the ANSI code page,
+	// which mangles a profile directory containing non-Latin characters.
+	char *databasePath = obs_module_config_path("sentry-db");
+
+	if (databasePath) {
+		sentry_options_set_database_pathw(
+			options, utf8_to_wstring(databasePath).c_str());
+
+		// Logged because a report that never arrives is diagnosed by
+		// looking for a stranded envelope, and that is only possible if
+		// the log says where to look.
+		blog(LOG_INFO,
+		     "obs-streamelements-core: StreamElements: Crash Handler: database path is %s",
+		     databasePath);
+
+		bfree(databasePath);
+	} else {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: StreamElements: Crash Handler: could not resolve the plugin config directory; falling back to the SDK's default database path, which is relative to the working directory");
+	}
+
 	// Stack plus heap around the crash site, roughly 5-10MB. BugSplat was
 	// configured for full memory dumps, which on an OBS process carrying
 	// browser sources is large enough to risk the upload cap; this is the
