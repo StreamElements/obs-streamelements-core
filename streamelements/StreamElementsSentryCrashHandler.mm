@@ -22,6 +22,9 @@
 #include <unistd.h>
 #include <mach-o/dyld.h>
 
+#import <Cocoa/Cocoa.h>
+#import <QuartzCore/QuartzCore.h>
+
 // Empty means crash reporting is inert: sentry_init() is skipped entirely rather
 // than run against a bad DSN, so a build without the DSN behaves like
 // STREAMELEMENTS_CRASH_HANDLER=none instead of failing at runtime.
@@ -198,6 +201,187 @@ static void PersistContactDetails(const std::string &name,
 
 /* ================================================================= */
 
+// Progress window.
+//
+// Collect() zips the configuration tree and walks the stack, which takes long
+// enough to be noticed -- and on macOS it runs in OnCrash, i.e. *before* the
+// consent dialog appears. Without this the user sees OBS simply stop
+// responding, with no indication that anything is happening at all.
+//
+// The sentry-crash daemon cannot report this for us: it is headless and tells
+// the crashing process nothing beyond its own log file. So we show the phases
+// we can observe ourselves.
+//
+// The moving bar is a Core Animation layer rather than an NSProgressIndicator
+// on purpose. Animations are committed to the render server and keep running
+// there, so the bar still moves while this thread is blocked inside Collect().
+// Anything driven by the main run loop would sit frozen -- which is the exact
+// impression we are trying to remove.
+
+enum {
+	CRASH_PROGRESS_COLLECTING = 0,
+	CRASH_PROGRESS_UPLOADING = 1,
+};
+
+static NSWindow *s_progressPanel = nil;
+static NSTextField *s_progressLabel = nil;
+
+static NSString *CrashProgressStatus(int phase)
+{
+	switch (phase) {
+	case CRASH_PROGRESS_UPLOADING:
+		return @"Uploading the crash report…";
+	default:
+		return @"Collecting diagnostic information…";
+	}
+}
+
+static NSTextField *CreateProgressLabel(NSRect frame, NSFont *font,
+					NSColor *color, NSString *text)
+{
+	NSTextField *label = [[NSTextField alloc] initWithFrame:frame];
+
+	[label setStringValue:text];
+	[label setFont:font];
+	[label setTextColor:color];
+	[label setBezeled:NO];
+	[label setDrawsBackground:NO];
+	[label setEditable:NO];
+	[label setSelectable:NO];
+
+	return label;
+}
+
+static void StartCrashProgress(int phase)
+{
+	// AppKit is main-thread only. Off the main thread we cannot show this,
+	// exactly as we cannot show the consent prompt -- see ChainedSignalHandler.
+	if (![NSThread isMainThread])
+		return;
+
+	@autoreleasepool {
+		if (s_progressPanel) {
+			[s_progressLabel
+				setStringValue:CrashProgressStatus(phase)];
+		} else {
+			const CGFloat width = 420;
+			const CGFloat height = 140;
+
+			s_progressPanel = [[NSPanel alloc]
+				initWithContentRect:NSMakeRect(0, 0, width,
+							       height)
+					  styleMask:NSWindowStyleMaskTitled
+					    backing:NSBackingStoreBuffered
+					      defer:NO];
+
+			[s_progressPanel setTitle:@"SE.Live"];
+			[s_progressPanel setLevel:NSFloatingWindowLevel];
+			[s_progressPanel setHidesOnDeactivate:NO];
+
+			// Defaults to YES for a window created this way, which
+			// would have -close release it out from under the
+			// static below. We drop the panel by ordering it out.
+			[s_progressPanel setReleasedWhenClosed:NO];
+
+			[s_progressPanel center];
+
+			NSView *content = [s_progressPanel contentView];
+			[content setWantsLayer:YES];
+
+			[content
+				addSubview:
+					CreateProgressLabel(
+						NSMakeRect(20, height - 52,
+							   width - 40, 22),
+						[NSFont boldSystemFontOfSize:14],
+						[NSColor labelColor],
+						@"Sending your crash report")];
+
+			s_progressLabel = CreateProgressLabel(
+				NSMakeRect(20, height - 78, width - 40, 20),
+				[NSFont systemFontOfSize:12],
+				[NSColor labelColor],
+				CrashProgressStatus(phase));
+
+			[content addSubview:s_progressLabel];
+
+			[content
+				addSubview:CreateProgressLabel(
+						   NSMakeRect(20, 16,
+							      width - 40, 34),
+						   [NSFont systemFontOfSize:11],
+						   [NSColor secondaryLabelColor],
+						   @"This can take up to a "
+						   @"minute. OBS will close by "
+						   @"itself once the report has "
+						   @"been sent.")];
+
+			const CGFloat trackWidth = width - 40;
+			const CGFloat trackHeight = 6;
+			const CGFloat chunkWidth = trackWidth / 4;
+
+			NSView *track = [[NSView alloc]
+				initWithFrame:NSMakeRect(20, height - 104,
+							 trackWidth,
+							 trackHeight)];
+
+			[track setWantsLayer:YES];
+
+			CALayer *trackLayer = [track layer];
+			trackLayer.backgroundColor =
+				[[NSColor separatorColor] CGColor];
+			trackLayer.cornerRadius = trackHeight / 2;
+			trackLayer.masksToBounds = YES;
+
+			CALayer *chunk = [CALayer layer];
+			chunk.backgroundColor =
+				[[NSColor controlAccentColor] CGColor];
+			chunk.cornerRadius = trackHeight / 2;
+			chunk.frame = CGRectMake(0, 0, chunkWidth, trackHeight);
+
+			[trackLayer addSublayer:chunk];
+			[content addSubview:track];
+
+			// Indeterminate: there is no progress figure to report,
+			// so animate rather than invent a percentage.
+			CABasicAnimation *slide = [CABasicAnimation
+				animationWithKeyPath:@"position.x"];
+
+			slide.fromValue = @(-chunkWidth / 2);
+			slide.toValue = @(trackWidth + chunkWidth / 2);
+			slide.duration = 1.4;
+			slide.repeatCount = HUGE_VALF;
+
+			[chunk addAnimation:slide forKey:@"slide"];
+		}
+
+		[s_progressPanel makeKeyAndOrderFront:nil];
+		[s_progressPanel displayIfNeeded];
+
+		// Hands the layer tree and its animation to the render server
+		// now. Without this the window would be committed only when the
+		// run loop next turned -- which, on this thread, is never.
+		[CATransaction flush];
+	}
+}
+
+static void StopCrashProgress()
+{
+	if (![NSThread isMainThread] || !s_progressPanel)
+		return;
+
+	@autoreleasepool {
+		[s_progressPanel orderOut:nil];
+
+		s_progressPanel = nil;
+		s_progressLabel = nil;
+
+		[CATransaction flush];
+	}
+}
+
+/* ================================================================= */
+
 //
 // Runs inside sentry's crash path, before the daemon is told to write the
 // minidump. This is the only point at which the event and the scope can still
@@ -223,6 +407,11 @@ static sentry_value_t OnCrash(const sentry_ucontext_t *uctx,
 	// gathered here rather than alongside the prompt.
 	//
 	if (s_crashContext) {
+		// Up before the slow part, not after: this hook runs ahead of
+		// the consent dialog, so without it the whole of WalkStack and
+		// Collect is dead air with the app unresponsive.
+		StartCrashProgress(CRASH_PROGRESS_COLLECTING);
+
 		s_crashContext->WalkStack(nullptr);
 
 		sentry_value_set_by_key(
@@ -230,6 +419,9 @@ static sentry_value_t OnCrash(const sentry_ucontext_t *uctx,
 			sentry_value_new_bool(s_crashContext->ShouldReport()));
 
 		ArmSentryScope(s_crashContext->Collect());
+
+		// The consent dialog is next, and it owns the screen from here.
+		StopCrashProgress();
 	}
 
 	return event;
@@ -281,6 +473,8 @@ static void ChainedSignalHandler(int signum, siginfo_t *info, void *context)
 			s_userName, s_userEmail, s_userDiscord);
 
 		if (consent.consented) {
+			StartCrashProgress(CRASH_PROGRESS_UPLOADING);
+
 			PersistContactDetails(consent.name, consent.email,
 					      consent.discord);
 
@@ -328,6 +522,10 @@ static void ChainedSignalHandler(int signum, siginfo_t *info, void *context)
 			}
 		}
 	}
+
+	// Before the host handler: OBS does its own crash reporting from here,
+	// and a floating window of ours must not sit on top of it.
+	StopCrashProgress();
 
 	// Hand on to whoever held this signal before we did, so OBS's own
 	// handling still runs.

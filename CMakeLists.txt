@@ -642,6 +642,11 @@ if (APPLE)
 		"-framework Foundation"
 		"-framework System"
         "-framework SystemConfiguration"
+		# Core Animation, for the crash progress window. Its animation is
+		# committed to the render server, so it keeps running while the
+		# crashing thread is blocked collecting the report -- an AppKit
+		# animation driven by the main run loop would freeze instead.
+		"-framework QuartzCore"
 	)
 
 	find_library(COREFOUNDATION CoreFoundation)
