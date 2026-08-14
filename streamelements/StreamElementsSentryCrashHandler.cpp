@@ -14,6 +14,9 @@
 #include <string>
 #include <vector>
 
+#include <stdio.h>
+#include <wchar.h>
+
 #include <windows.h>
 
 // Empty means crash reporting is inert: sentry_init() is skipped entirely rather
@@ -38,8 +41,6 @@ static LPTOP_LEVEL_EXCEPTION_FILTER s_sentryExceptionFilter = nullptr;
 static LPTOP_LEVEL_EXCEPTION_FILTER s_hostExceptionFilter = nullptr;
 
 static LONG s_insideExceptionFilter = 0L;
-
-static HWND s_messageWindow = NULL;
 
 // Contact details from the last report the user filled in. Read once at
 // startup, so the crash path never has to touch the config to prefill the
@@ -108,38 +109,319 @@ static bool GetOwnModuleDirectory(std::wstring &result)
 
 /* ================================================================= */
 
-static void CreateMessageWindow()
+// Progress window.
+//
+// This runs on its own thread, and it has to. The crashing thread goes from
+// here straight into Collect() and then blocks inside sentry's filter while
+// the daemon captures the dump and the transport uploads the event, so it
+// never pumps messages again. A window owned by that thread gets painted once
+// by UpdateWindow() and never repaints; worse, Windows ghosts a window whose
+// thread has not pumped for roughly five seconds and retitles it "(Not
+// Responding)". That is exactly what "everything is stuck" looks like, and
+// raising the shutdown timeout to 60s made that dead period longer.
+//
+// The sentry-crash daemon cannot help here: it is headless by design (it
+// launches itself with SW_HIDE) and reports nothing back but its own log. So
+// the phases below are the ones we can honestly observe ourselves -- the
+// crashing thread publishes one and never waits on the UI.
+
+enum {
+	CRASH_PROGRESS_COLLECTING = 0,
+	CRASH_PROGRESS_UPLOADING = 1,
+};
+
+static const wchar_t *const s_progressStatus[] = {
+	L"Collecting diagnostic information…",
+	L"Writing and uploading the crash report…",
+};
+
+#define WM_SE_CRASH_PROGRESS_DONE (WM_APP + 1)
+
+static const UINT_PTR CRASH_PROGRESS_TIMER_ID = 1;
+static const UINT CRASH_PROGRESS_TIMER_MS = 60;
+static const int CRASH_PROGRESS_WIDTH = 460;
+static const int CRASH_PROGRESS_HEIGHT = 156;
+
+static HANDLE s_progressThread = NULL;
+static HWND s_progressWindow = NULL;
+static LONG s_progressPhase = CRASH_PROGRESS_COLLECTING;
+static LONG s_progressPhaseTick = 0;
+static LONG s_progressQuit = 0;
+
+// Owned by the progress thread alone.
+static HFONT s_progressTitleFont = NULL;
+static HFONT s_progressTextFont = NULL;
+
+static HFONT CreateProgressFont(HDC hdc, int pointSize, int weight)
 {
-	if (s_messageWindow)
-		return;
+	LOGFONTW lf;
+	memset(&lf, 0, sizeof(lf));
 
-	auto mainWindowHandle = (HWND)obs_frontend_get_main_window_handle();
+	lf.lfHeight = -MulDiv(pointSize, GetDeviceCaps(hdc, LOGPIXELSY), 72);
+	lf.lfWeight = weight;
+	lf.lfCharSet = DEFAULT_CHARSET;
+	lf.lfQuality = CLEARTYPE_QUALITY;
+	wcscpy_s(lf.lfFaceName, L"Segoe UI");
 
-	if (!mainWindowHandle)
-		return;
+	return CreateFontIndirectW(&lf);
+}
 
+static void PaintCrashProgress(HDC hdc, const RECT &rc)
+{
+	const int width = rc.right - rc.left;
+	const int margin = 18;
+
+	FillRect(hdc, &rc, GetSysColorBrush(COLOR_WINDOW));
+	SetBkMode(hdc, TRANSPARENT);
+
+	RECT line = {margin, margin, width - margin, margin + 24};
+
+	SelectObject(hdc, s_progressTitleFont);
+	SetTextColor(hdc, GetSysColor(COLOR_WINDOWTEXT));
+	DrawTextW(hdc, L"Sending your crash report", -1, &line,
+		  DT_LEFT | DT_SINGLELINE | DT_NOPREFIX);
+
+	// Status, with elapsed seconds once there is something to wait for.
+	// A number that keeps moving is the whole point: it is the difference
+	// between "working" and "hung".
+	const LONG phase = InterlockedCompareExchange(&s_progressPhase, 0, 0);
+	const LONG start =
+		InterlockedCompareExchange(&s_progressPhaseTick, 0, 0);
+	const DWORD elapsed = (GetTickCount() - (DWORD)start) / 1000;
+
+	wchar_t status[256];
+	if (elapsed >= 2)
+		swprintf_s(status, L"%s  (%us)", s_progressStatus[phase],
+			   (unsigned)elapsed);
+	else
+		wcscpy_s(status, s_progressStatus[phase]);
+
+	line.top = margin + 30;
+	line.bottom = line.top + 20;
+
+	SelectObject(hdc, s_progressTextFont);
+	DrawTextW(hdc, status, -1, &line,
+		  DT_LEFT | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
+
+	// Indeterminate bar: there is no progress figure to report, so animate
+	// rather than invent a percentage.
+	RECT track = {margin, margin + 60, width - margin, margin + 68};
+	FillRect(hdc, &track, GetSysColorBrush(COLOR_BTNFACE));
+
+	const int trackWidth = track.right - track.left;
+	const int chunkWidth = trackWidth / 4;
+	const int travel = trackWidth + chunkWidth;
+	const int period = 1600;
+	const int offset =
+		(int)((__int64)travel * (GetTickCount() % period) / period);
+
+	RECT chunk = track;
+	chunk.left = track.left + offset - chunkWidth;
+	chunk.right = chunk.left + chunkWidth;
+
+	if (chunk.left < track.left)
+		chunk.left = track.left;
+	if (chunk.right > track.right)
+		chunk.right = track.right;
+
+	if (chunk.right > chunk.left)
+		FillRect(hdc, &chunk, GetSysColorBrush(COLOR_HIGHLIGHT));
+
+	line.top = margin + 82;
+	line.bottom = rc.bottom - margin;
+
+	SetTextColor(hdc, GetSysColor(COLOR_GRAYTEXT));
+	DrawTextW(hdc,
+		  L"This can take up to a minute. OBS will close by itself "
+		  L"once the report has been sent.",
+		  -1, &line, DT_LEFT | DT_WORDBREAK | DT_NOPREFIX);
+}
+
+static LRESULT CALLBACK CrashProgressWndProc(HWND hwnd, UINT msg, WPARAM wp,
+					     LPARAM lp)
+{
+	switch (msg) {
+	case WM_CREATE: {
+		HDC hdc = GetDC(hwnd);
+		if (hdc) {
+			s_progressTitleFont =
+				CreateProgressFont(hdc, 11, FW_SEMIBOLD);
+			s_progressTextFont =
+				CreateProgressFont(hdc, 9, FW_NORMAL);
+			ReleaseDC(hwnd, hdc);
+		}
+		SetTimer(hwnd, CRASH_PROGRESS_TIMER_ID, CRASH_PROGRESS_TIMER_MS,
+			 NULL);
+		return 0;
+	}
+
+	case WM_TIMER:
+		InvalidateRect(hwnd, NULL, FALSE);
+		return 0;
+
+	case WM_ERASEBKGND:
+		return 1; // WM_PAINT covers the whole client area
+
+	case WM_PAINT: {
+		PAINTSTRUCT ps;
+		HDC hdc = BeginPaint(hwnd, &ps);
+
+		RECT rc;
+		GetClientRect(hwnd, &rc);
+
+		// Double buffered: the bar animates at ~16fps and flicker on a
+		// crash dialog reads as instability.
+		HDC memDC = CreateCompatibleDC(hdc);
+		HBITMAP bmp =
+			memDC ? CreateCompatibleBitmap(hdc, rc.right, rc.bottom)
+			      : NULL;
+
+		if (memDC && bmp) {
+			HGDIOBJ old = SelectObject(memDC, bmp);
+			PaintCrashProgress(memDC, rc);
+			BitBlt(hdc, 0, 0, rc.right, rc.bottom, memDC, 0, 0,
+			       SRCCOPY);
+			SelectObject(memDC, old);
+		} else {
+			PaintCrashProgress(hdc, rc);
+		}
+
+		if (bmp)
+			DeleteObject(bmp);
+		if (memDC)
+			DeleteDC(memDC);
+
+		EndPaint(hwnd, &ps);
+		return 0;
+	}
+
+	case WM_CLOSE:
+		// Not the user's to dismiss -- the report is still in flight.
+		return 0;
+
+	case WM_SE_CRASH_PROGRESS_DONE:
+		DestroyWindow(hwnd);
+		return 0;
+
+	case WM_DESTROY:
+		KillTimer(hwnd, CRASH_PROGRESS_TIMER_ID);
+		PostQuitMessage(0);
+		return 0;
+	}
+
+	return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+static DWORD WINAPI CrashProgressThreadProc(LPVOID param)
+{
+	HWND mainWindow = (HWND)param;
+
+	WNDCLASSEXW wc;
+	memset(&wc, 0, sizeof(wc));
+	wc.cbSize = sizeof(wc);
+	wc.lpfnWndProc = CrashProgressWndProc;
+	wc.hInstance = GetModuleHandleW(NULL);
+	wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
+	wc.hbrBackground = GetSysColorBrush(COLOR_WINDOW);
+	wc.lpszClassName = L"SELiveCrashProgress";
+
+	RegisterClassExW(
+		&wc); // may already exist; CreateWindow reports failure
+
+	int x, y;
 	RECT r;
-	GetWindowRect(mainWindowHandle, &r);
 
-	const int width = 600;
-	const int height = 85;
-	const int x = (r.left + r.right) / 2 - (width / 2);
-	const int y = (r.top + r.bottom) / 2 - (height / 2);
+	// mainWindow was resolved on the crashing thread. GetWindowRect only
+	// reads shared state, so a hung owner thread cannot block us here.
+	if (mainWindow && GetWindowRect(mainWindow, &r)) {
+		x = (r.left + r.right) / 2 - CRASH_PROGRESS_WIDTH / 2;
+		y = (r.top + r.bottom) / 2 - CRASH_PROGRESS_HEIGHT / 2;
+	} else {
+		x = GetSystemMetrics(SM_CXSCREEN) / 2 -
+		    CRASH_PROGRESS_WIDTH / 2;
+		y = GetSystemMetrics(SM_CYSCREEN) / 2 -
+		    CRASH_PROGRESS_HEIGHT / 2;
+	}
 
-	s_messageWindow = CreateWindowA(
-		"Button",
-		"Oops, something is not right. Please wait while a crash report is being prepared...",
-		0, x, y, width, height, mainWindowHandle, NULL,
-		GetModuleHandle(0), NULL);
+	// No owner window on purpose: the owner's thread is the one that
+	// crashed, and tying activation to it is how this ends up ghosted.
+	HWND hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_DLGMODALFRAME,
+				    wc.lpszClassName, L"SE.Live",
+				    WS_POPUP | WS_CAPTION, x, y,
+				    CRASH_PROGRESS_WIDTH, CRASH_PROGRESS_HEIGHT,
+				    NULL, NULL, wc.hInstance, NULL);
 
-	if (!s_messageWindow)
+	if (!hwnd)
+		return 0;
+
+	InterlockedExchangePointer((PVOID volatile *)&s_progressWindow, hwnd);
+
+	// Stop() may have run before the window existed.
+	if (InterlockedCompareExchange(&s_progressQuit, 0, 0)) {
+		DestroyWindow(hwnd);
+		return 0;
+	}
+
+	SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+		     SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+	UpdateWindow(hwnd);
+
+	MSG msg;
+	while (GetMessageW(&msg, NULL, 0, 0) > 0) {
+		TranslateMessage(&msg);
+		DispatchMessageW(&msg);
+	}
+
+	InterlockedExchangePointer((PVOID volatile *)&s_progressWindow, NULL);
+
+	if (s_progressTitleFont)
+		DeleteObject(s_progressTitleFont);
+	if (s_progressTextFont)
+		DeleteObject(s_progressTextFont);
+
+	return 0;
+}
+
+static void SetCrashProgressPhase(LONG phase)
+{
+	// Tick first: the UI must never pair a new phase with a stale elapsed.
+	InterlockedExchange(&s_progressPhaseTick, (LONG)GetTickCount());
+	InterlockedExchange(&s_progressPhase, phase);
+}
+
+static void StartCrashProgress()
+{
+	if (s_progressThread)
 		return;
 
-	SetWindowLong(s_messageWindow, GWL_STYLE, WS_VISIBLE);
-	SetWindowLong(s_messageWindow, GWL_EXSTYLE, WS_EX_TOPMOST);
-	EnableWindow(s_messageWindow, FALSE);
-	ShowWindow(s_messageWindow, SW_SHOWNORMAL);
-	UpdateWindow(s_messageWindow);
+	// Resolved here rather than on the progress thread: this is a libobs
+	// call, and the crash path already makes it today.
+	HWND mainWindow = (HWND)obs_frontend_get_main_window_handle();
+
+	SetCrashProgressPhase(CRASH_PROGRESS_COLLECTING);
+
+	s_progressThread = CreateThread(NULL, 0, CrashProgressThreadProc,
+					(LPVOID)mainWindow, 0, NULL);
+}
+
+static void StopCrashProgress()
+{
+	if (!s_progressThread)
+		return;
+
+	InterlockedExchange(&s_progressQuit, 1);
+
+	HWND hwnd = (HWND)InterlockedCompareExchangePointer(
+		(PVOID volatile *)&s_progressWindow, NULL, NULL);
+
+	if (hwnd)
+		PostMessageW(hwnd, WM_SE_CRASH_PROGRESS_DONE, 0, 0);
+
+	// Bounded wait: nothing on the crash path may hang on the UI, and the
+	// process is about to be terminated regardless.
+	WaitForSingleObject(s_progressThread, 2000);
+	CloseHandle(s_progressThread);
+	s_progressThread = NULL;
 }
 
 /* ================================================================= */
@@ -339,12 +621,15 @@ static LONG CALLBACK SentryExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
 				// Only now: collecting the payload and waiting
 				// on the daemon takes a moment, and there is
 				// nothing to wait for if the user declined.
-				CreateMessageWindow();
+				StartCrashProgress();
 
 				ArmSentryScope(s_crashContext->Collect(),
 					       consent);
 
 				if (s_sentryExceptionFilter) {
+					SetCrashProgressPhase(
+						CRASH_PROGRESS_UPLOADING);
+
 					// Emits the event and signals the
 					// sentry-crash daemon, which writes and
 					// uploads the minidump out of process.
@@ -352,6 +637,11 @@ static LONG CALLBACK SentryExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
 					// it, or on timeout.
 					s_sentryExceptionFilter(pExceptionInfo);
 				}
+
+				// Before the host filter: OBS puts its own
+				// crash dialog up, and a topmost window of
+				// ours must not sit on top of it.
+				StopCrashProgress();
 			}
 		}
 
