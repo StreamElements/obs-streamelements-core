@@ -440,6 +440,13 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 		     "obs-streamelements-core: StreamElements: Crash Handler: could not resolve own module directory; falling back to the SDK's default sentry-crash lookup, which searches next to the host executable");
 	}
 
+	// 60s, for the reason documented in the Windows handler: with the default
+	// an observed crash wrote a complete minidump and then lost it when
+	// teardown cancelled the upload in flight. macOS has not been seen to do
+	// this, but the exposure is the same and the cost of waiting is a delay
+	// in a process that is already terminating.
+	sentry_options_set_shutdown_timeout(options, 60000);
+
 	sentry_options_set_minidump_mode(options, SENTRY_MINIDUMP_MODE_SMART);
 
 	sentry_options_set_crash_reporting_mode(
