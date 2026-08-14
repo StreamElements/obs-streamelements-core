@@ -425,6 +425,26 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 	// browser sources is large enough to risk the upload cap; this is the
 	// SDK's recommended middle setting and the one to revisit if crashes
 	// turn out to need more.
+	//
+	// How long the SDK waits for in-flight uploads before forcing shutdown.
+	//
+	// Not a tuning knob: with the default, an observed crash produced a
+	// complete 1MB minidump on disk and then lost it. The daemon log read
+	//
+	//   WinHttpSendRequest failed with code 12017
+	//   background thread failed to shut down cleanly within timeout
+	//
+	// -- 12017 being ERROR_WINHTTP_OPERATION_CANCELLED, the request aborted
+	// mid-flight because teardown began underneath it. The crash envelope was
+	// not persisted for retry either, so the report was simply gone.
+	//
+	// 60s is deliberately generous. A minidump of this size on a slow or
+	// congested uplink takes seconds at best, and the cost of waiting too
+	// long is a delay in a process that is already terminating, against
+	// losing the report entirely.
+	//
+	sentry_options_set_shutdown_timeout(options, 60000);
+
 	sentry_options_set_minidump_mode(options, SENTRY_MINIDUMP_MODE_SMART);
 
 	// Client-side stackwalk as the primary event, with the minidump attached
