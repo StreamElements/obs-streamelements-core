@@ -167,6 +167,52 @@ if (ENABLE_SENTRY)
 			DESTINATION "${SENTRY_SOURCE_DIR}")
 	endif()
 
+	# Raise how long the crashing process waits for the crash daemon, 10s -> 60s.
+	#
+	# sentry-native hard-codes SENTRY_CRASH_HANDLER_WAIT_TIMEOUT_MS as a
+	# compile-time #define with no sentry_options_* equivalent, so patching the
+	# source is the only way to reach it. At the stock 10s our exception filter
+	# gives up while the daemon is still uploading and returns
+	# EXCEPTION_CONTINUE_SEARCH; OBS's filter then terminates the process out
+	# from under the in-flight request. Observed as a complete 1MB minidump left
+	# on disk next to `WinHttpSendRequest failed with code 12017`
+	# (ERROR_WINHTTP_OPERATION_CANCELLED) in the daemon log, and nothing at all
+	# arriving in Sentry. See CORE-554.
+	#
+	# sentry_options_set_shutdown_timeout() does not cover this. It bounds how
+	# long the daemon waits for its own transport during teardown, which is moot
+	# once the process it belongs to has already been killed.
+	#
+	# Patched here rather than inside deps/sentry-native.zip so the divergence
+	# from upstream is visible in the build definition, and re-applied on every
+	# configure because the extract above is skipped once the tree exists.
+	set(SENTRY_WAIT_HEADER
+		"${SENTRY_SOURCE_DIR}/src/backends/native/sentry_crash_context.h")
+	set(SENTRY_WAIT_STOCK "10000 // 10s max wait for daemon")
+	set(SENTRY_WAIT_PATCHED "60000 // 60s max wait for daemon -- CORE-554")
+
+	file(READ "${SENTRY_WAIT_HEADER}" SENTRY_WAIT_CONTENT)
+
+	string(FIND "${SENTRY_WAIT_CONTENT}" "${SENTRY_WAIT_STOCK}"
+		SENTRY_WAIT_STOCK_POS)
+	string(FIND "${SENTRY_WAIT_CONTENT}" "${SENTRY_WAIT_PATCHED}"
+		SENTRY_WAIT_PATCHED_POS)
+
+	if (NOT SENTRY_WAIT_STOCK_POS EQUAL -1)
+		string(REPLACE
+			"${SENTRY_WAIT_STOCK}" "${SENTRY_WAIT_PATCHED}"
+			SENTRY_WAIT_CONTENT "${SENTRY_WAIT_CONTENT}")
+		file(WRITE "${SENTRY_WAIT_HEADER}" "${SENTRY_WAIT_CONTENT}")
+		message(STATUS
+			"obs-streamelements-core: patched SENTRY_CRASH_HANDLER_WAIT_TIMEOUT_MS to 60s")
+	elseif (SENTRY_WAIT_PATCHED_POS EQUAL -1)
+		# Neither form present: the vendored SDK moved underneath us. Failing
+		# here is deliberate -- a silently skipped patch reintroduces a bug
+		# whose only symptom is that crash reports quietly never arrive.
+		message(FATAL_ERROR
+			"obs-streamelements-core: could not patch SENTRY_CRASH_HANDLER_WAIT_TIMEOUT_MS in ${SENTRY_WAIT_HEADER} -- vendored sentry-native changed. Re-check the crash upload wait against CORE-554 before dropping this.")
+	endif()
+
 	# The `native` backend, not crashpad: it hands control back to WER rather than
 	# swallowing the host's crash handling, its hooks work on macOS, and it is the
 	# only backend offering sentry_options_set_minidump_flags. See CORE-554.
