@@ -584,6 +584,25 @@ Section "${PRODUCT_SHORT_NAME} Add-On" section_install_streamelements
 !ifndef SKIP_64BIT_CONTENT
     SetOutPath $INSTDIR\bin\64bit
 
+    # Clear BOTH crash backends before laying down whichever this build carries.
+    #
+    # The File lines below are /nonfatal precisely because only one backend is
+    # ever present, which means an upgrade that switches backends used to leave
+    # the previous one on disk untouched -- observed after installing a Sentry
+    # build over a BugSplat one: BugSplat64.dll, BugSplatHD64.exe and
+    # BugSplatRc64.dll were all still in bin\64bit. Nothing loads them, but they
+    # are dead weight that survives every future upgrade, and the uninstaller is
+    # no help because nobody uninstalls between upgrades.
+    #
+    # Deleting first and restoring from the package is simpler than teaching the
+    # installer which backend it is carrying, and is correct in both directions.
+    # The sentry daemon lives in obs-plugins\64bit, so it is cleared there.
+    Delete "$INSTDIR\bin\64bit\BsSndRpt64.exe"
+    Delete "$INSTDIR\bin\64bit\BugSplat64.dll"
+    Delete "$INSTDIR\bin\64bit\BugSplatHD64.exe"
+    Delete "$INSTDIR\bin\64bit\BugSplatRc64.dll"
+    Delete "$INSTDIR\obs-plugins\64bit\sentry-crash.exe"
+
     # /nonfatal on the crash-reporting runtime: which of these exists depends on
     # STREAMELEMENTS_CRASH_HANDLER at build time, and the installer has no way to
     # know which backend was compiled. A Sentry build ships no BugSplat DLLs, a
@@ -635,6 +654,11 @@ Section "${PRODUCT_SHORT_NAME} Add-On" section_install_streamelements
 
 !ifndef SKIP_32BIT_CONTENT
     SetOutPath $INSTDIR\bin\32bit
+
+    # Same clean-then-restore as the 64-bit section above. No 32-bit Sentry
+    # build exists today, so only the daemon line is speculative -- but it
+    # removes what a previous install left, which is the whole point.
+    Delete "$INSTDIR\obs-plugins\32bit\sentry-crash.exe"
 
     File ..\download\obs-streamelements-core\build32_qt6\bin\32bit\BsSndRpt.exe
     File ..\download\obs-streamelements-core\build32_qt6\bin\32bit\BugSplat.dll

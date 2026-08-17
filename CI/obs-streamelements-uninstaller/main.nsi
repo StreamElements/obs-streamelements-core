@@ -223,6 +223,9 @@ Section "section_main" section_main
     Delete "$INSTDIR\bin\32bit\BugSplat.dll"
     Delete "$INSTDIR\bin\32bit\BugSplatHD.exe"
     Delete "$INSTDIR\bin\32bit\BugSplatRc.dll"
+    # No 32-bit Sentry build exists, but these lines exist to clean up what a
+    # *previous* install left behind, so the pair stays symmetrical with 64-bit.
+    Delete "$INSTDIR\obs-plugins\32bit\sentry-crash.exe"
 
     Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_CODE_NAME}"

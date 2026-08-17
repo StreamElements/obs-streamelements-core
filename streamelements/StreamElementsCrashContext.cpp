@@ -771,13 +771,32 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 	// Sized against the observed archive with the blacklist corrected (~5MB).
 	// Anything approaching these limits is a new cache directory to blacklist,
 	// not a budget to raise.
+	//
+	// Files under the auxiliary plugins folder are the one deliberate
+	// exception. They are third-party executables -- Sentry has no symbols
+	// for them, so their bytes are the only way to resolve a frame in
+	// someone else's plugin -- and a plugin binary legitimately runs to tens
+	// of megabytes, which the general per-file limit exists to reject. They
+	// get their own, much higher ceiling instead of being exempt outright, so
+	// one pathological file still cannot swallow the archive.
+	//
+	// The total is raised to match: shipping plugin binaries and then
+	// truncating them at 24MB would be the worst of both. It stays well
+	// inside Sentry's 40MB *compressed* envelope cap -- binaries compress
+	// roughly 2-3x, so a full 40MB of them lands near 16MB, leaving room for
+	// the ~6.5MB minidump.
 	const uintmax_t maxFileBytes = 4ull * 1024 * 1024;
-	const uintmax_t maxTotalBytes = 24ull * 1024 * 1024;
+	const uintmax_t maxPluginFileBytes = 32ull * 1024 * 1024;
+	const uintmax_t maxTotalBytes = 40ull * 1024 * 1024;
 
 	struct CandidateFile {
 		std::wstring localPath;
 		std::wstring zipPath;
 		uintmax_t size;
+
+		// Under the auxiliary plugins folder, so subject to
+		// maxPluginFileBytes and taken last -- see the sort below.
+		bool isPlugin;
 	};
 
 	std::vector<CandidateFile> candidates;
@@ -811,6 +830,28 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 		// carries the ones before it. No trailing slash: the same prefix
 		// covers the timestamped copies left by a manual reset.
 		L"plugin_config/obs-streamelements-core/sentry-db",
+		// Our own binaries, and only ours.
+		//
+		// CI uploads obs-streamelements-core's symbols *and* its code
+		// file to Sentry, so Sentry resolves our frames on its own;
+		// shipping the bytes a second time buys nothing and costs
+		// megabytes. Third-party plugins are the opposite case -- Sentry
+		// holds no symbols for them, so the binary in this archive is
+		// the only way to resolve their frames by hand, which is why
+		// they are deliberately kept and exempted from the per-file
+		// limit below.
+		//
+		// This was previously true only by accident: our binary happens
+		// to exceed the per-file limit, so it was dropped as if it were
+		// a cache file. A stripped build coming in under the limit would
+		// silently have started shipping it.
+		//
+		// Both layouts of the auxiliary plugins folder. The Windows
+		// installer currently writes into the OBS install directory,
+		// which is outside this tree entirely, so that entry is only
+		// insurance against the layout changing.
+		L"plugins/obs-streamelements-core.plugin/contents/macos/",
+		L"plugins/obs-streamelements-core/bin/",
 		L"updates/",
 		L"profiler_data/",
 		L"obslive_restored_files/",
@@ -850,18 +891,44 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 				std::error_code ec;
 				const uintmax_t size = i.file_size(ec);
 
+				// The auxiliary plugins folder, which is inside
+				// the configuration tree on both platforms:
+				// ~/Library/Application Support/obs-studio/
+				// plugins on macOS, %APPDATA%\obs-studio\plugins
+				// on Windows. Ours is already excluded by the
+				// blacklist, so whatever is left here is a
+				// third-party plugin.
+				const std::wstring pluginsPrefix = L"plugins/";
+				const bool isPlugin =
+					zip_path_lcase.size() >=
+						pluginsPrefix.size() &&
+					zip_path_lcase.substr(
+						0, pluginsPrefix.size()) ==
+						pluginsPrefix;
+
 				candidates.push_back(
 					{local_path, L"obs-studio\\" + zip_path,
-					 ec ? 0 : size});
+					 ec ? 0 : size, isPlugin});
 			}
 		}
 	}
 
-	// Smallest first, so the budget buys the largest number of files and a
-	// single huge one can never crowd out the small text files that carry
-	// almost all of the diagnostic value.
+	// Everything else before the plugins, and smallest first within each, so
+	// the budget buys the largest number of files and a single huge one can
+	// never crowd out the small text files that carry almost all of the
+	// diagnostic value.
+	//
+	// Plugin binaries are the reason for the two tiers rather than one sort
+	// by size. They are wanted, but they are also the only things here large
+	// enough to exhaust the budget, so they take what is left after the
+	// configuration tree -- a few hundred KB -- rather than competing with
+	// it. Sorting purely by size would have let a handful of plugins push
+	// out the text files instead.
 	std::sort(candidates.begin(), candidates.end(),
 		  [](const CandidateFile &a, const CandidateFile &b) {
+			  if (a.isPlugin != b.isPlugin)
+				  return !a.isPlugin;
+
 			  return a.size < b.size;
 		  });
 
@@ -869,7 +936,11 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 	uintmax_t totalBytes = 0;
 
 	for (auto &candidate : candidates) {
-		const bool tooBig = candidate.size > maxFileBytes;
+		const uintmax_t fileLimit = candidate.isPlugin
+						    ? maxPluginFileBytes
+						    : maxFileBytes;
+
+		const bool tooBig = candidate.size > fileLimit;
 		const bool overBudget = totalBytes + candidate.size >
 					maxTotalBytes;
 
@@ -904,6 +975,9 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 				   std::to_string(omitted.size()));
 		manifest.push_back("Per-file limit: " +
 				   std::to_string(maxFileBytes) + " bytes");
+		manifest.push_back("Per-file limit (plugins): " +
+				   std::to_string(maxPluginFileBytes) +
+				   " bytes");
 		manifest.push_back("Archive budget: " +
 				   std::to_string(maxTotalBytes) + " bytes");
 		manifest.push_back("");
