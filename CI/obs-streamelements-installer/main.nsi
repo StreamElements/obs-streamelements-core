@@ -929,7 +929,9 @@ get_obs_32:
     StrCpy $g_obsTempPath32 "$g_obsTempPath32.exe"
 
     StrCpy $g_downloadTargetPath $g_obsTempPath32
-    StrCpy $g_downloadText "OBS Studio (Win32) ${OBS_DOWNLOAD_VERSION}"
+    ; No version in this caption on purpose: the 32-bit URL is the last x86 build
+    ; OBS ever shipped, not ${OBS_DOWNLOAD_VERSION}.
+    StrCpy $g_downloadText "OBS Studio (Win32)"
     StrCpy $g_downloadUrl "${OBS_DOWNLOAD_URL_32}"
     Call DownloadRequiredFile
 
