@@ -410,6 +410,12 @@ static sentry_value_t OnCrash(const sentry_ucontext_t *uctx,
 	UNUSED_PARAMETER(uctx);
 	UNUSED_PARAMETER(user_data);
 
+	// First thing, and before anything below can run a nested run loop.
+	// See IsCrashReportingInProgress() -- without this a host API call
+	// queued before the fault gets delivered into the consent dialog's
+	// modal loop and faults again on the already-crashed thread.
+	SetCrashReportingInProgress();
+
 	//
 	// Deliberately not the place to filter. Discarding here would suppress
 	// the event but not the minidump: the daemon notify that follows is
@@ -501,6 +507,11 @@ static void ChainedSignalHandler(int signum, siginfo_t *info, void *context)
 
 		return;
 	}
+
+	// Also set in OnCrash, which normally runs first. Repeated here because
+	// this handler still runs when sentry_init() failed and there is no
+	// OnCrash to reach.
+	SetCrashReportingInProgress();
 
 	if (s_initialized) {
 		const auto consent = StreamElementsCrashConsentDialog::Prompt(

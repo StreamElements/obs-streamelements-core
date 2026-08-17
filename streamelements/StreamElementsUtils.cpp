@@ -13,6 +13,7 @@
 #define GLOBAL_ENV_CONFIG_FILE_NAME "obs-studio/streamelements-env.ini"
 
 #include <cstdint>
+#include <atomic>
 #include <vector>
 #include <regex>
 #include <unordered_map>
@@ -92,6 +93,22 @@ static inline const char *safe_str(const char *s, const char *defaultValue = "(N
 		return defaultValue;
 	else
 		return s;
+}
+
+/* ========================================================= */
+
+// Written from a signal handler / exception filter, so std::atomic rather than
+// a plain bool. One-way: nothing clears it.
+static std::atomic<bool> s_crashReportingInProgress(false);
+
+void SetCrashReportingInProgress()
+{
+	s_crashReportingInProgress.store(true);
+}
+
+bool IsCrashReportingInProgress()
+{
+	return s_crashReportingInProgress.load();
 }
 
 /* ========================================================= */

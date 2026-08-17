@@ -596,6 +596,13 @@ static LONG CALLBACK SentryExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
 	if (s_crashContext)
 		s_crashContext->WalkStack(pExceptionInfo->ContextRecord);
 
+	// Stops host API calls from running once we are on the crash path. The
+	// consent prompt below is modal, and a modal message loop keeps
+	// dispatching to this process -- including Qt's posted events, and so
+	// the API calls queued before the fault. See
+	// IsCrashReportingInProgress().
+	SetCrashReportingInProgress();
+
 	if (InterlockedIncrement(&s_insideExceptionFilter) == 1L) {
 		// The gate. A stack that never passed through our code is not
 		// ours to report: we skip sentry's filter entirely, so no event
