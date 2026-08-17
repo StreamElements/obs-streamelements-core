@@ -1971,9 +1971,13 @@ bool WriteEnvironmentConfigString(const char *regValueName,
 #ifdef WIN32
 	std::string REG_KEY_PATH = GetEnvironmentConfigRegKeyPath(productName);
 
+	// +1 for the terminator. RegSetKeyValueA does not add one, and the docs
+	// are explicit that a REG_SZ written without it leaves readers to cope
+	// with an unterminated value.
 	LSTATUS lResult = RegSetKeyValueA(HKEY_LOCAL_MACHINE,
 					  REG_KEY_PATH.c_str(), regValueName,
-					  REG_SZ, regValue, strlen(regValue));
+					  REG_SZ, regValue,
+					  (DWORD)(strlen(regValue) + 1));
 
 	if (lResult != ERROR_SUCCESS) {
 		result = WriteEnvironmentConfigStrings(
@@ -2192,6 +2196,28 @@ std::string GetComputerSystemUniqueId()
 			    "WUID/00412F4E-0000-0000-0000-0000FFFFFFFF") { // Set by russian MS Office crack
 			result = "";
 		}
+	}
+
+	// ...and discard anything that is not even shaped like an id.
+	//
+	// Every id this function produces is "<4-letter tag>/<payload>" --
+	// WUID, SWID or SEID here, ALSU on macOS. The list above only rejects
+	// four exact strings, so a value that is merely malformed used to be
+	// accepted and, because it is written straight back to the registry,
+	// became that machine's permanent identity.
+	//
+	// Not hypothetical: a machine was found reporting a user id of literally
+	// "S" -- one character, REG_SZ, the first letter of an SWID/SEID value.
+	// Every crash from it was anonymous and none could be correlated with
+	// any other. Rejecting the value here regenerates a good one on the next
+	// call rather than requiring the registry to be cleaned by hand.
+	if (result.size() &&
+	    (result.size() < 16 || result.find('/') != 4)) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: discarding malformed machine unique id '%s'; a new one will be generated",
+		     result.c_str());
+
+		result = "";
 	}
 
 	if (!result.size()) {
