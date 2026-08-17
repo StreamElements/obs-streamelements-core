@@ -12,6 +12,7 @@
 
 #include <string>
 #include <vector>
+#include <filesystem>
 
 #include <util/platform.h>
 
@@ -80,6 +81,11 @@ static bool s_haveCrashEventId = false;
 // calling sentry_uuid_as_string from a signal handler; doing it in OnCrash
 // leaves that path with nothing but open/write/close.
 static char s_crashEventIdString[37] = {0};
+
+// <database>/cache, resolved at init so the decline path does not have to build
+// it. Empty if the database path could not be resolved, in which case there is
+// no cache to manage either.
+static std::string s_cacheDirectory;
 
 /* ================================================================= */
 
@@ -506,6 +512,54 @@ static void DieWithSignal(int signum)
 // close: the path was resolved at init and the id formatted in OnCrash exactly
 // so this function has neither to build.
 //
+//
+// Empties the SDK's envelope cache.
+//
+// "Don't send" has to delete, not merely withhold. sentry_user_consent_revoke()
+// only writes `0` to the consent file -- it leaves the cache alone -- while
+// sentry_user_consent_give() calls sentry_transport_retry(), which flushes the
+// *whole* cache directory. Consent is therefore all-or-nothing across every
+// envelope queued, so a single later "Send report" would ship every crash the
+// user had previously declined or never answered. Four such envelopes had
+// accumulated on the test machine before this was noticed.
+//
+// There is no API to drop one envelope, and no way to tell the SDK "this one
+// only", so the answer is to keep the cache empty of anything unconsented: the
+// only thing in it should be a report the user has just agreed to send.
+//
+// Called from the crash path, so it is deliberately plain unlink()s over a
+// directory listing. That is more than the open/write/close of the marker, but
+// this point is already past a full AppKit modal loop, so signal-safety was
+// spent long before here.
+//
+static void PurgeCachedEnvelopes(const char *reason)
+{
+	if (s_cacheDirectory.empty())
+		return;
+
+	std::error_code ec;
+	std::filesystem::directory_iterator it(s_cacheDirectory, ec);
+
+	if (ec)
+		return;
+
+	size_t dropped = 0;
+
+	for (const auto &entry : it) {
+		if (!entry.is_regular_file(ec))
+			continue;
+
+		if (os_unlink(entry.path().string().c_str()) == 0)
+			++dropped;
+	}
+
+	if (dropped) {
+		blog(LOG_INFO,
+		     "obs-streamelements-core: StreamElements: Crash Handler: dropped %zu cached crash report(s): %s",
+		     dropped, reason);
+	}
+}
+
 static void WritePendingConsentMarker()
 {
 	if (!s_pendingMarkerPath[0])
@@ -600,8 +654,11 @@ static void ChainedSignalHandler(int signum, siginfo_t *info, void *context)
 				WritePendingConsentMarker();
 			}
 		} else if (consent.prompted) {
-			// An actual "Don't send". Drop it.
+			// An actual "Don't send". Drop it -- and mean it:
+			// revoking alone leaves the envelope in the cache for
+			// the next "Send report" to flush along with its own.
 			sentry_user_consent_revoke();
+			PurgeCachedEnvelopes("declined by the user");
 		} else {
 			// We could not ask -- the crash was off the main
 			// thread, where AppKit cannot be driven. Revoking here
@@ -777,6 +834,11 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 	if (databasePath) {
 		sentry_options_set_database_path(options, databasePath);
 
+		// Where the SDK parks envelopes it could not send. Remembered
+		// so the decline path can empty it -- see
+		// PurgeCachedEnvelopes().
+		s_cacheDirectory = std::string(databasePath) + "/cache";
+
 		// Logged because a report that never arrives is diagnosed by
 		// looking for a stranded envelope, and that is only possible if
 		// the log says where to look.
@@ -899,10 +961,33 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 			StartCrashProgress(CRASH_PROGRESS_UPLOADING);
 
 			sentry_user_consent_give();
-			sentry_flush(30000);
+
+			const bool flushed = sentry_flush(30000) == 0;
 
 			StopCrashProgress();
+
+			// Did not finish in time. Put the marker back so the
+			// next launch offers it again -- otherwise the orphan
+			// sweep below would drop it on that launch, throwing
+			// away a report the user had just agreed to send.
+			if (!flushed)
+				WritePendingConsentMarker();
+		} else {
+			// Declined. Same reasoning as the crash-time path:
+			// revoking withholds, it does not delete.
+			sentry_user_consent_revoke();
+			PurgeCachedEnvelopes("declined by the user");
 		}
+	} else {
+		//
+		// Nothing is awaiting an answer, so anything still in the cache
+		// is an orphan -- a run that died with the prompt still open, or
+		// one killed before it could be asked. Nobody consented to any
+		// of it, and consent is all-or-nothing across the cache, so
+		// leaving it would let some future "Send report" ship crashes
+		// the user was never shown.
+		//
+		PurgeCachedEnvelopes("never consented to");
 	}
 
 	//
