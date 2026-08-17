@@ -47,6 +47,27 @@ bool IsTraceLogLevel();
 
 /* ========================================================= */
 
+//
+// Set by the crash handler for as long as it is reporting a crash, and never
+// cleared -- a process that has faulted is not going back to normal service.
+//
+// The consent prompt is modal, and a modal dialog on either platform runs a
+// nested message loop that keeps draining this process's own event queue. So
+// work queued before the fault -- including host API calls -- executes inside
+// the crash handler, on the thread that just crashed. Observed on macOS: a
+// second `crashProgram` call was delivered into the NSAlert's modal loop,
+// faulted again, and because the SDK's signal handler ignores a re-entrant
+// crash the faulting instruction simply re-executed forever. OBS hung at 100%
+// CPU with the dialog frozen behind a spinning beachball.
+//
+// Anything that can run application code from an event loop should consult
+// this and decline.
+//
+void SetCrashReportingInProgress();
+bool IsCrashReportingInProgress();
+
+/* ========================================================= */
+
 std::string wstring_to_utf8(const std::wstring wstr);
 std::wstring utf8_to_wstring(const std::string str);
 

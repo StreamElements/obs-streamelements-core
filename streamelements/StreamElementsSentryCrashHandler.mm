@@ -16,6 +16,7 @@
 #include <util/platform.h>
 
 #include <signal.h>
+#include <string.h>
 #include <dlfcn.h>
 #include <execinfo.h>
 #include <fcntl.h>
@@ -63,6 +64,22 @@ static StreamElementsCrashContext *s_crashContext = nullptr;
 // see ChainedSignalHandler. Resolved once at init so the signal handler only
 // has to open a path that already exists as a string.
 static char s_pendingMarkerPath[512] = {0};
+
+// Identity of the crash event, stamped by OnCrash.
+//
+// The prompt runs after the envelope has been written, so nothing the user
+// types can be added to the event itself -- see the note in OnCrash. What we
+// can do is send their answer as a separate User Feedback item pointing back at
+// this id, which is why the id has to be chosen by us rather than left to
+// sentry__ensure_event_id.
+static sentry_uuid_t s_crashEventId;
+static bool s_haveCrashEventId = false;
+
+// The same id, pre-formatted. The signal handler writes it into the pending
+// marker for the next launch to pick up, and formatting it there would mean
+// calling sentry_uuid_as_string from a signal handler; doing it in OnCrash
+// leaves that path with nothing but open/write/close.
+static char s_crashEventIdString[37] = {0};
 
 /* ================================================================= */
 
@@ -393,6 +410,12 @@ static sentry_value_t OnCrash(const sentry_ucontext_t *uctx,
 	UNUSED_PARAMETER(uctx);
 	UNUSED_PARAMETER(user_data);
 
+	// First thing, and before anything below can run a nested run loop.
+	// See IsCrashReportingInProgress() -- without this a host API call
+	// queued before the fault gets delivered into the consent dialog's
+	// modal loop and faults again on the already-crashed thread.
+	SetCrashReportingInProgress();
+
 	//
 	// Deliberately not the place to filter. Discarding here would suppress
 	// the event but not the minidump: the daemon notify that follows is
@@ -406,6 +429,23 @@ static sentry_value_t OnCrash(const sentry_ucontext_t *uctx,
 	// public API to add to one that already exists. So the whole payload is
 	// gathered here rather than alongside the prompt.
 	//
+	// Which is also why the event id is assigned here. Left alone,
+	// sentry__ensure_event_id picks one a moment later, inside the envelope
+	// the daemon writes, and we never see it -- sentry_handle_exception
+	// returns void. Setting it first means the prompt still has something to
+	// attach the user's description to. ensure_event_id keeps any non-nil
+	// value already present, so this simply wins.
+	{
+		s_crashEventId = sentry_uuid_new_v4();
+		sentry_uuid_as_string(&s_crashEventId, s_crashEventIdString);
+
+		sentry_value_set_by_key(
+			event, "event_id",
+			sentry_value_new_string(s_crashEventIdString));
+
+		s_haveCrashEventId = true;
+	}
+
 	if (s_crashContext) {
 		// Up before the slow part, not after: this hook runs ahead of
 		// the consent dialog, so without it the whole of WalkStack and
@@ -455,6 +495,38 @@ static void DieWithSignal(int signum)
 	raise(signum);
 }
 
+//
+// Leaves a note for the next launch that a crash is still sitting in the cache
+// unsent, either because we could not ask about it or because the upload did
+// not finish. The contents are the crash's event id, so the deferred prompt can
+// attach what the user types to the right crash; an empty marker is still a
+// valid marker, it just means feedback has nowhere to point.
+//
+// Called from the signal handler, so nothing here does more than open/write/
+// close: the path was resolved at init and the id formatted in OnCrash exactly
+// so this function has neither to build.
+//
+static void WritePendingConsentMarker()
+{
+	if (!s_pendingMarkerPath[0])
+		return;
+
+	const int fd =
+		open(s_pendingMarkerPath, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+
+	if (fd < 0)
+		return;
+
+	if (s_crashEventIdString[0]) {
+		const ssize_t ignored = write(fd, s_crashEventIdString,
+					      strlen(s_crashEventIdString));
+
+		UNUSED_PARAMETER(ignored);
+	}
+
+	close(fd);
+}
+
 static void ChainedSignalHandler(int signum, siginfo_t *info, void *context)
 {
 	// One crash only, and only one thread's. A plain read-then-write would
@@ -468,6 +540,11 @@ static void ChainedSignalHandler(int signum, siginfo_t *info, void *context)
 		return;
 	}
 
+	// Also set in OnCrash, which normally runs first. Repeated here because
+	// this handler still runs when sentry_init() failed and there is no
+	// OnCrash to reach.
+	SetCrashReportingInProgress();
+
 	if (s_initialized) {
 		const auto consent = StreamElementsCrashConsentDialog::Prompt(
 			s_userName, s_userEmail, s_userDiscord);
@@ -478,25 +555,50 @@ static void ChainedSignalHandler(int signum, siginfo_t *info, void *context)
 			PersistContactDetails(consent.name, consent.email,
 					      consent.discord);
 
-			SetSentryUser(consent.name, consent.email,
-				      consent.discord);
-
-			if (consent.description.size()) {
-				sentry_value_t report =
-					sentry_value_new_object();
-
-				sentry_value_set_by_key(
-					report, "description",
-					sentry_value_new_string(
-						consent.description.c_str()));
-
-				sentry_set_context("user_report", report);
+			// Deliberately NOT sentry_set_user() here. The crash
+			// envelope was sealed by the daemon before this prompt
+			// ever appeared, so a scope change now reaches no
+			// event at all -- it would only apply to some later
+			// one, and this process is about to die. The identity
+			// that travels with the crash is the one set at init;
+			// what the user typed just now travels as feedback.
+			if (consent.description.size() && s_haveCrashEventId) {
+				sentry_capture_feedback(
+					sentry_value_new_feedback(
+						consent.description.c_str(),
+						consent.email.size()
+							? consent.email.c_str()
+							: nullptr,
+						consent.name.size()
+							? consent.name.c_str()
+							: nullptr,
+						&s_crashEventId));
 			}
 
 			// Releases what the daemon already wrote. Until this
 			// call the envelope sits in the cache unsent, which is
 			// what makes "Don't send" mean it.
 			sentry_user_consent_give();
+
+			// And this is what actually pushes it out.
+			//
+			// Consent only moves the envelope into the retry queue;
+			// the upload itself happens on the background worker.
+			// Without a flush we returned immediately, chained to
+			// OBS's handler, and the process died with the report
+			// still queued -- and the "Uploading the crash report"
+			// window, which has nothing else to cover, was on
+			// screen for microseconds. Same 60s budget and the same
+			// reasoning as the Windows handler's shutdown timeout.
+			if (sentry_flush(60000) != 0) {
+				// Timed out: the envelope is still cached and
+				// this process is about to die. Consent is reset
+				// at every startup (see the constructor), so
+				// without a marker nothing would ever pick this
+				// up again and the report would be stranded on
+				// disk forever.
+				WritePendingConsentMarker();
+			}
 		} else if (consent.prompted) {
 			// An actual "Don't send". Drop it.
 			sentry_user_consent_revoke();
@@ -509,17 +611,8 @@ static void ChainedSignalHandler(int signum, siginfo_t *info, void *context)
 			//
 			// Leave consent untouched so the envelope stays cached,
 			// and drop a marker for the next launch to notice and
-			// ask about. open/write/close are async-signal-safe;
-			// the path was resolved at init precisely so nothing
-			// here has to build it.
-			if (s_pendingMarkerPath[0]) {
-				const int fd = open(
-					s_pendingMarkerPath,
-					O_WRONLY | O_CREAT | O_TRUNC, 0600);
-
-				if (fd >= 0)
-					close(fd);
-			}
+			// ask about.
+			WritePendingConsentMarker();
 		}
 	}
 
@@ -620,12 +713,32 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 	//
 	// This is what lets the prompt run after the dump and still mean
 	// something: the daemon reads consent out of shared memory rather than
-	// uploading blindly, so a refusal still stops the minidump. Envelopes
-	// captured while consent is withheld are cached, and flushed if consent
-	// is given later -- possibly not until the next launch, since a dying
-	// process may not survive long enough to finish the upload.
+	// uploading blindly, so a refusal still stops the minidump.
 	//
 	sentry_options_set_require_user_consent(options, 1);
+
+	//
+	// ...and these two are what make the sentence above true.
+	//
+	// require_user_consent ON ITS OWN DISCARDS the report. In
+	// sentry__capture_envelope, a withheld-consent envelope is only written
+	// to the cache when cache_keep or http_retry is set; otherwise it is
+	// dropped on the spot. A live crash test logged
+	//
+	//   INFO discarding envelope due to missing user consent
+	//
+	// about a second after the fault -- while the consent dialog was still
+	// on screen, and therefore long before it was answered. The whole
+	// dump-first-ask-second design rests on the envelope surviving until the
+	// answer, so without these the prompt could never deliver anything and
+	// "Send report" was a button that did nothing.
+	//
+	// http_retry additionally means a report that could not go out now --
+	// consent given too late, network down, process dying mid-upload -- is
+	// picked up on a later run instead of being lost.
+	//
+	sentry_options_set_cache_keep(options, SENTRY_CACHE_KEEP_OFFLINE);
+	sentry_options_set_http_retry(options, 1);
 
 	std::string moduleDirectory;
 
@@ -636,6 +749,45 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 	} else {
 		blog(LOG_WARNING,
 		     "obs-streamelements-core: StreamElements: Crash Handler: could not resolve own module directory; falling back to the SDK's default sentry-crash lookup, which searches next to the host executable");
+	}
+
+	// Where the SDK queues envelopes and minidumps until they are sent.
+	//
+	// Left unset, sentry-native uses `.sentry-native` *relative to the
+	// current working directory*, and a macOS app launched the way users
+	// launch one -- Finder, Dock, `open` -- has a working directory of `/`.
+	// That is the sealed system volume: `mkdir /.sentry-native` fails with
+	// "Read-only file system" for root, never mind a normal user.
+	// sentry__path_create_dir_all then fails, sentry_init() returns
+	// non-zero, and crash reporting is off for the whole session:
+	//
+	//   Crash Handler: backend is Sentry
+	//   Crash Handler: sentry_init() failed
+	//
+	// It looked fine in development only because a build launched from a
+	// shell inherits that shell's writable working directory. Verified both
+	// ways on 2026-08-17: via `open` it fails, and with the identical binary
+	// started from a writable directory it logs "Sentry initialized".
+	//
+	// The plugin config directory is per-user, writable without elevation,
+	// and already holds the rest of our state. Same choice as the Windows
+	// handler, which hit the same bug with `Program Files` in place of `/`.
+	char *databasePath = obs_module_config_path("sentry-db");
+
+	if (databasePath) {
+		sentry_options_set_database_path(options, databasePath);
+
+		// Logged because a report that never arrives is diagnosed by
+		// looking for a stranded envelope, and that is only possible if
+		// the log says where to look.
+		blog(LOG_INFO,
+		     "obs-streamelements-core: StreamElements: Crash Handler: database path is %s",
+		     databasePath);
+
+		bfree(databasePath);
+	} else {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: StreamElements: Crash Handler: could not resolve the plugin config directory; falling back to the SDK's default database path, which is relative to the working directory and therefore unwritable under Finder");
 	}
 
 	// 60s, for the reason documented in the Windows handler: with the default
@@ -694,6 +846,21 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 	// of reports would never be offered to the user at all.
 	//
 	if (s_pendingMarkerPath[0] && os_file_exists(s_pendingMarkerPath)) {
+		// The marker holds the id of the crash it stands for, so the
+		// answer can be attached to that event rather than floating
+		// free. Read before unlinking, obviously.
+		char *markerContents =
+			os_quick_read_utf8_file(s_pendingMarkerPath);
+
+		sentry_uuid_t pendingEventId = sentry_uuid_nil();
+
+		if (markerContents) {
+			pendingEventId =
+				sentry_uuid_from_string(markerContents);
+
+			bfree(markerContents);
+		}
+
 		os_unlink(s_pendingMarkerPath);
 
 		const auto consent = StreamElementsCrashConsentDialog::Prompt(
@@ -703,15 +870,59 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 			PersistContactDetails(consent.name, consent.email,
 					      consent.discord);
 
+			// Unlike the crash-time path, this one is a fresh
+			// process: setting the user here is worth doing because
+			// everything this session reports will carry it.
 			SetSentryUser(consent.name, consent.email,
 				      consent.discord);
 
-			// Flushes whatever the previous run left cached.
+			if (consent.description.size() &&
+			    !sentry_uuid_is_nil(&pendingEventId)) {
+				sentry_capture_feedback(
+					sentry_value_new_feedback(
+						consent.description.c_str(),
+						consent.email.size()
+							? consent.email.c_str()
+							: nullptr,
+						consent.name.size()
+							? consent.name.c_str()
+							: nullptr,
+						&pendingEventId));
+			}
+
+			// Releases whatever the previous run left cached, and
+			// then pushes it while we still hold consent -- the
+			// revoke below is unconditional, so leaving this to the
+			// background retry queue would race it and strand the
+			// report. Shorter budget than the crash path: the user
+			// is looking at a working OBS, not a dying one.
+			StartCrashProgress(CRASH_PROGRESS_UPLOADING);
+
 			sentry_user_consent_give();
-		} else {
-			sentry_user_consent_revoke();
+			sentry_flush(30000);
+
+			StopCrashProgress();
 		}
 	}
+
+	//
+	// Consent is per crash, never a standing preference. Unconditional, and
+	// last, so it covers both branches above.
+	//
+	// sentry-native persists the answer to <database>/user-consent and
+	// treats it as a global gate, which means a "yes" given for one crash
+	// silently pre-authorises the next one: the daemon uploads the moment
+	// the fault happens, before the dialog is on screen and regardless of
+	// what the user then clicks. Observed exactly that -- a second crash
+	// produced no "caching envelope" line at all, and the report was gone
+	// before it could be declined or described.
+	//
+	// Resetting here means every crash is answered on its own terms, with
+	// its own description, which is the only reading of "consent" that
+	// means anything. Note revoking does not touch anything already in the
+	// cache; it only closes the gate.
+	//
+	sentry_user_consent_revoke();
 
 	// After sentry_init, and deliberately: constructing this fetches the
 	// remote module-of-interest list over HTTP, which is not something to

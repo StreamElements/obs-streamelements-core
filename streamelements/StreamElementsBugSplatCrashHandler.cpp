@@ -184,6 +184,15 @@ static void HangDetectionThread()
 				return;
 			}
 
+			// The user agreed to interrupt OBS and report. From
+			// here the process is being torn down around a report,
+			// so nothing new should be dispatched into it if the UI
+			// thread happens to come unstuck mid-collection. Unlike
+			// the exception filter this MessageBox runs on the hang
+			// detection thread, so it is not itself pumping the
+			// app's queue -- but the outcome is the same.
+			SetCrashReportingInProgress();
+
 			CreateMessageWindow(true);
 
 			std::time_t hangTimestamp = std::time(nullptr);
@@ -385,6 +394,13 @@ static LONG CALLBACK CustomExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
 
 	if (s_crashContext)
 		s_crashContext->WalkStack(pExceptionInfo->ContextRecord);
+
+	// Stops host API calls from running once we are on the crash path.
+	// BugSplat's own submit prompt is modal, and a modal message loop keeps
+	// dispatching to this process -- including Qt's posted events, and so
+	// the API calls queued before the fault. See
+	// IsCrashReportingInProgress().
+	SetCrashReportingInProgress();
 
 	if (InterlockedIncrement(&s_insideExceptionFilter) == 1L) {
 #if HANG_DETECTION_ENABLED

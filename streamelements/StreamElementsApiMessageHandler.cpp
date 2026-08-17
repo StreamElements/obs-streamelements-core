@@ -242,6 +242,26 @@ bool StreamElementsApiMessageHandler::OnProcessMessageReceived(
 						return;
 					}
 
+					// The crash consent prompt is modal, and a
+					// modal loop keeps draining this queue --
+					// so without this, calls posted before
+					// the fault run inside the crash handler,
+					// on the thread that crashed. See
+					// IsCrashReportingInProgress().
+					if (IsCrashReportingInProgress()) {
+						blog(LOG_ERROR,
+						     "obs-streamelements-core[%s %s]: API: a crash is being reported; refusing call to '%s', callback id %d",
+						     context->target->m_target
+							     .c_str(),
+						     context->target->m_unique_id
+							     .c_str(),
+						     context->id.c_str(),
+						     context->cef_app_callback_id);
+
+						context->complete();
+						return;
+					}
+
 					if (IsTraceLogLevel()) {
 						blog(LOG_INFO,
 						     "obs-streamelements-core[%s %s]: API: performing call to '%s', callback id %d",

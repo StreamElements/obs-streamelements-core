@@ -4,6 +4,7 @@
 #import <Foundation/Foundation.h>
 
 #include <string>
+#include <float.h>
 
 /* ================================================================= */
 
@@ -100,8 +101,17 @@ StreamElementsCrashConsentDialog::Prompt(const std::string &name,
 	@autoreleasepool {
 		const CGFloat width = 420;
 
+		// Room for several lines of description. People answering "what
+		// were you doing" write sentences, not words, and a box one line
+		// tall says the opposite -- the Windows dialog has always given
+		// this field ES_MULTILINE and four lines of height.
+		const CGFloat descriptionHeight = 96;
+
+		const CGFloat descriptionTop = 178 + descriptionHeight;
+
 		NSView *accessory = [[NSView alloc]
-			initWithFrame:NSMakeRect(0, 0, width, 210)];
+			initWithFrame:NSMakeRect(0, 0, width,
+						 descriptionTop + 4)];
 
 		// Laid out from the bottom up: AppKit's origin is bottom-left,
 		// so the first control added sits lowest on screen.
@@ -116,11 +126,28 @@ StreamElementsCrashConsentDialog::Prompt(const std::string &name,
 			AddField(accessory, @"Name:", name, 148, width);
 
 		NSScrollView *scroll = [[NSScrollView alloc]
-			initWithFrame:NSMakeRect(0, 178, width, 28)];
+			initWithFrame:NSMakeRect(0, 178, width,
+						 descriptionHeight)];
 		NSTextView *description = [[NSTextView alloc]
-			initWithFrame:NSMakeRect(0, 0, width, 28)];
+			initWithFrame:NSMakeRect(0, 0, width,
+						 descriptionHeight)];
 
 		[description setRichText:NO];
+
+		// Without these an NSTextView in a scroll view neither wraps nor
+		// grows: the text container keeps its initial size, so typing
+		// runs off the right edge on a single line and the extra height
+		// above buys nothing.
+		[description setMinSize:NSMakeSize(0, descriptionHeight)];
+		[description setMaxSize:NSMakeSize(FLT_MAX, FLT_MAX)];
+		[description setVerticallyResizable:YES];
+		[description setHorizontallyResizable:NO];
+		[description setAutoresizingMask:NSViewWidthSizable];
+
+		[[description textContainer]
+			setContainerSize:NSMakeSize(width, FLT_MAX)];
+		[[description textContainer] setWidthTracksTextView:YES];
+
 		[scroll setDocumentView:description];
 		[scroll setHasVerticalScroller:YES];
 		[scroll setBorderType:NSBezelBorder];
