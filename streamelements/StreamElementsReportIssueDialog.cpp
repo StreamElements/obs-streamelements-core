@@ -418,6 +418,15 @@ void StreamElementsReportIssueDialog::accept()
 				// also permanently one Chromium release behind,
 				// since those directories arrive on demand.
 				L"plugin_config/obs-browser/",
+				// Our own binaries, and only ours. We build
+				// them, so their bytes tell us nothing we
+				// cannot get from the build. Third-party
+				// plugins in the same folder are kept
+				// deliberately -- they are the ones nobody
+				// else can hand us. Kept in step with
+				// StreamElementsCrashContext.cpp.
+				L"plugins/obs-streamelements-core.plugin/contents/macos/",
+				L"plugins/obs-streamelements-core/bin/",
 				L"updates/",
 				L"profiler_data/",
 				L"obslive_restored_files/",
