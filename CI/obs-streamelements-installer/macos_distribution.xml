@@ -27,7 +27,7 @@ https://developer.apple.com/library/mac/documentation/DeveloperTools/Reference/I
         function check_obs_present() {
             system.log("check_obs_present: START");
 
-            const MIN_OBS_VERSION = "31.1.0";
+            const MIN_OBS_VERSION = "32.2.0";
 
             system.log("check_obs_present: MIN_OBS_VERSION: " + MIN_OBS_VERSION);
 
@@ -52,7 +52,7 @@ https://developer.apple.com/library/mac/documentation/DeveloperTools/Reference/I
                 system.log("check_obs_present: obsInfo is null");
 
                 my.result.title = "OBS Studio not found.";
-                my.result.message = "Please install the latest version of OBS Studio from https://obsproject.com before installing SE.Live.";
+                my.result.message = "SE.Live requires OBS Studio " + MIN_OBS_VERSION + " or newer. Please install it from https://obsproject.com before installing SE.Live.";
                 my.result.type = "Fatal";
 
                 return true;
@@ -66,7 +66,7 @@ https://developer.apple.com/library/mac/documentation/DeveloperTools/Reference/I
                 system.log("check_obs_present: obsVersion < MIN_OBS_VERSION");
 
                 my.result.title = "OBS Studio is too old.";
-                my.result.message = "Please install the latest version of OBS Studio from https://obsproject.com before installing SE.Live.";
+                my.result.message = "SE.Live requires OBS Studio " + MIN_OBS_VERSION + " or newer, but this Mac has " + obsVersion + ". Please update OBS Studio from https://obsproject.com before installing SE.Live.";
                 my.result.type = "Fatal";
 
                 return true;

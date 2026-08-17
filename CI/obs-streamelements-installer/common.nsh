@@ -10,13 +10,17 @@
 # !define OBS_DOWNLOAD_VERSION "27.2.4"
 #!define OBS_DOWNLOAD_URL_64 "https://cdn-fastly.obsproject.com/downloads/OBS-Studio-${OBS_DOWNLOAD_VERSION}-Full-Installer-x64.exe"
 #!define OBS_DOWNLOAD_URL_32 "https://cdn-fastly.obsproject.com/downloads/OBS-Studio-${OBS_DOWNLOAD_VERSION}-Full-Installer-x86.exe"
-!define OBS_DOWNLOAD_VERSION ""
-!define OBS_DOWNLOAD_URL_64 "https://cdn-fastly.obsproject.com/downloads/OBS-Studio-31.1.2-Windows-x64-Installer.exe"
+!define OBS_DOWNLOAD_VERSION "32.2.1"
+!define OBS_DOWNLOAD_URL_64 "https://cdn-fastly.obsproject.com/downloads/OBS-Studio-${OBS_DOWNLOAD_VERSION}-Windows-x64-Installer.exe"
+# OBS Studio has published no 32-bit build since 27.2.4, which cannot satisfy
+# OBS_REQUIRE_VERSION. This URL is only ever reached on a 32-bit host, or beside
+# an existing 32-bit install -- see DownloadAndInstallOBS. It is deliberately
+# NOT ${OBS_DOWNLOAD_VERSION}: no such file exists.
 !define OBS_DOWNLOAD_URL_32 "https://cdn-fastly.obsproject.com/downloads/OBS-Studio-27.2.4-Full-Installer-x86.exe"
 !define MSVC_REDIST_X64_URL "https://cdn.streamelements.com/obs/dist/third-party/microsoft/vs2019/vcredist_x64.exe"
 !define MSVC_REDIST_X86_URL "https://cdn.streamelements.com/obs/dist/third-party/microsoft/vs2019/vcredist_x86.exe"
 
-!define OBS_REQUIRE_VERSION "31.1.0"
+!define OBS_REQUIRE_VERSION "32.2.0"
 
 !define MSG_DOWNLOAD_ERROR_RETRY "Failed downloading installation package.$\r$\n$\r$\nClick Retry to resume downloading or Cancel to abort."
 !define MSG_DOWNLOAD_CANCEL_CONFIRM "Are you sure that you want to stop download and abort ${PRODUCT_SHORT_NAME} setup?"
