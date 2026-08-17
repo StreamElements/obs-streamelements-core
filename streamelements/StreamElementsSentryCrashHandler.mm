@@ -495,6 +495,38 @@ static void DieWithSignal(int signum)
 	raise(signum);
 }
 
+//
+// Leaves a note for the next launch that a crash is still sitting in the cache
+// unsent, either because we could not ask about it or because the upload did
+// not finish. The contents are the crash's event id, so the deferred prompt can
+// attach what the user types to the right crash; an empty marker is still a
+// valid marker, it just means feedback has nowhere to point.
+//
+// Called from the signal handler, so nothing here does more than open/write/
+// close: the path was resolved at init and the id formatted in OnCrash exactly
+// so this function has neither to build.
+//
+static void WritePendingConsentMarker()
+{
+	if (!s_pendingMarkerPath[0])
+		return;
+
+	const int fd =
+		open(s_pendingMarkerPath, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+
+	if (fd < 0)
+		return;
+
+	if (s_crashEventIdString[0]) {
+		const ssize_t ignored = write(fd, s_crashEventIdString,
+					      strlen(s_crashEventIdString));
+
+		UNUSED_PARAMETER(ignored);
+	}
+
+	close(fd);
+}
+
 static void ChainedSignalHandler(int signum, siginfo_t *info, void *context)
 {
 	// One crash only, and only one thread's. A plain read-then-write would
@@ -558,7 +590,15 @@ static void ChainedSignalHandler(int signum, siginfo_t *info, void *context)
 			// window, which has nothing else to cover, was on
 			// screen for microseconds. Same 60s budget and the same
 			// reasoning as the Windows handler's shutdown timeout.
-			sentry_flush(60000);
+			if (sentry_flush(60000) != 0) {
+				// Timed out: the envelope is still cached and
+				// this process is about to die. Consent is reset
+				// at every startup (see the constructor), so
+				// without a marker nothing would ever pick this
+				// up again and the report would be stranded on
+				// disk forever.
+				WritePendingConsentMarker();
+			}
 		} else if (consent.prompted) {
 			// An actual "Don't send". Drop it.
 			sentry_user_consent_revoke();
@@ -571,34 +611,8 @@ static void ChainedSignalHandler(int signum, siginfo_t *info, void *context)
 			//
 			// Leave consent untouched so the envelope stays cached,
 			// and drop a marker for the next launch to notice and
-			// ask about. open/write/close are async-signal-safe;
-			// the path was resolved at init, and the id was
-			// formatted in OnCrash, precisely so nothing here has
-			// to build either.
-			//
-			// The marker carries the event id as its contents so
-			// the deferred prompt can still attach what the user
-			// types to the right crash. An empty marker is still a
-			// valid marker -- it just means feedback has nowhere to
-			// point.
-			if (s_pendingMarkerPath[0]) {
-				const int fd = open(
-					s_pendingMarkerPath,
-					O_WRONLY | O_CREAT | O_TRUNC, 0600);
-
-				if (fd >= 0) {
-					if (s_crashEventIdString[0]) {
-						const ssize_t ignored = write(
-							fd,
-							s_crashEventIdString,
-							strlen(s_crashEventIdString));
-
-						UNUSED_PARAMETER(ignored);
-					}
-
-					close(fd);
-				}
-			}
+			// ask about.
+			WritePendingConsentMarker();
 		}
 	}
 
@@ -876,16 +890,39 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 						&pendingEventId));
 			}
 
-			// Releases whatever the previous run left cached. No
-			// flush here, deliberately: this runs during startup on
-			// the main thread, and blocking the UI for up to a
-			// minute to push an old report would be worse than
-			// letting the retry queue carry it in the background.
+			// Releases whatever the previous run left cached, and
+			// then pushes it while we still hold consent -- the
+			// revoke below is unconditional, so leaving this to the
+			// background retry queue would race it and strand the
+			// report. Shorter budget than the crash path: the user
+			// is looking at a working OBS, not a dying one.
+			StartCrashProgress(CRASH_PROGRESS_UPLOADING);
+
 			sentry_user_consent_give();
-		} else {
-			sentry_user_consent_revoke();
+			sentry_flush(30000);
+
+			StopCrashProgress();
 		}
 	}
+
+	//
+	// Consent is per crash, never a standing preference. Unconditional, and
+	// last, so it covers both branches above.
+	//
+	// sentry-native persists the answer to <database>/user-consent and
+	// treats it as a global gate, which means a "yes" given for one crash
+	// silently pre-authorises the next one: the daemon uploads the moment
+	// the fault happens, before the dialog is on screen and regardless of
+	// what the user then clicks. Observed exactly that -- a second crash
+	// produced no "caching envelope" line at all, and the report was gone
+	// before it could be declined or described.
+	//
+	// Resetting here means every crash is answered on its own terms, with
+	// its own description, which is the only reading of "consent" that
+	// means anything. Note revoking does not touch anything already in the
+	// cache; it only closes the gate.
+	//
+	sentry_user_consent_revoke();
 
 	// After sentry_init, and deliberately: constructing this fetches the
 	// remote module-of-interest list over HTTP, which is not something to
