@@ -18,6 +18,10 @@
 #include <wchar.h>
 
 #include <windows.h>
+#include <dwmapi.h>
+
+// Needed only by the dark title bar on the progress window below.
+#pragma comment(lib, "dwmapi.lib")
 
 // Empty means crash reporting is inert: sentry_init() is skipped entirely rather
 // than run against a bad DSN, so a build without the DSN behaves like
@@ -166,18 +170,54 @@ static HFONT CreateProgressFont(HDC hdc, int pointSize, int weight)
 	return CreateFontIndirectW(&lf);
 }
 
+//
+// Dark, unconditionally, matching StreamElementsCrashConsentDialog.cpp. This
+// window is shown immediately before that dialog and again immediately after
+// it, so a light panel beside a dark dialog reads as a glitch rather than a
+// theme.
+//
+// The system colours this replaced (COLOR_WINDOW, COLOR_WINDOWTEXT,
+// COLOR_BTNFACE, COLOR_HIGHLIGHT, COLOR_GRAYTEXT) follow the OS setting, which
+// on a default Windows install means a white panel over a dark OBS.
+//
+static const COLORREF kProgressBackground = RGB(32, 32, 32);
+static const COLORREF kProgressText = RGB(255, 255, 255);
+static const COLORREF kProgressDimText = RGB(160, 160, 160);
+static const COLORREF kProgressTrack = RGB(60, 60, 60);
+static const COLORREF kProgressChunk = RGB(0, 120, 212);
+
+//
+// Leaked deliberately, like the dialog's brushes: they live as long as the
+// window, the process is terminating behind it, and a brush destroyed mid-paint
+// is a worse outcome than one never freed.
+//
+static HBRUSH GetProgressBrush(COLORREF color)
+{
+	static HBRUSH background = CreateSolidBrush(kProgressBackground);
+	static HBRUSH track = CreateSolidBrush(kProgressTrack);
+	static HBRUSH chunk = CreateSolidBrush(kProgressChunk);
+
+	if (color == kProgressTrack)
+		return track;
+
+	if (color == kProgressChunk)
+		return chunk;
+
+	return background;
+}
+
 static void PaintCrashProgress(HDC hdc, const RECT &rc)
 {
 	const int width = rc.right - rc.left;
 	const int margin = 18;
 
-	FillRect(hdc, &rc, GetSysColorBrush(COLOR_WINDOW));
+	FillRect(hdc, &rc, GetProgressBrush(kProgressBackground));
 	SetBkMode(hdc, TRANSPARENT);
 
 	RECT line = {margin, margin, width - margin, margin + 24};
 
 	SelectObject(hdc, s_progressTitleFont);
-	SetTextColor(hdc, GetSysColor(COLOR_WINDOWTEXT));
+	SetTextColor(hdc, kProgressText);
 	DrawTextW(hdc, L"Sending your crash report", -1, &line,
 		  DT_LEFT | DT_SINGLELINE | DT_NOPREFIX);
 
@@ -206,7 +246,7 @@ static void PaintCrashProgress(HDC hdc, const RECT &rc)
 	// Indeterminate bar: there is no progress figure to report, so animate
 	// rather than invent a percentage.
 	RECT track = {margin, margin + 60, width - margin, margin + 68};
-	FillRect(hdc, &track, GetSysColorBrush(COLOR_BTNFACE));
+	FillRect(hdc, &track, GetProgressBrush(kProgressTrack));
 
 	const int trackWidth = track.right - track.left;
 	const int chunkWidth = trackWidth / 4;
@@ -225,12 +265,12 @@ static void PaintCrashProgress(HDC hdc, const RECT &rc)
 		chunk.right = track.right;
 
 	if (chunk.right > chunk.left)
-		FillRect(hdc, &chunk, GetSysColorBrush(COLOR_HIGHLIGHT));
+		FillRect(hdc, &chunk, GetProgressBrush(kProgressChunk));
 
 	line.top = margin + 82;
 	line.bottom = rc.bottom - margin;
 
-	SetTextColor(hdc, GetSysColor(COLOR_GRAYTEXT));
+	SetTextColor(hdc, kProgressDimText);
 	DrawTextW(hdc,
 		  L"This can take up to a minute. OBS will close by itself "
 		  L"once the report has been sent.",
@@ -322,7 +362,7 @@ static DWORD WINAPI CrashProgressThreadProc(LPVOID param)
 	wc.lpfnWndProc = CrashProgressWndProc;
 	wc.hInstance = GetModuleHandleW(NULL);
 	wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
-	wc.hbrBackground = GetSysColorBrush(COLOR_WINDOW);
+	wc.hbrBackground = GetProgressBrush(kProgressBackground);
 	wc.lpszClassName = L"SELiveCrashProgress";
 
 	RegisterClassExW(
@@ -353,6 +393,25 @@ static DWORD WINAPI CrashProgressThreadProc(LPVOID param)
 
 	if (!hwnd)
 		return 0;
+
+	// WS_CAPTION means there is a title bar, and the title bar is drawn by
+	// the compositor rather than by PaintCrashProgress -- so without this it
+	// stays light above a dark panel. 20 on Windows 10 2004 and later, 19
+	// before it; try the current one and fall back rather than sniffing the
+	// build number. Both simply fail on older systems.
+	{
+		const DWORD kUseImmersiveDarkMode = 20;
+		const DWORD kUseImmersiveDarkModeBefore20H1 = 19;
+
+		BOOL enabled = TRUE;
+
+		if (FAILED(DwmSetWindowAttribute(hwnd, kUseImmersiveDarkMode,
+						 &enabled, sizeof(enabled)))) {
+			DwmSetWindowAttribute(hwnd,
+					      kUseImmersiveDarkModeBefore20H1,
+					      &enabled, sizeof(enabled));
+		}
+	}
 
 	InterlockedExchangePointer((PVOID volatile *)&s_progressWindow, hwnd);
 

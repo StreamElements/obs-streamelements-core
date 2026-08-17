@@ -301,6 +301,16 @@ static void StartCrashProgress(int phase)
 			[s_progressPanel setLevel:NSFloatingWindowLevel];
 			[s_progressPanel setHidesOnDeactivate:NO];
 
+			// Dark, to match the consent dialog. These two appear
+			// back to back in the same flow -- this one before it
+			// and again after -- so a light panel beside a dark
+			// dialog reads as a glitch rather than a theme.
+			[s_progressPanel
+				setAppearance:
+					[NSAppearance
+						appearanceNamed:
+							NSAppearanceNameDarkAqua]];
+
 			// Defaults to YES for a window created this way, which
 			// would have -close release it out from under the
 			// static below. We drop the panel by ordering it out.

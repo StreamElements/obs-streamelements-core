@@ -164,6 +164,26 @@ StreamElementsCrashConsentDialog::Prompt(const std::string &name,
 
 		[[alert window] setInitialFirstResponder:description];
 
+		//
+		// Dark, unconditionally -- not "follow the system".
+		//
+		// Matches the Windows dialog, and for the same reason: this
+		// appears in front of a dying OBS, whose own UI is dark in every
+		// theme it ships, and a light panel in front of that does not
+		// read as part of the same application. The user is being asked
+		// to send their configuration and a picture of their screen, so
+		// anything that looks like it came from somewhere else is a
+		// reason to say no.
+		//
+		// Setting it on the window is enough: the accessory view and its
+		// controls inherit, and the labels already use labelColor /
+		// secondaryLabelColor, which resolve per appearance.
+		//
+		[[alert window]
+			setAppearance:[NSAppearance
+					      appearanceNamed:
+						      NSAppearanceNameDarkAqua]];
+
 		// Nothing else will raise this: the app is dying behind it.
 		[NSApp activateIgnoringOtherApps:YES];
 
