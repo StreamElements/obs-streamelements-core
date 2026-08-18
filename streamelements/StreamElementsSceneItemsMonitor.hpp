@@ -5,6 +5,7 @@
 #include "StreamElementsUtils.hpp"
 
 #include <QObject>
+#include <QPointer>
 #include <QMainWindow>
 #include <QListView>
 #include <QAbstractItemModel>
@@ -153,14 +154,14 @@ protected:
 	virtual void OnObsExit() override;
 
 private:
-	QMainWindow *m_mainWindow;
-	QListView *m_sceneItemsListView = nullptr;
-	QToolBar *m_sceneItemsToolBar = nullptr;
-	QAbstractItemModel *m_sceneItemsModel = nullptr;
+	QPointer<QMainWindow> m_mainWindow;
+	QPointer<QListView> m_sceneItemsListView = nullptr;
+	QPointer<QToolBar> m_sceneItemsToolBar = nullptr;
+	QPointer<QAbstractItemModel> m_sceneItemsModel = nullptr;
 	bool m_enableSignals = false;
 	StreamElementsDeferredExecutive
 		m_updateSceneItemsWidgetsThrottledExecutive;
-	QObject *m_eventFilter = nullptr;
+	QPointer<QObject> m_eventFilter = nullptr;
 	CefRefPtr<CefValue> m_sceneItemsToolBarActions = CefValue::Create();
-	QToolButton *m_nativeActionSourcePropertiesButton = nullptr;
+	QPointer<QToolButton> m_nativeActionSourcePropertiesButton = nullptr;
 };

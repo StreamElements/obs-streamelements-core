@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QWidget>
+#include <QPointer>
 #include <QDockWidget>
 #include <QMainWindow>
 #include <stack>
@@ -98,8 +99,8 @@ protected:
 	QMainWindow* mainWindow() { return m_parent; }
 
 private:
-	QMainWindow* m_parent;
-	QWidget* m_nativeCentralWidget = nullptr;
+	QPointer<QMainWindow> m_parent;
+	QPointer<QWidget> m_nativeCentralWidget = nullptr;
 	//QWidget* m_currentCentralWidget = nullptr;
 
 	std::map<std::string, QDockWidget*> m_dockWidgets;

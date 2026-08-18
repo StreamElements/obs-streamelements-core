@@ -30,7 +30,13 @@ StreamElementsMenuManager::StreamElementsMenuManager(QMainWindow *parent)
 StreamElementsMenuManager::~StreamElementsMenuManager()
 {
 	//mainWindow()->menuBar()->removeAction((QAction *)m_menu->menuAction()); // -> crash
-	m_menu->menuAction()->setVisible(false);
+
+	// Guarded: the menu bar owns the menu and may already have destroyed it
+	// by the time the plugin tears down. m_menu is a QPointer, so this is a
+	// real test rather than a stale-pointer read.
+	if (m_menu)
+		m_menu->menuAction()->setVisible(false);
+
 	m_menu = nullptr;
 }
 

@@ -255,8 +255,8 @@ protected:
 private:
 	bool m_persistStateEnabled = false;
 	bool m_initialized = false;
-	QMainWindow *m_mainWindow = nullptr;
-	QWidget *m_nativeCentralWidget = nullptr;
+	QPointer<QMainWindow> m_mainWindow = nullptr;
+	QPointer<QWidget> m_nativeCentralWidget = nullptr;
 	std::shared_ptr<StreamElementsBrowserWidgetManager> m_widgetManager =
 		nullptr;
 	std::shared_ptr<StreamElementsObsSceneManager> m_obsSceneManager =
@@ -328,6 +328,6 @@ private:
 		QTimer m_timer;
 	};
 
-	QDockWidget *m_themeChangeListener = nullptr;
+	QPointer<QDockWidget> m_themeChangeListener = nullptr;
 	ApplicationStateListener *m_appStateListener = nullptr;
 };

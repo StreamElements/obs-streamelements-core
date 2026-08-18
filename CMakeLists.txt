@@ -213,6 +213,119 @@ if (ENABLE_SENTRY)
 			"obs-streamelements-core: could not patch SENTRY_CRASH_HANDLER_WAIT_TIMEOUT_MS in ${SENTRY_WAIT_HEADER} -- vendored sentry-native changed. Re-check the crash upload wait against CORE-554 before dropping this.")
 	endif()
 
+	# Stop the crash daemon inheriting every handle OBS happens to have open.
+	#
+	# sentry-native spawns sentry-crash.exe with CreateProcessW(...,
+	# bInheritHandles = TRUE, ...) and passes the two event handles it needs as
+	# numbers on the command line. Blanket inheritance is the only thing making
+	# those numbers valid in the child -- and it also hands the daemon every
+	# other inheritable handle in the process.
+	#
+	# Not theoretical. A frozen OBS 32.2.2 was traced to sentry-crash.exe holding
+	# the write end of win-capture's anonymous pipe: the get-graphics-offsets
+	# helper had already exited, but because the daemon still held the pipe open
+	# libobs never saw EOF, so load_graphics_offsets blocked in ReadFile forever,
+	# init_hooks never finished, and game_capture_create waited on it with an
+	# INFINITE timeout. Killing the daemon by hand released the pipe and OBS
+	# resumed immediately. The same daemon was also holding OBS's log file,
+	# obs-browser's debug log and mojo pipes, and three sockets.
+	#
+	# PROC_THREAD_ATTRIBUTE_HANDLE_LIST is the documented fix: inheritance stays
+	# on, but only the listed handles cross into the child.
+	#
+	# Bracket arguments throughout -- the C being matched is full of semicolons,
+	# and CMake's \; escape does not compare equal inside string(FIND).
+	set(SENTRY_SPAWN_SOURCE
+		"${SENTRY_SOURCE_DIR}/src/backends/native/sentry_crash_daemon.c")
+
+	set(SENTRY_SPAWN_STOCK [==[    // Prepare process creation structures
+    STARTUPINFOW si;
+    PROCESS_INFORMATION pi;
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(si);
+    // Hide console window for daemon
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    ZeroMemory(&pi, sizeof(pi));]==])
+
+	set(SENTRY_SPAWN_PATCHED [==[    // Prepare process creation structures -- SE.Live: patched, see CMakeLists
+    STARTUPINFOEXW si;
+    PROCESS_INFORMATION pi;
+    ZeroMemory(&si, sizeof(si));
+    si.StartupInfo.cb = sizeof(si);
+    // Hide console window for daemon
+    si.StartupInfo.dwFlags = STARTF_USESHOWWINDOW;
+    si.StartupInfo.wShowWindow = SW_HIDE;
+    ZeroMemory(&pi, sizeof(pi));
+
+    // Inherit ONLY these two handles. Without the list the daemon inherits
+    // every inheritable handle in the host, which has been observed
+    // deadlocking unrelated OBS plugins waiting on a pipe the daemon was
+    // silently holding open.
+    HANDLE inherit_handles[2] = { event_handle, ready_event_handle };
+    SIZE_T attr_size = 0;
+    InitializeProcThreadAttributeList(NULL, 1, 0, &attr_size);
+    si.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)sentry_malloc(attr_size);
+    if (si.lpAttributeList
+        && (!InitializeProcThreadAttributeList(
+                si.lpAttributeList, 1, 0, &attr_size)
+            || !UpdateProcThreadAttribute(si.lpAttributeList, 0,
+                PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inherit_handles,
+                sizeof(inherit_handles), NULL, NULL))) {
+        sentry_free(si.lpAttributeList);
+        si.lpAttributeList = NULL;
+    }
+    if (!si.lpAttributeList) {
+        // Fall back to stock behaviour rather than not reporting crashes.
+        SENTRY_WARN("could not restrict daemon handle inheritance");
+    }]==])
+
+	set(SENTRY_SPAWN_FLAGS_STOCK [==[            TRUE, // Inherit handles (for event_handle)
+            CREATE_NO_WINDOW | DETACHED_PROCESS, // Creation flags]==])
+
+	set(SENTRY_SPAWN_FLAGS_PATCHED [==[            TRUE, // Inherit, but only what lpAttributeList allows
+            CREATE_NO_WINDOW | DETACHED_PROCESS
+                | (si.lpAttributeList ? EXTENDED_STARTUPINFO_PRESENT : 0),]==])
+
+	set(SENTRY_SPAWN_CLEANUP_STOCK [==[    // Close thread handle (we don't need it)
+    CloseHandle(pi.hThread);]==])
+
+	set(SENTRY_SPAWN_CLEANUP_PATCHED [==[    if (si.lpAttributeList) {
+        DeleteProcThreadAttributeList(si.lpAttributeList);
+        sentry_free(si.lpAttributeList);
+    }
+
+    // Close thread handle (we don't need it)
+    CloseHandle(pi.hThread);]==])
+
+	file(READ "${SENTRY_SPAWN_SOURCE}" SENTRY_SPAWN_CONTENT)
+
+	string(FIND "${SENTRY_SPAWN_CONTENT}" "${SENTRY_SPAWN_STOCK}"
+		SENTRY_SPAWN_STOCK_POS)
+	string(FIND "${SENTRY_SPAWN_CONTENT}" "SE.Live: patched"
+		SENTRY_SPAWN_PATCHED_POS)
+
+	if (NOT SENTRY_SPAWN_STOCK_POS EQUAL -1)
+		string(REPLACE "${SENTRY_SPAWN_STOCK}" "${SENTRY_SPAWN_PATCHED}"
+			SENTRY_SPAWN_CONTENT "${SENTRY_SPAWN_CONTENT}")
+		string(REPLACE "${SENTRY_SPAWN_FLAGS_STOCK}"
+			"${SENTRY_SPAWN_FLAGS_PATCHED}"
+			SENTRY_SPAWN_CONTENT "${SENTRY_SPAWN_CONTENT}")
+		string(REPLACE "&si, // Startup info" "&si.StartupInfo, // Startup info"
+			SENTRY_SPAWN_CONTENT "${SENTRY_SPAWN_CONTENT}")
+		string(REPLACE "${SENTRY_SPAWN_CLEANUP_STOCK}"
+			"${SENTRY_SPAWN_CLEANUP_PATCHED}"
+			SENTRY_SPAWN_CONTENT "${SENTRY_SPAWN_CONTENT}")
+		file(WRITE "${SENTRY_SPAWN_SOURCE}" "${SENTRY_SPAWN_CONTENT}")
+		message(STATUS
+			"obs-streamelements-core: patched sentry-crash spawn to restrict handle inheritance")
+	elseif (SENTRY_SPAWN_PATCHED_POS EQUAL -1)
+		# As with the wait timeout above: a silently skipped patch reintroduces a
+		# bug whose only symptom is an unrelated OBS subsystem deadlocking.
+		message(FATAL_ERROR
+			"obs-streamelements-core: could not patch daemon handle inheritance in ${SENTRY_SPAWN_SOURCE} -- vendored sentry-native changed. Re-check CreateProcessW bInheritHandles before dropping this.")
+	endif()
+
 	# The `native` backend, not crashpad: it hands control back to WER rather than
 	# swallowing the host's crash handling, its hooks work on macOS, and it is the
 	# only backend offering sentry_options_set_minidump_flags. See CORE-554.
