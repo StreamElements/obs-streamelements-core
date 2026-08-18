@@ -9,6 +9,7 @@
 #include <QMainWindow>
 #include <QMenuBar>
 #include <QMenu>
+#include <QPointer>
 
 #include <string>
 #include <vector>
@@ -49,7 +50,22 @@ private:
 
 private:
 	QMainWindow* m_mainWindow;
-	QMenu *m_menu;
+
+	//
+	// QPointer, not QMenu*, because we do not own this.
+	//
+	// The menu is created here but handed to the main window's menu bar via
+	// addMenu(), which reparents it -- so Qt destroys it when the main
+	// window goes down, on its own schedule rather than ours. A raw pointer
+	// is left dangling for the whole of shutdown, and UpdateInternal's
+	// `if (!m_menu) return;` guard sails straight past a stale one into
+	// m_menu->clear() on freed memory.
+	//
+	// Observed: a crash in UpdateInternal at the moment OBS restarted to
+	// apply an update. QPointer is zeroed by Qt when the object dies, which
+	// is what makes that guard mean what it says.
+	//
+	QPointer<QMenu> m_menu;
 
 	CefRefPtr<CefValue> m_auxMenuItems = CefValue::Create();
 	bool m_showBuiltInMenuItems = true;
