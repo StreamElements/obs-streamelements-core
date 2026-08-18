@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QPointer>
 #include <QPushButton>
 #include <QObject>
 #include <QTimer>
@@ -162,34 +163,34 @@ private:
 	static void hotkey_routing_func(void* data, obs_hotkey_id id, bool pressed);
 
 private:
-	QWidget *m_nativeCentralWidget = nullptr;
-	QMainWindow* m_mainWindow = nullptr;
-	QPushButton* m_startStopStreamingButton = nullptr;
-	QPushButton* m_nativeStartStopStreamingButton = nullptr;
+	QPointer<QWidget> m_nativeCentralWidget = nullptr;
+	QPointer<QMainWindow> m_mainWindow = nullptr;
+	QPointer<QPushButton> m_startStopStreamingButton = nullptr;
+	QPointer<QPushButton> m_nativeStartStopStreamingButton = nullptr;
 	std::shared_ptr<WidgetVisibilityChangeTracker>
 		m_nativeManageBroadcastButtonVisibilityChangeTracker = nullptr;
-	QPushButton* m_nativeManageBroadcastButton = nullptr;
+	QPointer<QPushButton> m_nativeManageBroadcastButton = nullptr;
 	obs_hotkey_id m_startStopStreamingHotkeyId = OBS_INVALID_HOTKEY_ID;
 	start_streaming_mode_t m_start_streaming_mode = start;
 	int m_startStreamingRequestAcknowledgeTimeoutSeconds = 5;
-	QTimer* m_timeoutTimer = nullptr;
+	QPointer<QTimer> m_timeoutTimer = nullptr;
 	std::recursive_mutex m_timeoutTimerMutex;
 
 	bool m_isStreamingTransitionState = false;
 
 	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
-	QFrame *m_previewFrame = nullptr;
-	QVBoxLayout *m_previewFrameLayout = nullptr;
-	QLayout *m_nativePreviewLayout = nullptr;
-	QLayout *m_nativePreviewLayoutParent = nullptr;
-	QWidget *m_nativePreviewWidget = nullptr;
+	QPointer<QFrame> m_previewFrame = nullptr;
+	QPointer<QVBoxLayout> m_previewFrameLayout = nullptr;
+	QPointer<QLayout> m_nativePreviewLayout = nullptr;
+	QPointer<QLayout> m_nativePreviewLayoutParent = nullptr;
+	QPointer<QWidget> m_nativePreviewWidget = nullptr;
 	bool m_previewFrameVisible = false;
 	CefRefPtr<CefDictionaryValue> m_previewFrameSettings =
 		CefDictionaryValue::Create();
 
-	QWidget *m_previewTitleContainer = nullptr;
-	QHBoxLayout *m_previewTitleLayout = nullptr;
-	StreamElementsBrowserWidget *m_previewTitleBrowser = nullptr;
+	QPointer<QWidget> m_previewTitleContainer = nullptr;
+	QPointer<QHBoxLayout> m_previewTitleLayout = nullptr;
+	QPointer<StreamElementsBrowserWidget> m_previewTitleBrowser = nullptr;
 	CefRefPtr<CefDictionaryValue> m_previewTitleSettings =
 		CefDictionaryValue::Create();
 	#endif

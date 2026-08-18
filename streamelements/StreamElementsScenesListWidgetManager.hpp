@@ -8,6 +8,7 @@
 #include "cef-headers.hpp"
 
 #include <QMainWindow>
+#include <QPointer>
 #include <QListWidget>
 #include <QListView>
 #include <QToolBar>
@@ -102,14 +103,14 @@ private:
 	void UpdateScenesToolbar();
 
 private:
-	QMainWindow *m_mainWindow = nullptr;
-	QListWidget *m_nativeWidget = nullptr;
+	QPointer<QMainWindow> m_mainWindow = nullptr;
+	QPointer<QListWidget> m_nativeWidget = nullptr;
 	bool m_enableSignals = false;
 	StreamElementsDeferredExecutive m_updateWidgetsDeferredExecutive;
-	QAbstractItemDelegate *m_editDelegate;
-	QAbstractItemDelegate *m_prevEditDelegate;
+	QPointer<QAbstractItemDelegate> m_editDelegate;
+	QPointer<QAbstractItemDelegate> m_prevEditDelegate;
 	CefRefPtr<CefValue> m_scenesToolBarActions = CefValue::Create();
-	QToolBar *m_scenesToolBar = nullptr;
-	QObject *m_eventFilter = nullptr;
+	QPointer<QToolBar> m_scenesToolBar = nullptr;
+	QPointer<QObject> m_eventFilter = nullptr;
 	QListWidget::ViewMode m_prevViewMode = QListView::ListMode;
 };

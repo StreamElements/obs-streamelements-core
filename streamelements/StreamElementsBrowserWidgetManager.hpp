@@ -157,6 +157,6 @@ public:
 private:
 	std::map<std::string, StreamElementsBrowserWidget*> m_browserWidgets;
 
-	QToolBar* m_notificationBarToolBar = nullptr;
-	StreamElementsBrowserWidget* m_notificationBarBrowserWidget = nullptr;
+	QPointer<QToolBar> m_notificationBarToolBar = nullptr;
+	QPointer<StreamElementsBrowserWidget> m_notificationBarBrowserWidget = nullptr;
 };
