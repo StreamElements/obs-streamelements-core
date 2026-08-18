@@ -445,9 +445,21 @@ jobs:
       # package_url, package_url_64 and version_number. version_number is also what the
       # prune matches on, so the keys stay consistent with everything build.yml submitted
       # before this moved.
+      #
+      # Only on signed -> qa, the first hop a build takes and the point it stops being
+      # purely internal. Every later promotion moves the same bytes, so firing on any
+      # non-dry-run Windows promotion would submit one release four times over and spend
+      # the rate limits documented on the prune below for nothing. is-rollback needs no
+      # mention: "Validate Input" above rejects `to == signed` outright and allows no
+      # transition out of `signed` other than to `qa`, so this pair is only ever a
+      # forward promotion.
+      #
+      # The prune below deliberately keeps the wider gate: housekeeping should run on
+      # every promotion regardless of whether this hop submitted anything.
       - name: Download signed installers for VirusTotal
         id: vt_installers
-        if: ${{ github.event.inputs.dry-run == 'false' && github.event.inputs.platform == 'windows' }}
+        if: ${{ github.event.inputs.dry-run == 'false' && github.event.inputs.platform == 'windows'
+          && github.event.inputs.from == 'signed' && github.event.inputs.to == 'qa' }}
         run: |
           set -euo pipefail
 
@@ -482,7 +494,8 @@ jobs:
           echo "::notice::submitting $name_32 and $name_64 (version $version_number) to VirusTotal Monitor"
 
       - name: Upload signed installers to VirusTotal Monitor
-        if: ${{ github.event.inputs.dry-run == 'false' && github.event.inputs.platform == 'windows' }}
+        if: ${{ github.event.inputs.dry-run == 'false' && github.event.inputs.platform == 'windows'
+          && github.event.inputs.from == 'signed' && github.event.inputs.to == 'qa' }}
         uses: StreamElements/virustotal-monitor-action@v1
         with:
           # The action has no default and reads no environment variable — the key is always
