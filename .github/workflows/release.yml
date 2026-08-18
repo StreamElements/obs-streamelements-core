@@ -429,6 +429,88 @@ jobs:
           dry_run: ${{ env.SE_LINEAR_DRY_RUN }}
           log_level: verbose
 
+      # Submitting the signed installers to VirusTotal Monitor, moved here from
+      # build.yml's deploy-signed-windows job.
+      #
+      # Uploading at build time submitted every master build, including ones never
+      # promoted to a channel any user sees. Doing it on promotion means the binaries AV
+      # vendors are shown are the ones actually being shipped, and it puts the upload
+      # immediately before the prune below, so the version being added is counted by the
+      # same watermark pass that decides what to delete.
+      #
+      # Both the version key and the two installer URLs are read out of the manifest
+      # downloaded above rather than reconstructed. The channels disagree about installer
+      # filenames -- signed/ uses -<version>.exe and -<version>-64bit.exe, qa/beta/latest
+      # use -x86-/-x64-, stable drops the version entirely -- but every manifest carries
+      # package_url, package_url_64 and version_number. version_number is also what the
+      # prune matches on, so the keys stay consistent with everything build.yml submitted
+      # before this moved.
+      #
+      # Only on signed -> qa, the first hop a build takes and the point it stops being
+      # purely internal. Every later promotion moves the same bytes, so firing on any
+      # non-dry-run Windows promotion would submit one release four times over and spend
+      # the rate limits documented on the prune below for nothing. is-rollback needs no
+      # mention: "Validate Input" above rejects `to == signed` outright and allows no
+      # transition out of `signed` other than to `qa`, so this pair is only ever a
+      # forward promotion.
+      #
+      # The prune below deliberately keeps the wider gate: housekeeping should run on
+      # every promotion regardless of whether this hop submitted anything.
+      - name: Download signed installers for VirusTotal
+        id: vt_installers
+        if: ${{ github.event.inputs.dry-run == 'false' && github.event.inputs.platform == 'windows'
+          && github.event.inputs.from == 'signed' && github.event.inputs.to == 'qa' }}
+        run: |
+          set -euo pipefail
+
+          # The manifest is CRLF, so every value is stripped before use; a trailing
+          # carriage return silently corrupts both the URLs and the version key.
+          read_field() {
+            sed -n "s/^$1=//p" obs-streamelements.manifest | tr -d '\r' | head -1
+          }
+
+          version_number="$(read_field version_number)"
+          url_32="$(read_field package_url)"
+          url_64="$(read_field package_url_64)"
+
+          if [ -z "$version_number" ] || [ -z "$url_32" ] || [ -z "$url_64" ]; then
+            echo "::error::manifest on '${{ github.event.inputs.from }}' is missing version_number, package_url or package_url_64; cannot submit to VirusTotal"
+            exit 1
+          fi
+
+          # Keep the CDN's filenames: they are what shows up in VirusTotal Monitor, and
+          # renaming them would make a promoted build look unrelated to what build.yml
+          # used to submit. The query string is a cache-buster and is dropped.
+          name_32="$(basename "${url_32%%\?*}")"
+          name_64="$(basename "${url_64%%\?*}")"
+
+          curl -fsS --output "$name_32" "$url_32"
+          curl -fsS --output "$name_64" "$url_64"
+
+          echo "version_number=$version_number" >> "$GITHUB_OUTPUT"
+          echo "file_32=$name_32" >> "$GITHUB_OUTPUT"
+          echo "file_64=$name_64" >> "$GITHUB_OUTPUT"
+
+          echo "::notice::submitting $name_32 and $name_64 (version $version_number) to VirusTotal Monitor"
+
+      - name: Upload signed installers to VirusTotal Monitor
+        if: ${{ github.event.inputs.dry-run == 'false' && github.event.inputs.platform == 'windows'
+          && github.event.inputs.from == 'signed' && github.event.inputs.to == 'qa' }}
+        uses: StreamElements/virustotal-monitor-action@v1
+        with:
+          # The action has no default and reads no environment variable — the key is always
+          # passed in. Point this at whatever your repo or org calls the secret.
+          api-key: ${{ secrets.VT_MONITOR_API_KEY }}
+          mode: upload
+          version: ${{ steps.vt_installers.outputs.version_number }}
+          path-prefix: /obs-streamelements-core/windows
+          files: |
+            ${{ github.workspace }}/${{ steps.vt_installers.outputs.file_32 }}
+            ${{ github.workspace }}/${{ steps.vt_installers.outputs.file_64 }}
+          # Upload failures are loud: a release AV vendors never see is the problem this solves.
+          on-error: fail
+          verbose: true
+
       - name: Prune old versions from VirusTotal Monitor
         uses: streamelements/virustotal-monitor-action@v1
         if: ${{ github.event.inputs.dry-run == 'false' && github.event.inputs.platform == 'windows' }}

@@ -755,22 +755,6 @@ jobs:
           headers: |
             content-type: text/plain; charset=utf-8
 
-      - name: Upload signed installers to VirusTotal Monitor
-        uses: StreamElements/virustotal-monitor-action@v1
-        with:
-          # The action has no default and reads no environment variable — the key is always passed
-          # in. Point this at whatever your repo or org calls the secret.
-          api-key: ${{ secrets.VT_MONITOR_API_KEY }}
-          mode: upload
-          version: ${{ needs.version.outputs.version_encoded }}
-          path-prefix: /obs-streamelements-core/windows
-          files: |
-            ${{ github.workspace }}/obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}.exe
-            ${{ github.workspace }}/obs-streamelements-setup-${{ needs.version.outputs.version_encoded }}-64bit.exe
-          # Upload failures are loud: a release that AV vendors never see is the problem this solves.
-          on-error: fail
-          verbose: true
-
   deploy-signed-macos:
     needs: [ version, macos, build-installer ]
     runs-on: ubuntu-latest
@@ -859,10 +843,11 @@ jobs:
     # job whose dependencies were skipped. That is the intended outcome -- every step
     # below is already individually gated on has_release_notes, with one exception, the
     # VirusTotal prune. Losing the prune on notes-less builds is consistent rather than a
-    # gap: the matching VirusTotal upload lives in deploy-signed-windows and is skipped
-    # too, so no new files were submitted, and release.yml prunes again on every
-    # non-dry-run promotion. The same implicit skip already happens when
-    # SKIP_WINDOWS_SIGNING or SKIP_APPLE_SIGNING_AND_NOTARIZATION is set.
+    # gap: this workflow no longer submits anything to VirusTotal at all -- the upload
+    # moved to release.yml, which uploads and prunes together on every non-dry-run
+    # promotion -- so a skipped prune here leaves nothing unaccounted for. The same
+    # implicit skip already happens when SKIP_WINDOWS_SIGNING or
+    # SKIP_APPLE_SIGNING_AND_NOTARIZATION is set.
     if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
     needs: [version, windows, macos, build-uninstaller, build-installer, deploy-signed-macos, deploy-signed-windows, summary]
     runs-on: ubuntu-latest
