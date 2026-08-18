@@ -442,6 +442,11 @@ StreamElementsScenesListWidgetManager::StreamElementsScenesListWidgetManager(
 
 void StreamElementsScenesListWidgetManager::CheckViewMode()
 {
+	// OBS owns this list; it is gone during shutdown and rebuilt on a UI
+	// reset. See CORE-635.
+	if (!m_nativeWidget)
+		return;
+
 	QListWidget::ViewMode mode = m_nativeWidget->viewMode();
 
 	if (mode != m_prevViewMode) {
@@ -702,6 +707,10 @@ void StreamElementsScenesListWidgetManager::UpdateScenesToolbar()
 	if (!IsSupportedOBSVersion())
 		return;
 
+	// OBS owns the toolbar. See CORE-635.
+	if (!m_scenesToolBar)
+		return;
+
 	QWidget *widget = m_scenesToolBar->findChild<QWidget *>(
 		"streamelements_scenes_toolbar_aux_actions");
 
@@ -769,6 +778,10 @@ void StreamElementsScenesListWidgetManager::UpdateScenesToolbar()
 #if SE_ENABLE_SCENES_UI_EXTENSIONS
 void StreamElementsScenesListWidgetManager::UpdateWidgets()
 {
+	// Every row access below goes through the OBS-owned list. See CORE-635.
+	if (!m_nativeWidget)
+		return;
+
 	struct obs_frontend_source_list sources = {};
 
 	obs_frontend_get_scenes(&sources);

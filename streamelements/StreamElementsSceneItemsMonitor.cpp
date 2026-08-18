@@ -1100,7 +1100,9 @@ deserializeSceneItemUISettings(StreamElementsSceneItemsMonitor *monitor,
 #if SE_ENABLE_SCENEITEM_UI_EXTENSIONS
 void StreamElementsSceneItemsMonitor::UpdateSceneItemsWidgets()
 {
-	if (!m_sceneItemsModel)
+	// All three belong to OBS -- found with findChild, destroyed with its UI
+	// and rebuilt on a reset. See CORE-635.
+	if (!m_sceneItemsModel || !m_sceneItemsListView || !m_sceneItemsToolBar)
 		return;
 
 	sceneitems_vector_t sceneItems;

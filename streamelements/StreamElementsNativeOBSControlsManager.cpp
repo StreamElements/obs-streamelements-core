@@ -255,7 +255,8 @@ void StreamElementsNativeOBSControlsManager::HidePreviewFrame()
 {
 	m_previewFrameVisible = false;
 
-	m_previewFrame->setStyleSheet(
+	if (m_previewFrame)
+		m_previewFrame->setStyleSheet(
 		"QFrame#streamelements_central_widget_frame { border: none; padding: 0; margin: 0; background-color: transparent;");
 
 	m_previewFrameSettings = CefDictionaryValue::Create();
@@ -323,6 +324,10 @@ void StreamElementsNativeOBSControlsManager::SerializePreviewTitleBar(
 
 void StreamElementsNativeOBSControlsManager::HidePreviewTitleBar()
 {
+	// Reparented into OBS's central widget, so Qt owns it. See CORE-635.
+	if (!m_previewTitleContainer)
+		return;
+
 	m_previewTitleContainer->hide();
 
 	QApplication::sendPostedEvents();
@@ -338,6 +343,27 @@ void StreamElementsNativeOBSControlsManager::HidePreviewTitleBar()
 	m_previewTitleSettings = CefDictionaryValue::Create();
 }
 #endif
+
+//
+// Clicks OBS's own start/stop streaming button, if it is still there.
+//
+// The button is found with findChild and belongs to OBS, so it is gone during
+// shutdown and after a UI reset. Three separate paths click it -- the UI
+// control, the hotkey and the timeout tracker -- and each one dereferenced it
+// unguarded. See CORE-635.
+//
+void StreamElementsNativeOBSControlsManager::ClickNativeStartStopStreamingButton()
+{
+	if (!m_nativeStartStopStreamingButton) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: native start/stop streaming button is unavailable; ignoring request");
+
+		return;
+	}
+
+	m_nativeStartStopStreamingButton->click();
+}
+
 
 void StreamElementsNativeOBSControlsManager::Reset()
 {
@@ -432,6 +458,9 @@ void StreamElementsNativeOBSControlsManager::SetStreamingTransitionStartingState
 void StreamElementsNativeOBSControlsManager::SetStreamingRequestedState()
 {
 	QtExecSync([&] {
+		if (!m_startStopStreamingButton)
+			return;
+
 		m_startStopStreamingButton->setText(obs_module_text("StreamElements.Action.StartStreaming.RequestInProgress"));
 		m_startStopStreamingButton->setEnabled(false);
 
@@ -467,7 +496,7 @@ void StreamElementsNativeOBSControlsManager::OnStartStopStreamingButtonClicked()
 		blog(LOG_INFO, "obs-streamelements-core: streaming stop requested by UI control");
 
 		// obs_frontend_streaming_stop();
-		m_nativeStartStopStreamingButton->click();
+		ClickNativeStartStopStreamingButton();
 	}
 	else {
 		blog(LOG_INFO, "obs-streamelements-core: streaming start requested by UI control");
@@ -518,6 +547,9 @@ void StreamElementsNativeOBSControlsManager::handle_obs_frontend_event(enum obs_
 
 void StreamElementsNativeOBSControlsManager::SetStreamingStyle(bool streaming)
 {
+	if (!m_startStopStreamingButton)
+		return;
+
 	if (streaming) {
 		m_startStopStreamingButton->setStyleSheet(QString(
 			"QPushButton { background-color: #823929; color: #ffffff; font-weight:600; } "
@@ -560,6 +592,7 @@ void StreamElementsNativeOBSControlsManager::hotkey_routing_func(void* data, obs
 	if (id == self->m_startStopStreamingHotkeyId) {
 		if (pressed &&
 			!obs_frontend_streaming_active() &&
+			self->m_startStopStreamingButton &&
 			self->m_startStopStreamingButton->isEnabled()) {
 			blog(LOG_INFO, "obs-streamelements-core: streaming start requested by hotkey");
 
@@ -617,7 +650,7 @@ void StreamElementsNativeOBSControlsManager::BeginStartStreaming()
 	switch (m_start_streaming_mode) {
 	case start:
 		// obs_frontend_streaming_start();
-		m_nativeStartStopStreamingButton->click();
+		ClickNativeStartStopStreamingButton();
 		break;
 
 	case request:
@@ -704,7 +737,7 @@ void StreamElementsNativeOBSControlsManager::StartTimeoutTracker()
 		SetStreamingInitialState();
 
 		// obs_frontend_streaming_start();
-		m_nativeStartStopStreamingButton->click();
+		ClickNativeStartStopStreamingButton();
 	});
 
 	QMetaObject::invokeMethod(m_timeoutTimer, "start", Qt::QueuedConnection, Q_ARG(int, m_startStreamingRequestAcknowledgeTimeoutSeconds * 1000));

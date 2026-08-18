@@ -149,6 +149,7 @@ private:
 	void StopTimeoutTracker();
 
 protected:
+	void ClickNativeStartStopStreamingButton();
 	void BeginStartStreaming();
 
 private slots:

@@ -1031,7 +1031,9 @@ void StreamElementsBrowserWidgetManager::SerializeNotificationBar(
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
-	if (m_notificationBarToolBar) {
+	// Both, not just the toolbar: the browser widget is dereferenced below
+	// and can be destroyed independently of its container. See CORE-635.
+	if (m_notificationBarToolBar && m_notificationBarBrowserWidget) {
 		CefRefPtr<CefDictionaryValue> rootDictionary =
 			CefDictionaryValue::Create();
 		output->SetDictionary(rootDictionary);
