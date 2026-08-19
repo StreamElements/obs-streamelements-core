@@ -878,43 +878,20 @@ jobs:
         if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
         with:
           ssh-key: ${{ secrets.RELEASE_BOT_SSH_KEY }}
-          # The prerelease changelog is `git log <previous full release>..<sha>`, which
-          # needs the whole history and every tag. blob:none keeps it cheap: git log
-          # never reads file contents, and this repo's .git is ~120 MB.
+          # A full clone, because "Clear RELEASE_NOTES.md" below commits and pushes,
+          # which a shallow clone cannot do reliably. blob:none keeps it cheap: nothing
+          # here reads historical file contents, and this repo's .git is ~120 MB.
           fetch-depth: 0
           filter: blob:none
 
-      # The four steps below must stay between the checkout above (which puts
+      # The two steps below must stay between the checkout above (which puts
       # RELEASE_NOTES.md on disk) and "Clear RELEASE_NOTES.md" below (which truncates it
       # and pushes the truncation). This is the last point at which the notes for this
       # build exist anywhere.
-      - name: Resolve previous full release
-        id: prevtag
-        if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
-        uses: ./.github/actions/se-release
-        with:
-          mode: prevtag
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ needs.version.outputs.version_string }}
-          version-encoded: ${{ needs.version.outputs.version_encoded }}
-
-      - name: Build changelog
-        if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
-        uses: ./.github/actions/se-release
-        with:
-          mode: changelog
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ needs.version.outputs.version_string }}
-          previous-tag: ${{ steps.prevtag.outputs.previous_tag }}
-          # Walk to the built commit rather than the tag: the tagger step ran seconds ago
-          # and the tag may not have reached this clone yet.
-          head-ref: ${{ github.sha }}
-          changelog-file: ${{ github.workspace }}/.release-input/changelog.md
-
       # The blurb is not generated here. It comes from the `summary` job, which runs
       # early enough for build-installer to bake the same text into the manifests, so
-      # the in-app updater and the release page cannot disagree. Decoding it into the
-      # file the prerelease step already reads leaves that step unchanged.
+      # the in-app updater and the release page cannot disagree. Decoded here into the
+      # file the notes step below reads.
       - name: Decode release summary
         if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
         continue-on-error: true
@@ -934,43 +911,37 @@ jobs:
             echo "::warning::no What's New summary was produced; composing from notes and changelog only"
           fi
 
-      - name: Create GitHub prerelease
+      # The GitHub release is NOT created here any more. release.yml creates it on the
+      # first promotion and relabels it at each hop, so the releases page lists builds
+      # that actually reached a channel rather than every master build carrying notes.
+      #
+      # What must still happen at build time is composing the release notes artifact.
+      # RELEASE_NOTES.md is truncated and pushed a few steps below, and the What's New
+      # blurb comes from the `summary` job of this run; neither survives to promotion
+      # time. The artifact is uploaded to signed/ below and travels with the manifest,
+      # so every hop composes its body from the same text and the wording cannot drift
+      # between [ALPHA], [BETA] and the full release.
+      #
+      # No changelog is composed here for the same reason it is not in the artifact: it
+      # is relative to the previous full release, which moves between promotions.
+      - name: Compose the release notes artifact
         if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
         uses: ./.github/actions/se-release
         with:
-          mode: prerelease
+          mode: notes
           github-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ needs.version.outputs.version_string }}
           notes-file: RELEASE_NOTES.md
-          changelog-file: ${{ github.workspace }}/.release-input/changelog.md
-          # Also makes the step write obs-streamelements.release_notes.md here, for the
-          # CDN upload below.
+          # Writes obs-streamelements.release_notes.md here, for the CDN upload below.
           output-dir: ${{ github.workspace }}/.release-input
-          # Absent or empty whenever generation failed; the body is then composed from
-          # notes + changelog alone.
+          # Absent or empty whenever generation failed; the artifact is then the
+          # hand-written notes alone.
           summary-file: ${{ github.workspace }}/.release-input/summary.txt
-          dry-run: 'false'
-
-      # Attach the signed installers. Runs after the release exists and after
-      # deploy-signed-* has published them, reading the URLs from the manifest rather
-      # than rebuilding them from the version -- the manifest is the contract the
-      # in-app updater already follows, so the release ships exactly what it points at.
-      # Best-effort: a failure here leaves the release valid, just without binaries.
-      - name: Attach installers to the release
-        if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
-        continue-on-error: true
-        uses: ./.github/actions/se-release
-        with:
-          mode: assets
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ needs.version.outputs.version_string }}
-          version-encoded: ${{ needs.version.outputs.version_encoded }}
-          dry-run: 'false'
 
       # Publish the blurb + notes next to the manifest in signed/, so promotion can reuse
       # the text instead of regenerating it, and so the notes for a given build follow
       # that build through the channels. Uploaded here rather than from deploy-signed-*
-      # because the blurb does not exist until the step above has run.
+      # because the artifact does not exist until the step above has run.
       - name: Auth Google API
         if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
         uses: 'google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed' # v2

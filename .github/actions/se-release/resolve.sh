@@ -91,8 +91,8 @@ fi
 # first one's upload and resolves an empty range. That is correct rather than a bug: the
 # issues were attached on the first pass and `sync` for the same version adds nothing.
 #
-# Nothing below this point applies to a beta promotion -- no release is created or
-# relabelled there, so requirement 10 must not fire and there is no changelog to base.
+# Unlike the rollback branch above this one falls through: every promotion now writes a
+# release, so previous_tag and the recovered notes are needed on this hop too.
 if [ "${SE_TO:-}" = "beta" ]; then
 	BASE=""
 	beta="${RUNNER_TEMP:-/tmp}/se-beta-$PLATFORM.manifest"
@@ -120,17 +120,17 @@ if [ "${SE_TO:-}" = "beta" ]; then
 	fi
 
 	emit previous_channel_tag "$BASE"
-	exit 0
 fi
 
-# ------------------------------------------------------------------ requirement 10
-# A version may not reach `latest` without a release. The usual cause is a build whose
-# RELEASE_NOTES.md was empty: build.yml then skips both the tag and the prerelease, so
-# there is nothing to promote. Failing here means it fails before anything ships.
+# A release no longer exists before the first promotion -- signed -> qa is what creates
+# it -- so its absence is reported rather than fatal. Requirement 10, "nothing reaches
+# `latest` without a release", is enforced in publish.sh, which is the step that knows
+# which hop this is and can still create one.
 if IS_PRERELEASE=$(gh release view "$TAG" --json isPrerelease -q .isPrerelease 2>/dev/null); then
 	note "GitHub release $TAG exists (prerelease=$IS_PRERELEASE)"
 else
-	die "version $ENCODED decodes to tag $TAG, which has no GitHub release. The master build that produced it almost certainly ran with an empty RELEASE_NOTES.md, so .github/workflows/build.yml skipped both the tag and the [BETA] prerelease. Add release notes and rebuild, or create tag $TAG and its prerelease by hand, before promoting this build to 'latest'."
+	IS_PRERELEASE=""
+	note "no GitHub release for $TAG yet; this promotion will create it"
 fi
 emit is_prerelease "$IS_PRERELEASE"
 
@@ -141,9 +141,9 @@ PREV_TAG="$PREV_FULL_TAG"
 emit previous_tag "$PREV_TAG"
 
 # ------------------------------------------------------------------- requirement 5
-# Recover the pristine RELEASE_NOTES.md that build.yml fenced into the prerelease body.
-# Done here rather than in publish.sh because Claude needs it as input, and Claude runs
-# in between.
+# Recover the pristine RELEASE_NOTES.md fenced into an existing release body. This is a
+# fallback: the notes artifact fetched from the source channel is the primary source,
+# and on signed -> qa there is no release to recover from yet.
 : > "$OUTDIR/notes.md"
 gh release view "$TAG" --json body -q .body > "$OUTDIR/body.md" 2>/dev/null || : > "$OUTDIR/body.md"
 awk -v b="$RELEASE_NOTES_BEGIN" -v e="$RELEASE_NOTES_END" '
@@ -162,4 +162,6 @@ if [ ! -s "$OUTDIR/notes.md" ] && [ -r RELEASE_NOTES.history.md ]; then
 		found            { print }
 	' RELEASE_NOTES.history.md > "$OUTDIR/notes.md" || :
 fi
-[ -s "$OUTDIR/notes.md" ] || warn "no release notes recovered for $TAG"
+if [ ! -s "$OUTDIR/notes.md" ]; then
+	note "no notes recovered from a release body for $TAG; the channel artifact will be used"
+fi
