@@ -34,7 +34,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Auth Google API
-        uses: 'google-github-actions/auth@v2'
+        uses: 'google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed' # v2
         with:
           project_id: streamelements-core
           workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
@@ -109,7 +109,7 @@ jobs:
           makensis /V4 main.nsi
 
       - name: Sign Windows binaries
-        uses: azure/artifact-signing-action@v2
+        uses: azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2
         if: ${{ env.SIGN_BINARIES == 'true' }}
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -124,11 +124,26 @@ jobs:
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
 
-# Automatically finds signtool.exe and exposes its path
+      # Inlined from KamaranL/add-signtool-action@v1: find the newest signtool.exe
+      # for this runner's architecture under the Windows SDK and put its directory on
+      # PATH, which is all the verify step below needs. The action's `id: signtool`
+      # went with it -- nothing ever read its output. Same search the action did:
+      # recurse the SDK bin tree, keep the ones in an arch-named directory, take the
+      # highest path. Absent signtool is fatal rather than a silently unverified
+      # signature.
       - name: Find SignTool
         if: ${{ env.SIGN_BINARIES == 'true' }}
-        uses: KamaranL/add-signtool-action@v1
-        id: signtool
+        shell: pwsh
+        run: |
+          $arch = $env:RUNNER_ARCH.ToLower()
+          $base = "${env:ProgramFiles(x86)}/Windows Kits/10/bin"
+          $tool = Get-ChildItem $base -Recurse -Force -Filter signtool.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.Directory.Name -eq $arch } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $tool) { throw "signtool.exe ($arch) not found under $base" }
+          Write-Output "Using $($tool.FullName)"
+          $tool.Directory.FullName | Out-File $env:GITHUB_PATH -Append
 
       - name: Verify Windows binaries code signature
         if: ${{ env.SIGN_BINARIES == 'true' }}
@@ -145,7 +160,7 @@ jobs:
 
       - name: Upload to Google Artifact Storage
         if: ${{ env.UPLOAD_BINARIES == 'true' }}
-        uses: 'google-github-actions/upload-cloud-storage@v3'
+        uses: 'google-github-actions/upload-cloud-storage@6397bd7208e18d13ba2619ee21b9873edc94427a' # v3
         with:
           parent: false
           process_gcloudignore: false
@@ -154,7 +169,7 @@ jobs:
 
       - name: Upload to CDN Signed Artifact Storage
         if: ${{ env.UPLOAD_BINARIES == 'true' }}
-        uses: 'google-github-actions/upload-cloud-storage@v3'
+        uses: 'google-github-actions/upload-cloud-storage@6397bd7208e18d13ba2619ee21b9873edc94427a' # v3
         with:
           parent: false
           process_gcloudignore: false
@@ -163,7 +178,7 @@ jobs:
 
       - name: Upload to CDN QA Artifact Storage
         if: ${{ env.UPLOAD_BINARIES == 'true' }}
-        uses: 'google-github-actions/upload-cloud-storage@v3'
+        uses: 'google-github-actions/upload-cloud-storage@6397bd7208e18d13ba2619ee21b9873edc94427a' # v3
         with:
           parent: false
           process_gcloudignore: false
@@ -172,7 +187,7 @@ jobs:
 
       - name: Upload to CDN Latest Artifact Storage
         if: ${{ env.UPLOAD_BINARIES == 'true' }}
-        uses: 'google-github-actions/upload-cloud-storage@v3'
+        uses: 'google-github-actions/upload-cloud-storage@6397bd7208e18d13ba2619ee21b9873edc94427a' # v3
         with:
           parent: false
           process_gcloudignore: false

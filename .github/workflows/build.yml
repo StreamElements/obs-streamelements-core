@@ -72,12 +72,20 @@ jobs:
       has_release_notes: ${{ steps.has_release_notes_step.outputs.has_release_notes }}
 
     steps:
+      # Inlined from mlilback/build-number@v1, whose entire main.js was
+      # `core.exportVariable('BUILD_NUMBER', (base + run).toString())`. It ran before
+      # anything else in the pipeline and decided the version every artifact is named
+      # after, on a node12-era third-party tag -- the worst place in these workflows to
+      # trust a moving reference.
+      #
+      # The arithmetic is identical, and the sequence is verified unchanged against the
+      # last three releases: 569+302=871 (26.8.18.871), 569+289=858 (26.8.18.858),
+      # 569+282=851 (26.8.17.851). Keep it as base + run_number: the fleet updater
+      # compares version numbers, so a value that jumps backwards bricks self-update.
+      # se-release/lib.sh documents the same formula and reads it back out of tags.
       - name: Generate build number
-        uses: mlilback/build-number@v1
-        with:
-          base: ${{ env.BASE_BUILD_NUMBER }}
-          run-id: ${{ github.run_number }}
-          # Output: ${{ env.BUILD_NUMBER }} env var
+        # Output: ${{ env.BUILD_NUMBER }} env var
+        run: echo "BUILD_NUMBER=$(( ${{ env.BASE_BUILD_NUMBER }} + ${{ github.run_number }} ))" >> "$GITHUB_ENV"
 
       - name: Generate Version
         id: version_step
@@ -174,7 +182,7 @@ jobs:
         # GitHub event context and rejects anything it does not recognise -- here it
         # fails immediately with "Unsupported event type: push". The base action has no
         # such gate. Pinned exactly: it publishes no moving major tag.
-        uses: anthropics/claude-code-base-action@v0.0.63
+        uses: anthropics/claude-code-base-action@e8132bc5e637a42c27763fc757faa37e1ee43b34 # v0.0.63
         # Force Task subagents to run in the foreground; same rationale as
         # claude-code-review.yml. Upstream: anthropics/claude-code-action#1499.
         env:
@@ -263,14 +271,14 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Auth Google API
-        uses: 'google-github-actions/auth@v2'
+        uses: 'google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed' # v2
         with:
           project_id: streamelements-core
           workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
           service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
 
       - name: Add msbuild to PATH
-        uses: microsoft/setup-msbuild@v3
+        uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
 
       - name: Clone OBS Studio
         shell: cmd
@@ -403,7 +411,7 @@ jobs:
 
       - name: Upload 64bit build artifact to GCS
         if: github.event_name != 'pull_request'
-        uses: 'google-github-actions/upload-cloud-storage@v3'
+        uses: 'google-github-actions/upload-cloud-storage@6397bd7208e18d13ba2619ee21b9873edc94427a' # v3
         with:
           parent: false
           process_gcloudignore: false
@@ -412,7 +420,7 @@ jobs:
 
       - name: Upload version header to GCS
         if: github.event_name != 'pull_request'
-        uses: 'google-github-actions/upload-cloud-storage@v3'
+        uses: 'google-github-actions/upload-cloud-storage@6397bd7208e18d13ba2619ee21b9873edc94427a' # v3
         with:
           parent: false
           process_gcloudignore: false
@@ -437,7 +445,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Auth Google API
-        uses: 'google-github-actions/auth@v2'
+        uses: 'google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed' # v2
         with:
           project_id: streamelements-core
           workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
@@ -597,7 +605,7 @@ jobs:
 
       - name: Upload ARM64 build artifact to GCS
         if: github.event_name != 'pull_request'
-        uses: 'google-github-actions/upload-cloud-storage@v3'
+        uses: 'google-github-actions/upload-cloud-storage@6397bd7208e18d13ba2619ee21b9873edc94427a' # v3
         with:
           parent: false
           process_gcloudignore: false
@@ -606,7 +614,7 @@ jobs:
 
       - name: Upload x86_64 build artifact to GCS
         if: github.event_name != 'pull_request'
-        uses: 'google-github-actions/upload-cloud-storage@v3'
+        uses: 'google-github-actions/upload-cloud-storage@6397bd7208e18d13ba2619ee21b9873edc94427a' # v3
         with:
           parent: false
           process_gcloudignore: false
@@ -615,7 +623,7 @@ jobs:
 
       - name: Upload version header to GCS
         if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
-        uses: 'google-github-actions/upload-cloud-storage@v3'
+        uses: 'google-github-actions/upload-cloud-storage@6397bd7208e18d13ba2619ee21b9873edc94427a' # v3
         with:
           parent: false
           process_gcloudignore: false
@@ -665,14 +673,14 @@ jobs:
 
     steps:
       - name: Auth Google API
-        uses: 'google-github-actions/auth@v2'
+        uses: 'google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed' # v2
         with:
           project_id: streamelements-core
           workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
           service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
 
       - name: Create Custom Status Badge
-        uses: emibcn/badge-action@v2.0.2
+        uses: emibcn/badge-action@4209421db54c8764d8932070ffd0f81715a629bf # v2.0.2
         with:
           label: 'Version'
           status: '${{ needs.version.outputs.version_string }}'
@@ -736,7 +744,7 @@ jobs:
             *.*.version.svg
 
       - name: Upload Binaries to CDN Google Storage
-        uses: 'google-github-actions/upload-cloud-storage@v3'
+        uses: 'google-github-actions/upload-cloud-storage@6397bd7208e18d13ba2619ee21b9873edc94427a' # v3
         with:
           parent: false
           process_gcloudignore: false
@@ -745,7 +753,7 @@ jobs:
           destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed'
 
       - name: Upload Manifests to CDN Google Storage
-        uses: 'google-github-actions/upload-cloud-storage@v3'
+        uses: 'google-github-actions/upload-cloud-storage@6397bd7208e18d13ba2619ee21b9873edc94427a' # v3
         with:
           parent: false
           process_gcloudignore: false
@@ -763,14 +771,14 @@ jobs:
 
     steps:
       - name: Auth Google API
-        uses: 'google-github-actions/auth@v2'
+        uses: 'google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed' # v2
         with:
           project_id: streamelements-core
           workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
           service_account: ${{ vars.GCS_SERVICE_ACCOUNT }}
 
       - name: Create Custom Status Badge
-        uses: emibcn/badge-action@v2.0.2
+        uses: emibcn/badge-action@4209421db54c8764d8932070ffd0f81715a629bf # v2.0.2
         with:
           label: 'Version'
           status: '${{ needs.version.outputs.version_string }}'
@@ -818,7 +826,7 @@ jobs:
             *.manifest
           
       - name: Upload Binaries to CDN Google Storage
-        uses: 'google-github-actions/upload-cloud-storage@v3'
+        uses: 'google-github-actions/upload-cloud-storage@6397bd7208e18d13ba2619ee21b9873edc94427a' # v3
         with:
           parent: false
           process_gcloudignore: false
@@ -827,7 +835,7 @@ jobs:
           destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/macos/signed'
 
       - name: Upload Manifests to CDN Google Storage
-        uses: 'google-github-actions/upload-cloud-storage@v3'
+        uses: 'google-github-actions/upload-cloud-storage@6397bd7208e18d13ba2619ee21b9873edc94427a' # v3
         with:
           parent: false
           process_gcloudignore: false
@@ -849,12 +857,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Inlined from tvdias/github-tagger@v0.0.1, which was one createRef call on
+      # github.context.sha -- reproduced exactly, including the failure on a tag that
+      # already exists (the action did not force-update either, so a re-run of an
+      # already-tagged version still stops here rather than silently moving a tag that
+      # a release points at). This runs before the checkout below, so it has to go
+      # through the API rather than `git tag`.
       - name: Tag master commit
-        uses: tvdias/github-tagger@v0.0.1
         if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
-        with:
-          repo-token: "${{ secrets.GITHUB_TOKEN }}"
-          tag: "${{ needs.version.outputs.version_string }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.version.outputs.version_string }}
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f "ref=refs/tags/$TAG" \
+            -f "sha=$GITHUB_SHA"
 
       - uses: actions/checkout@v4
         if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
@@ -955,7 +973,7 @@ jobs:
       # because the blurb does not exist until the step above has run.
       - name: Auth Google API
         if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
-        uses: 'google-github-actions/auth@v2'
+        uses: 'google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed' # v2
         with:
           project_id: streamelements-core
           workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
@@ -963,7 +981,7 @@ jobs:
 
       - name: Upload release notes to windows/signed
         if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
-        uses: 'google-github-actions/upload-cloud-storage@v3'
+        uses: 'google-github-actions/upload-cloud-storage@6397bd7208e18d13ba2619ee21b9873edc94427a' # v3
         with:
           parent: false
           process_gcloudignore: false
@@ -976,7 +994,7 @@ jobs:
 
       - name: Upload release notes to macos/signed
         if: needs.version.outputs.is_workflow_automation != 'true' && needs.version.outputs.has_release_notes == 'true'
-        uses: 'google-github-actions/upload-cloud-storage@v3'
+        uses: 'google-github-actions/upload-cloud-storage@6397bd7208e18d13ba2619ee21b9873edc94427a' # v3
         with:
           parent: false
           process_gcloudignore: false
