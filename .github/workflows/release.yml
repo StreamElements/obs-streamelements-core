@@ -160,7 +160,7 @@ jobs:
           filter: blob:none
 
       - name: Auth Google API
-        uses: 'google-github-actions/auth@v2'
+        uses: 'google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed' # v2
         with:
           project_id: streamelements-core
           workload_identity_provider: ${{ vars.GCS_WORKLOAD_ID_PROVIDER }}
@@ -251,7 +251,7 @@ jobs:
 
       - name: Upload Manifests to CDN Google Storage
         if: ${{ github.event.inputs.dry-run == 'false' }}
-        uses: 'google-github-actions/upload-cloud-storage@v3'
+        uses: 'google-github-actions/upload-cloud-storage@6397bd7208e18d13ba2619ee21b9873edc94427a' # v3
         with:
           parent: false
           process_gcloudignore: false
@@ -273,7 +273,7 @@ jobs:
       # has moved on.
       - name: Upload release notes to CDN Google Storage
         if: ${{ github.event.inputs.dry-run == 'false' }}
-        uses: 'google-github-actions/upload-cloud-storage@v3'
+        uses: 'google-github-actions/upload-cloud-storage@6397bd7208e18d13ba2619ee21b9873edc94427a' # v3
         with:
           parent: false
           process_gcloudignore: false
@@ -289,7 +289,7 @@ jobs:
       # the upload action.
       - name: Upload SVGs to CDN Google Storage
         if: ${{ github.event.inputs.dry-run == 'false' && steps.download.outputs.has_version_svg == 'true' }}
-        uses: 'google-github-actions/upload-cloud-storage@v3'
+        uses: 'google-github-actions/upload-cloud-storage@6397bd7208e18d13ba2619ee21b9873edc94427a' # v3
         with:
           parent: false
           process_gcloudignore: false
@@ -372,7 +372,7 @@ jobs:
         id: linear_sync
         if: env.SE_HAS_LINEAR == 'true' && env.SE_LINEAR_BETA == 'true' && steps.linear_checkout.outputs.ok == 'true'
         continue-on-error: true
-        uses: linear/linear-release-action@v0
+        uses: linear/linear-release-action@17b8c24f8ceb2b98cabaf1965ff83c55dd596fac # v0
         with:
           access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
           command: sync
@@ -406,7 +406,7 @@ jobs:
       - name: Move Linear release to the beta stage
         if: env.SE_HAS_LINEAR == 'true' && env.SE_LINEAR_BETA == 'true' && vars.LINEAR_BETA_STAGE != '' && steps.linear_sync.outcome == 'success'
         continue-on-error: true
-        uses: linear/linear-release-action@v0
+        uses: linear/linear-release-action@17b8c24f8ceb2b98cabaf1965ff83c55dd596fac # v0
         with:
           access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
           command: update
@@ -421,7 +421,7 @@ jobs:
       - name: Complete Linear release
         if: env.SE_HAS_LINEAR == 'true' && env.SE_PROMOTE == 'true'
         continue-on-error: true
-        uses: linear/linear-release-action@v0
+        uses: linear/linear-release-action@17b8c24f8ceb2b98cabaf1965ff83c55dd596fac # v0
         with:
           access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
           command: complete
@@ -496,7 +496,7 @@ jobs:
       - name: Upload signed installers to VirusTotal Monitor
         if: ${{ github.event.inputs.dry-run == 'false' && github.event.inputs.platform == 'windows'
           && github.event.inputs.from == 'signed' && github.event.inputs.to == 'qa' }}
-        uses: StreamElements/virustotal-monitor-action@v1
+        uses: StreamElements/virustotal-monitor-action@9c7f2ad235cf0b1f7d5975ad1e0eccb4210f4d71 # v1
         with:
           # The action has no default and reads no environment variable — the key is always
           # passed in. Point this at whatever your repo or org calls the secret.
@@ -512,7 +512,7 @@ jobs:
           verbose: true
 
       - name: Prune old versions from VirusTotal Monitor
-        uses: streamelements/virustotal-monitor-action@v1
+        uses: StreamElements/virustotal-monitor-action@9c7f2ad235cf0b1f7d5975ad1e0eccb4210f4d71 # v1
         if: ${{ github.event.inputs.dry-run == 'false' && github.event.inputs.platform == 'windows' }}
         with:
           # The action has no default and reads no environment variable — the key is always
