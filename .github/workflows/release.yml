@@ -373,7 +373,7 @@ jobs:
       # the GitHub release does, one stage per hop:
       #
       #   signed -> qa      create the release, named for the version, with the same
-      #                     body as the GitHub release, at stage "In Progress"
+      #                     body as the GitHub release, at stage "Alpha"
       #   qa -> beta        stage -> "Open Beta"          (vars.LINEAR_BETA_STAGE)
       #   beta -> latest    complete it, which is what moves a scheduled pipeline to its
       #                     completed stage, "Released"
@@ -382,7 +382,7 @@ jobs:
       #
       #   stable -> latest  the DISPLACED release goes back to "Open Beta"; the restored
       #                     one is completed, mirroring what the GitHub rollback does
-      #   latest -> beta    stage -> "In Progress"
+      #   latest -> beta    stage -> "Alpha"
       #
       # Everything is continue-on-error. Issue bookkeeping must never hold up a
       # promotion, least of all during an incident.
@@ -440,13 +440,26 @@ jobs:
           # named UTF-8, matched out of `fix: UTF-8 output into manifests`. That is
           # cosmetic -- identifiers absent from the workspace are ignored server-side --
           # and it is not something this input can turn off.
+          #
+          # This input is SUBJECT-ONLY, and so is --include-subjects. Keys in a commit
+          # body -- which is where this repo's `Fixes CORE-123` trailers live, master
+          # being squash-merged -- are picked up by the CLI's built-in magic-word
+          # detection instead, which reads the whole commit message. So description
+          # scanning is already covered; what it needed was a scan range, which base_ref
+          # above now supplies on this hop.
           issue_pattern: ${{ vars.LINEAR_ISSUE_PATTERN || '\b(CORE-[0-9]+)\b' }}
           dry_run: ${{ env.SE_LINEAR_DRY_RUN }}
           log_level: verbose
 
       # A newly synced release sits in the pipeline's planned stage, so qa has to move it
-      # to In Progress explicitly.
-      - name: Move the Linear release to In Progress
+      # to the alpha stage explicitly.
+      #
+      # Matched by name, so a rename in Linear breaks it silently -- this stage was called
+      # "In Progress" until 2026-08-21. Its id (aa91d821-7539-4c19-865a-4c5bd91851f2) did
+      # not change and would have been immune; the name is used because it is legible in a
+      # workflow log and in the variable, and LINEAR_ALPHA_STAGE can override it without a
+      # code change if it moves again.
+      - name: Move the Linear release to the alpha stage
         if: env.SE_HAS_LINEAR == 'true' && env.SE_RELEASE_HOP == 'true' && github.event.inputs.to == 'qa' && steps.linear_sync.outcome == 'success'
         continue-on-error: true
         uses: linear/linear-release-action@17b8c24f8ceb2b98cabaf1965ff83c55dd596fac # v0
@@ -454,12 +467,12 @@ jobs:
           access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
           command: update
           version: ${{ steps.version.outputs.version_string }}
-          stage: ${{ vars.LINEAR_INPROGRESS_STAGE || 'In Progress' }}
+          stage: ${{ vars.LINEAR_ALPHA_STAGE || 'Alpha' }}
           dry_run: ${{ env.SE_LINEAR_DRY_RUN }}
           log_level: verbose
 
       # Skipped when LINEAR_BETA_STAGE is unset, so a workspace without that stage keeps
-      # the release on In Progress rather than failing the promotion.
+      # the release on the alpha stage rather than failing the promotion.
       - name: Move the Linear release to the beta stage
         if: env.SE_HAS_LINEAR == 'true' && env.SE_RELEASE_HOP == 'true' && github.event.inputs.to == 'beta' && vars.LINEAR_BETA_STAGE != ''
         continue-on-error: true
@@ -490,7 +503,7 @@ jobs:
 
       # A stable -> latest rollback puts an older build back in front of users, so the
       # release it displaces stops being released. It goes back to the beta stage rather
-      # than to In Progress: it was on beta before it was promoted, and should_revert is
+      # than to alpha: it was on beta before it was promoted, and should_revert is
       # already false whenever the other platform still serves it.
       - name: Move the displaced Linear release back to the beta stage
         if: env.SE_HAS_LINEAR == 'true' && env.SE_ROLLBACK == 'true' && steps.version.outputs.should_revert == 'true' && steps.version.outputs.displaced_tag != '' && vars.LINEAR_BETA_STAGE != ''
@@ -506,8 +519,8 @@ jobs:
 
       # latest -> beta is only ever reached as a rollback -- "Validate Input" rejects it
       # as a promotion. The build is being taken away from everyone, so its release goes
-      # back to In Progress rather than to the beta stage.
-      - name: Move the Linear release back to In Progress
+      # back to the alpha stage rather than to the beta stage.
+      - name: Move the Linear release back to the alpha stage
         if: env.SE_HAS_LINEAR == 'true' && github.event.inputs.is-rollback == 'true' && github.event.inputs.from == 'latest' && github.event.inputs.to == 'beta'
         continue-on-error: true
         uses: linear/linear-release-action@17b8c24f8ceb2b98cabaf1965ff83c55dd596fac # v0
@@ -515,13 +528,13 @@ jobs:
           access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
           command: update
           version: ${{ steps.version.outputs.version_string }}
-          stage: ${{ vars.LINEAR_INPROGRESS_STAGE || 'In Progress' }}
+          stage: ${{ vars.LINEAR_ALPHA_STAGE || 'Alpha' }}
           dry_run: ${{ env.SE_LINEAR_DRY_RUN }}
           log_level: verbose
 
       # Cancel whatever is still open behind the release that just shipped.
       #
-      # A build can reach `latest` while older builds are still sitting on In Progress or
+      # A build can reach `latest` while older builds are still sitting on Alpha or
       # Open Beta -- they were promoted to qa or beta and then overtaken. Those releases
       # will never ship, and leaving them open makes the pipeline read as though several
       # versions are in flight at once.
