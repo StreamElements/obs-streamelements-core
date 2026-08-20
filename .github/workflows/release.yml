@@ -321,6 +321,9 @@ jobs:
         with:
           mode: release
           to: ${{ github.event.inputs.to }}
+          # Also makes the step write release-body.md here, which the Linear release
+          # below reuses so both descriptions are the same bytes.
+          output-dir: ${{ github.workspace }}/.release-input
           github-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ steps.version.outputs.version_string }}
           previous-tag: ${{ steps.version.outputs.previous_tag }}
@@ -372,28 +375,34 @@ jobs:
           dry-run: ${{ github.event.inputs.dry-run }}
 
       # ---------------------------------------------------------------------------
-      # Linear release tracking. Two hops matter, mirroring how the channels are used:
+      # Linear release tracking. The Linear release now follows the channel exactly as
+      # the GitHub release does, one stage per hop:
       #
-      #   qa -> beta      the build becomes announceable: create the Linear release for
-      #                   this version and attach every issue resolved since the build
-      #                   beta served until a moment ago
-      #   beta -> latest  the build reaches everyone: complete that release
+      #   signed -> qa      create the release, named for the version, with the same
+      #                     body as the GitHub release, at stage "In Progress"
+      #   qa -> beta        stage -> "Open Beta"          (vars.LINEAR_BETA_STAGE)
+      #   beta -> latest    complete it, which is what moves a scheduled pipeline to its
+      #                     completed stage, "Released"
       #
-      # All of it runs after the CDN uploads and after the GitHub release, and every step
-      # is continue-on-error. Issue bookkeeping must never be able to hold up a promotion,
-      # least of all during an incident.
+      # and on the two rollbacks:
       #
-      # Issue detection is the part to watch. Linear keys do not appear in this repo's
-      # commit subjects -- master is squash-merged, so subjects read `feat(ci): ... (#93)`
-      # and the branch name that carried the key is gone. The CLI bridges that by
-      # resolving the `(#93)` reference to its pull request and reading the issues Linear
-      # linked to it, which works only for PRs whose branch carried a key. Coverage is
-      # therefore a branch-naming question; issue_pattern is additive and catches keys
-      # written into the subject by hand.
+      #   stable -> latest  the DISPLACED release goes back to "Open Beta"; the restored
+      #                     one is completed, mirroring what the GitHub rollback does
+      #   latest -> beta    stage -> "In Progress"
+      #
+      # Everything is continue-on-error. Issue bookkeeping must never hold up a
+      # promotion, least of all during an incident.
+      #
+      # Issue detection moved to the qa hop with creation. Linear keys do not appear in
+      # this repo's commit subjects -- master is squash-merged, so subjects read
+      # `feat(ci): ... (#93)` and the branch name that carried the key is gone. The CLI
+      # bridges that by resolving the `(#93)` reference to its pull request and reading
+      # the issues Linear linked to it, which works only for PRs whose branch carried a
+      # key. issue_pattern is additive and catches keys written into a subject by hand.
       # ---------------------------------------------------------------------------
       - name: Check out the promoted build
         id: linear_checkout
-        if: env.SE_HAS_LINEAR == 'true' && env.SE_LINEAR_BETA == 'true'
+        if: env.SE_HAS_LINEAR == 'true' && (env.SE_RELEASE_HOP == 'true' || env.SE_ROLLBACK == 'true')
         continue-on-error: true
         env:
           TAG: ${{ steps.version.outputs.version_string }}
@@ -409,26 +418,27 @@ jobs:
             echo "ok=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Sync Linear release
+      # Only `sync` creates a release or sets its version; `update` and `complete`
+      # strictly look one up and fail if it is absent. So this must run on the hop that
+      # creates -- signed -> qa -- and it is also the only hop that scans commits.
+      - name: Create the Linear release
         id: linear_sync
-        if: env.SE_HAS_LINEAR == 'true' && env.SE_LINEAR_BETA == 'true' && steps.linear_checkout.outputs.ok == 'true'
+        if: env.SE_HAS_LINEAR == 'true' && env.SE_RELEASE_HOP == 'true' && github.event.inputs.to == 'qa' && steps.linear_checkout.outputs.ok == 'true'
         continue-on-error: true
         uses: linear/linear-release-action@17b8c24f8ceb2b98cabaf1965ff83c55dd596fac # v0
         with:
           access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
           command: sync
-          # Only `sync` sets a version on a release; `update` and `complete` select an
-          # existing one. Passing it explicitly at every hop is what lets the beta and
-          # latest promotions of the same build agree on which release they mean.
+          # Version and name are both the dotted build version. Passing the version
+          # explicitly at every hop is what lets the later ones select this release.
           version: ${{ steps.version.outputs.version_string }}
-          name: SE.Live ${{ steps.version.outputs.version_string }}
-          # Empty when the previous beta version is unknown or untagged, in which case the
-          # CLI falls back to its own scan base.
+          name: ${{ steps.version.outputs.version_string }}
+          # Byte-identical to the GitHub release body: the release step above writes the
+          # body it published to this path, so the two cannot drift.
+          release_notes: ${{ github.workspace }}/.release-input/release-body.md
+          # Empty when the previous version on this channel is unknown or untagged, in
+          # which case the CLI falls back to its own scan base.
           base_ref: ${{ steps.version.outputs.previous_channel_tag }}
-          # The blurb and notes composed at build time, which have travelled with the
-          # manifest through every channel. Skipped when the source channel only had the
-          # "no release notes" placeholder -- there is no point copying that into Linear.
-          release_notes: ${{ steps.download.outputs.has_release_notes == 'true' && format('{0}/obs-streamelements.release_notes.md', github.workspace) || '' }}
           links: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.version.outputs.version_string }}
           # Additive to the CLI's built-in detection, and scoped to the team prefix so it
           # contributes nothing but CORE keys. It does not suppress the built-in subject
@@ -440,12 +450,24 @@ jobs:
           dry_run: ${{ env.SE_LINEAR_DRY_RUN }}
           log_level: verbose
 
-      # The SE.Live pipeline currently has only Planned / In Progress / Released, so there
-      # is no stage that means "on the beta channel" and this step stays dormant. Add one
-      # in Linear and set the LINEAR_BETA_STAGE repository variable to its name to switch
-      # it on; nothing here needs to change.
-      - name: Move Linear release to the beta stage
-        if: env.SE_HAS_LINEAR == 'true' && env.SE_LINEAR_BETA == 'true' && vars.LINEAR_BETA_STAGE != '' && steps.linear_sync.outcome == 'success'
+      # A newly synced release sits in the pipeline's planned stage, so qa has to move it
+      # to In Progress explicitly.
+      - name: Move the Linear release to In Progress
+        if: env.SE_HAS_LINEAR == 'true' && env.SE_RELEASE_HOP == 'true' && github.event.inputs.to == 'qa' && steps.linear_sync.outcome == 'success'
+        continue-on-error: true
+        uses: linear/linear-release-action@17b8c24f8ceb2b98cabaf1965ff83c55dd596fac # v0
+        with:
+          access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
+          command: update
+          version: ${{ steps.version.outputs.version_string }}
+          stage: ${{ vars.LINEAR_INPROGRESS_STAGE || 'In Progress' }}
+          dry_run: ${{ env.SE_LINEAR_DRY_RUN }}
+          log_level: verbose
+
+      # Skipped when LINEAR_BETA_STAGE is unset, so a workspace without that stage keeps
+      # the release on In Progress rather than failing the promotion.
+      - name: Move the Linear release to the beta stage
+        if: env.SE_HAS_LINEAR == 'true' && env.SE_RELEASE_HOP == 'true' && github.event.inputs.to == 'beta' && vars.LINEAR_BETA_STAGE != ''
         continue-on-error: true
         uses: linear/linear-release-action@17b8c24f8ceb2b98cabaf1965ff83c55dd596fac # v0
         with:
@@ -456,11 +478,13 @@ jobs:
           dry_run: ${{ env.SE_LINEAR_DRY_RUN }}
           log_level: verbose
 
-      # Reaching `latest` on either platform is what makes a build everyone's, so this
-      # mirrors requirement 1: the first platform through completes the release and the
-      # second one is a no-op on an already-completed release.
-      - name: Complete Linear release
-        if: env.SE_HAS_LINEAR == 'true' && env.SE_PROMOTE == 'true'
+      # `complete` rather than `update --stage=Released`: for a scheduled pipeline that
+      # is what moves a release into the completed stage, and it is the only path that
+      # fires the pipeline's autoGenerateReleaseNotesOnCompletion and
+      # rolloverIssuesOnCompletion settings, both of which are on.
+      - name: Complete the Linear release
+        id: linear_complete
+        if: env.SE_HAS_LINEAR == 'true' && (env.SE_PROMOTE == 'true' || env.SE_ROLLBACK == 'true')
         continue-on-error: true
         uses: linear/linear-release-action@17b8c24f8ceb2b98cabaf1965ff83c55dd596fac # v0
         with:
@@ -469,6 +493,107 @@ jobs:
           version: ${{ steps.version.outputs.version_string }}
           dry_run: ${{ env.SE_LINEAR_DRY_RUN }}
           log_level: verbose
+
+      # A stable -> latest rollback puts an older build back in front of users, so the
+      # release it displaces stops being released. It goes back to the beta stage rather
+      # than to In Progress: it was on beta before it was promoted, and should_revert is
+      # already false whenever the other platform still serves it.
+      - name: Move the displaced Linear release back to the beta stage
+        if: env.SE_HAS_LINEAR == 'true' && env.SE_ROLLBACK == 'true' && steps.version.outputs.should_revert == 'true' && steps.version.outputs.displaced_tag != '' && vars.LINEAR_BETA_STAGE != ''
+        continue-on-error: true
+        uses: linear/linear-release-action@17b8c24f8ceb2b98cabaf1965ff83c55dd596fac # v0
+        with:
+          access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
+          command: update
+          version: ${{ steps.version.outputs.displaced_tag }}
+          stage: ${{ vars.LINEAR_BETA_STAGE }}
+          dry_run: ${{ env.SE_LINEAR_DRY_RUN }}
+          log_level: verbose
+
+      # latest -> beta is only ever reached as a rollback -- "Validate Input" rejects it
+      # as a promotion. The build is being taken away from everyone, so its release goes
+      # back to In Progress rather than to the beta stage.
+      - name: Move the Linear release back to In Progress
+        if: env.SE_HAS_LINEAR == 'true' && github.event.inputs.is-rollback == 'true' && github.event.inputs.from == 'latest' && github.event.inputs.to == 'beta'
+        continue-on-error: true
+        uses: linear/linear-release-action@17b8c24f8ceb2b98cabaf1965ff83c55dd596fac # v0
+        with:
+          access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
+          command: update
+          version: ${{ steps.version.outputs.version_string }}
+          stage: ${{ vars.LINEAR_INPROGRESS_STAGE || 'In Progress' }}
+          dry_run: ${{ env.SE_LINEAR_DRY_RUN }}
+          log_level: verbose
+
+      # Cancel whatever is still open behind the release that just shipped.
+      #
+      # A build can reach `latest` while older builds are still sitting on In Progress or
+      # Open Beta -- they were promoted to qa or beta and then overtaken. Those releases
+      # will never ship, and leaving them open makes the pipeline read as though several
+      # versions are in flight at once.
+      #
+      # This is a script rather than more `uses:` steps because the set is dynamic and an
+      # action step cannot loop. The CLI has no list command either, so the candidates are
+      # derived from tags instead: every version tag strictly between the previous full
+      # release and this one. Anything older than the previous full release was already
+      # completed or cancelled when that one shipped, so the window is exactly right.
+      #
+      # `update` errors on a version with no release, which is the common case here --
+      # most tagged builds are never promoted. Those failures are expected and swallowed
+      # per version; only the count is reported.
+      - name: Cancel releases left open behind this one
+        if: env.SE_HAS_LINEAR == 'true' && env.SE_PROMOTE == 'true' && steps.linear_complete.outcome == 'success'
+        continue-on-error: true
+        env:
+          LINEAR_ACCESS_KEY: ${{ secrets.LINEAR_ACCESS_KEY }}
+          TAG: ${{ steps.version.outputs.version_string }}
+          PREV: ${{ steps.version.outputs.previous_tag }}
+          CANCEL_STAGE: ${{ vars.LINEAR_CANCELED_STAGE || 'Canceled' }}
+          DRY: ${{ env.SE_LINEAR_DRY_RUN }}
+          # Pinned to the version linear-release-action installs by default, so both
+          # paths speak to Linear through the same CLI.
+          CLI_VERSION: v0.15.0
+        run: |
+          set -euo pipefail
+
+          if [ -z "$PREV" ]; then
+            echo "::warning::no previous full release, so the range of possibly-open releases is unbounded; skipping the cancel sweep"
+            exit 0
+          fi
+
+          # The build number is the last dotted component and is a global monotonic
+          # counter, which makes it a truer order than the yy.m.d prefix -- that has at
+          # least one bogus entry (tag 15.12.15.535 sorts wrong by date but right by
+          # build number).
+          build_of() { printf '%s\n' "${1##*.}"; }
+          cur=$(build_of "$TAG")
+          low=$(build_of "$PREV")
+          echo "::notice::cancel sweep: releases with build numbers strictly between $low ($PREV) and $cur ($TAG)"
+
+          curl -fsSL "https://github.com/linear/linear-release/releases/download/$CLI_VERSION/linear-release-linux-x64" -o linear-release
+          chmod +x linear-release
+
+          cancelled=0
+          absent=0
+          for t in $(git tag --list '[0-9]*.[0-9]*.[0-9]*.[0-9]*' | sort -t. -k4,4n); do
+            b=$(build_of "$t")
+            case "$b" in '' | *[!0-9]*) continue ;; esac
+            [ "$b" -gt "$low" ] || continue
+            [ "$b" -lt "$cur" ] || continue
+
+            args="update --stage=$CANCEL_STAGE --release-version=$t --quiet"
+            [ "$DRY" = 'true' ] && args="$args --dry-run"
+            # shellcheck disable=SC2086
+            if ./linear-release $args > /dev/null 2>&1; then
+              echo "  cancelled $t"
+              cancelled=$((cancelled + 1))
+            else
+              absent=$((absent + 1))
+            fi
+          done
+
+          rm -f linear-release
+          echo "::notice::cancel sweep: $cancelled release(s) moved to '$CANCEL_STAGE', $absent tag(s) had no release (dry-run: $DRY)"
 
       # Submitting the signed installers to VirusTotal Monitor, moved here from
       # build.yml's deploy-signed-windows job.
