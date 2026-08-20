@@ -33,14 +33,6 @@ on:
         default: true
         required: true
 
-      linear-dry-run:
-        description: >-
-          Scan commits and read from Linear, but write nothing to it. Separate from
-          dry-run so a real promotion can still leave Linear untouched while the issue
-          detection is being validated. A dry-run promotion forces this on regardless.
-        type: boolean
-        default: true
-        required: true
 
       is-rollback:
         type: boolean
@@ -81,8 +73,10 @@ jobs:
       # usable in a fork or a clone that has no pipeline access key.
       SE_HAS_LINEAR: ${{ secrets.LINEAR_ACCESS_KEY != '' }}
       # A dry-run promotion must not write to Linear either -- otherwise rehearsing a
-      # promotion would leave a real release behind.
-      SE_LINEAR_DRY_RUN: ${{ (github.event.inputs.dry-run == 'true' || github.event.inputs.linear-dry-run == 'true') && 'true' || 'false' }}
+      # promotion would leave a real release behind. There is no separate Linear opt-out:
+      # the stage a release sits on is part of the promotion, not a thing to rehearse
+      # independently of it.
+      SE_LINEAR_DRY_RUN: ${{ github.event.inputs.dry-run }}
 
     steps:
       - name: debug
@@ -594,15 +588,87 @@ jobs:
 
           rm -f linear-release
           echo "::notice::cancel sweep: $cancelled release(s) moved to '$CANCEL_STAGE', $absent tag(s) had no release (dry-run: $DRY)"
+      # Runs BEFORE the upload, and the order is load-bearing.
+      #
+      # Monitor storage is a hard quota (1 GiB for this group). When it is full,
+      # VirusTotal rejects an upload with HTTP 429 QuotaExceededError -- the same status
+      # it uses for rate limits, so the action retries it five times and fails. With the
+      # prune ordered after the upload, a failed upload skipped the one step that frees
+      # space, so a full store stayed full and every later promotion failed identically.
+      # That is exactly what happened on the first real signed -> qa run: 1020264912 of
+      # 1048576000 bytes used, 27 MiB free, a 35.76 MiB installer to store.
+      #
+      # Pruning first cannot delete what is being promoted: the manifests below were
+      # uploaded earlier in this job, so the incoming version is already live on the
+      # destination channel and protected by manifest-urls.
+      - name: Prune old versions from VirusTotal Monitor
+        uses: StreamElements/virustotal-monitor-action@v1
+        if: ${{ github.event.inputs.dry-run == 'false' && github.event.inputs.platform == 'windows' }}
+        with:
+          # The action has no default and reads no environment variable — the key is always
+          # passed in. Point this at whatever your repo or org calls the secret.
+          api-key: ${{ secrets.VT_MONITOR_API_KEY }}
+          mode: prune
+          managed-prefixes: /obs-streamelements-core
+          quota-bytes: ${{ vars.VT_MONITOR_QUOTA_BYTES || '1GiB' }}
+          # Retention is the manifests and nothing else: what the five channels point at
+          # stays, everything else under the prefix goes, on every promotion.
+          #
+          # The watermarks used to gate this at 80% and prune back to 60%, which meant that
+          # in practice we never pruned -- and then the store filled. VirusTotal answers a
+          # full store with the same HTTP 429 it uses for rate limits, so the first real
+          # signed -> qa upload retried five times and failed at 1020264912 of 1048576000
+          # bytes used.
+          #
+          # 0 would say this plainly, but the action rejects it: parseWatermark requires a
+          # positive number and target-watermark must be strictly below high-watermark. So
+          # 0.01 is 'as soon as there is anything worth pruning' and 0.001 is 'prune it
+          # all', with the manifests doing the actual keeping. Note these are fractions,
+          # not the percentages the old 80/60 were: parseWatermark reads a value above 1
+          # as a percentage and anything else as a fraction, so '1' would mean 100% and
+          # prune only once the store is completely full -- the opposite of the intent.
+          #
+          # Worth replacing with a first-class retention option in the action rather than
+          # leaving two watermarks standing in for a policy that has nothing to do with
+          # usage.
+          high-watermark: ${{ vars.VT_MONITOR_HIGH_WATERMARK || '0.01' }}
+          target-watermark: ${{ vars.VT_MONITOR_TARGET_WATERMARK || '0.001' }}
+          # No newest-N protection: an unpromoted build is exactly what should be deleted,
+          # and being recent is not a reason to keep it.
+          keep-versions: ${{ vars.VT_MONITOR_KEEP_VERSIONS || '0' }}
+          # Anything these point at is never deleted. If any of them cannot be fetched, the
+          # step fails rather than pruning with an incomplete picture of what is live.
+          #
+          # Each channel is its own directory holding one obs-streamelements.manifest; signed/
+          # additionally pins the most recent signed build. The channels disagree about
+          # installer filenames (signed/ uses -<version>.exe and -<version>-64bit.exe, qa/beta/
+          # latest use -x86-/-x64-, stable drops the version from the filename entirely), so
+          # matching keys off version_number, which all five carry.
+          manifest-urls: |
+            https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed/obs-streamelements.manifest
+            https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/qa/obs-streamelements.manifest
+            https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/beta/obs-streamelements.manifest
+            https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/latest/obs-streamelements.manifest
+            https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/stable/obs-streamelements.manifest
+          # Public-API allowances by default. A prune walks the tree and deletes per version, so
+          # at 4/minute expect a few minutes of wall clock; raise these if the key allows more.
+          rate-limit-per-minute: ${{ vars.VT_MONITOR_RATE_PER_MINUTE || '4' }}
+          rate-limit-per-day: ${{ vars.VT_MONITOR_RATE_PER_DAY || '500' }}
+          rate-limit-per-month: ${{ vars.VT_MONITOR_RATE_PER_MONTH || '15500' }}
+          # Scheduled runs default to enforcing; manual runs default to previewing.
+          dry-run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry-run || 'false' }}
+          # Storage housekeeping must never take a release down with it.
+          on-error: warn
+          verbose: true
 
       # Submitting the signed installers to VirusTotal Monitor, moved here from
       # build.yml's deploy-signed-windows job.
       #
       # Uploading at build time submitted every master build, including ones never
       # promoted to a channel any user sees. Doing it on promotion means the binaries AV
-      # vendors are shown are the ones actually being shipped, and it puts the upload
-      # immediately before the prune below, so the version being added is counted by the
-      # same watermark pass that decides what to delete.
+      # vendors are shown are the ones actually being shipped, and it puts the upload in
+      # the same job as the prune instead of adding in one workflow and reconciling in
+      # another. The prune runs first; see the ordering note on it above.
       #
       # Both the version key and the two installer URLs are read out of the manifest
       # downloaded above rather than reconstructed. The channels disagree about installer
@@ -615,12 +681,12 @@ jobs:
       # Only on signed -> qa, the first hop a build takes and the point it stops being
       # purely internal. Every later promotion moves the same bytes, so firing on any
       # non-dry-run Windows promotion would submit one release four times over and spend
-      # the rate limits documented on the prune below for nothing. is-rollback needs no
+      # the rate limits documented on the prune above for nothing. is-rollback needs no
       # mention: "Validate Input" above rejects `to == signed` outright and allows no
       # transition out of `signed` other than to `qa`, so this pair is only ever a
       # forward promotion.
       #
-      # The prune below deliberately keeps the wider gate: housekeeping should run on
+      # The prune above deliberately keeps the wider gate: housekeeping should run on
       # every promotion regardless of whether this hop submitted anything.
       - name: Download signed installers for VirusTotal
         id: vt_installers
@@ -677,40 +743,3 @@ jobs:
           on-error: fail
           verbose: true
 
-      - name: Prune old versions from VirusTotal Monitor
-        uses: StreamElements/virustotal-monitor-action@v1
-        if: ${{ github.event.inputs.dry-run == 'false' && github.event.inputs.platform == 'windows' }}
-        with:
-          # The action has no default and reads no environment variable — the key is always
-          # passed in. Point this at whatever your repo or org calls the secret.
-          api-key: ${{ secrets.VT_MONITOR_API_KEY }}
-          mode: prune
-          managed-prefixes: /obs-streamelements-core
-          quota-bytes: ${{ vars.VT_MONITOR_QUOTA_BYTES || '1GiB' }}
-          high-watermark: ${{ inputs.high-watermark || vars.VT_MONITOR_HIGH_WATERMARK || '80' }}
-          target-watermark: ${{ inputs.target-watermark || vars.VT_MONITOR_TARGET_WATERMARK || '60' }}
-          keep-versions: ${{ vars.VT_MONITOR_KEEP_VERSIONS || '3' }}
-          # Anything these point at is never deleted. If any of them cannot be fetched, the
-          # step fails rather than pruning with an incomplete picture of what is live.
-          #
-          # Each channel is its own directory holding one obs-streamelements.manifest; signed/
-          # additionally pins the most recent signed build. The channels disagree about
-          # installer filenames (signed/ uses -<version>.exe and -<version>-64bit.exe, qa/beta/
-          # latest use -x86-/-x64-, stable drops the version from the filename entirely), so
-          # matching keys off version_number, which all five carry.
-          manifest-urls: |
-            https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/signed/obs-streamelements.manifest
-            https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/qa/obs-streamelements.manifest
-            https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/beta/obs-streamelements.manifest
-            https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/latest/obs-streamelements.manifest
-            https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/stable/obs-streamelements.manifest
-          # Public-API allowances by default. A prune walks the tree and deletes per version, so
-          # at 4/minute expect a few minutes of wall clock; raise these if the key allows more.
-          rate-limit-per-minute: ${{ vars.VT_MONITOR_RATE_PER_MINUTE || '4' }}
-          rate-limit-per-day: ${{ vars.VT_MONITOR_RATE_PER_DAY || '500' }}
-          rate-limit-per-month: ${{ vars.VT_MONITOR_RATE_PER_MONTH || '15500' }}
-          # Scheduled runs default to enforcing; manual runs default to previewing.
-          dry-run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry-run || 'false' }}
-          # Storage housekeeping must never take a release down with it.
-          on-error: warn
-          verbose: true
