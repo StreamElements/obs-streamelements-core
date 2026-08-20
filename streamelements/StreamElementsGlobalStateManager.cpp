@@ -605,9 +605,21 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		RestoreState();
 	}
 
+	// Draining the posted-event queue runs arbitrary code while this
+	// Initialize() is still on the stack and m_initialized is still false:
+	// deferred deletes, frontend callbacks, and any modal dialog's own event
+	// loop. Nothing constructed above may be assumed live below this point.
 	QApplication::sendPostedEvents();
 
-	m_menuManager->Update();
+	// Guarded because of the pump above, not out of caution. Observed: OBS
+	// held OBSInit open in its modal update dialog for ~5 minutes, and by the
+	// time this line ran m_menuManager was null. The fault then landed inside
+	// UpdateInternal's own `if (!m_menu)` guard -- SYNC_ACCESS() locks a
+	// static mutex, so it touches no member, which makes that guard the first
+	// read through `this` and therefore the crash site rather than the
+	// protection it looks like.
+	if (m_menuManager)
+		m_menuManager->Update();
 
 	{
 		json11::Json::object eventProps;
