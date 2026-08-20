@@ -82,10 +82,15 @@ fi
 # -------------------------------------------------------------------- Linear sync base
 # `qa -> beta` is the hop at which a build becomes something worth announcing, so that is
 # where release.yml creates the Linear release for it. The commit scan needs a lower
-# bound, and the honest one is "whatever beta served until a moment ago" -- which is the
-# version sitting on the destination channel right now. Reading it here rather than after
-# the upload is the same ordering constraint the rollback path has, for the same reason:
-# the upload is about to overwrite it with the version being promoted.
+# bound, and the honest one is "whatever the destination channel served until a moment
+# ago" -- the version sitting on it right now. Reading it here rather than after the
+# upload is the same ordering constraint the rollback path has, for the same reason: the
+# upload is about to overwrite it with the version being promoted.
+#
+# Computed for every forward hop, not just beta. It was beta-only until the release and
+# its issues moved to signed -> qa, which left that hop passing no base at all: the CLI
+# logged "No recent releases found; assuming first sync", inspected the single HEAD
+# commit, and attached one issue to release 26.8.20.897 where the range held eight.
 #
 # Windows and macOS promote separately, so the second platform through reads back the
 # first one's upload and resolves an empty range. That is correct rather than a bug: the
@@ -93,21 +98,22 @@ fi
 #
 # Unlike the rollback branch above this one falls through: every promotion now writes a
 # release, so previous_tag and the recovered notes are needed on this hop too.
-if [ "${SE_TO:-}" = "beta" ]; then
+case "${SE_TO:-}" in
+qa | beta | latest)
 	BASE=""
-	beta="${RUNNER_TEMP:-/tmp}/se-beta-$PLATFORM.manifest"
+	dest="${RUNNER_TEMP:-/tmp}/se-$SE_TO-$PLATFORM.manifest"
 	# stderr is dropped because manifest_version_number reports a parse failure with
 	# die(), and an ::error:: annotation would misrepresent what is only a missing lower
 	# bound: the CLI falls back to its own scan base and the sync still happens.
-	if fetch_channel_manifest "$PLATFORM" beta "$beta" && B=$(manifest_version_number "$beta" 2> /dev/null); then
+	if fetch_channel_manifest "$PLATFORM" "$SE_TO" "$dest" && B=$(manifest_version_number "$dest" 2> /dev/null); then
 		if [ "$B" -ge "$ENCODED" ]; then
-			note "linear: $PLATFORM/beta already serves $B (>= $ENCODED); no new commits to scan"
+			note "linear: $PLATFORM/$SE_TO already serves $B (>= $ENCODED); no new commits to scan"
 		else
 			BASE=$(decode_version "$B")
-			note "linear: $PLATFORM/beta serves $B; scanning $BASE..$TAG"
+			note "linear: $PLATFORM/$SE_TO serves $B; scanning $BASE..$TAG"
 		fi
 	else
-		warn "linear: no readable version on $PLATFORM/beta; the CLI will choose its own scan base"
+		warn "linear: no readable version on $PLATFORM/$SE_TO; the CLI will choose its own scan base"
 	fi
 
 	# The scan is `git log <base>..<tag>`, so the lower bound has to exist as a tag in
@@ -120,7 +126,8 @@ if [ "${SE_TO:-}" = "beta" ]; then
 	fi
 
 	emit previous_channel_tag "$BASE"
-fi
+	;;
+esac
 
 # A release no longer exists before the first promotion -- signed -> qa is what creates
 # it -- so its absence is reported rather than fatal. Requirement 10, "nothing reaches

@@ -440,6 +440,13 @@ jobs:
           # named UTF-8, matched out of `fix: UTF-8 output into manifests`. That is
           # cosmetic -- identifiers absent from the workspace are ignored server-side --
           # and it is not something this input can turn off.
+          #
+          # This input is SUBJECT-ONLY, and so is --include-subjects. Keys in a commit
+          # body -- which is where this repo's `Fixes CORE-123` trailers live, master
+          # being squash-merged -- are picked up by the CLI's built-in magic-word
+          # detection instead, which reads the whole commit message. So description
+          # scanning is already covered; what it needed was a scan range, which base_ref
+          # above now supplies on this hop.
           issue_pattern: ${{ vars.LINEAR_ISSUE_PATTERN || '\b(CORE-[0-9]+)\b' }}
           dry_run: ${{ env.SE_LINEAR_DRY_RUN }}
           log_level: verbose
