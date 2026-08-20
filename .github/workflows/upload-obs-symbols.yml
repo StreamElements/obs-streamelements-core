@@ -1,0 +1,179 @@
+name: Upload OBS Symbols to Sentry
+
+# Uploads the OBS Studio debug files -- OBS itself and every plugin it bundles -- to the
+# Sentry project our crash reports go to.
+#
+# Why this exists: we upload symbols for obs-streamelements-core.dll from build.yml, so
+# our own frames resolve, but every OBS, libobs and bundled-plugin frame in a crash
+# report renders as `<unknown>`. SELIVE-C is the example that prompted this -- its
+# crashing stack was InsHook_CallNextHookEx -> CallNextHookEx -> <unknown>, all of it
+# inside win-capture's graphics hook, and none of it readable.
+#
+# OBS publishes the debug files per release, so there is nothing to build here: this
+# fetches them and hands them to sentry-cli. It is dispatch-only and re-runnable --
+# sentry-cli skips debug files the project already has, so running it again for a new
+# OBS version costs only the new version.
+#
+# Not covered: Qt. The Windows PDB archive carries no Qt6*.pdb (verified: zero matches
+# in 32.2.2), and OBS does not publish them, so Qt frames stay unresolved. That is a
+# limit of what upstream ships, not of this workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      versions:
+        description: >-
+          Space-separated OBS versions to upload, e.g. "32.2.1 32.2.2". Must match the
+          release tag exactly.
+        type: string
+        required: true
+        default: 32.1.0 32.1.1 32.1.2 32.2.0 32.2.1 32.2.2
+
+      include-windows-x64:
+        description: Windows x64 - PDBs plus the matching binaries. This is what we ship.
+        type: boolean
+        required: true
+        default: true
+
+      include-macos:
+        description: macOS - dSYMs for both Apple silicon and Intel.
+        type: boolean
+        required: true
+        default: true
+
+      include-windows-arm64:
+        description: >-
+          Windows arm64. Off by default - CI builds SE.Live x64 only, so no crash report
+          can carry arm64 OBS modules.
+        type: boolean
+        required: true
+        default: false
+
+      dry-run:
+        description: >-
+          Fetch and inspect the debug files, and report what would be sent, without
+          uploading anything.
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    # Six versions x (fetch + extract + upload) with the archives processed one at a
+    # time. Generous, because a re-run that finds everything already uploaded is fast
+    # and a first run over six versions is not.
+    timeout-minutes: 90
+
+    env:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+      SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check credentials
+        run: |
+          set -euo pipefail
+          missing=
+          [ -n "${SENTRY_AUTH_TOKEN:-}" ] || missing="$missing SENTRY_AUTH_TOKEN"
+          [ -n "${SENTRY_ORG:-}" ] || missing="$missing SENTRY_ORG"
+          [ -n "${SENTRY_PROJECT:-}" ] || missing="$missing SENTRY_PROJECT"
+          if [ -n "$missing" ]; then
+            echo "::error::missing repository secret(s):$missing"
+            exit 1
+          fi
+          echo "::notice::uploading to $SENTRY_ORG/$SENTRY_PROJECT"
+
+      - name: Upload debug files
+        run: |
+          set -euo pipefail
+
+          REPO=obsproject/obs-studio
+          WORK="$RUNNER_TEMP/obs-symbols"
+          DRY='${{ github.event.inputs.dry-run }}'
+
+          # --no-upload runs every step except the transfer, so a dry run still proves
+          # the archives exist, extract, and contain files sentry-cli recognises.
+          UPLOAD_FLAGS=
+          [ "$DRY" = 'true' ] && UPLOAD_FLAGS=--no-upload
+
+          # One asset per line: <name-suffix> <kind>. The Windows binaries matter as much
+          # as the PDBs -- x64 stack unwinding reads the unwind tables out of the PE, and
+          # Sentry matches a minidump's modules by code ID, which only the PE carries.
+          # macOS needs no equivalent: a dSYM carries the Mach-O UUID the report records.
+          assets=
+          if [ '${{ github.event.inputs.include-windows-x64 }}' = 'true' ]; then
+            assets="$assets Windows-x64-PDBs.zip Windows-x64.zip"
+          fi
+          if [ '${{ github.event.inputs.include-windows-arm64 }}' = 'true' ]; then
+            assets="$assets Windows-arm64-PDBs.zip Windows-arm64.zip"
+          fi
+          if [ '${{ github.event.inputs.include-macos }}' = 'true' ]; then
+            assets="$assets macOS-Apple-dSYMs.tar.xz macOS-Intel-dSYMs.tar.xz"
+          fi
+
+          if [ -z "$assets" ]; then
+            echo "::error::every platform was disabled; nothing to upload"
+            exit 1
+          fi
+
+          total_versions=0
+          for version in ${{ github.event.inputs.versions }}; do
+            total_versions=$((total_versions + 1))
+            echo "::group::OBS $version"
+
+            # Fail loudly on a version that does not exist, rather than uploading the
+            # other five and reporting success.
+            if ! gh release view "$version" --repo "$REPO" > /dev/null 2>&1; then
+              echo "::error::no obs-studio release tagged '$version'"
+              exit 1
+            fi
+
+            dir="$WORK/$version"
+            rm -rf "$dir"; mkdir -p "$dir/extract"
+
+            for suffix in $assets; do
+              name="OBS-Studio-$version-$suffix"
+              echo "fetching $name"
+              if ! gh release download "$version" --repo "$REPO" \
+                   --pattern "$name" --dir "$dir" --clobber; then
+                echo "::error::$version does not publish $name"
+                exit 1
+              fi
+
+              case "$name" in
+              *.zip) unzip -q -o "$dir/$name" -d "$dir/extract" ;;
+              *.tar.xz) tar -xJf "$dir/$name" -C "$dir/extract" ;;
+              esac
+              # Delete each archive as soon as it is unpacked: six versions of
+              # everything at once does not fit in a runner's free space.
+              rm -f "$dir/$name"
+            done
+
+            found=$(find "$dir/extract" -type f \( -name '*.pdb' -o -name '*.dll' \
+              -o -name '*.exe' -o -path '*.dSYM/*' \) | wc -l)
+            echo "::notice::OBS $version: $found candidate debug/code files"
+            if [ "$found" -eq 0 ]; then
+              echo "::error::no debug or code files found in the $version archives"
+              exit 1
+            fi
+
+            # The whole tree is scanned rather than named file by file: OBS puts debug
+            # files under bin/, obs-plugins/, data/obs-plugins/ and data/obs-scripting/,
+            # and that layout is upstream's to change. sentry-cli ignores what it does
+            # not recognise and skips what the project already has.
+            npx -y @sentry/cli debug-files upload $UPLOAD_FLAGS "$dir/extract"
+
+            rm -rf "$dir"
+            echo "::endgroup::"
+          done
+
+          if [ "$DRY" = 'true' ]; then
+            echo "::warning::dry run -- $total_versions version(s) fetched and checked, nothing uploaded"
+          else
+            echo "::notice::uploaded debug files for $total_versions OBS version(s)"
+          fi
