@@ -167,6 +167,14 @@ if [ "$(wc -c < "$body")" -gt 120000 ]; then
 	mv "$body.cut" "$body"
 fi
 
+# Hand the composed body to whatever else has to publish the same text -- release.yml
+# feeds it to the Linear release, so the two descriptions cannot drift. Written even on
+# a dry run, so a rehearsal exercises that path too.
+if [ -n "${SE_OUTPUT_DIR:-}" ]; then
+	mkdir -p "$SE_OUTPUT_DIR"
+	cp "$body" "$SE_OUTPUT_DIR/release-body.md"
+	note "wrote $SE_OUTPUT_DIR/release-body.md"
+fi
 # Always render the exact body, dry-run or not -- seeing what would be published is the
 # entire point of a dry-run here.
 {
