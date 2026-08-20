@@ -1,12 +1,13 @@
 name: 'SE.Live GitHub Release'
 description: >-
   Create, promote and roll back the GitHub Releases that mirror SE.Live channel state.
-  A build with release notes gets a [BETA] prerelease; reaching the `latest` channel on
-  either platform turns it into a full release.
+  The release follows the channel: signed -> qa creates an [ALPHA] prerelease, qa -> beta
+  relabels it [BETA], and reaching `latest` on either platform turns it into a full
+  release. Nothing is created at build time.
 
 inputs:
   mode:
-    description: 'prevtag | prerelease | assets | resolve | changelog | publish | rollback'
+    description: 'notes | assets | resolve | changelog | release | rollback'
     required: true
   platforms:
     description: 'Space-separated platforms to attach installers for (mode=assets).'
@@ -24,7 +25,7 @@ inputs:
     required: false
     default: ''
   version-encoded:
-    description: 'Raw 14-digit version_number, e.g. 20260205000549 (mode=prevtag).'
+    description: 'Raw 14-digit version_number, e.g. 20260205000549 (mode=assets).'
     required: false
     default: ''
   manifest:
@@ -36,7 +37,7 @@ inputs:
     required: false
     default: ''
   to:
-    description: 'Destination channel of the promotion (mode=resolve).'
+    description: 'Destination channel of the promotion (mode=resolve, mode=release).'
     required: false
     default: ''
   is-rollback:
@@ -48,13 +49,13 @@ inputs:
     required: false
     default: ''
   notes-file:
-    description: 'Path to RELEASE_NOTES.md (mode=prerelease) or recovered notes (mode=publish).'
+    description: 'Path to RELEASE_NOTES.md (mode=notes) or recovered notes (mode=release).'
     required: false
     default: ''
   release-notes-file:
     description: >-
       Path to obs-streamelements.release_notes.md fetched from the source channel
-      (mode=publish). Contains the blurb and notes composed at build time; when present it
+      (mode=release). Contains the blurb and notes composed at build time; when present it
       is reused verbatim and no summary is regenerated.
     required: false
     default: ''
@@ -68,8 +69,8 @@ inputs:
     default: ''
   head-ref:
     description: >-
-      Commit-ish the changelog walks to. Defaults to `tag`; build.yml passes the SHA
-      because its tag was created moments earlier and may not be in the clone yet.
+      Commit-ish the changelog walks to. Defaults to `tag`, which is what release.yml
+      relies on: by promotion time the tag is long since visible.
     required: false
     default: ''
   displaced-tag:
@@ -122,7 +123,7 @@ outputs:
     description: 'Whether the displaced release may be reverted to a prerelease.'
     value: ${{ steps.run.outputs.should_revert }}
   release_action:
-    description: 'created | refreshed | skipped (mode=prerelease).'
+    description: 'created | refreshed | skipped (mode=release).'
     value: ${{ steps.run.outputs.release_action }}
 
 runs:

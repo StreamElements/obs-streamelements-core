@@ -139,6 +139,48 @@ static void check_c10_no_duplicate_handler_setcurrentprofile()
 	}
 }
 
+// --- Menu manager must not be dereferenced unguarded in Initialize().
+//
+// Initialize() calls QApplication::sendPostedEvents() a few lines above,
+// which runs deferred deletes, frontend callbacks and any modal dialog's own
+// event loop while Initialize() is still on the stack. Observed in the field:
+// OBS held OBSInit open in its modal update dialog for minutes, and by the
+// time the next line ran m_menuManager was null. UpdateInternal then faulted
+// on a null `this` at its own `if (!m_menu)` guard -- SYNC_ACCESS() locks a
+// static mutex and touches no member, so that guard is the first read through
+// `this`, which makes the null check the crash site instead of the
+// protection.
+//
+// Minidump, pid 47436:
+//   UpdateInternal+0x54  mov rcx,[rsi+18h]  rsi=0  ->  read of 0x18
+static void check_menu_manager_update_guarded()
+{
+	auto src = slurp(
+		"streamelements/StreamElementsGlobalStateManager.cpp");
+
+	// Every occurrence must be the guarded one. Counting both forms and
+	// comparing is what distinguishes them: the call sits on its own line
+	// under the guard, so a pattern anchored on the call alone matches the
+	// guarded form too and proves nothing.
+	std::regex any_call(R"(m_menuManager->Update\(\);)");
+	std::regex guarded(
+		R"(if \(m_menuManager\)[\s]*m_menuManager->Update\(\);)");
+
+	std::size_t total = count_matches(src, any_call);
+	std::size_t safe = count_matches(src, guarded);
+
+	check(total > 0,
+	      "Initialize() must still call m_menuManager->Update(); the invariant cannot be satisfied by deleting the call");
+
+	if (total != safe) {
+		std::fprintf(
+			stderr,
+			"FAIL: %zu of %zu m_menuManager->Update() call(s) lack an if (m_menuManager) guard\n",
+			total - safe, total);
+		++failures;
+	}
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -146,6 +188,7 @@ int main()
 	check_c5_cefparsejson_null_guarded();
 	check_c6_audio_encoder_bounds();
 	check_c10_no_duplicate_handler_setcurrentprofile();
+	check_menu_manager_update_guarded();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",
