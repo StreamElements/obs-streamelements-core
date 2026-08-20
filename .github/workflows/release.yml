@@ -452,9 +452,31 @@ jobs:
           mode: prune
           managed-prefixes: /obs-streamelements-core
           quota-bytes: ${{ vars.VT_MONITOR_QUOTA_BYTES || '1GiB' }}
-          high-watermark: ${{ vars.VT_MONITOR_HIGH_WATERMARK || '80' }}
-          target-watermark: ${{ vars.VT_MONITOR_TARGET_WATERMARK || '60' }}
-          keep-versions: ${{ vars.VT_MONITOR_KEEP_VERSIONS || '3' }}
+          # Retention is the manifests and nothing else: what the five channels point at
+          # stays, everything else under the prefix goes, on every promotion.
+          #
+          # The watermarks used to gate this at 80% and prune back to 60%, which meant that
+          # in practice we never pruned -- and then the store filled. VirusTotal answers a
+          # full store with the same HTTP 429 it uses for rate limits, so the first real
+          # signed -> qa upload retried five times and failed at 1020264912 of 1048576000
+          # bytes used.
+          #
+          # 0 would say this plainly, but the action rejects it: parseWatermark requires a
+          # positive number and target-watermark must be strictly below high-watermark. So
+          # 0.01 is 'as soon as there is anything worth pruning' and 0.001 is 'prune it
+          # all', with the manifests doing the actual keeping. Note these are fractions,
+          # not the percentages the old 80/60 were: parseWatermark reads a value above 1
+          # as a percentage and anything else as a fraction, so '1' would mean 100% and
+          # prune only once the store is completely full -- the opposite of the intent.
+          #
+          # Worth replacing with a first-class retention option in the action rather than
+          # leaving two watermarks standing in for a policy that has nothing to do with
+          # usage.
+          high-watermark: ${{ vars.VT_MONITOR_HIGH_WATERMARK || '0.01' }}
+          target-watermark: ${{ vars.VT_MONITOR_TARGET_WATERMARK || '0.001' }}
+          # No newest-N protection: an unpromoted build is exactly what should be deleted,
+          # and being recent is not a reason to keep it.
+          keep-versions: ${{ vars.VT_MONITOR_KEEP_VERSIONS || '0' }}
           # Anything these point at is never deleted. If any of them cannot be fetched, the
           # step fails rather than pruning with an incomplete picture of what is live.
           #
