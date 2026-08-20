@@ -52,22 +52,28 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
-    # Only two of the five transitions that "Validate Input" permits touch a GitHub
-    # release at all. Naming them once here keeps the same boolean out of several `if:`
-    # expressions further down.
+    # Which transitions touch a GitHub release. Naming them once here keeps the same
+    # booleans out of several `if:` expressions further down.
     #
-    #   beta -> latest     a build reaches users: cut the full release (req 1)
+    #   signed -> qa       the release is CREATED, as a prerelease titled [ALPHA]. This
+    #                      is the first time the build exists anywhere but signed/, and
+    #                      it is where the installers are attached.
+    #   qa -> beta         relabelled [BETA], still a prerelease. Also where the Linear
+    #                      release is created and its issues attached.
+    #   beta -> latest     a build reaches users: the full release (req 1)
     #   stable -> latest   an older build is restored onto `latest`, displacing whatever
     #                      was there: that displaced release goes back to [BETA] (req 11)
     #
-    # latest -> beta is deliberately absent. It copies latest's manifest onto `beta` and
-    # leaves `latest` serving the same build, so nothing is taken away from users and no
-    # release changes.
+    # build.yml creates nothing. A build that is never promoted has a tag and no release,
+    # which is the point: the releases page lists what shipped somewhere rather than
+    # every master build that happened to carry notes.
     #
-    # Linear tracks one more hop than GitHub does. `qa -> beta` creates no release here --
-    # nothing has shipped to anyone yet -- but it is the point at which the build is worth
-    # announcing, so it is where the Linear release is created and its issues attached.
+    # latest -> beta is deliberately absent. It copies latest's manifest onto `beta` and
+    # leaves `latest` serving the same build, so nothing is taken away from users; the
+    # release stays full rather than being relabelled back to [BETA].
     env:
+      # Every forward promotion now writes the GitHub release for the version it moves.
+      SE_RELEASE_HOP: ${{ (github.event.inputs.to == 'qa' || github.event.inputs.to == 'beta' || github.event.inputs.to == 'latest') && github.event.inputs.is-rollback != 'true' }}
       SE_PROMOTE: ${{ github.event.inputs.to == 'latest' && github.event.inputs.is-rollback != 'true' }}
       SE_ROLLBACK: ${{ github.event.inputs.is-rollback == 'true' && github.event.inputs.from == 'stable' && github.event.inputs.to == 'latest' }}
       SE_LINEAR_BETA: ${{ github.event.inputs.to == 'beta' && github.event.inputs.is-rollback != 'true' }}
@@ -223,12 +229,13 @@ jobs:
       #             is about to overwrite with S. Read afterwards, `S < L` compares S with
       #             itself and the guard never fires.
       #
-      # It also front-loads the "no release for this version" failure, so a promotion
-      # that cannot be recorded fails before anything reaches the CDN.
+      # It no longer front-loads a "no release for this version" failure: on signed -> qa
+      # there is deliberately no release yet. That check now lives in the release step,
+      # which knows the hop and can still create one; it stays fatal only for `latest`.
       # ---------------------------------------------------------------------------
       - name: Resolve version, tag and previous full release
         id: version
-        if: env.SE_PROMOTE == 'true' || env.SE_ROLLBACK == 'true' || (env.SE_LINEAR_BETA == 'true' && env.SE_HAS_LINEAR == 'true')
+        if: env.SE_RELEASE_HOP == 'true' || env.SE_ROLLBACK == 'true'
         uses: ./.github/actions/se-release
         with:
           mode: resolve
@@ -240,7 +247,7 @@ jobs:
           output-dir: ${{ github.workspace }}/.release-input
 
       - name: Build changelog
-        if: env.SE_PROMOTE == 'true'
+        if: env.SE_RELEASE_HOP == 'true'
         uses: ./.github/actions/se-release
         with:
           mode: changelog
@@ -299,11 +306,21 @@ jobs:
           headers: |
             cache-control: 'no-store, no-cache, must-revalidate'
 
-      - name: Publish GitHub release
-        if: env.SE_PROMOTE == 'true'
+      # The GitHub release follows the channel, not the build. build.yml creates none:
+      #
+      #   signed -> qa      created as a prerelease titled '[ALPHA] <tag>'
+      #   qa -> beta        relabelled '[BETA] <tag>', still a prerelease
+      #   beta -> latest    titled '<tag>', full release, Latest
+      #
+      # Convergent at every hop, which matters because each version is promoted twice --
+      # once per platform. The second pass finds the release already in the right state
+      # and only re-asserts its title.
+      - name: Write the GitHub release for this channel
+        if: env.SE_RELEASE_HOP == 'true'
         uses: ./.github/actions/se-release
         with:
-          mode: publish
+          mode: release
+          to: ${{ github.event.inputs.to }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ steps.version.outputs.version_string }}
           previous-tag: ${{ steps.version.outputs.previous_tag }}
@@ -317,6 +334,30 @@ jobs:
           # Always recomputed: the range is relative to the previous full release, which
           # can have moved since the build was made.
           changelog-file: ${{ github.workspace }}/.release-input/changelog.md
+          dry-run: ${{ github.event.inputs.dry-run }}
+
+      # Attach the signed installers, on the hop that creates the release. Moved here
+      # from build.yml with the release itself.
+      #
+      # Read from signed/ rather than from the destination channel, because that is
+      # where the installers this version was built as actually live. The channel is a
+      # moving pointer, so attach-assets.sh refuses to attach when signed/ has since
+      # moved on to a newer build -- shipping someone else's binaries under this tag
+      # would be worse than shipping none.
+      #
+      # Only on the qa hop: later promotions would find signed/ further ahead and skip
+      # anyway, and the assets are already on the release by then.
+      #
+      # Best-effort: a failure here leaves the release valid, just without binaries.
+      - name: Attach installers to the release
+        if: env.SE_RELEASE_HOP == 'true' && github.event.inputs.to == 'qa'
+        continue-on-error: true
+        uses: ./.github/actions/se-release
+        with:
+          mode: assets
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ steps.version.outputs.version_string }}
+          version-encoded: ${{ steps.version.outputs.version_encoded }}
           dry-run: ${{ github.event.inputs.dry-run }}
 
       - name: Revert displaced GitHub release
