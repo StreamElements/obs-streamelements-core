@@ -430,9 +430,12 @@ jobs:
           # Byte-identical to the GitHub release body: the release step above writes the
           # body it published to this path, so the two cannot drift.
           release_notes: ${{ github.workspace }}/.release-input/release-body.md
-          # Empty when the previous version on this channel is unknown or untagged, in
-          # which case the CLI falls back to its own scan base.
-          base_ref: ${{ steps.version.outputs.previous_channel_tag }}
+          # The last full release, so the issue scan covers exactly the range the
+          # changelog in the body above covers -- resolve.sh derives this from the same
+          # PREV_TAG, and falls back to the previous version on this channel only while
+          # no full release exists yet. Empty when neither resolves, in which case the
+          # CLI falls back to its own scan base and sees only the head commit.
+          base_ref: ${{ steps.version.outputs.linear_base_tag }}
           links: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.version.outputs.version_string }}
           # Additive to the CLI's built-in detection, and scoped to the team prefix so it
           # contributes nothing but CORE keys. It does not suppress the built-in subject
@@ -445,8 +448,8 @@ jobs:
           # body -- which is where this repo's `Fixes CORE-123` trailers live, master
           # being squash-merged -- are picked up by the CLI's built-in magic-word
           # detection instead, which reads the whole commit message. So description
-          # scanning is already covered; what it needed was a scan range, which base_ref
-          # above now supplies on this hop.
+          # scanning is already covered; what it needed was a scan range wide enough to
+          # hold the descriptions, which base_ref above now supplies.
           issue_pattern: ${{ vars.LINEAR_ISSUE_PATTERN || '\b(CORE-[0-9]+)\b' }}
           dry_run: ${{ env.SE_LINEAR_DRY_RUN }}
           log_level: verbose
