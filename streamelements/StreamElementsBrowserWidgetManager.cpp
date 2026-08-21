@@ -21,8 +21,13 @@ StreamElementsBrowserWidgetManager::StreamElementsBrowserWidgetManager(
 
 StreamElementsBrowserWidgetManager::~StreamElementsBrowserWidgetManager()
 {
-	// NOP
+	// This runs before the base destructor deletes any dock, so on the OBS
+	// teardown path every entry here may already have been destroyed by Qt
+	// along with its dock. QPointer makes that visible (CORE-786).
 	for (auto kv : m_browserWidgets) {
+		if (!kv.second)
+			continue;
+
 		kv.second->RemoveVideoCompositionView();
 	}
 
@@ -349,6 +354,10 @@ bool StreamElementsBrowserWidgetManager::SetWidgetUrlById(const char *const id,
 	if (!m_browserWidgets.count(id))
 		return false;
 
+	// Null when Qt destroyed the widget with its dock (CORE-786).
+	if (!m_browserWidgets[id])
+		return false;
+
 	m_browserWidgets[id]->BrowserLoadInitialPage(url);
 
 	return true;
@@ -369,7 +378,10 @@ bool StreamElementsBrowserWidgetManager::RemoveDockWidget(const char *const id)
 
 	if (StreamElementsWidgetManager::RemoveDockWidget(id)) {
 		if (m_browserWidgets.count(id)) {
-			m_browserWidgets[id]->RemoveVideoCompositionView();
+			if (m_browserWidgets[id])
+				m_browserWidgets[id]
+					->RemoveVideoCompositionView();
+
 			m_browserWidgets.erase(id);
 
 			return true;
@@ -397,6 +409,9 @@ StreamElementsBrowserWidgetManager::GetDockBrowserWidgetInfo(
 		return nullptr;
 
 	auto browser = m_browserWidgets[id];
+
+	if (!browser)
+		return nullptr;
 
 	StreamElementsBrowserWidgetManager::DockWidgetInfo *baseInfo =
 		GetDockWidgetInfo(id);

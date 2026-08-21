@@ -250,6 +250,52 @@ static void check_widget_manager_dtor_does_not_drain_events()
 	      "CORE-777: ~StreamElementsWidgetManager() must hold each dock widget in a QPointer before deleting it");
 }
 
+// --- CORE-786: the widget maps must hold QPointer, not raw pointers.
+//
+// Docks are children of the OBS main window (addDockWidget), and browser
+// widgets are children of their dock. Qt owns both and destroys them with
+// their parent -- which, on the OBSInit re-entrancy path, happens before
+// ~StreamElementsWidgetManager runs. Raw pointers in these maps went stale
+// and were then deleted a second time.
+//
+// Guarding at the point of use is not enough and was the gap in the first
+// version of this fix: a QPointer constructed from an already-dangling raw
+// pointer is born non-null. The map itself has to hold the QPointer.
+static void check_widget_maps_hold_qpointer()
+{
+	auto wm = strip_line_comments(
+		slurp("streamelements/StreamElementsWidgetManager.hpp"));
+
+	check(wm.find("std::map<std::string, QPointer<QDockWidget>>") !=
+		      std::string::npos,
+	      "CORE-786: m_dockWidgets must be std::map<std::string, QPointer<QDockWidget>>");
+	check(wm.find("std::map<std::string, QDockWidget*>") ==
+		      std::string::npos,
+	      "CORE-786: m_dockWidgets must not hold raw QDockWidget*");
+
+	auto bwm = strip_line_comments(
+		slurp("streamelements/StreamElementsBrowserWidgetManager.hpp"));
+
+	check(bwm.find("QPointer<StreamElementsBrowserWidget>>") !=
+		      std::string::npos,
+	      "CORE-786: m_browserWidgets must hold QPointer<StreamElementsBrowserWidget>");
+	check(bwm.find("std::map<std::string, StreamElementsBrowserWidget*>") ==
+		      std::string::npos,
+	      "CORE-786: m_browserWidgets must not hold raw StreamElementsBrowserWidget*");
+
+	// The composition view widgets are hand-deleted, so they must be
+	// QPointer too or the delete can run twice.
+	auto bw = strip_line_comments(
+		slurp("streamelements/StreamElementsBrowserWidget.hpp"));
+
+	check(bw.find("QPointer<QWidget> m_activeVideoCompositionViewWidgetContainer") !=
+		      std::string::npos,
+	      "CORE-786: m_activeVideoCompositionViewWidgetContainer must be a QPointer");
+	check(bw.find("QPointer<StreamElementsVideoCompositionViewWidget>") !=
+		      std::string::npos,
+	      "CORE-786: m_activeVideoCompositionViewWidget must be a QPointer");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -259,6 +305,7 @@ int main()
 	check_c10_no_duplicate_handler_setcurrentprofile();
 	check_menu_manager_update_guarded();
 	check_widget_manager_dtor_does_not_drain_events();
+	check_widget_maps_hold_qpointer();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

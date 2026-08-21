@@ -623,18 +623,24 @@ void StreamElementsBrowserWidget::RemoveVideoCompositionView()
 	if (!m_activeVideoCompositionViewWidget)
 		return;
 
+	// Both members are QPointer, so a widget Qt already destroyed -- these
+	// are children of this widget and of each other -- reads back null and
+	// is not deleted a second time (CORE-786). Destroy() still has to run
+	// deterministically, which is why these are deleted by hand rather than
+	// left to the parent.
 	m_activeVideoCompositionViewWidget->hide();
 	m_activeVideoCompositionViewWidget->Destroy();
 	m_activeVideoCompositionViewWidget->setParent(nullptr);
-	delete m_activeVideoCompositionViewWidget;
-	// m_activeVideoCompositionViewWidget->deleteLater();
+	delete m_activeVideoCompositionViewWidget.data();
 
 	m_activeVideoCompositionViewWidget = nullptr;
 
-	m_activeVideoCompositionViewWidgetContainer->hide();
-	m_activeVideoCompositionViewWidgetContainer->setParent(nullptr);
-	delete m_activeVideoCompositionViewWidgetContainer;
-	//m_activeVideoCompositionViewWidgetContainer->deleteLater();
+	if (m_activeVideoCompositionViewWidgetContainer) {
+		m_activeVideoCompositionViewWidgetContainer->hide();
+		m_activeVideoCompositionViewWidgetContainer->setParent(
+			nullptr);
+		delete m_activeVideoCompositionViewWidgetContainer.data();
+	}
 
 	m_activeVideoCompositionViewWidgetContainer = nullptr;
 }

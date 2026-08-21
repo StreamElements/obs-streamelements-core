@@ -24,13 +24,24 @@ StreamElementsWidgetManager::~StreamElementsWidgetManager()
 		     "[obs-streamelements-core]: destroying dock widget '%s'",
 		     pair.first.c_str());
 
-		// QPointer, so a dock widget destroyed behind our back --
-		// by its QMainWindow parent, or by a deleteLater() posted
-		// from elsewhere -- reads back as null instead of dangling.
-		QPointer<QDockWidget> dock(pair.second);
+		// pair.second is already a QPointer (see the header), so a dock
+		// destroyed behind our back -- by its QMainWindow parent during
+		// OBS teardown, or by a deleteLater() posted elsewhere -- reads
+		// back null here rather than dangling.
+		//
+		// Wrapping the raw pointer in a QPointer *here* would not work
+		// and was the gap in the first version of this fix: QPointer
+		// only tracks destructions that happen after it is constructed,
+		// so one built from an already-dangling pointer is born
+		// non-null and the guard passes (CORE-786).
+		QPointer<QDockWidget> dock = pair.second;
 
-		if (!dock)
+		if (!dock) {
+			blog(LOG_INFO,
+			     "[obs-streamelements-core]: dock widget '%s' was already destroyed; skipping",
+			     pair.first.c_str());
 			continue;
+		}
 
 		if (m_parent)
 			m_parent->removeDockWidget(dock);
@@ -335,6 +346,10 @@ bool StreamElementsWidgetManager::ShowWidgetById(const char *const id)
 
 	QDockWidget *dock = m_dockWidgets[id];
 
+	// Null when Qt destroyed the dock behind our back (CORE-786).
+	if (!dock)
+		return false;
+
 	dock->setVisible(true);
 
 	return true;
@@ -353,6 +368,10 @@ bool StreamElementsWidgetManager::SetWidgetTitleById(const char* const id,
 
 	QDockWidget *dock = m_dockWidgets[id];
 
+	// Null when Qt destroyed the dock behind our back (CORE-786).
+	if (!dock)
+		return false;
+
 	dock->setWindowTitle(QString(title));
 
 	return true;
@@ -369,6 +388,10 @@ bool StreamElementsWidgetManager::HideWidgetById(const char *const id)
 	}
 
 	QDockWidget *dock = m_dockWidgets[id];
+
+	// Null when Qt destroyed the dock behind our back (CORE-786).
+	if (!dock)
+		return false;
 
 	dock->setVisible(false);
 
@@ -430,6 +453,10 @@ bool StreamElementsWidgetManager::SetWidgetDimensionsById(const char *const id,
 	}
 
 	QDockWidget *dock = m_dockWidgets[id];
+
+	// Null when Qt destroyed the dock behind our back (CORE-786).
+	if (!dock)
+		return false;
 
 	if (!dock->isFloating() || !dock->window()) {
 		return false;
@@ -502,12 +529,18 @@ bool StreamElementsWidgetManager::RemoveDockWidget(const char *const id)
 		return false;
 	}
 
-	QDockWidget *dock = m_dockWidgets[id];
+	QPointer<QDockWidget> dock = m_dockWidgets[id];
 
 	m_dockWidgets.erase(id);
 	m_dockWidgetAreas.erase(id);
 
-	m_parent->removeDockWidget(dock);
+	// The map entry goes either way; the widget is only touched if Qt has
+	// not already destroyed it (CORE-786).
+	if (!dock)
+		return true;
+
+	if (m_parent)
+		m_parent->removeDockWidget(dock);
 
 	dock->deleteLater();
 
@@ -619,6 +652,10 @@ void StreamElementsWidgetManager::SaveDockWidgetsGeometry()
 	QApplication::sendPostedEvents();
 
 	for (auto iter : m_dockWidgets) {
+		// Null when Qt destroyed the dock behind our back (CORE-786).
+		if (!iter.second)
+			continue;
+
 		m_dockWidgetSavedMinSize[iter.first] = iter.second->size();
 	}
 }
@@ -632,22 +669,30 @@ void StreamElementsWidgetManager::RestoreDockWidgetsGeometry()
 	std::map<std::string, QSize> maxSize;
 
 	for (auto iter : m_dockWidgetSavedMinSize) {
-		if (m_dockWidgets.count(iter.first)) {
-			maxSize[iter.first] =
-				m_dockWidgets[iter.first]->maximumSize();
+		QPointer<QDockWidget> dock;
 
-			m_dockWidgets[iter.first]->setMinimumSize(iter.second);
-			m_dockWidgets[iter.first]->setMaximumSize(iter.second);
+		if (m_dockWidgets.count(iter.first))
+			dock = m_dockWidgets[iter.first];
+
+		if (dock) {
+			maxSize[iter.first] = dock->maximumSize();
+
+			dock->setMinimumSize(iter.second);
+			dock->setMaximumSize(iter.second);
 		}
 	}
 
 	QApplication::sendPostedEvents();
 
 	for (auto iter : m_dockWidgetSavedMinSize) {
-		if (m_dockWidgets.count(iter.first)) {
-			m_dockWidgets[iter.first]->setMinimumSize(QSize(0, 0));
-			m_dockWidgets[iter.first]->setMaximumSize(
-				maxSize[iter.first]);
+		QPointer<QDockWidget> dock;
+
+		if (m_dockWidgets.count(iter.first))
+			dock = m_dockWidgets[iter.first];
+
+		if (dock) {
+			dock->setMinimumSize(QSize(0, 0));
+			dock->setMaximumSize(maxSize[iter.first]);
 		}
 	}
 

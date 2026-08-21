@@ -103,7 +103,12 @@ private:
 	QPointer<QWidget> m_nativeCentralWidget = nullptr;
 	//QWidget* m_currentCentralWidget = nullptr;
 
-	std::map<std::string, QDockWidget*> m_dockWidgets;
+	// QPointer, not a raw pointer: the docks are children of the OBS main
+	// window (addDockWidget), so Qt owns them and destroys them with that
+	// window. Nothing tells this map when that happens, and on the OBSInit
+	// re-entrancy path it happens before ~StreamElementsWidgetManager runs.
+	// Raw pointers went stale and were deleted a second time (CORE-786).
+	std::map<std::string, QPointer<QDockWidget>> m_dockWidgets;
 	std::map<std::string, Qt::DockWidgetArea> m_dockWidgetAreas;
 
 	std::map<std::string, QSize> m_dockWidgetSavedMinSize;
