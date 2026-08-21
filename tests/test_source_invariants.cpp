@@ -181,6 +181,75 @@ static void check_menu_manager_update_guarded()
 	}
 }
 
+// --- CORE-777: ~StreamElementsWidgetManager must not drain the Qt event
+// queue while tearing down its dock widgets.
+//
+// The destructor used to call QApplication::sendPostedEvents() between
+// QMainWindow::removeDockWidget() and delete. That dispatches any
+// DeferredDelete already posted for the very widget about to be deleted,
+// so the delete lands on an already-destructed object and Qt aborts in
+// _purecall -- ~QObject deletes its QObjectData through a pure virtual
+// destructor, and on the second pass the vtable has degraded to
+// QObjectData, whose slot holds _purecall.
+//
+// Draining is unnecessary: ~QObject discards events posted to the object
+// being destroyed.
+static std::string strip_line_comments(const std::string &src)
+{
+	std::string out;
+	out.reserve(src.size());
+
+	for (std::size_t i = 0; i < src.size();) {
+		if (src[i] == '/' && i + 1 < src.size() && src[i + 1] == '/') {
+			while (i < src.size() && src[i] != '\n')
+				++i;
+		} else {
+			out.push_back(src[i]);
+			++i;
+		}
+	}
+
+	return out;
+}
+
+static void check_widget_manager_dtor_does_not_drain_events()
+{
+	auto src = slurp("streamelements/StreamElementsWidgetManager.cpp");
+
+	// Isolate the destructor body: from its signature to the first
+	// closing brace in column 0. Scanning the whole file would trip over
+	// the deliberate drains in PushCentralWidget() and friends.
+	const std::string sig =
+		"StreamElementsWidgetManager::~StreamElementsWidgetManager()";
+
+	auto start = src.find(sig);
+	check(start != std::string::npos,
+	      "CORE-777: ~StreamElementsWidgetManager() not found -- update this invariant");
+	if (start == std::string::npos)
+		return;
+
+	auto end = src.find("\n}", start);
+	check(end != std::string::npos,
+	      "CORE-777: could not find the end of ~StreamElementsWidgetManager()");
+	if (end == std::string::npos)
+		return;
+
+	std::string body = src.substr(start, end - start);
+
+	// Comments are stripped first: the fix leaves a comment naming the
+	// call it must not make, and that must not satisfy the check either
+	// way round.
+	std::string code = strip_line_comments(body);
+
+	check(code.find("sendPostedEvents") == std::string::npos,
+	      "CORE-777: ~StreamElementsWidgetManager() must not call QApplication::sendPostedEvents() -- it turns a pending deleteLater() into a double delete");
+
+	// And the widget must be reached through a QPointer, so a dock
+	// destroyed behind our back reads back as null rather than dangling.
+	check(code.find("QPointer<QDockWidget>") != std::string::npos,
+	      "CORE-777: ~StreamElementsWidgetManager() must hold each dock widget in a QPointer before deleting it");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -189,6 +258,7 @@ int main()
 	check_c6_audio_encoder_bounds();
 	check_c10_no_duplicate_handler_setcurrentprofile();
 	check_menu_manager_update_guarded();
+	check_widget_manager_dtor_does_not_drain_events();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",
