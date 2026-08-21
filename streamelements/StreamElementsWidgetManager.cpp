@@ -24,15 +24,33 @@ StreamElementsWidgetManager::~StreamElementsWidgetManager()
 		     "[obs-streamelements-core]: destroying dock widget '%s'",
 		     pair.first.c_str());
 
-		m_parent->removeDockWidget(pair.second);
+		// QPointer, so a dock widget destroyed behind our back --
+		// by its QMainWindow parent, or by a deleteLater() posted
+		// from elsewhere -- reads back as null instead of dangling.
+		QPointer<QDockWidget> dock(pair.second);
 
-		// This causes a crash on shutdown, just delete below
-		// pair.second->deleteLater();
+		if (!dock)
+			continue;
 
-		// Drain event queue
-		QApplication::sendPostedEvents();
+		if (m_parent)
+			m_parent->removeDockWidget(dock);
 
-		delete pair.second;
+		// Deliberately NOT draining the event queue here (CORE-777).
+		// A QApplication::sendPostedEvents() at this point dispatches
+		// any DeferredDelete already posted for this very widget,
+		// destroying it, and the delete below then runs on an
+		// already-destructed object. That aborts inside Qt, where
+		// ~QObject deletes its QObjectData through a pure virtual
+		// destructor: the second pass finds the vtable degraded to
+		// QObjectData and lands in _purecall.
+		//
+		// Draining buys nothing anyway -- ~QObject discards the events
+		// posted to the object being destroyed.
+
+		if (!dock)
+			continue;
+
+		delete dock.data();
 	}
 
 	m_dockWidgets.clear();
