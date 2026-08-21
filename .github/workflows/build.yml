@@ -252,8 +252,6 @@ jobs:
 
     env:
       CHECKOUT: 32.2.1
-      GS_ACCESS_KEY_ID: ${{ secrets.GS_ACCESS_KEY_ID }}
-      GS_KEY_BASE64: ${{ secrets.GS_KEY_BASE64 }}
       GITHUB_WORKSPACE: $GITHUB_WORKSPACE
 
       # Redefined here rather than taken from the workflow-level env, because
@@ -294,15 +292,6 @@ jobs:
           mkdir C:\local\obs-studio\plugins\obs-streamelements-core
           xcopy "%GITHUB_WORKSPACE%\*.*" "C:\local\obs-studio\plugins\obs-streamelements-core" /S /E /I /Y
           echo add_obs_plugin(obs-streamelements-core) > C:\local\obs-studio\plugins\CMakeLists.txt
-
-      - name: Setup GCS uploader
-        shell: powershell
-        run: |
-          cd C:\local\obs-studio\plugins\obs-streamelements-core\CI\gcs
-          [System.Text.Encoding]::UTF8.GetString(
-            [System.Convert]::FromBase64String($env:GS_KEY_BASE64)
-          ) | Out-File key.json
-          npm install
 
       # Symbol upload is best-effort: BugSplat being unreachable must not fail a build
       # that otherwise compiled and signed correctly. The only consequence is that crash
@@ -434,7 +423,6 @@ jobs:
 
     env:
       CHECKOUT: 32.2.1
-      GS_SECRET_ACCESS_KEY: ${{ secrets.GS_SECRET_ACCESS_KEY }}
 
       # See the matching comment in the windows job: job-level env is the only
       # scope that can read `needs`, so the release-notes gate has to be applied
