@@ -638,12 +638,20 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			->trackEvent("se_live_initialized", eventProps, fields);
 	}
 
-	//QtPostTask([]() {
-		// Update visible state
-		StreamElementsGlobalStateManager::GetInstance()
-			->GetMenuManager()
-			->Update();
-	//});
+	// Update visible state.
+	//
+	// Through m_menuManager, not GetInstance()->GetMenuManager(): this is a
+	// member function and the member is right here. Going through the singleton
+	// is what crashed. GetInstance() lazily constructs when s_instance is not
+	// this instance, and a freshly constructed manager has every shared_ptr
+	// member null -- so ->Update() ran on a null StreamElementsMenuManager.
+	//
+	// Confirmed from two minidumps of the same fault: UpdateInternal entered
+	// with this == nullptr, while this->m_menuManager on the instance running
+	// Initialize() was non-null. Two different objects; the singleton returned
+	// the empty one.
+	if (m_menuManager)
+		m_menuManager->Update();
 
 	streamelements_updater_init();
 
