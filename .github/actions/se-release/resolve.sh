@@ -147,6 +147,33 @@ resolve_previous_full_tag "$BUILD" "$ENCODED"
 PREV_TAG="$PREV_FULL_TAG"
 emit previous_tag "$PREV_TAG"
 
+# ------------------------------------------------------------------ Linear scan base
+# The Linear release must list every issue fixed since the last FULL release, so its
+# commit scan takes the same lower bound as the changelog in the GitHub release body --
+# PREV_TAG -- rather than the version currently on the destination channel.
+#
+# Those two ranges are not the same range. Consecutive qa builds are a day or two apart,
+# while a full release can be weeks back, so scanning only the channel range is what left
+# Linear release 26.8.20.897 holding a fraction of what the changelog listed. Same base,
+# same commits, same issues, by construction.
+#
+# previous_channel_tag remains the fallback and is strictly better than nothing: until
+# the first full release exists PREV_TAG resolves only through the `latest` manifest
+# bootstrap, and when that is unavailable too it is empty. An empty base_ref sends the
+# CLI back to its own scan base -- one commit, one issue -- which is the failure this is
+# here to prevent.
+LINEAR_BASE="$PREV_TAG"
+if [ -z "$LINEAR_BASE" ] && [ -n "${BASE:-}" ]; then
+	LINEAR_BASE="$BASE"
+	note "linear: no previous full release; falling back to channel base $LINEAR_BASE"
+fi
+if [ -n "$LINEAR_BASE" ]; then
+	note "linear: issue scan range $LINEAR_BASE..$TAG"
+else
+	warn "linear: no scan base resolved; the CLI will fall back to its own, which sees only the head commit"
+fi
+emit linear_base_tag "$LINEAR_BASE"
+
 # ------------------------------------------------------------------- requirement 5
 # Recover the pristine RELEASE_NOTES.md fenced into an existing release body. This is a
 # fallback: the notes artifact fetched from the source channel is the primary source,
