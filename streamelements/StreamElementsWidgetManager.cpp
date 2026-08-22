@@ -29,30 +29,6 @@ StreamElementsWidgetManager::StreamElementsWidgetManager(QMainWindow *parent)
 // the entire normal lifetime of the plugin, so RemoveDockWidget() at runtime
 // still deletes and nothing accumulates.
 //
-static void SafeDeleteDockWidget(QPointer<QDockWidget> dock, const char *id,
-				 bool useDeleteLater)
-{
-	if (!dock)
-		return;
-
-	if (!IsObsInitFinished()) {
-		blog(LOG_WARNING,
-		     "[obs-streamelements-core]: leaking dock widget '%s': OBS has not finished initializing, deleting it now would corrupt the widget tree",
-		     id);
-
-		// Detach from the main window so OBS's own teardown does not
-		// walk into it later.
-		dock->setParent(nullptr);
-
-		return;
-	}
-
-	if (useDeleteLater)
-		dock->deleteLater();
-	else
-		delete dock.data();
-}
-
 StreamElementsWidgetManager::~StreamElementsWidgetManager()
 {
 	while (DestroyCurrentCentralWidget()) {
@@ -101,7 +77,7 @@ StreamElementsWidgetManager::~StreamElementsWidgetManager()
 		if (!dock)
 			continue;
 
-		SafeDeleteDockWidget(dock, pair.first.c_str(), false);
+		SEDeleteDockWidgetWhenSafe(dock, pair.first.c_str(), false);
 	}
 
 	m_dockWidgets.clear();
@@ -582,7 +558,7 @@ bool StreamElementsWidgetManager::RemoveDockWidget(const char *const id)
 	if (m_parent)
 		m_parent->removeDockWidget(dock);
 
-	SafeDeleteDockWidget(dock, id, true);
+	SEDeleteDockWidgetWhenSafe(dock, id, true);
 
 	return true;
 }

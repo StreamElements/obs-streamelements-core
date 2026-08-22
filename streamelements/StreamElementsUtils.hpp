@@ -26,6 +26,8 @@
 #include <curl/curl.h>
 
 #include <QMenu>
+#include <QDockWidget>
+#include <QPointer>
 #include <QWidget>
 
 #define SYNC_ACCESS()                                                    \
@@ -252,6 +254,13 @@ bool IsObsInitFinished();
 // Use instead of QApplication::sendPostedEvents() everywhere. Identical
 // behaviour, plus the depth accounting IsObsInitFinished() relies on.
 void SEDrainEventQueue();
+
+// The only sanctioned way to destroy a QDockWidget. Deletes it when the gate
+// above is open; otherwise detaches it from OBS's widget tree and leaks it,
+// loudly. Destroying a dock while OBSInit() is still on the stack corrupts
+// the tree, and by then obs_frontend_get_main_window() may already be null.
+void SEDeleteDockWidgetWhenSafe(QPointer<QDockWidget> dock, const char *id,
+				bool useDeleteLater);
 
 /* ========================================================= */
 

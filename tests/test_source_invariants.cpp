@@ -343,28 +343,75 @@ static void check_event_pumps_are_counted()
 // --- CORE-786: dock widgets must not be deleted unguarded.
 static void check_dock_deletion_is_gated()
 {
+	// Every dock teardown site must go through the shared helper.
+	static const char *const kSources[] = {
+		"streamelements/StreamElementsWidgetManager.cpp",
+		"streamelements/StreamElementsWorkerManager.cpp",
+	};
+
+	for (const char *const relpath : kSources) {
+		auto s = strip_line_comments(slurp(relpath));
+
+		if (s.find("SEDeleteDockWidgetWhenSafe") == std::string::npos) {
+			std::fprintf(
+				stderr,
+				"FAIL: CORE-786: %s must destroy dock widgets through SEDeleteDockWidgetWhenSafe()\n",
+				relpath);
+			++failures;
+		}
+	}
+
+	auto utils = strip_line_comments(
+		slurp("streamelements/StreamElementsUtils.cpp"));
+
+	check(utils.find("IsObsInitFinished()") != std::string::npos,
+	      "CORE-786: SEDeleteDockWidgetWhenSafe() must gate on IsObsInitFinished()");
+
 	auto code = strip_line_comments(
 		slurp("streamelements/StreamElementsWidgetManager.cpp"));
 
-	check(code.find("SafeDeleteDockWidget") != std::string::npos,
-	      "CORE-786: StreamElementsWidgetManager.cpp must delete dock widgets through SafeDeleteDockWidget()");
-
-	check(code.find("IsObsInitFinished") != std::string::npos,
-	      "CORE-786: SafeDeleteDockWidget() must gate on IsObsInitFinished()");
-
 	// The two raw deletion forms are legitimate inside the helper and
 	// nowhere else, so cut the helper out before looking for them.
-	auto helper = code.find("static void SafeDeleteDockWidget(");
-	if (helper != std::string::npos) {
-		auto helper_end = code.find("\n}", helper);
-		if (helper_end != std::string::npos)
-			code.erase(helper, helper_end - helper);
-	}
-
 	check(code.find("delete dock.data();") == std::string::npos,
 	      "CORE-786: bare `delete dock.data();` outside SafeDeleteDockWidget()");
 	check(code.find("dock->deleteLater();") == std::string::npos,
 	      "CORE-786: bare `dock->deleteLater();` outside SafeDeleteDockWidget()");
+}
+
+// --- CORE-786: the plug-in must not initialize from inside OBSInit().
+//
+// OBS_FRONTEND_EVENT_FINISHED_LOADING is emitted from OBSBasic::OnFirstLoad(),
+// inside OBSBasic::OBSInit(). Initializing there puts the whole object
+// hierarchy on OBSInit's stack, where OBS can go on to emit EXIT without ever
+// reaching its own event loop. Initialization must be deferred behind
+// IsObsInitFinished().
+static void check_initialize_is_deferred()
+{
+	auto code = strip_line_comments(slurp("obs-streamelements-core-plugin.cpp"));
+
+	auto handler = code.find("case OBS_FRONTEND_EVENT_FINISHED_LOADING:");
+	check(handler != std::string::npos,
+	      "CORE-786: FINISHED_LOADING case not found -- update this invariant");
+	if (handler == std::string::npos)
+		return;
+
+	auto handler_end = code.find("case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:",
+				     handler);
+	if (handler_end == std::string::npos)
+		handler_end = code.size();
+
+	auto branch = code.substr(handler, handler_end - handler);
+
+	// `->Initialize(` is the call on the state manager; the branch may
+	// legitimately mention StreamElementsDeferredInitialize().
+	check(branch.find("->Initialize(") == std::string::npos,
+	      "CORE-786: FINISHED_LOADING must not call Initialize() directly; defer it behind IsObsInitFinished()");
+
+	check(code.find("IsObsInitFinished()") != std::string::npos,
+	      "CORE-786: deferred initialization must gate on IsObsInitFinished()");
+
+	check(code.find("StreamElementsBeginObsInitWatch()") != std::string::npos,
+	      "CORE-786: the OBS init watch must be started from FINISHED_LOADING");
 }
 
 int main()
@@ -379,6 +426,7 @@ int main()
 	check_widget_maps_hold_qpointer();
 	check_event_pumps_are_counted();
 	check_dock_deletion_is_gated();
+	check_initialize_is_deferred();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

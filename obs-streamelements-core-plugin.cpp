@@ -11,6 +11,7 @@
 #include <sstream>
 #include <thread>
 #include <mutex>
+#include <atomic>
 
 #include "json11/json11.hpp"
 #include "obs-websocket-api/obs-websocket-api.h"
@@ -110,45 +111,89 @@ MODULE_EXPORT bool obs_module_load(void)
 	return true;
 }
 
+//
+// OBS emits OBS_FRONTEND_EVENT_FINISHED_LOADING from OBSBasic::OnFirstLoad(),
+// which runs INSIDE OBSBasic::OBSInit(). Initializing from that callback puts
+// our entire object hierarchy on OBSInit's stack, and if the user is held on
+// OBS's modal update dialog, OBS can emit FINISHED_LOADING and later EXIT from
+// two separate on_event() calls without ever reaching its own event loop. Our
+// Initialize() then stalls in an event pump, resumes minutes later, builds
+// widgets into a main window OBS is already dismantling, and teardown runs
+// against a half-built world with obs_frontend_get_main_window() already null.
+//
+// So: do not initialize from the callback. Wait until control has demonstrably
+// reached OBS's event loop, then initialize. If EXIT arrives first, never
+// initialize at all -- there is nothing to build for a session that is over
+// before it began (CORE-786).
+//
+static std::atomic<bool> s_isRunning(false);
+static std::atomic<bool> s_didInitialize(false);
+
+static void StreamElementsDeferredInitialize()
+{
+	if (!s_isRunning.load()) {
+		blog(LOG_INFO,
+		     "[obs-streamelements-core]: OBS exited before it finished initializing; skipping plug-in initialization");
+		return;
+	}
+
+	if (!IsObsInitFinished()) {
+		QtDelayTask([]() -> void { StreamElementsDeferredInitialize(); },
+			    250);
+		return;
+	}
+
+	auto mainWindow = static_cast<QMainWindow *>(
+		obs_frontend_get_main_window());
+
+	if (!mainWindow) {
+		blog(LOG_ERROR,
+		     "[obs-streamelements-core]: no OBS main window; skipping plug-in initialization");
+		return;
+	}
+
+	blog(LOG_INFO, "[obs-streamelements-core]: initializing");
+
+	s_didInitialize.store(true);
+
+	StreamElementsGlobalStateManager::GetInstance()->Initialize(mainWindow);
+
+	blog(LOG_INFO, "[obs-streamelements-core]: init done");
+}
+
 void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	static bool isRunning = true;
-
 	switch (event) {
 	case OBS_FRONTEND_EVENT_FINISHED_LOADING:
-		isRunning = true;
+		s_isRunning.store(true);
 
-		blog(LOG_INFO, "[obs-streamelements-core]: initializing");
+		blog(LOG_INFO,
+		     "[obs-streamelements-core]: waiting for OBS to finish initializing");
 
-		// This event is emitted from OBSBasic::OnFirstLoad(), which
-		// runs inside OBSBasic::OBSInit(). Start watching for the
-		// moment control actually reaches OBS's own event loop --
-		// dock widget deletion is gated on it (CORE-786).
 		StreamElementsBeginObsInitWatch();
 
-		// Initialize StreamElements plug-in
-		StreamElementsGlobalStateManager::GetInstance()->Initialize(
-			static_cast<QMainWindow *>(obs_frontend_get_main_window()));
-
-		blog(LOG_INFO, "[obs-streamelements-core]: init done");
+		StreamElementsDeferredInitialize();
 		break;
 	case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
 	case OBS_FRONTEND_EVENT_EXIT:
-		if (!isRunning)
+		if (!s_isRunning.exchange(false))
 			return;
-
-		isRunning = false;
 
 		obs_frontend_remove_event_callback(handle_obs_frontend_event,
 						   nullptr);
 
+		if (!s_didInitialize.load()) {
+			blog(LOG_INFO,
+			     "[obs-streamelements-core]: shutting down before initialization completed; nothing to tear down");
+			StreamElementsGlobalStateManager::Destroy();
+			break;
+		}
+
 		// Shutdown StreamElements plug-in
 		blog(LOG_INFO, "[obs-streamelements-core]: shutting down");
 
-		//StreamElementsGlobalStateManager::GetInstance()
-		//	->Shutdown();
 		StreamElementsGlobalStateManager::Destroy();
 		break;
 	default:

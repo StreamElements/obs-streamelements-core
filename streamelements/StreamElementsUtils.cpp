@@ -457,6 +457,30 @@ static void ObsInitWatchTick(int consecutiveClean)
 	QtDelayTask([next]() -> void { ObsInitWatchTick(next); }, 250);
 }
 
+void SEDeleteDockWidgetWhenSafe(QPointer<QDockWidget> dock, const char *id,
+				bool useDeleteLater)
+{
+	if (!dock)
+		return;
+
+	if (!IsObsInitFinished()) {
+		blog(LOG_WARNING,
+		     "[obs-streamelements-core]: leaking dock widget '%s': OBS has not finished initializing, deleting it now would corrupt the widget tree",
+		     id ? id : "(unnamed)");
+
+		// Detach from the main window so OBS's own teardown does not
+		// walk into it later.
+		dock->setParent(nullptr);
+
+		return;
+	}
+
+	if (useDeleteLater)
+		dock->deleteLater();
+	else
+		delete dock.data();
+}
+
 void StreamElementsBeginObsInitWatch()
 {
 	if (s_obsInitWatchStarted.exchange(true))
