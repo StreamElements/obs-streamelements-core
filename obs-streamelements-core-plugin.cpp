@@ -122,6 +122,12 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 
 		blog(LOG_INFO, "[obs-streamelements-core]: initializing");
 
+		// This event is emitted from OBSBasic::OnFirstLoad(), which
+		// runs inside OBSBasic::OBSInit(). Start watching for the
+		// moment control actually reaches OBS's own event loop --
+		// dock widget deletion is gated on it (CORE-786).
+		StreamElementsBeginObsInitWatch();
+
 		// Initialize StreamElements plug-in
 		StreamElementsGlobalStateManager::GetInstance()->Initialize(
 			static_cast<QMainWindow *>(obs_frontend_get_main_window()));

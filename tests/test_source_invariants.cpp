@@ -296,6 +296,77 @@ static void check_widget_maps_hold_qpointer()
 	      "CORE-786: m_activeVideoCompositionViewWidget must be a QPointer");
 }
 
+// --- CORE-786: every event pump must go through SEDrainEventQueue().
+//
+// IsObsInitFinished() distinguishes OBS's own event loop from a nested one by
+// counting the pumps we run ourselves. A bare QApplication::sendPostedEvents()
+// anywhere in the plugin is invisible to that counter, so the gate could open
+// while OBSInit() is still on the stack -- which is the exact condition that
+// corrupts the widget tree. The wrapper in StreamElementsUtils.cpp is the only
+// legitimate caller.
+static void check_event_pumps_are_counted()
+{
+	static const char *const kSources[] = {
+		"streamelements/StreamElementsBrowserWidgetManager.cpp",
+		"streamelements/StreamElementsGlobalStateManager.cpp",
+		"streamelements/StreamElementsNativeOBSControlsManager.cpp",
+		"streamelements/StreamElementsWidgetManager.cpp",
+		"streamelements/StreamElementsWorkerManager.cpp",
+		"streamelements/StreamElementsReportIssueDialog.cpp",
+	};
+
+	for (const char *const relpath : kSources) {
+		auto code = strip_line_comments(slurp(relpath));
+
+		if (code.find("sendPostedEvents") != std::string::npos) {
+			std::fprintf(
+				stderr,
+				"FAIL: CORE-786: %s calls sendPostedEvents() directly; use SEDrainEventQueue() so the pump is counted\n",
+				relpath);
+			++failures;
+		}
+	}
+
+	// And the wrapper itself must still contain exactly one real pump.
+	auto utils = strip_line_comments(
+		slurp("streamelements/StreamElementsUtils.cpp"));
+
+	std::regex pump(R"(QApplication::sendPostedEvents\(\);)");
+
+	check(count_matches(utils, pump) == 1,
+	      "CORE-786: StreamElementsUtils.cpp must contain exactly one QApplication::sendPostedEvents(), inside SEDrainEventQueue()");
+
+	check(utils.find("void SEDrainEventQueue()") != std::string::npos,
+	      "CORE-786: SEDrainEventQueue() must exist in StreamElementsUtils.cpp");
+}
+
+// --- CORE-786: dock widgets must not be deleted unguarded.
+static void check_dock_deletion_is_gated()
+{
+	auto code = strip_line_comments(
+		slurp("streamelements/StreamElementsWidgetManager.cpp"));
+
+	check(code.find("SafeDeleteDockWidget") != std::string::npos,
+	      "CORE-786: StreamElementsWidgetManager.cpp must delete dock widgets through SafeDeleteDockWidget()");
+
+	check(code.find("IsObsInitFinished") != std::string::npos,
+	      "CORE-786: SafeDeleteDockWidget() must gate on IsObsInitFinished()");
+
+	// The two raw deletion forms are legitimate inside the helper and
+	// nowhere else, so cut the helper out before looking for them.
+	auto helper = code.find("static void SafeDeleteDockWidget(");
+	if (helper != std::string::npos) {
+		auto helper_end = code.find("\n}", helper);
+		if (helper_end != std::string::npos)
+			code.erase(helper, helper_end - helper);
+	}
+
+	check(code.find("delete dock.data();") == std::string::npos,
+	      "CORE-786: bare `delete dock.data();` outside SafeDeleteDockWidget()");
+	check(code.find("dock->deleteLater();") == std::string::npos,
+	      "CORE-786: bare `dock->deleteLater();` outside SafeDeleteDockWidget()");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -306,6 +377,8 @@ int main()
 	check_menu_manager_update_guarded();
 	check_widget_manager_dtor_does_not_drain_events();
 	check_widget_maps_hold_qpointer();
+	check_event_pumps_are_counted();
+	check_dock_deletion_is_gated();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

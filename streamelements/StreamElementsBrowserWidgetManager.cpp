@@ -603,10 +603,10 @@ void StreamElementsBrowserWidgetManager::DeserializeDockingWidgets(
 						mainWindow()->splitDockWidget(prev, curr, Qt::Vertical);
 					}
 
-					QApplication::sendPostedEvents();
+					SEDrainEventQueue();
 					prev->setMinimumSize(idToMinSizeMap[dockIds[i - 1]]);
 					prev->widget()->setMinimumSize(idToMinSizeMap[dockIds[i - 1]]);
-					QApplication::sendPostedEvents();
+					SEDrainEventQueue();
 				}
 				*/
 			}
@@ -982,7 +982,7 @@ bool StreamElementsBrowserWidgetManager::InsertDockingWidgetRelativeToId(
 		}
 	}
 
-	QApplication::sendPostedEvents();
+	SEDrainEventQueue();
 
 	return true;
 }
@@ -1023,7 +1023,7 @@ void StreamElementsBrowserWidgetManager::HideNotificationBar()
 	if (m_notificationBarToolBar) {
 		m_notificationBarToolBar->setVisible(false);
 
-		QApplication::sendPostedEvents();
+		SEDrainEventQueue();
 
 		mainWindow()->removeToolBar(m_notificationBarToolBar);
 

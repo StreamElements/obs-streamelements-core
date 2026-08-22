@@ -609,7 +609,7 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	// Initialize() is still on the stack and m_initialized is still false:
 	// deferred deletes, frontend callbacks, and any modal dialog's own event
 	// loop. Nothing constructed above may be assumed live below this point.
-	QApplication::sendPostedEvents();
+	SEDrainEventQueue();
 
 	// Guarded because of the pump above, not out of caution. Observed: OBS
 	// held OBSInit open in its modal update dialog for ~5 minutes, and by the
@@ -741,7 +741,7 @@ void StreamElementsGlobalStateManager::Shutdown()
 
 	StreamElementsConfig::Destroy();
 
-	QApplication::sendPostedEvents();
+	SEDrainEventQueue();
 
 	m_initialized = false;
 }
@@ -1312,7 +1312,7 @@ bool StreamElementsGlobalStateManager::DeserializeModalDialog(
 
 			dialog->setFixedSize(width, height);
 
-			QApplication::sendPostedEvents();
+			SEDrainEventQueue();
 
 			dialog->setMinimumSize(width, height);
 			dialog->setMaximumSize(savedMaxSize);
@@ -1535,7 +1535,7 @@ std::shared_ptr<std::promise<CefRefPtr<CefValue>>> StreamElementsGlobalStateMana
 
 			dialog->setFixedSize(width, height);
 
-			QApplication::sendPostedEvents();
+			SEDrainEventQueue();
 
 			dialog->setMinimumSize(width, height);
 			dialog->setMaximumSize(savedMaxSize);

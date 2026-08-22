@@ -330,7 +330,7 @@ void StreamElementsNativeOBSControlsManager::HidePreviewTitleBar()
 
 	m_previewTitleContainer->hide();
 
-	QApplication::sendPostedEvents();
+	SEDrainEventQueue();
 
 	if (m_previewTitleBrowser) {
 		m_previewTitleLayout->removeWidget(m_previewTitleBrowser);

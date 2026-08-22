@@ -223,6 +223,38 @@ std::future<void> __QtDelayTask_Impl(std::function<void()> task, int delayMs, co
 #define QtPostTask QtAsyncCallFunctor(__FILE__, __LINE__, &__QtPostTask_Impl)
 #define QtExecSync QtAsyncCallFunctor(__FILE__, __LINE__, &__QtExecSync_Impl)
 
+/* ========================================================= */
+
+//
+// OBS init gate (CORE-786).
+//
+// OBS emits OBS_FRONTEND_EVENT_FINISHED_LOADING from OBSBasic::OnFirstLoad(),
+// which runs INSIDE OBSBasic::OBSInit(). If the user is held on OBS's modal
+// update dialog, OBS can emit FINISHED_LOADING and later EXIT from two
+// separate on_event() calls without ever leaving OBSInit -- so our whole
+// lifecycle can run against a main window that is still being built and is
+// then torn down. Destroying dock widgets in that window is what faulted.
+//
+// IsObsInitFinished() answers "has control returned to OBS's own event loop",
+// conservatively. It only becomes true once a timer task has observed, twice
+// in a row, that no modal or popup is up AND that we are not inside one of our
+// own event pumps. That last condition is what SEDrainEventQueue() maintains:
+// a timer can only fire from an event loop, and the only event loops in play
+// are our pumps (counted), a modal exec() (detected), and OBS's real loop --
+// which is the one we are waiting for.
+//
+// Started from the FINISHED_LOADING handler. Before that, and for a few
+// hundred ms after OBS's loop starts, it reports false.
+//
+void StreamElementsBeginObsInitWatch();
+bool IsObsInitFinished();
+
+// Use instead of QApplication::sendPostedEvents() everywhere. Identical
+// behaviour, plus the depth accounting IsObsInitFinished() relies on.
+void SEDrainEventQueue();
+
+/* ========================================================= */
+
 std::string DockWidgetAreaToString(const Qt::DockWidgetArea area);
 std::string GetCommandLineOptionValue(const std::string key);
 std::string LoadResourceString(std::string path);

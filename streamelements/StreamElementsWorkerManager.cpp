@@ -60,7 +60,7 @@ public:
 		mainWindow->removeDockWidget(m_dockWidget);
 		m_dockWidget->deleteLater();
 
-		QApplication::sendPostedEvents();
+		SEDrainEventQueue();
 	}
 
 	std::string GetUrl() { return m_url; }
