@@ -336,6 +336,18 @@ void StreamElementsGlobalStateManager::Destroy()
 	s_instance = nullptr;
 }
 
+void StreamElementsGlobalStateManager::Leak()
+{
+	// Heap-allocated and never freed, so the refcount never reaches zero
+	// and no destructor runs -- not now, and not during static destruction
+	// at process exit either.
+	if (s_instance.get())
+		new std::shared_ptr<StreamElementsGlobalStateManager>(
+			s_instance);
+
+	s_instance = nullptr;
+}
+
 bool StreamElementsGlobalStateManager::IsInstanceAvailable()
 {
 	if (!s_instance.get())
@@ -657,6 +669,10 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 	m_persistStateEnabled = true;
 	m_initialized = true;
+
+	// From here on an OBS close is an ordinary close, and teardown runs
+	// normally (CORE-786).
+	SENoteInitializeCompleted();
 
 	obs_frontend_add_event_callback(handle_obs_frontend_event, nullptr);
 }

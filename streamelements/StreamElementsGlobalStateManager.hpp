@@ -85,6 +85,12 @@ public:
 public:
 	static std::shared_ptr<StreamElementsGlobalStateManager> GetInstance();
 	static void Destroy();
+
+	// Releases the singleton WITHOUT running any destructor, by parking a
+	// reference that is never freed. Used when OBS asked to close before
+	// initialization completed: the object graph is half-built and running
+	// its destructors corrupts the widget tree (CORE-786).
+	static void Leak();
 	static bool IsInstanceAvailable();
 
 public:

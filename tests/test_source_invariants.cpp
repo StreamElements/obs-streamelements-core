@@ -298,6 +298,10 @@ static void check_widget_maps_hold_qpointer()
 
 // --- CORE-786: every event pump must go through SEDrainEventQueue().
 //
+// One choke point for every event pump the plug-in runs. A bare
+// QApplication::sendPostedEvents() is how OBS's modal update dialog and its
+// queued close() get dispatched from inside our own Initialize().
+//
 // IsObsInitFinished() distinguishes OBS's own event loop from a nested one by
 // counting the pumps we run ourselves. A bare QApplication::sendPostedEvents()
 // anywhere in the plugin is invisible to that counter, so the gate could open
@@ -364,8 +368,8 @@ static void check_dock_deletion_is_gated()
 	auto utils = strip_line_comments(
 		slurp("streamelements/StreamElementsUtils.cpp"));
 
-	check(utils.find("IsObsInitFinished()") != std::string::npos,
-	      "CORE-786: SEDeleteDockWidgetWhenSafe() must gate on IsObsInitFinished()");
+	check(utils.find("SEIsUiTeardownSafe()") != std::string::npos,
+	      "CORE-786: SEDeleteDockWidgetWhenSafe() must gate on SEIsUiTeardownSafe()");
 
 	auto code = strip_line_comments(
 		slurp("streamelements/StreamElementsWidgetManager.cpp"));
@@ -378,40 +382,48 @@ static void check_dock_deletion_is_gated()
 	      "CORE-786: bare `dock->deleteLater();` outside SafeDeleteDockWidget()");
 }
 
-// --- CORE-786: the plug-in must not initialize from inside OBSInit().
+// --- CORE-786: the plug-in must watch the OBS main window for close.
 //
-// OBS_FRONTEND_EVENT_FINISHED_LOADING is emitted from OBSBasic::OnFirstLoad(),
-// inside OBSBasic::OBSInit(). Initializing there puts the whole object
-// hierarchy on OBSInit's stack, where OBS can go on to emit EXIT without ever
-// reaching its own event loop. Initialization must be deferred behind
-// IsObsInitFinished().
-static void check_initialize_is_deferred()
+// OBSBasic::OBSInit() starts AutoUpdateThread before it emits
+// FINISHED_LOADING, and that thread ends with a queued close() on the main
+// window. If the close lands before Initialize() finishes, our object graph is
+// half-built and must not be torn down. QEvent::Close on the main window is
+// the signal; it is delivered before OBSBasic::closeEvent(), which is what
+// fires EXIT.
+static void check_obs_close_is_watched()
 {
 	auto code = strip_line_comments(slurp("obs-streamelements-core-plugin.cpp"));
 
-	auto handler = code.find("case OBS_FRONTEND_EVENT_FINISHED_LOADING:");
-	check(handler != std::string::npos,
-	      "CORE-786: FINISHED_LOADING case not found -- update this invariant");
-	if (handler == std::string::npos)
-		return;
+	check(code.find("QEvent::Close") != std::string::npos,
+	      "CORE-786: the plug-in must watch for QEvent::Close on the OBS main window");
 
-	auto handler_end = code.find("case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:",
-				     handler);
-	if (handler_end == std::string::npos)
-		handler_end = code.size();
+	check(code.find("installEventFilter") != std::string::npos,
+	      "CORE-786: the close watcher must be installed as an event filter");
 
-	auto branch = code.substr(handler, handler_end - handler);
+	check(code.find("bool SEIsUiTeardownSafe()") != std::string::npos,
+	      "CORE-786: SEIsUiTeardownSafe() must be defined in the plug-in entry point");
 
-	// `->Initialize(` is the call on the state manager; the branch may
-	// legitimately mention StreamElementsDeferredInitialize().
-	check(branch.find("->Initialize(") == std::string::npos,
-	      "CORE-786: FINISHED_LOADING must not call Initialize() directly; defer it behind IsObsInitFinished()");
+	check(code.find("SENoteInitializeCompleted()") != std::string::npos,
+	      "CORE-786: SENoteInitializeCompleted() must be defined in the plug-in entry point");
 
-	check(code.find("IsObsInitFinished()") != std::string::npos,
-	      "CORE-786: deferred initialization must gate on IsObsInitFinished()");
+	// The gate has to actually be consulted on the teardown path, and the
+	// unsafe branch must leak rather than destroy.
+	check(code.find("StreamElementsGlobalStateManager::Leak()") !=
+		      std::string::npos,
+	      "CORE-786: the EXIT path must leak rather than tear down when teardown is unsafe");
 
-	check(code.find("StreamElementsBeginObsInitWatch()") != std::string::npos,
-	      "CORE-786: the OBS init watch must be started from FINISHED_LOADING");
+	// The filter must never swallow the event -- OBS has to close exactly
+	// as it would without us.
+	check(code.find("return QObject::eventFilter(watched, event);") !=
+		      std::string::npos,
+	      "CORE-786: the close watcher must not consume events");
+
+	// And Initialize() must record completion, or the gate never opens.
+	auto gsm = strip_line_comments(
+		slurp("streamelements/StreamElementsGlobalStateManager.cpp"));
+
+	check(gsm.find("SENoteInitializeCompleted();") != std::string::npos,
+	      "CORE-786: Initialize() must call SENoteInitializeCompleted() on completion");
 }
 
 int main()
@@ -426,7 +438,7 @@ int main()
 	check_widget_maps_hold_qpointer();
 	check_event_pumps_are_counted();
 	check_dock_deletion_is_gated();
-	check_initialize_is_deferred();
+	check_obs_close_is_watched();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

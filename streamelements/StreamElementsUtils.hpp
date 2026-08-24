@@ -228,31 +228,22 @@ std::future<void> __QtDelayTask_Impl(std::function<void()> task, int delayMs, co
 /* ========================================================= */
 
 //
-// OBS init gate (CORE-786).
+// UI teardown gate (CORE-786). Defined in obs-streamelements-core-plugin.cpp,
+// which is where the detection lives; see the long comment there.
 //
-// OBS emits OBS_FRONTEND_EVENT_FINISHED_LOADING from OBSBasic::OnFirstLoad(),
-// which runs INSIDE OBSBasic::OBSInit(). If the user is held on OBS's modal
-// update dialog, OBS can emit FINISHED_LOADING and later EXIT from two
-// separate on_event() calls without ever leaving OBSInit -- so our whole
-// lifecycle can run against a main window that is still being built and is
-// then torn down. Destroying dock widgets in that window is what faulted.
+// False once OBS has been asked to close before our Initialize() completed --
+// the update-thread race. In that state our object graph is half-built and
+// destroying any of it corrupts the widget tree, so every UI teardown site
+// must check this first.
 //
-// IsObsInitFinished() answers "has control returned to OBS's own event loop",
-// conservatively. It only becomes true once a timer task has observed, twice
-// in a row, that no modal or popup is up AND that we are not inside one of our
-// own event pumps. That last condition is what SEDrainEventQueue() maintains:
-// a timer can only fire from an event loop, and the only event loops in play
-// are our pumps (counted), a modal exec() (detected), and OBS's real loop --
-// which is the one we are waiting for.
-//
-// Started from the FINISHED_LOADING handler. Before that, and for a few
-// hundred ms after OBS's loop starts, it reports false.
-//
-void StreamElementsBeginObsInitWatch();
-bool IsObsInitFinished();
+bool SEIsUiTeardownSafe();
 
-// Use instead of QApplication::sendPostedEvents() everywhere. Identical
-// behaviour, plus the depth accounting IsObsInitFinished() relies on.
+// Called at the end of Initialize(). After this, an ordinary close is an
+// ordinary close and teardown proceeds normally.
+void SENoteInitializeCompleted();
+
+// Use instead of QApplication::sendPostedEvents() everywhere: one choke point
+// for every event pump the plug-in runs.
 void SEDrainEventQueue();
 
 // The only sanctioned way to destroy a QDockWidget. Deletes it when the gate

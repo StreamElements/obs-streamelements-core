@@ -411,50 +411,9 @@ std::future<void> __QtExecSync_Impl(std::function<void()> task,
 
 /* ========================================================= */
 
-// See StreamElementsUtils.hpp for why this exists (CORE-786).
-static std::atomic<int> s_eventPumpDepth(0);
-static std::atomic<bool> s_obsInitFinished(false);
-static std::atomic<bool> s_obsInitWatchStarted(false);
-
 void SEDrainEventQueue()
 {
-	++s_eventPumpDepth;
-
 	QApplication::sendPostedEvents();
-
-	--s_eventPumpDepth;
-}
-
-bool IsObsInitFinished()
-{
-	return s_obsInitFinished.load();
-}
-
-static void ObsInitWatchTick(int consecutiveClean)
-{
-	if (s_obsInitFinished.load())
-		return;
-
-	// A timer task can be delivered from a nested loop just as easily as
-	// from the outermost one, so "this ran" proves nothing on its own.
-	// These two conditions are what distinguish OBS's loop from the loops
-	// we know about.
-	const bool clean = s_eventPumpDepth.load() == 0 &&
-			   QApplication::activeModalWidget() == nullptr &&
-			   QApplication::activePopupWidget() == nullptr;
-
-	const int next = clean ? consecutiveClean + 1 : 0;
-
-	if (next >= 2) {
-		s_obsInitFinished.store(true);
-
-		blog(LOG_INFO,
-		     "[obs-streamelements-core]: OBS init finished; dock widget deletion enabled");
-
-		return;
-	}
-
-	QtDelayTask([next]() -> void { ObsInitWatchTick(next); }, 250);
 }
 
 void SEDeleteDockWidgetWhenSafe(QPointer<QDockWidget> dock, const char *id,
@@ -463,9 +422,9 @@ void SEDeleteDockWidgetWhenSafe(QPointer<QDockWidget> dock, const char *id,
 	if (!dock)
 		return;
 
-	if (!IsObsInitFinished()) {
+	if (!SEIsUiTeardownSafe()) {
 		blog(LOG_WARNING,
-		     "[obs-streamelements-core]: leaking dock widget '%s': OBS has not finished initializing, deleting it now would corrupt the widget tree",
+		     "[obs-streamelements-core]: leaking dock widget '%s': OBS was asked to close before initialization completed, deleting it now would corrupt the widget tree",
 		     id ? id : "(unnamed)");
 
 		// Detach from the main window so OBS's own teardown does not
@@ -479,14 +438,6 @@ void SEDeleteDockWidgetWhenSafe(QPointer<QDockWidget> dock, const char *id,
 		dock->deleteLater();
 	else
 		delete dock.data();
-}
-
-void StreamElementsBeginObsInitWatch()
-{
-	if (s_obsInitWatchStarted.exchange(true))
-		return;
-
-	QtDelayTask([]() -> void { ObsInitWatchTick(0); }, 250);
 }
 
 /* ========================================================= */
