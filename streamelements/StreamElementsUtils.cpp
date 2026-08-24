@@ -413,12 +413,11 @@ std::future<void> __QtExecSync_Impl(std::function<void()> task,
 
 void SEDrainEventQueue()
 {
-	// Once OBS has been asked to close before we finished initializing,
-	// every further pump dispatches events into a world that is being torn
-	// down -- deferred deletes, queued calls into managers we have already
-	// leaked, and more of Initialize()'s own UI work. Stop pumping
-	// (CORE-786).
-	if (!SEIsUiTeardownSafe())
+	// Not while Initialize() is on the stack -- pumping there delivers the
+	// update thread's queued close() and nests OBS's EXIT dispatch inside
+	// its FINISHED_LOADING dispatch -- and not once a close has been caught,
+	// when every further dispatch feeds a world being torn down (CORE-786).
+	if (!SEIsEventPumpAllowed())
 		return;
 
 	QApplication::sendPostedEvents();

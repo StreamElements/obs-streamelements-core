@@ -349,8 +349,8 @@ static void check_event_pumps_are_counted()
 	auto pump_end = utils.find("\n}", pump_at);
 	auto pump_body = utils.substr(pump_at, pump_end - pump_at);
 
-	check(pump_body.find("SEIsUiTeardownSafe()") != std::string::npos,
-	      "CORE-786: SEDrainEventQueue() must stop pumping once teardown is unsafe");
+	check(pump_body.find("SEIsEventPumpAllowed()") != std::string::npos,
+	      "CORE-786: SEDrainEventQueue() must gate on SEIsEventPumpAllowed()");
 }
 
 // --- CORE-786: dock widgets must not be deleted unguarded.
@@ -414,6 +414,19 @@ static void check_obs_close_is_watched()
 
 	check(code.find("SENoteInitializeCompleted()") != std::string::npos,
 	      "CORE-786: SENoteInitializeCompleted() must be defined in the plug-in entry point");
+
+	// Pumping the event queue anywhere under Initialize() is what nests
+	// OBS's EXIT dispatch inside its FINISHED_LOADING dispatch, so the
+	// whole call has to run with pumping disabled.
+	check(code.find("bool SEIsEventPumpAllowed()") != std::string::npos,
+	      "CORE-786: SEIsEventPumpAllowed() must be defined in the plug-in entry point");
+
+	check(code.find("s_initializeInProgress") != std::string::npos,
+	      "CORE-786: an in-progress flag must cover the whole of Initialize()");
+
+	check(code.find("StreamElementsInitializeScope initializeScope;") !=
+		      std::string::npos,
+	      "CORE-786: Initialize() must be called inside StreamElementsInitializeScope");
 
 	// The gate has to actually be consulted on the teardown path, and the
 	// unsafe branch must leak rather than destroy.

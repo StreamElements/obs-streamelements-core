@@ -242,6 +242,10 @@ bool SEIsUiTeardownSafe();
 // ordinary close and teardown proceeds normally.
 void SENoteInitializeCompleted();
 
+// False while Initialize() is on the stack, and after a close has been caught.
+// Defined in obs-streamelements-core-plugin.cpp.
+bool SEIsEventPumpAllowed();
+
 // Use instead of QApplication::sendPostedEvents() everywhere: one choke point
 // for every event pump the plug-in runs.
 void SEDrainEventQueue();

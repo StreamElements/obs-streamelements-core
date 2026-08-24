@@ -156,6 +156,7 @@ MODULE_EXPORT bool obs_module_load(void)
 // exit would leak. Only a close that beats `init done` is poison.
 //
 static std::atomic<bool> s_initializeCompleted(false);
+static std::atomic<bool> s_initializeInProgress(false);
 static std::atomic<bool> s_closedBeforeInitCompleted(false);
 static std::atomic<bool> s_closeWatcherInstalled(false);
 
@@ -181,6 +182,42 @@ bool SEIsUiTeardownSafe()
 void SENoteInitializeCompleted()
 {
 	s_initializeCompleted.store(true);
+}
+
+//
+// Pumping the event queue while Initialize() is on the stack is what creates
+// the nesting: it delivers the update thread's queued close(), so
+// OBSBasic::closeEvent() -> OnEvent(EXIT) runs INSIDE the FINISHED_LOADING
+// dispatch. OBSStudioAPI::on_event() iterates `callbacks` with the size
+// captured once, every plug-in deregisters during the nested pass, and the
+// outer loop then indexes past the end of a shrunken vector and calls through
+// garbage -- an AV at on_event+0x4c with no plug-in frames on the stack.
+//
+// Gating the pump on the caught-close flag was not enough, and could not be:
+// that flag is only set while the close is being delivered, by the very pump
+// that delivers it. The pump has to be off for the whole of Initialize().
+//
+// Cost: the central-widget sizing hack in PushCentralWidget() /
+// DestroyCurrentCentralWidget() and the dock geometry save/restore rely on
+// draining to settle. Without it a dock may be sized wrong at startup. That is
+// cosmetic, and confined to initialization.
+//
+bool SEIsEventPumpAllowed()
+{
+	return !s_initializeInProgress.load() && SEIsUiTeardownSafe();
+}
+
+namespace {
+struct StreamElementsInitializeScope {
+	StreamElementsInitializeScope()
+	{
+		s_initializeInProgress.store(true);
+	}
+	~StreamElementsInitializeScope()
+	{
+		s_initializeInProgress.store(false);
+	}
+};
 }
 
 class StreamElementsObsCloseWatcher : public QObject {
@@ -236,10 +273,17 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 
 		blog(LOG_INFO, "[obs-streamelements-core]: initializing");
 
-		// Initialize StreamElements plug-in
-		StreamElementsGlobalStateManager::GetInstance()->Initialize(
-			static_cast<QMainWindow *>(
-				obs_frontend_get_main_window()));
+		// Initialize StreamElements plug-in.
+		//
+		// Scoped so that no event pump can run while this is on the
+		// stack; see SEIsEventPumpAllowed() above.
+		{
+			StreamElementsInitializeScope initializeScope;
+
+			StreamElementsGlobalStateManager::GetInstance()
+				->Initialize(static_cast<QMainWindow *>(
+					obs_frontend_get_main_window()));
+		}
 
 		blog(LOG_INFO, "[obs-streamelements-core]: init done");
 		break;
