@@ -342,6 +342,15 @@ static void check_event_pumps_are_counted()
 
 	check(utils.find("void SEDrainEventQueue()") != std::string::npos,
 	      "CORE-786: SEDrainEventQueue() must exist in StreamElementsUtils.cpp");
+
+	// The pump must stop once the close has been caught: every further
+	// dispatch feeds events into a world that is being torn down.
+	auto pump_at = utils.find("void SEDrainEventQueue()");
+	auto pump_end = utils.find("\n}", pump_at);
+	auto pump_body = utils.substr(pump_at, pump_end - pump_at);
+
+	check(pump_body.find("SEIsUiTeardownSafe()") != std::string::npos,
+	      "CORE-786: SEDrainEventQueue() must stop pumping once teardown is unsafe");
 }
 
 // --- CORE-786: dock widgets must not be deleted unguarded.
@@ -411,6 +420,18 @@ static void check_obs_close_is_watched()
 	check(code.find("StreamElementsGlobalStateManager::Leak()") !=
 		      std::string::npos,
 	      "CORE-786: the EXIT path must leak rather than tear down when teardown is unsafe");
+
+	// Removing our callback mutates the vector OBSStudioAPI::on_event() is
+	// iterating. Harmless normally, fatal when EXIT is dispatched from
+	// inside another on_event(), so it must be gated.
+	auto rm = code.find("obs_frontend_remove_event_callback(");
+	check(rm != std::string::npos,
+	      "CORE-786: EXIT-path callback removal not found -- update this invariant");
+	if (rm != std::string::npos) {
+		auto before = code.rfind("SEIsUiTeardownSafe()", rm);
+		check(before != std::string::npos && rm - before < 200,
+		      "CORE-786: obs_frontend_remove_event_callback() must be gated on SEIsUiTeardownSafe()");
+	}
 
 	// The filter must never swallow the event -- OBS has to close exactly
 	// as it would without us.

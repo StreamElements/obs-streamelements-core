@@ -255,8 +255,18 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 		// `init done` means the same thing.
 		NoteObsCloseRequested("OBS_FRONTEND_EVENT_EXIT");
 
-		obs_frontend_remove_event_callback(handle_obs_frontend_event,
-						   nullptr);
+		// OBSStudioAPI::on_event() iterates `callbacks` with the size
+		// captured once, and obs_frontend_remove_event_callback()
+		// erases from that same vector. When EXIT is dispatched from
+		// inside another on_event() -- which is what the update-thread
+		// race produces -- removing here shrinks the vector under the
+		// outer loop, which then indexes past the end and calls through
+		// garbage. Leave the callback registered; `isRunning` above
+		// already makes any further event a no-op (CORE-786).
+		if (SEIsUiTeardownSafe()) {
+			obs_frontend_remove_event_callback(
+				handle_obs_frontend_event, nullptr);
+		}
 
 		if (!SEIsUiTeardownSafe()) {
 			blog(LOG_WARNING,
