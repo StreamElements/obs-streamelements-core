@@ -409,6 +409,46 @@ std::future<void> __QtExecSync_Impl(std::function<void()> task,
 	}
 }
 
+/* ========================================================= */
+
+void SEDrainEventQueue()
+{
+	// Not while Initialize() is on the stack -- pumping there delivers the
+	// update thread's queued close() and nests OBS's EXIT dispatch inside
+	// its FINISHED_LOADING dispatch -- and not once a close has been caught,
+	// when every further dispatch feeds a world being torn down (CORE-786).
+	if (!SEIsEventPumpAllowed())
+		return;
+
+	QApplication::sendPostedEvents();
+}
+
+void SEDeleteDockWidgetWhenSafe(QPointer<QDockWidget> dock, const char *id,
+				bool useDeleteLater)
+{
+	if (!dock)
+		return;
+
+	if (!SEIsUiTeardownSafe()) {
+		blog(LOG_WARNING,
+		     "[obs-streamelements-core]: leaking dock widget '%s': OBS was asked to close before initialization completed, deleting it now would corrupt the widget tree",
+		     id ? id : "(unnamed)");
+
+		// Detach from the main window so OBS's own teardown does not
+		// walk into it later.
+		dock->setParent(nullptr);
+
+		return;
+	}
+
+	if (useDeleteLater)
+		dock->deleteLater();
+	else
+		delete dock.data();
+}
+
+/* ========================================================= */
+
 std::string DockWidgetAreaToString(const Qt::DockWidgetArea area)
 {
 	switch (area) {

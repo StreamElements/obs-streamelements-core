@@ -11,6 +11,10 @@
 #include <sstream>
 #include <thread>
 #include <mutex>
+#include <atomic>
+#include <QMainWindow>
+#include <QObject>
+#include <QEvent>
 
 #include "json11/json11.hpp"
 #include "obs-websocket-api/obs-websocket-api.h"
@@ -110,6 +114,149 @@ MODULE_EXPORT bool obs_module_load(void)
 	return true;
 }
 
+//
+// ---------------------------------------------------------------------------
+// The OBS update-thread race (CORE-786)
+// ---------------------------------------------------------------------------
+//
+// OBSBasic::OBSInit() spawns the update checker BEFORE it tells us the UI is
+// ready, and the two are not ordered with respect to each other:
+//
+//   OBSBasic.cpp:1307   TimedCheckForUpdates() -> new AutoUpdateThread; start()
+//   OBSBasic.cpp:1371   OnFirstLoad()          -> FINISHED_LOADING
+//
+// AutoUpdateThread then reaches back onto the main thread twice:
+//
+//   1. queryUpdate() does invokeMethod(this, "queryUpdateSlot",
+//      Qt::BlockingQueuedConnection), and `this` is the QThread OBJECT, which
+//      lives in the main thread. So the update dialog's exec() -- a nested,
+//      modal event loop -- runs on the main thread, dispatched by whichever
+//      event pump runs next. That pump is frequently one of ours, inside
+//      Initialize().
+//
+//   2. After launching the updater, run() finishes with
+//      invokeMethod(App()->GetMainWindow(), "close"), queued. The next pump --
+//      again, often ours -- delivers it, so OBSBasic::close() -> closeEvent()
+//      -> OBS_FRONTEND_EVENT_EXIT all run NESTED INSIDE our Initialize().
+//
+// We are then asked to tear down an object graph we are still building. Every
+// crash chased under this issue was a destructor touching something
+// Initialize() had just created: docks built at 02:48:17, destroyed at
+// 02:48:20, `init done` never reached.
+//
+// Detection: an event filter on the OBS main window watching QEvent::Close.
+// Filters on a widget run before that widget's own closeEvent(), and
+// closeEvent() is what fires EXIT -- so the flag is set before teardown
+// begins. QEvent::Close is the correct signal: the queued call arrives as a
+// private QMetaCallEvent carrying no readable method name, so it cannot be
+// told apart from any other invokeMethod on the main window.
+//
+// The flag is deliberately narrow. A close AFTER Initialize() completed is an
+// ordinary shutdown and must behave exactly as it always has, or every normal
+// exit would leak. Only a close that beats `init done` is poison.
+//
+static std::atomic<bool> s_initializeCompleted(false);
+static std::atomic<bool> s_initializeInProgress(false);
+static std::atomic<bool> s_closedBeforeInitCompleted(false);
+static std::atomic<bool> s_closeWatcherInstalled(false);
+
+static void NoteObsCloseRequested(const char *source)
+{
+	if (s_initializeCompleted.load())
+		return; // ordinary shutdown
+
+	if (s_closedBeforeInitCompleted.exchange(true))
+		return;
+
+	blog(LOG_WARNING,
+	     "[obs-streamelements-core]: OBS was asked to close before initialization completed (%s); UI teardown will be suppressed",
+	     source);
+}
+
+// Declared in StreamElementsUtils.hpp; called from every UI teardown site.
+bool SEIsUiTeardownSafe()
+{
+	return !s_closedBeforeInitCompleted.load();
+}
+
+void SENoteInitializeCompleted()
+{
+	s_initializeCompleted.store(true);
+}
+
+//
+// Pumping the event queue while Initialize() is on the stack is what creates
+// the nesting: it delivers the update thread's queued close(), so
+// OBSBasic::closeEvent() -> OnEvent(EXIT) runs INSIDE the FINISHED_LOADING
+// dispatch. OBSStudioAPI::on_event() iterates `callbacks` with the size
+// captured once, every plug-in deregisters during the nested pass, and the
+// outer loop then indexes past the end of a shrunken vector and calls through
+// garbage -- an AV at on_event+0x4c with no plug-in frames on the stack.
+//
+// Gating the pump on the caught-close flag was not enough, and could not be:
+// that flag is only set while the close is being delivered, by the very pump
+// that delivers it. The pump has to be off for the whole of Initialize().
+//
+// Cost: the central-widget sizing hack in PushCentralWidget() /
+// DestroyCurrentCentralWidget() and the dock geometry save/restore rely on
+// draining to settle. Without it a dock may be sized wrong at startup. That is
+// cosmetic, and confined to initialization.
+//
+bool SEIsEventPumpAllowed()
+{
+	return !s_initializeInProgress.load() && SEIsUiTeardownSafe();
+}
+
+namespace {
+struct StreamElementsInitializeScope {
+	StreamElementsInitializeScope()
+	{
+		s_initializeInProgress.store(true);
+	}
+	~StreamElementsInitializeScope()
+	{
+		s_initializeInProgress.store(false);
+	}
+};
+}
+
+class StreamElementsObsCloseWatcher : public QObject {
+public:
+	StreamElementsObsCloseWatcher(QObject *parent) : QObject(parent) {}
+
+protected:
+	bool eventFilter(QObject *watched, QEvent *event) override
+	{
+		if (event->type() == QEvent::Close)
+			NoteObsCloseRequested("QEvent::Close");
+
+		// Observe only. Never consume: OBS must close exactly as it
+		// would have without us.
+		return QObject::eventFilter(watched, event);
+	}
+};
+
+static void InstallObsCloseWatcher()
+{
+	if (s_closeWatcherInstalled.load())
+		return;
+
+	auto mainWindow =
+		static_cast<QMainWindow *>(obs_frontend_get_main_window());
+
+	if (!mainWindow)
+		return; // not up yet; the caller tries again later
+
+	s_closeWatcherInstalled.store(true);
+
+	// Parented to the main window so it dies with it.
+	mainWindow->installEventFilter(
+		new StreamElementsObsCloseWatcher(mainWindow));
+
+	blog(LOG_INFO,
+	     "[obs-streamelements-core]: watching the OBS main window for close");
+}
+
 void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
@@ -120,11 +267,23 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 	case OBS_FRONTEND_EVENT_FINISHED_LOADING:
 		isRunning = true;
 
+		// Belt and braces: obs_module_post_load() usually gets this,
+		// but the main window certainly exists by now.
+		InstallObsCloseWatcher();
+
 		blog(LOG_INFO, "[obs-streamelements-core]: initializing");
 
-		// Initialize StreamElements plug-in
-		StreamElementsGlobalStateManager::GetInstance()->Initialize(
-			static_cast<QMainWindow *>(obs_frontend_get_main_window()));
+		// Initialize StreamElements plug-in.
+		//
+		// Scoped so that no event pump can run while this is on the
+		// stack; see SEIsEventPumpAllowed() above.
+		{
+			StreamElementsInitializeScope initializeScope;
+
+			StreamElementsGlobalStateManager::GetInstance()
+				->Initialize(static_cast<QMainWindow *>(
+					obs_frontend_get_main_window()));
+		}
 
 		blog(LOG_INFO, "[obs-streamelements-core]: init done");
 		break;
@@ -135,14 +294,39 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 
 		isRunning = false;
 
-		obs_frontend_remove_event_callback(handle_obs_frontend_event,
-						   nullptr);
+		// Second, independent trigger: a quit path that never sends
+		// QEvent::Close still reaches here, and EXIT arriving before
+		// `init done` means the same thing.
+		NoteObsCloseRequested("OBS_FRONTEND_EVENT_EXIT");
+
+		// OBSStudioAPI::on_event() iterates `callbacks` with the size
+		// captured once, and obs_frontend_remove_event_callback()
+		// erases from that same vector. When EXIT is dispatched from
+		// inside another on_event() -- which is what the update-thread
+		// race produces -- removing here shrinks the vector under the
+		// outer loop, which then indexes past the end and calls through
+		// garbage. Leave the callback registered; `isRunning` above
+		// already makes any further event a no-op (CORE-786).
+		if (SEIsUiTeardownSafe()) {
+			obs_frontend_remove_event_callback(
+				handle_obs_frontend_event, nullptr);
+		}
+
+		if (!SEIsUiTeardownSafe()) {
+			blog(LOG_WARNING,
+			     "[obs-streamelements-core]: leaking plug-in state rather than tearing down a half-built object graph");
+
+			// Running the destructors is what corrupts the widget
+			// tree, so do not run them at all. The process is
+			// exiting and about to be replaced by the updater; a
+			// leak is strictly better than a crash.
+			StreamElementsGlobalStateManager::Leak();
+			break;
+		}
 
 		// Shutdown StreamElements plug-in
 		blog(LOG_INFO, "[obs-streamelements-core]: shutting down");
 
-		//StreamElementsGlobalStateManager::GetInstance()
-		//	->Shutdown();
 		StreamElementsGlobalStateManager::Destroy();
 		break;
 	default:
@@ -153,6 +337,11 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 MODULE_EXPORT void obs_module_post_load(void)
 {
 #if ENABLE_PLUGIN
+	// Earliest point the main window may exist. The update thread can in
+	// principle prompt before FINISHED_LOADING, so install as early as
+	// possible; the handler installs again if this was too early.
+	InstallObsCloseWatcher();
+
 	obs_frontend_add_event_callback(handle_obs_frontend_event, nullptr);
 
 	/*

@@ -250,6 +250,216 @@ static void check_widget_manager_dtor_does_not_drain_events()
 	      "CORE-777: ~StreamElementsWidgetManager() must hold each dock widget in a QPointer before deleting it");
 }
 
+// --- CORE-786: the widget maps must hold QPointer, not raw pointers.
+//
+// Docks are children of the OBS main window (addDockWidget), and browser
+// widgets are children of their dock. Qt owns both and destroys them with
+// their parent -- which, on the OBSInit re-entrancy path, happens before
+// ~StreamElementsWidgetManager runs. Raw pointers in these maps went stale
+// and were then deleted a second time.
+//
+// Guarding at the point of use is not enough and was the gap in the first
+// version of this fix: a QPointer constructed from an already-dangling raw
+// pointer is born non-null. The map itself has to hold the QPointer.
+static void check_widget_maps_hold_qpointer()
+{
+	auto wm = strip_line_comments(
+		slurp("streamelements/StreamElementsWidgetManager.hpp"));
+
+	check(wm.find("std::map<std::string, QPointer<QDockWidget>>") !=
+		      std::string::npos,
+	      "CORE-786: m_dockWidgets must be std::map<std::string, QPointer<QDockWidget>>");
+	check(wm.find("std::map<std::string, QDockWidget*>") ==
+		      std::string::npos,
+	      "CORE-786: m_dockWidgets must not hold raw QDockWidget*");
+
+	auto bwm = strip_line_comments(
+		slurp("streamelements/StreamElementsBrowserWidgetManager.hpp"));
+
+	check(bwm.find("QPointer<StreamElementsBrowserWidget>>") !=
+		      std::string::npos,
+	      "CORE-786: m_browserWidgets must hold QPointer<StreamElementsBrowserWidget>");
+	check(bwm.find("std::map<std::string, StreamElementsBrowserWidget*>") ==
+		      std::string::npos,
+	      "CORE-786: m_browserWidgets must not hold raw StreamElementsBrowserWidget*");
+
+	// The composition view widgets are hand-deleted, so they must be
+	// QPointer too or the delete can run twice.
+	auto bw = strip_line_comments(
+		slurp("streamelements/StreamElementsBrowserWidget.hpp"));
+
+	check(bw.find("QPointer<QWidget> m_activeVideoCompositionViewWidgetContainer") !=
+		      std::string::npos,
+	      "CORE-786: m_activeVideoCompositionViewWidgetContainer must be a QPointer");
+	check(bw.find("QPointer<StreamElementsVideoCompositionViewWidget>") !=
+		      std::string::npos,
+	      "CORE-786: m_activeVideoCompositionViewWidget must be a QPointer");
+}
+
+// --- CORE-786: every event pump must go through SEDrainEventQueue().
+//
+// One choke point for every event pump the plug-in runs. A bare
+// QApplication::sendPostedEvents() is how OBS's modal update dialog and its
+// queued close() get dispatched from inside our own Initialize().
+//
+// IsObsInitFinished() distinguishes OBS's own event loop from a nested one by
+// counting the pumps we run ourselves. A bare QApplication::sendPostedEvents()
+// anywhere in the plugin is invisible to that counter, so the gate could open
+// while OBSInit() is still on the stack -- which is the exact condition that
+// corrupts the widget tree. The wrapper in StreamElementsUtils.cpp is the only
+// legitimate caller.
+static void check_event_pumps_are_counted()
+{
+	static const char *const kSources[] = {
+		"streamelements/StreamElementsBrowserWidgetManager.cpp",
+		"streamelements/StreamElementsGlobalStateManager.cpp",
+		"streamelements/StreamElementsNativeOBSControlsManager.cpp",
+		"streamelements/StreamElementsWidgetManager.cpp",
+		"streamelements/StreamElementsWorkerManager.cpp",
+		"streamelements/StreamElementsReportIssueDialog.cpp",
+	};
+
+	for (const char *const relpath : kSources) {
+		auto code = strip_line_comments(slurp(relpath));
+
+		if (code.find("sendPostedEvents") != std::string::npos) {
+			std::fprintf(
+				stderr,
+				"FAIL: CORE-786: %s calls sendPostedEvents() directly; use SEDrainEventQueue() so the pump is counted\n",
+				relpath);
+			++failures;
+		}
+	}
+
+	// And the wrapper itself must still contain exactly one real pump.
+	auto utils = strip_line_comments(
+		slurp("streamelements/StreamElementsUtils.cpp"));
+
+	std::regex pump(R"(QApplication::sendPostedEvents\(\);)");
+
+	check(count_matches(utils, pump) == 1,
+	      "CORE-786: StreamElementsUtils.cpp must contain exactly one QApplication::sendPostedEvents(), inside SEDrainEventQueue()");
+
+	check(utils.find("void SEDrainEventQueue()") != std::string::npos,
+	      "CORE-786: SEDrainEventQueue() must exist in StreamElementsUtils.cpp");
+
+	// The pump must stop once the close has been caught: every further
+	// dispatch feeds events into a world that is being torn down.
+	auto pump_at = utils.find("void SEDrainEventQueue()");
+	auto pump_end = utils.find("\n}", pump_at);
+	auto pump_body = utils.substr(pump_at, pump_end - pump_at);
+
+	check(pump_body.find("SEIsEventPumpAllowed()") != std::string::npos,
+	      "CORE-786: SEDrainEventQueue() must gate on SEIsEventPumpAllowed()");
+}
+
+// --- CORE-786: dock widgets must not be deleted unguarded.
+static void check_dock_deletion_is_gated()
+{
+	// Every dock teardown site must go through the shared helper.
+	static const char *const kSources[] = {
+		"streamelements/StreamElementsWidgetManager.cpp",
+		"streamelements/StreamElementsWorkerManager.cpp",
+	};
+
+	for (const char *const relpath : kSources) {
+		auto s = strip_line_comments(slurp(relpath));
+
+		if (s.find("SEDeleteDockWidgetWhenSafe") == std::string::npos) {
+			std::fprintf(
+				stderr,
+				"FAIL: CORE-786: %s must destroy dock widgets through SEDeleteDockWidgetWhenSafe()\n",
+				relpath);
+			++failures;
+		}
+	}
+
+	auto utils = strip_line_comments(
+		slurp("streamelements/StreamElementsUtils.cpp"));
+
+	check(utils.find("SEIsUiTeardownSafe()") != std::string::npos,
+	      "CORE-786: SEDeleteDockWidgetWhenSafe() must gate on SEIsUiTeardownSafe()");
+
+	auto code = strip_line_comments(
+		slurp("streamelements/StreamElementsWidgetManager.cpp"));
+
+	// The two raw deletion forms are legitimate inside the helper and
+	// nowhere else, so cut the helper out before looking for them.
+	check(code.find("delete dock.data();") == std::string::npos,
+	      "CORE-786: bare `delete dock.data();` outside SafeDeleteDockWidget()");
+	check(code.find("dock->deleteLater();") == std::string::npos,
+	      "CORE-786: bare `dock->deleteLater();` outside SafeDeleteDockWidget()");
+}
+
+// --- CORE-786: the plug-in must watch the OBS main window for close.
+//
+// OBSBasic::OBSInit() starts AutoUpdateThread before it emits
+// FINISHED_LOADING, and that thread ends with a queued close() on the main
+// window. If the close lands before Initialize() finishes, our object graph is
+// half-built and must not be torn down. QEvent::Close on the main window is
+// the signal; it is delivered before OBSBasic::closeEvent(), which is what
+// fires EXIT.
+static void check_obs_close_is_watched()
+{
+	auto code = strip_line_comments(slurp("obs-streamelements-core-plugin.cpp"));
+
+	check(code.find("QEvent::Close") != std::string::npos,
+	      "CORE-786: the plug-in must watch for QEvent::Close on the OBS main window");
+
+	check(code.find("installEventFilter") != std::string::npos,
+	      "CORE-786: the close watcher must be installed as an event filter");
+
+	check(code.find("bool SEIsUiTeardownSafe()") != std::string::npos,
+	      "CORE-786: SEIsUiTeardownSafe() must be defined in the plug-in entry point");
+
+	check(code.find("SENoteInitializeCompleted()") != std::string::npos,
+	      "CORE-786: SENoteInitializeCompleted() must be defined in the plug-in entry point");
+
+	// Pumping the event queue anywhere under Initialize() is what nests
+	// OBS's EXIT dispatch inside its FINISHED_LOADING dispatch, so the
+	// whole call has to run with pumping disabled.
+	check(code.find("bool SEIsEventPumpAllowed()") != std::string::npos,
+	      "CORE-786: SEIsEventPumpAllowed() must be defined in the plug-in entry point");
+
+	check(code.find("s_initializeInProgress") != std::string::npos,
+	      "CORE-786: an in-progress flag must cover the whole of Initialize()");
+
+	check(code.find("StreamElementsInitializeScope initializeScope;") !=
+		      std::string::npos,
+	      "CORE-786: Initialize() must be called inside StreamElementsInitializeScope");
+
+	// The gate has to actually be consulted on the teardown path, and the
+	// unsafe branch must leak rather than destroy.
+	check(code.find("StreamElementsGlobalStateManager::Leak()") !=
+		      std::string::npos,
+	      "CORE-786: the EXIT path must leak rather than tear down when teardown is unsafe");
+
+	// Removing our callback mutates the vector OBSStudioAPI::on_event() is
+	// iterating. Harmless normally, fatal when EXIT is dispatched from
+	// inside another on_event(), so it must be gated.
+	auto rm = code.find("obs_frontend_remove_event_callback(");
+	check(rm != std::string::npos,
+	      "CORE-786: EXIT-path callback removal not found -- update this invariant");
+	if (rm != std::string::npos) {
+		auto before = code.rfind("SEIsUiTeardownSafe()", rm);
+		check(before != std::string::npos && rm - before < 200,
+		      "CORE-786: obs_frontend_remove_event_callback() must be gated on SEIsUiTeardownSafe()");
+	}
+
+	// The filter must never swallow the event -- OBS has to close exactly
+	// as it would without us.
+	check(code.find("return QObject::eventFilter(watched, event);") !=
+		      std::string::npos,
+	      "CORE-786: the close watcher must not consume events");
+
+	// And Initialize() must record completion, or the gate never opens.
+	auto gsm = strip_line_comments(
+		slurp("streamelements/StreamElementsGlobalStateManager.cpp"));
+
+	check(gsm.find("SENoteInitializeCompleted();") != std::string::npos,
+	      "CORE-786: Initialize() must call SENoteInitializeCompleted() on completion");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -259,6 +469,10 @@ int main()
 	check_c10_no_duplicate_handler_setcurrentprofile();
 	check_menu_manager_update_guarded();
 	check_widget_manager_dtor_does_not_drain_events();
+	check_widget_maps_hold_qpointer();
+	check_event_pumps_are_counted();
+	check_dock_deletion_is_gated();
+	check_obs_close_is_watched();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

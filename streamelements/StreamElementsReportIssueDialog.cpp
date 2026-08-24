@@ -552,7 +552,7 @@ void StreamElementsReportIssueDialog::accept()
 		if (!dialog.cancelled()) {
 			dialog.setMessage(obs_module_text(
 				"StreamElements.ReportIssue.Progress.Message.CollectingCpuBenchmark"));
-			qApp->sendPostedEvents();
+			SEDrainEventQueue();
 
 			cpu_benchmark = GetCpuCoreBenchmark(
 				CPU_BENCH_TOTAL, cpu_bench_delta);
@@ -561,7 +561,7 @@ void StreamElementsReportIssueDialog::accept()
 		if (!dialog.cancelled()) {
 			dialog.setMessage(obs_module_text(
 				"StreamElements.ReportIssue.Progress.Message.CollectingSysInfo"));
-			qApp->sendPostedEvents();
+			SEDrainEventQueue();
 
 			{
 				CefRefPtr<CefValue> basicInfo =

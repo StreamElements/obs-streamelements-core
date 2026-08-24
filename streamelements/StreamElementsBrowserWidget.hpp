@@ -6,6 +6,7 @@
 #include "StreamElementsWebsocketApiServer.hpp"
 
 #include <QWidget>
+#include <QPointer>
 #include <QHideEvent>
 #include <QCloseEvent>
 
@@ -49,9 +50,12 @@ private:
 
 	bool m_isIncognito = false;
 
-	QWidget *m_activeVideoCompositionViewWidgetContainer = nullptr;
-	StreamElementsVideoCompositionViewWidget
-		*m_activeVideoCompositionViewWidget = nullptr;
+	// QPointer: both are Qt children of this widget, so Qt may destroy them
+	// first during teardown. RemoveVideoCompositionView() deletes them by
+	// hand and must not do so twice (CORE-786).
+	QPointer<QWidget> m_activeVideoCompositionViewWidgetContainer = nullptr;
+	QPointer<StreamElementsVideoCompositionViewWidget>
+		m_activeVideoCompositionViewWidget = nullptr;
 
 	bool m_isDestroyed = false;
 

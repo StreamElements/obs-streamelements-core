@@ -54,13 +54,26 @@ public:
 	}
 
 	~StreamElementsWorker() {
+		// Null once OBS has torn down its frontend API, which happens
+		// before our teardown whenever the plugin is destroyed from
+		// inside OBSInit (CORE-786).
 		auto mainWindow = static_cast<QMainWindow *>(
 			obs_frontend_get_main_window());
 
-		mainWindow->removeDockWidget(m_dockWidget);
-		m_dockWidget->deleteLater();
+		QPointer<QDockWidget> dock(m_dockWidget);
 
-		QApplication::sendPostedEvents();
+		m_dockWidget = nullptr;
+
+		if (!dock)
+			return;
+
+		if (mainWindow)
+			mainWindow->removeDockWidget(dock);
+
+		SEDeleteDockWidgetWhenSafe(dock, "streamelements_worker", true);
+
+		// No event pump here: draining mid-teardown is what produced
+		// CORE-777.
 	}
 
 	std::string GetUrl() { return m_url; }

@@ -26,6 +26,8 @@
 #include <curl/curl.h>
 
 #include <QMenu>
+#include <QDockWidget>
+#include <QPointer>
 #include <QWidget>
 
 #define SYNC_ACCESS()                                                    \
@@ -222,6 +224,40 @@ std::future<void> __QtDelayTask_Impl(std::function<void()> task, int delayMs, co
 #define QtDelayTask(task, delayMs) __QtDelayTask_Impl(task, delayMs, __FILE__, __LINE__)
 #define QtPostTask QtAsyncCallFunctor(__FILE__, __LINE__, &__QtPostTask_Impl)
 #define QtExecSync QtAsyncCallFunctor(__FILE__, __LINE__, &__QtExecSync_Impl)
+
+/* ========================================================= */
+
+//
+// UI teardown gate (CORE-786). Defined in obs-streamelements-core-plugin.cpp,
+// which is where the detection lives; see the long comment there.
+//
+// False once OBS has been asked to close before our Initialize() completed --
+// the update-thread race. In that state our object graph is half-built and
+// destroying any of it corrupts the widget tree, so every UI teardown site
+// must check this first.
+//
+bool SEIsUiTeardownSafe();
+
+// Called at the end of Initialize(). After this, an ordinary close is an
+// ordinary close and teardown proceeds normally.
+void SENoteInitializeCompleted();
+
+// False while Initialize() is on the stack, and after a close has been caught.
+// Defined in obs-streamelements-core-plugin.cpp.
+bool SEIsEventPumpAllowed();
+
+// Use instead of QApplication::sendPostedEvents() everywhere: one choke point
+// for every event pump the plug-in runs.
+void SEDrainEventQueue();
+
+// The only sanctioned way to destroy a QDockWidget. Deletes it when the gate
+// above is open; otherwise detaches it from OBS's widget tree and leaks it,
+// loudly. Destroying a dock while OBSInit() is still on the stack corrupts
+// the tree, and by then obs_frontend_get_main_window() may already be null.
+void SEDeleteDockWidgetWhenSafe(QPointer<QDockWidget> dock, const char *id,
+				bool useDeleteLater);
+
+/* ========================================================= */
 
 std::string DockWidgetAreaToString(const Qt::DockWidgetArea area);
 std::string GetCommandLineOptionValue(const std::string key);

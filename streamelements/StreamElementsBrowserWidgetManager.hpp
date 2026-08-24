@@ -6,6 +6,8 @@
 #include <map>
 #include <string>
 
+#include <QPointer>
+
 class StreamElementsBrowserWidgetManager
 	:
 	protected StreamElementsWidgetManager
@@ -155,7 +157,11 @@ public:
 
 
 private:
-	std::map<std::string, StreamElementsBrowserWidget*> m_browserWidgets;
+	// QPointer for the same reason as m_dockWidgets (CORE-786): each browser
+	// widget is a child of its dock, so it dies with the dock, and this map
+	// is not notified.
+	std::map<std::string, QPointer<StreamElementsBrowserWidget>>
+		m_browserWidgets;
 
 	QPointer<QToolBar> m_notificationBarToolBar = nullptr;
 	QPointer<StreamElementsBrowserWidget> m_notificationBarBrowserWidget = nullptr;
