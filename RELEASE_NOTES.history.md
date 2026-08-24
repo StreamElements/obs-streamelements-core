@@ -1,0 +1,14 @@
+### 26.8.24.924
+
+- Fix: lazy video encoder creation on use to reduce GPU resource consumption
+- Fix: cache encoder basic properties to reduce GPU resource consumption
+- Fix: crash under certain conditions when scenes are changed
+- Fix: use OBS private canvas objects in custom video compositions instead of OBS views directly
+- Fix: adjust unknown encoder video formats to preferred NV12 video format
+- Fix: crashes triggered by corrupted memory
+- Fix: crashes triggered by OBS Studio update
+- Fix: crashes triggered by exiting OBS Studio
+- Fix: crash triggered by a race between the OBS Update dialog on start-up and SE.Live
+- Infra: crash reporting backend switched to sentry.io
+- Breaking change: SE.Live now requires at least OBS 32.2.0
+
