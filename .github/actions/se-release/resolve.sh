@@ -117,9 +117,10 @@ qa | beta | latest)
 	fi
 
 	# The scan is `git log <base>..<tag>`, so the lower bound has to exist as a tag in
-	# this clone. Not every version that reached a channel was tagged -- windows/stable
-	# references 20241127000268 and tag 24.11.27.268 was never pushed -- so this is a live
-	# condition rather than a hypothetical.
+	# this clone, and a version that reached a channel is not guaranteed to have one.
+	# windows/stable served 20241127000268 with no 24.11.27.268 tag until both it and a
+	# back-filled release were created by hand on 2026-08-25. The guard stays: the
+	# pipeline never enforced the invariant, so it can recur.
 	if [ -n "$BASE" ] && ! git rev-parse -q --verify "refs/tags/$BASE^{commit}" > /dev/null 2>&1; then
 		warn "linear: tag '$BASE' is not present in this clone; the CLI will choose its own scan base"
 		BASE=""
