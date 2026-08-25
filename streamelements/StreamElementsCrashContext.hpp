@@ -70,7 +70,15 @@ public:
 	//
 	// `contextRecord` is a PCONTEXT. Typed as void* so the header does not
 	// drag <windows.h> into every translation unit that includes it.
-	void WalkStack(void *contextRecord);
+	//
+	// `skipOwnLeadingFrames` discards the frames at the top of the walk that
+	// belong to this plug-in, before they are recorded or tested. Set it
+	// only when the CONTEXT was captured inside our own crash handler --
+	// the abort()/SIGABRT path -- where our module is on the stack
+	// unconditionally and would otherwise make ShouldReport() true for every
+	// abort in the process. An SEH crash takes its CONTEXT from the OS at
+	// the fault point and must leave this false.
+	void WalkStack(void *contextRecord, bool skipOwnLeadingFrames = false);
 
 	// The module-of-interest verdict: false means the crashing stack never
 	// passed through our code and the report must be suppressed entirely.

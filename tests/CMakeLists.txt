@@ -59,6 +59,11 @@ endfunction()
 se_add_test(test_video_encoder_template_demo
   test_video_encoder_template_demo.cpp)
 
+# --- Behavioural test: CORE-860 (the module-of-interest gate must not be
+#     rubber-stamped by the crash handler's own frames on the abort path) ---
+se_add_test(test_crash_gate_leading_frames
+  test_crash_gate_leading_frames.cpp)
+
 # --- Source-invariant test: catches re-introduction of any of the
 #     bug patterns this PR fixes. ---
 se_add_test(test_source_invariants

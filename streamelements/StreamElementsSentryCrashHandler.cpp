@@ -17,6 +17,13 @@
 #include <stdio.h>
 #include <wchar.h>
 
+// signal() for the SIGABRT door, _set_purecall_handler() for pure virtual
+// calls. Both are process-wide CRT state shared with OBS, which is the point:
+// see the CORE-860 block further down.
+#include <signal.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include <windows.h>
 #include <dwmapi.h>
 
@@ -500,6 +507,35 @@ static bool IsTagWorthyAttribute(const std::string &name)
 }
 
 //
+// The handful of tags that identify the build, armed at startup rather than on
+// the crash path.
+//
+// Everything else is collected when the process is dying and set in
+// ArmSentryScope(). That is fine while the crash path is the only way an event
+// is produced -- but CORE-860 was exactly the case where it was not, and those
+// events arrived with no product, no version and no platform, which made them
+// nearly impossible to place. These three cost nothing at startup and mean any
+// future bypass still yields an attributable event.
+//
+// Kept to three: with SENTRY_INTEGRATION_WER, tags map onto
+// WerRegisterCustomMetadata, capped at 8. These plus the two set on the crash
+// path plus crash.kind leaves headroom.
+//
+static void ArmStableSentryTags()
+{
+	sentry_set_tag("product", "SE.Live");
+	sentry_set_tag("obs_version", obs_get_version_string());
+
+#if defined(_M_AMD64)
+	sentry_set_tag("arch", "x86_64");
+#elif defined(_M_ARM64)
+	sentry_set_tag("arch", "arm64");
+#else
+	sentry_set_tag("arch", "x86");
+#endif
+}
+
+//
 // Identifies the reporter on every event.
 //
 // The machine id is always present; name and email only once the user has
@@ -640,7 +676,17 @@ ArmSentryScope(const StreamElementsCrashContext::Result &context,
 
 /* ================================================================= */
 
-static LONG CALLBACK SentryExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
+//
+// The whole crash path, shared by the two ways a fatal condition reaches us:
+// the top-level SEH filter and the SIGABRT handler below.
+//
+// `skipOwnLeadingFrames` is false for SEH, where the CONTEXT comes from the OS
+// at the fault point, and true for SIGABRT, where we captured it ourselves and
+// our own handler is therefore the innermost frame. See
+// StreamElementsCrashContext::WalkStack.
+//
+static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
+				 bool skipOwnLeadingFrames)
 {
 	if (pExceptionInfo->ExceptionRecord->ExceptionCode ==
 	    EXCEPTION_STACK_OVERFLOW) {
@@ -653,7 +699,8 @@ static LONG CALLBACK SentryExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
 	}
 
 	if (s_crashContext)
-		s_crashContext->WalkStack(pExceptionInfo->ContextRecord);
+		s_crashContext->WalkStack(pExceptionInfo->ContextRecord,
+					  skipOwnLeadingFrames);
 
 	// Stops host API calls from running once we are on the crash path. The
 	// consent prompt below is modal, and a modal message loop keeps
@@ -730,6 +777,107 @@ static LONG CALLBACK SentryExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
 	InterlockedDecrement(&s_insideExceptionFilter);
 
 	return EXCEPTION_CONTINUE_SEARCH;
+}
+
+static LONG CALLBACK SentryExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
+{
+	return HandleFatalException(pExceptionInfo, false);
+}
+
+/* ================================================================= */
+
+//
+// The second door (CORE-860).
+//
+// sentry_init() installs TWO crash entry points on Windows, not one --
+// sentry-native/src/backends/native/sentry_crash_handler.c:
+//
+//   g_previous_filter = SetUnhandledExceptionFilter(crash_exception_filter);
+//   sentry__win32_install_sigabrt_handler(crash_sigabrt_handler);
+//
+// The second is a plain signal(SIGABRT, ...). Displacing only the first left
+// every abort() going straight to sentry: uploaded with no consent prompt, no
+// module-of-interest gate and none of the payload, because all of that lives in
+// the filter above. That is not a corner case -- abort() is how EVERY _purecall
+// arrives, which is the entire double-destruction family behind CORE-777 and
+// CORE-786. The one crash class we most need data on was the one class that
+// arrived empty. Observed as SELIVE-E and SELIVE-K.
+//
+// So we take that door too, and route it into the same path.
+//
+// macOS never had this problem: the .mm handler installs its own handlers for
+// all six signals, SIGABRT included, BEFORE sentry_init.
+//
+
+// Sentry's handle_sigabrt, displaced by ours. Only ever used if the shared path
+// above returns, which it should not -- a bug there degrades to sentry's old
+// behaviour rather than to silence.
+static void(__cdecl *s_sentryAbortHandler)(int) = nullptr;
+
+// Set by the purecall handler so the event says what kind of abort this was.
+// A bare "abort" and a pure virtual call want very different investigations.
+static volatile LONG s_abortIsPurecall = 0L;
+
+static void __cdecl SentryAbortHandler(int signum)
+{
+	// abort() carries no exception context, so build the same synthetic
+	// record sentry's own handler builds. RtlCaptureContext captures the
+	// CALLER's context, so the innermost frame is this function -- hence
+	// skipOwnLeadingFrames below.
+	CONTEXT context;
+	RtlCaptureContext(&context);
+
+	EXCEPTION_RECORD record;
+	memset(&record, 0, sizeof(record));
+	record.ExceptionCode = STATUS_FATAL_APP_EXIT;
+	record.ExceptionFlags = EXCEPTION_NONCONTINUABLE;
+#if defined(_M_AMD64)
+	record.ExceptionAddress = (PVOID)context.Rip;
+#elif defined(_M_IX86)
+	record.ExceptionAddress = (PVOID)context.Eip;
+#elif defined(_M_ARM64)
+	record.ExceptionAddress = (PVOID)context.Pc;
+#endif
+
+	EXCEPTION_POINTERS pointers;
+	pointers.ContextRecord = &context;
+	pointers.ExceptionRecord = &record;
+
+	if (s_initialized) {
+		// Cheap, and it survives the gate rejecting the crash, which
+		// costs nothing. Set here rather than in ArmSentryScope because
+		// it describes how we were entered, not what was collected.
+		sentry_set_tag("crash.kind",
+			       s_abortIsPurecall ? "purecall" : "abort");
+	}
+
+	HandleFatalException(&pointers, true);
+
+	// Only reachable on re-entry -- HandleFatalException terminates the
+	// process on the first pass through. Hand back to sentry so a crash is
+	// still reported, then make sure abort() cannot return to its caller.
+	if (s_sentryAbortHandler)
+		s_sentryAbortHandler(signum);
+
+	TerminateProcess(GetCurrentProcess(), 3);
+}
+
+//
+// Without this a pure virtual call arrives as an anonymous abort: the CRT's
+// default _purecall handler just calls abort(), and the resulting event is
+// titled after whatever the innermost resolvable symbol happens to be. Sentry
+// grouped two unrelated ones together as "handle_sigabrt".
+//
+// Deliberately routed through abort() rather than duplicating the handler, so
+// there is exactly one abort path to reason about. The _purecall/abort/raise
+// frames stay in the walked stack, which is useful: they are what identifies
+// the fault.
+//
+static void __cdecl SentryPurecallHandler(void)
+{
+	InterlockedExchange(&s_abortIsPurecall, 1L);
+
+	abort();
 }
 
 /* ================================================================= */
@@ -862,11 +1010,31 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 
 	SetSentryUser(s_userName, s_userEmail, s_userDiscord);
 
+	ArmStableSentryTags();
+
 	// Whatever sentry_init() installed. Ours goes on top, so ours runs
 	// first and this one is invoked by us, deliberately, only when the
 	// module-of-interest gate passes.
 	s_sentryExceptionFilter =
 		SetUnhandledExceptionFilter(SentryExceptionFilter);
+
+	// The other door sentry_init() installed. Same reasoning, same order:
+	// ours on top, sentry's kept as the fallback. Without this, abort() --
+	// and therefore every _purecall -- goes straight to sentry, ungated and
+	// unconsented. See the CORE-860 block above.
+	s_sentryAbortHandler = signal(SIGABRT, SentryAbortHandler);
+
+	if (s_sentryAbortHandler == SIG_ERR) {
+		s_sentryAbortHandler = nullptr;
+
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: StreamElements: Crash Handler: could not install the SIGABRT handler; abort() crashes will bypass the consent prompt and the module-of-interest gate");
+	}
+
+	// Process-wide, and the displaced handler is deliberately dropped: the
+	// CRT's default is "call abort()", which is where ours ends up anyway,
+	// so there is nothing to chain to.
+	_set_purecall_handler(SentryPurecallHandler);
 
 	s_crashContext = new StreamElementsCrashContext();
 

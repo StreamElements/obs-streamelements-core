@@ -76,7 +76,8 @@ static void check_c4_no_self_assign_cefclientid()
 {
 	auto src = slurp("streamelements/StreamElementsApiMessageHandler.cpp");
 
-	std::regex bad(R"(context\s*->\s*cefClientId\s*=\s*context\s*->\s*cefClientId)");
+	std::regex bad(
+		R"(context\s*->\s*cefClientId\s*=\s*context\s*->\s*cefClientId)");
 	check(count_matches(src, bad) == 0,
 	      "C4: StreamElementsApiMessageHandler.cpp must not contain "
 	      "`context->cefClientId = context->cefClientId` (self-assign)");
@@ -132,9 +133,10 @@ static void check_c10_no_duplicate_handler_setcurrentprofile()
 	std::regex reg(R"(API_HANDLER_BEGIN\(\"setCurrentProfile\"\))");
 	std::size_t count = count_matches(src, reg);
 	if (count != 1) {
-		std::fprintf(stderr,
-			     "FAIL: C10: setCurrentProfile is registered %zu time(s); expected exactly 1\n",
-			     count);
+		std::fprintf(
+			stderr,
+			"FAIL: C10: setCurrentProfile is registered %zu time(s); expected exactly 1\n",
+			count);
 		++failures;
 	}
 }
@@ -155,8 +157,7 @@ static void check_c10_no_duplicate_handler_setcurrentprofile()
 //   UpdateInternal+0x54  mov rcx,[rsi+18h]  rsi=0  ->  read of 0x18
 static void check_menu_manager_update_guarded()
 {
-	auto src = slurp(
-		"streamelements/StreamElementsGlobalStateManager.cpp");
+	auto src = slurp("streamelements/StreamElementsGlobalStateManager.cpp");
 
 	// Every occurrence must be the guarded one. Counting both forms and
 	// comparing is what distinguishes them: the call sits on its own line
@@ -401,7 +402,8 @@ static void check_dock_deletion_is_gated()
 // fires EXIT.
 static void check_obs_close_is_watched()
 {
-	auto code = strip_line_comments(slurp("obs-streamelements-core-plugin.cpp"));
+	auto code = strip_line_comments(
+		slurp("obs-streamelements-core-plugin.cpp"));
 
 	check(code.find("QEvent::Close") != std::string::npos,
 	      "CORE-786: the plug-in must watch for QEvent::Close on the OBS main window");
@@ -460,6 +462,85 @@ static void check_obs_close_is_watched()
 	      "CORE-786: Initialize() must call SENoteInitializeCompleted() on completion");
 }
 
+// --- CORE-860: both of sentry's crash entry points must be ours.
+//
+// sentry_init() installs a top-level SEH filter AND a signal(SIGABRT, ...)
+// handler. Owning only the first sent every abort() -- every _purecall, so the
+// whole double-destruction family -- straight to Sentry with no consent prompt,
+// no module-of-interest gate and no payload.
+static void check_both_sentry_doors_are_owned()
+{
+	auto code = strip_line_comments(
+		slurp("streamelements/StreamElementsSentryCrashHandler.cpp"));
+
+	check(code.find("SetUnhandledExceptionFilter(SentryExceptionFilter)") !=
+		      std::string::npos,
+	      "CORE-860: the SEH filter must still be installed");
+
+	check(code.find("signal(SIGABRT,") != std::string::npos,
+	      "CORE-860: the SIGABRT door must be taken too, or abort() bypasses the gate and the consent prompt");
+
+	check(code.find("_set_purecall_handler(") != std::string::npos,
+	      "CORE-860: a pure virtual call must be identified as such, not arrive as an anonymous abort");
+
+	// Both doors must funnel into the same path, or the gate and the
+	// consent prompt exist on only one of them.
+	check(count_matches(code, std::regex("HandleFatalException\\(")) >= 3,
+	      "CORE-860: both entry points must call the shared HandleFatalException()");
+
+	// The SEH path takes its CONTEXT from the OS at the fault point; the
+	// abort path captures its own, from inside our handler. Only the latter
+	// may drop leading frames -- see check_abort_path_drops_own_frames.
+	check(code.find("HandleFatalException(pExceptionInfo, false)") !=
+		      std::string::npos,
+	      "CORE-860: the SEH path must NOT skip leading frames");
+
+	check(code.find("HandleFatalException(&pointers, true)") !=
+		      std::string::npos,
+	      "CORE-860: the abort path MUST skip its own leading frames");
+
+	// Identity has to survive a future bypass of the crash path.
+	check(code.find("ArmStableSentryTags();") != std::string::npos,
+	      "CORE-860: the stable identity tags must be armed at init, not only on the crash path");
+}
+
+// --- CORE-860: the abort path must not rubber-stamp the gate.
+//
+// The SIGABRT handler captures its own CONTEXT, so this plug-in is on the stack
+// of every abort in the process. Without dropping those leading frames, the
+// module-of-interest verdict is true for everyone's crashes.
+static void check_abort_path_drops_own_frames()
+{
+	auto hpp = strip_line_comments(
+		slurp("streamelements/StreamElementsCrashContext.hpp"));
+
+	check(hpp.find("bool skipOwnLeadingFrames") != std::string::npos,
+	      "CORE-860: WalkStack() must offer the leading-frame skip");
+
+	auto cpp = strip_line_comments(
+		slurp("streamelements/StreamElementsCrashContext.cpp"));
+
+	check(cpp.find("SetSkipLeadingOwnFrames(skipOwnLeadingFrames)") !=
+		      std::string::npos,
+	      "CORE-860: WalkStack() must pass the skip flag through to the walker");
+
+	// The skip must run before the frame is recorded and before the verdict
+	// is taken, and must stop at the first frame that is not ours.
+	auto skip = cpp.find("if (m_skippingOwnFrames) {");
+	check(skip != std::string::npos,
+	      "CORE-860: the walker must implement the leading-frame skip");
+
+	if (skip != std::string::npos) {
+		auto verdict = cpp.find("hasMatchModuleOfInterest =", skip);
+		check(verdict != std::string::npos && verdict > skip,
+		      "CORE-860: the skip must be applied before the module-of-interest verdict");
+
+		auto stops = cpp.find("m_skippingOwnFrames = false;", skip);
+		check(stops != std::string::npos && stops - skip < 200,
+		      "CORE-860: skipping must stop at the first frame that is not ours");
+	}
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -473,6 +554,8 @@ int main()
 	check_event_pumps_are_counted();
 	check_dock_deletion_is_gated();
 	check_obs_close_is_watched();
+	check_both_sentry_doors_are_owned();
+	check_abort_path_drops_own_frames();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",
