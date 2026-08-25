@@ -48,9 +48,10 @@ if [ "$MODE" = "rollback" ]; then
 	fi
 
 	# Re-assert the incoming (older) version as the full, Latest release. It may predate
-	# this automation or never have been tagged at all -- windows/stable currently points
-	# at 20241127000268, whose tag 24.11.27.268 does not exist -- so warn, never fail:
-	# the revert above is the part that matters.
+	# this automation, or have reached a channel without ever being tagged -- that was
+	# true of windows/stable's 20241127000268 until its tag and release were back-filled
+	# by hand on 2026-08-25. Nothing prevents it recurring, so warn, never fail: the
+	# revert above is the part that matters.
 	if gh release view "$TAG" --json id > /dev/null 2>&1; then
 		note "Re-asserting $TAG as the full, Latest release"
 		gh_write release edit "$TAG" --prerelease=false --title "$TAG" --latest

@@ -191,9 +191,12 @@ resolve_previous_full_tag() {
 		fi
 	fi
 
-	# The changelog needs the tag object, not merely a release. Not every version that
-	# has reached a channel was tagged: windows/stable currently references
-	# 20241127000268, and tag 24.11.27.268 does not exist in this repo.
+	# The changelog needs the tag object, not merely a release, and a version that
+	# reached a channel is not guaranteed to have been tagged. windows/stable served
+	# 20241127000268 for a long time with no 24.11.27.268 tag; the tag and a back-filled
+	# release were created by hand on 2026-08-25, so that particular gap is closed, but
+	# the guard stays -- nothing in the pipeline enforces that a channel version was
+	# ever tagged.
 	if [ -n "$_prev" ] && ! git rev-parse -q --verify "refs/tags/$_prev^{commit}" > /dev/null 2>&1; then
 		warn "previous tag '$_prev' is not present in this clone; the changelog will be omitted"
 		_prev=""
