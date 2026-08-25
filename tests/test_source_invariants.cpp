@@ -605,6 +605,45 @@ static void check_sentry_init_is_diagnosable()
 	      "CORE-861: the MAX_PATH check must account for the files sentry creates inside the database directory, not just the directory itself");
 }
 
+// --- CORE-862: queued Qt tasks must not run once crash reporting has begun.
+//
+// The consent prompt is a native Win32 modal dialog, and every Win32 modal loop
+// dispatches the private message Qt's event dispatcher uses to drain its
+// posted-event queue. So putting the prompt up runs whatever was queued -- and a
+// task that calls QDialog::exec() blocks the crash path behind an unrelated
+// modal dialog.
+static void check_queued_tasks_suppressed_during_crash()
+{
+	auto code = strip_line_comments(
+		slurp("streamelements/StreamElementsUtils.cpp"));
+
+	// Both queued paths -- QtPostTask's executor and QtDelayTask's timer
+	// lambda -- must skip the task AND release the waiter. Dropping a task
+	// without calling finish() does not remove the deadlock, it moves it
+	// onto whichever thread called QtExecSync and is blocked in
+	// result.wait().
+	std::regex gateReleasesWaiter(
+		R"(if \(IsCrashReportingInProgress\(\)\)\s*\{\s*finish\(\);\s*return;)");
+	check(count_matches(code, gateReleasesWaiter) == 2,
+	      "CORE-862: both queued paths must call finish() before returning, or a QtExecSync caller is left blocked forever");
+
+	// The same-thread QtExecSync shortcut bypasses the queue entirely and
+	// runs the task inline, so it needs its own gate -- and the crashing
+	// thread is usually this one. Negated form, hence a separate check.
+	std::regex execSyncGated(
+		R"(if \(!IsCrashReportingInProgress\(\)\)\s*task\(\);)");
+	check(count_matches(code, execSyncGated) == 1,
+	      "CORE-862: the QtExecSync same-thread path must be gated too -- it never touches the queue");
+
+	// A dropped task must not be reported as having run: the gate has to sit
+	// above the running flag, not below it.
+	auto gate = code.find("if (IsCrashReportingInProgress())");
+	auto running = code.find("item->running = true;");
+	check(gate != std::string::npos && running != std::string::npos &&
+		      gate < running,
+	      "CORE-862: the crash gate must precede item->running, or dropped tasks appear as running in async-context.json");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -621,6 +660,7 @@ int main()
 	check_both_sentry_doors_are_owned();
 	check_abort_path_drops_own_frames();
 	check_sentry_init_is_diagnosable();
+	check_queued_tasks_suppressed_during_crash();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

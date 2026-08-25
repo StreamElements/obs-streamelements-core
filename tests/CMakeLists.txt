@@ -64,6 +64,11 @@ se_add_test(test_video_encoder_template_demo
 se_add_test(test_crash_gate_leading_frames
   test_crash_gate_leading_frames.cpp)
 
+# --- Behavioural test: CORE-862 (queued Qt tasks must not run once crash
+#     reporting has begun, and a dropped task must still release its waiter) ---
+se_add_test(test_crash_suppresses_queued_tasks
+  test_crash_suppresses_queued_tasks.cpp)
+
 # --- Source-invariant test: catches re-introduction of any of the
 #     bug patterns this PR fixes. ---
 se_add_test(test_source_invariants
