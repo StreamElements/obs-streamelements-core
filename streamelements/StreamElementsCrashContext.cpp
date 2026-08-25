@@ -214,7 +214,43 @@ public:
 			      httpResponseReceivedCallback, nullptr);
 	}
 
+public:
+	//
+	// Discards the frames at the top of the walk that belong to us, before
+	// anything is recorded or tested.
+	//
+	// Only for a walk whose CONTEXT we captured ourselves, inside our own
+	// crash handler -- the abort()/SIGABRT path. There the innermost frame
+	// is the handler, so this module is on the stack unconditionally and the
+	// verdict below would be true for every abort in the process, including
+	// OBS's and other plugins'. That is not a gate, it is a rubber stamp.
+	//
+	// An SEH crash gets its CONTEXT from the OS at the fault point and our
+	// filter is not in it, so that path must NOT set this.
+	//
+	// Skipping stops at the first frame that is not ours -- normally the
+	// handler frame alone, then `raise`. A fault genuinely inside our code
+	// reappears further down the stack, below the CRT's abort machinery, and
+	// still passes the gate.
+	//
+	// Call immediately before each walk: this arms a one-shot that the walk
+	// itself clears.
+	void SetSkipLeadingOwnFrames(bool skip) { m_skippingOwnFrames = skip; }
+
 protected:
+	bool IsModuleOfInterest(const char *moduleName) const
+	{
+		if (!moduleName)
+			return false;
+
+		for (auto &filter : modulesOfInterest) {
+			if (strcasecmp(filter.c_str(), moduleName) == 0)
+				return true;
+		}
+
+		return false;
+	}
+
 	virtual void OnCallstackEntry(CallstackEntryType eType,
 				      CallstackEntry &entry) override
 	{
@@ -222,6 +258,13 @@ protected:
 
 		if (!entry.offset)
 			return;
+
+		if (m_skippingOwnFrames) {
+			if (IsModuleOfInterest(entry.moduleName))
+				return;
+
+			m_skippingOwnFrames = false;
+		}
 
 #define LOCAL_SPACE "\t"
 		output += entry.loadedImageName;
@@ -236,22 +279,18 @@ protected:
 		output += "\n";
 #undef LOCAL_SPACE
 
-		if (!hasMatchModuleOfInterest) {
-			for (auto filter : modulesOfInterest) {
-				if (strcasecmp(filter.c_str(),
-					       entry.moduleName) == 0) {
-					hasMatchModuleOfInterest = true;
-
-					break;
-				}
-			}
-		}
+		if (!hasMatchModuleOfInterest)
+			hasMatchModuleOfInterest =
+				IsModuleOfInterest(entry.moduleName);
 	}
 
 public:
 	bool hasMatchModuleOfInterest = false;
 	std::vector<std::string> modulesOfInterest;
 	std::string output;
+
+private:
+	bool m_skippingOwnFrames = false;
 };
 
 #else
@@ -275,6 +314,9 @@ public:
 		modulesOfInterest.push_back("obs-streamelements");
 	}
 
+	// See the Windows walker: arms a one-shot that the walk clears.
+	void SetSkipLeadingOwnFrames(bool skip) { m_skippingOwnFrames = skip; }
+
 	void Walk()
 	{
 		void *frames[128];
@@ -291,33 +333,51 @@ public:
 			if (dladdr(frames[i], &info) && info.dli_fname)
 				image = info.dli_fname;
 
+			const bool isOwnModule = IsModuleOfInterest(image);
+
+			if (m_skippingOwnFrames) {
+				if (isOwnModule)
+					continue;
+
+				m_skippingOwnFrames = false;
+			}
+
 			output += image;
 			output += "\t";
 			output += (symbols && symbols[i]) ? symbols[i] : "";
 			output += "\n";
 
-			if (hasMatchModuleOfInterest || !*image)
-				continue;
-
-			const std::string path = image;
-
-			for (auto &filter : modulesOfInterest) {
-				if (path.find(filter) != std::string::npos) {
-					hasMatchModuleOfInterest = true;
-
-					break;
-				}
-			}
+			if (!hasMatchModuleOfInterest)
+				hasMatchModuleOfInterest = isOwnModule;
 		}
 
 		if (symbols)
 			free(symbols);
 	}
 
+protected:
+	bool IsModuleOfInterest(const char *image) const
+	{
+		if (!image || !*image)
+			return false;
+
+		const std::string path = image;
+
+		for (auto &filter : modulesOfInterest) {
+			if (path.find(filter) != std::string::npos)
+				return true;
+		}
+
+		return false;
+	}
+
 public:
 	bool hasMatchModuleOfInterest = false;
 	std::vector<std::string> modulesOfInterest;
 	std::string output;
+
+private:
+	bool m_skippingOwnFrames = false;
 };
 
 #endif
@@ -409,10 +469,13 @@ StreamElementsCrashContext::~StreamElementsCrashContext()
 	m_impl = nullptr;
 }
 
-void StreamElementsCrashContext::WalkStack(void *contextRecord)
+void StreamElementsCrashContext::WalkStack(void *contextRecord,
+					   bool skipOwnLeadingFrames)
 {
 	if (!m_impl || !m_impl->stackWalker)
 		return;
+
+	m_impl->stackWalker->SetSkipLeadingOwnFrames(skipOwnLeadingFrames);
 
 #ifdef WIN32
 	m_impl->stackWalker->ShowCallstack(::GetCurrentThread(),
@@ -851,11 +914,8 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 		// which is outside this tree entirely, so that entry is only
 		// insurance against the layout changing.
 		L"plugins/obs-streamelements-core.plugin/contents/macos/",
-		L"plugins/obs-streamelements-core/bin/",
-		L"updates/",
-		L"profiler_data/",
-		L"obslive_restored_files/",
-		L"crashes/"};
+		L"plugins/obs-streamelements-core/bin/", L"updates/",
+		L"profiler_data/", L"obslive_restored_files/", L"crashes/"};
 
 	// Collect all files
 	for (auto &i : std::filesystem::recursive_directory_iterator(
@@ -936,9 +996,8 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 	uintmax_t totalBytes = 0;
 
 	for (auto &candidate : candidates) {
-		const uintmax_t fileLimit = candidate.isPlugin
-						    ? maxPluginFileBytes
-						    : maxFileBytes;
+		const uintmax_t fileLimit =
+			candidate.isPlugin ? maxPluginFileBytes : maxFileBytes;
 
 		const bool tooBig = candidate.size > fileLimit;
 		const bool overBudget = totalBytes + candidate.size >

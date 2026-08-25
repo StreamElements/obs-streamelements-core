@@ -39,6 +39,17 @@
 // sentry_handle_exception" -- a crash whose stack never passed through our code
 // goes straight from step 2 to step 4 and Sentry never hears about it.
 //
+// 3. sentry_init() installs TWO crash entry points on Windows, not one: the
+//    top-level filter above, and a plain signal(SIGABRT, ...). Owning only the
+//    first left abort() -- and therefore every _purecall, which is the whole
+//    double-destruction family behind CORE-777 and CORE-786 -- going straight
+//    to sentry with no gate, no consent prompt and no payload. So this handler
+//    owns both doors, and both funnel into the same path. The only difference
+//    is that the SIGABRT path captures its own CONTEXT, which puts our handler
+//    on the stack and means the leading frames must be dropped before the gate
+//    is applied, or the gate would pass for every abort in the process.
+//    See CORE-860.
+//
 // See CORE-554 for the full design, including why the `native` backend rather
 // than crashpad.
 //
