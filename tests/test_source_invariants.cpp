@@ -541,6 +541,70 @@ static void check_abort_path_drops_own_frames()
 	}
 }
 
+// --- CORE-861: a failing sentry_init() must say why, and must not depend on
+// the process working directory.
+//
+// Every way sentry_init() can fail logs through SENTRY_WARN, which is compiled
+// in but discarded unless options->debug is set. Without the logger installed,
+// an install with no crash reporting at all produced one line -- "sentry_init()
+// failed" -- and no way to find out why.
+//
+// Separately, obs_module_config_path() is relative on a portable install, and a
+// relative path handed to sentry is resolved against the process working
+// directory, which no plug-in controls.
+static void check_sentry_init_is_diagnosable()
+{
+	auto code = strip_line_comments(
+		slurp("streamelements/StreamElementsSentryCrashHandler.cpp"));
+
+	check(code.find("sentry_options_set_logger(") != std::string::npos,
+	      "CORE-861: sentry's own diagnostics must be routed into the OBS log");
+
+	// The logger is inert unless debug is enabled -- that is the whole
+	// reason the failures were invisible.
+	check(code.find("sentry_options_set_debug(options, 1)") !=
+		      std::string::npos,
+	      "CORE-861: sentry debug must be on, or the logger above is never called");
+
+	// ...but the default level must stay above DEBUG, or every start-up
+	// writes a wall of SDK chatter into the user's log.
+	check(code.find("sentry_options_set_logger_level(") !=
+		      std::string::npos,
+	      "CORE-861: the logger level must be set, or the default DEBUG stream floods the log");
+
+	check(code.find("SENTRY_LEVEL_WARNING") != std::string::npos,
+	      "CORE-861: the default logger level must be WARNING so failures still explain themselves");
+
+	// The database path must not be left relative.
+	//
+	// Anchored on the call expression, not on the name: the function's own
+	// definition contains the name too, so a bare find() still matches
+	// after the call site is removed and proves nothing.
+	std::regex resolvesConfigPath(
+		R"(ResolveAgainstHostExecutable\(\s*utf8_to_wstring\(databasePath\)\s*\))");
+	check(count_matches(code, resolvesConfigPath) == 1,
+	      "CORE-861: the config path handed to sentry must go through ResolveAgainstHostExecutable()");
+
+	// The resolved value, not the raw one, is what sentry must receive.
+	std::regex setsResolved(
+		R"(sentry_options_set_database_pathw\(\s*options,\s*resolved\.c_str\(\))");
+	check(count_matches(code, setsResolved) == 1,
+	      "CORE-861: sentry_options_set_database_pathw() must be given the resolved path");
+
+	// And the MAX_PATH ceiling must be reported rather than left as a silent
+	// absence of crash reports. Anchored on the emitted message, so that
+	// deleting the blog() is what fails -- renaming the constant is not.
+	std::regex warnsOnLimit(
+		R"(blog\(LOG_WARNING[\s\S]{0,400}?MAX_PATH limit of)");
+	check(count_matches(code, warnsOnLimit) >= 1,
+	      "CORE-861: a database path too close to MAX_PATH must be warned about explicitly");
+
+	check(code.find(
+		      "resolved.size() + kLongestSentryChildPath >= MAX_PATH") !=
+		      std::string::npos,
+	      "CORE-861: the MAX_PATH check must account for the files sentry creates inside the database directory, not just the directory itself");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -556,6 +620,7 @@ int main()
 	check_obs_close_is_watched();
 	check_both_sentry_doors_are_owned();
 	check_abort_path_drops_own_frames();
+	check_sentry_init_is_diagnosable();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",
