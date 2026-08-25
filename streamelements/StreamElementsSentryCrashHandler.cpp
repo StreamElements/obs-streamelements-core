@@ -18,10 +18,13 @@
 #include <stdio.h>
 #include <wchar.h>
 
-// signal() for the SIGABRT door, _set_purecall_handler() for pure virtual
-// calls. Both are process-wide CRT state shared with OBS, which is the point:
-// see the CORE-860 block further down.
+// The CRT doors into a dying process: signal() for SIGABRT,
+// _set_purecall_handler() for pure virtual calls, _set_new_handler() and
+// _set_new_mode() for allocation failure. All of it is process-wide state
+// shared with OBS, which is the point -- see the CORE-860 and CORE-863 blocks
+// further down.
 #include <signal.h>
+#include <new.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -53,6 +56,14 @@ static LPTOP_LEVEL_EXCEPTION_FILTER s_sentryExceptionFilter = nullptr;
 static LPTOP_LEVEL_EXCEPTION_FILTER s_hostExceptionFilter = nullptr;
 
 static LONG s_insideExceptionFilter = 0L;
+
+// What killed us, read by HandleFatalException() to set crash.kind and written
+// by the CRT handlers far below. Declared here only because the reader comes
+// first in the file; the reasoning for each lives with the handler that sets it.
+//
+// Both are one-way: nothing clears them.
+static volatile LONG s_abortIsPurecall = 0L; // the purecall door (CORE-860)
+static volatile LONG s_sawOutOfMemory = 0L;  // the allocation door (CORE-863)
 
 // Contact details from the last report the user filled in. Read once at
 // startup, so the crash path never has to touch the config to prefill the
@@ -800,14 +811,72 @@ ArmSentryScope(const StreamElementsCrashContext::Result &context,
 // The whole crash path, shared by the two ways a fatal condition reaches us:
 // the top-level SEH filter and the SIGABRT handler below.
 //
-// `skipOwnLeadingFrames` is false for SEH, where the CONTEXT comes from the OS
-// at the fault point, and true for SIGABRT, where we captured it ourselves and
-// our own handler is therefore the innermost frame. See
-// StreamElementsCrashContext::WalkStack.
+// `fromAbortDoor` says which. One flag rather than two, because the two things
+// it decides follow from the same fact and must never disagree:
+//
+//   - the stack walk drops our own leading frames, because the abort door is
+//     the one where we captured the CONTEXT ourselves and our handler is
+//     therefore the innermost frame. SEH takes its CONTEXT from the OS at the
+//     fault point, where we are not on the stack at all. See
+//     StreamElementsCrashContext::WalkStack.
+//
+//   - crash.kind falls back to "abort" rather than "exception".
 //
 static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
-				 bool skipOwnLeadingFrames)
+				 bool fromAbortDoor)
 {
+	//
+	// First statement in the whole crash path, and it has to be (CORE-863).
+	//
+	// StreamElementsCrashContext reserves 1MB at construction so that
+	// collection has headroom on a process that died of exhaustion. That
+	// reserve used to be handed back on the first line of Collect() -- which
+	// runs after the stack walk and after the consent prompt, both of which
+	// allocate. On the one crash class the reserve exists for, it was not
+	// available to the two things most likely to fail first.
+	//
+	// Safe to call more than once; the second call does nothing. The new
+	// handler calls it too, earlier still.
+	//
+	StreamElementsCrashContext::ReleaseGuardBuffer();
+
+	//
+	// What killed us, on whichever door we came through.
+	//
+	// This lives here rather than in the SIGABRT handler, and that placement
+	// was bought with a wasted test run: an uncaught std::bad_alloc does NOT
+	// reach abort() on MSVC. `throw` becomes a real SEH exception
+	// (0xE06D7363, RaiseException), so an unhandled one lands in the filter
+	// above, not in the abort door. Tagging only in the abort handler meant
+	// the OOM this was written for arrived untagged. Both doors funnel
+	// through here, so this is the only correct place for it.
+	//
+	// Precedence, and it matters which way round:
+	//
+	//   purecall  proximate and certain -- the CRT told us moments ago that
+	//             the call which failed was a pure virtual one.
+	//
+	//   oom       inferred and STICKY. It says an allocation failed at some
+	//             point, not that it is why we are dying; a failure that was
+	//             caught and handled leaves it set for the life of the
+	//             process. So it must not outrank purecall, or it would
+	//             relabel a later, unrelated crash. It does outrank the two
+	//             below, which carry no cause at all.
+	//
+	//   abort     came through the SIGABRT door with no better explanation.
+	//
+	//   exception came through the SEH filter -- an access violation, or a
+	//             C++ exception nobody caught.
+	//
+	if (s_initialized) {
+		const char *kind = s_abortIsPurecall  ? "purecall"
+				   : s_sawOutOfMemory ? "oom"
+				   : fromAbortDoor    ? "abort"
+						      : "exception";
+
+		sentry_set_tag("crash.kind", kind);
+	}
+
 	if (pExceptionInfo->ExceptionRecord->ExceptionCode ==
 	    EXCEPTION_STACK_OVERFLOW) {
 		static ULONG stack_size = 0L;
@@ -819,8 +888,9 @@ static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
 	}
 
 	if (s_crashContext)
-		s_crashContext->WalkStack(pExceptionInfo->ContextRecord,
-					  skipOwnLeadingFrames);
+		s_crashContext->WalkStack(
+			pExceptionInfo->ContextRecord,
+			/*skipOwnLeadingFrames=*/fromAbortDoor);
 
 	// Stops host API calls from running once we are on the crash path. The
 	// consent prompt below is modal, and a modal message loop keeps
@@ -934,9 +1004,52 @@ static LONG CALLBACK SentryExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
 // behaviour rather than to silence.
 static void(__cdecl *s_sentryAbortHandler)(int) = nullptr;
 
-// Set by the purecall handler so the event says what kind of abort this was.
-// A bare "abort" and a pure virtual call want very different investigations.
-static volatile LONG s_abortIsPurecall = 0L;
+//
+// Out of memory (CORE-863).
+//
+// The BugSplat integration installed five process-global CRT hooks -- purecall,
+// SIGABRT, terminate, invalid-parameter and this one -- all routed to a
+// deliberate null write so the exception filter would see them. The Sentry
+// migration dropped all five; CORE-860 recovered the first two. This is the
+// allocation one.
+//
+// Deliberately NOT what BugSplat did. Its memory_depleted() force-crashes the
+// process on any allocation failure, and _set_new_mode(1) extends that to plain
+// malloc -- which would preempt libobs's own bmalloc -> bcrash handling. A
+// plug-in overriding the host's allocation-failure policy is not a call we get
+// to make.
+//
+// So this observes and chains. Standard semantics are preserved exactly:
+// returning 0 means operator new throws std::bad_alloc and malloc returns NULL,
+// as they do today. If that goes unhandled it reaches abort() and the SIGABRT
+// handler above, which can now say the crash was an OOM rather than a generic
+// abort. If it IS handled, nothing is broken and nothing is reported -- a
+// handled allocation failure is not a crash.
+//
+static _PNH s_previousNewHandler = nullptr;
+static int s_previousNewMode = 0;
+
+static int __cdecl SentryNewHandler(size_t size)
+{
+	InterlockedExchange(&s_sawOutOfMemory, 1L);
+
+	// Now, not later. This is the moment the process has no memory, and the
+	// crash path is about to want some -- the stack walk and the consent
+	// prompt both allocate before Collect() runs. Safe to call more than
+	// once; the second call does nothing.
+	StreamElementsCrashContext::ReleaseGuardBuffer();
+
+	// Nothing is logged here on purpose: blog() formats, and formatting
+	// allocates, on the one code path where allocation is what failed.
+
+	// Chain. If whoever held this handler before us can free something and
+	// ask for a retry, that is a better outcome than a crash and it is
+	// theirs to decide, not ours.
+	if (s_previousNewHandler)
+		return s_previousNewHandler(size);
+
+	return 0;
+}
 
 static void __cdecl SentryAbortHandler(int signum)
 {
@@ -962,14 +1075,6 @@ static void __cdecl SentryAbortHandler(int signum)
 	EXCEPTION_POINTERS pointers;
 	pointers.ContextRecord = &context;
 	pointers.ExceptionRecord = &record;
-
-	if (s_initialized) {
-		// Cheap, and it survives the gate rejecting the crash, which
-		// costs nothing. Set here rather than in ArmSentryScope because
-		// it describes how we were entered, not what was collected.
-		sentry_set_tag("crash.kind",
-			       s_abortIsPurecall ? "purecall" : "abort");
-	}
 
 	HandleFatalException(&pointers, true);
 
@@ -1191,6 +1296,21 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 	// CRT's default is "call abort()", which is where ours ends up anyway,
 	// so there is nothing to chain to.
 	_set_purecall_handler(SentryPurecallHandler);
+
+	// The allocation door (CORE-863). Unlike purecall, this one CAN be
+	// chained -- _set_new_handler hands back whoever held it -- and is,
+	// because an upstream handler that can free memory and ask for a retry
+	// should still win.
+	s_previousNewHandler = _set_new_handler(SentryNewHandler);
+
+	// Routes plain malloc failures through the handler above as well, not
+	// just operator new. libobs allocates through bmalloc -> malloc, so
+	// without this the largest allocator in the process is invisible to it.
+	//
+	// Not a behaviour change on its own: the handler returns 0 unless
+	// something upstream asked for a retry, and malloc then returns NULL
+	// exactly as it does today.
+	s_previousNewMode = _set_new_mode(1);
 
 	s_crashContext = new StreamElementsCrashContext();
 

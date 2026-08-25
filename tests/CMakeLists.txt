@@ -69,6 +69,11 @@ se_add_test(test_crash_gate_leading_frames
 se_add_test(test_crash_suppresses_queued_tasks
   test_crash_suppresses_queued_tasks.cpp)
 
+# --- Behavioural test: CORE-863 (the OOM handler must observe and chain,
+#     not seize the host's allocation-failure policy) ---
+se_add_test(test_crash_oom_handler
+  test_crash_oom_handler.cpp)
+
 # --- Source-invariant test: catches re-introduction of any of the
 #     bug patterns this PR fixes. ---
 se_add_test(test_source_invariants
