@@ -51,19 +51,19 @@
 #endif
 
 #ifndef WIN32
-	#define sprintf_s sprintf
+#define sprintf_s sprintf
 
-	#ifndef WCHAR
-	typedef wchar_t WCHAR;
-	#endif
+#ifndef WCHAR
+typedef wchar_t WCHAR;
+#endif
 
-	#ifndef DWORD
-	typedef unsigned long DWORD;
-	#endif
+#ifndef DWORD
+typedef unsigned long DWORD;
+#endif
 
-	#ifndef HKEY
-	typedef void *HKEY;
-	#endif
+#ifndef HKEY
+typedef void *HKEY;
+#endif
 
 #include <sys/syscall.h>
 #endif
@@ -87,7 +87,8 @@ static config_t *obs_fe_user_config()
 
 /* ========================================================= */
 
-static inline const char *safe_str(const char *s, const char *defaultValue = "(NULL)")
+static inline const char *safe_str(const char *s,
+				   const char *defaultValue = "(NULL)")
 {
 	if (s == NULL)
 		return defaultValue;
@@ -113,7 +114,8 @@ bool IsCrashReportingInProgress()
 
 /* ========================================================= */
 
-bool IsTraceLogLevel() {
+bool IsTraceLogLevel()
+{
 	static bool has_result = false;
 	static bool result = false;
 
@@ -201,7 +203,7 @@ static std::vector<std::string> tokenizeString(const std::string &str,
 StreamElementsApiContext_t s_apiContext;
 std::shared_mutex s_apiContextMutex;
 
-void GetApiContext(std::function<void(StreamElementsApiContext_t*)> callback)
+void GetApiContext(std::function<void(StreamElementsApiContext_t *)> callback)
 {
 	std::shared_lock lock(s_apiContextMutex);
 
@@ -222,18 +224,19 @@ bool TryGetApiContext(std::function<void(StreamElementsApiContext_t *)> callback
 	return true;
 }
 
-std::shared_ptr<StreamElementsApiContextItem> PushApiContext(CefString method, CefRefPtr<CefListValue> args)
+std::shared_ptr<StreamElementsApiContextItem>
+PushApiContext(CefString method, CefRefPtr<CefListValue> args)
 {
 	std::unique_lock lock(s_apiContextMutex);
 
-	auto item =
-		std::make_shared<StreamElementsApiContextItem>(method, args,
+	auto item = std::make_shared<StreamElementsApiContextItem>(
+		method, args,
 #ifdef _WIN32
-							       GetCurrentThreadId()
+		GetCurrentThreadId()
 #else
-							       uint32_t(syscall(SYS_thread_selfid))
+		uint32_t(syscall(SYS_thread_selfid))
 #endif
-							       );
+	);
 
 	s_apiContext.push_back(item);
 
@@ -319,8 +322,6 @@ std::future<void> __QtDelayTask_Impl(std::function<void()> task, int delayMs,
 	auto item = AsyncCallContextPush(file, line, false);
 
 	QTimer::singleShot(std::chrono::milliseconds(delayMs), qApp, [=]() {
-		item->running = true;
-
 		// Same reasoning as __QtPostTask_Impl: cleanup must survive a
 		// throwing task, or the context entry leaks into every later
 		// crash report.
@@ -329,6 +330,17 @@ std::future<void> __QtDelayTask_Impl(std::function<void()> task, int delayMs,
 
 			promise->set_value();
 		};
+
+		// Same gate as __QtPostTask_Impl, and for the same reason
+		// (CORE-862). A timer fires through the same event dispatcher,
+		// so a Win32 modal loop delivers it just as readily.
+		if (IsCrashReportingInProgress()) {
+			finish();
+
+			return;
+		}
+
+		item->running = true;
 
 		try {
 			task();
@@ -353,17 +365,6 @@ std::future<void> __QtPostTask_Impl(std::function<void()> task,
 	auto item = AsyncCallContextPush(file, line, false);
 
 	auto executor = [=]() {
-		// Before the task, not after.
-		//
-		// This flag is what tells a crash report which queued call was
-		// executing at the moment of the fault -- the crash handler
-		// writes it into async-context.json. Setting it afterwards meant
-		// the one task that actually was running reported running=false,
-		// which is precisely backwards, and on the macro used at most of
-		// the call sites in this codebase. QtDelayTask below has always
-		// had it the right way round.
-		item->running = true;
-
 		// The entry has to come off the stack, and the waiter has to be
 		// released, even if the task throws. Otherwise the entry stays
 		// for the life of the process and appears in every later crash
@@ -374,6 +375,54 @@ std::future<void> __QtPostTask_Impl(std::function<void()> task,
 
 			promise->set_value();
 		};
+
+		//
+		// Nothing queued before a crash may run after it (CORE-862).
+		//
+		// The consent prompt is a native Win32 modal dialog, and every
+		// Win32 modal loop calls DispatchMessage on all messages --
+		// including the private one Qt's event dispatcher posts to its
+		// own hidden window to drain the posted-event queue. So merely
+		// putting the prompt up runs whatever was queued here, inside
+		// the crash handler, on the crashing thread.
+		//
+		// When one of those tasks calls QDialog::exec(), its nested
+		// event loop sits on top of the prompt's loop and the crash
+		// path cannot continue until that unrelated dialog is answered
+		// -- which the user has no reason to connect to the crash
+		// prompt, and may never see behind a topmost window. Observed:
+		// the prompt was answered and hidden while DialogBox2 was still
+		// on the stack, unable to return.
+		//
+		// finish() still runs. The point is not to strand anyone: a
+		// QtExecSync caller is blocked in result.wait() on another
+		// thread, and dropping the task without releasing it would wedge
+		// that thread too.
+		//
+		// This is the same single-choke-point shape as
+		// SEDrainEventQueue() (CORE-786), and it covers only OUR queued
+		// work -- OBS's own posted calls and other plug-ins' can still
+		// open a dialog inside the prompt.
+		//
+		if (IsCrashReportingInProgress()) {
+			finish();
+
+			return;
+		}
+
+		// Before the task, not after.
+		//
+		// This flag is what tells a crash report which queued call was
+		// executing at the moment of the fault -- the crash handler
+		// writes it into async-context.json. Setting it afterwards meant
+		// the one task that actually was running reported running=false,
+		// which is precisely backwards, and on the macro used at most of
+		// the call sites in this codebase. QtDelayTask below has always
+		// had it the right way round.
+		//
+		// Below the gate above, so a task that was dropped is not
+		// reported as having been running.
+		item->running = true;
 
 		try {
 			task();
@@ -395,7 +444,13 @@ std::future<void> __QtExecSync_Impl(std::function<void()> task,
 				    std::string file, int line)
 {
 	if (QThread::currentThread() == qApp->thread()) {
-		task();
+		// Same gate as the queued path (CORE-862), so the contract is
+		// the same whichever thread asks: once crash reporting has
+		// begun, a marshalled task does not run. This branch bypasses
+		// the queue entirely, so it needs its own check -- and the
+		// crashing thread is usually this one.
+		if (!IsCrashReportingInProgress())
+			task();
 
 		std::promise<void> promise;
 		promise.set_value();
@@ -577,20 +632,41 @@ void SerializeSystemTimes(CefRefPtr<CefValue> &output)
 		d->SetDouble("busySeconds", kernelRat + userRat - idleRat);
 	}
 #else
-    mach_port_t mach_port = mach_host_self();
-    host_cpu_load_info_data_t cpu_load_info;
+	mach_port_t mach_port = mach_host_self();
+	host_cpu_load_info_data_t cpu_load_info;
 
-    mach_msg_type_number_t cpu_load_info_count = HOST_CPU_LOAD_INFO_COUNT;
-    if (host_statistics((host_t)mach_port, HOST_CPU_LOAD_INFO, (host_info_t)&cpu_load_info, &cpu_load_info_count) == KERN_SUCCESS) {
-        CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
-        output->SetDictionary(d);
+	mach_msg_type_number_t cpu_load_info_count = HOST_CPU_LOAD_INFO_COUNT;
+	if (host_statistics((host_t)mach_port, HOST_CPU_LOAD_INFO,
+			    (host_info_t)&cpu_load_info,
+			    &cpu_load_info_count) == KERN_SUCCESS) {
+		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+		output->SetDictionary(d);
 
-        d->SetDouble("idleSeconds", (double)(cpu_load_info.cpu_ticks[CPU_STATE_IDLE]) / (double)CLOCKS_PER_SEC);
-        d->SetDouble("kernelSeconds", (double)(cpu_load_info.cpu_ticks[CPU_STATE_SYSTEM]) / (double)CLOCKS_PER_SEC);
-        d->SetDouble("userSeconds", (double)(cpu_load_info.cpu_ticks[CPU_STATE_USER] + cpu_load_info.cpu_ticks[CPU_STATE_NICE]) / (double)CLOCKS_PER_SEC);
-        d->SetDouble("totalSeconds", (double)(cpu_load_info.cpu_ticks[CPU_STATE_SYSTEM] + cpu_load_info.cpu_ticks[CPU_STATE_USER] + cpu_load_info.cpu_ticks[CPU_STATE_IDLE] + cpu_load_info.cpu_ticks[CPU_STATE_NICE]) / (double)CLOCKS_PER_SEC);
-        d->SetDouble("busySeconds", (double)(cpu_load_info.cpu_ticks[CPU_STATE_SYSTEM] + cpu_load_info.cpu_ticks[CPU_STATE_USER] + cpu_load_info.cpu_ticks[CPU_STATE_NICE]) / (double)CLOCKS_PER_SEC);
-    }
+		d->SetDouble("idleSeconds",
+			     (double)(cpu_load_info.cpu_ticks[CPU_STATE_IDLE]) /
+				     (double)CLOCKS_PER_SEC);
+		d->SetDouble(
+			"kernelSeconds",
+			(double)(cpu_load_info.cpu_ticks[CPU_STATE_SYSTEM]) /
+				(double)CLOCKS_PER_SEC);
+		d->SetDouble("userSeconds",
+			     (double)(cpu_load_info.cpu_ticks[CPU_STATE_USER] +
+				      cpu_load_info.cpu_ticks[CPU_STATE_NICE]) /
+				     (double)CLOCKS_PER_SEC);
+		d->SetDouble(
+			"totalSeconds",
+			(double)(cpu_load_info.cpu_ticks[CPU_STATE_SYSTEM] +
+				 cpu_load_info.cpu_ticks[CPU_STATE_USER] +
+				 cpu_load_info.cpu_ticks[CPU_STATE_IDLE] +
+				 cpu_load_info.cpu_ticks[CPU_STATE_NICE]) /
+				(double)CLOCKS_PER_SEC);
+		d->SetDouble(
+			"busySeconds",
+			(double)(cpu_load_info.cpu_ticks[CPU_STATE_SYSTEM] +
+				 cpu_load_info.cpu_ticks[CPU_STATE_USER] +
+				 cpu_load_info.cpu_ticks[CPU_STATE_NICE]) /
+				(double)CLOCKS_PER_SEC);
+	}
 #endif
 }
 
@@ -598,7 +674,7 @@ void SerializeSystemMemoryUsage(CefRefPtr<CefValue> &output)
 {
 	output->SetNull();
 
-    const uint64_t DIV = 1048576;
+	const uint64_t DIV = 1048576;
 
 #ifdef _WIN32
 	MEMORYSTATUSEX mem;
@@ -621,38 +697,46 @@ void SerializeSystemMemoryUsage(CefRefPtr<CefValue> &output)
 		d->SetInt("freePageFileSize", mem.ullAvailPageFile / DIV);
 	}
 #else
-    mach_port_t mach_port = mach_host_self();
-    vm_statistics_data_t vm_stats;
+	mach_port_t mach_port = mach_host_self();
+	vm_statistics_data_t vm_stats;
 
-    mach_msg_type_number_t vm_info_count = HOST_VM_INFO_COUNT;
-    vm_size_t page_size;
-    if (host_statistics((host_t)mach_port, HOST_VM_INFO, (host_info_t)&vm_stats, &vm_info_count) == KERN_SUCCESS &&
-        host_page_size(mach_port, &page_size) == KERN_SUCCESS) {
-        int64_t free_memory = (int64_t)vm_stats.free_count * (int64_t)page_size;
-        int64_t used_memory = ((int64_t)vm_stats.active_count + (int64_t)vm_stats.inactive_count + (int64_t)vm_stats.wire_count) * (int64_t)page_size;
-        int64_t total_memory = free_memory + used_memory;
+	mach_msg_type_number_t vm_info_count = HOST_VM_INFO_COUNT;
+	vm_size_t page_size;
+	if (host_statistics((host_t)mach_port, HOST_VM_INFO,
+			    (host_info_t)&vm_stats,
+			    &vm_info_count) == KERN_SUCCESS &&
+	    host_page_size(mach_port, &page_size) == KERN_SUCCESS) {
+		int64_t free_memory =
+			(int64_t)vm_stats.free_count * (int64_t)page_size;
+		int64_t used_memory = ((int64_t)vm_stats.active_count +
+				       (int64_t)vm_stats.inactive_count +
+				       (int64_t)vm_stats.wire_count) *
+				      (int64_t)page_size;
+		int64_t total_memory = free_memory + used_memory;
 
-        CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
-        output->SetDictionary(d);
+		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+		output->SetDictionary(d);
 
-        d->SetString("units", "MB");
-        d->SetInt("memoryUsedPercentage", used_memory * 100L / total_memory);
-        d->SetInt("totalVirtualMemory", total_memory / DIV);
-        d->SetInt("freeVirtualMemory", free_memory / DIV);
-        d->SetInt("freeExtendedVirtualMemory", 0);
-        d->SetInt("totalPageFileSize", 0);
-        d->SetInt("freePageFileSize", 0);
-        
-        {
-            int mib[2] = { CTL_HW, HW_MEMSIZE };
-            int64_t physical_memory;
-            size_t length = sizeof(physical_memory);
-            sysctl(mib, 2, &physical_memory, &length, NULL, 0);
+		d->SetString("units", "MB");
+		d->SetInt("memoryUsedPercentage",
+			  used_memory * 100L / total_memory);
+		d->SetInt("totalVirtualMemory", total_memory / DIV);
+		d->SetInt("freeVirtualMemory", free_memory / DIV);
+		d->SetInt("freeExtendedVirtualMemory", 0);
+		d->SetInt("totalPageFileSize", 0);
+		d->SetInt("freePageFileSize", 0);
 
-            d->SetInt("totalPhysicalMemory", physical_memory / DIV);
-            d->SetInt("freePhysicalMemory", free_memory / DIV); // inaccurate
-        }
-    }
+		{
+			int mib[2] = {CTL_HW, HW_MEMSIZE};
+			int64_t physical_memory;
+			size_t length = sizeof(physical_memory);
+			sysctl(mib, 2, &physical_memory, &length, NULL, 0);
+
+			d->SetInt("totalPhysicalMemory", physical_memory / DIV);
+			d->SetInt("freePhysicalMemory",
+				  free_memory / DIV); // inaccurate
+		}
+	}
 #endif
 }
 
@@ -702,7 +786,7 @@ void SerializeSystemHardwareProperties(CefRefPtr<CefValue> &output)
 	CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
 	output->SetDictionary(d);
 
-    d->SetString("platform", "windows");
+	d->SetString("platform", "windows");
 
 	SYSTEM_INFO info;
 
@@ -844,14 +928,15 @@ void SerializeSystemHardwareProperties(CefRefPtr<CefValue> &output)
 
 		d->SetDictionary("bios", bios);
 	}
-    
-    d->SetString("os", "Windows");
+
+	d->SetString("os", "Windows");
 }
 #endif
 
 /* ========================================================= */
 
-bool DeserializeObsSourceFilters(obs_source_t* source, CefRefPtr<CefValue> filtersValue)
+bool DeserializeObsSourceFilters(obs_source_t *source,
+				 CefRefPtr<CefValue> filtersValue)
 {
 	if (!filtersValue.get())
 		return false;
@@ -952,11 +1037,12 @@ bool DeserializeObsSourceFilters(obs_source_t* source, CefRefPtr<CefValue> filte
 CefRefPtr<CefListValue> SerializeObsSourceFilters(obs_source_t *source,
 						  bool serializeProperties)
 {
-	if (!source) return CefListValue::Create();
+	if (!source)
+		return CefListValue::Create();
 
 	struct local_filters_context_t {
 		CefRefPtr<CefListValue> items = CefListValue::Create();
-		std::vector<obs_source_t*> filters;
+		std::vector<obs_source_t *> filters;
 
 		~local_filters_context_t()
 		{
@@ -974,7 +1060,8 @@ CefRefPtr<CefListValue> SerializeObsSourceFilters(obs_source_t *source,
 			auto context =
 				static_cast<local_filters_context_t *>(params);
 
-			context->filters.push_back(SETRACE_ADDREF(obs_source_get_ref(filter)));
+			context->filters.push_back(
+				SETRACE_ADDREF(obs_source_get_ref(filter)));
 		},
 		&context);
 
@@ -1001,7 +1088,8 @@ void SerializeObsSource(obs_source_t *source, CefRefPtr<CefDictionaryValue> dic,
 
 	obs_source_type sourceType = obs_source_get_type(source);
 	std::string sourceId = safe_str(obs_source_get_id(source));
-	std::string unversioned_id = safe_str(obs_source_get_unversioned_id(source));
+	std::string unversioned_id =
+		safe_str(obs_source_get_unversioned_id(source));
 
 	uint32_t sourceCaps = obs_get_source_output_flags(sourceId.c_str());
 
@@ -1016,8 +1104,8 @@ void SerializeObsSource(obs_source_t *source, CefRefPtr<CefDictionaryValue> dic,
 		dic->SetString("name", safe_str(obs_source_get_name(source)));
 	} else {
 		dic->SetString("id", sourceId);
-		dic->SetString("name",
-			       safe_str(obs_source_get_display_name(sourceId.c_str())));
+		dic->SetString("name", safe_str(obs_source_get_display_name(
+					       sourceId.c_str())));
 	}
 
 	dic->SetString("className",
@@ -1048,7 +1136,8 @@ void SerializeObsSource(obs_source_t *source, CefRefPtr<CefDictionaryValue> dic,
 		     sourceType == OBS_SOURCE_TYPE_TRANSITION);
 	dic->SetBool("isSceneSource", sourceType == OBS_SOURCE_TYPE_SCENE);
 
-	OBSDataAutoRelease settings = SETRACE_SCOPEREF(obs_source_get_settings(source));
+	OBSDataAutoRelease settings =
+		SETRACE_SCOPEREF(obs_source_get_settings(source));
 
 	if (isExistingSource) {
 		dic->SetValue("settings", SerializeObsData(settings));
@@ -1095,7 +1184,8 @@ void SerializeObsSource(obs_source_t *source, CefRefPtr<CefDictionaryValue> dic,
 		     SerializeObsSourceFilters(source, serializeProperties));
 }
 
-void SerializeObsSourceProperties(CefRefPtr<CefValue> input, CefRefPtr<CefValue>& output)
+void SerializeObsSourceProperties(CefRefPtr<CefValue> input,
+				  CefRefPtr<CefValue> &output)
 {
 	output->SetNull();
 
@@ -1116,8 +1206,8 @@ void SerializeObsSourceProperties(CefRefPtr<CefValue> input, CefRefPtr<CefValue>
 			return;
 	}
 
-	OBSSourceAutoRelease source =
-		SETRACE_SCOPEREF(obs_source_create_private(id.c_str(), id.c_str(), settings));
+	OBSSourceAutoRelease source = SETRACE_SCOPEREF(
+		obs_source_create_private(id.c_str(), id.c_str(), settings));
 
 	if (!source)
 		return;
@@ -1129,8 +1219,8 @@ void SerializeObsSourceProperties(CefRefPtr<CefValue> input, CefRefPtr<CefValue>
 	output->SetDictionary(root);
 }
 
-void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
-					uint32_t requireAnyOfOutputFlagsMask,
+void SerializeAvailableInputSourceTypes(
+	CefRefPtr<CefValue> &output, uint32_t requireAnyOfOutputFlagsMask,
 	std::vector<obs_source_type> requiredSourceTypes,
 	bool serializeProperties)
 {
@@ -1147,12 +1237,13 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 	// Response codec collection is our root object
 	output->SetList(list);
 
-	auto add = [&](std::string sourceId,
-		       const char *unversioned_id, obs_canvas_t* canvas) -> void {
+	auto add = [&](std::string sourceId, const char *unversioned_id,
+		       obs_canvas_t *canvas) -> void {
 		existingSourceIds[sourceId] = true;
 
 		// Get source caps
-		uint32_t sourceCaps = obs_get_source_output_flags(sourceId.c_str());
+		uint32_t sourceCaps =
+			obs_get_source_output_flags(sourceId.c_str());
 
 		// Check if the source is disabled, if so - skip it
 		if ((sourceCaps & OBS_SOURCE_CAP_DISABLED) != 0)
@@ -1172,7 +1263,7 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 		OBSSourceAutoRelease source = nullptr;
 
 		if (canvas && sourceId == "scene") {
-			obs_scene_t* scene =
+			obs_scene_t *scene =
 				SETRACE_NOREF(obs_canvas_scene_create(
 					canvas,
 					CreateGloballyUniqueIdString().c_str()));
@@ -1227,8 +1318,8 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 	// Iterate over all required source types
 	for (auto requiredType : requiredSourceTypes) {
 		if (requiredType == OBS_SOURCE_TYPE_SCENE &&
-			(requireAnyOfOutputFlagsMask & OBS_SOURCE_VIDEO) ==
-				OBS_SOURCE_VIDEO) {
+		    (requireAnyOfOutputFlagsMask & OBS_SOURCE_VIDEO) ==
+			    OBS_SOURCE_VIDEO) {
 
 			obs_video_info ovi;
 
@@ -1250,8 +1341,7 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 			// Filled by obs_enum_input_types() call below
 			const char *sourceId;
 
-			if (requiredType ==
-				OBS_SOURCE_TYPE_INPUT) {
+			if (requiredType == OBS_SOURCE_TYPE_INPUT) {
 				const char *unversioned_id;
 
 				if (!obs_enum_input_types2(idx, &sourceId,
@@ -1259,14 +1349,12 @@ void SerializeAvailableInputSourceTypes(CefRefPtr<CefValue> &output,
 					break;
 
 				add(sourceId, unversioned_id, nullptr);
-			} else if (requiredType ==
-					OBS_SOURCE_TYPE_FILTER) {
+			} else if (requiredType == OBS_SOURCE_TYPE_FILTER) {
 				if (!obs_enum_filter_types(idx, &sourceId))
 					break;
 
 				add(sourceId, nullptr, nullptr);
-			} else if (requiredType ==
-					OBS_SOURCE_TYPE_TRANSITION) {
+			} else if (requiredType == OBS_SOURCE_TYPE_TRANSITION) {
 				if (!obs_enum_transition_types(idx, &sourceId))
 					break;
 
@@ -1446,7 +1534,7 @@ std::string GetCefVersionString()
 	char buf[64] = "unknown";
 
 #ifdef _WIN32
-	void* libcef = os_dlopen("libcef");
+	void *libcef = os_dlopen("libcef");
 	if (libcef) {
 		typedef int (*cef_version_info_func_ptr_t)(int entry);
 
@@ -1481,8 +1569,8 @@ std::string GetCefPlatformApiHash()
 		typedef const char *(*cef_api_hash_func_ptr_t)(int entry);
 
 		cef_api_hash_func_ptr_t cef_api_hash_func_ptr =
-			(cef_api_hash_func_ptr_t)os_dlsym(
-				libcef, "cef_api_hash");
+			(cef_api_hash_func_ptr_t)os_dlsym(libcef,
+							  "cef_api_hash");
 
 		if (cef_api_hash_func_ptr) {
 			sprintf(buf, "%s", cef_api_hash_func_ptr(0));
@@ -1554,7 +1642,7 @@ std::string GetStreamElementsApiVersionString()
 #pragma comment(lib, "Winhttp.lib")
 void SetGlobalCURLOptions(CURL *curl, const char *url)
 {
-    // TODO: TBD: MacOS: http://mirror.informatimago.com/next/developer.apple.com/qa/qa2001/qa1234.html
+	// TODO: TBD: MacOS: http://mirror.informatimago.com/next/developer.apple.com/qa/qa2001/qa1234.html
 	std::string proxy =
 		GetCommandLineOptionValue("streamelements-http-proxy");
 
@@ -1637,7 +1725,8 @@ static size_t http_write_callback(char *ptr, size_t size, size_t nmemb,
 	}
 };
 
-bool HttpGet(std::string method, const char *url, http_client_headers_t request_headers,
+bool HttpGet(std::string method, const char *url,
+	     http_client_headers_t request_headers,
 	     http_client_callback_t callback, void *userdata)
 {
 	bool result = false;
@@ -1650,7 +1739,8 @@ bool HttpGet(std::string method, const char *url, http_client_headers_t request_
 		if (method == "GET") {
 			// NOP
 		} else if (method == "DELETE" || method == "OPTIONS") {
-			curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method.c_str());
+			curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST,
+					 method.c_str());
 		}
 
 		SetGlobalCURLOptions(curl, url);
@@ -1712,14 +1802,15 @@ bool HttpGet(std::string method, const char *url, http_client_headers_t request_
 	return result;
 }
 
-bool HttpGet(const char* url, http_client_headers_t request_headers,
-	http_client_callback_t callback, void* userdata)
+bool HttpGet(const char *url, http_client_headers_t request_headers,
+	     http_client_callback_t callback, void *userdata)
 {
 	return HttpGet("GET", url, request_headers, callback, userdata);
 }
 
-bool HttpPost(std::string method, const char *url, http_client_headers_t request_headers,
-	      void *buffer, size_t buffer_len, http_client_callback_t callback,
+bool HttpPost(std::string method, const char *url,
+	      http_client_headers_t request_headers, void *buffer,
+	      size_t buffer_len, http_client_callback_t callback,
 	      void *userdata)
 {
 	bool result = false;
@@ -1735,16 +1826,17 @@ bool HttpPost(std::string method, const char *url, http_client_headers_t request
 		if (method == "POST") {
 			curl_easy_setopt(curl, CURLOPT_POST, 1L);
 		} else if (method == "PUT") {
-			curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L); // implies PUT
+			curl_easy_setopt(curl, CURLOPT_UPLOAD,
+					 1L); // implies PUT
 		} else if (method == "PATCH") {
-			curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method.c_str());
+			curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST,
+					 method.c_str());
 		} else {
 			// Unknown method
 			curl_easy_cleanup(curl);
 
 			return false;
 		}
-
 
 		curl_easy_setopt(curl, CURLOPT_URL, url);
 
@@ -1806,12 +1898,12 @@ bool HttpPost(std::string method, const char *url, http_client_headers_t request
 	return result;
 }
 
-bool HttpPost(const char* url, http_client_headers_t request_headers,
-	void* buffer, size_t buffer_len, http_client_callback_t callback,
-	void* userdata)
+bool HttpPost(const char *url, http_client_headers_t request_headers,
+	      void *buffer, size_t buffer_len, http_client_callback_t callback,
+	      void *userdata)
 {
-	return HttpPost("POST", url, request_headers, buffer, buffer_len, callback,
-		 userdata);
+	return HttpPost("POST", url, request_headers, buffer, buffer_len,
+			callback, userdata);
 }
 
 static const size_t MAX_HTTP_STRING_RESPONSE_LENGTH = 1024 * 1024 * 100;
@@ -1854,15 +1946,14 @@ bool HttpGetString(std::string method, const char *url,
 	return success;
 }
 
-bool HttpGetString(const char* url, http_client_headers_t request_headers,
-	http_client_string_callback_t callback, void* userdata)
+bool HttpGetString(const char *url, http_client_headers_t request_headers,
+		   http_client_string_callback_t callback, void *userdata)
 {
 	return HttpGetString("GET", url, request_headers, callback, userdata);
 }
 
-bool HttpGetBuffer(
-	const char *url, http_client_headers_t request_headers,
-	http_client_buffer_callback_t callback, void *userdata)
+bool HttpGetBuffer(const char *url, http_client_headers_t request_headers,
+		   http_client_buffer_callback_t callback, void *userdata)
 {
 	std::vector<char> buffer;
 	std::string error = "";
@@ -1937,9 +2028,9 @@ bool HttpPostString(std::string method, const char *url,
 	return success;
 }
 
-bool HttpPostString(const char* url, http_client_headers_t request_headers,
-	const char* postData,
-	http_client_string_callback_t callback, void* userdata)
+bool HttpPostString(const char *url, http_client_headers_t request_headers,
+		    const char *postData,
+		    http_client_string_callback_t callback, void *userdata)
 {
 	return HttpPostString("POST", url, request_headers, postData, callback,
 			      userdata);
@@ -1991,7 +2082,8 @@ static std::string ReadEnvironmentConfigString(const char *regValueName,
 	SETRACE_ADDREF(config);
 	bfree(filePath);
 
-	const char* str = config_get_string(config, productName ? productName : "Global", regValueName);
+	const char *str = config_get_string(
+		config, productName ? productName : "Global", regValueName);
 
 	if (str) {
 		result = str;
@@ -2034,9 +2126,8 @@ bool WriteEnvironmentConfigString(const char *regValueName,
 	SETRACE_ADDREF(config);
 	bfree(filePath);
 
-	config_set_string(config,
-				      productName ? productName : "Global",
-				      regValueName, regValue);
+	config_set_string(config, productName ? productName : "Global",
+			  regValueName, regValue);
 
 	config_save_safe(config, "tmp", "bak");
 
@@ -2078,7 +2169,8 @@ bool WriteEnvironmentConfigStrings(streamelements_env_update_requests requests)
 {
 #ifndef WIN32
 	for (auto req : requests) {
-		if (!WriteEnvironmentConfigString(req.key.c_str(), req.value.c_str(),
+		if (!WriteEnvironmentConfigString(req.key.c_str(),
+						  req.value.c_str(),
 						  req.product.c_str())) {
 			return false;
 		}
@@ -2251,8 +2343,7 @@ std::string GetComputerSystemUniqueId()
 	// Every crash from it was anonymous and none could be correlated with
 	// any other. Rejecting the value here regenerates a good one on the next
 	// call rather than requiring the registry to be cleaned by hand.
-	if (result.size() &&
-	    (result.size() < 16 || result.find('/') != 4)) {
+	if (result.size() && (result.size() < 16 || result.find('/') != 4)) {
 		blog(LOG_WARNING,
 		     "obs-streamelements-core: discarding malformed machine unique id '%s'; a new one will be generated",
 		     result.c_str());
@@ -2472,11 +2563,12 @@ std::string CreateSessionSignedAbsolutePathURL(std::wstring path)
 	path = std::regex_replace(path, std::wregex(L"&"), L"%26");
 
 	QUrl parts(StreamElementsGlobalStateManager::GetInstance()
-			 ->GetLocalFilesystemHttpServer()
-			 ->GetBaseUrl()
-			 .c_str());
+			   ->GetLocalFilesystemHttpServer()
+			   ->GetBaseUrl()
+			   .c_str());
 
-	parts.setPath(QString::fromStdWString((std::wstring(L"/") + path).c_str()));
+	parts.setPath(
+		QString::fromStdWString((std::wstring(L"/") + path).c_str()));
 
 	std::string message = parts.path().toStdString();
 
@@ -2519,8 +2611,9 @@ bool VerifySessionSignedAbsolutePathURL(std::string url, std::string &path)
 
 bool IsAlwaysOnTop(QWidget *window)
 {
-    if (!window) return false;
-    
+	if (!window)
+		return false;
+
 #ifdef WIN32
 	DWORD exStyle = GetWindowLong((HWND)window->winId(), GWL_EXSTYLE);
 	return (exStyle & WS_EX_TOPMOST) != 0;
@@ -2531,7 +2624,8 @@ bool IsAlwaysOnTop(QWidget *window)
 
 void SetAlwaysOnTop(QWidget *window, bool enable)
 {
-    if (!window) return;
+	if (!window)
+		return;
 
 #ifdef WIN32
 	HWND hwnd = (HWND)window->winId();
@@ -2577,14 +2671,14 @@ double GetObsGlobalFramesPerSecond()
 void AdviseHostUserInterfaceStateChanged()
 {
 	static bool isBusy = false;
-	
+
 	if (!os_atomic_set_bool(&isBusy, true)) {
 		QTimer::singleShot(std::chrono::milliseconds(250), qApp, [&]() {
 			os_atomic_set_bool(&isBusy, false);
 
 			// Advise guest code of user interface state changes
-			DispatchJSEventGlobal(
-				"hostUserInterfaceStateChanged", "null");
+			DispatchJSEventGlobal("hostUserInterfaceStateChanged",
+					      "null");
 		});
 	}
 }
@@ -2597,8 +2691,8 @@ void AdviseHostHotkeyBindingsChanged()
 
 		QTimer::singleShot(std::chrono::milliseconds(250), qApp, [&]() {
 			// Advise guest code of user interface state changes
-			DispatchJSEventGlobal(
-				"hostHotkeyBindingsChanged", "null");
+			DispatchJSEventGlobal("hostHotkeyBindingsChanged",
+					      "null");
 
 			os_atomic_set_bool(&isBusy, false);
 		});
@@ -2700,7 +2794,8 @@ bool GetTemporaryFilePath(std::string prefixString, std::string &result)
 
 std::string GetUniqueFileNameFromPath(std::string fullPath, size_t maxLength)
 {
-	std::filesystem::path path = std::filesystem::path(utf8_to_wstring(fullPath).c_str());
+	std::filesystem::path path =
+		std::filesystem::path(utf8_to_wstring(fullPath).c_str());
 
 	auto stem = std::regex_replace(path.stem().wstring(),
 				       std::wregex(L"[ ]"), L"_");
@@ -2842,23 +2937,25 @@ bool ReadListOfObsProfiles(std::map<std::string, std::string> &output)
 }
 
 std::shared_ptr<CancelableTask>
-HttpGetAsync(std::string url,
-		async_http_request_callback_t callback)
+HttpGetAsync(std::string url, async_http_request_callback_t callback)
 {
-	return CancelableTask::Execute([=](std::shared_ptr<CancelableTask> task) {
-		http_client_headers_t headers;
+	return CancelableTask::Execute(
+		[=](std::shared_ptr<CancelableTask> task) {
+			http_client_headers_t headers;
 
-		auto cb = [=](void* data, size_t datalen, void* userdata, char* error_msg,
-			int http_code) {
+			auto cb = [=](void *data, size_t datalen,
+				      void *userdata, char *error_msg,
+				      int http_code) {
 				if (!task->IsCancelled()) {
-					bool success = http_code >= 200 && http_code < 400;
+					bool success = http_code >= 200 &&
+						       http_code < 400;
 
 					callback(success, data, datalen);
 				}
-		};
+			};
 
-		HttpGetBuffer(url.c_str(), headers, cb, nullptr);
-	});
+			HttpGetBuffer(url.c_str(), headers, cb, nullptr);
+		});
 }
 
 class QRemoteIconMenu : public QMenu {
@@ -2910,9 +3007,8 @@ public:
 
 		CefRefPtr<StreamElementsRemoteIconLoader> loaderCopy = loader;
 
-		QObject::connect(this, &QObject::destroyed, [loaderCopy]() {
-			loaderCopy->Cancel();
-		});
+		QObject::connect(this, &QObject::destroyed,
+				 [loaderCopy]() { loaderCopy->Cancel(); });
 	}
 
 	virtual QSize minimumSizeHint() const override { return sizeHint(); }
@@ -2939,7 +3035,7 @@ private:
 	CefRefPtr<StreamElementsRemoteIconLoader> loader;
 };
 
-bool DeserializeDocksMenu(QMenu& menu)
+bool DeserializeDocksMenu(QMenu &menu)
 {
 	auto widgetManager = StreamElementsGlobalStateManager::GetInstance()
 				     ->GetWidgetManager();
@@ -2950,7 +3046,7 @@ bool DeserializeDocksMenu(QMenu& menu)
 	widgetManager->EnterCriticalSection();
 
 	std::vector<std::string> widgetIds;
-	
+
 	widgetManager->GetDockBrowserWidgetIdentifiers(widgetIds);
 
 	std::vector<StreamElementsBrowserWidgetManager::DockBrowserWidgetInfo *>
@@ -2993,7 +3089,6 @@ bool DeserializeDocksMenu(QMenu& menu)
 			if (!widgetManager)
 				return;
 
-
 			widgetManager->EnterCriticalSection();
 
 			QDockWidget *dock =
@@ -3010,11 +3105,11 @@ bool DeserializeDocksMenu(QMenu& menu)
 								{"type",
 								 "button_click"},
 								{"placement",
-								 "menu"}
-							},
+								 "menu"}},
 							json11::Json::array{json11::Json::array{
 								"dock_widget_title",
-								dock->windowTitle().toStdString()}});
+								dock->windowTitle()
+									.toStdString()}});
 				} else {
 					// Show
 					StreamElementsGlobalStateManager::GetInstance()
@@ -3025,17 +3120,18 @@ bool DeserializeDocksMenu(QMenu& menu)
 								{"type",
 								 "button_click"},
 								{"placement",
-								 "menu"}
-							},
+								 "menu"}},
 							json11::Json::array{json11::Json::array{
 								"dock_widget_title",
-								dock->windowTitle().toStdString()}});
+								dock->windowTitle()
+									.toStdString()}});
 				}
 
 				dock->setVisible(!isVisible);
 
 				StreamElementsGlobalStateManager::GetInstance()
-					->GetMenuManager()->Update();
+					->GetMenuManager()
+					->Update();
 			}
 
 			widgetManager->LeaveCriticalSection();
@@ -3162,7 +3258,8 @@ bool DeserializeMenu(CefRefPtr<CefValue> input, QMenu &menu,
 				if (!DeserializeMenu(d->GetValue("items"),
 						     *submenu))
 					return false;
-			} else if (d->HasKey("itemsSource") && d->GetType("itemsSource") == VTYPE_STRING) {
+			} else if (d->HasKey("itemsSource") &&
+				   d->GetType("itemsSource") == VTYPE_STRING) {
 				std::string itemsSource =
 					d->GetString("itemsSource");
 
@@ -3230,7 +3327,8 @@ DeserializeAuxiliaryControlWidget(CefRefPtr<CefValue> input,
 		styleSheet += " } ";
 	}
 
-	styleSheet += "QPushButton { background-color: palette(button); padding: 1; padding-left: 1em; padding-right: 1em; } ";
+	styleSheet +=
+		"QPushButton { background-color: palette(button); padding: 1; padding-left: 1em; padding-right: 1em; } ";
 	styleSheet +=
 		"QPushButton:hover { background-color: palette(midlight); color: palette(dark); } ";
 	styleSheet +=
@@ -3423,7 +3521,8 @@ void ObsSceneEnumAllItems(obs_scene_t *scene,
 					local_context *context =
 						(local_context *)param;
 
-					obs_sceneitem_addref(SETRACE_ADDREF(sceneitem));
+					obs_sceneitem_addref(
+						SETRACE_ADDREF(sceneitem));
 
 					context->items.push_back(sceneitem);
 
@@ -3477,7 +3576,7 @@ bool IsCefValueEqual(CefRefPtr<CefValue> a, CefRefPtr<CefValue> b)
 	return json1 == json2;
 }
 
-void ObsEnumAllScenes(std::function < bool(obs_source_t * scene)> func)
+void ObsEnumAllScenes(std::function<bool(obs_source_t *scene)> func)
 {
 	struct local_context {
 		std::vector<obs_source_t *> list;
@@ -3489,7 +3588,6 @@ void ObsEnumAllScenes(std::function < bool(obs_source_t * scene)> func)
 		[](void *data, obs_source_t *scene) -> bool {
 			local_context *context = (local_context *)data;
 
-			
 			if (!obs_source_is_group(scene)) {
 				context->list.push_back(SETRACE_ADDREF(
 					obs_source_get_ref(scene)));
@@ -3521,8 +3619,8 @@ public:
 
 		std::string id = CreateGloballyUniqueIdString();
 
-		s_map[id] = new TimedObsApiTransactionHandle(id, timeoutMilliseconds,
-						       [id]() { Destroy(id); });
+		s_map[id] = new TimedObsApiTransactionHandle(
+			id, timeoutMilliseconds, [id]() { Destroy(id); });
 
 		if (s_map.size() == 1) {
 			StreamElementsPleaseWaitWindow::GetInstance()->Show();
@@ -3533,7 +3631,8 @@ public:
 		return id;
 	}
 
-	static void Destroy(std::string id) {
+	static void Destroy(std::string id)
+	{
 		std::lock_guard<std::recursive_mutex> guard(s_mutex);
 
 		if (!s_map.count(id))
@@ -3551,26 +3650,25 @@ public:
 	}
 
 private:
-	TimedObsApiTransactionHandle(
-		std::string id,
-		int timeoutMilliseconds, std::function<void()> onTimer)
+	TimedObsApiTransactionHandle(std::string id, int timeoutMilliseconds,
+				     std::function<void()> onTimer)
 		: m_id(id), m_onTimer(onTimer)
 	{
 		m_timer = new QTimer();
 		m_timer->moveToThread(qApp->thread());
 		m_timer->setInterval(timeoutMilliseconds);
 		m_timer->setSingleShot(true);
-		QObject::connect(m_timer, &QTimer::timeout, [this]() {
-			m_onTimer();
-		});
+		QObject::connect(m_timer, &QTimer::timeout,
+				 [this]() { m_onTimer(); });
 		QMetaObject::invokeMethod(m_timer, "start",
 					  Qt::QueuedConnection,
 					  Q_ARG(int, timeoutMilliseconds));
 	}
 
-	~TimedObsApiTransactionHandle() {
-		QMetaObject::invokeMethod(m_timer, "stop",
-					  Qt::QueuedConnection, Q_ARG(int, 0));
+	~TimedObsApiTransactionHandle()
+	{
+		QMetaObject::invokeMethod(m_timer, "stop", Qt::QueuedConnection,
+					  Q_ARG(int, 0));
 
 		m_timer->deleteLater();
 	}
@@ -3581,14 +3679,17 @@ private:
 	QTimer *m_timer;
 };
 
-std::map<std::string, TimedObsApiTransactionHandle *> TimedObsApiTransactionHandle::s_map;
+std::map<std::string, TimedObsApiTransactionHandle *>
+	TimedObsApiTransactionHandle::s_map;
 std::recursive_mutex TimedObsApiTransactionHandle::s_mutex;
 
-std::string CreateTimedObsApiTransaction(int timeoutMilliseconds) {
+std::string CreateTimedObsApiTransaction(int timeoutMilliseconds)
+{
 	return TimedObsApiTransactionHandle::Create(timeoutMilliseconds);
 }
 
-void CompleteTimedObsApiTransaction(std::string id) {
+void CompleteTimedObsApiTransaction(std::string id)
+{
 	TimedObsApiTransactionHandle::Destroy(id);
 }
 
@@ -3604,7 +3705,7 @@ static bool GetBool(CefRefPtr<CefDictionaryValue> input, std::string key,
 }
 
 static int GetInt(CefRefPtr<CefDictionaryValue> input, std::string key,
-		    int defaultValue = 0)
+		  int defaultValue = 0)
 {
 	if (!input->HasKey(key) || input->GetType(key) != VTYPE_INT)
 		return defaultValue;
@@ -3612,8 +3713,8 @@ static int GetInt(CefRefPtr<CefDictionaryValue> input, std::string key,
 	return input->GetInt(key);
 }
 
-static std::string GetString(CefRefPtr<CefDictionaryValue> input, std::string key,
-		  std::string defaultValue = "")
+static std::string GetString(CefRefPtr<CefDictionaryValue> input,
+			     std::string key, std::string defaultValue = "")
 {
 	if (!input->HasKey(key) || input->GetType(key) != VTYPE_STRING)
 		return defaultValue;
@@ -3622,7 +3723,7 @@ static std::string GetString(CefRefPtr<CefDictionaryValue> input, std::string ke
 }
 
 static std::wstring GetWString(CefRefPtr<CefDictionaryValue> input,
-			     std::string key, std::wstring defaultValue = L"")
+			       std::string key, std::wstring defaultValue = L"")
 {
 	if (!input->HasKey(key) || input->GetType(key) != VTYPE_STRING)
 		return defaultValue;
@@ -3648,9 +3749,8 @@ void RestartCurrentApplication()
 
 	QProcess proc;
 	if (proc.startDetached(
-		QCoreApplication::instance()->applicationFilePath(),
-		QCoreApplication::instance()->arguments()
-	)) {
+		    QCoreApplication::instance()->applicationFilePath(),
+		    QCoreApplication::instance()->arguments())) {
 		success = true;
 
 		/* Exit OBS */
@@ -3724,7 +3824,8 @@ void DispatchJSEventGlobal(std::string event, std::string eventArgsJson)
 	apiServer->DispatchJSEvent("system", event, eventArgsJson);
 }
 
-void DispatchJSEventContainer(std::string target, std::string event, std::string eventArgsJson)
+void DispatchJSEventContainer(std::string target, std::string event,
+			      std::string eventArgsJson)
 {
 	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
 		return;
@@ -3735,7 +3836,8 @@ void DispatchJSEventContainer(std::string target, std::string event, std::string
 	if (!apiServer)
 		return;
 
-	apiServer->DispatchTargetJSEvent("system", target, event, eventArgsJson);
+	apiServer->DispatchTargetJSEvent("system", target, event,
+					 eventArgsJson);
 }
 
 bool SecureJoinPaths(std::string base, std::string subpath, std::string &result)
@@ -4063,7 +4165,6 @@ bool SerializeObsProperties(obs_properties_t *props,
 	return true;
 }
 
-
 bool DeserializeObsData(CefRefPtr<CefValue> input, obs_data_t *data)
 {
 	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
@@ -4071,7 +4172,8 @@ bool DeserializeObsData(CefRefPtr<CefValue> input, obs_data_t *data)
 
 	std::string json = CefWriteJSON(input, JSON_WRITER_DEFAULT);
 
-	OBSDataAutoRelease parsed_data = SETRACE_SCOPEREF(obs_data_create_from_json(json.c_str()));
+	OBSDataAutoRelease parsed_data =
+		SETRACE_SCOPEREF(obs_data_create_from_json(json.c_str()));
 
 	if (!parsed_data)
 		return false;
@@ -4086,7 +4188,8 @@ CefRefPtr<CefValue> SerializeObsData(obs_data_t *data)
 	if (data) {
 		static std::shared_mutex mutex;
 
-		std::unique_lock guard(mutex); // obs_data_get_json is not thread_safe for the same data container
+		std::unique_lock guard(
+			mutex); // obs_data_get_json is not thread_safe for the same data container
 
 		const char *json =
 			SETRACE_NOREF(obs_data_get_json_with_defaults(data));
@@ -4104,8 +4207,8 @@ CefRefPtr<CefValue> SerializeObsData(obs_data_t *data)
 	return result;
 }
 
-CefRefPtr<CefValue>
-SerializeObsEncoderProperties(std::string id, obs_data_t *settings)
+CefRefPtr<CefValue> SerializeObsEncoderProperties(std::string id,
+						  obs_data_t *settings)
 {
 	auto result = CefValue::Create();
 
@@ -4258,7 +4361,8 @@ obs_source_t *GetExistingObsTransition(std::string lookupId)
 	return result;
 }
 
-bool DeserializeObsTransition(CefRefPtr<CefValue> input, obs_source_t **out_transition,
+bool DeserializeObsTransition(CefRefPtr<CefValue> input,
+			      obs_source_t **out_transition,
 			      int *durationMilliseconds, bool useExisting)
 {
 	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
@@ -4273,7 +4377,7 @@ bool DeserializeObsTransition(CefRefPtr<CefValue> input, obs_source_t **out_tran
 
 	OBSDataAutoRelease settings = nullptr;
 	OBSSourceAutoRelease transition = nullptr;
-	
+
 	if (d->HasKey("settings")) {
 		settings = SETRACE_SCOPEREF(obs_data_create());
 
@@ -4325,13 +4429,13 @@ bool DeserializeObsTransition(CefRefPtr<CefValue> input, obs_source_t **out_tran
 	if (d->HasKey("alignment") && d->GetType("alignment") == VTYPE_STRING) {
 		obs_transition_set_alignment(
 			transition, GetInt32FromAlignmentId(
-				    d->GetString("alignment").c_str()));
+					    d->GetString("alignment").c_str()));
 	}
 
 	if (obs_transition_fixed(transition)) {
 		*durationMilliseconds = 0;
 	} else if (d->HasKey("durationMilliseconds") &&
-	    d->GetType("durationMilliseconds") == VTYPE_INT) {
+		   d->GetType("durationMilliseconds") == VTYPE_INT) {
 		*durationMilliseconds = d->GetInt("durationMilliseconds");
 	} else {
 		*durationMilliseconds = 300; // OBS FE default
@@ -4462,17 +4566,18 @@ static obs_encoder_t *DeserializeObsEncoder(obs_encoder_type type,
 		return nullptr;
 }
 
-obs_encoder_t* DeserializeObsVideoEncoder(CefRefPtr<CefValue> input)
+obs_encoder_t *DeserializeObsVideoEncoder(CefRefPtr<CefValue> input)
 {
 	return DeserializeObsEncoder(OBS_ENCODER_VIDEO, input, 0);
 }
 
-obs_encoder_t *DeserializeObsAudioEncoder(CefRefPtr<CefValue> input, int mixer_idx)
+obs_encoder_t *DeserializeObsAudioEncoder(CefRefPtr<CefValue> input,
+					  int mixer_idx)
 {
 	return DeserializeObsEncoder(OBS_ENCODER_VIDEO, input, mixer_idx);
 }
 
-void SerializeLoadedObsModules(CefRefPtr<CefValue>& output)
+void SerializeLoadedObsModules(CefRefPtr<CefValue> &output)
 {
 	struct local_context {
 		CefRefPtr<CefListValue> list = CefListValue::Create();
@@ -4492,7 +4597,8 @@ void SerializeLoadedObsModules(CefRefPtr<CefValue>& output)
 			std::string binary_path = safe_str(
 				obs_get_module_binary_path(module), "");
 
-			char* binaryAbsPath = os_get_abs_path_ptr(binary_path.c_str());
+			char *binaryAbsPath =
+				os_get_abs_path_ptr(binary_path.c_str());
 			binary_path = safe_str(binaryAbsPath, "");
 			bfree(binaryAbsPath);
 
@@ -4519,7 +4625,8 @@ void SerializeLoadedObsModules(CefRefPtr<CefValue>& output)
 	output->SetList(context.list);
 }
 
-void DeserializeRevealFileInGraphicalShell(CefRefPtr<CefValue> input, CefRefPtr<CefValue>& output)
+void DeserializeRevealFileInGraphicalShell(CefRefPtr<CefValue> input,
+					   CefRefPtr<CefValue> &output)
 {
 	output->SetBool(false);
 
@@ -4533,37 +4640,34 @@ void DeserializeRevealFileInGraphicalShell(CefRefPtr<CefValue> input, CefRefPtr<
 	if (!fileInfo.exists())
 		return;
 
-	#ifdef WIN32
-		QString explorer = QStandardPaths::findExecutable(QString::fromLatin1("explorer.exe"));
+#ifdef WIN32
+	QString explorer = QStandardPaths::findExecutable(
+		QString::fromLatin1("explorer.exe"));
 
-		if (explorer.isEmpty()) {
-			return;
-		}
+	if (explorer.isEmpty()) {
+		return;
+	}
 
-		QStringList param;
-		if (!fileInfo.isDir())
-			param += QLatin1String("/select,");
-		param += QDir::toNativeSeparators(fileInfo.canonicalFilePath());
+	QStringList param;
+	if (!fileInfo.isDir())
+		param += QLatin1String("/select,");
+	param += QDir::toNativeSeparators(fileInfo.canonicalFilePath());
 
-		output->SetBool(QProcess::startDetached(explorer, param));
-	#endif
+	output->SetBool(QProcess::startDetached(explorer, param));
+#endif
 
-	#ifdef APPLE
-		QStringList scriptArgs;
-		scriptArgs
-			<< QLatin1String("-e")
-			<< QString::fromLatin1(
-				   "tell application \"Finder\" to reveal POSIX file \"%1\"")
-				   .arg(fileInfo.canonicalFilePath());
-		QProcess::execute(QLatin1String("/usr/bin/osascript"),
-				  scriptArgs);
-		scriptArgs.clear();
-		scriptArgs
-			<< QLatin1String("-e")
-			<< QLatin1String(
-				   "tell application \"Finder\" to activate");
-		output->SetBool(
-			QProcess::execute(QLatin1String("/usr/bin/osascript"),
+#ifdef APPLE
+	QStringList scriptArgs;
+	scriptArgs
+		<< QLatin1String("-e")
+		<< QString::fromLatin1(
+			   "tell application \"Finder\" to reveal POSIX file \"%1\"")
+			   .arg(fileInfo.canonicalFilePath());
+	QProcess::execute(QLatin1String("/usr/bin/osascript"), scriptArgs);
+	scriptArgs.clear();
+	scriptArgs << QLatin1String("-e")
+		   << QLatin1String("tell application \"Finder\" to activate");
+	output->SetBool(QProcess::execute(QLatin1String("/usr/bin/osascript"),
 					  scriptArgs) == 0);
-	#endif
+#endif
 }
