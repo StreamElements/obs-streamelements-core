@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <wchar.h>
 
@@ -116,6 +117,125 @@ static bool GetOwnModuleDirectory(std::wstring &result)
 	result = path;
 
 	return true;
+}
+
+//
+// Turns a possibly-relative path into an absolute one, anchored to the
+// directory containing the host executable.
+//
+// obs_module_config_path() returns an absolute path on a normal install and a
+// RELATIVE one on a portable install -- literally
+// "../../config/obs-studio/plugin_config/obs-streamelements-core/sentry-db",
+// which is relative to obs64.exe. Handed to sentry unchanged, it is resolved
+// against the process's CURRENT WORKING DIRECTORY instead, and that is not ours
+// to rely on: the host or any other plug-in may call SetCurrentDirectory at any
+// time, and nothing announces it when they do.
+//
+// Today those two happen to agree, so this is hardening rather than a fix for
+// an observed failure. It is cheap, and the failure mode it removes is a bad
+// one: sentry__path_create_dir_all() fails, sentry_init() aborts, and the
+// install has NO CRASH REPORTING AT ALL -- no handler, no gate, no consent
+// prompt. See CORE-861.
+//
+// GetFullPathNameW alone would not do: it resolves against the current
+// directory too. The anchor has to be the host executable's directory, because
+// that is what OBS built the relative path against.
+//
+static std::wstring ResolveAgainstHostExecutable(const std::wstring &path)
+{
+	// Already absolute (a normal install): nothing to do.
+	if (path.size() >= 2 &&
+	    (path[1] == L':' || (path[0] == L'\\' && path[1] == L'\\')))
+		return path;
+
+	wchar_t exePath[MAX_PATH];
+	DWORD len = ::GetModuleFileNameW(NULL, exePath, MAX_PATH);
+
+	if (!len || len >= MAX_PATH)
+		return path; // no better answer than what we were given
+
+	wchar_t *lastSlash = wcsrchr(exePath, L'\\');
+
+	if (!lastSlash)
+		return path;
+
+	*(lastSlash + 1) = L'\0';
+
+	const std::wstring joined = std::wstring(exePath) + path;
+
+	// Collapsing the ".." matters: sentry creates the directory chain one
+	// prefix at a time, and a prefix that still contains ".." only works
+	// from the right starting point.
+	//
+	// Sized dynamically because the result may exceed MAX_PATH -- see the
+	// warning at the call site. A fixed buffer would silently return the
+	// uncollapsed form here, which is the least useful of the three
+	// possible answers.
+	DWORD needed = ::GetFullPathNameW(joined.c_str(), 0, NULL, NULL);
+
+	if (!needed)
+		return joined;
+
+	std::vector<wchar_t> buffer(needed);
+
+	DWORD written =
+		::GetFullPathNameW(joined.c_str(), needed, buffer.data(), NULL);
+
+	if (!written || written >= needed)
+		return joined;
+
+	return std::wstring(buffer.data(), written);
+}
+
+/* ================================================================= */
+
+//
+// Routes sentry-native's own diagnostics into the OBS log.
+//
+// Every way sentry_init() can fail reports itself through SENTRY_WARN first --
+// which database directory it could not create, which run folder it could not
+// lock, which backend refused to start. All of it is compiled in, and all of it
+// is discarded unless options->debug is set.
+//
+// Without this, a failed init produced exactly one line -- "sentry_init()
+// failed" -- and no way to find out why short of attaching a debugger to a
+// user's machine. That is how CORE-861 stayed invisible: crash reporting was
+// entirely absent on an install and the log said nothing about the cause.
+//
+// So the logger is always installed, and the level rather than the switch is
+// what varies: WARNING and above normally, so a failure always explains itself,
+// and the full DEBUG stream under --setrace when someone is actually looking.
+// The chatty part is DEBUG/INFO, and that stays off by default.
+//
+static void SentryLogger(sentry_level_t level, const char *message,
+			 va_list args, void *userdata)
+{
+	UNUSED_PARAMETER(userdata);
+
+	char buffer[2048];
+
+	// vsnprintf always terminates, and a truncated diagnostic is still worth
+	// more than none.
+	vsnprintf(buffer, sizeof(buffer), message, args);
+
+	int obsLevel;
+
+	switch (level) {
+	case SENTRY_LEVEL_FATAL:
+	case SENTRY_LEVEL_ERROR:
+		obsLevel = LOG_ERROR;
+		break;
+	case SENTRY_LEVEL_WARNING:
+		obsLevel = LOG_WARNING;
+		break;
+	default:
+		obsLevel = LOG_INFO;
+		break;
+	}
+
+	blog(obsLevel,
+	     "obs-streamelements-core: StreamElements: Crash Handler: sentry: %s",
+	     buffer);
 }
 
 /* ================================================================= */
@@ -904,6 +1024,14 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 
 	sentry_options_t *options = sentry_options_new();
 
+	// Before anything that can fail, so that whatever fails says why.
+	// See SentryLogger.
+	sentry_options_set_debug(options, 1);
+	sentry_options_set_logger(options, SentryLogger, nullptr);
+	sentry_options_set_logger_level(
+		options,
+		IsTraceLogLevel() ? SENTRY_LEVEL_DEBUG : SENTRY_LEVEL_WARNING);
+
 	sentry_options_set_dsn(options, dsn.c_str());
 
 	// Matches the tag CI creates for the same build, so a Sentry release lines
@@ -941,15 +1069,43 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 	char *databasePath = obs_module_config_path("sentry-db");
 
 	if (databasePath) {
-		sentry_options_set_database_pathw(
-			options, utf8_to_wstring(databasePath).c_str());
+		const std::wstring resolved = ResolveAgainstHostExecutable(
+			utf8_to_wstring(databasePath));
+
+		sentry_options_set_database_pathw(options, resolved.c_str());
 
 		// Logged because a report that never arrives is diagnosed by
 		// looking for a stranded envelope, and that is only possible if
 		// the log says where to look.
 		blog(LOG_INFO,
 		     "obs-streamelements-core: StreamElements: Crash Handler: database path is %s",
-		     databasePath);
+		     wstring_to_utf8(resolved).c_str());
+
+		// sentry uses plain CreateDirectoryW/CreateFileW with no \\?\
+		// prefix, so once a path it needs reaches MAX_PATH it simply
+		// cannot create it, sentry_init() fails, and the install has no
+		// crash reporting at all.
+		//
+		// Prefixing \\?\ ourselves does not help: sentry builds the
+		// directory chain one separator at a time, and the first prefix
+		// of "\\?\C:\..." is "\", which CreateDirectoryW rejects. So
+		// this is a real limit rather than something to work around
+		// here, and the useful thing is to say so plainly instead of
+		// leaving a silent absence of crash reports.
+		//
+		// The limit applies to what sentry creates INSIDE the database
+		// directory, not to the directory itself -- observed failing at
+		// a 244-character database path, on the run lock. The longest
+		// child is "<uuid>.run\__sentry-breadcrumb1", 63 characters,
+		// plus its separator.
+		const size_t kLongestSentryChildPath = 64;
+
+		if (resolved.size() + kLongestSentryChildPath >= MAX_PATH) {
+			blog(LOG_WARNING,
+			     "obs-streamelements-core: StreamElements: Crash Handler: the crash database path is %zu characters, leaving less than %zu before the Windows MAX_PATH limit of %d; sentry_init() is likely to fail and crash reporting to be unavailable. Install OBS to a shorter path.",
+			     resolved.size(), kLongestSentryChildPath,
+			     MAX_PATH);
+		}
 
 		bfree(databasePath);
 	} else {
