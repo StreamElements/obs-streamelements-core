@@ -808,6 +808,79 @@ ArmSentryScope(const StreamElementsCrashContext::Result &context,
 /* ================================================================= */
 
 //
+//
+// Deadline on the consent prompt (CORE-862).
+//
+// The prompt is a native Win32 modal dialog, and every Win32 modal loop
+// dispatches the private message Qt's event dispatcher uses to drain its
+// posted-event queue. So a queued call can run inside the prompt, and if it
+// opens a QDialog::exec() its nested loop sits on top of ours and
+// DialogBoxIndirectParamW cannot return until that unrelated dialog is
+// answered. Observed with a cdb attach: the prompt had already been answered
+// and hidden while USER32!DialogBox2 was still on the stack.
+//
+// The choke point in __QtPostTask_Impl stops OUR queued work from doing that.
+// It cannot stop OBS's own posted calls or another plug-in's, and nothing can:
+// a nested modal loop is above us on the stack, and no other thread can unwind
+// it. EndDialog only marks the dialog for termination; it does not return.
+//
+// So the only bounded outcome available from outside is to stop waiting. The
+// process has already crashed; leaving a zombie OBS holding the user's machine
+// is worse than losing one report.
+//
+// Scoped to the prompt alone, and disarmed the moment it returns. Everything
+// after it is already bounded -- the daemon wait by shutdown_timeout, the
+// progress window by its own 2s join, and the host filter exits. Arming a
+// single watchdog over the whole path would have to outlast a 60s upload, which
+// makes it useless as a backstop.
+//
+// Generous on purpose: this must never fire for someone typing a description.
+// Five minutes is far longer than that and far shorter than forever.
+//
+static const DWORD CRASH_PROMPT_DEADLINE_MS = 5 * 60 * 1000;
+
+static HANDLE s_promptWatchdogThread = NULL;
+static HANDLE s_promptWatchdogAnswered = NULL;
+
+static DWORD WINAPI PromptWatchdogThreadProc(LPVOID)
+{
+	if (::WaitForSingleObject(s_promptWatchdogAnswered,
+				  CRASH_PROMPT_DEADLINE_MS) == WAIT_OBJECT_0)
+		return 0; // answered in time; nothing to do
+
+	blog(LOG_ERROR,
+	     "obs-streamelements-core: StreamElements: Crash Handler: the crash consent prompt has not returned after %lu seconds -- most likely blocked behind another modal dialog. Terminating rather than leaving the process hung; this report is lost. See CORE-862.",
+	     (unsigned long)(CRASH_PROMPT_DEADLINE_MS / 1000));
+
+	// Not exit() and not abort(): both run code on the way out, and abort()
+	// would re-enter our own SIGABRT handler.
+	::TerminateProcess(::GetCurrentProcess(), 3);
+
+	return 0;
+}
+
+static void ArmPromptWatchdog()
+{
+	s_promptWatchdogAnswered = ::CreateEventW(NULL, TRUE, FALSE, NULL);
+
+	if (!s_promptWatchdogAnswered)
+		return; // no watchdog is better than a watchdog that fires early
+
+	s_promptWatchdogThread = ::CreateThread(
+		NULL, 0, PromptWatchdogThreadProc, NULL, 0, NULL);
+}
+
+static void DisarmPromptWatchdog()
+{
+	if (s_promptWatchdogAnswered)
+		::SetEvent(s_promptWatchdogAnswered);
+
+	// Deliberately not waiting on the thread and not closing the handles:
+	// the wait above releases it, and a crash path must not block on its own
+	// bookkeeping. The process is about to end regardless.
+	s_promptWatchdogThread = NULL;
+}
+
 // The whole crash path, shared by the two ways a fatal condition reaches us:
 // the top-level SEH filter and the SIGABRT handler below.
 //
@@ -912,9 +985,15 @@ static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
 			// crash data from users who never agreed to it -- and
 			// would lose the descriptions, which are frequently the
 			// only account of what the user was actually doing.
+			// Bounded, because the prompt can be blocked behind a
+			// modal dialog we do not own. See ArmPromptWatchdog.
+			ArmPromptWatchdog();
+
 			const auto consent =
 				StreamElementsCrashConsentDialog::Prompt(
 					s_userName, s_userEmail, s_userDiscord);
+
+			DisarmPromptWatchdog();
 
 			if (consent.consented) {
 				PersistContactDetails(consent.name,

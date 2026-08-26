@@ -761,6 +761,57 @@ static void check_guard_buffer_released_first()
 	}
 }
 
+// --- CORE-862: the consent prompt must be bounded.
+//
+// The choke point in __QtPostTask_Impl stops OUR queued work from opening a
+// modal dialog inside the prompt. It cannot stop OBS's own posted calls or
+// another plug-in's, and nothing can -- a nested modal loop is above us on the
+// stack and no other thread can unwind it. So the prompt needs a deadline, or a
+// crashed process can sit there indefinitely holding the user's machine.
+static void check_consent_prompt_is_bounded()
+{
+	auto code = strip_line_comments(
+		slurp("streamelements/StreamElementsSentryCrashHandler.cpp"));
+
+	check(code.find("CRASH_PROMPT_DEADLINE_MS") != std::string::npos,
+	      "CORE-862: the consent prompt must have a deadline");
+
+	// Armed immediately before the prompt and released immediately after --
+	// scoped to the prompt alone, because everything after it is already
+	// bounded and a watchdog spanning the upload would have to outlast it.
+	auto arm = code.find("ArmPromptWatchdog();");
+	auto prompt = code.find("StreamElementsCrashConsentDialog::Prompt(");
+	auto disarm = code.find("DisarmPromptWatchdog();");
+
+	check(arm != std::string::npos && prompt != std::string::npos &&
+		      disarm != std::string::npos,
+	      "CORE-862: prompt watchdog wiring not found -- update this invariant");
+
+	if (arm != std::string::npos && prompt != std::string::npos &&
+	    disarm != std::string::npos) {
+		check(arm < prompt,
+		      "CORE-862: the watchdog must be armed BEFORE the prompt, or it cannot bound it");
+		check(disarm > prompt,
+		      "CORE-862: the watchdog must be released AFTER the prompt returns");
+	}
+
+	// TerminateProcess, not exit() and not abort(): both run code on the way
+	// out, and abort() would re-enter our own SIGABRT handler.
+	auto watchdog = code.find("PromptWatchdogThreadProc");
+	check(watchdog != std::string::npos,
+	      "CORE-862: watchdog thread proc not found -- update this invariant");
+
+	if (watchdog != std::string::npos) {
+		auto body = code.substr(watchdog, 900);
+
+		check(body.find("TerminateProcess") != std::string::npos,
+		      "CORE-862: the watchdog must terminate the process when the deadline passes");
+		check(body.find("abort()") == std::string::npos &&
+			      body.find("exit(") == std::string::npos,
+		      "CORE-862: the watchdog must not use abort() or exit() -- abort() re-enters our own SIGABRT handler");
+	}
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -780,6 +831,7 @@ int main()
 	check_queued_tasks_suppressed_during_crash();
 	check_oom_handler_observes_and_chains();
 	check_guard_buffer_released_first();
+	check_consent_prompt_is_bounded();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",
