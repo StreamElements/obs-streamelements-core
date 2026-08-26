@@ -497,6 +497,15 @@ bool StreamElementsCrashContext::ShouldReport() const
 	return m_impl->stackWalker->hasMatchModuleOfInterest;
 }
 
+std::vector<std::string>
+StreamElementsCrashContext::GetModulesOfInterest() const
+{
+	if (!m_impl || !m_impl->stackWalker)
+		return {};
+
+	return m_impl->stackWalker->modulesOfInterest;
+}
+
 /* ================================================================= */
 
 StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()

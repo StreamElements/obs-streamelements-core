@@ -324,6 +324,54 @@ if (ENABLE_SENTRY)
 			endif()
 		endif()
 	endforeach()
+
+	# The gating WER runtime exception module (CORE-864).
+	#
+	# Heap corruption and every __fastfail bypass SEH, so neither our filter
+	# nor OBS's ever sees them; a WER runtime exception module, running out of
+	# process inside WerFault.exe, is the only thing that can capture them.
+	#
+	# sentry builds one -- sentry-wer.dll, from the target above -- but it
+	# claims every such crash in the host process, including OBS's own and
+	# every other plugin's. Registering it directly would undo the
+	# module-of-interest gate for one crash class. So we build our own, which
+	# applies the gate and the standing-consent check and then forwards to
+	# sentry's, and we register ours instead.
+	#
+	# Its own target because it is loaded into WerFault.exe, not into OBS: it
+	# must link neither libobs nor Qt nor sentry. Both DLLs are copied beside
+	# the plugin below, and sentry's is deliberately NOT placed next to
+	# obs64.exe, which is the only place sentry's own registration looks --
+	# that is what keeps ours the only module registered.
+	if (WIN32)
+		add_library(se-crash-wer SHARED
+			streamelements/StreamElementsWerModule.cpp
+			streamelements/StreamElementsWerModule.def
+		)
+
+		# No "lib" prefix and no debug postfix: WerFault loads it by the
+		# exact path we register, and the .def names the DLL.
+		set_property(TARGET se-crash-wer PROPERTY PREFIX "")
+		set_property(TARGET se-crash-wer PROPERTY DEBUG_POSTFIX "")
+
+		# Qt's autogen is on for everything in this directory. This target
+		# has no Qt in it and must not acquire any -- it is loaded into
+		# WerFault.exe, not into OBS -- so the moc/uic/rcc passes are turned
+		# off rather than left to produce an empty translation unit.
+		set_property(TARGET se-crash-wer PROPERTY AUTOMOC OFF)
+		set_property(TARGET se-crash-wer PROPERTY AUTOUIC OFF)
+		set_property(TARGET se-crash-wer PROPERTY AUTORCC OFF)
+
+		# /MD, matching libobs and the plugin. See the note on
+		# MSVC_RUNTIME_LIBRARY at the top of this file.
+		set_property(TARGET se-crash-wer PROPERTY MSVC_RUNTIME_LIBRARY
+			"MultiThreadedDLL")
+
+		target_include_directories(se-crash-wer PRIVATE
+			"${CMAKE_CURRENT_SOURCE_DIR}/streamelements")
+
+		target_link_libraries(se-crash-wer PRIVATE dbghelp psapi)
+	endif()
 endif()
 
 # WIN32 is part of the condition now that ENABLE_BUGSPLAT tracks the selected
@@ -632,6 +680,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/StreamElementsCrashConsentDialog.hpp
 	streamelements/StreamElementsBugSplatCrashHandler.hpp
 	streamelements/StreamElementsSentryCrashHandler.hpp
+	streamelements/StreamElementsWerRegistration.h
 	streamelements/StreamElementsMessageBus.hpp
 	streamelements/StreamElementsControllerServer.hpp
 	streamelements/StreamElementsObsSceneManager.hpp
@@ -1019,6 +1068,36 @@ if (WIN32)
 			"$<TARGET_FILE:sentry-crash>"
 			"${CMAKE_BINARY_DIR}/rundir/$<CONFIGURATION>/obs-plugins/${BITS}bit/"
 		)
+
+		# The two WER module DLLs travel together and land in exactly the
+		# same place, for two different reasons (CORE-864).
+		#
+		# se-crash-wer.dll is ours: the handler registers it by absolute
+		# path, resolved relative to its own module, so it can live here
+		# rather than beside obs64.exe.
+		#
+		# sentry-wer.dll is sentry's, and it is here *because* sentry will
+		# not look here. wer_default_path() in sentry_backend_native.c
+		# joins "sentry-wer.dll" onto the directory of the host executable
+		# and registers whatever it finds. Putting it beside obs64.exe
+		# would make sentry register it, and sentry's module claims every
+		# fast-fail in the process -- OBS's own and every other plugin's --
+		# with no gate. Keeping it here means sentry logs "Native WER
+		# module not found", registers nothing, and ours stays the only
+		# registered module; ours then loads this copy explicitly by the
+		# path it was given.
+		add_dependencies(obs-streamelements-core se-crash-wer sentry-wer)
+
+		foreach(se_wer_target se-crash-wer sentry-wer)
+			add_custom_command(TARGET obs-streamelements-core POST_BUILD
+				COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				"$<TARGET_FILE:${se_wer_target}>"
+				"$<TARGET_FILE_DIR:obs-streamelements-core>"
+				COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				"$<TARGET_FILE:${se_wer_target}>"
+				"${CMAKE_BINARY_DIR}/rundir/$<CONFIGURATION>/obs-plugins/${BITS}bit/"
+			)
+		endforeach()
 	endif()
 endif()
 

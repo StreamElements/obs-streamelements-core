@@ -51,6 +51,24 @@ static const wchar_t *const PRIVACY_TEXT =
 	L"The report includes your OBS Studio and SE.Live configuration and an image of the OBS window. "
 	L"These may contain personal information, and are used only to diagnose this crash. Stream keys are removed.";
 
+//
+// What answering here also decides (CORE-864).
+//
+// Heap corruption and fast-fail crashes kill the process before any handler of
+// ours runs. They are captured out of process, by a WER module, after we are
+// already dead -- so there is no possible moment at which this dialog could
+// appear for them. They are reported on the strength of the last answer given
+// here, or not at all.
+//
+// Saying so is not optional. Consent obtained for "this crash" cannot silently
+// become consent for later ones the user was never told about; if this sentence
+// is removed, the standing-consent behaviour has to go with it. See
+// StreamElementsSentryCrashHandler.cpp, SetStandingConsent().
+//
+static const wchar_t *const STANDING_CONSENT_TEXT =
+	L"Some crashes stop OBS Studio too abruptly for this question to appear. "
+	L"Send report also lets those be sent automatically from now on; Don't send turns that off.";
+
 /* ================================================================= */
 
 #define IDC_DESCRIPTION 1001
@@ -748,11 +766,13 @@ static void BuildConsentDialogTemplate(DialogTemplateBuilder &builder)
 
 	builder.AddDword(dialogStyle);
 	builder.AddDword(WS_EX_TOPMOST);
-	builder.AddWord(13); // control count
+	builder.AddWord(14); // control count
 	builder.AddShort(0);
 	builder.AddShort(0);
 	builder.AddShort(320);
-	builder.AddShort(232);
+	// 24 taller than it was, for the standing-consent line below the privacy
+	// text. The button row moved down by the same amount.
+	builder.AddShort(256);
 
 	builder.AddWord(0); // no menu
 	builder.AddWord(0); // default dialog class
@@ -807,6 +827,9 @@ static void BuildConsentDialogTemplate(DialogTemplateBuilder &builder)
 	AddControl(builder, visibleChild, 7, 170, 306, 30, (WORD)-1,
 		   ATOM_STATIC, PRIVACY_TEXT);
 
+	AddControl(builder, visibleChild, 7, 202, 306, 20, (WORD)-1,
+		   ATOM_STATIC, STANDING_CONSENT_TEXT);
+
 	// BS_OWNERDRAW on both, so DrawConsentButton below paints them.
 	//
 	// A themed push button ignores WM_CTLCOLORBTN entirely -- the theme
@@ -823,11 +846,11 @@ static void BuildConsentDialogTemplate(DialogTemplateBuilder &builder)
 	// position below survives from here.
 	AddControl(builder,
 		   visibleChild | WS_TABSTOP | BS_DEFPUSHBUTTON | BS_OWNERDRAW,
-		   113, 204, 96, 20, IDOK, ATOM_BUTTON, L"Send report");
+		   113, 228, 96, 20, IDOK, ATOM_BUTTON, L"Send report");
 
 	AddControl(builder,
-		   visibleChild | WS_TABSTOP | BS_PUSHBUTTON | BS_OWNERDRAW, 217,
-		   204, 96, 20, IDCANCEL, ATOM_BUTTON, L"Don't send");
+		   visibleChild | WS_TABSTOP | BS_PUSHBUTTON | BS_OWNERDRAW,
+		   217, 228, 96, 20, IDCANCEL, ATOM_BUTTON, L"Don't send");
 }
 
 /* ================================================================= */

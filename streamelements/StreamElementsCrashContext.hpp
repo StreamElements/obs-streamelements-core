@@ -89,6 +89,20 @@ public:
 	// False until WalkStack() has run.
 	bool ShouldReport() const;
 
+	// The names ShouldReport() matches against: "obs-streamelements-core"
+	// and "obs-streamelements" by default, replaced wholesale when the
+	// remote settings.json supplies its own list.
+	//
+	// Exposed because the same verdict has to be reached a second time, in
+	// another process, by the WER runtime exception module that handles the
+	// crashes SEH never sees (CORE-864). That module cannot call in here, so
+	// the list is copied into the registration block it reads out of our
+	// memory. Two gates that disagreed would be worse than one.
+	//
+	// Final by the time the constructor returns: the settings fetch that can
+	// replace the list is synchronous and happens there.
+	std::vector<std::string> GetModulesOfInterest() const;
+
 	// Called from the exception path with the process already dying. Does no
 	// allocation it can avoid, touches no Qt, and must not throw.
 	//

@@ -188,6 +188,18 @@ Section "section_main" section_main
     Delete "$INSTDIR\bin\64bit\BugSplatRc64.dll"
     Delete "$INSTDIR\obs-plugins\64bit\sentry-crash.exe"
 
+    # The WER runtime exception modules (CORE-864).
+    Delete "$INSTDIR\obs-plugins\64bit\se-crash-wer.dll"
+    Delete "$INSTDIR\obs-plugins\64bit\sentry-wer.dll"
+
+    # And the per-user allow-list entry that let WerFault load ours. The plug-in
+    # writes this on every start, keyed by the DLL's full path, and deliberately
+    # does not remove it at shutdown -- a crash during OBS's own teardown should
+    # still be caught. So this is the only place it is ever cleaned up. Harmless
+    # if left (WER only consults it for a process that registered the module),
+    # but it would otherwise name a DLL that no longer exists, forever.
+    DeleteRegValue HKCU "Software\Microsoft\Windows\Windows Error Reporting\RuntimeExceptionHelperModules" "$INSTDIR\obs-plugins\64bit\se-crash-wer.dll"
+
     Delete "$INSTDIR\obs-plugins\32bit\obs-streamelements.qt5.dymod"
     Delete "$INSTDIR\obs-plugins\32bit\obs-streamelements.qt5.pdb"
 

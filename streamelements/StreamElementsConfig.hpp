@@ -274,6 +274,37 @@ public:
 		SaveConfig();
 	}
 
+	//
+	// Standing consent for crashes that cannot ask (CORE-864).
+	//
+	// Heap corruption and every __fastfail kill the process before any
+	// handler of ours runs, so they are captured out of process by a WER
+	// runtime exception module, after we are already dead. There is no
+	// opportunity to show a prompt. The module reads this answer instead --
+	// it is carried into the crash in the registration block, see
+	// StreamElementsWerRegistration.h -- and reports nothing without it.
+	//
+	// Set from the ordinary crash-time prompt: "Send report" grants it,
+	// "Don't send" withdraws it. That is what the prompt now says it does.
+	// Defaults to false, so a user who has never answered a prompt has
+	// nothing sent on their behalf.
+	//
+	bool GetCrashReportStandingConsent()
+	{
+		return config_get_bool(
+			StreamElementsConfig::GetInstance()->GetConfig(),
+			"CrashReporting", "StandingConsent");
+	}
+
+	void SetCrashReportStandingConsent(bool value)
+	{
+		config_set_bool(
+			StreamElementsConfig::GetInstance()->GetConfig(),
+			"CrashReporting", "StandingConsent", value);
+
+		SaveConfig();
+	}
+
 	std::string GetSceneItemsAuxActionsConfig()
 	{
 		const char *value = config_get_string(

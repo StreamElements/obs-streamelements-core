@@ -3,6 +3,7 @@
 #include "StreamElementsConfig.hpp"
 #include "StreamElementsCrashConsentDialog.hpp"
 #include "StreamElementsCrashContext.hpp"
+#include "StreamElementsWerRegistration.h"
 #include "StreamElementsUtils.hpp"
 
 #include <util/base.h>
@@ -31,8 +32,14 @@
 #include <windows.h>
 #include <dwmapi.h>
 
+// WerRegisterRuntimeExceptionModule, the fast-fail door (CORE-864).
+#include <werapi.h>
+
 // Needed only by the dark title bar on the progress window below.
 #pragma comment(lib, "dwmapi.lib")
+
+// WerRegisterRuntimeExceptionModule, for the fast-fail door (CORE-864).
+#pragma comment(lib, "wer.lib")
 
 // Empty means crash reporting is inert: sentry_init() is skipped entirely rather
 // than run against a bad DSN, so a build without the DSN behaves like
@@ -881,6 +888,189 @@ static void DisarmPromptWatchdog()
 	s_promptWatchdogThread = NULL;
 }
 
+/* ================================================================= */
+
+//
+// The fast-fail door (CORE-864).
+//
+// Heap corruption (STATUS_HEAP_CORRUPTION) and every __fastfail
+// (STATUS_STACK_BUFFER_OVERRUN -- /GS cookie failures, and the CRT's default
+// invalid-parameter handler) bypass SEH entirely. The filter above never runs,
+// the SIGABRT door never runs, and OBS's own handler never runs either. The
+// process is simply gone.
+//
+// A WER runtime exception module is the only mechanism on Windows that sees
+// them, because it runs out of process inside WerFault.exe once we are already
+// dead. sentry-native ships one, but it has never registered here: its
+// wer_default_path() looks for sentry-wer.dll beside the host executable, and
+// we ship it beside the plug-in. Hence "Native WER module not found" in every
+// log since the Sentry backend shipped.
+//
+// Shipping it where sentry looks would have registered it -- and it claims
+// every fast-fail in the process, OBS's own and every other plug-in's, with no
+// gate at all. That is exactly what CORE-860 exists to stop. So se-crash-wer.dll
+// is registered instead: it applies the gate and the consent check, then
+// forwards to sentry's module. See StreamElementsWerModule.cpp.
+//
+// What the plug-in side owes that arrangement is a registration struct that
+// outlives everything, because WER hands its address to the module and the
+// module reads it back out of our memory with ReadProcessMemory().
+//
+
+static SEWerRegistration s_werRegistration = {};
+static bool s_werRegistered = false;
+
+//
+// Standing consent, as last answered at a crash prompt.
+//
+// The WER path cannot ask -- there is nobody left to ask -- so it reports on
+// the strength of the previous answer, or not at all. Mirrored into the
+// registration block so the module reads the current value rather than whatever
+// happened to be true at startup.
+//
+static bool s_standingConsent = false;
+
+static void SetStandingConsent(bool consented)
+{
+	// The in-memory half is free and always kept current.
+	const bool changed = s_standingConsent != consented;
+
+	s_standingConsent = consented;
+	s_werRegistration.seConsent = consented ? 1U : 0U;
+
+	if (!changed)
+		return;
+
+	// The ini write is not free: this runs on the crashing thread, on a
+	// process that is already dying. Only when the answer actually changed,
+	// for the same reason PersistContactDetails() guards its writes.
+	auto config = StreamElementsConfig::GetInstance();
+
+	if (config)
+		config->SetCrashReportStandingConsent(consented);
+}
+
+//
+// HKCU, deliberately: WER accepts a per-user allow-list, so this needs no
+// elevation. Same key and same approach as sentry-native's own registration.
+// Without the value, WerRegisterRuntimeExceptionModule still succeeds but
+// WerFault declines to load the DLL.
+//
+static bool SetWerRegistryValue(const std::wstring &modulePath)
+{
+	const DWORD one = 1;
+
+	const LSTATUS status = ::RegSetKeyValueW(
+		HKEY_CURRENT_USER,
+		L"Software\\Microsoft\\Windows\\Windows Error Reporting\\RuntimeExceptionHelperModules",
+		modulePath.c_str(), REG_DWORD, &one, sizeof(one));
+
+	return status == ERROR_SUCCESS;
+}
+
+//
+// Fills in the registration block and registers the module.
+//
+// Must run after sentry_init(), because app_tid has to be the thread that
+// called it: sentry's module derives the shared-memory names it uses to reach
+// the sentry-crash daemon from (pid, that tid), and opening them under any
+// other name finds nothing. And after the crash context exists, because the
+// gate list comes from it.
+//
+static void RegisterWerModule(uint64_t sentryInitThreadId,
+			      const std::vector<std::string> &modulesOfInterest)
+{
+	std::wstring moduleDirectory;
+
+	if (!GetOwnModuleDirectory(moduleDirectory)) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: StreamElements: Crash Handler: could not resolve own module directory; the WER module cannot be registered and fast-fail crashes will go unreported");
+		return;
+	}
+
+	const std::wstring modulePath = moduleDirectory + L"se-crash-wer.dll";
+	const std::wstring sentryWerPath = moduleDirectory + L"sentry-wer.dll";
+
+	// Both DLLs have to be on disk, and saying which one is missing matters:
+	// they are produced by two different CMake rules and packaged by two
+	// different lines in main.nsi, so they can go missing independently.
+	if (::GetFileAttributesW(modulePath.c_str()) ==
+	    INVALID_FILE_ATTRIBUTES) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: StreamElements: Crash Handler: se-crash-wer.dll is not next to the plug-in; fast-fail and heap-corruption crashes will go unreported");
+		return;
+	}
+
+	if (::GetFileAttributesW(sentryWerPath.c_str()) ==
+	    INVALID_FILE_ATTRIBUTES) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: StreamElements: Crash Handler: sentry-wer.dll is not next to the plug-in; the gating module would have nothing to forward to, so it is not registered");
+		return;
+	}
+
+	// --- sentry's half of the block. Its layout is not ours to choose. ---
+	s_werRegistration.version = 1;
+	s_werRegistration.app_pid = ::GetCurrentProcessId();
+	s_werRegistration.app_tid = sentryInitThreadId;
+
+	// --- ours ------------------------------------------------------------
+	s_werRegistration.seMagic = SE_WER_MAGIC;
+	s_werRegistration.seVersion = SE_WER_VERSION;
+	s_werRegistration.seConsent = s_standingConsent ? 1U : 0U;
+
+	::wcsncpy_s(s_werRegistration.seSentryWerPath,
+		    _countof(s_werRegistration.seSentryWerPath),
+		    sentryWerPath.c_str(), _TRUNCATE);
+
+	s_werRegistration.seModuleCount = 0;
+
+	for (const auto &name : modulesOfInterest) {
+		if (s_werRegistration.seModuleCount >= SE_WER_MODULES_MAX) {
+			blog(LOG_WARNING,
+			     "obs-streamelements-core: StreamElements: Crash Handler: more than %d modules of interest; the WER gate will use the first %d and may decline a crash the in-process gate would have accepted",
+			     SE_WER_MODULES_MAX, SE_WER_MODULES_MAX);
+			break;
+		}
+
+		::strncpy_s(s_werRegistration
+				    .seModules[s_werRegistration.seModuleCount],
+			    SE_WER_MODULE_NAME_MAX, name.c_str(), _TRUNCATE);
+
+		++s_werRegistration.seModuleCount;
+	}
+
+	if (!SetWerRegistryValue(modulePath)) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: StreamElements: Crash Handler: could not add the WER module to the per-user allow-list; fast-fail and heap-corruption crashes will go unreported");
+		return;
+	}
+
+	//
+	// Below Windows 10 build 19041 this call succeeds but the out-of-process
+	// callback is never invoked -- sentry refuses to register below the same
+	// build for that reason. We register anyway and say so: the call is
+	// harmless, and a version test here would have to duplicate sentry's,
+	// which reads the real build number rather than the shimmed one that
+	// GetVersionEx reports to an unmanifested host.
+	//
+	const HRESULT hr = ::WerRegisterRuntimeExceptionModule(
+		modulePath.c_str(), &s_werRegistration);
+
+	if (FAILED(hr)) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: StreamElements: Crash Handler: WerRegisterRuntimeExceptionModule failed (0x%08lX); fast-fail and heap-corruption crashes will go unreported",
+		     (unsigned long)hr);
+		return;
+	}
+
+	s_werRegistered = true;
+
+	blog(LOG_INFO,
+	     "obs-streamelements-core: StreamElements: Crash Handler: WER module registered (requires Windows 10 build 19041 or later to fire); %d module(s) of interest, standing consent = %s",
+	     (int)s_werRegistration.seModuleCount,
+	     s_standingConsent ? "yes" : "no");
+}
+
 // The whole crash path, shared by the two ways a fatal condition reaches us:
 // the top-level SEH filter and the SIGABRT handler below.
 //
@@ -994,6 +1184,15 @@ static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
 					s_userName, s_userEmail, s_userDiscord);
 
 			DisarmPromptWatchdog();
+
+			// Whatever the user just decided also settles what
+			// happens to the crashes that can never ask -- heap
+			// corruption and fast-fail, which kill the process
+			// before any handler of ours runs and are reported out
+			// of process by the WER module. "Send report" grants
+			// that; "Don't send" withdraws it. The prompt says so;
+			// see StreamElementsCrashConsentDialog.cpp.
+			SetStandingConsent(consent.consented);
 
 			if (consent.consented) {
 				PersistContactDetails(consent.name,
@@ -1330,6 +1529,16 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 	sentry_options_set_crash_reporting_mode(
 		options, SENTRY_CRASH_REPORTING_MODE_NATIVE_WITH_MINIDUMP);
 
+	//
+	// The thread that calls sentry_init() is part of the WER module's
+	// address book, not an incidental detail: sentry-native names the shared
+	// memory it talks to the sentry-crash daemon over
+	// "Local\\SentryCrash-<pid>-<tid>", with tid fixed at this moment. The
+	// module opens it by that name and finds nothing if we hand it any
+	// other thread. See RegisterWerModule().
+	//
+	const uint64_t sentryInitThreadId = (uint64_t)::GetCurrentThreadId();
+
 	if (sentry_init(options) != 0) {
 		blog(LOG_ERROR,
 		     "obs-streamelements-core: StreamElements: Crash Handler: sentry_init() failed");
@@ -1346,6 +1555,10 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 		s_userName = config->GetCrashReportUserName();
 		s_userEmail = config->GetCrashReportUserEmail();
 		s_userDiscord = config->GetCrashReportUserDiscord();
+
+		// The answer the WER path reports on, because it cannot ask.
+		// False until the user has said yes to some earlier prompt.
+		s_standingConsent = config->GetCrashReportStandingConsent();
 	}
 
 	SetSentryUser(s_userName, s_userEmail, s_userDiscord);
@@ -1392,6 +1605,14 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 	s_previousNewMode = _set_new_mode(1);
 
 	s_crashContext = new StreamElementsCrashContext();
+
+	// Last, and in this order deliberately: the gate list is only final once
+	// the context has been constructed -- its settings.json fetch is
+	// synchronous and happens in there -- and app_tid is only meaningful
+	// once sentry_init() has run. Copying a half-built list into the
+	// registration block would give the two gates different answers.
+	RegisterWerModule(sentryInitThreadId,
+			  s_crashContext->GetModulesOfInterest());
 
 	s_initialized = true;
 

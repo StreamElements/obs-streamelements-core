@@ -79,6 +79,11 @@ se_add_test(test_crash_oom_handler
 se_add_test(test_lazy_encoder_refcount
   test_lazy_encoder_refcount.cpp)
 
+# --- The WER runtime exception module gate: heap corruption and fast-fail
+#     never reach the in-process filter, so this is the only gate they get. ---
+se_add_test(test_wer_gate
+  test_wer_gate.cpp)
+
 # --- Source-invariant test: catches re-introduction of any of the
 #     bug patterns this PR fixes. ---
 se_add_test(test_source_invariants
