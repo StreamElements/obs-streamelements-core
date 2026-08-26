@@ -1,7 +1,11 @@
 #include "StreamElementsApiMessageHandler.hpp"
 
-// __fastfail, for the crashProgramFastFail test hook below.
+// __fastfail, for the crashProgramFastFail test hook below. Windows only: this
+// file is in the unconditional source list, and neither the intrinsic nor the
+// header exists on macOS.
+#ifdef WIN32
 #include <intrin.h>
+#endif
 
 #include "cef-headers.hpp"
 
@@ -3345,6 +3349,10 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+#ifdef WIN32
+	// Windows only, and not for want of a macOS equivalent: the door this
+	// exists to test is a WER runtime exception module, which is a Windows
+	// mechanism. There is nothing on macOS for the call to prove.
 	API_HANDLER_BEGIN("crashProgramFastFail");
 	{
 		// The counterpart to crashProgram above, and the only way to
@@ -3369,6 +3377,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		__fastfail(FAST_FAIL_FATAL_APP_EXIT);
 	}
 	API_HANDLER_END();
+#endif
 
 	API_HANDLER_BEGIN("deadlockProgram");
 	{
