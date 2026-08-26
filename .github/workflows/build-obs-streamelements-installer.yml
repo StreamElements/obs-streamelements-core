@@ -174,17 +174,14 @@ jobs:
 
             if not exist ${{ env.ROOT }}\..\obs-studio\build64_qt6\rundir\${{ env.BUILD_CONFIG }} md ${{ env.ROOT }}\..\obs-studio\build64_qt6\rundir\${{ env.BUILD_CONFIG }}
 
-            if not exist ${{ env.ROOT }}\..\obs-studio\build32_qt6\rundir\${{ env.BUILD_CONFIG }} md ${{ env.ROOT }}\..\obs-studio\build32_qt6\rundir\${{ env.BUILD_CONFIG }}
 
             if not exist ${{ env.ROOT }}\..\download md ${{ env.ROOT }}\..\download
 
             if not exist ${{ env.ROOT }}\..\download\obs-streamelements-core md ${{ env.ROOT }}\..\download\obs-streamelements-core
 
-            if not exist ${{ env.ROOT }}\..\download\obs-streamelements-core\build32_qt6 md ${{ env.ROOT }}\..\download\obs-streamelements-core\build32_qt6
 
             if not exist ${{ env.ROOT }}\..\download\obs-streamelements-core\build64_qt6 md ${{ env.ROOT }}\..\download\obs-streamelements-core\build64_qt6
 
-            if not exist ${{ env.ROOT }}\..\download\obs-streamelements\build32_qt6 md ${{ env.ROOT }}\..\download\obs-streamelements\build32_qt6
 
             if not exist ${{ env.ROOT }}\..\download\obs-streamelements\build64_qt6 md ${{ env.ROOT }}\..\download\obs-streamelements\build64_qt6
 
@@ -193,7 +190,6 @@ jobs:
 
 
 
-            curl -f https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/windows/build32_qt6.zip --output ${{ env.ROOT }}\..\download\obs-streamelements-core\build32_qt6.zip
 
             curl -f https://storage.googleapis.com/se-obs-builds/obs-streamelements-core/latest/windows/build64_qt6.zip --output ${{ env.ROOT }}\..\download\obs-streamelements-core\build64_qt6.zip
 
@@ -207,25 +203,21 @@ jobs:
 
 
 
-            7z x -y ${{ env.ROOT }}\..\download\obs-streamelements-core\build32_qt6.zip -o${{ env.ROOT }}\..\download\obs-streamelements-core\build32_qt6
 
             7z x -y ${{ env.ROOT }}\..\download\obs-streamelements-core\build64_qt6.zip -o${{ env.ROOT }}\..\download\obs-streamelements-core\build64_qt6
 
 
 
 
-            xcopy ${{ env.ROOT }}\..\download\obs-streamelements-core\build32_qt6\*.* ${{ env.ROOT }}\..\obs-studio\build32_qt6\rundir\${{ env.BUILD_CONFIG }} /S /E /I /Y
 
             xcopy ${{ env.ROOT }}\..\download\obs-streamelements-core\build64_qt6\*.* ${{ env.ROOT }}\..\obs-studio\build64_qt6\rundir\${{ env.BUILD_CONFIG }} /S /E /I /Y
 
-            xcopy ${{ env.ROOT }}\..\download\obs-streamelements\build32_qt6\*.* ${{ env.ROOT }}\..\obs-studio\build32_qt6\rundir\${{ env.BUILD_CONFIG }} /S /E /I /Y
 
             xcopy ${{ env.ROOT }}\..\download\obs-streamelements\build64_qt6\*.* ${{ env.ROOT }}\..\obs-studio\build64_qt6\rundir\${{ env.BUILD_CONFIG }} /S /E /I /Y
 
 
 
 
-            curl -f https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-streamelements-set-machine-config/windows/qa/obs-streamelements-set-machine-config-32.exe --output ${{ env.ROOT }}\..\obs-studio\build32_qt6\rundir\${{ env.BUILD_CONFIG }}\obs-plugins\32bit\obs-streamelements-set-machine-config.exe
 
             curl -f https://storage.googleapis.com/cdn.streamelements.com/obs/dist/obs-streamelements-set-machine-config/windows/qa/obs-streamelements-set-machine-config-64.exe --output ${{ env.ROOT }}\..\obs-studio\build64_qt6\rundir\${{ env.BUILD_CONFIG }}\obs-plugins\64bit\obs-streamelements-set-machine-config.exe
 
@@ -291,8 +283,6 @@ jobs:
 
             $StreamElementsExe64bit = 'obs-streamelements-setup-x64.exe'
 
-            $StreamElementsExe32bit = 'obs-streamelements-setup-x86.exe'
-
 
             # One encoding object for everything: UTF-8, and $false = no BOM, ever.
             $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
@@ -341,15 +331,25 @@ jobs:
 
             cd "${{ env.ROOT }}"
 
-            makensis /V4 /DSKIP_64BIT_CONTENT main.nsi
-
-            ren obs-streamelements-setup.exe $StreamElementsExe32bit
-
-            makensis /V4 /DSKIP_32BIT_CONTENT main.nsi
-
-            ren obs-streamelements-setup.exe $StreamElementsExe64bit
-
+            # One installer, built once (CORE-416).
+            #
+            # This used to run makensis three times: /DSKIP_64BIT_CONTENT for an x86
+            # installer, /DSKIP_32BIT_CONTENT for the x64 one, and once more bare. The
+            # x86 build was assembled from a build32_qt6.zip that nothing has produced
+            # for a long time, and deploy published the x64 exe under the 32-bit
+            # filename anyway -- so the x86 installer was already fiction.
+            #
+            # With the 32-bit content gone from main.nsi there is nothing left for
+            # /DSKIP_32BIT_CONTENT to skip, so one bare build covers both outputs.
+            # Confirmed by compiling old-with-define against new-without and diffing:
+            # the NSIS payload is identical.
+            #
+            # The -x64 copy stays because the signing, verify and upload steps below
+            # glob obs-streamelements-setup*.exe, and because build.yml republishes the
+            # x64 exe under the 32-bit filename for any legacy client still asking.
             makensis /V4 main.nsi
+
+            copy obs-streamelements-setup.exe $StreamElementsExe64bit
 
       - name: Sign Windows binaries
         uses: azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2

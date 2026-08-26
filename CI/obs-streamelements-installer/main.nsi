@@ -566,22 +566,13 @@ Section "${PRODUCT_SHORT_NAME} Add-On" section_install_streamelements
     # Data
     #########################################################################
 
-    !ifndef SKIP_64BIT_CONTENT
-        SetOutPath $INSTDIR\data\obs-plugins\obs-streamelements-core
+    SetOutPath $INSTDIR\data\obs-plugins\obs-streamelements-core
 
-        File /r ..\download\obs-streamelements-core\build64_qt6\data\obs-plugins\obs-streamelements-core\*.*
-    !else
-        !ifndef SKIP_32BIT_CONTENT
-            SetOutPath $INSTDIR\data\obs-plugins\obs-streamelements-core
-
-            File /r ..\download\obs-streamelements-core\build32_qt6\data\obs-plugins\obs-streamelements-core\*.*
-        !endif
-    !endif
+    File /r ..\download\obs-streamelements-core\build64_qt6\data\obs-plugins\obs-streamelements-core\*.*
 
     #########################################################################
     # 64 bit
     #########################################################################
-!ifndef SKIP_64BIT_CONTENT
     SetOutPath $INSTDIR\bin\64bit
 
     # Clear BOTH crash backends before laying down whichever this build carries.
@@ -636,7 +627,6 @@ Section "${PRODUCT_SHORT_NAME} Add-On" section_install_streamelements
     Delete "$OUTDIR\obs-streamelements.qt5.pdb"
     Delete "$OUTDIR\obs-streamelements-core.qt5.dymod"
     Delete "$OUTDIR\obs-streamelements-core.qt5.pdb"
-!endif
 
     #########################################################################
     # 32 bit
@@ -652,38 +642,34 @@ Section "${PRODUCT_SHORT_NAME} Add-On" section_install_streamelements
 
     setup_obs_32:
 
-!ifndef SKIP_32BIT_CONTENT
-    SetOutPath $INSTDIR\bin\32bit
-
-    # Same clean-then-restore as the 64-bit section above. No 32-bit Sentry
-    # build exists today, so only the daemon line is speculative -- but it
-    # removes what a previous install left, which is the whole point.
-    Delete "$INSTDIR\obs-plugins\32bit\sentry-crash.exe"
-
-    File ..\download\obs-streamelements-core\build32_qt6\bin\32bit\BsSndRpt.exe
-    File ..\download\obs-streamelements-core\build32_qt6\bin\32bit\BugSplat.dll
-    File ..\download\obs-streamelements-core\build32_qt6\bin\32bit\BugSplatHD.exe
-    File ..\download\obs-streamelements-core\build32_qt6\bin\32bit\BugSplatRc.dll
-
-    SetOutPath $INSTDIR\obs-plugins\32bit\locales
-
-    File /nonfatal ..\download\obs-streamelements-core\build32_qt6\obs-plugins\32bit\locales\*.*
-
-    SetOutPath $INSTDIR\obs-plugins\32bit
-
-    File /oname=obs-streamelements-core.dll ..\download\obs-streamelements-core\build32_qt6\obs-plugins\32bit\obs-streamelements-core.dll
-    File /oname=obs-streamelements-core.pdb ..\download\obs-streamelements-core\build32_qt6\obs-plugins\32bit\obs-streamelements-core.pdb
-    
-    File /nonfatal ..\download\obs-streamelements-core\build32_qt6\obs-plugins\32bit\obs-streamelements-set-machine-config.*
-
-    Delete /REBOOTOK "$OUTDIR\obs-streamelements.dll"
-    Delete /REBOOTOK "$OUTDIR\obs-streamelements.pdb"
-
-    Delete "$OUTDIR\obs-streamelements.qt5.dymod"
-    Delete "$OUTDIR\obs-streamelements.qt5.pdb"
-    Delete "$OUTDIR\obs-streamelements-core.qt5.dymod"
-    Delete "$OUTDIR\obs-streamelements-core.qt5.pdb"
-!endif
+    #
+    # Nothing happens here any more (CORE-416).
+    #
+    # We stopped shipping 32-bit. The "32-bit installer" was built from a
+    # build32_qt6.zip that nothing has produced for a long time -- a legacy
+    # object still sitting in the bucket -- and the deploy step papered over
+    # that by publishing the x64 exe under the 32-bit filename, so what users
+    # actually received was already x64.
+    #
+    # Everything that used to stand here sat inside !ifndef SKIP_32BIT_CONTENT,
+    # and CI always passed that define for the installer it shipped. So it was
+    # already dead code in the only build anyone ever ran. Verified rather than
+    # assumed: compiling HEAD with /DSKIP_32BIT_CONTENT and this revision with
+    # no defines, against the same input tree, produces an identical NSIS
+    # payload -- all 3,132,685 bytes of header, install code, string table and
+    # data block. The only differing bytes are five in an alignment gap in
+    # .rsrc that NSIS never zeroes, plus the CRC32 that covers them.
+    #
+    # Note what is deliberately NOT here: cleanup of stale 32-bit files. Those
+    # Delete lines were inside the same guard, so the x64 installer never ran
+    # them either. Keeping them would be a behaviour change dressed up as a
+    # deletion. The uninstaller still clears them.
+    #
+    # The RunningX64 check and the two labels stay. They cost two instructions,
+    # they are what keeps this compile identical to the previous one, and the
+    # 32-bit OBS *host* detection further down is a separate concern from
+    # whether we ship a 32-bit plug-in.
+    #
 
 skip_obs_32:
 
@@ -937,11 +923,7 @@ Function DownloadAndInstallOBS
     ${If} ${RunningX64}
         ; Check if we can skip 32-bit installation on 64-bit system
 
-!ifndef SKIP_64BIT_CONTENT
         IfFileExists "$INSTDIR\bin\32bit\obs32.exe" get_obs_32 skip_obs_32
-!else
-        goto get_obs_32
-!endif
     ${Else}
         goto get_obs_32
     ${EndIf}
