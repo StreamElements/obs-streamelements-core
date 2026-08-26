@@ -644,6 +644,123 @@ static void check_queued_tasks_suppressed_during_crash()
 	      "CORE-862: the crash gate must precede item->running, or dropped tasks appear as running in async-context.json");
 }
 
+// --- CORE-863: the allocation door must be owned, chained, and not seized.
+//
+// BugSplat installed five process-global CRT hooks; the Sentry migration
+// dropped all five and CORE-860 recovered two. This is the allocation one.
+//
+// The design constraint is as important as the hook itself: BugSplat's
+// memory_depleted() force-crashes on any allocation failure, which would
+// preempt libobs's own bmalloc -> bcrash handling. Ours observes and chains.
+static void check_oom_handler_observes_and_chains()
+{
+	auto code = strip_line_comments(
+		slurp("streamelements/StreamElementsSentryCrashHandler.cpp"));
+
+	check(code.find("_set_new_handler(SentryNewHandler)") !=
+		      std::string::npos,
+	      "CORE-863: the allocation door must be taken, or an OOM is reported as a generic abort at best");
+
+	// malloc failures must route through it too -- libobs allocates through
+	// bmalloc -> malloc, which is the largest allocator in the process.
+	check(code.find("_set_new_mode(1)") != std::string::npos,
+	      "CORE-863: _set_new_mode(1) must route malloc failures through the handler as well");
+
+	// The displaced handler must be kept and called: an upstream handler
+	// that can free memory and ask for a retry has to still win.
+	check(code.find("s_previousNewHandler = _set_new_handler(") !=
+		      std::string::npos,
+	      "CORE-863: the displaced new handler must be captured for chaining");
+
+	std::regex chains(
+		R"(if \(s_previousNewHandler\)\s*return s_previousNewHandler\(size\);)");
+	check(count_matches(code, chains) == 1,
+	      "CORE-863: the handler must chain and pass the upstream answer through, not swallow a retry request");
+
+	// And it must otherwise return 0 -- that is what preserves standard
+	// semantics (bad_alloc thrown, malloc returns NULL) rather than seizing
+	// the host's policy the way BugSplat's terminator() did.
+	auto handler = code.find("int __cdecl SentryNewHandler(size_t size)");
+	check(handler != std::string::npos,
+	      "CORE-863: SentryNewHandler not found -- update this invariant");
+
+	if (handler != std::string::npos) {
+		auto body = code.substr(handler, 700);
+
+		check(body.find("return 0;") != std::string::npos,
+		      "CORE-863: the handler must return 0 when nothing upstream can help, so operator new still throws and malloc still returns NULL");
+
+		check(body.find("terminator") == std::string::npos &&
+			      body.find("TerminateProcess") ==
+				      std::string::npos,
+		      "CORE-863: the handler must NOT force-crash the process -- that would preempt libobs's own bmalloc failure handling");
+
+		// The guard buffer exists for exactly this moment.
+		check(body.find("ReleaseGuardBuffer();") != std::string::npos,
+		      "CORE-863: the new handler must hand the guard buffer back at the moment memory ran out");
+	}
+
+	// crash.kind precedence: a sticky, inferred OOM flag must not relabel a
+	// definite, proximate purecall.
+	std::regex kindPrecedence(
+		R"(s_abortIsPurecall\s*\?\s*"purecall"\s*:\s*s_sawOutOfMemory\s*\?\s*"oom"\s*:\s*fromAbortDoor\s*\?\s*"abort"\s*:\s*"exception")");
+	check(count_matches(code, kindPrecedence) == 1,
+	      "CORE-863: crash.kind must rank purecall above the sticky OOM flag, OOM above a bare abort, and distinguish the two doors");
+
+	// And it must be set on the SHARED path, not in the abort handler.
+	// An uncaught std::bad_alloc never reaches abort() on MSVC -- `throw`
+	// raises a real SEH exception (0xE06D7363), so it lands in the filter.
+	// Tagging only in the abort handler left the OOM this exists for
+	// untagged, which a test run caught.
+	auto shared = code.find(
+		"static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,");
+	auto tag = code.find("sentry_set_tag(\"crash.kind\", kind);");
+	auto abortDoor = code.find("static void __cdecl SentryAbortHandler(");
+
+	check(shared != std::string::npos && tag != std::string::npos &&
+		      abortDoor != std::string::npos,
+	      "CORE-863: crash.kind wiring not found -- update this invariant");
+
+	if (shared != std::string::npos && tag != std::string::npos &&
+	    abortDoor != std::string::npos) {
+		check(tag > shared && tag < abortDoor,
+		      "CORE-863: crash.kind must be set on the shared crash path, not only in the abort handler -- an uncaught bad_alloc arrives through the SEH filter");
+	}
+}
+
+// --- CORE-863: the guard buffer must be released before anything allocates.
+//
+// It is reserved so that collection has headroom on an exhausted process. It
+// used to be handed back on the first line of Collect(), which runs after the
+// stack walk and after the consent prompt -- both of which allocate.
+static void check_guard_buffer_released_first()
+{
+	auto code = strip_line_comments(
+		slurp("streamelements/StreamElementsSentryCrashHandler.cpp"));
+
+	auto entry = code.find(
+		"static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,");
+	check(entry != std::string::npos,
+	      "CORE-863: HandleFatalException not found -- update this invariant");
+
+	if (entry == std::string::npos)
+		return;
+
+	auto release = code.find(
+		"StreamElementsCrashContext::ReleaseGuardBuffer();", entry);
+	auto walk = code.find("WalkStack(", entry);
+
+	check(release != std::string::npos,
+	      "CORE-863: the crash path must release the guard buffer");
+	check(walk != std::string::npos,
+	      "CORE-863: WalkStack call not found -- update this invariant");
+
+	if (release != std::string::npos && walk != std::string::npos) {
+		check(release < walk,
+		      "CORE-863: the guard buffer must be released BEFORE the stack walk, which allocates");
+	}
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -661,6 +778,8 @@ int main()
 	check_abort_path_drops_own_frames();
 	check_sentry_init_is_diagnosable();
 	check_queued_tasks_suppressed_during_crash();
+	check_oom_handler_observes_and_chains();
+	check_guard_buffer_released_first();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",
