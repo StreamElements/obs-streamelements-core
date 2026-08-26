@@ -812,6 +812,55 @@ static void check_consent_prompt_is_bounded()
 	}
 }
 
+// --- CORE-865: the encoder must be released once per OBJECT, not per consumer.
+//
+// AddConsumer acquires inside `if (!m_object)` -- once, for the first consumer.
+// RemoveConsumer used to release unconditionally, above the guard, so N
+// consumers produced one acquire and N releases. Several providers share one
+// obs_encoder_t, so the second consumer to leave destroyed an encoder the
+// others were still holding, and the next release wrote through freed memory.
+static void check_encoder_released_once_per_object()
+{
+	auto code = strip_line_comments(
+		slurp("streamelements/StreamElementsUtils.hpp"));
+
+	auto remove = code.find("void RemoveConsumer()");
+	check(remove != std::string::npos,
+	      "CORE-865: RemoveConsumer not found -- update this invariant");
+
+	if (remove == std::string::npos)
+		return;
+
+	auto body = code.substr(remove, 900);
+
+	auto guard = body.find("if (m_refCount <= 0 && m_object)");
+	auto release = body.find("ReleaseRef(m_object);");
+
+	check(guard != std::string::npos,
+	      "CORE-865: the last-consumer guard must remain");
+	check(release != std::string::npos,
+	      "CORE-865: RemoveConsumer must still release the encoder");
+
+	if (guard != std::string::npos && release != std::string::npos) {
+		check(release > guard,
+		      "CORE-865: ReleaseRef must sit INSIDE the m_refCount <= 0 branch -- releasing once per consumer destroys an encoder other consumers still hold");
+	}
+
+	// And exactly one release site, so the guarded one cannot be joined by an
+	// unguarded one later.
+	check(count_matches(code, std::regex(R"(ReleaseRef\(m_object\);)")) ==
+		      1,
+	      "CORE-865: there must be exactly one ReleaseRef(m_object) call site");
+
+	// The acquire stays guarded too; the whole point is that the two match.
+	auto add = code.find("void AddConsumer()");
+	if (add != std::string::npos) {
+		auto addBody = code.substr(add, 500);
+		check(addBody.find("if (!m_object)") != std::string::npos,
+		      "CORE-865: AddConsumer must still acquire only for the first consumer");
+	}
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -832,6 +881,7 @@ int main()
 	check_oom_handler_observes_and_chains();
 	check_guard_buffer_released_first();
 	check_consent_prompt_is_bounded();
+	check_encoder_released_once_per_object();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

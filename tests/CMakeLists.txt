@@ -74,6 +74,11 @@ se_add_test(test_crash_suppresses_queued_tasks
 se_add_test(test_crash_oom_handler
   test_crash_oom_handler.cpp)
 
+# --- Behavioural test: CORE-865 (the lazy encoder provider must acquire and
+#     release its encoder once per OBJECT, not once per consumer) ---
+se_add_test(test_lazy_encoder_refcount
+  test_lazy_encoder_refcount.cpp)
+
 # --- Source-invariant test: catches re-introduction of any of the
 #     bug patterns this PR fixes. ---
 se_add_test(test_source_invariants
