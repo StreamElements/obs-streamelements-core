@@ -926,21 +926,15 @@ static void check_wer_module_gates_before_forwarding()
 	// matched "static BOOL SEWerStackTouchesModuleOfInterest(" would still
 	// pass with the call deleted, which is precisely the regression it is
 	// meant to catch.
-	auto consent = code.find("if (!registration.seConsent)");
 	auto walk = code.find("!SEWerStackTouchesModuleOfInterest(");
 	auto forward = code.find("return SEWerForwardToSentry(");
 
-	check(consent != std::string::npos,
-	      "CORE-864: the module must test standing consent");
 	check(walk != std::string::npos,
 	      "CORE-864: the module must walk the crashed stack");
 	check(forward != std::string::npos,
 	      "CORE-864: the module must forward to sentry's module");
 
-	if (consent != std::string::npos && walk != std::string::npos &&
-	    forward != std::string::npos) {
-		check(consent < walk,
-		      "CORE-864: consent must be tested before the cross-process stack walk, which WER is timing");
+	if (walk != std::string::npos && forward != std::string::npos) {
 		check(walk < forward,
 		      "CORE-864: the gate must run before the forward -- once sentry's module has the crash, it is reported");
 	}
@@ -951,28 +945,31 @@ static void check_wer_module_gates_before_forwarding()
 	      "CORE-864: the module must never claim ownership on its own account; it propagates whatever sentry's module decided");
 }
 
-// --- CORE-864: the prompt must say that "yes" outlives this crash.
+// --- CORE-864: the prompt must disclose the reports it cannot ask about.
 //
-// Standing consent means a later crash -- one that can never show a dialog --
-// is reported on the strength of this answer. Consent obtained for "this crash"
-// cannot silently become consent for crashes the user was never told about.
-static void check_consent_prompt_discloses_standing_consent()
+// Heap corruption and fast-fail are reported without any prior answer, because
+// there is no moment at which they could ask for one. A user is entitled to
+// know that, and to know how much smaller that payload is than the one this
+// dialog is about. The disclosure is the only place either is said.
+static void check_prompt_discloses_automatic_reports()
 {
-	auto dialog = slurp("streamelements/StreamElementsCrashConsentDialog.cpp");
+	auto dialog =
+		slurp("streamelements/StreamElementsCrashConsentDialog.cpp");
 
 	// Anchored on the AddControl that DISPLAYS it, not on the string's
 	// definition -- a dialog that defines the text and never shows it would
 	// otherwise pass while telling the user nothing.
-	check(dialog.find("ATOM_STATIC, STANDING_CONSENT_TEXT") !=
+	check(dialog.find("ATOM_STATIC, AUTOMATIC_REPORT_TEXT") !=
 		      std::string::npos,
-	      "CORE-864: the consent dialog must display the standing-consent disclosure, not merely define it");
+	      "CORE-864: the consent dialog must display the automatic-report disclosure, not merely define it");
 
-	auto handler =
-		slurp("streamelements/StreamElementsSentryCrashHandler.cpp");
+	// And the disclosure has to stay true. It promises those reports carry
+	// no configuration archive and no screenshot, which holds only because
+	// the WER module never collects a payload.
+	auto module = slurp("streamelements/StreamElementsWerModule.cpp");
 
-	check(handler.find("SetStandingConsent(consent.consented)") !=
-		      std::string::npos,
-	      "CORE-864: the prompt's answer must set standing consent -- both ways, so declining withdraws it");
+	check(module.find("Collect(") == std::string::npos,
+	      "CORE-864: the WER module must not collect a payload -- the prompt tells the user these reports carry none");
 }
 
 // --- CORE-864: the registration block's prefix is sentry's, byte for byte.
@@ -1017,7 +1014,7 @@ int main()
 	check_encoder_released_once_per_object();
 	check_sentry_wer_is_not_beside_the_host_executable();
 	check_wer_module_gates_before_forwarding();
-	check_consent_prompt_discloses_standing_consent();
+	check_prompt_discloses_automatic_reports();
 	check_wer_registration_prefix_is_asserted();
 
 	if (failures) {

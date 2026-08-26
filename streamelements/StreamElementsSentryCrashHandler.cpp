@@ -921,36 +921,6 @@ static SEWerRegistration s_werRegistration = {};
 static bool s_werRegistered = false;
 
 //
-// Standing consent, as last answered at a crash prompt.
-//
-// The WER path cannot ask -- there is nobody left to ask -- so it reports on
-// the strength of the previous answer, or not at all. Mirrored into the
-// registration block so the module reads the current value rather than whatever
-// happened to be true at startup.
-//
-static bool s_standingConsent = false;
-
-static void SetStandingConsent(bool consented)
-{
-	// The in-memory half is free and always kept current.
-	const bool changed = s_standingConsent != consented;
-
-	s_standingConsent = consented;
-	s_werRegistration.seConsent = consented ? 1U : 0U;
-
-	if (!changed)
-		return;
-
-	// The ini write is not free: this runs on the crashing thread, on a
-	// process that is already dying. Only when the answer actually changed,
-	// for the same reason PersistContactDetails() guards its writes.
-	auto config = StreamElementsConfig::GetInstance();
-
-	if (config)
-		config->SetCrashReportStandingConsent(consented);
-}
-
-//
 // HKCU, deliberately: WER accepts a per-user allow-list, so this needs no
 // elevation. Same key and same approach as sentry-native's own registration.
 // Without the value, WerRegisterRuntimeExceptionModule still succeeds but
@@ -1016,7 +986,6 @@ static void RegisterWerModule(uint64_t sentryInitThreadId,
 	// --- ours ------------------------------------------------------------
 	s_werRegistration.seMagic = SE_WER_MAGIC;
 	s_werRegistration.seVersion = SE_WER_VERSION;
-	s_werRegistration.seConsent = s_standingConsent ? 1U : 0U;
 
 	::wcsncpy_s(s_werRegistration.seSentryWerPath,
 		    _countof(s_werRegistration.seSentryWerPath),
@@ -1066,9 +1035,8 @@ static void RegisterWerModule(uint64_t sentryInitThreadId,
 	s_werRegistered = true;
 
 	blog(LOG_INFO,
-	     "obs-streamelements-core: StreamElements: Crash Handler: WER module registered (requires Windows 10 build 19041 or later to fire); %d module(s) of interest, standing consent = %s",
-	     (int)s_werRegistration.seModuleCount,
-	     s_standingConsent ? "yes" : "no");
+	     "obs-streamelements-core: StreamElements: Crash Handler: WER module registered (requires Windows 10 build 19041 or later to fire); %d module(s) of interest",
+	     (int)s_werRegistration.seModuleCount);
 }
 
 // The whole crash path, shared by the two ways a fatal condition reaches us:
@@ -1184,15 +1152,6 @@ static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
 					s_userName, s_userEmail, s_userDiscord);
 
 			DisarmPromptWatchdog();
-
-			// Whatever the user just decided also settles what
-			// happens to the crashes that can never ask -- heap
-			// corruption and fast-fail, which kill the process
-			// before any handler of ours runs and are reported out
-			// of process by the WER module. "Send report" grants
-			// that; "Don't send" withdraws it. The prompt says so;
-			// see StreamElementsCrashConsentDialog.cpp.
-			SetStandingConsent(consent.consented);
 
 			if (consent.consented) {
 				PersistContactDetails(consent.name,
@@ -1555,10 +1514,6 @@ StreamElementsSentryCrashHandler::StreamElementsSentryCrashHandler()
 		s_userName = config->GetCrashReportUserName();
 		s_userEmail = config->GetCrashReportUserEmail();
 		s_userDiscord = config->GetCrashReportUserDiscord();
-
-		// The answer the WER path reports on, because it cannot ask.
-		// False until the user has said yes to some earlier prompt.
-		s_standingConsent = config->GetCrashReportStandingConsent();
 	}
 
 	SetSentryUser(s_userName, s_userEmail, s_userDiscord);

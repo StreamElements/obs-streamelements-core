@@ -52,22 +52,24 @@ static const wchar_t *const PRIVACY_TEXT =
 	L"These may contain personal information, and are used only to diagnose this crash. Stream keys are removed.";
 
 //
-// What answering here also decides (CORE-864).
+// The crashes this dialog can never appear for (CORE-864).
 //
-// Heap corruption and fast-fail crashes kill the process before any handler of
-// ours runs. They are captured out of process, by a WER module, after we are
-// already dead -- so there is no possible moment at which this dialog could
-// appear for them. They are reported on the strength of the last answer given
-// here, or not at all.
+// Heap corruption and fast-fail kill the process before any handler of ours
+// runs. They are captured out of process, by a WER module, after we are already
+// dead -- so there is no moment at which this dialog could be shown for them,
+// and no earlier answer is required for them to be sent.
 //
-// Saying so is not optional. Consent obtained for "this crash" cannot silently
-// become consent for later ones the user was never told about; if this sentence
-// is removed, the standing-consent behaviour has to go with it. See
-// StreamElementsSentryCrashHandler.cpp, SetStandingConsent().
+// Disclosing that is not optional, and neither is being precise about what it
+// covers. Those reports are a minidump and the tags armed at startup: there is
+// nobody left to build the configuration archive, capture the screen, or ask
+// what the user was doing. The paragraph above is about that material, which is
+// why declining it does not contradict this. If the automatic behaviour is ever
+// removed, this sentence goes with it -- and if it is ever widened to carry the
+// archive or the screenshot, this sentence stops being true.
 //
-static const wchar_t *const STANDING_CONSENT_TEXT =
-	L"Some crashes stop OBS Studio too abruptly for this question to appear. "
-	L"Send report also lets those be sent automatically from now on; Don't send turns that off.";
+static const wchar_t *const AUTOMATIC_REPORT_TEXT =
+	L"Some crashes stop OBS Studio too abruptly to ask. Those send technical crash data "
+	L"automatically -- no configuration, screenshot or description.";
 
 /* ================================================================= */
 
@@ -828,7 +830,7 @@ static void BuildConsentDialogTemplate(DialogTemplateBuilder &builder)
 		   ATOM_STATIC, PRIVACY_TEXT);
 
 	AddControl(builder, visibleChild, 7, 202, 306, 20, (WORD)-1,
-		   ATOM_STATIC, STANDING_CONSENT_TEXT);
+		   ATOM_STATIC, AUTOMATIC_REPORT_TEXT);
 
 	// BS_OWNERDRAW on both, so DrawConsentButton below paints them.
 	//

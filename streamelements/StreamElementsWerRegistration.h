@@ -64,11 +64,6 @@ typedef struct {
 	DWORD seMagic;   // SE_WER_MAGIC
 	DWORD seVersion; // SE_WER_VERSION
 
-	// Standing consent, as of the crash. Zero means the user has never
-	// agreed, or has since declined, and the module declines without
-	// walking anything.
-	DWORD seConsent;
-
 	// Modules of interest, lower-cased base names with no extension,
 	// mirroring the in-process gate in StreamElementsCrashContext. Sent
 	// along because the remote settings.json can replace the built-in list

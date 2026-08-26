@@ -16,8 +16,7 @@
 //
 // The real module needs a live WerFault, a crashed process to walk and sentry's
 // own module to forward to, so what is mirrored here is the decision itself:
-// the four tests it applies, and the order it applies them in. The order is not
-// cosmetic -- see check_consent_is_tested_before_the_stack_walk.
+// the three tests it applies, and the order it applies them in.
 //
 // The module's own end-to-end behaviour was verified separately against a real
 // __fastfail, a real WerFault and a real sentry-crash daemon.
@@ -53,7 +52,6 @@ static const unsigned long EXCEPTION_CPP = 0xE06D7363UL;
 struct Crash {
 	unsigned long code = STATUS_STACK_BUFFER_OVERRUN;
 	bool isFatal = true;
-	bool consent = true;
 
 	// Module names on the crashed thread, innermost first.
 	std::vector<std::string> stack;
@@ -68,7 +66,6 @@ struct Crash {
 struct Trace {
 	bool testedFatal = false;
 	bool testedCode = false;
-	bool testedConsent = false;
 	bool walkedStack = false;
 	bool forwarded = false;
 };
@@ -107,7 +104,12 @@ static bool IsModuleOfInterest(const Crash &crash, const std::string &name)
 
 //
 // Mirror of OutOfProcessExceptionEventCallback's decision, in the same order:
-// fatal, then code, then consent, then the stack walk, then forward.
+// fatal, then code, then the stack walk, then forward.
+//
+// Consent is deliberately absent. This crash class cannot ask -- the process is
+// gone before any handler of ours runs -- and gating it on an answer to some
+// earlier prompt would mean the first fast-fail a user ever hits is always the
+// one that goes unreported. See check_no_prior_consent_is_required.
 //
 static bool Decide(const Crash &crash, Trace &trace)
 {
@@ -119,11 +121,6 @@ static bool Decide(const Crash &crash, Trace &trace)
 	trace.testedCode = true;
 
 	if (!IsNativeWerException(crash.code))
-		return false;
-
-	trace.testedConsent = true;
-
-	if (!crash.consent)
 		return false;
 
 	trace.walkedStack = true;
@@ -254,39 +251,31 @@ static void check_remote_module_list_is_honoured()
 }
 
 // --- Consent -------------------------------------------------------------
-
-static void check_no_standing_consent_declines()
+//
+// There is none, and that is the decision: this class is reported on implicit
+// consent.
+//
+// The alternative -- honour an answer given at some earlier crash prompt --
+// sounds safer and is worse. A user's first fast-fail would always go
+// unreported, and a user who never has an ordinary crash would never report one
+// at all. It is also a narrower disclosure than it sounds: a WER report carries
+// a minidump and the tags armed at startup, never the configuration archive,
+// the screenshot of the user's screen, or their description of what they were
+// doing, because nothing is left running to collect them. The crash-time prompt
+// is what asks about that material; this is a different, much smaller payload,
+// and the prompt says so.
+static void check_no_prior_consent_is_required()
 {
+	// A first-ever fast-fail, on a profile that has never seen a prompt.
 	Crash crash;
-	crash.consent = false;
 	crash.stack = {"obs-streamelements-core"};
 
 	Trace trace;
 
-	check(!Decide(crash, trace),
-	      "CORE-864: without a standing answer there is nothing to report on -- this crash cannot ask");
-	check(!trace.forwarded,
-	      "CORE-864: an unconsented crash must never reach sentry's module");
-}
-
-// The order is load-bearing, not a micro-optimisation. Walking the stack of a
-// crashed process means enumerating its modules and unwinding it from inside
-// WerFault, which WER is timing -- and it is pure waste when the answer was
-// already settled by an answer the user gave.
-static void check_consent_is_tested_before_the_stack_walk()
-{
-	Crash crash;
-	crash.consent = false;
-	crash.stack = {"obs-streamelements-core"};
-
-	Trace trace;
-
-	Decide(crash, trace);
-
-	check(trace.testedConsent,
-	      "CORE-864: consent must actually be tested");
-	check(!trace.walkedStack,
-	      "CORE-864: consent must be tested BEFORE the cross-process stack walk, so a declined crash costs nothing");
+	check(Decide(crash, trace),
+	      "CORE-864: a fast-fail must be reported without any prior answer -- there is no moment at which this crash could have asked");
+	check(trace.forwarded,
+	      "CORE-864: it must reach sentry's module, which is what actually captures the dump");
 }
 
 // --- Codes we must not touch ---------------------------------------------
@@ -301,7 +290,7 @@ static void check_access_violation_is_declined()
 
 	check(!Decide(crash, trace),
 	      "CORE-864: an access violation reaches the in-process filter, which gates and prompts; claiming it here would bypass both");
-	check(!trace.testedConsent,
+	check(!trace.walkedStack,
 	      "CORE-864: a non-WER exception must be rejected on the code alone, before anything expensive");
 }
 
@@ -381,8 +370,7 @@ int main()
 	check_module_match_is_case_insensitive();
 	check_remote_module_list_is_honoured();
 
-	check_no_standing_consent_declines();
-	check_consent_is_tested_before_the_stack_walk();
+	check_no_prior_consent_is_required();
 
 	check_access_violation_is_declined();
 	check_cpp_exception_is_declined();

@@ -20,9 +20,8 @@
 // ship it beside the plugin, where sentry will not find it. We do the two
 // things sentry's module cannot:
 //
-//   1. decline unless the user has given standing consent, and
-//   2. decline unless the crashed thread's stack passes through one of our
-//      modules,
+//   decline unless the crashed thread's stack passes through one of our
+//   modules,
 //
 // and only then hand the very same call to sentry's module, which owns the
 // shared-memory handshake with the sentry-crash daemon that writes and uploads
@@ -450,18 +449,20 @@ HRESULT WINAPI OutOfProcessExceptionEventCallback(
 		 (unsigned long)::GetProcessId(exceptionInfo->hProcess));
 
 	//
-	// Consent, before anything else is examined.
+	// Note what is deliberately NOT tested here: consent.
 	//
-	// This crash cannot ask. It is reported on the strength of an answer
-	// the user gave to an earlier prompt, and if there is no such answer
-	// there is nothing to fall back on -- so we stop here and the crash
-	// goes unreported. That is the intended outcome, not a failure.
+	// This crash cannot ask -- the process is already gone -- and gating on
+	// an answer to some earlier prompt would mean the first fast-fail a user
+	// ever hits is always the one that goes unreported, which is the case
+	// most worth having. So this class is reported on implicit consent, and
+	// the crash-time prompt says so.
 	//
-	if (!registration.seConsent) {
-		SEWerLog("no standing consent -- declining");
-		return S_OK;
-	}
-
+	// It is a narrower disclosure than it sounds. A WER report is a minidump
+	// plus the scope armed at startup; there is nobody left to collect the
+	// configuration archive, the screenshot of the user's screen, or their
+	// description of what they were doing. Those are what the prompt is
+	// really asking about, and they are absent here by construction.
+	//
 	SEWerLoadModuleRanges(exceptionInfo->hProcess);
 
 	//
