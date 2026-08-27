@@ -1,0 +1,13 @@
+; Exports for se-crash-wer.dll, the gating WER runtime exception module.
+; See StreamElementsWerModule.cpp and CORE-864.
+;
+; WerFault.exe resolves these three by name, so they must be undecorated --
+; which is why the definitions carry extern "C". Names and order match
+; sentry-wer.def: the module stands in for sentry's, and forwards to it.
+
+LIBRARY "se-crash-wer.dll"
+
+EXPORTS
+  OutOfProcessExceptionEventCallback
+  OutOfProcessExceptionEventSignatureCallback
+  OutOfProcessExceptionEventDebuggerLaunchCallback

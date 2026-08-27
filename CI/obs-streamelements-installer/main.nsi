@@ -593,6 +593,8 @@ Section "${PRODUCT_SHORT_NAME} Add-On" section_install_streamelements
     Delete "$INSTDIR\bin\64bit\BugSplatHD64.exe"
     Delete "$INSTDIR\bin\64bit\BugSplatRc64.dll"
     Delete "$INSTDIR\obs-plugins\64bit\sentry-crash.exe"
+    Delete "$INSTDIR\obs-plugins\64bit\se-crash-wer.dll"
+    Delete "$INSTDIR\obs-plugins\64bit\sentry-wer.dll"
 
     # /nonfatal on the crash-reporting runtime: which of these exists depends on
     # STREAMELEMENTS_CRASH_HANDLER at build time, and the installer has no way to
@@ -619,6 +621,29 @@ Section "${PRODUCT_SHORT_NAME} Add-On" section_install_streamelements
     # to land here, next to obs-streamelements-core.dll, not in bin\64bit.
     # /nonfatal because a BugSplat build does not produce it.
     File /nonfatal ..\download\obs-streamelements-core\build64_qt6\obs-plugins\64bit\sentry-crash.exe
+
+    # The two WER runtime exception modules (CORE-864). Heap corruption and
+    # every __fastfail bypass SEH, so nothing in the crashing process ever sees
+    # them; these are what capture that class, out of process, from inside
+    # WerFault.exe.
+    #
+    # se-crash-wer.dll is ours. It applies the module-of-interest gate and the
+    # standing-consent check, then forwards to sentry's module. The handler
+    # registers it by absolute path, resolved beside its own module, which is
+    # why it can live here.
+    #
+    # sentry-wer.dll must land HERE and nowhere else, and specifically NOT in
+    # bin\64bit next to obs64.exe. sentry-native's wer_default_path() joins
+    # "sentry-wer.dll" onto the host executable's directory and registers
+    # whatever it finds there; a copy in bin\64bit would therefore get
+    # registered by sentry itself, and sentry's module claims every fast-fail
+    # in the process -- OBS's own and every other plug-in's -- with no gate at
+    # all. Keeping it here is what keeps ours the only registered module.
+    #
+    # /nonfatal for the same reason as the daemon above: a BugSplat build
+    # produces neither.
+    File /nonfatal ..\download\obs-streamelements-core\build64_qt6\obs-plugins\64bit\se-crash-wer.dll
+    File /nonfatal ..\download\obs-streamelements-core\build64_qt6\obs-plugins\64bit\sentry-wer.dll
 
     Delete /REBOOTOK "$OUTDIR\obs-streamelements.dll"
     Delete /REBOOTOK "$OUTDIR\obs-streamelements.pdb"

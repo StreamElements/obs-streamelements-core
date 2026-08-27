@@ -1,5 +1,12 @@
 #include "StreamElementsApiMessageHandler.hpp"
 
+// __fastfail, for the crashProgramFastFail test hook below. Windows only: this
+// file is in the unconditional source list, and neither the intrinsic nor the
+// header exists on macOS.
+#ifdef WIN32
+#include <intrin.h>
+#endif
+
 #include "cef-headers.hpp"
 
 #include "Version.hpp"
@@ -3341,6 +3348,36 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		UNUSED_PARAMETER(result);
 	}
 	API_HANDLER_END();
+
+#ifdef WIN32
+	// Windows only, and not for want of a macOS equivalent: the door this
+	// exists to test is a WER runtime exception module, which is a Windows
+	// mechanism. There is nothing on macOS for the call to prove.
+	API_HANDLER_BEGIN("crashProgramFastFail");
+	{
+		// The counterpart to crashProgram above, and the only way to
+		// exercise the fast-fail door (CORE-864).
+		//
+		// __fastfail raises STATUS_STACK_BUFFER_OVERRUN, which bypasses
+		// SEH entirely: our top-level filter never runs, the SIGABRT
+		// door never runs, and OBS's own handler never runs. The one
+		// thing that can capture it is the WER runtime exception module,
+		// out of process, after we are already dead -- so without a
+		// trigger there is no way to confirm that path works until a
+		// real user hits it.
+		//
+		// It matters that the call sits HERE, in the plug-in's own
+		// module. The gate that module applies asks whether the crashed
+		// thread's stack passes through our code, so a trigger placed
+		// anywhere else would be declined by design -- and would prove
+		// the opposite of what it set out to.
+		//
+		// Nothing runs after this line: not the UNUSED_PARAMETER, not
+		// the handler's epilogue. The process is gone.
+		__fastfail(FAST_FAIL_FATAL_APP_EXIT);
+	}
+	API_HANDLER_END();
+#endif
 
 	API_HANDLER_BEGIN("deadlockProgram");
 	{

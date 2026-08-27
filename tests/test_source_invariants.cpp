@@ -861,6 +861,136 @@ static void check_encoder_released_once_per_object()
 	}
 }
 
+
+// --- CORE-864: sentry-wer.dll must never be installed next to obs64.exe.
+//
+// sentry_backend_native.c's wer_default_path() joins "sentry-wer.dll" onto the
+// directory of the HOST EXECUTABLE and registers whatever it finds. A copy in
+// bin\64bit would therefore be registered by sentry itself -- and sentry's
+// module claims every fast-fail and every heap corruption in the process, OBS's
+// own and every other plug-in's, with no module-of-interest gate and no consent.
+//
+// That is the entire CORE-860 decision, silently undone for one crash class, by
+// a one-line change to a copy rule. Both the CMake copy and the installer put
+// it in obs-plugins\64bit precisely so sentry does NOT find it, and ours stays
+// the only registered module.
+static void check_sentry_wer_is_not_beside_the_host_executable()
+{
+	auto cmake = slurp("CMakeLists.txt");
+
+	// Isolate the rule that copies the two WER modules, and assert about ITS
+	// destinations. Searching the whole file would prove nothing: the file
+	// mentions bin/<BITS>bit legitimately, for the BugSplat runtime.
+	auto copyRule = cmake.find("foreach(se_wer_target");
+
+	check(copyRule != std::string::npos,
+	      "CORE-864: both WER modules must be copied beside the plug-in, or the gating module has nothing to forward to");
+
+	if (copyRule != std::string::npos) {
+		auto ruleEnd = cmake.find("endforeach()", copyRule);
+		auto rule = cmake.substr(copyRule, ruleEnd - copyRule);
+
+		check(rule.find("obs-plugins/${BITS}bit") != std::string::npos,
+		      "CORE-864: the WER modules must be copied into obs-plugins/<BITS>bit, where the handler resolves them");
+
+		// The one that matters. bin/<BITS>bit is the host executable's
+		// directory, which is exactly where sentry looks.
+		check(rule.find("/bin/${BITS}bit") == std::string::npos,
+		      "CORE-864: the WER modules must NOT be copied into bin/<BITS>bit -- sentry would register sentry-wer.dll itself, ungated and unconsented");
+	}
+
+	auto nsi = slurp("CI/obs-streamelements-installer/main.nsi");
+
+	check(nsi.find("obs-plugins\\64bit\\sentry-wer.dll") !=
+			      std::string::npos ||
+		      nsi.find("64bit\\sentry-wer.dll") != std::string::npos,
+	      "CORE-864: the installer must package sentry-wer.dll from obs-plugins\\64bit");
+
+	check(nsi.find("bin\\64bit\\sentry-wer.dll") == std::string::npos,
+	      "CORE-864: the installer must NOT place sentry-wer.dll in bin\\64bit, where sentry would register it ungated");
+
+	check(nsi.find("se-crash-wer.dll") != std::string::npos,
+	      "CORE-864: the installer must package se-crash-wer.dll, the gating module");
+}
+
+// --- CORE-864: the WER module must gate before it forwards.
+//
+// It runs in WerFault.exe with no way to ask anything. If it forwarded first
+// and gated afterwards there would be nothing to undo -- sentry's module hands
+// the crash to the daemon, which writes and uploads it.
+static void check_wer_module_gates_before_forwarding()
+{
+	auto code = slurp("streamelements/StreamElementsWerModule.cpp");
+
+	// Anchored on the CALL SITES, never on the definitions. A check that
+	// matched "static BOOL SEWerStackTouchesModuleOfInterest(" would still
+	// pass with the call deleted, which is precisely the regression it is
+	// meant to catch.
+	auto walk = code.find("!SEWerStackTouchesModuleOfInterest(");
+	auto forward = code.find("return SEWerForwardToSentry(");
+
+	check(walk != std::string::npos,
+	      "CORE-864: the module must walk the crashed stack");
+	check(forward != std::string::npos,
+	      "CORE-864: the module must forward to sentry's module");
+
+	if (walk != std::string::npos && forward != std::string::npos) {
+		check(walk < forward,
+		      "CORE-864: the gate must run before the forward -- once sentry's module has the crash, it is reported");
+	}
+
+	// Ownership is sentry's verdict, never ours. Claiming a crash sentry
+	// will not report suppresses WER's own handling and reports nothing.
+	check(code.find("*ownershipClaimed = TRUE") == std::string::npos,
+	      "CORE-864: the module must never claim ownership on its own account; it propagates whatever sentry's module decided");
+}
+
+// --- CORE-864: the prompt must disclose the reports it cannot ask about.
+//
+// Heap corruption and fast-fail are reported without any prior answer, because
+// there is no moment at which they could ask for one. A user is entitled to
+// know that, and to know how much smaller that payload is than the one this
+// dialog is about. The disclosure is the only place either is said.
+static void check_prompt_discloses_automatic_reports()
+{
+	auto dialog =
+		slurp("streamelements/StreamElementsCrashConsentDialog.cpp");
+
+	// Anchored on the AddControl that DISPLAYS it, not on the string's
+	// definition -- a dialog that defines the text and never shows it would
+	// otherwise pass while telling the user nothing.
+	check(dialog.find("ATOM_STATIC, AUTOMATIC_REPORT_TEXT") !=
+		      std::string::npos,
+	      "CORE-864: the consent dialog must display the automatic-report disclosure, not merely define it");
+
+	// And the disclosure has to stay true. It promises those reports carry
+	// no configuration archive and no screenshot, which holds only because
+	// the WER module never collects a payload.
+	auto module = slurp("streamelements/StreamElementsWerModule.cpp");
+
+	check(module.find("Collect(") == std::string::npos,
+	      "CORE-864: the WER module must not collect a payload -- the prompt tells the user these reports carry none");
+}
+
+// --- CORE-864: the registration block's prefix is sentry's, byte for byte.
+//
+// Our module forwards with the same context pointer, and sentry's
+// read_registration() does a fixed-size read of sentry_wer_registration_t from
+// it, then derives the shared-memory name it reaches the daemon over. A field
+// inserted into the prefix silently stops that name matching, and nothing is
+// ever reported -- with every log line still saying the module was registered.
+static void check_wer_registration_prefix_is_asserted()
+{
+	auto header =
+		slurp("streamelements/StreamElementsWerRegistration.h");
+
+	check(header.find("static_assert(offsetof(SEWerRegistration, seMagic) == 16") !=
+		      std::string::npos,
+	      "CORE-864: the sentry-compatible prefix must be pinned by a static_assert, not by a comment");
+	check(header.find("app_tid") != std::string::npos,
+	      "CORE-864: the registration block must carry app_tid; the shared-memory name is derived from it");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -882,6 +1012,10 @@ int main()
 	check_guard_buffer_released_first();
 	check_consent_prompt_is_bounded();
 	check_encoder_released_once_per_object();
+	check_sentry_wer_is_not_beside_the_host_executable();
+	check_wer_module_gates_before_forwarding();
+	check_prompt_discloses_automatic_reports();
+	check_wer_registration_prefix_is_asserted();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",
