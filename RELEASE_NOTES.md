@@ -15,6 +15,10 @@
 - Fix: OBS Studio could be left running and unresponsive after a crash when the report prompt was blocked behind another window
 - Fix: SE.Live docks were registered incorrectly with the OBS window, corrupting the saved layout
 - Fix: the crash report prompt no longer processes unrelated window messages while a crash is being collected
+- Fix: crash when switching scene collections, caused by SE.Live docks not being registered correctly with the OBS window
+- Fix: OBS Studio could crash a second time while the crash report prompt was on screen, losing the report being collected
+- Fix: crashes originating in other plug-ins could be reported as SE.Live crashes
+- Fix: small memory leak during the update check
 - Infra: removed the unused 32-bit installer build
 - Infra: crash reporting backend switched to sentry.io
 - Breaking change: SE.Live now requires at least OBS 32.2.0
