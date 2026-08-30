@@ -986,6 +986,7 @@ static void RegisterWerModule(uint64_t sentryInitThreadId,
 	// --- ours ------------------------------------------------------------
 	s_werRegistration.seMagic = SE_WER_MAGIC;
 	s_werRegistration.seVersion = SE_WER_VERSION;
+	s_werRegistration.seHandlerActive = 0;
 
 	::wcsncpy_s(s_werRegistration.seSentryWerPath,
 		    _countof(s_werRegistration.seSentryWerPath),
@@ -1130,6 +1131,12 @@ static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
 	// IsCrashReportingInProgress().
 	SetCrashReportingInProgress();
 
+	// Tells the WER module that any of our frames at the top of the stack are
+	// this handler rather than the fault (CORE-968). Deliberately set before
+	// the depth test, so it is true even for a re-entrant call: what the
+	// module needs to know is that our handler is on the stack at all.
+	s_werRegistration.seHandlerActive = 1;
+
 	if (InterlockedIncrement(&s_insideExceptionFilter) == 1L) {
 		// The gate. A stack that never passed through our code is not
 		// ours to report: we skip sentry's filter entirely, so no event
@@ -1201,7 +1208,10 @@ static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
 		abort();
 	}
 
-	InterlockedDecrement(&s_insideExceptionFilter);
+	// Only the outermost call clears it; a nested one leaving does not mean
+	// the handler is off the stack.
+	if (InterlockedDecrement(&s_insideExceptionFilter) == 0L)
+		s_werRegistration.seHandlerActive = 0;
 
 	return EXCEPTION_CONTINUE_SEARCH;
 }

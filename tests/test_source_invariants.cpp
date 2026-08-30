@@ -1139,6 +1139,46 @@ static void check_full_release_adopts_before_cancelling()
 	      "CORE-954: the cancel sweep must be gated on the adoption succeeding -- otherwise a failed adopt still retires the releases holding the issues");
 }
 
+// --- CORE-968: the WER gate's leading-frame skip must stay CONDITIONAL.
+//
+// Our frames being on the stack is not evidence the crash is ours -- when the
+// fault happens inside our handler they are there by construction (SELIVE-1Y,
+// where obs-websocket's destructor aborted and our handler died on its corrupt
+// heap). But skipping them unconditionally is just as wrong: a __fastfail
+// raised directly by our own code also has our frame innermost, and that is the
+// crash class this module exists to capture.
+//
+// Frame position cannot separate the two. Only seHandlerActive can, which is why
+// this check pins BOTH halves: the flag must be published by the handler, and
+// the module's skip must be derived from it rather than hard-coded either way.
+static void check_wer_skip_is_conditional_on_the_handler_flag()
+{
+	auto header = slurp("streamelements/StreamElementsWerRegistration.h");
+
+	check(header.find("DWORD seHandlerActive;") != std::string::npos,
+	      "CORE-968: the registration block must carry seHandlerActive");
+
+	auto handler =
+		slurp("streamelements/StreamElementsSentryCrashHandler.cpp");
+
+	check(handler.find("s_werRegistration.seHandlerActive = 1;") !=
+		      std::string::npos,
+	      "CORE-968: the crash handler must publish that it is on the stack");
+	check(handler.find("s_werRegistration.seHandlerActive = 0;") !=
+		      std::string::npos,
+	      "CORE-968: it must also clear the flag, or every later crash looks like one inside the handler");
+
+	auto module = slurp("streamelements/StreamElementsWerModule.cpp");
+
+	// The skip must be derived from the flag. Anchored on the assignment so
+	// that hard-coding it TRUE or FALSE -- the two ways to get this wrong --
+	// both fail here.
+	check(module.find(
+		      "BOOL skippingOwnLeadingFrames = registration->seHandlerActive") !=
+		      std::string::npos,
+	      "CORE-968: the skip must be conditional on seHandlerActive; hard-coding it FALSE reports other plug-ins' crashes as ours, and TRUE declines fast-fails raised by our own code");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -1166,6 +1206,7 @@ int main()
 	check_wer_registration_prefix_is_asserted();
 	check_every_emitted_output_is_declared();
 	check_full_release_adopts_before_cancelling();
+	check_wer_skip_is_conditional_on_the_handler_flag();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",
