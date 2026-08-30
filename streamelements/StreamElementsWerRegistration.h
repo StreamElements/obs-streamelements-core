@@ -64,6 +64,21 @@ typedef struct {
 	DWORD seMagic;   // SE_WER_MAGIC
 	DWORD seVersion; // SE_WER_VERSION
 
+	// Non-zero while our own crash handler is on the stack (CORE-968).
+	//
+	// Our frames being present is not evidence the crash is ours: when the
+	// fault happens inside the handler they are there by construction. The
+	// module needs to tell that case apart from a fault that genuinely
+	// started in our code, and frame position alone cannot -- both have our
+	// code innermost.
+	//
+	// So the handler publishes whether it was running. Read out of the
+	// crashed process at the moment of the fault, it is exactly the fact the
+	// gate needs, and it is the same thing the in-process walker relies on
+	// when it arms SetSkipLeadingOwnFrames for the abort door and only
+	// there.
+	DWORD seHandlerActive;
+
 	// Modules of interest, lower-cased base names with no extension,
 	// mirroring the in-process gate in StreamElementsCrashContext. Sent
 	// along because the remote settings.json can replace the built-in list

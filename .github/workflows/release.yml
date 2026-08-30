@@ -488,6 +488,63 @@ jobs:
           dry_run: ${{ env.SE_LINEAR_DRY_RUN }}
           log_level: verbose
 
+      # Take over the issues held by the releases this one overtook, before they are
+      # cancelled below (CORE-954).
+      #
+      # A build reaches `latest` while older builds are still sitting on Alpha or Open
+      # Beta. Their work shipped -- they are ancestors of this tag -- but the cancel
+      # sweep at the end of this job retires them, and without this step their issues go
+      # quiet with them: the release that actually delivered the work does not list it,
+      # and the release that lists it is Canceled.
+      #
+      # This is a second `sync` on the release that is shipping, and the only thing that
+      # makes it different from the one at signed -> qa is the scan range: base_ref is
+      # the previous FULL release, so the range covers every overtaken build in between
+      # rather than just this build's own commits.
+      #
+      # Deriving the set from commits rather than reading it off the old releases is not
+      # a shortcut, it is the only option. LINEAR_ACCESS_KEY is pipeline-scoped, and the
+      # five operations it can perform (releaseSyncByAccessKey,
+      # releaseUpdateByPipelineByAccessKey, releaseCompleteByAccessKey,
+      # pipelineSettingsByAccessKey, recentReleasesByAccessKey) include no way to list a
+      # release's issues -- recentReleasesByAccessKey returns id, name, createdAt and
+      # commitSha and nothing else. A workspace-scoped key in Actions was rejected on
+      # security grounds, so reading them is not available here at any price.
+      #
+      # Adding is safe because an issue may belong to more than one release in a
+      # pipeline: verified against the live workspace by attaching a second release to an
+      # issue that already had one and reading it back on both, then reverting. So this
+      # cannot take an issue away from a release that is still open, and it cannot fail
+      # on an issue another release already holds.
+      #
+      # The flip side is that the cancelled releases keep listing their issues too --
+      # there is no detach operation on this key. The release that shipped the work gains
+      # it, which is the traceability that was missing; a true move needs the Linear MCP.
+      #
+      # Runs BEFORE `complete`, so the release is already holding everything when
+      # completion fires the pipeline's autoGenerateReleaseNotesOnCompletion and
+      # rolloverIssuesOnCompletion settings.
+      - name: Adopt the issues of the releases this one overtook
+        id: linear_adopt
+        if: env.SE_HAS_LINEAR == 'true' && env.SE_PROMOTE == 'true' && steps.linear_checkout.outputs.ok == 'true' && steps.version.outputs.linear_base_tag != ''
+        continue-on-error: true
+        uses: linear/linear-release-action@17b8c24f8ceb2b98cabaf1965ff83c55dd596fac # v0
+        with:
+          access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
+          command: sync
+          version: ${{ steps.version.outputs.version_string }}
+          name: ${{ steps.version.outputs.version_string }}
+          # The whole point of this step. Deliberately NOT the previous build: the range
+          # has to reach back past every release that was overtaken.
+          base_ref: ${{ steps.version.outputs.linear_base_tag }}
+          issue_pattern: ${{ vars.LINEAR_ISSUE_PATTERN || '\b(CORE-[0-9]+)\b' }}
+          # Release notes are deliberately not passed. They were written by the
+          # signed -> qa sync and again into the GitHub release body above; this step
+          # exists to add issues, and re-sending them here would be a second source of
+          # truth for the same text.
+          dry_run: ${{ env.SE_LINEAR_DRY_RUN }}
+          log_level: verbose
+
       # `complete` rather than `update --stage=Released`: for a scheduled pipeline that
       # is what moves a release into the completed stage, and it is the only path that
       # fires the pipeline's autoGenerateReleaseNotesOnCompletion and
@@ -552,7 +609,11 @@ jobs:
       # most tagged builds are never promoted. Those failures are expected and swallowed
       # per version; only the count is reported.
       - name: Cancel releases left open behind this one
-        if: env.SE_HAS_LINEAR == 'true' && env.SE_PROMOTE == 'true' && steps.linear_complete.outcome == 'success'
+        # Gated on the adoption above as well as on completion. Cancelling a release
+        # whose issues were not taken over is the exact failure this pair exists to
+        # prevent -- better to leave it open and visible than to retire it quietly with
+        # work still attached to nothing that shipped.
+        if: env.SE_HAS_LINEAR == 'true' && env.SE_PROMOTE == 'true' && steps.linear_complete.outcome == 'success' && steps.linear_adopt.outcome == 'success'
         continue-on-error: true
         env:
           LINEAR_ACCESS_KEY: ${{ secrets.LINEAR_ACCESS_KEY }}

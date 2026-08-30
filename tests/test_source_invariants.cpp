@@ -11,12 +11,12 @@
 
 #include <cassert>
 #include <cstdio>
-#include <fstream>
+#include <vector>
 #include <algorithm>
+#include <fstream>
 #include <regex>
 #include <sstream>
 #include <string>
-#include <vector>
 
 static int failures = 0;
 
@@ -993,6 +993,293 @@ static void check_wer_registration_prefix_is_asserted()
 	      "CORE-864: the registration block must carry app_tid; the shared-memory name is derived from it");
 }
 
+
+// --- CORE-954: every value resolve.sh emits must be declared as an action output.
+//
+// A composite action exposes only the outputs it names. `emit foo` writes to
+// GITHUB_OUTPUT of the inner step, but if action.yml has no `foo:` block then
+// `steps.<id>.outputs.foo` evaluates to the empty string in the caller -- with
+// no warning, no error, and a workflow log that looks correct because
+// resolve.sh logs what it computed rather than what the caller received.
+//
+// That is not hypothetical. linear_base_tag was emitted from CORE-783 onward
+// and never declared, so `base_ref` was silently empty on every Linear sync for
+// months: the CLI fell back to its own scan base and each release held only its
+// own build's issues -- exactly the bug CORE-783 was filed to fix. It surfaced
+// only because a later step guarded on the output being non-empty and was
+// skipped.
+//
+// This is the general form of that gate rather than a check for one key: any
+// future `emit` that someone forgets to declare fails here instead.
+static void check_every_emitted_output_is_declared()
+{
+	auto action = slurp(".github/actions/se-release/action.yml");
+
+	// The declarations live under a top-level `outputs:` block; everything
+	// after it up to the next top-level key is what the action exposes.
+	auto outputs_at = action.find("\noutputs:");
+	check(outputs_at != std::string::npos,
+	      "CORE-954: se-release/action.yml must declare an outputs block");
+
+	if (outputs_at == std::string::npos)
+		return;
+
+	// The block ends at the next line that starts in column 0 and is not a
+	// comment -- `runs:` in practice.
+	std::string outputs = action.substr(outputs_at + 1);
+	std::regex next_top_level(R"(\n(?=[a-z][a-z-]*:))");
+	std::smatch m;
+
+	if (std::regex_search(outputs, m, next_top_level))
+		outputs = outputs.substr(0, m.position(0));
+
+	// Every `emit <key>` across the action's shell scripts.
+	static const char *const scripts[] = {
+		".github/actions/se-release/resolve.sh",
+		".github/actions/se-release/prevtag.sh",
+		".github/actions/se-release/publish.sh",
+		".github/actions/se-release/notes.sh",
+		".github/actions/se-release/changelog.sh",
+		".github/actions/se-release/attach-assets.sh",
+		".github/actions/se-release/dispatch.sh",
+	};
+
+	// Anchored on a line start without std::regex::multiline, which this
+	// MSVC does not provide. Group 2 is the key.
+	std::regex emit(R"((^|\n)[ \t]*emit[ \t]+([a-z_]+))");
+
+	std::size_t emitted = 0;
+
+	for (const char *script : scripts) {
+		std::string src;
+
+		try {
+			src = slurp(script);
+		} catch (...) {
+			continue; // a script may legitimately not exist
+		}
+
+		auto begin = std::sregex_iterator(src.begin(), src.end(), emit);
+		auto end = std::sregex_iterator();
+
+		for (auto it = begin; it != end; ++it) {
+			const std::string key = (*it)[2].str();
+
+			++emitted;
+
+			const bool declared =
+				outputs.find("\n  " + key + ":") !=
+				std::string::npos;
+
+			if (!declared) {
+				std::fprintf(stderr,
+					     "FAIL: CORE-954: '%s' is emitted by %s but not declared in se-release/action.yml, so the caller reads an empty string\n",
+					     key.c_str(), script);
+				++failures;
+			}
+		}
+	}
+
+	check(emitted > 0,
+	      "CORE-954: no emitted outputs were found at all -- the emit pattern or the script list has moved");
+}
+
+// --- CORE-954: the full release must adopt the issues of the releases it
+//     overtakes BEFORE any of them are cancelled.
+//
+// Cancelling a release whose issues were not taken over is the failure this
+// pair exists to prevent: the work shipped, but the release that delivered it
+// does not list it and the one that does is Canceled.
+static void check_full_release_adopts_before_cancelling()
+{
+	auto wf = slurp(".github/workflows/release.yml");
+
+	// The ids are matched with their trailing newline. Without it,
+	// find("id: linear_adopt") is satisfied by "id: linear_adopt_ANYTHING",
+	// so renaming the step away would leave this check passing.
+	auto adopt = wf.find("id: linear_adopt\n");
+	auto complete = wf.find("id: linear_complete\n");
+	auto cancel = wf.find("name: Cancel releases left open behind this one");
+
+	check(adopt != std::string::npos,
+	      "CORE-954: the full-release hop must adopt the overtaken releases' issues");
+	check(cancel != std::string::npos,
+	      "CORE-954: the cancel sweep must still exist");
+
+	if (adopt == std::string::npos || cancel == std::string::npos)
+		return;
+
+	check(adopt < cancel,
+	      "CORE-954: issues must be adopted BEFORE the releases holding them are cancelled");
+
+	if (complete != std::string::npos) {
+		// Completion fires the pipeline's rolloverIssuesOnCompletion
+		// and autoGenerateReleaseNotesOnCompletion, so the release has
+		// to be holding everything by then.
+		check(adopt < complete,
+		      "CORE-954: adoption must precede `complete`, which is what fires the pipeline's rollover and notes generation");
+	}
+
+	// The scan range is the whole point: the previous full release, not the
+	// previous build. A narrower base would cover none of the overtaken
+	// releases and the step would be decorative.
+	auto adopt_block = wf.substr(adopt, 1400);
+
+	// The whole `base_ref:` line, not just the output name: the step's own
+	// `if:` guard also mentions linear_base_tag, so a bare substring search
+	// stays true even when base_ref is repointed at a narrower tag.
+	check(adopt_block.find(
+		      "base_ref: ${{ steps.version.outputs.linear_base_tag }}") !=
+		      std::string::npos,
+	      "CORE-954: the adopt step must scan from linear_base_tag (the previous FULL release), or it covers none of the overtaken builds");
+
+	// And the sweep must not run if adoption did not.
+	auto cancel_block = wf.substr(cancel, 900);
+
+	check(cancel_block.find("steps.linear_adopt.outcome == 'success'") !=
+		      std::string::npos,
+	      "CORE-954: the cancel sweep must be gated on the adoption succeeding -- otherwise a failed adopt still retires the releases holding the issues");
+}
+
+// --- CORE-968: the WER gate's leading-frame skip must stay CONDITIONAL.
+//
+// Our frames being on the stack is not evidence the crash is ours -- when the
+// fault happens inside our handler they are there by construction (SELIVE-1Y,
+// where obs-websocket's destructor aborted and our handler died on its corrupt
+// heap). But skipping them unconditionally is just as wrong: a __fastfail
+// raised directly by our own code also has our frame innermost, and that is the
+// crash class this module exists to capture.
+//
+// Frame position cannot separate the two. Only seHandlerActive can, which is why
+// this check pins BOTH halves: the flag must be published by the handler, and
+// the module's skip must be derived from it rather than hard-coded either way.
+static void check_wer_skip_is_conditional_on_the_handler_flag()
+{
+	auto header = slurp("streamelements/StreamElementsWerRegistration.h");
+
+	check(header.find("DWORD seHandlerActive;") != std::string::npos,
+	      "CORE-968: the registration block must carry seHandlerActive");
+
+	auto handler =
+		slurp("streamelements/StreamElementsSentryCrashHandler.cpp");
+
+	check(handler.find("s_werRegistration.seHandlerActive = 1;") !=
+		      std::string::npos,
+	      "CORE-968: the crash handler must publish that it is on the stack");
+	check(handler.find("s_werRegistration.seHandlerActive = 0;") !=
+		      std::string::npos,
+	      "CORE-968: it must also clear the flag, or every later crash looks like one inside the handler");
+
+	auto module = slurp("streamelements/StreamElementsWerModule.cpp");
+
+	// The skip must be derived from the flag. Anchored on the assignment so
+	// that hard-coding it TRUE or FALSE -- the two ways to get this wrong --
+	// both fail here.
+	check(module.find(
+		      "BOOL skippingOwnLeadingFrames = registration->seHandlerActive") !=
+		      std::string::npos,
+	      "CORE-968: the skip must be conditional on seHandlerActive; hard-coding it FALSE reports other plug-ins' crashes as ours, and TRUE declines fast-fails raised by our own code");
+}
+
+// --- CORE-967: the consent prompt must not pump foreign messages.
+//
+// DialogBoxIndirectParamW runs the standard modal loop, which dispatches every
+// message queued for the thread. On a crash path that is fatal rather than
+// untidy: the fault that brought us here is frequently a half-destroyed widget,
+// and letting Qt repaint the main window inside the prompt touches it again.
+//
+// SELIVE-1Z is that loop, in production:
+//
+//   restoreState -> _purecall -> handler -> Prompt -> DispatchMessageWorker
+//     -> QWidgetRepaintManager::paintAndFlush -> _purecall AGAIN -> abort
+//
+// The second fault is on the same thread, nested inside the handler still
+// reporting the first, and kills the process mid-collection. s_insideExceptionFilter
+// cannot save it -- same thread, nothing to wait for.
+//
+// Measured before and after with a standalone harness: the DialogBox version
+// dispatched 202 foreign messages while the prompt was up; the isolated loop
+// dispatched 0, with the dialog behaving identically.
+static void check_consent_prompt_does_not_pump_foreign_messages()
+{
+	auto dialog = slurp("streamelements/StreamElementsCrashConsentDialog.cpp");
+
+	check(dialog.find("DialogBoxIndirectParamW(") == std::string::npos,
+	      "CORE-967: the prompt must not use DialogBoxIndirectParamW -- its modal loop dispatches Qt's messages and re-enters the crash");
+
+	check(dialog.find("RunIsolatedDialogLoop(dialog, state)") !=
+		      std::string::npos,
+	      "CORE-967: the prompt must be pumped by RunIsolatedDialogLoop, which dispatches only its own messages");
+
+	check(dialog.find("CreateDialogIndirectParamW(") != std::string::npos,
+	      "CORE-967: the dialog must be created modeless for that loop to drive it");
+
+	// The anti-spin measure. WM_PAINT is not consumed by GetMessage; it is
+	// regenerated until the update region is cleared, so discarding a
+	// foreign paint without validating it spins this loop at 100% CPU for
+	// as long as the prompt is up -- up to the five-minute CORE-862
+	// watchdog.
+	check(dialog.find("::ValidateRect(msg.hwnd, NULL)") != std::string::npos,
+	      "CORE-967: a discarded foreign WM_PAINT must be validated, or the isolated loop spins at 100% CPU");
+
+	// EndDialog only works for DialogBox*; leaving it behind would mean the
+	// prompt never closes and the watchdog kills the process every time.
+	check(dialog.find("::EndDialog(") == std::string::npos,
+	      "CORE-967: EndDialog does not end a modeless dialog -- the prompt would hang until the watchdog terminated the process");
+}
+
+// --- CORE-967: Qt::NoDockWidgetArea is not a valid addDockWidget() argument.
+//
+// checkDockWidgetArea() accepts only Left/Right/Top/Bottom. Anything else is
+// rejected with "QMainWindow::addDockWidget: invalid 'area' argument" and the
+// call returns having done nothing, so the dock is never registered in
+// QMainWindowLayout -- while the caller carries on treating it as though it
+// were, floating it and, in the worst version of this, draining the event queue
+// between two setFloating() calls.
+//
+// The layout is then inconsistent, and QMainWindow::restoreState() walks that
+// structure on the next scene-collection change. SELIVE-1Z faults there, in
+// QLayout::totalMinimumSize, on a pure virtual.
+//
+// This was not theoretical: every OBS log on an affected machine carried four of
+// those warnings per start. A portable A/B measured 1 before and 0 after (the
+// other three need SE.Live docks, which need a login).
+//
+// A floating dock is made by adding it to a real area and then floating it.
+static void check_no_dock_is_added_to_an_invalid_area()
+{
+	static const char *const sources[] = {
+		"streamelements/StreamElementsWidgetManager.cpp",
+		"streamelements/StreamElementsWorkerManager.cpp",
+		"streamelements/StreamElementsGlobalStateManager.cpp",
+		"streamelements/StreamElementsBrowserWidgetManager.cpp",
+	};
+
+	// Matches the argument as written at a call site, across the line break
+	// clang-format is fond of putting after the opening paren.
+	std::regex bad(R"(addDockWidget\(\s*Qt::NoDockWidgetArea)");
+
+	for (const char *src : sources) {
+		auto code = slurp(src);
+
+		if (std::regex_search(code, bad)) {
+			std::fprintf(stderr,
+				     "FAIL: CORE-967: %s calls addDockWidget(Qt::NoDockWidgetArea), which Qt rejects outright -- the dock is never added and the layout restoreState walks is left inconsistent\n",
+				     src);
+			++failures;
+		}
+	}
+
+	// The theme listener is a QDockWidget in the main window, so saveState()
+	// and restoreState() identify it by objectName. Qt requires one to be
+	// set for every dock in the window; this had none.
+	auto global = slurp("streamelements/StreamElementsGlobalStateManager.cpp");
+
+	check(global.find("m_themeChangeListener->setObjectName(") !=
+		      std::string::npos,
+	      "CORE-967: the theme-change dock must have an objectName -- saveState/restoreState identify docks by it");
+}
+
 // --- CORE-979: no config_t handle may escape through an early return.
 //
 // updater.cpp opens config_t handles and closes them at the bottom of the
@@ -1105,6 +1392,11 @@ int main()
 	check_wer_module_gates_before_forwarding();
 	check_prompt_discloses_automatic_reports();
 	check_wer_registration_prefix_is_asserted();
+	check_every_emitted_output_is_declared();
+	check_full_release_adopts_before_cancelling();
+	check_wer_skip_is_conditional_on_the_handler_flag();
+	check_consent_prompt_does_not_pump_foreign_messages();
+	check_no_dock_is_added_to_an_invalid_area();
 	check_no_config_handle_escapes_an_early_return();
 
 	if (failures) {
