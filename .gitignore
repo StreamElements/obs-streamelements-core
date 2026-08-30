@@ -114,3 +114,6 @@ tags
 
 #scratch dir the release workflows write recovered notes and changelogs into
 /.release-input/
+
+# Local, machine-specific agent notes (see CLAUDE.md)
+CLAUDE.local.md

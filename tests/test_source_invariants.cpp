@@ -11,6 +11,8 @@
 
 #include <cassert>
 #include <cstdio>
+#include <vector>
+#include <algorithm>
 #include <fstream>
 #include <regex>
 #include <sstream>
@@ -1278,6 +1280,93 @@ static void check_no_dock_is_added_to_an_invalid_area()
 	      "CORE-967: the theme-change dock must have an objectName -- saveState/restoreState identify docks by it");
 }
 
+// --- CORE-979: no config_t handle may escape through an early return.
+//
+// updater.cpp opens config_t handles and closes them at the bottom of the
+// function. Two `return` statements sat between an open and its close, and both
+// walked out with the handle still open:
+//
+//   prompt_for_update    -- the "Skip this version" path. skip_version is
+//                           sticky, so for anyone who has ever skipped a
+//                           version this leaked once per OBS start, forever.
+//   the manifest lambda  -- the "cannot update while streaming/recording"
+//                           path, which for a streaming tool is not an edge
+//                           case.
+//
+// The first is where the `reference count balance = 1 (0 is good)` logged at
+// every clean shutdown came from; a SETRACE level-2 dump named it outright:
+//
+//   + updater.cpp:467 : count(1) config   AddRefs (1), DecRefs (0)
+//
+// It is worth a static gate because the runtime signal is so easy to miss: it
+// needs ENABLE_SETRACE on, a clean shutdown, and someone reading the log --
+// and it does not reproduce at all on a fresh profile, where skip_version has
+// never been written and the early return is never taken.
+//
+// Walks the file in source order tracking which handles are open. Any `return`
+// reached while one is fails. Comments are stripped first, or the prose in the
+// fix ("this early return used to...") would trip the scan.
+static void check_no_config_handle_escapes_an_early_return()
+{
+	auto src = slurp("streamelements/updater/updater.cpp");
+
+	// Strip // comments line by line, then join. Joining is what lets the
+	// scan see a config_close(...) that clang-format has wrapped over three
+	// lines, as it does at the deeper indentation levels in this file.
+	std::string code;
+	std::istringstream lines(src);
+	std::string line;
+
+	while (std::getline(lines, line)) {
+		auto comment = line.find("//");
+
+		if (comment != std::string::npos)
+			line.erase(comment);
+
+		code += line;
+		code += ' ';
+	}
+
+	// Tokens of interest, matched in the order they appear.
+	std::regex token(
+		R"(config_open\s*\(\s*&\s*(\w+)|SETRACE_DECREF\s*\(\s*(\w+)|\breturn\b)");
+
+	std::vector<std::string> open;
+
+	for (auto it = std::sregex_iterator(code.begin(), code.end(), token);
+	     it != std::sregex_iterator(); ++it) {
+		const std::smatch &m = *it;
+
+		if (m[1].matched) {
+			open.push_back(m[1].str());
+			continue;
+		}
+
+		if (m[2].matched) {
+			auto found =
+				std::find(open.begin(), open.end(), m[2].str());
+
+			if (found != open.end())
+				open.erase(found);
+
+			continue;
+		}
+
+		// A return, with a handle still open.
+		if (!open.empty()) {
+			std::fprintf(
+				stderr,
+				"FAIL: CORE-979: updater.cpp returns with '%s' still open -- config_close it before leaving, or it leaks once per OBS start\n",
+				open.front().c_str());
+			++failures;
+
+			// Report each handle once; otherwise one missing close
+			// buries the output under every later return.
+			open.clear();
+		}
+	}
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -1308,6 +1397,7 @@ int main()
 	check_wer_skip_is_conditional_on_the_handler_flag();
 	check_consent_prompt_does_not_pump_foreign_messages();
 	check_no_dock_is_added_to_an_invalid_area();
+	check_no_config_handle_escapes_an_early_return();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",
