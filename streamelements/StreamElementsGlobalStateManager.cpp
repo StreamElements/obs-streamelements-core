@@ -485,13 +485,20 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 	m_appStateListener = new ApplicationStateListener();
 	m_themeChangeListener = new ThemeChangeListener();
-#ifdef WIN32
-	mainWindow()->addDockWidget(Qt::NoDockWidgetArea,
-					m_themeChangeListener);
-#else
+
+	// objectName, because QMainWindow::saveState() and restoreState()
+	// identify docks by it and Qt's documentation requires it to be set for
+	// every dock in the window. This one had none, so it was saved and
+	// matched under an empty key (CORE-967).
+	m_themeChangeListener->setObjectName("streamelements_theme_listener");
+
+	// Bottom on both platforms now. The Windows branch passed
+	// Qt::NoDockWidgetArea, which addDockWidget rejects -- the dock was
+	// never added at all, which is one of the four "invalid 'area'
+	// argument" warnings in every OBS log. It is invisible and floating
+	// either way; see StreamElementsWidgetManager::AddDockWidget.
 	mainWindow()->addDockWidget(Qt::BottomDockWidgetArea,
-					m_themeChangeListener);
-#endif
+				    m_themeChangeListener);
 
 	{
 		// Set up "Live Support" button

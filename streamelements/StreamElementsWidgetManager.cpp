@@ -273,17 +273,45 @@ bool StreamElementsWidgetManager::AddDockWidget(
 	dock->setWindowTitle(title);
 
 	dock->setWidget(widget);
-	m_parent->addDockWidget(area, dock);
+
+	//
+	// Qt::NoDockWidgetArea is not a valid argument to addDockWidget()
+	// (CORE-967).
+	//
+	// checkDockWidgetArea() accepts only Left/Right/Top/Bottom; anything
+	// else is rejected with "QMainWindow::addDockWidget: invalid 'area'
+	// argument" and the function returns having done nothing. The dock is
+	// then never registered in QMainWindowLayout -- and every OBS log on a
+	// machine running this carries four of those warnings per start.
+	//
+	// What followed made it worse. setFloating(false) on a dock the layout
+	// has never heard of, whose parent is nonetheless the main window, docks
+	// it through a path that skipped addDockWidget's bookkeeping; and the
+	// event-queue drains between the two setFloating() calls dispatched
+	// arbitrary posted events -- DeferredDelete included -- in the middle of
+	// manipulating dock layout. CORE-786 established what pumping there
+	// costs.
+	//
+	// The result is a QMainWindowLayout holding a half-registered dock, and
+	// that structure is exactly what QMainWindow::restoreState() walks on
+	// the next scene-collection change. SELIVE-1Z faults there, in
+	// QLayout::totalMinimumSize, on a pure virtual.
+	//
+	// A floating dock is made by adding it to a real area and then floating
+	// it, which is the documented sequence. The requested area is still
+	// recorded as-asked, so GetDockWidgetArea() and its "floating" spelling
+	// are unchanged.
+	//
+	const Qt::DockWidgetArea placementArea =
+		area == Qt::NoDockWidgetArea ? Qt::RightDockWidgetArea : area;
+
+	m_parent->addDockWidget(placementArea, dock);
 
 	m_dockWidgets[id] = dock;
 	m_dockWidgetAreas[id] = area;
 
-	if (area == Qt::NoDockWidgetArea) {
-		dock->setFloating(false);
-		SEDrainEventQueue();
+	if (area == Qt::NoDockWidgetArea)
 		dock->setFloating(true);
-		SEDrainEventQueue();
-	}
 
 	std::string savedId = id;
 

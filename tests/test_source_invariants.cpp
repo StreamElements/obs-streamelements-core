@@ -991,6 +991,59 @@ static void check_wer_registration_prefix_is_asserted()
 	      "CORE-864: the registration block must carry app_tid; the shared-memory name is derived from it");
 }
 
+
+// --- CORE-967: Qt::NoDockWidgetArea is not a valid addDockWidget() argument.
+//
+// checkDockWidgetArea() accepts only Left/Right/Top/Bottom. Anything else is
+// rejected with "QMainWindow::addDockWidget: invalid 'area' argument" and the
+// call returns having done nothing, so the dock is never registered in
+// QMainWindowLayout -- while the caller carries on treating it as though it
+// were, floating it and, in the worst version of this, draining the event queue
+// between two setFloating() calls.
+//
+// The layout is then inconsistent, and QMainWindow::restoreState() walks that
+// structure on the next scene-collection change. SELIVE-1Z faults there, in
+// QLayout::totalMinimumSize, on a pure virtual.
+//
+// This was not theoretical: every OBS log on an affected machine carried four of
+// those warnings per start. A portable A/B measured 1 before and 0 after (the
+// other three need SE.Live docks, which need a login).
+//
+// A floating dock is made by adding it to a real area and then floating it.
+static void check_no_dock_is_added_to_an_invalid_area()
+{
+	static const char *const sources[] = {
+		"streamelements/StreamElementsWidgetManager.cpp",
+		"streamelements/StreamElementsWorkerManager.cpp",
+		"streamelements/StreamElementsGlobalStateManager.cpp",
+		"streamelements/StreamElementsBrowserWidgetManager.cpp",
+	};
+
+	// Matches the argument as written at a call site, across the line break
+	// clang-format is fond of putting after the opening paren.
+	std::regex bad(R"(addDockWidget\(\s*Qt::NoDockWidgetArea)");
+
+	for (const char *src : sources) {
+		auto code = slurp(src);
+
+		if (std::regex_search(code, bad)) {
+			std::fprintf(stderr,
+				     "FAIL: CORE-967: %s calls addDockWidget(Qt::NoDockWidgetArea), which Qt rejects outright -- the dock is never added and the layout restoreState walks is left inconsistent\n",
+				     src);
+			++failures;
+		}
+	}
+
+	// The theme listener is a QDockWidget in the main window, so saveState()
+	// and restoreState() identify it by objectName. Qt requires one to be
+	// set for every dock in the window; this had none.
+	auto global = slurp("streamelements/StreamElementsGlobalStateManager.cpp");
+
+	check(global.find("m_themeChangeListener->setObjectName(") !=
+		      std::string::npos,
+	      "CORE-967: the theme-change dock must have an objectName -- saveState/restoreState identify docks by it");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -1015,6 +1068,7 @@ int main()
 	check_sentry_wer_is_not_beside_the_host_executable();
 	check_wer_module_gates_before_forwarding();
 	check_prompt_discloses_automatic_reports();
+	check_no_dock_is_added_to_an_invalid_area();
 	check_wer_registration_prefix_is_asserted();
 
 	if (failures) {

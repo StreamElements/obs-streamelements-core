@@ -46,7 +46,16 @@ public:
 		m_dockWidget->layout()->addWidget(browserWidget);
 		m_dockWidget->setGeometry(QRect(rec.width() * 2, rec.height() * 2, 1920, 1080));
 
-		mainWindow->addDockWidget(Qt::NoDockWidgetArea, m_dockWidget);
+		// Not NoDockWidgetArea: addDockWidget rejects it outright and
+		// the dock never enters QMainWindowLayout, leaving the
+		// structure restoreState walks inconsistent. Added to a real
+		// area and then floated, which is the documented way to get a
+		// floating dock. See CORE-967 and the note in
+		// StreamElementsWidgetManager::AddDockWidget.
+		m_dockWidget->setObjectName("streamelements_worker_dock");
+		mainWindow->addDockWidget(Qt::RightDockWidgetArea,
+					  m_dockWidget);
+		m_dockWidget->setFloating(true);
 
 		QTimer::singleShot(std::chrono::milliseconds(0), qApp, [this]() {
 			m_dockWidget->hide();
