@@ -482,8 +482,18 @@ static bool prompt_for_update(const bool allowUseLastResponse,
 		uint64_t skip_version = config_get_uint(config, "update-prompt",
 							"skip_version");
 
-		if (avail_version_number == skip_version)
+		if (avail_version_number == skip_version) {
+			// Close before leaving. This early return used to
+			// walk out with the handle still open, which is
+			// where the "reference count balance = 1" reported
+			// at unload came from -- and it fires on every
+			// single start once the user has skipped a version,
+			// because skip_version is sticky.
+			config_close(SETRACE_DECREF(config));
+			config = NULL;
+
 			return false;
+		}
 	}
 
 	// Prompt the user with available update
@@ -803,6 +813,17 @@ static void check_for_updates_async(bool allowUseLastResponse, bool silent,
 							if (package_url.size()) {
 								if (!ensure_no_output(context->silent)) {
 									blog(LOG_INFO, "obs-streamelements-core: updater: can not update while streaming and/or recording are active");
+
+									// Same leak as above,
+									// on the manifest: this
+									// return is the only exit
+									// between the open and the
+									// close at the bottom of
+									// the lambda.
+									config_close(SETRACE_DECREF(
+										manifest));
+									manifest =
+										NULL;
 
 									context->callback();
 
