@@ -169,6 +169,11 @@ struct DialogState {
 
 	std::wstring description;
 	bool consented = false;
+
+	// IDOK or IDCANCEL once answered, 0 until then. The dialog is modeless
+	// (see RunIsolatedDialogLoop), so there is no EndDialog return value to
+	// carry this and the loop below reads it from here instead.
+	int outcome = 0;
 };
 
 static std::wstring GetControlText(HWND dialog, int id)
@@ -745,7 +750,13 @@ static INT_PTR CALLBACK ConsentDialogProc(HWND dialog, UINT message,
 			state->consented = true;
 		}
 
-		::EndDialog(dialog, id);
+		// DestroyWindow rather than EndDialog: this dialog is modeless
+		// and pumped by RunIsolatedDialogLoop, which watches for the
+		// window going away. EndDialog only works for DialogBox*.
+		if (state)
+			state->outcome = id;
+
+		::DestroyWindow(dialog);
 
 		return TRUE;
 	}
@@ -857,6 +868,75 @@ static void BuildConsentDialogTemplate(DialogTemplateBuilder &builder)
 
 /* ================================================================= */
 
+//
+// A modal loop that dispatches ONLY this dialog's messages (CORE-967).
+//
+// DialogBoxIndirectParamW runs the standard modal loop, and that loop dispatches
+// every message queued for the thread -- including Qt's. On a crash path that is
+// not merely untidy, it is fatal: the fault that brought us here is frequently a
+// half-destroyed widget, and letting Qt repaint the main window inside the
+// prompt touches it again.
+//
+// Observed in production as SELIVE-1Z:
+//
+//     QMainWindow::restoreState -> QLayout::activate -> _purecall
+//       -> SentryPurecallHandler -> abort -> SentryAbortHandler
+//         -> HandleFatalException -> Prompt -> DialogBoxIndirectParamW
+//           -> DispatchMessageWorker -> QWidgetRepaintManager::paintAndFlush
+//             -> _purecall AGAIN -> SentryPurecallHandler -> abort
+//
+// The second purecall arrives on the same thread, nested inside the handler that
+// is still reporting the first. s_insideExceptionFilter correctly refuses to
+// report it again, so it returns EXCEPTION_CONTINUE_SEARCH, abort() resumes, and
+// the process fast-fails -- killing us in the middle of collecting the first
+// report. A re-entrancy counter cannot save this: same thread, so there is
+// nothing to wait for and nothing to unwind. The only fix is to not run the
+// foreign code at all.
+//
+// So the dialog is created modeless and pumped here, and anything that does not
+// belong to it is discarded rather than dispatched. Nothing else in this process
+// needs to run again -- it is already dying, and the one remaining job is to ask
+// the user a question.
+//
+// WM_PAINT for a foreign window is validated rather than merely dropped. WM_PAINT
+// is not removed from the queue by GetMessage; it is regenerated until the update
+// region is cleared, so dropping it would spin this loop at 100% CPU for as long
+// as the prompt is up -- which, with the CORE-862 watchdog, can be five minutes.
+//
+// The watchdog is unaffected and still bounds this: it runs on its own thread and
+// terminates the process if the prompt has not been answered in time.
+//
+static int RunIsolatedDialogLoop(HWND dialog, const DialogState &state)
+{
+	MSG msg;
+
+	while (::IsWindow(dialog)) {
+		if (!::GetMessageW(&msg, NULL, 0, 0)) {
+			// WM_QUIT. Someone is tearing the thread down; treat it
+			// as no answer, which means do not send.
+			break;
+		}
+
+		const HWND root = msg.hwnd ? ::GetAncestor(msg.hwnd, GA_ROOT)
+					   : NULL;
+
+		if (root == dialog) {
+			if (!::IsDialogMessageW(dialog, &msg)) {
+				::TranslateMessage(&msg);
+				::DispatchMessageW(&msg);
+			}
+
+			continue;
+		}
+
+		// Not ours. Deliberately not dispatched -- see above.
+		if (msg.message == WM_PAINT && msg.hwnd)
+			::ValidateRect(msg.hwnd, NULL);
+	}
+
+	return state.outcome;
+}
+
 StreamElementsCrashConsentDialog::Result
 StreamElementsCrashConsentDialog::Prompt(const std::string &name,
 					 const std::string &email,
@@ -883,9 +963,21 @@ StreamElementsCrashConsentDialog::Prompt(const std::string &name,
 	// cost is that the dialog is not modal to OBS, which is why it is
 	// WS_EX_TOPMOST and calls SetForegroundWindow above.
 	//
-	const INT_PTR outcome = ::DialogBoxIndirectParamW(
-		::GetModuleHandleW(NULL), builder.Get(), NULL,
-		ConsentDialogProc, (LPARAM)&state);
+	// Modeless, then pumped by RunIsolatedDialogLoop above. The template
+	// carries no WS_VISIBLE -- DialogBox* used to show the window for us --
+	// so it is shown explicitly here.
+	HWND dialog = ::CreateDialogIndirectParamW(::GetModuleHandleW(NULL),
+						   builder.Get(), NULL,
+						   ConsentDialogProc,
+						   (LPARAM)&state);
+
+	int outcome = -1;
+
+	if (dialog) {
+		::ShowWindow(dialog, SW_SHOW);
+
+		outcome = RunIsolatedDialogLoop(dialog, state);
+	}
 
 	// IDOK and IDCANCEL both mean the dialog appeared and was answered; -1
 	// means Windows refused the template and it never did.
