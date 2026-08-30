@@ -220,8 +220,30 @@ static BOOL SEWerIsModuleOfInterest(const SEWerRegistration *registration,
 /* ================================================================= */
 
 //
-// The gate. Walks the crashed thread cross-process and reports whether any
-// frame lands in a module we own.
+// The gate. Walks the crashed thread cross-process and reports whether the crash
+// is ours.
+//
+// "Ours" deliberately does not mean "one of our frames is on the stack"
+// (CORE-968). When the fault happens inside our own crash handler our frames are
+// on the stack by construction, so that test passes for every crash in the
+// process -- including OBS's and other plug-ins'. Observed as SELIVE-1Y, where
+// obs-websocket's destructor called terminate(), our SIGABRT handler ran, and
+// the stack walk inside it died on an already-corrupt heap. Nothing about that
+// crash was ours; we claimed it because SentryAbortHandler was on the stack.
+//
+// So the leading run of our own frames is skipped, and the verdict is taken from
+// what lies beneath it. A fault genuinely inside our code still passes: our
+// frames reappear further down, below the CRT and OBS frames that called us.
+// This is the same discipline StreamElementsCrashContext::WalkStack applies
+// in-process via SetSkipLeadingOwnFrames, and for the same stated reason --
+// "That is not a gate, it is a rubber stamp."
+//
+// Applied only when the handler was actually running, which the registration
+// block reports in seHandlerActive. That condition is load-bearing: a
+// __fastfail raised directly by our own code also has our frame innermost, and
+// skipping unconditionally would decline the very crash class this module exists
+// to capture. Frame position cannot separate the two; the handler saying whether
+// it was on the stack can.
 //
 static BOOL
 SEWerStackTouchesModuleOfInterest(HANDLE process, HANDLE thread,
@@ -234,6 +256,17 @@ SEWerStackTouchesModuleOfInterest(HANDLE process, HANDLE thread,
 	STACKFRAME64 frame;
 	DWORD machine = 0;
 	BOOL found = FALSE;
+
+	// Only when our handler was running at the moment of the fault. See the
+	// note above -- unconditionally skipping would decline a fast-fail
+	// raised by our own code, which is the case this module is for.
+	BOOL skippingOwnLeadingFrames = registration->seHandlerActive ? TRUE
+								      : FALSE;
+
+	if (skippingOwnLeadingFrames) {
+		SEWerLog(
+			"our crash handler was running; skipping its frames before judging");
+	}
 
 	::SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_NO_PROMPTS);
 
@@ -281,7 +314,25 @@ SEWerStackTouchesModuleOfInterest(HANDLE process, HANDLE thread,
 		const char *moduleName =
 			SEWerModuleForAddress(frame.AddrPC.Offset);
 
-		if (SEWerIsModuleOfInterest(registration, moduleName)) {
+		const BOOL ours =
+			SEWerIsModuleOfInterest(registration, moduleName);
+
+		if (skippingOwnLeadingFrames) {
+			if (ours) {
+				// Still inside our own handler. Says nothing
+				// about whose crash this is.
+				SEWerLog(
+					"frame %d is in %s -- skipping our own leading frame",
+					index, moduleName);
+				continue;
+			}
+
+			// First frame that is not ours: everything below this
+			// point is the real stack.
+			skippingOwnLeadingFrames = FALSE;
+		}
+
+		if (ours) {
 			SEWerLog("frame %d is in %s -- ours", index,
 				 moduleName);
 

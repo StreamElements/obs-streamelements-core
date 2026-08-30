@@ -53,6 +53,10 @@ struct Crash {
 	unsigned long code = STATUS_STACK_BUFFER_OVERRUN;
 	bool isFatal = true;
 
+	// What the registration block reports in seHandlerActive: whether our own
+	// crash handler was on the stack when the fault happened.
+	bool handlerWasActive = false;
+
 	// Module names on the crashed thread, innermost first.
 	std::vector<std::string> stack;
 
@@ -68,6 +72,7 @@ struct Trace {
 	bool testedCode = false;
 	bool walkedStack = false;
 	bool forwarded = false;
+	int skippedLeadingOwnFrames = 0;
 };
 
 static bool IsNativeWerException(unsigned long code)
@@ -125,10 +130,27 @@ static bool Decide(const Crash &crash, Trace &trace)
 
 	trace.walkedStack = true;
 
+	// When our handler was running, the leading run of our own frames is the
+	// handler rather than the fault, and says nothing about whose crash this
+	// is. When it was NOT running, our innermost frame is the fault -- which
+	// is the whole point of this module -- so the skip must not apply.
+	// Frame position cannot separate the two; only this flag can.
 	bool ours = false;
+	bool skippingOwnLeadingFrames = crash.handlerWasActive;
 
 	for (const auto &frame : crash.stack) {
-		if (IsModuleOfInterest(crash, frame)) {
+		const bool isOurs = IsModuleOfInterest(crash, frame);
+
+		if (skippingOwnLeadingFrames) {
+			if (isOurs) {
+				++trace.skippedLeadingOwnFrames;
+				continue;
+			}
+
+			skippingOwnLeadingFrames = false;
+		}
+
+		if (isOurs) {
 			ours = true;
 			break;
 		}
@@ -250,6 +272,90 @@ static void check_remote_module_list_is_honoured()
 	      "CORE-864: when the remote list replaces the defaults, the WER gate must narrow with the in-process gate rather than keeping its own answer");
 }
 
+// --- CORE-968: our own handler on the stack is not evidence ---------------
+//
+// The case that made this necessary, from SELIVE-1Y: obs-websocket's destructor
+// called terminate() during obs_shutdown, our SIGABRT handler ran, and the stack
+// walk inside it died on an already-corrupt heap. Every plug-in frame on that
+// stack belonged to our crash handler. Nothing about the crash was ours.
+static void check_crash_inside_our_own_handler_is_declined()
+{
+	Crash crash;
+	crash.code = STATUS_HEAP_CORRUPTION;
+	crash.handlerWasActive = true;
+	// Innermost first: our handler, then the abort machinery, then the
+	// plug-in that actually faulted.
+	crash.stack = {"obs-streamelements-core", // SentryAbortHandler
+		       "obs-streamelements-core", // HandleFatalException
+		       "ucrtbase",                // abort / raise
+		       "obs-websocket",           // the real culprit
+		       "obs"};
+
+	Trace trace;
+
+	check(!Decide(crash, trace),
+	      "CORE-968: a crash whose only plug-in frames are our own handler's is not ours to report");
+	check(trace.skippedLeadingOwnFrames == 2,
+	      "CORE-968: the leading run of our own frames must be skipped, not counted as evidence");
+	check(!trace.forwarded,
+	      "CORE-968: such a crash must never reach sentry's module");
+}
+
+// The other half: skipping must not swallow a real one. A fault genuinely inside
+// our code reappears below the CRT and OBS frames that called us.
+static void check_crash_in_our_code_still_claimed_below_the_handler()
+{
+	Crash crash;
+	crash.handlerWasActive = true;
+	crash.stack = {"obs-streamelements-core", // handler frames
+		       "ucrtbase",
+		       "obs-streamelements-core", // where it actually faulted
+		       "Qt6Core",
+		       "obs"};
+
+	Trace trace;
+
+	check(Decide(crash, trace),
+	      "CORE-968: skipping the leading frames must not hide a fault that is genuinely ours");
+	check(trace.forwarded,
+	      "CORE-968: it must still be forwarded to sentry's module");
+}
+
+// The condition is the whole fix. Same stack, same frames, opposite verdicts --
+// decided only by whether our handler was running.
+//
+// Getting this wrong is not academic: an unconditional skip declines a
+// __fastfail raised directly by our own code, which is the crash class this
+// module was built for. That is what the first cut of CORE-968 did, and these
+// are the checks that caught it.
+static void check_the_skip_is_conditional_on_the_handler_running()
+{
+	const std::vector<std::string> stack = {"obs-streamelements-core",
+						"ucrtbase", "obs"};
+
+	Crash fault;
+	fault.handlerWasActive = false;
+	fault.stack = stack;
+
+	Trace t1;
+
+	check(Decide(fault, t1),
+	      "CORE-968: with the handler NOT running, our innermost frame IS the fault and must be claimed");
+	check(t1.skippedLeadingOwnFrames == 0,
+	      "CORE-968: nothing may be skipped when the handler was not running");
+
+	Crash inHandler;
+	inHandler.handlerWasActive = true;
+	inHandler.stack = stack;
+
+	Trace t2;
+
+	check(!Decide(inHandler, t2),
+	      "CORE-968: with the handler running, the same leading frame is the handler and must not count");
+	check(t2.skippedLeadingOwnFrames == 1,
+	      "CORE-968: exactly the leading run of our frames is skipped");
+}
+
 // --- Consent -------------------------------------------------------------
 //
 // There is none, and that is the decision: this class is reported on implicit
@@ -369,6 +475,10 @@ int main()
 	check_crash_in_obs_itself_is_declined();
 	check_module_match_is_case_insensitive();
 	check_remote_module_list_is_honoured();
+
+	check_crash_inside_our_own_handler_is_declined();
+	check_crash_in_our_code_still_claimed_below_the_handler();
+	check_the_skip_is_conditional_on_the_handler_running();
 
 	check_no_prior_consent_is_required();
 
