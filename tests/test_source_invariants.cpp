@@ -1179,6 +1179,53 @@ static void check_wer_skip_is_conditional_on_the_handler_flag()
 	      "CORE-968: the skip must be conditional on seHandlerActive; hard-coding it FALSE reports other plug-ins' crashes as ours, and TRUE declines fast-fails raised by our own code");
 }
 
+// --- CORE-967: the consent prompt must not pump foreign messages.
+//
+// DialogBoxIndirectParamW runs the standard modal loop, which dispatches every
+// message queued for the thread. On a crash path that is fatal rather than
+// untidy: the fault that brought us here is frequently a half-destroyed widget,
+// and letting Qt repaint the main window inside the prompt touches it again.
+//
+// SELIVE-1Z is that loop, in production:
+//
+//   restoreState -> _purecall -> handler -> Prompt -> DispatchMessageWorker
+//     -> QWidgetRepaintManager::paintAndFlush -> _purecall AGAIN -> abort
+//
+// The second fault is on the same thread, nested inside the handler still
+// reporting the first, and kills the process mid-collection. s_insideExceptionFilter
+// cannot save it -- same thread, nothing to wait for.
+//
+// Measured before and after with a standalone harness: the DialogBox version
+// dispatched 202 foreign messages while the prompt was up; the isolated loop
+// dispatched 0, with the dialog behaving identically.
+static void check_consent_prompt_does_not_pump_foreign_messages()
+{
+	auto dialog = slurp("streamelements/StreamElementsCrashConsentDialog.cpp");
+
+	check(dialog.find("DialogBoxIndirectParamW(") == std::string::npos,
+	      "CORE-967: the prompt must not use DialogBoxIndirectParamW -- its modal loop dispatches Qt's messages and re-enters the crash");
+
+	check(dialog.find("RunIsolatedDialogLoop(dialog, state)") !=
+		      std::string::npos,
+	      "CORE-967: the prompt must be pumped by RunIsolatedDialogLoop, which dispatches only its own messages");
+
+	check(dialog.find("CreateDialogIndirectParamW(") != std::string::npos,
+	      "CORE-967: the dialog must be created modeless for that loop to drive it");
+
+	// The anti-spin measure. WM_PAINT is not consumed by GetMessage; it is
+	// regenerated until the update region is cleared, so discarding a
+	// foreign paint without validating it spins this loop at 100% CPU for
+	// as long as the prompt is up -- up to the five-minute CORE-862
+	// watchdog.
+	check(dialog.find("::ValidateRect(msg.hwnd, NULL)") != std::string::npos,
+	      "CORE-967: a discarded foreign WM_PAINT must be validated, or the isolated loop spins at 100% CPU");
+
+	// EndDialog only works for DialogBox*; leaving it behind would mean the
+	// prompt never closes and the watchdog kills the process every time.
+	check(dialog.find("::EndDialog(") == std::string::npos,
+	      "CORE-967: EndDialog does not end a modeless dialog -- the prompt would hang until the watchdog terminated the process");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -1207,6 +1254,7 @@ int main()
 	check_every_emitted_output_is_declared();
 	check_full_release_adopts_before_cancelling();
 	check_wer_skip_is_conditional_on_the_handler_flag();
+	check_consent_prompt_does_not_pump_foreign_messages();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",
