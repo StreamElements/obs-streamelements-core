@@ -4,7 +4,7 @@
 
 ## `reloadAllBrowserSources(ResultCallback<success>)`
 
-> ⚠️ **Not implemented.** No handler by this name is registered anywhere in `streamelements/`, so calling it will not resolve. Neither deprecated nor implemented — most likely specified and never built.
+> ⚠️ **Removed.** Implemented once, but taken out in `f206595` (Eject dependency on CEF and obs-browser (#1), 2022-06-17). No handler by this name is registered any more, so calling it will not resolve.
 
 **Removed in API 3.0**
 
