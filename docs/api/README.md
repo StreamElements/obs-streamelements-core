@@ -24,8 +24,8 @@ this tree is.
 ## Reference
 
 - [`window`](window.md) — 104 events and methods on the page's own `window`
-- [`window.host`](host/) — 217 calls across 58 groups
-- [Data structures](types/) — 70 object types
+- [`window.host`](host/README.md) — 217 calls across 58 groups
+- [Data structures](types/README.md) — 70 object types
 
 ### `window.host` by group
 
@@ -164,7 +164,7 @@ this tree is.
 | [`getAllSceneCollections(ResultCallback<SceneCollectionInfo[]>)`](host/scene-collections.md#getallscenecollectionsresultcallbackscenecollectioninfo) | [Scene collections](host/scene-collections.md) |
 | [`getAllSceneItems(SceneInfo, ResultCallback<SceneItemInfo[]>)`](host/scene-items.md#getallsceneitemssceneinfo-resultcallbacksceneiteminfo) | [Scene items](host/scene-items.md) |
 | [`getAllScenes({ videoCompositionId }, ResultCallback<SceneInfo[]>)`](host/scenes.md#getallscenes-videocompositionid-resultcallbacksceneinfo) | [Scenes](host/scenes.md) |
-| [`getAllScenes({ videoCompositionId }, ResultCallback<SceneInfo[]>)`](host/scenes.md#getallscenes-videocompositionid-resultcallbacksceneinfo) | [Scenes](host/scenes.md) |
+| [`getAllScenes({ videoCompositionId }, ResultCallback<SceneInfo[]>)`](host/scenes.md#getallscenes-videocompositionid-resultcallbacksceneinfo_1) | [Scenes](host/scenes.md) |
 | [`getAllScopedStorageJsonItems(ScopedStorageItemInfo, ResultCallback< ScopedStorageItemInfo [] \| null>)`](host/scoped-storage.md#getallscopedstoragejsonitemsscopedstorageiteminfo-resultcallback-scopedstorageiteminfo-null) | [Scoped Storage](host/scoped-storage.md) |
 | [`getAllSharedVideoCompositions(ResultCallback<{ id: SharedVideoCompositionInfo }>)`](host/shared-video-compositions.md#getallsharedvideocompositionsresultcallback-id-sharedvideocompositioninfo) | [Shared Video Compositions](host/shared-video-compositions.md) |
 | [`getAllStreamingOutputs(ResultCallback<{id: OutputInfo}>)`](host/streaming-outputs.md#getallstreamingoutputsresultcallbackid-outputinfo) | [Streaming Outputs](host/streaming-outputs.md) |

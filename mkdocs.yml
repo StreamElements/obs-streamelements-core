@@ -1,0 +1,78 @@
+# Builds docs/api/ into the /api/ section of the GitHub Pages site.
+#
+# The site root keeps serving docs/status.html untouched; pages.yml copies the
+# rest of docs/ over this build's output rather than the other way round, so a
+# broken docs build can never take the status page down with it.
+
+site_name: JavaScript OBS API
+site_description: >-
+  The host API SE.Live exposes to page JavaScript running inside OBS.
+site_url: https://streamelements.github.io/obs-streamelements-core/api/
+repo_url: https://github.com/StreamElements/obs-streamelements-core
+edit_uri: edit/master/docs/api/
+
+docs_dir: docs/api
+site_dir: _site/api
+
+# The reference is one page per functional group and per data type, and the
+# alphabetical index on the front page carries 217 generated anchor links into
+# those pages. A renamed heading or a moved file silently breaks them, so both
+# are validated and the build fails rather than publishing dead links.
+strict: true
+validation:
+  links:
+    absolute_links: relative_to_docs
+    unrecognized_links: warn
+    anchors: warn
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.top
+    - navigation.indexes
+    # Without this, every one of the 141 pages embeds the entire 140-entry
+    # nav tree -- 9.2 MB of HTML for a reference whose actual text is a
+    # fraction of that. Prune renders only the visible branch.
+    - navigation.prune
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  # The signatures are headings, and every one of them needs a stable anchor
+  # for the index to link to.
+  - toc:
+      permalink: true
+  - tables
+  - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/StreamElements/obs-streamelements-core

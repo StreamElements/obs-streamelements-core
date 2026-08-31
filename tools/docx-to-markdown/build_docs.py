@@ -5,6 +5,7 @@ it are shifted so the file reads as a standalone document. A host group file is
 titled with its group name, so the Heading5 signatures inside it become `##`.
 """
 
+import collections
 import io
 import os
 import re
@@ -143,14 +144,27 @@ def anchor_for(sig):
 
 rows = []
 for gname, rel, sigs in host_files:
+    # Overloads repeat a signature verbatim within one page -- getAllScenes has
+    # a 1.21 form and a 6.0 form. Python-Markdown gives the second heading the
+    # slug with "_1" appended, so the anchors have to be assigned in document
+    # order here too, or both index rows land on the first overload. Anchor
+    # validation cannot catch that: the anchor it points at does exist.
+    seen = collections.Counter()
     for s in sigs:
-        rows.append((sig_name(s), s, gname, rel))
+        base = anchor_for(s)
+        n = seen[base]
+        seen[base] += 1
+        rows.append((sig_name(s), s, gname, rel,
+                     base if n == 0 else '%s_%d' % (base, n)))
+
+# Stable, so equal signatures keep document order and the un-suffixed anchor
+# stays with the first of them.
 rows.sort(key=lambda r: (r[0].lower(), r[1]))
 
 index = ['| Call | Group |', '| --- | --- |']
-for bare, s, gname, rel in rows:
+for bare, s, gname, rel, anchor in rows:
     index.append('| [`%s`](%s#%s) | [%s](%s) |'
-                 % (s.replace('|', '\\|'), rel, anchor_for(s), gname, rel))
+                 % (s.replace('|', '\\|'), rel, anchor, gname, rel))
 index = '\n'.join(index)
 
 readme = """# JavaScript OBS API
@@ -179,8 +193,8 @@ this tree is.
 ## Reference
 
 - [`window`](window.md) — %(nwindow)d events and methods on the page's own `window`
-- [`window.host`](host/) — %(nmethods)d calls across %(ngroups)d groups
-- [Data structures](types/) — %(ntypes)d object types
+- [`window.host`](host/README.md) — %(nmethods)d calls across %(ngroups)d groups
+- [Data structures](types/README.md) — %(ntypes)d object types
 
 ### `window.host` by group
 

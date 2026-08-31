@@ -117,3 +117,8 @@ tags
 
 # Local, machine-specific agent notes (see CLAUDE.md)
 CLAUDE.local.md
+
+# MkDocs build output (see .github/workflows/pages.yml)
+_site/
+__pycache__/
+*.pyc
