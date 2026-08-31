@@ -2,6 +2,17 @@
 
 Core SE.Live OBS plugin.
 
+# JavaScript OBS API
+
+The host API this plugin exposes to page JavaScript — 217 `window.host` calls,
+104 `window` events and methods, and 70 data structures — is documented in
+**[`docs/api/`](docs/api/)**, currently at API version 6.6.
+
+That tree is the source of truth. It replaces `JavaScript OBS API Version
+6.6.docx`, which is not in version control; see
+[`tools/docx-to-markdown/`](tools/docx-to-markdown/) for how it was converted
+and verified.
+
 # Building locally
 
 This plugin does not build on its own. It is built as part of an obs-studio
