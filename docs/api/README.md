@@ -90,6 +90,10 @@ this tree is.
 
 ### All `window.host` calls, alphabetically
 
+Calls marked ⚠️ are documented but **not registered by the plug-in** — deprecated and removed, or never implemented. Open one to see which.
+
+
+
 | Call | Group |
 | --- | --- |
 | [`addAudioComposition(AudioCompositionInfo, ResultCallback< AudioCompositionInfo \| null>)`](host/audio-compositions.md#addaudiocompositionaudiocompositioninfo-resultcallback-audiocompositioninfo-null) | [Audio Compositions](host/audio-compositions.md) |
@@ -135,8 +139,8 @@ this tree is.
 | [`disableReplayBufferOutputsByIds(Array<id>, ResultCallback<success>)`](host/replay-buffer-outputs.md#disablereplaybufferoutputsbyidsarrayid-resultcallbacksuccess) | [Replay Buffer Outputs](host/replay-buffer-outputs.md) |
 | [`disableStreamingOutputsByIds(Array<id>, ResultCallback<success>)`](host/streaming-outputs.md#disablestreamingoutputsbyidsarrayid-resultcallbacksuccess) | [Streaming Outputs](host/streaming-outputs.md) |
 | [`disconnectVideoCompositionsFromSharedVideoCompositionsByIds(Array<string>, ResultCallback<success>)`](host/shared-video-compositions.md#disconnectvideocompositionsfromsharedvideocompositionsbyidsarraystring-resultcallbacksuccess) | [Shared Video Compositions](host/shared-video-compositions.md) |
-| [`dispatchKeyboardEvent(KeyboardEventInfo, ResultCallback<success>)`](host/synthetic-input.md#dispatchkeyboardeventkeyboardeventinfo-resultcallbacksuccess) | [Synthetic input](host/synthetic-input.md) |
-| [`dispatchMouseEvent(MouseEventInfo, ResultCallback<success>)`](host/synthetic-input.md#dispatchmouseeventmouseeventinfo-resultcallbacksuccess) | [Synthetic input](host/synthetic-input.md) |
+| [`⚠️ dispatchKeyboardEvent(KeyboardEventInfo, ResultCallback<success>)`](host/synthetic-input.md#dispatchkeyboardeventkeyboardeventinfo-resultcallbacksuccess) | [Synthetic input](host/synthetic-input.md) |
+| [`⚠️ dispatchMouseEvent(MouseEventInfo, ResultCallback<success>)`](host/synthetic-input.md#dispatchmouseeventmouseeventinfo-resultcallbacksuccess) | [Synthetic input](host/synthetic-input.md) |
 | [`enableRecordingOutputsByIds(Array<id>, ResultCallback<success>)`](host/recording-outputs.md#enablerecordingoutputsbyidsarrayid-resultcallbacksuccess) | [Recording Outputs](host/recording-outputs.md) |
 | [`enableReplayBufferOutputsByIds(Array<id>, ResultCallback<success>)`](host/replay-buffer-outputs.md#enablereplaybufferoutputsbyidsarrayid-resultcallbacksuccess) | [Replay Buffer Outputs](host/replay-buffer-outputs.md) |
 | [`enableStreamingOutputsByIds(Array<id>, ResultCallback<success>)`](host/streaming-outputs.md#enablestreamingoutputsbyidsarrayid-resultcallbacksuccess) | [Streaming Outputs](host/streaming-outputs.md) |
@@ -183,7 +187,7 @@ this tree is.
 | [`getAvailableVideoEncoders(ResultCallback<EncoderInfo[]>)`](host/encoders.md#getavailablevideoencodersresultcallbackencoderinfo) | [Encoders](host/encoders.md) |
 | [`getAvailableVideoFilterSourceTypes(ResultCallback<InputSourceTypeInfo[]>)`](host/filter-source-types.md#getavailablevideofiltersourcetypesresultcallbackinputsourcetypeinfo) | [Filter source types](host/filter-source-types.md) |
 | [`getAvailableVideoInputSourceTypes(ResultCallback<InputSourceTypeInfo[]>)`](host/input-source-types.md#getavailablevideoinputsourcetypesresultcallbackinputsourcetypeinfo) | [Input source types](host/input-source-types.md) |
-| [`getContainerForeignPopupWindowsProperties(ResultCallback<ForeignPopupWindowsInfo>)`](host/popup-window.md#getcontainerforeignpopupwindowspropertiesresultcallbackforeignpopupwindowsinfo) | [Popup window](host/popup-window.md) |
+| [`⚠️ getContainerForeignPopupWindowsProperties(ResultCallback<ForeignPopupWindowsInfo>)`](host/popup-window.md#getcontainerforeignpopupwindowspropertiesresultcallbackforeignpopupwindowsinfo) | [Popup window](host/popup-window.md) |
 | [`getCurrentContainerProperties(ResultCallback<ContainerInfo>)`](host/container-information.md#getcurrentcontainerpropertiesresultcallbackcontainerinfo) | [Container information](host/container-information.md) |
 | [`getCurrentProfile(ResultCallback<ProfileInfo>)`](host/profiles.md#getcurrentprofileresultcallbackprofileinfo) | [Profiles](host/profiles.md) |
 | [`getCurrentScene(ResultCallback<SceneInfo>)`](host/scenes.md#getcurrentsceneresultcallbacksceneinfo) | [Scenes](host/scenes.md) |
@@ -196,7 +200,7 @@ this tree is.
 | [`getExternalSceneDataSceneCollectionContent(ExternalSceneDataSceneCollectionInfo, ResultCallback<ExternalSceneDataSceneCollectionContent>)`](host/external-scene-data.md#getexternalscenedatascenecollectioncontentexternalscenedatascenecollectioninfo-resultcallbackexternalscenedatascenecollectioncontent) | [External Scene Data](host/external-scene-data.md) |
 | [`getExternalSceneDataSceneCollections(ExternalSceneDataProviderInfo, ResultCallback<ExternalSceneDataSceneCollectionInfo>)`](host/external-scene-data.md#getexternalscenedatascenecollectionsexternalscenedataproviderinfo-resultcallbackexternalscenedatascenecollectioninfo) | [External Scene Data](host/external-scene-data.md) |
 | [`getFilterSourceProperties(InputSourceTypeInfo, ResultCallback<InputSourceTypeInfo \| null>)`](host/filter-source-types.md#getfiltersourcepropertiesinputsourcetypeinfo-resultcallbackinputsourcetypeinfo-null) | [Filter source types](host/filter-source-types.md) |
-| [`getHostCapabilities(ResultCallback<HostCapabilities>)`](host/host-information.md#gethostcapabilitiesresultcallbackhostcapabilities) | [Host information](host/host-information.md) |
+| [`⚠️ getHostCapabilities(ResultCallback<HostCapabilities>)`](host/host-information.md#gethostcapabilitiesresultcallbackhostcapabilities) | [Host information](host/host-information.md) |
 | [`getHostProperties(ResultCallback<HostInfo>)`](host/host-information.md#gethostpropertiesresultcallbackhostinfo) | [Host information](host/host-information.md) |
 | [`getHostReleaseGroupProperties(ResultCallback<ReleaseGroupInfo>)`](host/release-groups.md#gethostreleasegrouppropertiesresultcallbackreleasegroupinfo) | [Release groups](host/release-groups.md) |
 | [`getInputSourceProperties(InputSourceTypeInfo, ResultCallback<InputSourceTypeInfo \| null>)`](host/input-source-types.md#getinputsourcepropertiesinputsourcetypeinfo-resultcallbackinputsourcetypeinfo-null) | [Input source types](host/input-source-types.md) |
@@ -239,7 +243,7 @@ this tree is.
 | [`queryUserEnvironmentBackupPackageContent(BackupContentInfo, ResultCallback<BackupContentInfo>)`](host/backup-restore.md#queryuserenvironmentbackuppackagecontentbackupcontentinfo-resultcallbackbackupcontentinfo) | [Backup/Restore](host/backup-restore.md) |
 | [`queryUserEnvironmentBackupReferencedFiles (BackupRequestInfo, ResultCallback<BackupContentInfo>)`](host/backup-restore.md#queryuserenvironmentbackupreferencedfiles-backuprequestinfo-resultcallbackbackupcontentinfo) | [Backup/Restore](host/backup-restore.md) |
 | [`readScopedStorageJsonItem(ScopedStorageItemInfo, ResultCallback< ScopedStorageItemInfo \| null>)`](host/scoped-storage.md#readscopedstoragejsonitemscopedstorageiteminfo-resultcallback-scopedstorageiteminfo-null) | [Scoped Storage](host/scoped-storage.md) |
-| [`reloadAllBrowserSources(ResultCallback<success>)`](host/browser-sources.md#reloadallbrowsersourcesresultcallbacksuccess) | [Browser Sources](host/browser-sources.md) |
+| [`⚠️ reloadAllBrowserSources(ResultCallback<success>)`](host/browser-sources.md#reloadallbrowsersourcesresultcallbacksuccess) | [Browser Sources](host/browser-sources.md) |
 | [`removeAudioCompositionsByIds(Array<audioCompositionId>, ResultCallback<success>)`](host/audio-compositions.md#removeaudiocompositionsbyidsarrayaudiocompositionid-resultcallbacksuccess) | [Audio Compositions](host/audio-compositions.md) |
 | [`removeBackgroundWorkersByIds(array<workerId>, ResultCallback<success>)`](host/background-workers.md#removebackgroundworkersbyidsarrayworkerid-resultcallbacksuccess) | [Background workers](host/background-workers.md) |
 | [`removeBrowserScopedHttpServersByIds(<string\|string[]>, ResultCallback<success>)`](host/http-server.md#removebrowserscopedhttpserversbyidsstringstring-resultcallbacksuccess) | [HTTP server](host/http-server.md) |
@@ -261,8 +265,8 @@ this tree is.
 | [`sendHttpRequestResponse(string<id>, HTTPResponseInfo, ResultCallback<success>)`](host/http-server.md#sendhttprequestresponsestringid-httpresponseinfo-resultcallbacksuccess) | [HTTP server](host/http-server.md) |
 | [`setAudioCompositionProperties(AudioCompositionInfo, ResultCallback< AudioCompositionInfo \| null>)`](host/audio-compositions.md#setaudiocompositionpropertiesaudiocompositioninfo-resultcallback-audiocompositioninfo-null) | [Audio Compositions](host/audio-compositions.md) |
 | [`setAuxiliaryMenuItems(MenuItemInfo[], ResultCallback<success>)`](host/menu.md#setauxiliarymenuitemsmenuiteminfo-resultcallbacksuccess) | [Menu](host/menu.md) |
-| [`setContainerForeignPopupWindowsProperties(ForeignPopupWindowsInfo, ResultCallback<success>)`](host/popup-window.md#setcontainerforeignpopupwindowspropertiesforeignpopupwindowsinfo-resultcallbacksuccess) | [Popup window](host/popup-window.md) |
-| [`setCurrentProfileById(ProfileInfo, ResultCallback<success>)`](host/profiles.md#setcurrentprofilebyidprofileinfo-resultcallbacksuccess) | [Profiles](host/profiles.md) |
+| [`⚠️ setContainerForeignPopupWindowsProperties(ForeignPopupWindowsInfo, ResultCallback<success>)`](host/popup-window.md#setcontainerforeignpopupwindowspropertiesforeignpopupwindowsinfo-resultcallbacksuccess) | [Popup window](host/popup-window.md) |
+| [`⚠️ setCurrentProfileById(ProfileInfo, ResultCallback<success>)`](host/profiles.md#setcurrentprofilebyidprofileinfo-resultcallbacksuccess) | [Profiles](host/profiles.md) |
 | [`setCurrentSceneById(sceneId, ResultCallback<success>)`](host/scenes.md#setcurrentscenebyidsceneid-resultcallbacksuccess) | [Scenes](host/scenes.md) |
 | [`setCurrentSceneCollectionById(sceneCollectionId, ResultCallback<success>)`](host/scene-collections.md#setcurrentscenecollectionbyidscenecollectionid-resultcallbacksuccess) | [Scene collections](host/scene-collections.md) |
 | [`setCurrentSceneItemPropertiesById(SceneItemInfo, ResultCallback<success>)`](host/scene-items.md#setcurrentsceneitempropertiesbyidsceneiteminfo-resultcallbacksuccess) | [Scene items](host/scene-items.md) |

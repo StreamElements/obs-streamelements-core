@@ -81,4 +81,15 @@ both corrections above. It also lists calls documented but absent from the code
 `setContainerForeignPopupWindowsProperties`, `setCurrentProfileById`), one
 registered but undocumented (`getCurrentSceneCollectionProperties`), and three
 debug-only handlers that are undocumented on purpose (`crashProgram`,
-`crashProgramFastFail`, `deadlockProgram`). Those are unresolved, not fixed.
+`crashProgramFastFail`, `deadlockProgram`). Those are now **marked in the docs themselves** by
+`mark_unimplemented.py`, which derives the list rather than hard-coding it, so
+re-running it after a code change adds and removes markers on its own. It
+distinguishes three cases: deprecated-and-removed (four calls, which say so in
+their own text), a name that does not match the implementation
+(`setCurrentProfileById` -> `setCurrentProfile`), and genuinely unexplained
+(`getHostCapabilities`, `reloadAllBrowserSources` -- neither deprecated nor
+ever built).
+
+`getCurrentSceneCollectionProperties` is registered but undocumented, and is
+still unresolved: writing an entry for it needs someone who knows what it
+returns.

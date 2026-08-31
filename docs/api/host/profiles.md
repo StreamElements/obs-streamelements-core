@@ -20,6 +20,8 @@ Get current OBS profile.
 
 ## `setCurrentProfileById(ProfileInfo, ResultCallback<success>)`
 
+> ⚠️ **Name does not match the implementation.** The registered handler is `setCurrentProfile`, which does what is described here; no handler named `setCurrentProfileById` exists.
+
 **Available since API version 1.22**
 
 Set current OBS profile by ID.

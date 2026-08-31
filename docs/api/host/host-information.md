@@ -12,6 +12,8 @@ Get host platform properties, including platform, architecture, component versio
 
 ## `getHostCapabilities(ResultCallback<HostCapabilities>)`
 
+> ⚠️ **Not implemented.** No handler by this name is registered anywhere in `streamelements/`, so calling it will not resolve. Neither deprecated nor implemented — most likely specified and never built.
+
 Available since API version 1.8
 
 Get host platform capabilities
