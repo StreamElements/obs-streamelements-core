@@ -3,8 +3,10 @@
 **API version 6.6** — the host API SE.Live exposes to page JavaScript
 running inside OBS.
 
-Converted from `JavaScript OBS API Version 6.6.docx`, last revised
-2025-10-07. That document is no longer the source of truth; this tree is.
+Converted from `JavaScript OBS API Version 6.6.docx` — last recorded
+API revision 2025-10-07, file last saved 2025-10-09, Word revision 117 of a
+document started 2018-05-22. That document is no longer the source of truth;
+this tree is.
 
 ## Start here
 
