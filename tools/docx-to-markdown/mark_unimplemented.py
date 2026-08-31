@@ -178,6 +178,7 @@ def mark_index(names):
               'one to see which.')
 
     out = []
+    dropped_legend = False
     for line in text.split(nl):
         # Strip any existing marker BEFORE matching. Matching first would look
         # at a line whose name is preceded by the marker, fail, and then drop
@@ -187,8 +188,20 @@ def mark_index(names):
         m = re.match(r'^\| \[`([A-Za-z_][A-Za-z0-9_]*)', line)
         if m and m.group(1) in names:
             line = line.replace('| [`', '| [`⚠️ ', 1)
+
         if line.strip() == legend:
+            dropped_legend = True
             continue
+
+        # Swallow the blank line the legend left behind. Without this the file
+        # gains one blank line per run: the marker count stays identical, so a
+        # test that counts markers reports idempotency while the bytes keep
+        # changing.
+        if dropped_legend and not line.strip():
+            dropped_legend = False
+            continue
+        dropped_legend = False
+
         out.append(line)
 
     text = nl.join(out)
