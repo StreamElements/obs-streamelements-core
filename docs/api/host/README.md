@@ -1,0 +1,62 @@
+# `window.host`
+
+The host API, grouped by area. See the [alphabetical index](../README.md#all-windowhost-calls-alphabetically).
+
+- [Properties](properties.md) — 4 calls
+- [Startup flags](startup-flags.md) — 2 calls
+- [Cookies](cookies.md) — 1 call
+- [On-boarding](on-boarding.md) — 2 calls
+- [Logged-in notification](logged-in-notification.md) — 2 calls
+- [External browser](external-browser.md) — 1 call
+- [Popup window](popup-window.md) — 3 calls
+- [Modal dialog](modal-dialog.md) — 2 calls
+- [Non-Modal dialog](non-modal-dialog.md) — 6 calls
+- [Generic dialog API](generic-dialog-api.md) — 1 call
+- [Container information](container-information.md) — 1 call
+- [Central widget](central-widget.md) — 2 calls
+- [Docking widgets](docking-widgets.md) — 13 calls
+- [Background workers](background-workers.md) — 3 calls
+- [Scene collections](scene-collections.md) — 3 calls
+- [Scenes](scenes.md) — 10 calls
+- [Scene items](scene-items.md) — 34 calls
+- [Streaming bandwidth test](streaming-bandwidth-test.md) — 3 calls
+- [Encoders](encoders.md) — 4 calls
+- [Input source types](input-source-types.md) — 4 calls
+- [Existing input sources](existing-input-sources.md) — 3 calls
+- [Filter source types](filter-source-types.md) — 4 calls
+- [Output settings](output-settings.md) — 3 calls
+- [Streaming Outputs](streaming-outputs.md) — 5 calls
+- [Recording Outputs](recording-outputs.md) — 6 calls
+- [Replay Buffer Outputs](replay-buffer-outputs.md) — 6 calls
+- [Native Integration with Streaming Services](native-integration-with-streaming-services.md) — 1 call
+- [Streaming](streaming.md) — 6 calls
+- [Notification bar](notification-bar.md) — 2 calls
+- [Output preview area title bar](output-preview-area-title-bar.md) — 2 calls
+- [Output preview area frame](output-preview-area-frame.md) — 2 calls
+- [Status bar](status-bar.md) — 1 call
+- [System resources](system-resources.md) — 3 calls
+- [Hotkey bindings](hotkey-bindings.md) — 5 calls
+- [Host information](host-information.md) — 2 calls
+- [Message bus](message-bus.md) — 2 calls
+- [Release groups](release-groups.md) — 3 calls
+- [External Scene Data](external-scene-data.md) — 3 calls
+- [HTTP Requests](http-requests.md) — 1 call
+- [User interface state](user-interface-state.md) — 2 calls
+- [Menu](menu.md) — 4 calls
+- [Profiles](profiles.md) — 3 calls
+- [Backup/Restore](backup-restore.md) — 4 calls
+- [Browser Sources](browser-sources.md) — 1 call
+- [Defer settings save](defer-settings-save.md) — 2 calls
+- [Invoke API methods in Batch Mode](invoke-api-methods-in-batch-mode.md) — 1 call
+- [Synthetic input](synthetic-input.md) — 2 calls
+- [HTTP server](http-server.md) — 4 calls
+- [Scoped Storage](scoped-storage.md) — 4 calls
+- [Audio & Video Composition Encoders](audio-video-composition-encoders.md) — 4 calls
+- [Audio Compositions](audio-compositions.md) — 4 calls
+- [Video Compositions](video-compositions.md) — 4 calls
+- [Shared Video Compositions](shared-video-compositions.md) — 6 calls
+- [Video Composition View Overlays](video-composition-view-overlays.md) — 3 calls
+- [Screenshots](screenshots.md) — 1 call
+- [Transitions](transitions.md) — 4 calls
+- [Menus](menus.md) — 1 call
+- [Modules](modules.md) — 2 calls
