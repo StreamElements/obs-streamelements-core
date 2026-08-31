@@ -10,6 +10,8 @@ Get a list of available audio or video filter source types.
 
 Filter source types can be added as items to the *filters* collection of a *SceneItemInfo*.
 
+**Data structures:** [`InputSourceTypeInfo`](../types/InputSourceTypeInfo.md)
+
 ## `getAvailableAudioFilterSourceTypes(ResultCallback<InputSourceTypeInfo[]>)`
 
 Available since API version 6.0
@@ -17,6 +19,8 @@ Available since API version 6.0
 Get a list of available audio filter source types.
 
 Filter source types can be added as items to the *filters* collection of a *SceneItemInfo*.
+
+**Data structures:** [`InputSourceTypeInfo`](../types/InputSourceTypeInfo.md)
 
 ## `getAvailableVideoFilterSourceTypes(ResultCallback<InputSourceTypeInfo[]>)`
 
@@ -26,6 +30,8 @@ Get a list of available video filter source types.
 
 Filter source types can be added as items to the *filters* collection of a *SceneItemInfo*.
 
+**Data structures:** [`InputSourceTypeInfo`](../types/InputSourceTypeInfo.md)
+
 ## `getFilterSourceProperties(InputSourceTypeInfo, ResultCallback<InputSourceTypeInfo | null>)`
 
 **Available since API version 6.0**
@@ -33,3 +39,5 @@ Filter source types can be added as items to the *filters* collection of a *Scen
 Get **filter** source type’s properties.
 
 This works by creating a filter source of *InputSourceTypeInfo.class* with *InputSourceTypeInfo.settings* applied to it, and returning an *InputSourceTypeInfo* with *InputSourceTypeInfo.properties* field adjusted to the source settings.
+
+**Data structures:** [`InputSourceTypeInfo`](../types/InputSourceTypeInfo.md)

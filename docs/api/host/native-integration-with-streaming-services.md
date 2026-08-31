@@ -3,3 +3,5 @@
 `window.host`
 
 ## `getNativeStreamingServiceIntegrationStatus(ResultCallback<NativeStreamingServiceIntegrationInfo>`
+
+**Data structures:** [`NativeStreamingServiceIntegrationInfo`](../types/NativeStreamingServiceIntegrationInfo.md)

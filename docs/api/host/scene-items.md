@@ -8,11 +8,15 @@
 
 Get all items in the current scene.
 
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md)
+
 ## `getAllSceneItems(SceneInfo, ResultCallback<SceneItemInfo[]>)`
 
 **Available since API version 1.26**
 
 Get all items in the scene specified by *SceneInfo.id*
+
+**Data structures:** [`SceneInfo`](../types/SceneInfo.md), [`SceneItemInfo`](../types/SceneItemInfo.md)
 
 ## `removeCurrentSceneItemsByIds(array<sceneItemId>, ResultCallback<success>)`
 
@@ -34,6 +38,8 @@ Set scene item properties described by SceneItemInfo.
 
 **Note:** the scene item to update is located by the value of *SceneItemInfo.id*.
 
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md)
+
 ## `setSceneItemPropertiesById(SceneItemInfo, ResultCallback<success>)`
 
 **Available since API version 1.26**
@@ -41,6 +47,8 @@ Set scene item properties described by SceneItemInfo.
 Set scene item properties described by SceneItemInfo.
 
 **Note:** the scene item to update is located by the value of *SceneItemInfo.id*.
+
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md)
 
 ## `getCurrentSceneItemPropertiesById(SceneItemInfo, ResultCallback<success>)`
 
@@ -54,6 +62,8 @@ The reason we do this is that some source plug-ins do not implement *obs_source_
 
 **Note:** the scene item to retrieve is located by the value of *SceneItemInfo.id*.
 
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md)
+
 ## `getSceneItemPropertiesById(SceneItemInfo, ResultCallback<success>)`
 
 **Available since API version 6.0**
@@ -65,6 +75,8 @@ This call will retrieve _ALL_ available information for the *SceneItemInfo*, inc
 The reason we do this is that some source plug-ins do not implement *obs_source_get_properties* properly, and we want to minimize the amount of calls to this OBS API while still allowing fine-grained control where applicable.
 
 **Note:** the scene item to retrieve is located by the value of *SceneItemInfo.id*.
+
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md)
 
 ## `addCurrentSceneItemGameCaptureSource(SceneItemInfo, ResultCallback<SceneItemInfo>)`
 
@@ -82,6 +94,8 @@ Add a game capture source scene item (id: “game_capture”)
 | capture_cursor | bool | Capture cursor |
 | anti_cheat_hook | bool | Use anti-cheat compatibility hook |
 | capture_overlays | bool | Capture third-party overlays (such as steam) |
+
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md)
 
 ## `addSceneItemGameCaptureSource(SceneItemInfo, ResultCallback<SceneItemInfo>)`
 
@@ -102,6 +116,8 @@ Add a game capture source scene item (id: “game_capture”)
 
 **Note**: scene to add the game capture source to is specified by *SceneItemInfo.sceneId*
 
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md)
+
 ## `addCurrentSceneItemBrowserSource(SceneItemInfo, ResultCallback<SceneItemInfo>)`
 
 **Available since API version 1.10**
@@ -121,6 +137,8 @@ Add browser source scene item (source class: “browser_source”)
 | shutdown | bool | Shutdown source when not visible<br>Optional |
 | restart_when_active | bool | Refresh browser when scene becomes active<br>Optional |
 | reroute_audio | bool | Control audio via OBS<br>Optional |
+
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md)
 
 ## `addSceneItemBrowserSource(SceneItemInfo, ResultCallback<SceneItemInfo>)`
 
@@ -144,6 +162,8 @@ Add browser source scene item (source class: “browser_source”)
 
 **Note**: scene to add the browser source to is specified by *SceneItemInfo.sceneId*
 
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md)
+
 ## `addCurrentSceneItemVideoCaptureSource(SceneItemInfo, ResultCallback<SceneItemInfo>)`
 
 **Available since API version 1.21**
@@ -157,6 +177,8 @@ Add video capture source scene item (source id: “dshow_input” on Windows)
 | video_device_id | string | Video capture device identifier obtained via getAvailableVideoCaptureDevices() call |
 
 **Note:** you should set *SceneItemInfo.preferExistingSourceReference = true* when adding video capture sources.
+
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md)
 
 ## `addSceneItemVideoCaptureSource(SceneItemInfo, ResultCallback<SceneItemInfo>)`
 
@@ -173,6 +195,8 @@ Add video capture source scene item (source id: “dshow_input” on Windows)
 **Note:** you should set *SceneItemInfo.preferExistingSourceReference = true* when adding video capture sources.
 
 **Note**: scene to add the video capture source to is specified by *SceneItemInfo.sceneId*
+
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md)
 
 ## `addCurrentSceneItemObsNativeSource(SceneItemInfo, ResultCallback<SceneItemInfo>)`
 
@@ -194,6 +218,8 @@ This method is provided as **last resort**, where time-to-market is of critical 
 
 **One should plan for replacing the call to this method with a more streamlined alternative as soon as it becomes available.**
 
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md)
+
 ## `addSceneItemObsNativeSource(SceneItemInfo, ResultCallback<SceneItemInfo>)`
 
 **Available since API version 1.26**
@@ -212,6 +238,8 @@ This method is provided as **last resort**, where time-to-market is of critical 
 
 **Note**: scene to add the OBS Native source to is specified by *SceneItemInfo.sceneId*
 
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md)
+
 ## `addCurrentSceneItemGroup(SceneItemInfo, ResultCallback<SceneItemInfo>)`
 
 **Available since API version 1.21**
@@ -219,6 +247,8 @@ This method is provided as **last resort**, where time-to-market is of critical 
 Add OBS scene item group to the list of scene items.
 
 **Note**: only *SceneItemInfo.name* and *SceneItemInfo.composition* members are honored and required.
+
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md)
 
 ## `addSceneItemGroup(SceneItemInfo, ResultCallback<SceneItemInfo>)`
 
@@ -229,6 +259,8 @@ Add OBS scene item group to the list of scene items.
 **Note**: only *SceneItemInfo.name* and *SceneItemInfo.composition* members are honored and required.
 
 **Note**: scene to add the source group to is specified by *SceneItemInfo.sceneId*
+
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md)
 
 ## `getAvailableInputSourceClasses(ResultCallback<string[]>)`
 
@@ -244,6 +276,8 @@ Retrieve list of settings properties which a specified source class expects alon
 
 **Note:** the only *SceneItemInfo* properties respected by this API method are *SceneItemInfo.class* (required) and *SceneItemInfo.settings* (optional).
 
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md), [`ObsPropertyInfo`](../types/ObsPropertyInfo.md)
+
 ## `ungroupCurrentSceneItemGroupById(SceneItemInfo, ResultCallback<success>)`
 
 **Available since API version 1.21**
@@ -252,6 +286,8 @@ Extract scene items from scene item group referenced by *SceneItemInfo.id* into 
 
 **Note:** only *SceneItemInfo.id* is respected by the API method.
 
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md)
+
 ## `ungroupSceneItemGroupById(SceneItemInfo, ResultCallback<success>)`
 
 **Available since API version 1.26**
@@ -259,6 +295,8 @@ Extract scene items from scene item group referenced by *SceneItemInfo.id* into 
 Extract scene items from scene item group referenced by *SceneItemInfo.id* into the top level and remove the scene item group.
 
 **Note:** only *SceneItemInfo.id* is respected by the API method.
+
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md)
 
 ## `invokeCurrentSceneItemDefaultActionById(string<sceneItemId>, ResultCallback<success>)`
 
@@ -282,11 +320,15 @@ This method is useful when *SceneItemInfo.contextMenu* for the item was set, but
 
 Set auxiliary actions available at the bottom-right corner of the OBS Scene Items (Sources) dock.
 
+**Data structures:** [`ActionInfo`](../types/ActionInfo.md)
+
 ## `getCurrentSceneItemsAuxiliaryActions(ResultCallback<ActionInfo[]>)`
 
 **Available since API version 1.24**
 
 Get auxiliary actions available at the bottom-right corner of the OBS Scene Items (Sources) dock.
+
+**Data structures:** [`ActionInfo`](../types/ActionInfo.md)
 
 ## `openSceneItemPropertiesDialogById(string<sceneItemId>, ResultCallback<success>)`
 
@@ -318,6 +360,8 @@ Open OBS native source transform editor dialog for the specified scene item ID.
 
 Retrieve scene item rotation in absolute degrees (rotation relative to viewport, taking any additional rotations from parent groups into account).
 
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md), [`ViewportSceneItemRotationInfo`](../types/ViewportSceneItemRotationInfo.md)
+
 ## `setSceneItemRotationInViewport(ViewportSceneItemRotationInfo, ResultCallback< ViewportSceneItemRotationInfo>)`
 
 **Available since API version 6.0**
@@ -326,14 +370,20 @@ Set scene item rotation in absolute degrees (rotation relative to viewport, taki
 
 **NOTE: Rotation will always be performed around the item’s center**.
 
+**Data structures:** [`ViewportSceneItemRotationInfo`](../types/ViewportSceneItemRotationInfo.md)
+
 ## `getSceneItemBoundingBoxInViewport(SceneItemInfo or ViewportSceneItemGeometryInfo, ResultCallback<ViewportSceneItemGeometryInfo>)`
 
 **Available since API version 6.0**
 
 Retrieve scene item bounding box in absolute coordinates (relative to viewport top-left (0,0), taking any additional transformations from parent groups and the scene item itself into account).
 
+**Data structures:** [`SceneItemInfo`](../types/SceneItemInfo.md), [`ViewportSceneItemGeometryInfo`](../types/ViewportSceneItemGeometryInfo.md)
+
 ## `setSceneItemPositionInViewport(ViewportSceneItemGeometryInfo, ResultCallback< ViewportSceneItemGeometryInfo>)`
 
 **Available since API version 6.0**
 
 Set scene item (top, left) position in absolute coordinates (relative to viewport top-left (0,0), taking any additional transformations from parent groups and the scene item itself into account).
+
+**Data structures:** [`ViewportSceneItemGeometryInfo`](../types/ViewportSceneItemGeometryInfo.md)

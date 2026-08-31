@@ -163,8 +163,8 @@ this tree is.
 | [`getAllReplayBufferOutputs(ResultCallback<{id: OutputInfo}>)`](host/replay-buffer-outputs.md#getallreplaybufferoutputsresultcallbackid-outputinfo) | [Replay Buffer Outputs](host/replay-buffer-outputs.md) |
 | [`getAllSceneCollections(ResultCallback<SceneCollectionInfo[]>)`](host/scene-collections.md#getallscenecollectionsresultcallbackscenecollectioninfo) | [Scene collections](host/scene-collections.md) |
 | [`getAllSceneItems(SceneInfo, ResultCallback<SceneItemInfo[]>)`](host/scene-items.md#getallsceneitemssceneinfo-resultcallbacksceneiteminfo) | [Scene items](host/scene-items.md) |
+| [`getAllScenes(ResultCallback<SceneInfo[]>)`](host/scenes.md#getallscenesresultcallbacksceneinfo) | [Scenes](host/scenes.md) |
 | [`getAllScenes({ videoCompositionId }, ResultCallback<SceneInfo[]>)`](host/scenes.md#getallscenes-videocompositionid-resultcallbacksceneinfo) | [Scenes](host/scenes.md) |
-| [`getAllScenes({ videoCompositionId }, ResultCallback<SceneInfo[]>)`](host/scenes.md#getallscenes-videocompositionid-resultcallbacksceneinfo_1) | [Scenes](host/scenes.md) |
 | [`getAllScopedStorageJsonItems(ScopedStorageItemInfo, ResultCallback< ScopedStorageItemInfo [] \| null>)`](host/scoped-storage.md#getallscopedstoragejsonitemsscopedstorageiteminfo-resultcallback-scopedstorageiteminfo-null) | [Scoped Storage](host/scoped-storage.md) |
 | [`getAllSharedVideoCompositions(ResultCallback<{ id: SharedVideoCompositionInfo }>)`](host/shared-video-compositions.md#getallsharedvideocompositionsresultcallback-id-sharedvideocompositioninfo) | [Shared Video Compositions](host/shared-video-compositions.md) |
 | [`getAllStreamingOutputs(ResultCallback<{id: OutputInfo}>)`](host/streaming-outputs.md#getallstreamingoutputsresultcallbackid-outputinfo) | [Streaming Outputs](host/streaming-outputs.md) |
@@ -205,7 +205,7 @@ this tree is.
 | [`getSceneItemPropertiesById(SceneItemInfo, ResultCallback<success>)`](host/scene-items.md#getsceneitempropertiesbyidsceneiteminfo-resultcallbacksuccess) | [Scene items](host/scene-items.md) |
 | [`getSceneItemRotationInViewport(SceneItemInfo or ViewportSceneItemRotationInfo, ResultCallback<ViewportSceneItemRotationInfo>)`](host/scene-items.md#getsceneitemrotationinviewportsceneiteminfo-or-viewportsceneitemrotationinfo-resultcallbackviewportsceneitemrotationinfo) | [Scene items](host/scene-items.md) |
 | [`getScenesAuxiliaryActions(ResultCallback<ActionInfo[]>)`](host/scenes.md#getscenesauxiliaryactionsresultcallbackactioninfo) | [Scenes](host/scenes.md) |
-| [`getShowBuildInMenuItems(ResultCallback<bool>)`](host/menu.md#getshowbuildinmenuitemsresultcallbackbool) | [Menu](host/menu.md) |
+| [`getShowBuiltInMenuItems(ResultCallback<bool>)`](host/menu.md#getshowbuiltinmenuitemsresultcallbackbool) | [Menu](host/menu.md) |
 | [`getSourceClassProperties(SceneItemInfo, RestulCallback<ObsPropertyInfo[]>)`](host/scene-items.md#getsourceclasspropertiessceneiteminfo-restulcallbackobspropertyinfo) | [Scene items](host/scene-items.md) |
 | [`getStartupFlags(ResultCallback<number<flags>>)`](host/startup-flags.md#getstartupflagsresultcallbacknumberflags) | [Startup flags](host/startup-flags.md) |
 | [`getStreamingStatus(ResultCallback<StreamingStatusInfo>)`](host/streaming.md#getstreamingstatusresultcallbackstreamingstatusinfo) | [Streaming](host/streaming.md) |

@@ -8,11 +8,15 @@ Available since API version 5.0
 
 Get all streaming outputs.
 
+**Data structures:** [`OutputInfo`](../types/OutputInfo.md)
+
 ## `addStreamingOutput(OutputInfo, ResultCallback<success>)`
 
 Available since API version 5.0
 
 Add a streaming output.
+
+**Data structures:** [`OutputInfo`](../types/OutputInfo.md)
 
 ## `removeStreamingOutputsByIds(Array<id>, ResultCallback<success>)`
 

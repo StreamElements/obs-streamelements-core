@@ -10,6 +10,8 @@
 
 Show a title bar in the OBS output preview area (central widget) with the given URL and height.
 
+**Data structures:** [`NotificationBarInfo`](../types/NotificationBarInfo.md)
+
 ## `hideOutputPreviewTitleBar (ResultCallback<success>)`
 
 **Available since API version 2.1**

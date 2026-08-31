@@ -14,9 +14,13 @@ The URL supplied as part of the background worker initialization is used to dete
 
 Add a background worker according to specified info.
 
+**Data structures:** [`BackgroundWorkerInfo`](../types/BackgroundWorkerInfo.md)
+
 ## `getAllBackgroundWorkers(ResultCallback<{id:BackgroundWorkerInfo}>)`
 
 Get all background workers.
+
+**Data structures:** [`BackgroundWorkerInfo`](../types/BackgroundWorkerInfo.md)
 
 ## `removeBackgroundWorkersByIds(array<workerId>, ResultCallback<success>)`
 

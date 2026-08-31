@@ -25,3 +25,5 @@ External controllers will receive the event according to the external controller
 **Note: this API call is not available in the Browser Source.**
 
 When you need to communicate with the Browser Source, use *broadcastMessage*.
+
+**Data structures:** [`EventInfo`](../types/EventInfo.md)

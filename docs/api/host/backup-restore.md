@@ -10,11 +10,15 @@ Query user environment (scene collections, media files) for referenced files.
 
 This method can be used to determine whether referenced files requested by a backup operation are too large to be included in the backup package.
 
+**Data structures:** [`BackupRequestInfo`](../types/BackupRequestInfo.md), [`BackupContentInfo`](../types/BackupContentInfo.md)
+
 ## `createUserEnvironmentBackupPackage(BackupRequestInfo, ResultCallback<BackupContentInfo>)`
 
 **Available since API version 1.22**
 
 Create user environment (profiles, scene collections, media files) backup package.
+
+**Data structures:** [`BackupRequestInfo`](../types/BackupRequestInfo.md), [`BackupContentInfo`](../types/BackupContentInfo.md)
 
 ## `queryUserEnvironmentBackupPackageContent(BackupContentInfo, ResultCallback<BackupContentInfo>)`
 
@@ -23,6 +27,8 @@ Create user environment (profiles, scene collections, media files) backup packag
 Retrieve scene collection names & profile names from backup package.
 
 **Note:** If *BackupContentInfo.url* points to remote package, it will be downloaded and a new *BackupContentInfo.url* pointing to the local downloaded file will be generated.
+
+**Data structures:** [`BackupContentInfo`](../types/BackupContentInfo.md)
 
 ## `restoreUserEnvironmentBackupPackageContent(BackupContentInfo, ResultCallback<success>)`
 
@@ -35,3 +41,5 @@ Restore backup package from *BackupContentInfo* previously obtained via a call t
 **Important:** the restore operation will cause OBS to restart!
 
 **Important:** attempt to restore while OBS is streaming or recording **will fail**.
+
+**Data structures:** [`BackupContentInfo`](../types/BackupContentInfo.md)

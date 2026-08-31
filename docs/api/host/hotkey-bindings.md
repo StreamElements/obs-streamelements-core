@@ -8,6 +8,8 @@ Available since API version 1.3
 
 Get all OBS hotkey bindings.
 
+**Data structures:** [`HotkeyBindingInfo`](../types/HotkeyBindingInfo.md)
+
 ## `addHotkeyBinding(HotkeyBindingInfo, ResultCallback<boundHotkeyId>)`
 
 Available since API version 1.3
@@ -102,6 +104,8 @@ window.host.addHotkeyBinding(bindingByKeyName, function(boundHotkeyId) {});
 window.host.addHotkeyBinding(bindingByVirtualKeyCode, function(boundHotkeyId) {});
 ```
 
+**Data structures:** [`HotkeyBindingInfo`](../types/HotkeyBindingInfo.md)
+
 ## `removeHotkeyBindingById(hotkeyId, ResultCallback<success>)`
 
 Available since API version 1.3
@@ -114,6 +118,8 @@ Available since API version 1.3
 
 Get all OBS hotkey bindings managed by OBS.Live. This method can be used to **store hotkey bindings in the cloud** for later retrieval and restoration by calls to *addHotkeyBinding()*.
 
+**Data structures:** [`HotkeyBindingInfo`](../types/HotkeyBindingInfo.md)
+
 ## `setHotkeyBindingTriggers(Pick<HotkeyBindingInfo, ‘id’ | ‘triggers’>, ResultCallback<success>)`
 
 **Available since API version 6.5**
@@ -121,3 +127,5 @@ Get all OBS hotkey bindings managed by OBS.Live. This method can be used to **st
 Replaces existing hotkey binding triggers with specified list of triggers.
 
 Hotkey selection is done by hotkey *id*, which allows selecting _any_ hotkey, including those defined by OBS itself.
+
+**Data structures:** [`HotkeyBindingInfo`](../types/HotkeyBindingInfo.md)

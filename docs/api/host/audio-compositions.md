@@ -8,6 +8,8 @@ Get all currently existing audio compositions. The result of this API call is a 
 
 **Available since API version 6.0**
 
+**Data structures:** [`AudioCompositionInfo`](../types/AudioCompositionInfo.md)
+
 ## `removeAudioCompositionsByIds(Array<audioCompositionId>, ResultCallback<success>)`
 
 Remove audio compositions by their IDs. If an ID does not exist, it is ignored. If at least one audio composition specified by an ID cannot be removed (*canRemove = false*), the whole call will fail.
@@ -20,6 +22,8 @@ Add an audio composition. Returns the full composition info upon success, or *nu
 
 **Available since API version 6.0**
 
+**Data structures:** [`AudioCompositionInfo`](../types/AudioCompositionInfo.md)
+
 ## `setAudioCompositionProperties(AudioCompositionInfo, ResultCallback< AudioCompositionInfo | null>)`
 
 Modifies audio composition properties. Returns the full composition info upon success, or *null* on failure.
@@ -27,3 +31,5 @@ Modifies audio composition properties. Returns the full composition info upon su
 Currently only updating “name” is supported.
 
 **Available since API version 6.0**
+
+**Data structures:** [`AudioCompositionInfo`](../types/AudioCompositionInfo.md)

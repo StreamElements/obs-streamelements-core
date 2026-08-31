@@ -8,11 +8,15 @@ Available since API version 6.0
 
 Get all recording outputs.
 
+**Data structures:** [`OutputInfo`](../types/OutputInfo.md)
+
 ## `addRecordingOutput(OutputInfo, ResultCallback<success>)`
 
 Available since API version 6.0
 
 Add a recording output.
+
+**Data structures:** [`OutputInfo`](../types/OutputInfo.md)
 
 ## `removeRecordingOutputsByIds(Array<id>, ResultCallback<success>)`
 

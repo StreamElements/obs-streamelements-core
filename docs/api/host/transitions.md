@@ -8,17 +8,23 @@ Get available transition classes (types).
 
 **Available since API version 6.0**
 
+**Data structures:** [`TransitionInfo`](../types/TransitionInfo.md)
+
 ## `getVideoCompositionTransition(object<{ videoCompositionId }>, ResultCallback<TransitionInfo | null | false>)`
 
 Get active transition on the specified *videoCompositionId*.
 
 **Available since API version 6.0**
 
+**Data structures:** [`TransitionInfo`](../types/TransitionInfo.md)
+
 ## `setVideoCompositionTransition(TransitionInfo, ResultCallback<TransitionInfo | null | false>)`
 
 Set active transition on the specified *videoCompositionId*.
 
 **Available since API version 6.0**
+
+**Data structures:** [`TransitionInfo`](../types/TransitionInfo.md)
 
 ## `showVideoCompositionTransitionPropertiesDialog(object<{ videoCompositionId }>, ResultCallback<success>)`
 

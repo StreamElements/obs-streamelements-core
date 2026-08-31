@@ -8,6 +8,8 @@ Available since API version 1.17
 
 Retrieve current streaming status, including whether streaming is currently active.
 
+**Data structures:** [`StreamingStatusInfo`](../types/StreamingStatusInfo.md)
+
 ## `requestStreamingStart(ResultCallback<success>)`
 
 Available since API version 1.18
@@ -31,6 +33,8 @@ Changes how UI-triggered streaming start behaves.
 This method mainly controls whether triggering streaming start actually starts streaming or sends the hostStreamingStartRequested event for one of the JavaScript pages to handle as it sees fit.
 
 The JavaScript page may choose to present additional user interface, alter streaming destination, etc.
+
+**Data structures:** [`StreamingStartUIHandlerProperties`](../types/StreamingStartUIHandlerProperties.md)
 
 ## `adviseStreamingStartUIRequestAccepted (ResultCallback<success>)`
 
