@@ -84,7 +84,9 @@ debug-only handlers that are undocumented on purpose (`crashProgram`,
 `crashProgramFastFail`, `deadlockProgram`). Those are now **marked in the docs themselves** by
 `mark_unimplemented.py`, which derives the list rather than hard-coding it, so
 re-running it after a code change adds and removes markers on its own. It
-distinguishes three cases: deprecated-and-removed (four calls, which say so in
+asks `git log -S` over the full history (back to 2014) so it can tell a call
+that was **removed** from one that was **never built** -- the code alone cannot.
+It distinguishes three cases: deprecated-and-removed (four calls, which say so in
 their own text), a name that does not match the implementation
 (`setCurrentProfileById` -> `setCurrentProfile`), and genuinely unexplained
 (`getHostCapabilities`, `reloadAllBrowserSources` -- neither deprecated nor

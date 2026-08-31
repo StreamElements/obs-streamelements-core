@@ -94,6 +94,7 @@ Calls marked ⚠️ are documented but **not registered by the plug-in** — dep
 
 
 
+
 | Call | Group |
 | --- | --- |
 | [`addAudioComposition(AudioCompositionInfo, ResultCallback< AudioCompositionInfo \| null>)`](host/audio-compositions.md#addaudiocompositionaudiocompositioninfo-resultcallback-audiocompositioninfo-null) | [Audio Compositions](host/audio-compositions.md) |

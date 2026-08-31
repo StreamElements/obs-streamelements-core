@@ -28,6 +28,7 @@ Idempotent: an existing marker is replaced, never stacked.
 import io
 import os
 import re
+import subprocess
 import sys
 
 REPO = sys.argv[1] if len(sys.argv) > 1 else '.'
@@ -62,29 +63,51 @@ def registered_names():
 REGISTERED = registered_names()
 
 
-def note_for(name, deprecated):
-    """The marker, worded for what is actually known about this call.
+def removal_of(name):
+    """The commit that took this handler out, or None if it never existed.
 
-    Four of the seven absent calls carry "Deprecated in API 3.0" in their own
-    text, so their absence is a removal that already happened rather than a
-    documentation defect, and saying "not implemented" would understate what is
-    known. The remaining ones are genuinely unexplained and should read as such.
+    Asking the code alone cannot tell "removed years ago" from "never built",
+    and those deserve different warnings: the first is a stale document, the
+    second is a specification that outran the implementation. git log -S over
+    the full history separates them with evidence. Five of the six removals
+    turn out to be the same commit -- the 2022 CEF/obs-browser ejection.
     """
+    try:
+        out = subprocess.check_output(
+            ['git', 'log', '-S', name, '--all', '--date=short',
+             '--format=%h\t%ad\t%s', '--', ':!docs', ':!tools'],
+            cwd=REPO, stderr=subprocess.DEVNULL).decode('utf-8', 'replace')
+    except Exception:
+        return None
+
+    lines = [l for l in out.split('\n') if l.strip()]
+    if not lines:
+        return None
+    return lines[0].split('\t')          # newest touch == the removal
+
+
+def note_for(name, deprecated):
+    """The marker, worded for what is actually known about this call."""
     if name in ALIASES:
         return ('> ⚠️ **Name does not match the implementation.** The '
                 'registered handler is `%s`, which does what is described '
-                'here; no handler named `%s` exists.'
+                'here; no handler named `%s` has ever existed.'
                 % (ALIASES[name], name))
 
-    if deprecated:
-        return ('> ⚠️ **Removed.** Deprecated as noted below, and no handler '
-                'by this name is registered anywhere in `streamelements/` any '
-                'more. Kept for the record; calling it will not resolve.')
+    gone = removal_of(name)
 
-    return ('%s No handler by this name is registered anywhere in '
-            '`streamelements/`, so calling it will not resolve. Neither '
-            'deprecated nor implemented — most likely specified and never '
-            'built.' % MARK)
+    if gone:
+        sha, date, subject = gone[0], gone[1], gone[2]
+        return ('> ⚠️ **Removed.** Implemented once, but taken out in `%s` '
+                '(%s, %s)%s. No handler by this name is registered any more, '
+                'so calling it will not resolve.'
+                % (sha, subject, date,
+                   ' — and the entry below does not say so'
+                   if not deprecated else ''))
+
+    return ('%s No handler by this name appears anywhere in this repository, '
+            'in any commit on any branch, and the history goes back to 2014. '
+            'Documented but never built here.' % MARK)
 
 
 def rewrite(path):
@@ -125,7 +148,12 @@ def rewrite(path):
         j = i
         deprecated = False
         while j < len(lines) and not lines[j].startswith('## '):
-            if 'deprecat' in lines[j].lower():
+            low = lines[j].lower()
+            # "Removed in API 3.0" as well as "Deprecated in API 3.0" -- both
+            # forms occur, and matching only the first made the marker tell
+            # reloadAllBrowserSources that its entry "says only that it was
+            # deprecated" when the entry plainly says it was removed.
+            if 'deprecat' in low or 'removed in api' in low:
                 deprecated = True
                 break
             j += 1
@@ -183,8 +211,8 @@ print('marked %d call(s):' % len(total))
 for n, dep in sorted(total):
     if n in ALIASES:
         kind = 'name mismatch -> %s' % ALIASES[n]
-    elif dep:
-        kind = 'deprecated and removed'
     else:
-        kind = 'UNEXPLAINED: never implemented'
+        gone = removal_of(n)
+        kind = ('removed in %s (%s)' % (gone[0], gone[1]) if gone
+                else 'NEVER existed in this repo')
     print('   %-44s %s' % (n, kind))
