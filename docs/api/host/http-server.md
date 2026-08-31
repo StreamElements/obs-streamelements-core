@@ -26,11 +26,15 @@ Remove the listening HTTP service before navigating away to another domain.
 
 **Available since API version 1.37**
 
+**Data structures:** [`GenericNetworkServiceInfo`](../types/GenericNetworkServiceInfo.md)
+
 ## `getAllBrowserScopedHttpServers(ResultCallback<GenericNetworkServiceInfo[]>)`
 
 Retrieve a list of currently running HTTP servers scoped to the current browser.
 
 **Available since API version 1.37**
+
+**Data structures:** [`GenericNetworkServiceInfo`](../types/GenericNetworkServiceInfo.md)
 
 ## `removeBrowserScopedHttpServersByIds(<string|string[]>, ResultCallback<success>)`
 
@@ -51,3 +55,5 @@ Send a response to an HTTP request received by a *hostMessageReceived* event han
 The HTTP listener service waits for up to 15 seconds for a response to be sent. Afterwards it responds with a default HTTP 404 Request Not Handled status (a variation of HTTP 404 Not Found).
 
 **Available since API version 1.37**
+
+**Data structures:** [`HTTPResponseInfo`](../types/HTTPResponseInfo.md)

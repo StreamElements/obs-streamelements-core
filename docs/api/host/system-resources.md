@@ -25,14 +25,20 @@ var cpuUsagePercentage = busyDelta * 100 / totalDelta;
 
 This technique allows retrieving CPU usage times of different parts and states of the program.
 
+**Data structures:** [`SystemCPUUsageTimes`](../types/SystemCPUUsageTimes.md)
+
 ## `getSystemMemoryUsage(ResultCallback<SystemMemoryUsageInfo>)`
 
 Available since API version 1.1
 
 Get current system memory usage information.
 
+**Data structures:** [`SystemMemoryUsageInfo`](../types/SystemMemoryUsageInfo.md)
+
 ## `getSystemHardwareProperties(ResultCallback<SystemHardwareInfo>)`
 
 Available since API version 1.1
 
 Get current system hardware information.
+
+**Data structures:** [`SystemHardwareInfo`](../types/SystemHardwareInfo.md)

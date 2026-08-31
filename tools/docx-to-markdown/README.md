@@ -47,3 +47,49 @@ else.
 Signatures are emitted as inline code — ``## `getAllScenes(...)` `` — which is
 both the modern convention and the thing that keeps
 `ResultCallback<SceneInfo[]>` from being eaten as raw HTML.
+
+## Corrections made after conversion
+
+The tree is the source of truth, so these were fixed in the Markdown, not the
+Word document. **Re-running `build_docs.py` would revert them**, and would also
+drop the type cross-links; run `link_types.py` afterwards and re-apply these by
+hand.
+
+- **`getAllScenes`** — the document listed the same signature twice, once under
+  API 1.21 and once under 6.0. The implementation takes the argument as
+  optional (`if (args->GetSize()) input = args->GetValue(0); else
+  input->SetNull();`, and `GetVideoComposition()` falls back to the native
+  composition), so the 1.21 form is `getAllScenes(ResultCallback<SceneInfo[]>)`
+  with no argument — exactly as the neighbouring `getCurrentScene` pair is
+  already written.
+- **`getShowBuiltInMenuItems`** — documented as `getShowBuil**d**InMenuItems`.
+  No such handler exists; the setter beside it was already spelled correctly.
+
+## Verifying the docs against the implementation
+
+The handlers are registered in two files, not one -- missing the second reports
+`endDialog`, `endModalDialog` and `endNonModalDialog` as undocumented:
+
+```sh
+grep -rho 'API_HANDLER_BEGIN("[^"]*"' streamelements/ | sed 's/.*("//;s/"//' | sort -u
+```
+
+Diffing that against the `##` signatures under `docs/api/host/` is what found
+both corrections above. It also lists calls documented but absent from the code
+(`dispatchKeyboardEvent`, `dispatchMouseEvent`, `getHostCapabilities`,
+`reloadAllBrowserSources`, `getContainerForeignPopupWindowsProperties`,
+`setContainerForeignPopupWindowsProperties`, `setCurrentProfileById`), one
+registered but undocumented (`getCurrentSceneCollectionProperties`), and three
+debug-only handlers that are undocumented on purpose (`crashProgram`,
+`crashProgramFastFail`, `deadlockProgram`). Those are now **marked in the docs themselves** by
+`mark_unimplemented.py`, which derives the list rather than hard-coding it, so
+re-running it after a code change adds and removes markers on its own. It
+distinguishes three cases: deprecated-and-removed (four calls, which say so in
+their own text), a name that does not match the implementation
+(`setCurrentProfileById` -> `setCurrentProfile`), and genuinely unexplained
+(`getHostCapabilities`, `reloadAllBrowserSources` -- neither deprecated nor
+ever built).
+
+`getCurrentSceneCollectionProperties` is registered but undocumented, and is
+still unresolved: writing an entry for it needs someone who knows what it
+returns.

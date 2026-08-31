@@ -18,6 +18,8 @@ Shared Video Composition name is assigned automatically to reflect it’s status
 
 Available since API version 6.6
 
+**Data structures:** [`SharedVideoCompositionInfo`](../types/SharedVideoCompositionInfo.md)
+
 ## `setSharedVideoCompositionProperties(SharedVideoCompositionInfo, ResultCallback<SharedVideoCompositionInfo | null>)`
 
 Set Shared Video Composition properties. At the time of this writing, only setting “name” is supported.
@@ -27,6 +29,8 @@ This is the only way to change the automatically assigned Shared Video Compositi
 SharedVideoComposition.id field is always required.
 
 Available since API version 6.6
+
+**Data structures:** [`SharedVideoCompositionInfo`](../types/SharedVideoCompositionInfo.md)
 
 ## `removeSharedVideoCompositionsByIds(Array<string>, ResultCallback<success>)`
 
@@ -40,6 +44,8 @@ Retrieve all existing Shared Video Compositions as an object, where it’s key i
 
 Available since API version 6.6
 
+**Data structures:** [`SharedVideoCompositionInfo`](../types/SharedVideoCompositionInfo.md)
+
 ## `connectVideoCompositionToSharedVideoComposition({ sharedVideoCompositionId: string, videoCompositionId: string }, ResultCallback<SharedVideoCompositionInfo>)`
 
 Connect an existing Video Composition to an existing Shared Video Composition.
@@ -51,6 +57,8 @@ One VC can be shared by multiple SVCs. In this sense, an SVC works very much lik
 Calling this API while OBS video output is active (streaming, recording) is not allowed.
 
 Available since API version 6.6
+
+**Data structures:** [`SharedVideoCompositionInfo`](../types/SharedVideoCompositionInfo.md)
 
 ## `disconnectVideoCompositionsFromSharedVideoCompositionsByIds(Array<string>, ResultCallback<success>)`
 

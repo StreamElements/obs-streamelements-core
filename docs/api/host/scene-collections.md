@@ -14,6 +14,8 @@ getCurrentSceneCollectionProperties(ResultCallback\<SceneCollectionInfo>)
 
 Get current scene collection properties.
 
+**Data structures:** [`SceneCollectionInfo`](../types/SceneCollectionInfo.md)
+
 ## `addSceneCollection(SceneCollectionInfo, ResultCallback<success>)`
 
 **Available since API version 1.22**
@@ -23,6 +25,8 @@ Add a new scene collection according to specified info, and select the new scene
 **Warning:** as of OBS 24.0.3, this API is **broken** due to bugs in obs_frontend_add_scene_collection OBS front-end API.
 
 Will be resolved in OBS 25.
+
+**Data structures:** [`SceneCollectionInfo`](../types/SceneCollectionInfo.md)
 
 ## `setCurrentSceneCollectionById(sceneCollectionId, ResultCallback<success>)`
 

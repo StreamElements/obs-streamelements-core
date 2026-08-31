@@ -20,14 +20,20 @@ Read content of scoped storage text item.
 
 **Available since API version 5.0**
 
+**Data structures:** [`ScopedStorageItemInfo`](../types/ScopedStorageItemInfo.md)
+
 ## `removeScopedStorageJsonItem(ScopedStorageItemInfo, ResultCallback< ScopedStorageItemInfo | null>)`
 
 Remove a scoped storage item.
 
 **Available since API version 5.0**
 
+**Data structures:** [`ScopedStorageItemInfo`](../types/ScopedStorageItemInfo.md)
+
 ## `getAllScopedStorageJsonItems(ScopedStorageItemInfo, ResultCallback< ScopedStorageItemInfo [] | null>)`
 
 Get list of scoped storage items from specific scope and container.
 
 **Available since API version 5.0**
+
+**Data structures:** [`ScopedStorageItemInfo`](../types/ScopedStorageItemInfo.md)

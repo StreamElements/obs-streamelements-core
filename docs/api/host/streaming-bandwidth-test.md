@@ -6,10 +6,16 @@
 
 Begin streaming bandwidth test with specified maximum bitrate and test duration.
 
+**Data structures:** [`BandwidthTestSettings`](../types/BandwidthTestSettings.md), [`ServerInfo`](../types/ServerInfo.md)
+
 ## `streamingBandwidthTestEnd(stopIfRunning, ResultCallback<BandwidthTestStatus>)`
 
 Complete streaming bandwidth test. If *stopIfRunning* == true, bandwidth test which is currently in progress will stop, discarding remaining servers to be tested, and will present only the data which has been accumulated so far.
 
+**Data structures:** [`BandwidthTestStatus`](../types/BandwidthTestStatus.md)
+
 ## `streamingBandwidthTestGetStatus(ResultCallback<BandwidthTestStatus>)`
 
 Present the bandwidth test results which have been accumulated so far.
+
+**Data structures:** [`BandwidthTestStatus`](../types/BandwidthTestStatus.md)

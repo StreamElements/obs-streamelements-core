@@ -8,6 +8,8 @@ Open non-modal dialog with specified info, on result, execute specified callback
 
 **Available since API version 3.2**
 
+**Data structures:** [`DialogInfo`](../types/DialogInfo.md)
+
 ## `endNonModalDialog(object, ResultCallback<success>)`
 
 Within a modal dialog opened with showNonModalDialog(), signal the dialog has ended with the specified result. The first parameter value is the dialog result.
@@ -19,6 +21,8 @@ Within a modal dialog opened with showNonModalDialog(), signal the dialog has en
 Retrieve an object who’s keys are non-modal dialog *id*, and values are *DialogInfo* structures for all currently open non-modal dialogs.
 
 **Available since API version 3.3**
+
+**Data structures:** [`DialogInfo`](../types/DialogInfo.md)
 
 ## `closeNonModalDialogsByIds(array<id>, ResultCallback<success>)`
 
@@ -35,3 +39,5 @@ Accepts an *id* of a non-modal dialog and focuses input on it (brings it to fron
 Accepts an *id* of a non-modal dialog and new *DimensionsInfo* and adjusts the non-modal dialog dimensions.
 
 **Available since API version 3.3**
+
+**Data structures:** [`DimensionsInfo`](../types/DimensionsInfo.md)

@@ -12,11 +12,15 @@ Show or modify current video composition view overlay over the current calling b
 
 **Available since API version 6.0**
 
+**Data structures:** [`VideoCompositionViewOverlayInfo`](../types/VideoCompositionViewOverlayInfo.md)
+
 ## `getVideoCompositionViewOverlayProperties(ResultCallback<VideoCompositionViewOverlayInfo | null>)`
 
 Get current browser widget’s currently active video composition view overlay’s properties or *null* if none is active.
 
 **Available since API version 6.0**
+
+**Data structures:** [`VideoCompositionViewOverlayInfo`](../types/VideoCompositionViewOverlayInfo.md)
 
 ## `removeVideoCompositionViewOverlay(ResultCallback<success>)`
 

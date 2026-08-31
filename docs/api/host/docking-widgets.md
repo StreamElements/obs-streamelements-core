@@ -6,9 +6,13 @@
 
 Add docking widget to OBS UI according to specified info.
 
+**Data structures:** [`DockingWidgetInfo`](../types/DockingWidgetInfo.md)
+
 ## `getAllDockingWidgets(ResultCallback<{id:DockingWidgetInfo}>)`
 
 Get all docking browser widgets.
+
+**Data structures:** [`DockingWidgetInfo`](../types/DockingWidgetInfo.md)
 
 ## `removeDockingWidgetsByIds(array<widgetId>, ResultCallback<success>)`
 
@@ -30,6 +34,8 @@ Set docking widget width and height by widget Id.
 
 **Note:** setting widget dimensions is allowed only when the widget is in floating state.
 
+**Data structures:** [`DimensionsInfo`](../types/DimensionsInfo.md)
+
 ## `setDockingWidgetPositionById(widgetId, PositionInfo, ResultCallback<success>)`
 
 **Available since API version 1.8**
@@ -37,6 +43,8 @@ Set docking widget width and height by widget Id.
 Set docking widget left and top coordinates by widget Id.
 
 **Note:** setting widget position is allowed only when the widget is in floating state.
+
+**Data structures:** [`PositionInfo`](../types/PositionInfo.md)
 
 ## `setDockingWidgetUrlById(widgetId, url, ResultCallback<success>)`
 

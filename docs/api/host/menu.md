@@ -14,11 +14,15 @@ See *MenuItemInfo* for further details.
 
 **Note**: auxiliary menu items will be reset upon host state reset (logout, after version upgrade, etc.).
 
+**Data structures:** [`MenuItemInfo`](../types/MenuItemInfo.md)
+
 ## `getAuxiliaryMenuItems(ResultCallback<MenuItemInfo[]>)`
 
 **Available since API version 1.22**
 
 Get currently active auxiliary menu items previously set by *setAuxiliaryMenuItems*.
+
+**Data structures:** [`MenuItemInfo`](../types/MenuItemInfo.md)
 
 ## `setShowBuiltInMenuItems(bool<show>, ResultCallback<success>)`
 
@@ -26,7 +30,7 @@ Get currently active auxiliary menu items previously set by *setAuxiliaryMenuIte
 
 Specify whether to show built-in menu items.
 
-## `getShowBuildInMenuItems(ResultCallback<bool>)`
+## `getShowBuiltInMenuItems(ResultCallback<bool>)`
 
 **Available since API version 1.38**
 
