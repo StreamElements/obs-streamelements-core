@@ -355,7 +355,27 @@ void StreamElementsRazerWyvrnManager::ThreadProc()
 				      clock::now() - initStart)
 				      .count();
 
-	if (sdkInitialized) {
+	// Shutdown may have arrived while init was in flight -- OBS closed within
+	// the ~3.2 s CoreInitSDK takes. If it did, ShuttingDown has already been
+	// published and must stand: reporting Ok here would flip the status back,
+	// tell a subscribed page the subsystem had just become available as it
+	// was going away, and re-open the SetEventName gate that ShuttingDown
+	// exists to close.
+	//
+	// Observed, not hypothesised: closing OBS during init logged
+	// "shuttingDown" and then "ok", in that order.
+	bool stopping;
+
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		stopping = m_stopRequested;
+	}
+
+	if (stopping) {
+		blog(LOG_INFO,
+		     "obs-streamelements-core: WYVRN: shutdown arrived during init (%.0f ms); tearing down",
+		     initMs);
+	} else if (sdkInitialized) {
 		// The SDK asks for ~100 ms of settling before the first
 		// SetEventName.
 		os_sleep_ms(120);
