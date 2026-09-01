@@ -46,6 +46,7 @@ The host API, grouped by area. See the [alphabetical index](../README.md#all-win
 - [Profiles](profiles.md) — 3 calls
 - [Backup/Restore](backup-restore.md) — 4 calls
 - [Browser Sources](browser-sources.md) — 1 call
+- [Razer WYVRN](razer-wyvrn.md) — 2 calls
 - [Defer settings save](defer-settings-save.md) — 2 calls
 - [Invoke API methods in Batch Mode](invoke-api-methods-in-batch-mode.md) — 1 call
 - [Synthetic input](synthetic-input.md) — 2 calls

@@ -519,6 +519,47 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandler(
 
 static std::recursive_mutex s_sync_api_call_mutex;
 
+//
+// The WYVRN manager, or null. Absent both before Initialize() has created it
+// and after Shutdown() has released it -- and Shutdown() is exactly when a page
+// is most likely to still be calling.
+//
+static std::shared_ptr<StreamElementsRazerWyvrnManager> GetRazerWyvrnManager()
+{
+	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+		return nullptr;
+
+	return StreamElementsGlobalStateManager::GetInstance()
+		->GetRazerWyvrnManager();
+}
+
+//
+// The `razerWyvrn` object. One serializer shared with the
+// hostRazerWyvrnStatusChanged event, so a page cannot be told two different
+// things about the same state.
+//
+static CefRefPtr<CefValue> SerializeRazerWyvrnStatus()
+{
+	auto manager = GetRazerWyvrnManager();
+
+	if (manager.get())
+		return manager->SerializeStatus();
+
+	// No manager at all: report the same shape rather than null, so a
+	// caller never has to branch on its absence.
+	CefRefPtr<CefValue> result = CefValue::Create();
+	CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+
+	d->SetBool("available", false);
+	d->SetBool("initialized", false);
+	d->SetString("status", "notCompiledIn");
+	d->SetInt("eventCount", 0);
+
+	result->SetDictionary(d);
+
+	return result;
+}
+
 #define API_HANDLER_BEGIN(name) \
 	RegisterIncomingApiCallHandler(name, []( \
 		std::shared_ptr<StreamElementsApiMessageHandler> self, \
@@ -3336,6 +3377,112 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			DeserializeRevealFileInGraphicalShell(args->GetValue(0),
 							      result);
 		}
+	}
+	API_HANDLER_END();
+
+	//
+	// Host capabilities. Documented since API 1.8 and never implemented until
+	// now -- so nothing can depend on the old shape, and the documented
+	// `sceneCollections` member is kept purely for fidelity with the
+	// specification.
+	//
+	// This is deliberately the ONLY place WYVRN availability is reported. A
+	// separate status call would be a second source of truth that could
+	// disagree with this one.
+	//
+	API_HANDLER_BEGIN("getHostCapabilities");
+	{
+		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+
+		d->SetString("sceneCollections", "available");
+
+		d->SetValue("razerWyvrn", SerializeRazerWyvrnStatus());
+
+		result->SetDictionary(d);
+	}
+	API_HANDLER_END();
+
+	//
+	// Every event declared by every WYVRN configuration installed on this
+	// machine, each carrying its Chroma and haptic components and
+	// session-signed URLs for their assets -- so a caller can see what firing
+	// an event would actually do, and preview it, without a second call.
+	//
+	// Optional filter argument: { source, idPrefix }. There are ~4,000 events
+	// on a machine with Synapse installed, so callers are expected to use it.
+	//
+	// An unavailable subsystem yields an empty array, never an error.
+	//
+	API_HANDLER_BEGIN("getAllRazerWyvrnEvents");
+	{
+		std::string sourceFilter;
+		std::string idPrefix;
+
+		if (args->GetSize() > 0 &&
+		    args->GetValue(0)->GetType() == VTYPE_DICTIONARY) {
+			CefRefPtr<CefDictionaryValue> d =
+				args->GetValue(0)->GetDictionary();
+
+			if (d->HasKey("source") &&
+			    d->GetType("source") == VTYPE_STRING)
+				sourceFilter =
+					d->GetString("source").ToString();
+
+			if (d->HasKey("idPrefix") &&
+			    d->GetType("idPrefix") == VTYPE_STRING)
+				idPrefix = d->GetString("idPrefix").ToString();
+		}
+
+		auto manager = GetRazerWyvrnManager();
+
+		if (manager.get()) {
+			result = manager->SerializeEvents(sourceFilter,
+							  idPrefix);
+		} else {
+			result->SetList(CefListValue::Create());
+		}
+	}
+	API_HANDLER_END();
+
+	//
+	// Fire an event by name.
+	//
+	// Takes the RazerWyvrnEventInfo object rather than a bare string, so a
+	// caller can hand back an item from getAllRazerWyvrnEvents unmodified;
+	// `id` is extracted here. A bare string is also accepted, since refusing
+	// it would be gratuitous.
+	//
+	// An empty or absent id stops playback, which is the SDK's own
+	// convention.
+	//
+	// Nothing here blocks. API_HANDLER_BEGIN holds a process-wide recursive
+	// mutex that serialises every API call, and SetEventName only parks the
+	// name for the SDK thread -- the call into Razer's DLL happens on that
+	// thread, not this one.
+	//
+	API_HANDLER_BEGIN("setRazerWyvrnEventName");
+	{
+		std::string name;
+
+		if (args->GetSize() > 0) {
+			CefRefPtr<CefValue> arg = args->GetValue(0);
+
+			if (arg->GetType() == VTYPE_DICTIONARY) {
+				CefRefPtr<CefDictionaryValue> d =
+					arg->GetDictionary();
+
+				if (d->HasKey("id") &&
+				    d->GetType("id") == VTYPE_STRING)
+					name = d->GetString("id").ToString();
+			} else if (arg->GetType() == VTYPE_STRING) {
+				name = arg->GetString().ToString();
+			}
+		}
+
+		auto manager = GetRazerWyvrnManager();
+
+		result->SetBool(manager.get() ? manager->SetEventName(name)
+					      : false);
 	}
 	API_HANDLER_END();
 

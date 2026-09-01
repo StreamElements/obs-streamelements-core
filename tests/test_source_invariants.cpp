@@ -1367,6 +1367,98 @@ static void check_no_config_handle_escapes_an_early_return()
 	}
 }
 
+// --- The WYVRN SDK must never be built with its signature check disabled.
+//
+// deps/wyvrn-sdk/UnicodeWyvrnAPI.cpp reads
+// NO_CHECK_WYVRNSDK_LIBRARY_SIGNATURE, and defining it skips the Authenticode
+// verification that RzChromatic64.dll is signed by Razer -- on a DLL that is
+// then LoadLibrary'd into the OBS process. It is a debugging convenience in
+// Razer's sample that must not follow the code into a shipping build.
+//
+// Checked in CMakeLists.txt rather than in a source file, because that is
+// where such a define would plausibly be added: as an add_compile_definitions
+// or a target_compile_definitions entry alongside the vendored sources.
+static void check_wyvrn_signature_check_is_not_disabled()
+{
+	auto cmake = slurp("CMakeLists.txt");
+
+	std::regex bad(R"(NO_CHECK_WYVRNSDK_LIBRARY_SIGNATURE)");
+
+	// The comment in CMakeLists.txt naming the symbol is expected; a
+	// *define* of it is not. Match only the forms that would actually
+	// define it, so the explanatory comment does not trip the gate.
+	std::regex defined(
+		R"((add_compile_definitions|target_compile_definitions|add_definitions)\s*\([^)]*NO_CHECK_WYVRNSDK_LIBRARY_SIGNATURE)");
+
+	check(count_matches(cmake, defined) == 0,
+	      "WYVRN: CMakeLists.txt must never define NO_CHECK_WYVRNSDK_LIBRARY_SIGNATURE "
+	      "(it skips Authenticode verification of RzChromatic64.dll)");
+
+	// The vendored sources are meant to be unmodified, so the symbol must
+	// still only ever be *read* there, never defined.
+	auto sdk = slurp("deps/wyvrn-sdk/UnicodeWyvrnAPI.cpp");
+
+	std::regex sdk_defined(
+		R"(#\s*define\s+NO_CHECK_WYVRNSDK_LIBRARY_SIGNATURE)");
+
+	check(count_matches(sdk, sdk_defined) == 0,
+	      "WYVRN: deps/wyvrn-sdk/UnicodeWyvrnAPI.cpp must not define "
+	      "NO_CHECK_WYVRNSDK_LIBRARY_SIGNATURE");
+
+	// And the guard itself must still be there -- a vendored-source update
+	// that dropped the check entirely would otherwise pass silently.
+	check(count_matches(sdk, bad) >= 1,
+	      "WYVRN: deps/wyvrn-sdk/UnicodeWyvrnAPI.cpp no longer references "
+	      "NO_CHECK_WYVRNSDK_LIBRARY_SIGNATURE -- has the signature check been "
+	      "removed from the vendored SDK?");
+}
+
+// --- Every WYVRN SDK entry point must be called from the SDK thread only.
+//
+// The Chroma stack beneath the SDK is COM-based and thread-affine: CoreInitSDK,
+// CoreSetEventName and CoreUnInit must all run on the same thread. The manager
+// guarantees that by confining them to ThreadProc(). A call added anywhere else
+// would compile, work most of the time, and fail as a rare crash on a user's
+// machine -- which is exactly what this gate exists to prevent.
+static void check_wyvrn_sdk_calls_stay_on_the_sdk_thread()
+{
+	auto src = slurp("streamelements/StreamElementsRazerWyvrnManager.cpp");
+
+	const std::string marker =
+		"void StreamElementsRazerWyvrnManager::ThreadProc()";
+	auto begin = src.find(marker);
+	check(begin != std::string::npos,
+	      "WYVRN: StreamElementsRazerWyvrnManager.cpp must define ThreadProc()");
+	if (begin == std::string::npos)
+		return;
+
+	// ThreadProc runs to the start of the next member definition.
+	auto end = src.find("\nStreamElementsRazerWyvrnManager::", begin);
+	auto end2 =
+		src.find("\nvoid StreamElementsRazerWyvrnManager::", begin + 1);
+	if (end2 != std::string::npos &&
+	    (end == std::string::npos || end2 < end))
+		end = end2;
+	if (end == std::string::npos)
+		end = src.size();
+
+	std::regex call(
+		R"(WyvrnSDK::WyvrnAPI::(CoreInitSDK|CoreSetEventName|CoreUnInit|InitAPI|UninitAPI))");
+
+	const std::size_t inside =
+		count_matches(src.substr(begin, end - begin), call);
+	const std::size_t total = count_matches(src, call);
+
+	check(total >= 5,
+	      "WYVRN: expected the SDK entry points to be called at all "
+	      "(CoreInitSDK / CoreSetEventName / CoreUnInit / InitAPI / UninitAPI)");
+
+	check(inside == total,
+	      "WYVRN: every WyvrnSDK::WyvrnAPI:: call must be inside ThreadProc() -- "
+	      "the SDK is thread-affine and must be entered only from the thread "
+	      "that ran CoreInitSDK");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -1398,6 +1490,8 @@ int main()
 	check_consent_prompt_does_not_pump_foreign_messages();
 	check_no_dock_is_added_to_an_invalid_area();
 	check_no_config_handle_escapes_an_early_return();
+	check_wyvrn_signature_check_is_not_disabled();
+	check_wyvrn_sdk_calls_stay_on_the_sdk_thread();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

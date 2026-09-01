@@ -47,6 +47,10 @@ function(se_add_test name)
     "${GENERATED_INCLUDE}"
     "${REPO_ROOT}"
     "${REPO_ROOT}/deps"
+    # cef-stub's cef_string.cpp reaches for deps/utf8.h, which in turn includes
+    # utf8/checked.h - and those live under streamelements/deps, exactly as the
+    # plug-in build wires them up (CMakeLists.txt:104).
+    "${REPO_ROOT}/streamelements/deps"
   )
   target_compile_features(${name} PRIVATE cxx_std_17)
   if(NOT MSVC)
@@ -54,6 +58,23 @@ function(se_add_test name)
   endif()
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
+
+# --- Behavioural test: the WYVRN configuration parser -----------------------
+#
+# Compiles the real production parser, not a mirror of it. That is possible
+# because StreamElementsRazerWyvrnConfig.cpp deliberately depends on nothing but
+# the standard library and the local CefValue model - no libobs, no Qt - so the
+# thing under test here is the code that actually ships.
+se_add_test(test_razer_wyvrn_config
+  test_razer_wyvrn_config.cpp
+  "${REPO_ROOT}/streamelements/StreamElementsRazerWyvrnConfig.cpp"
+  "${REPO_ROOT}/deps/cef-stub/cef_string.cpp"
+  "${REPO_ROOT}/deps/cef-stub/cef_value.cpp"
+  "${REPO_ROOT}/deps/cef-stub/cef_value_binary.cpp"
+  "${REPO_ROOT}/deps/cef-stub/cef_value_dictionary.cpp"
+  "${REPO_ROOT}/deps/cef-stub/cef_value_json.cpp"
+  "${REPO_ROOT}/deps/cef-stub/cef_value_list.cpp"
+)
 
 # --- Behavioural test: C2 (VideoEncoderTemplate::IsMatchingIndex = vs ==) ---
 se_add_test(test_video_encoder_template_demo
