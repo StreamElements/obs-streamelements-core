@@ -6,7 +6,7 @@ Core SE.Live OBS plugin.
 
 The host API this plugin exposes to page JavaScript — 217 `window.host` calls,
 104 `window` events and methods, and 70 data structures — is documented in
-**[`docs/api/`](docs/api/)**, currently at API version 6.6.
+**[`docs/api/`](docs/api/)**, accessible at <a href="https://streamelements.github.io/obs-streamelements-core/api/" target="_blank">https://streamelements.github.io/obs-streamelements-core/api/</a> currently at API version 6.6.
 
 That tree is the source of truth. It replaces `JavaScript OBS API Version
 6.6.docx`, which is not in version control; see
@@ -81,10 +81,6 @@ cd build_macos_arm64 && xcodebuild -configuration RelWithDebInfo \
 # Release channels status
 
 <a href="https://streamelements.github.io/obs-streamelements-core/status.html" target="_blank">Extended Status Page</a> — every channel on both platforms, with build dates, promotion drift and release notes, read live from the CDN manifests. Source: <a href="docs/status.html">docs/status.html</a>.
-
-# JavaScript API Documentation
-
-<a href="https://streamelements.github.io/obs-streamelements-core/api/" target="_blank">JavaScript API</a>
 
 # Deployment
 
