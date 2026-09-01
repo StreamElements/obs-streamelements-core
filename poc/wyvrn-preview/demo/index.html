@@ -1,0 +1,409 @@
+<title>WYVRN Effect Preview</title>
+<style>
+  /*
+   * Single-theme by decision, not omission: these previews are emissive LED
+   * colour. On a light ground a dim blue LED and an unlit cell look identical,
+   * so the page commits to a dark instrument panel and paints every colour
+   * explicitly rather than borrowing the host's.
+   *
+   * The chrome is deliberately colourless. The artefact under inspection is
+   * full-spectrum RGB, so any accent the UI picks for itself competes with the
+   * thing being examined. Amber appears only where it means something:
+   * haptic energy.
+   */
+  :root {
+    --ground:  #0b0c10;
+    --panel:   #13151c;
+    --inset:   #090a0e;
+    --rule:    #242833;
+    --text:    #e8eaf0;
+    --muted:   #8c93a6;
+    --amber:   #e8a33d;
+    --steel:   #7fa6d0;
+
+    /* No webfont: the preview makes no external request of any kind. IBM Plex
+       is used where the machine already has it, otherwise the platform faces. */
+    --sans: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  header { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+
+  h1 {
+    font-size: 27px; font-weight: 600; letter-spacing: -0.02em;
+    margin: 0; text-wrap: balance;
+  }
+
+  .lede { color: var(--muted); margin: 0; max-width: 64ch; }
+  .lede code {
+    font-family: var(--mono); font-size: 0.88em;
+    color: var(--text); background: var(--inset);
+    border: 1px solid var(--rule); border-radius: 4px; padding: 1px 5px;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 18px 18px 20px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+
+  .panel > h2 {
+    font-family: var(--mono);
+    font-size: 11px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.13em;
+    color: var(--muted); margin: 0;
+  }
+
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+  input[type=text] {
+    flex: 1 1 340px; min-width: 0;
+    background: var(--inset); color: var(--text);
+    border: 1px solid var(--rule); border-radius: 7px;
+    padding: 9px 12px; font-family: var(--mono); font-size: 13px;
+  }
+  input[type=text]::placeholder { color: #5b6273; }
+  input[type=text]:focus-visible,
+  button:focus-visible { outline: 2px solid var(--steel); outline-offset: 2px; }
+
+  button {
+    background: #1b1f29; color: var(--text);
+    border: 1px solid var(--rule); border-radius: 7px;
+    padding: 9px 15px; font-family: var(--sans); font-size: 13px;
+    cursor: pointer; transition: background 120ms ease, border-color 120ms ease;
+  }
+  button:hover { background: #232836; border-color: #333a4a; }
+  button.primary { background: var(--text); color: var(--ground); border-color: transparent; font-weight: 600; }
+  button.primary:hover { background: #fff; }
+
+  /* Channel strips: one per physical device. */
+  /* One dark stage holding every device, as the gallery does: a flex row,
+     centre-aligned, evenly distributed. Devices are sized by the renderer. */
+  .devices {
+    display: flex; flex-wrap: wrap;
+    align-items: center; justify-content: space-evenly;
+    gap: 8px 4px;
+    background: var(--inset);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+
+  .readout {
+    display: flex; gap: 26px; flex-wrap: wrap;
+    font-family: var(--mono); font-size: 12px; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .readout b { color: var(--text); font-weight: 500; }
+
+  .hint { color: var(--muted); font-size: 13px; margin: 0; }
+  .err { color: #f08a7a; font-size: 13px; font-family: var(--mono); white-space: pre-wrap; margin: 0; }
+  .err:empty { display: none; }
+
+  .setting {
+    display: flex; gap: 10px; align-items: flex-start;
+    font-size: 13px; cursor: pointer;
+  }
+  .setting input { margin-top: 4px; accent-color: var(--steel); }
+  .setting .hint { display: inline; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+
+<div class="page">
+  <header>
+    <h1>WYVRN Effect Preview</h1>
+    <p class="lede">
+      Decodes and plays Razer <code>.chroma</code> lighting and Interhaptics
+      <code>.haps</code> vibration files in the browser. Self-contained — no host
+      bridge, no SE.Live API.
+    </p>
+  </header>
+
+  <section class="panel">
+    <h2>Source</h2>
+    <div class="controls">
+      <input type="text" id="url" spellcheck="false"
+             placeholder="https://…/Effect_Keyboard.chroma   or   …/Effect.haps">
+      <button class="primary" id="load">Load URL</button>
+      <button id="pick">Open local files…</button>
+      <input type="file" id="file" accept=".chroma,.haps" multiple hidden>
+    </div>
+    <p class="err" id="error"></p>
+  </section>
+
+  <section class="panel">
+    <div id="chroma" class="devices"></div>
+    <p class="hint" id="chromaEmpty">Nothing loaded.</p>
+  </section>
+
+  <section class="panel">
+    <div id="haps"></div>
+    <p class="hint" id="hapsEmpty">Nothing loaded.</p>
+  </section>
+
+  <section class="panel">
+    <div id="body"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Playback</h2>
+    <div class="controls">
+      <button class="primary" id="play">Play</button>
+      <button id="stop">Stop</button>
+      <span class="hint" id="state"></span>
+    </div>
+    <label class="setting">
+      <input type="checkbox" id="isOneShot">
+      <span>isOneShot<span class="hint"> — play once and stop, instead of repeating after a 1 s rest.</span></span>
+    </label>
+    <label class="setting">
+      <input type="checkbox" id="audio">
+      <span>Audible approximation<span class="hint"> — vibration below 100 Hz is felt, not heard, so it is lifted into an audible band.</span></span>
+    </label>
+  </section>
+</div>
+
+<script>
+/*__BUNDLE__*/
+
+const EMBEDDED = /*__EMBEDDED__*/;
+
+// Everything the page creates is owned here, so teardown releases it all.
+const live = new DisposableBag();
+let chromaRenderers = [];
+let hapsRenderer = null;
+let bodyRenderer = null;
+let audioOn = false;
+let oneShotOn = false;
+
+// Local one-line helper, deliberately not named `$`, which would suggest a
+// library that is not here. This page loads no third-party client-side code.
+const el = (id) => document.getElementById(id);
+
+function showError(err) {
+  el("error").textContent = err ? String(err && err.message ? err.message : err) : "";
+}
+
+async function clearChroma() {
+  for (const r of chromaRenderers) await r.dispose();
+  chromaRenderers = [];
+  el("chroma").innerHTML = "";
+  el("chromaEmpty").style.display = "";
+}
+
+async function clearHaps() {
+  if (hapsRenderer) { await hapsRenderer.dispose(); hapsRenderer = null; }
+  if (bodyRenderer) { await bodyRenderer.dispose(); bodyRenderer = null; }
+  el("haps").innerHTML = "";
+  el("body").innerHTML = "";
+  el("hapsEmpty").style.display = "";
+}
+
+function mountChroma(effect) {
+  // The renderer builds and sizes its own element, exactly as the gallery's
+  // loadAndEmbedSvgs does; the page only supplies the container.
+  chromaRenderers.push(
+    new ChromaRenderer(el("chroma"), effect, { loop: true, autoplay: true }),
+  );
+  el("chromaEmpty").style.display = "none";
+
+  const first = chromaRenderers[0].effect;
+  const fps = 1 / (first.frames[0]?.durationSeconds || 1);
+}
+
+function mountHaps(effect, targeting) {
+  // The timeline shows one effect; the body view accumulates all of them.
+  if (!hapsRenderer) {
+      hapsRenderer = new HapsRenderer(el("haps"), effect, {
+      autoplay: true, audio: audioOn, isOneShot: oneShotOn, pauseMs: 1000,
+    });
+    el("hapsEmpty").style.display = "none";
+  }
+
+
+  // The body view takes sources, plural: one event routinely drives several
+  // regions, and several events can play at once.
+  if (!bodyRenderer)
+    bodyRenderer = new HapticBodyRenderer(el("body"), {
+      pauseMs: 1000, isOneShot: oneShotOn,
+    });
+
+  const targets = targeting && targeting.length
+    ? targeting
+    : [{ target: "All", spatialization: "Global", gain: 1 }];
+
+  bodyRenderer.addSource({ effect, targeting: targets, label: effect.sourceName });
+
+}
+
+async function loadUrl(url) {
+  showError("");
+  try {
+    if (/\.haps(\?|$)/i.test(url)) {
+      await clearHaps();
+      mountHaps(await HapsEffect.fromUrl(url));
+    } else {
+      await clearChroma();
+      mountChroma(await ChromaEffect.fromUrl(url));
+    }
+  } catch (err) {
+    showError(err);
+  }
+}
+
+el("load").addEventListener("click", () => {
+  const url = el("url").value.trim();
+  if (url) void loadUrl(url);
+});
+
+el("url").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") el("load").click();
+});
+
+el("pick").addEventListener("click", () => el("file").click());
+
+el("file").addEventListener("change", async (e) => {
+  showError("");
+  const files = Array.from(e.target.files || []);
+  const chroma = files.filter((f) => /\.chroma$/i.test(f.name));
+  const haps = files.find((f) => /\.haps$/i.test(f.name));
+
+  try {
+    if (chroma.length) {
+      await clearChroma();
+      for (const f of chroma) {
+        mountChroma(ChromaEffect.fromArrayBuffer(await f.arrayBuffer(), f.name));
+      }
+    }
+    if (haps) {
+      await clearHaps();
+      mountHaps(HapsEffect.fromJson(await haps.text(), haps.name));
+    }
+  } catch (err) {
+    showError(err);
+  }
+});
+
+// All three renderers answer to play/stop, so one control drives the whole
+// event rather than each panel having its own transport.
+function allRenderers() {
+  return [...chromaRenderers, hapsRenderer, bodyRenderer].filter(Boolean);
+}
+
+function setState(text) {
+  el("state").textContent = text;
+}
+
+el("play").addEventListener("click", () => {
+  void Promise.all(allRenderers().map((r) => r.play()));
+  setState(oneShotOn ? "playing once" : "playing, repeating");
+});
+
+el("stop").addEventListener("click", () => {
+  for (const r of allRenderers()) r.stop();
+  setState("stopped");
+});
+
+el("isOneShot").addEventListener("change", (e) => {
+  oneShotOn = e.target.checked;
+
+  // Settable after construction, so switching tears nothing down.
+  if (hapsRenderer) hapsRenderer.isOneShot = oneShotOn;
+  if (bodyRenderer) bodyRenderer.isOneShot = oneShotOn;
+
+  // Re-trigger: otherwise turning it off leaves a finished one-shot stopped.
+  void Promise.all(allRenderers().map((r) => r.play()));
+  setState(oneShotOn ? "playing once" : "playing, repeating");
+});
+
+el("isOneShot").addEventListener("change", (e) => {
+  oneShotOn = e.target.checked;
+
+  // Settable after construction, so switching does not tear anything down.
+  if (hapsRenderer) hapsRenderer.oneShot = oneShotOn;
+  if (bodyRenderer) bodyRenderer.oneShot = oneShotOn;
+
+  // Re-trigger, otherwise turning it off leaves a finished one-shot stopped.
+  void Promise.all([
+    hapsRenderer ? hapsRenderer.play() : null,
+    bodyRenderer ? bodyRenderer.play() : null,
+  ]);
+});
+
+el("audio").addEventListener("change", async (e) => {
+  audioOn = e.target.checked;
+
+  // Rebuild so the AudioContext is created inside the user gesture that
+  // enabled it, and so the previous one is disposed rather than left running.
+  if (hapsRenderer) {
+    const effect = hapsRenderer.effect;
+    await hapsRenderer.dispose();
+    el("haps").innerHTML = "";
+    hapsRenderer = new HapsRenderer(el("haps"), effect, {
+      audio: audioOn, isOneShot: oneShotOn, pauseMs: 1000,
+    });
+  }
+});
+
+window.addEventListener("pagehide", () => {
+  void (async () => {
+    await clearChroma();
+    await clearHaps();
+    await live.dispose();
+  })();
+});
+
+// A data: URL is still a URL, but fetch() against one is subject to CSP
+// connect-src and is blocked in some sandboxed contexts. Embedded samples are
+// therefore decoded directly; the URL field above is the fromUrl() path.
+function decodeDataUrl(url) {
+  const base64 = url.slice(url.indexOf(",") + 1);
+  const bin = atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+}
+
+if (EMBEDDED) {
+  void (async () => {
+    try {
+      for (const c of EMBEDDED.chroma || []) {
+        mountChroma(ChromaEffect.fromArrayBuffer(decodeDataUrl(c.url), c.name));
+      }
+      for (const h of EMBEDDED.haps || []) {
+        const text = new TextDecoder().decode(decodeDataUrl(h.url));
+        mountHaps(HapsEffect.fromJson(text, h.name), h.targeting);
+      }
+    } catch (err) {
+      showError(err);
+    }
+  })();
+}
+</script>
