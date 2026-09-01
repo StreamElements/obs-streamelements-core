@@ -3420,8 +3420,9 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 		// Defaults to true: one call that fully answers "what would
 		// this do" is the point of the call. Pass false to get ids
-		// only, which is the difference between a 7.7 MB response
-		// that takes tens of seconds and a cheap one.
+		// only -- unfiltered, that is the difference between 7.7 MB in
+		// ~2.1 s and 0.28 MB in ~65 ms, and the whole request runs
+		// inside the API lock.
 		bool components = true;
 
 		if (args->GetSize() > 0 &&

@@ -153,10 +153,10 @@ public:
 	//
 	// It is not a cosmetic flag. Serializing them costs one filesystem
 	// probe and one URL signature per component, and an unfiltered call
-	// covers ~24,700 of them: measured at 7.7 MB and tens of seconds on a
-	// machine with Synapse installed, during which the process-wide API
-	// mutex is held and OBS is visibly unresponsive. With components off
-	// the same call is a list of ids and is cheap.
+	// covers ~24,700 of them: measured at 7.7 MB in ~2.1 s on a machine
+	// with Synapse installed, against 0.28 MB in ~65 ms with components
+	// off. The whole request runs inside the process-wide API mutex, so
+	// the cost is paid by every other caller too.
 	CefRefPtr<CefValue> SerializeEvents(const std::string &sourceFilter,
 					    const std::string &idPrefix,
 					    bool components);
