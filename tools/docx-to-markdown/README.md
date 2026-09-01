@@ -92,6 +92,13 @@ their own text), a name that does not match the implementation
 (`getHostCapabilities`, `reloadAllBrowserSources` -- neither deprecated nor
 ever built).
 
-`getCurrentSceneCollectionProperties` is registered but undocumented, and is
-still unresolved: writing an entry for it needs someone who knows what it
-returns.
+`getCurrentSceneCollectionProperties` was reported as registered but
+undocumented. It was in fact documented all along -- its heading had lost its
+Heading5 style in Word, so it was body text, absent from the document’s own
+table of contents, and invisible to any structural pass. Promoted to a real
+heading, and its behaviour written up from the source.
+
+Nothing registered is undocumented now except three debug-only handlers
+(`crashProgram`, `crashProgramFastFail`, `deadlockProgram`) and
+`setCurrentProfile`, which is the real name behind the `setCurrentProfileById`
+entry and is marked there.
