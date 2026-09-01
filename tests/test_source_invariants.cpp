@@ -1459,6 +1459,45 @@ static void check_wyvrn_sdk_calls_stay_on_the_sdk_thread()
 	      "that ran CoreInitSDK");
 }
 
+// --- A rejected file-server request must stop, not fall through.
+//
+// StreamElementsLocalFilesystemHttpServer verifies a session signature before
+// serving an absolute path. The rejection branch originally had no `return`: it
+// set 429 and a JSON body, then carried on to open the file, attach a content
+// provider for its bytes, and reset the status to 200. The bytes did not escape
+// -- set_content had already claimed the body -- but that was cpp-httplib's
+// precedence protecting the check rather than the check protecting anything,
+// and the descriptor opened on that path leaked once per rejected request.
+//
+// This is the local file server that getAllRazerWyvrnEvents hands signed URLs
+// into, so the guard matters at scale.
+static void check_rejected_signature_stops_the_handler()
+{
+	auto src = slurp(
+		"streamelements/StreamElementsLocalFilesystemHttpServer.cpp");
+
+	auto begin = src.find("if (!VerifySessionSignedAbsolutePathURL(");
+	check(begin != std::string::npos,
+	      "file server: the session signature check must still be present");
+	if (begin == std::string::npos)
+		return;
+
+	// The rejection block ends at the first closing brace at that
+	// indentation; a `return` must appear before it.
+	auto end = src.find("\n\t\t}", begin);
+	check(end != std::string::npos,
+	      "file server: could not find the end of the signature check block");
+	if (end == std::string::npos)
+		return;
+
+	const std::string block = src.substr(begin, end - begin);
+
+	std::regex ret(R"(\breturn\s*;)");
+	check(count_matches(block, ret) >= 1,
+	      "file server: the invalid-signature branch must return -- without it "
+	      "the handler falls through, opens the file, and resets the status to 200");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -1492,6 +1531,7 @@ int main()
 	check_no_config_handle_escapes_an_early_return();
 	check_wyvrn_signature_check_is_not_disabled();
 	check_wyvrn_sdk_calls_stay_on_the_sdk_thread();
+	check_rejected_signature_stops_the_handler();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

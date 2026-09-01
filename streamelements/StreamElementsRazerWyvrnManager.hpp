@@ -178,12 +178,16 @@ private:
 
 	Snapshot TakeSnapshot(bool refresh);
 
-	// Absolute paths of the assets a component refers to, discovered by
-	// looking beside the config rather than trusting a naming convention.
-	// Lock-free: everything they need comes from the snapshot.
-	static std::vector<std::pair<std::string, std::string>>
-	FindChromaAssets(const Snapshot &snapshot, const std::string &source,
-			 const std::string &effect);
+	// The asset a component refers to, discovered by looking beside the
+	// config. Lock-free: everything they need comes from the snapshot.
+	//
+	// A Chroma_Event is already device-specific -- a config lists one per
+	// device, and the effect name IS the file's base name
+	// ("Interact_Keyboard" -> "Interact_Keyboard.chroma"). So this returns
+	// one asset, not a set, and the device comes from the name's suffix.
+	static std::pair<std::string, std::string>
+	FindChromaAsset(const Snapshot &snapshot, const std::string &source,
+			const std::string &effect);
 	static std::string FindHapticAsset(const Snapshot &snapshot,
 					   const std::string &source,
 					   const std::string &effect);

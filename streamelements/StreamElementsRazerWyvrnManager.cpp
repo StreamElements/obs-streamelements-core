@@ -111,9 +111,40 @@ StreamElementsRazerWyvrnManager::~StreamElementsRazerWyvrnManager()
 	Shutdown();
 }
 
+//
+// Two spellings of one path are the same directory on Windows, and the scan
+// would otherwise walk it twice and report every event twice -- 8,088 events
+// from 322 folders instead of 4,044 from 161, observed on this machine before
+// this was added.
+//
+// Comparison is case-insensitive with separators normalised, because that is
+// the equality Windows itself uses. A junction aiming two genuinely different
+// paths at one directory would still slip through, but that is not what the
+// duplicate spellings below are.
+//
+static std::string NormalizeRootForCompare(const std::string &path)
+{
+	std::string out;
+	out.reserve(path.size());
+
+	for (char c : path) {
+		if (c == '\\')
+			c = '/';
+#ifdef WIN32
+		c = (char)tolower((unsigned char)c);
+#endif
+		out.push_back(c);
+	}
+
+	while (out.size() > 1 && out.back() == '/')
+		out.pop_back();
+
+	return out;
+}
+
 std::vector<std::string> StreamElementsRazerWyvrnManager::GetConfigRoots()
 {
-	std::vector<std::string> roots;
+	std::vector<std::string> candidates;
 
 	// An override first, so a wrong guess below is a configuration problem
 	// rather than a code change. The documented path and the path actually
@@ -121,15 +152,32 @@ std::vector<std::string> StreamElementsRazerWyvrnManager::GetConfigRoots()
 	// neither is guaranteed stable.
 	const char *override_ = getenv("SE_WYVRN_HAPTIC_FOLDERS");
 	if (override_ && *override_)
-		roots.push_back(override_);
+		candidates.push_back(override_);
 
 #ifdef WIN32
-	// Observed on a machine with Synapse 4 installed. Case is irrelevant on
-	// Windows; both spellings are listed because the documentation and the
-	// installer disagree and either may be what a given build produces.
-	roots.push_back("C:\\Program Files (x86)\\Interhaptics\\hapticFolders");
-	roots.push_back("C:\\Program Files (x86)\\InterHaptics\\HapticFolders");
+	// Observed on a machine with Synapse 4 installed. Both spellings are
+	// listed because the documentation and the installer disagree and
+	// either may be what a given build produces -- and because case is
+	// irrelevant on Windows, the dedup above is what keeps listing both
+	// from counting everything twice.
+	candidates.push_back(
+		"C:\\Program Files (x86)\\Interhaptics\\hapticFolders");
+	candidates.push_back(
+		"C:\\Program Files (x86)\\InterHaptics\\HapticFolders");
 #endif
+
+	std::vector<std::string> roots;
+	std::vector<std::string> seen;
+
+	for (const auto &candidate : candidates) {
+		const std::string key = NormalizeRootForCompare(candidate);
+
+		if (std::find(seen.begin(), seen.end(), key) != seen.end())
+			continue;
+
+		seen.push_back(key);
+		roots.push_back(candidate);
+	}
 
 	return roots;
 }
@@ -188,6 +236,15 @@ void StreamElementsRazerWyvrnManager::Shutdown()
 
 	m_wake.notify_all();
 
+	// Announce before joining, not after. This is the last moment the
+	// websocket API server is still up -- by the time the singleton finishes
+	// releasing its managers there is nothing left to deliver the event on,
+	// and a page subscribed to hostRazerWyvrnStatusChanged would see the
+	// subsystem simply stop answering instead of saying goodbye.
+	//
+	// Outside the lock above, because SetStatus takes the same mutex.
+	SetStatus(StreamElementsRazerWyvrnStatus::ShuttingDown, 0);
+
 	// Join, not detach. The thread unwinds through CoreUnInit and
 	// UninitAPI, and UninitAPI frees RzChromatic64.dll - letting that race
 	// with our own teardown means unloading a module while it is still
@@ -240,9 +297,18 @@ void StreamElementsRazerWyvrnManager::DispatchStatusChanged()
 	// when the singleton may be going away.
 	auto value = SerializeStatus();
 
-	DispatchJSEventGlobal(
-		"hostRazerWyvrnStatusChanged",
-		CefWriteJSON(value, JSON_WRITER_DEFAULT).ToString());
+	const std::string json =
+		CefWriteJSON(value, JSON_WRITER_DEFAULT).ToString();
+
+	// Logged as well as dispatched. "Why is there no lighting" is answered
+	// by this line, and it is the only record of the transition for anyone
+	// whose page loaded after init had already finished -- which is most of
+	// them, since the panels take longer to come up than the SDK takes to
+	// initialize.
+	blog(LOG_INFO, "obs-streamelements-core: WYVRN: status %s",
+	     json.c_str());
+
+	DispatchJSEventGlobal("hostRazerWyvrnStatusChanged", json);
 }
 
 /* ========================================================================= */
@@ -529,39 +595,53 @@ size_t StreamElementsRazerWyvrnManager::GetEventCount()
 
 /* ========================================================================= */
 
-std::vector<std::pair<std::string, std::string>>
-StreamElementsRazerWyvrnManager::FindChromaAssets(const Snapshot &snapshot,
-						  const std::string &source,
-						  const std::string &effect)
+//
+// The device a Chroma effect targets, taken from the trailing "_<Device>" of
+// its name. Empty when the suffix is not one we know -- reporting nothing beats
+// reporting a guess, since the caller uses this to pick the grid dimensions and
+// a wrong pick renders as noise.
+//
+static std::string ChromaDeviceFromEffectName(const std::string &effect)
 {
-	std::vector<std::pair<std::string, std::string>> assets;
-
-	std::string folder;
-	for (const auto &kv : snapshot.sourcePaths) {
-		if (kv.first == source) {
-			folder = kv.second;
-			break;
-		}
-	}
-
-	if (folder.empty())
-		return assets;
-
-	// Device variants are discovered by looking at what is actually beside
-	// the config, rather than by assuming a fixed set of suffixes: not every
-	// effect ships every device, and the caller wants the ones that exist.
 	static const char *kDevices[] = {"Keyboard", "Keypad",  "Mouse",
 					 "Mousepad", "Headset", "ChromaLink"};
 
-	for (const char *device : kDevices) {
-		const std::string path =
-			folder + "/" + effect + "_" + device + ".chroma";
+	const auto sep = effect.rfind('_');
 
-		if (os_file_exists(path.c_str()))
-			assets.push_back({device, path});
+	if (sep == std::string::npos)
+		return std::string();
+
+	const std::string suffix = effect.substr(sep + 1);
+
+	for (const char *device : kDevices) {
+		if (suffix == device)
+			return suffix;
 	}
 
-	return assets;
+	return std::string();
+}
+
+std::pair<std::string, std::string>
+StreamElementsRazerWyvrnManager::FindChromaAsset(const Snapshot &snapshot,
+						 const std::string &source,
+						 const std::string &effect)
+{
+	for (const auto &kv : snapshot.sourcePaths) {
+		if (kv.first != source)
+			continue;
+
+		// The effect name is the file's base name, verbatim. An earlier
+		// version appended "_<Device>" to it and found nothing at all,
+		// because the config already carries the suffix.
+		const std::string path = kv.second + "/" + effect + ".chroma";
+
+		if (os_file_exists(path.c_str()))
+			return {ChromaDeviceFromEffectName(effect), path};
+
+		break;
+	}
+
+	return {std::string(), std::string()};
 }
 
 std::string
@@ -622,26 +702,22 @@ CefRefPtr<CefValue> StreamElementsRazerWyvrnManager::SerializeEventInternal(
 		c->SetString("effect", component.effect);
 		c->SetBool("interrupt", component.interrupt);
 
-		CefRefPtr<CefListValue> assets = CefListValue::Create();
+		const auto asset = FindChromaAsset(snapshot, event.source,
+						   component.effect);
 
-		for (const auto &asset : FindChromaAssets(
-			     snapshot, event.source, component.effect)) {
-			CefRefPtr<CefDictionaryValue> a =
-				CefDictionaryValue::Create();
+		// Named even when the file is missing, so a caller can tell "this
+		// event targets the keyboard but the asset is absent" apart from
+		// "this event has nothing to do with the keyboard".
+		c->SetString("device", asset.first);
 
-			a->SetString("device", asset.first);
-
+		if (!asset.second.empty()) {
 			// A session-signed URL, so the page fetches the bytes
-			// through the local file server rather than being handed
-			// a raw filesystem path it could not use anyway.
-			a->SetString("url",
+			// through the local file server rather than being handed a
+			// raw filesystem path it could not use anyway.
+			c->SetString("url",
 				     CreateSessionSignedAbsolutePathURL(
 					     utf8_to_wstring(asset.second)));
-
-			assets->SetDictionary(assets->GetSize(), a);
 		}
-
-		c->SetList("assets", assets);
 		chroma->SetDictionary(chroma->GetSize(), c);
 	}
 

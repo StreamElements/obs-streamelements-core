@@ -885,8 +885,13 @@ that loads later misses this event entirely. Call
 first and treat it as the source of truth; subscribing alone is not enough.
 
 It fires on failure as well as success — on the overwhelmingly common machine
-with no Razer software installed it arrives carrying `dllNotFound`, so a page
-waiting for readiness is never left waiting forever.
+with no Razer software installed it arrives carrying `dllNotFound` rather than
+never arriving.
+
+It fires only on a *change*, so a build where the integration is compiled out
+(`notCompiledIn`) or the platform does not support it (`notSupportedOnPlatform`)
+never transitions and never fires. That is the other reason to call
+`getHostCapabilities` first rather than waiting on this event.
 
 ## Methods
 

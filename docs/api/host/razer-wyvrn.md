@@ -84,6 +84,10 @@ The asset URLs returned by `getAllRazerWyvrnEvents` point at the local file
 server and are session-signed; fetching one yields the exact bytes on disk. Both
 formats decode entirely in the browser.
 
+A URL with a missing or altered signature is refused with
+`{ "success": false, "message": "Invalid Request Signature" }`, and the file is
+not served.
+
 ### The `.chroma` format
 
 A frame-by-frame colour animation. All integers are little-endian.

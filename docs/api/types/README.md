@@ -50,7 +50,6 @@ Objects passed to and returned from [`window.host`](../README.md) calls.
 - [PositionInfo](PositionInfo.md)
 - [ProfileInfo](ProfileInfo.md)
 - [QuerySoftwareUpdateArgs](QuerySoftwareUpdateArgs.md)
-- [RazerWyvrnChromaAsset](RazerWyvrnChromaAsset.md)
 - [RazerWyvrnChromaComponent](RazerWyvrnChromaComponent.md)
 - [RazerWyvrnEventInfo](RazerWyvrnEventInfo.md)
 - [RazerWyvrnHapticComponent](RazerWyvrnHapticComponent.md)
