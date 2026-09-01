@@ -148,8 +148,18 @@ public:
 	// containing folder and `idPrefix` the event id; both are
 	// case-insensitive and either may be empty.
 	//
+	// `components` controls whether each event carries its Chroma and haptic
+	// components with signed asset URLs.
+	//
+	// It is not a cosmetic flag. Serializing them costs one filesystem
+	// probe and one URL signature per component, and an unfiltered call
+	// covers ~24,700 of them: measured at 7.7 MB and tens of seconds on a
+	// machine with Synapse installed, during which the process-wide API
+	// mutex is held and OBS is visibly unresponsive. With components off
+	// the same call is a list of ids and is cheap.
 	CefRefPtr<CefValue> SerializeEvents(const std::string &sourceFilter,
-					    const std::string &idPrefix);
+					    const std::string &idPrefix,
+					    bool components);
 
 	// Roots searched for wyvrn.config files, in order.
 	static std::vector<std::string> GetConfigRoots();
@@ -194,7 +204,8 @@ private:
 
 	static CefRefPtr<CefValue>
 	SerializeEventInternal(const Snapshot &snapshot,
-			       const StreamElementsRazerWyvrnEventInfo &event);
+			       const StreamElementsRazerWyvrnEventInfo &event,
+			       bool components);
 
 	mutable std::mutex m_mutex;
 	std::condition_variable m_wake;

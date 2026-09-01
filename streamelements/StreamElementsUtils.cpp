@@ -2559,8 +2559,15 @@ bool VerifySessionMessageSignature(std::string &message, std::string &signature)
 
 std::string CreateSessionSignedAbsolutePathURL(std::wstring path)
 {
-	path = std::regex_replace(path, std::wregex(L"#"), L"%23");
-	path = std::regex_replace(path, std::wregex(L"&"), L"%26");
+	// static, because constructing a std::wregex compiles the pattern and
+	// this is called once per asset. getAllRazerWyvrnEvents signs ~23,700
+	// URLs in one call; at two fresh regexes each that was ~47,000 pattern
+	// compilations and the dominant cost of the whole request.
+	static const std::wregex kHash(L"#");
+	static const std::wregex kAmp(L"&");
+
+	path = std::regex_replace(path, kHash, L"%23");
+	path = std::regex_replace(path, kAmp, L"%26");
 
 	QUrl parts(StreamElementsGlobalStateManager::GetInstance()
 			   ->GetLocalFilesystemHttpServer()

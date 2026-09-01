@@ -50,6 +50,28 @@ window.host.getAllRazerWyvrnEvents(
 | --- | --- | --- |
 | source | string | Match the containing configuration folder exactly, case-insensitively. Omit or leave empty for all. |
 | idPrefix | string | Match the beginning of the event id, case-insensitively. Omit or leave empty for all. |
+| components | bool | Include each event's components and asset URLs. Defaults to `true`. |
+
+### Cost
+
+`components` is not a cosmetic flag. Including them costs one filesystem probe
+and one URL signature per component, and the whole request runs inside the
+process-wide API lock — so a slow call makes OBS unresponsive, not just this
+caller.
+
+Measured on a machine with Synapse installed (4,044 events, 24,698 components):
+
+| Call | Time | Payload |
+| --- | --- | --- |
+| Filtered by source, with components | ~50 ms | 0.13 MB |
+| Unfiltered, `components: false` | ~65 ms | 0.28 MB |
+| Unfiltered, with components | ~2.1 s | 7.7 MB |
+
+**Filter, or turn components off.** Asking for all 4,044 events with their
+components is supported and correct, but it is a two-second request returning
+nearly eight megabytes, and nothing else can call the host API while it runs.
+The intended shape is a cheap ids-only sweep followed by a filtered call for
+whatever the user actually selected.
 
 **Data structures:** [`RazerWyvrnEventInfo`](../types/RazerWyvrnEventInfo.md)
 

@@ -685,7 +685,7 @@ CefRefPtr<CefValue> StreamElementsRazerWyvrnManager::SerializeStatus()
 
 CefRefPtr<CefValue> StreamElementsRazerWyvrnManager::SerializeEventInternal(
 	const Snapshot &snapshot,
-	const StreamElementsRazerWyvrnEventInfo &event)
+	const StreamElementsRazerWyvrnEventInfo &event, bool components)
 {
 	CefRefPtr<CefValue> result = CefValue::Create();
 	CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
@@ -693,6 +693,12 @@ CefRefPtr<CefValue> StreamElementsRazerWyvrnManager::SerializeEventInternal(
 	d->SetString("id", event.id);
 	d->SetString("source", event.source);
 	d->SetString("kind", event.kind);
+
+	if (!components) {
+		result->SetDictionary(d);
+
+		return result;
+	}
 
 	CefRefPtr<CefListValue> chroma = CefListValue::Create();
 
@@ -773,11 +779,12 @@ CefRefPtr<CefValue> StreamElementsRazerWyvrnManager::SerializeEventInternal(
 CefRefPtr<CefValue> StreamElementsRazerWyvrnManager::SerializeEvent(
 	const StreamElementsRazerWyvrnEventInfo &event)
 {
-	return SerializeEventInternal(TakeSnapshot(false), event);
+	return SerializeEventInternal(TakeSnapshot(false), event, true);
 }
 
 CefRefPtr<CefValue> StreamElementsRazerWyvrnManager::SerializeEvents(
-	const std::string &sourceFilter, const std::string &idPrefix)
+	const std::string &sourceFilter, const std::string &idPrefix,
+	bool components)
 {
 	// One snapshot for the whole list. Everything below is lock-free, which
 	// matters because serializing ~4,000 events means thousands of
@@ -797,7 +804,8 @@ CefRefPtr<CefValue> StreamElementsRazerWyvrnManager::SerializeEvents(
 			continue;
 
 		list->SetValue(list->GetSize(),
-			       SerializeEventInternal(snapshot, event));
+			       SerializeEventInternal(snapshot, event,
+						      components));
 	}
 
 	result->SetList(list);

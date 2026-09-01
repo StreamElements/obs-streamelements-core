@@ -3418,6 +3418,12 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		std::string sourceFilter;
 		std::string idPrefix;
 
+		// Defaults to true: one call that fully answers "what would
+		// this do" is the point of the call. Pass false to get ids
+		// only, which is the difference between a 7.7 MB response
+		// that takes tens of seconds and a cheap one.
+		bool components = true;
+
 		if (args->GetSize() > 0 &&
 		    args->GetValue(0)->GetType() == VTYPE_DICTIONARY) {
 			CefRefPtr<CefDictionaryValue> d =
@@ -3431,13 +3437,17 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			if (d->HasKey("idPrefix") &&
 			    d->GetType("idPrefix") == VTYPE_STRING)
 				idPrefix = d->GetString("idPrefix").ToString();
+
+			if (d->HasKey("components") &&
+			    d->GetType("components") == VTYPE_BOOL)
+				components = d->GetBool("components");
 		}
 
 		auto manager = GetRazerWyvrnManager();
 
 		if (manager.get()) {
 			result = manager->SerializeEvents(sourceFilter,
-							  idPrefix);
+							  idPrefix, components);
 		} else {
 			result->SetList(CefListValue::Create());
 		}
