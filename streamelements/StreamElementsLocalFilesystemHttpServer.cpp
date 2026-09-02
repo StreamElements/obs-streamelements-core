@@ -41,6 +41,18 @@ StreamElementsLocalFilesystemHttpServer() {
 			res.set_content(
 				"{ \"success\": false, \"message\": \"Invalid Request Signature\" }",
 				"application/json");
+
+			// Without this the handler carried on: it opened the
+			// file, attached a content provider for it, and reset
+			// the status to 200 further down. The bytes did not
+			// actually escape -- set_content had already claimed
+			// the body, so the provider's were discarded -- but
+			// that is cpp-httplib's precedence protecting us, not
+			// the check. The rejection also reported 200, logged
+			// "serving file from path", and opened a descriptor
+			// whose cleanup lambda only runs if the provider is
+			// used, leaking one handle per rejected request.
+			return;
 		}
 
 		blog(LOG_INFO,

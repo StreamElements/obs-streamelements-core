@@ -52,6 +52,31 @@ endif()
 
 message(STATUS "obs-streamelements-core: crash handler backend: ${STREAMELEMENTS_CRASH_HANDLER}")
 
+# Razer WYVRN: Chroma RGB lighting and Sensa HD haptics.
+#
+# Windows-only, because the SDK is. One variable decides both which sources
+# compile and whether SE_ENABLE_WYVRN is defined, so the two cannot disagree --
+# the same shape as the crash-handler switch above.
+#
+# The integration is optional at RUNTIME as well: the SDK loads
+# RzChromatic64.dll dynamically and verifies its Authenticode signature, so there
+# is no link-time dependency on Razer and a machine without Synapse simply
+# reports the subsystem unavailable.
+option(STREAMELEMENTS_ENABLE_WYVRN "Build the Razer WYVRN integration" ON)
+
+if (STREAMELEMENTS_ENABLE_WYVRN AND NOT WIN32)
+	# Not a supported target. Forced off rather than failing, so a macOS
+	# build needs no special invocation.
+	set(STREAMELEMENTS_ENABLE_WYVRN OFF)
+	message(STATUS "obs-streamelements-core: WYVRN is Windows-only; disabled on this platform")
+endif()
+
+if (STREAMELEMENTS_ENABLE_WYVRN)
+	add_compile_definitions(SE_ENABLE_WYVRN)
+endif()
+
+message(STATUS "obs-streamelements-core: Razer WYVRN: ${STREAMELEMENTS_ENABLE_WYVRN}")
+
 if (WIN32)
 	set(ENABLE_ANGELSCRIPT TRUE)
 
@@ -480,7 +505,13 @@ if(MSVC)
 	endforeach()
 endif()
 
+# The WYVRN manager and its config parser are always compiled: with the option
+# off they report "not compiled in" and the API calls still answer, so page
+# JavaScript sees a consistent surface on every platform. Only the vendored SDK
+# below is conditional.
 set(obs-streamelements-core_SOURCES
+	streamelements/StreamElementsRazerWyvrnConfig.cpp
+	streamelements/StreamElementsRazerWyvrnManager.cpp
 	obs-streamelements-core-plugin.cpp
 	deps/json11/json11.cpp
 	deps/base64/base64.cpp
@@ -557,7 +588,7 @@ set(obs-streamelements-core_SOURCES
 	)
 
 if (APPLE)
-    list(APPEND obs-streamelements-core_SOURCES
+list(APPEND obs-streamelements-core_SOURCES
         streamelements/StreamElementsUtils.mm
     )
 
@@ -635,6 +666,8 @@ if (ENABLE_SENTRY)
 endif()
 
 set(obs-streamelements-core_HEADERS
+	streamelements/StreamElementsRazerWyvrnConfig.hpp
+	streamelements/StreamElementsRazerWyvrnManager.hpp
 	deps/json11/json11.hpp
 	deps/base64/base64.hpp
 	deps/obs-websocket-api/obs-websocket-api.h
@@ -741,6 +774,29 @@ if (APPLE)
 		streamelements/mach_exc.h
 		macutil.mm
     )
+endif()
+
+# The vendored WYVRN SDK. Razer ships it as source rather than a library, and
+# it resolves RzChromatic64.dll at runtime via LoadLibraryW after checking the
+# module is signed by Razer -- so nothing here creates a link-time dependency.
+#
+# NO_CHECK_WYVRNSDK_LIBRARY_SIGNATURE is deliberately NOT defined: it would
+# skip that Authenticode check on a DLL loaded into the OBS process. A source
+# invariant in tests/ asserts it stays absent.
+if (STREAMELEMENTS_ENABLE_WYVRN)
+	list(APPEND obs-streamelements-core_SOURCES
+		deps/wyvrn-sdk/WyvrnAPI.cpp
+		deps/wyvrn-sdk/UnicodeWyvrnAPI.cpp
+		deps/wyvrn-sdk/VerifyLibrarySignature.cpp
+		deps/wyvrn-sdk/WyvrnLogger.cpp)
+
+	list(APPEND obs-streamelements-core_HEADERS
+		deps/wyvrn-sdk/WyvrnAPI.h
+		deps/wyvrn-sdk/UnicodeWyvrnAPI.h
+		deps/wyvrn-sdk/VerifyLibrarySignature.h
+		deps/wyvrn-sdk/WyvrnLogger.h
+		deps/wyvrn-sdk/WyvrnErrors.h
+		deps/wyvrn-sdk/WyvrnSDKTypes.h)
 endif()
 
 if (APPLE)

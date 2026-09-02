@@ -472,6 +472,16 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		std::make_shared<WindowStateChangeEventFilter>(
 			mainWindow());
 
+	// After the websocket API server, because reaching Ok or a failure
+	// status dispatches hostRazerWyvrnStatusChanged through it.
+	//
+	// Start() returns immediately. CoreInitSDK costs a flat ~3.3 s, so it
+	// runs on the manager's own SDK thread and OBS start is not delayed;
+	// WYVRN becomes available a few seconds into the session.
+	m_razerWyvrnManager =
+		std::make_shared<StreamElementsRazerWyvrnManager>();
+	m_razerWyvrnManager->Start();
+
 	m_outputManager =
 		std::make_shared<StreamElementsOutputManager>(
 			m_videoCompositionManager, m_audioCompositionManager);
@@ -700,6 +710,16 @@ void StreamElementsGlobalStateManager::Shutdown()
 
 	streamelements_updater_shutdown();
 
+	// Early, and explicitly rather than by releasing the pointer: this
+	// joins the SDK thread, which unwinds through CoreUnInit() on its way
+	// out. Two things must still be alive while that happens -- the
+	// websocket API server, so the ShuttingDown status reaches the page,
+	// and the crash handler below, so a fault inside Razer's DLL is still
+	// reported.
+	if (m_razerWyvrnManager) {
+		m_razerWyvrnManager->Shutdown();
+	}
+
 	// Shutdown on the main thread. No platform guard: StopAsyncHangDetection()
 	// is a no-op on backends that have no hang detection.
 	if (m_crashHandler) {
@@ -745,6 +765,7 @@ void StreamElementsGlobalStateManager::Shutdown()
 
 	m_profilesManager = nullptr;
 	m_backupManager = nullptr;
+	m_razerWyvrnManager = nullptr;
 	m_cleanupManager = nullptr;
 	m_previewManager = nullptr;
 	m_websocketApiServer = nullptr;

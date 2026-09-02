@@ -519,6 +519,47 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandler(
 
 static std::recursive_mutex s_sync_api_call_mutex;
 
+//
+// The WYVRN manager, or null. Absent both before Initialize() has created it
+// and after Shutdown() has released it -- and Shutdown() is exactly when a page
+// is most likely to still be calling.
+//
+static std::shared_ptr<StreamElementsRazerWyvrnManager> GetRazerWyvrnManager()
+{
+	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+		return nullptr;
+
+	return StreamElementsGlobalStateManager::GetInstance()
+		->GetRazerWyvrnManager();
+}
+
+//
+// The `razerWyvrn` object. One serializer shared with the
+// hostRazerWyvrnStatusChanged event, so a page cannot be told two different
+// things about the same state.
+//
+static CefRefPtr<CefValue> SerializeRazerWyvrnStatus()
+{
+	auto manager = GetRazerWyvrnManager();
+
+	if (manager.get())
+		return manager->SerializeStatus();
+
+	// No manager at all: report the same shape rather than null, so a
+	// caller never has to branch on its absence.
+	CefRefPtr<CefValue> result = CefValue::Create();
+	CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+
+	d->SetBool("available", false);
+	d->SetBool("initialized", false);
+	d->SetString("status", "notCompiledIn");
+	d->SetInt("eventCount", 0);
+
+	result->SetDictionary(d);
+
+	return result;
+}
+
 #define API_HANDLER_BEGIN(name) \
 	RegisterIncomingApiCallHandler(name, []( \
 		std::shared_ptr<StreamElementsApiMessageHandler> self, \
@@ -3335,6 +3376,196 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize() > 0) {
 			DeserializeRevealFileInGraphicalShell(args->GetValue(0),
 							      result);
+		}
+	}
+	API_HANDLER_END();
+
+	//
+	// Host capabilities. Documented since API 1.8 and never implemented until
+	// now -- so nothing can depend on the old shape, and the documented
+	// `sceneCollections` member is kept purely for fidelity with the
+	// specification.
+	//
+	// This is deliberately the ONLY place WYVRN availability is reported. A
+	// separate status call would be a second source of truth that could
+	// disagree with this one.
+	//
+	API_HANDLER_BEGIN("getHostCapabilities");
+	{
+		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+
+		d->SetString("sceneCollections", "available");
+
+		d->SetValue("razerWyvrn", SerializeRazerWyvrnStatus());
+
+		result->SetDictionary(d);
+	}
+	API_HANDLER_END();
+
+	//
+	// Every event declared by every WYVRN configuration installed on this
+	// machine, each carrying its Chroma and haptic components and
+	// session-signed URLs for their assets -- so a caller can see what firing
+	// an event would actually do, and preview it, without a second call.
+	//
+	// Optional filter argument: { source, idPrefix }. There are ~4,000 events
+	// on a machine with Synapse installed, so callers are expected to use it.
+	//
+	// An unavailable subsystem yields an empty array, never an error.
+	//
+	API_HANDLER_BEGIN("getAllRazerWyvrnEvents");
+	{
+		std::string sourceFilter;
+		std::string idPrefix;
+
+		// Defaults to true: one call that fully answers "what would
+		// this do" is the point of the call. Pass false to get ids
+		// only -- unfiltered, that is the difference between 7.7 MB in
+		// ~2.1 s and 0.28 MB in ~65 ms, and the whole request runs
+		// inside the API lock.
+		bool components = true;
+
+		if (args->GetSize() > 0 &&
+		    args->GetValue(0)->GetType() == VTYPE_DICTIONARY) {
+			CefRefPtr<CefDictionaryValue> d =
+				args->GetValue(0)->GetDictionary();
+
+			if (d->HasKey("source") &&
+			    d->GetType("source") == VTYPE_STRING)
+				sourceFilter =
+					d->GetString("source").ToString();
+
+			if (d->HasKey("idPrefix") &&
+			    d->GetType("idPrefix") == VTYPE_STRING)
+				idPrefix = d->GetString("idPrefix").ToString();
+
+			if (d->HasKey("components") &&
+			    d->GetType("components") == VTYPE_BOOL)
+				components = d->GetBool("components");
+		}
+
+		auto manager = GetRazerWyvrnManager();
+
+		if (manager.get()) {
+			result = manager->SerializeEvents(sourceFilter,
+							  idPrefix, components);
+		} else {
+			result->SetList(CefListValue::Create());
+		}
+	}
+	API_HANDLER_END();
+
+	//
+	// Fire an event.
+	//
+	// Accepts a RazerWyvrnEventInfo object rather than a bare string, so an
+	// item from getAllRazerWyvrnEvents can be handed straight back; only
+	// `id` and `fallback` are read. A bare string is accepted too.
+	//
+	// Stopping playback -- the SDK's own convention for an empty name -- is
+	// spelled any of `null`, no argument at all, or an object whose `id` is
+	// empty. All three mean the same thing, because a caller clearing an
+	// event should not have to remember which shape we wanted.
+	//
+	// `fallback` names another event to try when this one is not declared by
+	// any configuration on this machine, and nests to arbitrary depth:
+	//
+	//     { id: "Headshot",
+	//       fallback: { id: "Hit", fallback: { id: "Generic_Impact" } } }
+	//
+	// The chain is resolved against the scan, not against the SDK: the SDK
+	// accepts an event belonging to another application and reports success,
+	// so asking it "did that work?" would always answer yes and the fallback
+	// would never fire.
+	//
+	// Nothing here blocks. API_HANDLER_BEGIN holds a process-wide recursive
+	// mutex that serialises every API call, and SetEventName only parks the
+	// name for the SDK thread.
+	//
+	API_HANDLER_BEGIN("setRazerWyvrnEventName");
+	{
+		auto manager = GetRazerWyvrnManager();
+
+		// Bounded so a pathological structure cannot spin here while the
+		// global API mutex is held.
+		const int kMaxFallbackDepth = 16;
+
+		std::string resolved;
+		std::string tried;
+		bool stopRequested = false;
+		bool sawCandidate = false;
+
+		CefRefPtr<CefValue> arg =
+			args->GetSize() > 0 ? args->GetValue(0) : nullptr;
+
+		if (arg.get() && arg->GetType() == VTYPE_STRING) {
+			const std::string id = arg->GetString().ToString();
+
+			sawCandidate = !id.empty();
+			stopRequested = id.empty();
+			tried = id;
+
+			if (manager.get() && !id.empty())
+				resolved = manager->ResolveEventId(id);
+		} else if (arg.get() && arg->GetType() == VTYPE_DICTIONARY) {
+			CefRefPtr<CefDictionaryValue> d = arg->GetDictionary();
+
+			for (int depth = 0;
+			     d.get() && depth < kMaxFallbackDepth; ++depth) {
+				std::string id;
+
+				if (d->HasKey("id") &&
+				    d->GetType("id") == VTYPE_STRING)
+					id = d->GetString("id").ToString();
+
+				if (id.empty() && !d->HasKey("fallback")) {
+					// An explicit empty id, with nothing to
+					// fall back to, is a stop.
+					stopRequested = true;
+					break;
+				}
+
+				if (!id.empty()) {
+					sawCandidate = true;
+					tried += tried.empty() ? id
+							       : (" -> " + id);
+
+					if (manager.get()) {
+						resolved =
+							manager->ResolveEventId(
+								id);
+
+						if (!resolved.empty())
+							break;
+					}
+				}
+
+				if (d->HasKey("fallback") &&
+				    d->GetType("fallback") == VTYPE_DICTIONARY)
+					d = d->GetDictionary("fallback");
+				else
+					d = nullptr;
+			}
+		} else {
+			// null, or no argument at all.
+			stopRequested = true;
+		}
+
+		if (!manager.get()) {
+			result->SetBool(false);
+		} else if (stopRequested || !sawCandidate) {
+			result->SetBool(manager->SetEventName(std::string()));
+		} else if (!resolved.empty()) {
+			result->SetBool(manager->SetEventName(resolved));
+		} else {
+			// Nothing in the chain exists here. Say so rather than
+			// firing a name that cannot render, so the caller can
+			// tell "sent" from "silently did nothing".
+			blog(LOG_INFO,
+			     "obs-streamelements-core: WYVRN: no configuration declares any of '%s'; nothing sent",
+			     tried.c_str());
+
+			result->SetBool(false);
 		}
 	}
 	API_HANDLER_END();

@@ -867,6 +867,32 @@ Available since API version 6.6
 
 **Payload**: null
 
+### `hostRazerWyvrnStatusChanged`
+
+Fired when the [Razer WYVRN](host/razer-wyvrn.md) integration changes state — becoming ready, failing to initialize, or shutting down.
+
+Available since API version 6.8
+
+**Payload**: [`RazerWyvrnStatus`](types/RazerWyvrnStatus.md)
+
+The payload is the same object `getHostCapabilities` returns as its
+`razerWyvrn` member, so this can be treated as a push of a value that would
+otherwise have to be polled.
+
+Initialization takes about 3.4 seconds and runs in the background, so a page
+that loads later misses this event entirely. Call
+[`getHostCapabilities`](host/host-information.md#gethostcapabilitiesresultcallbackhostcapabilities)
+first and treat it as the source of truth; subscribing alone is not enough.
+
+It fires on failure as well as success — on the overwhelmingly common machine
+with no Razer software installed it arrives carrying `dllNotFound` rather than
+never arriving.
+
+It fires only on a *change*, so a build where the integration is compiled out
+(`notCompiledIn`) or the platform does not support it (`notSupportedOnPlatform`)
+never transitions and never fires. That is the other reason to call
+`getHostCapabilities` first rather than waiting on this event.
+
 ## Methods
 
 ### `window.open()`
