@@ -195,6 +195,7 @@ Calls marked ⚠️ are documented but **not registered by the plug-in** — dep
 | [`getCurrentProfile(ResultCallback<ProfileInfo>)`](host/profiles.md#getcurrentprofileresultcallbackprofileinfo) | [Profiles](host/profiles.md) |
 | [`getCurrentScene(ResultCallback<SceneInfo>)`](host/scenes.md#getcurrentsceneresultcallbacksceneinfo) | [Scenes](host/scenes.md) |
 | [`getCurrentScene({ videoCompositionId }, ResultCallback<SceneInfo>)`](host/scenes.md#getcurrentscene-videocompositionid-resultcallbacksceneinfo) | [Scenes](host/scenes.md) |
+| [`getCurrentSceneCollectionProperties(ResultCallback<SceneCollectionInfo>)`](host/scene-collections.md#getcurrentscenecollectionpropertiesresultcallbackscenecollectioninfo) | [Scene collections](host/scene-collections.md) |
 | [`getCurrentSceneItemPropertiesById(SceneItemInfo, ResultCallback<success>)`](host/scene-items.md#getcurrentsceneitempropertiesbyidsceneiteminfo-resultcallbacksuccess) | [Scene items](host/scene-items.md) |
 | [`getCurrentSceneItemsAuxiliaryActions(ResultCallback<ActionInfo[]>)`](host/scene-items.md#getcurrentsceneitemsauxiliaryactionsresultcallbackactioninfo) | [Scene items](host/scene-items.md) |
 | [`getEncoderProperties(EncoderInfo, ResultCallback<ObsEncoderInfo \| null>)`](host/encoders.md#getencoderpropertiesencoderinfo-resultcallbackobsencoderinfo-null) | [Encoders](host/encoders.md) |
