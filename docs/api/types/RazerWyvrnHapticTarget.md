@@ -7,11 +7,13 @@ One body target of a
 
 | **Property** | **Type** | **Description** |
 | --- | --- | --- |
-| target | string | Body region, e.g. `"Chest"`, `"Hand"`, `"Waist"`. |
-| spatialization | string | e.g. `"Global"`. |
+| target | string | Body region: `hand`, `head`, `chest`, `waist`, `leg`, `all`, `down`, `top`. |
+| spatialization | string | `global`, `left` or `right`. |
 | gain | number | Intensity multiplier. |
 
-**Note:** `target` is passed through exactly as the configuration writes it. The
-shipped data contains both a lowercase `"waist"` and the misspelling `"Wasit"`;
-a caller mapping these to body regions should see what the data actually says
-rather than a cleaned-up version of it.
+**Note:** values are normalised to camelCase from the vendor's own
+capitalisation — see [Enum
+values](../host/razer-wyvrn.md#enum-values). That folds the `Waist`/`waist`
+split in the source data onto one value, but does not repair the `Wasit` typo
+that also occurs, which arrives as `wasit`. A caller mapping targets to body
+regions should expect that.

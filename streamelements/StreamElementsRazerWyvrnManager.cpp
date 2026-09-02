@@ -613,18 +613,47 @@ size_t StreamElementsRazerWyvrnManager::GetEventCount()
 	return m_events.size();
 }
 
+std::string
+StreamElementsRazerWyvrnManager::ResolveEventId(const std::string &id)
+{
+	if (id.empty())
+		return std::string();
+
+	const std::string needle = ToLower(id);
+
+	std::lock_guard<std::mutex> lock(m_mutex);
+
+	if (!m_eventsScanned)
+		ScanEventsLocked();
+
+	for (const auto &event : m_events) {
+		if (ToLower(event.id) == needle)
+			return event.id;
+	}
+
+	return std::string();
+}
+
 /* ========================================================================= */
 
 //
 // The device a Chroma effect targets, taken from the trailing "_<Device>" of
-// its name. Empty when the suffix is not one we know -- reporting nothing beats
-// reporting a guess, since the caller uses this to pick the grid dimensions and
-// a wrong pick renders as noise.
+// its name, and reported in the API's camelCase vocabulary.
+//
+// Empty when the suffix is not one we know -- reporting nothing beats
+// reporting a guess, since the caller uses this to pick the grid dimensions
+// and a wrong pick renders as noise.
+//
+// KeyboardExtended is in the list because the shipped data uses it: 7 effects
+// on this machine carry that suffix, and without it they reported no device at
+// all. It is the 192-LED grid; plain Keyboard is 132.
 //
 static std::string ChromaDeviceFromEffectName(const std::string &effect)
 {
-	static const char *kDevices[] = {"Keyboard", "Keypad",  "Mouse",
-					 "Mousepad", "Headset", "ChromaLink"};
+	static const char *kDevices[] = {"Keyboard",        "Keypad",
+					 "Mouse",           "Mousepad",
+					 "Headset",         "ChromaLink",
+					 "KeyboardExtended"};
 
 	const auto sep = effect.rfind('_');
 
@@ -635,7 +664,7 @@ static std::string ChromaDeviceFromEffectName(const std::string &effect)
 
 	for (const char *device : kDevices) {
 		if (suffix == device)
-			return suffix;
+			return RazerWyvrnCamelCaseEnum(suffix);
 	}
 
 	return std::string();

@@ -100,6 +100,25 @@ struct StreamElementsRazerWyvrnEventInfo {
 //
 // Takes a bare filename, not a path.
 //
+//
+// Normalise a config's enum-ish value into the vocabulary the JS API exposes:
+// camelCase, or plain lowercase for a single word.
+//
+// The rule is exactly "lowercase the first character, leave the rest", which is
+// enough for every value the shipped configurations actually contain:
+//
+//     Chest -> chest        Global -> global      Merge -> merge
+//     VeryHigh -> veryHigh  ChromaLink -> chromaLink
+//     KeyboardExtended -> keyboardExtended
+//
+// It also folds the "Waist"/"waist" case split that occurs across vendors into
+// one value. It deliberately does NOT map unknown spellings onto known ones --
+// the real data contains a "Wasit" typo, and inventing a correction for it
+// would hide a genuine data problem behind a value the caller cannot tell apart
+// from a real one.
+//
+std::string RazerWyvrnCamelCaseEnum(const std::string &value);
+
 bool IsRazerWyvrnConfigFileName(const std::string &fileName);
 
 //

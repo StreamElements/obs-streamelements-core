@@ -83,12 +83,54 @@ Fire an event.
 
 Takes the whole [`RazerWyvrnEventInfo`](../types/RazerWyvrnEventInfo.md) object
 rather than a bare string, so an item obtained from `getAllRazerWyvrnEvents` can
-be handed back unmodified; only `id` is read. A bare string is also accepted.
+be handed back unmodified; only `id` and `fallback` are read. A bare string is
+also accepted.
 
-An empty or absent `id` **stops playback**, which is the SDK's own convention.
+`id` is matched case-insensitively, and the event is fired under the spelling
+the configuration uses — so `aim_on` reaches the SDK as `Aim_On`.
+
+### Stopping playback
+
+Three spellings mean the same thing, because a caller clearing an event should
+not have to remember which shape the API wanted:
+
+```js
+window.host.setRazerWyvrnEventName(null, cb);       // null
+window.host.setRazerWyvrnEventName(cb);             // no argument at all
+window.host.setRazerWyvrnEventName({ id: '' }, cb); // an empty id
+```
+
+### `fallback`
+
+`fallback` names another event to try when this one is not declared by any
+configuration on the machine. It takes the same shape and nests to arbitrary
+depth:
+
+```js
+window.host.setRazerWyvrnEventName({
+    id: 'Headshot',
+    fallback: { id: 'Hit',
+                fallback: { id: 'Generic_Impact' } }
+}, cb);
+```
+
+The first entry in the chain that names a real event wins, and only that one is
+fired. If nothing in the chain exists on this machine, **nothing is sent** and
+the call returns `false` — the chain that was tried is written to the OBS log.
+
+The chain is resolved against the scanned configurations, not against the SDK.
+That is deliberate: `CoreSetEventName` accepts an event belonging to a different
+application and reports success, so asking the SDK "did that work?" would always
+answer yes and the fallback would never fire.
+
+Nesting is bounded at 16 levels, since the whole call runs inside the
+process-wide API lock.
+
+### Return value
 
 Returns `false` when the integration is not ready — including during the first
-few seconds of a session, while initialization is still running.
+few seconds of a session, while initialization is still running — and when no
+event in the chain exists on this machine.
 
 **Rate limiting is newest-wins.** The SDK accepts at most 30 events per second.
 An event arriving inside that window is parked rather than dropped, and if
@@ -99,6 +141,34 @@ superseded event is logged to the OBS log so a name that never rendered is
 visible rather than silently absent.
 
 **Data structures:** [`RazerWyvrnEventInfo`](../types/RazerWyvrnEventInfo.md)
+
+## Enum values
+
+Every closed vocabulary this API returns is **camelCase**, or plain lowercase
+where the value is a single word. The configurations on disk use the vendor's
+own capitalisation (`Chest`, `VeryHigh`, `ChromaLink`); it is normalised on the
+way out, by lowercasing the first character and leaving the rest.
+
+| Field | Values |
+| --- | --- |
+| [`RazerWyvrnChromaComponent.device`](../types/RazerWyvrnChromaComponent.md) | `keyboard`, `keyboardExtended`, `keypad`, `mouse`, `mousepad`, `headset`, `chromaLink` |
+| [`RazerWyvrnHapticComponent.mixing`](../types/RazerWyvrnHapticComponent.md) | `merge`, `override` |
+| [`RazerWyvrnHapticComponent.priority`](../types/RazerWyvrnHapticComponent.md) | `veryLow`, `low`, `medium`, `high`, `veryHigh` |
+| [`RazerWyvrnHapticTarget.target`](../types/RazerWyvrnHapticTarget.md) | `hand`, `head`, `chest`, `waist`, `leg`, `all`, `down`, `top` |
+| [`RazerWyvrnHapticTarget.spatialization`](../types/RazerWyvrnHapticTarget.md) | `global`, `left`, `right` |
+| [`RazerWyvrnEventInfo.kind`](../types/RazerWyvrnEventInfo.md) | `exact`, `fallbackPattern` |
+| [`RazerWyvrnStatus.status`](../types/RazerWyvrnStatus.md) | see [RazerWyvrnStatus](../types/RazerWyvrnStatus.md) |
+
+These are the values observed across every configuration installed on a machine
+with Synapse. **Treat the lists as complete but not closed** — a future
+configuration may introduce a value not listed here, and it will arrive
+normalised the same way rather than being dropped.
+
+Normalisation folds case splits in the source data onto one value: both `Waist`
+and `waist` occur in the wild and both arrive as `waist`. It does **not** map
+unknown spellings onto known ones — the shipped data contains a `Wasit` typo,
+which arrives as `wasit` rather than being silently corrected into `waist`,
+because a caller cannot otherwise tell a real value from a repaired one.
 
 ## Rendering previews
 

@@ -119,9 +119,10 @@ ParseTargeting(CefRefPtr<CefDictionaryValue> hapticEvent)
 			continue;
 
 		StreamElementsRazerWyvrnHapticTarget target;
-		target.target = ReadString(entry, "Target");
-		target.spatialization =
-			ReadString(entry, "Spatialization", "Global");
+		target.target =
+			RazerWyvrnCamelCaseEnum(ReadString(entry, "Target"));
+		target.spatialization = RazerWyvrnCamelCaseEnum(
+			ReadString(entry, "Spatialization", "Global"));
 		target.gain = ReadDouble(entry, "Gain", 1.0);
 
 		// An entry with no Target says nothing about where the effect
@@ -185,8 +186,10 @@ void ParseCommandList(CefRefPtr<CefDictionaryValue> root, const char *key,
 				haptic.effect =
 					ReadString(entry, "Haptic_Effect");
 				haptic.loop = ReadInt(entry, "Loop");
-				haptic.mixing = ReadString(entry, "Mixing");
-				haptic.priority = ReadString(entry, "Priority");
+				haptic.mixing = RazerWyvrnCamelCaseEnum(
+					ReadString(entry, "Mixing"));
+				haptic.priority = RazerWyvrnCamelCaseEnum(
+					ReadString(entry, "Priority"));
 				haptic.targeting = ParseTargeting(entry);
 
 				if (!haptic.effect.empty())
@@ -202,6 +205,17 @@ void ParseCommandList(CefRefPtr<CefDictionaryValue> root, const char *key,
 } // namespace
 
 /* ========================================================================= */
+
+std::string RazerWyvrnCamelCaseEnum(const std::string &value)
+{
+	if (value.empty())
+		return value;
+
+	std::string out = value;
+	out[0] = (char)tolower((unsigned char)out[0]);
+
+	return out;
+}
 
 bool IsRazerWyvrnConfigFileName(const std::string &fileName)
 {

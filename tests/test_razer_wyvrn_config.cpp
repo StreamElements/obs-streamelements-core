@@ -129,21 +129,21 @@ static void test_real_config_parses_completely()
 	check(first.haptics[0].effect == "Interact_Environment",
 	      "Haptic_Effect is carried");
 	check(first.haptics[0].loop == 1, "Loop is carried");
-	check(first.haptics[0].mixing == "Merge", "Mixing is carried");
-	check(first.haptics[0].priority == "High", "Priority is carried");
+	check(first.haptics[0].mixing == "merge", "Mixing is carried");
+	check(first.haptics[0].priority == "high", "Priority is carried");
 
 	// Targeting is the half that says *where* on the body an event lands,
 	// and one event routinely drives several regions.
 	check(first.haptics[0].targeting.size() == 3,
 	      "all three body targets are parsed");
 	if (first.haptics[0].targeting.size() == 3) {
-		check(first.haptics[0].targeting[0].target == "Chest",
+		check(first.haptics[0].targeting[0].target == "chest",
 		      "first target is Chest");
-		check(first.haptics[0].targeting[1].target == "Hand",
+		check(first.haptics[0].targeting[1].target == "hand",
 		      "second target is Hand");
-		check(first.haptics[0].targeting[2].target == "Waist",
+		check(first.haptics[0].targeting[2].target == "waist",
 		      "third target is Waist");
-		check(first.haptics[0].targeting[0].spatialization == "Global",
+		check(first.haptics[0].targeting[0].spatialization == "global",
 		      "spatialization is carried");
 		// Gain is written as `1`, not `1.0`, throughout the real files.
 		check(first.haptics[0].targeting[0].gain == 1.0,
@@ -189,7 +189,7 @@ static void test_fallback_commands_are_tagged_distinctly()
 	if (!events[0].haptics.empty() &&
 	    !events[0].haptics[0].targeting.empty()) {
 		check(events[0].haptics[0].targeting[0].spatialization ==
-			      "Left",
+			      "left",
 		      "a non-Global spatialization is carried");
 		check(events[0].haptics[0].targeting[0].gain == 0.7,
 		      "a fractional Gain is carried");
@@ -280,14 +280,46 @@ static void test_targeting_oddities_in_the_shipped_data()
 	if (targeting.size() != 3)
 		return;
 
+	// Both spellings occur in the shipped data. Normalisation folds the case
+	// split onto one value, but leaves the misspelling as its own value --
+	// correcting it would hide a data problem behind a value the caller
+	// cannot tell apart from a real one.
 	check(targeting[0].target == "waist",
-	      "lowercase target passed through");
-	check(targeting[1].target == "Wasit",
-	      "the misspelling in the shipped data is passed through, not corrected");
-	check(targeting[2].spatialization == "Global",
+	      "a lowercase target survives normalisation unchanged");
+	check(targeting[1].target == "wasit",
+	      "the misspelling is camelCased but not corrected");
+	check(targeting[2].spatialization == "global",
 	      "a missing Spatialization defaults to Global");
 }
 
+static void test_enum_values_are_camel_cased()
+{
+	// The rule is "lowercase the first character, leave the rest", which
+	// covers every value the shipped configurations contain.
+	check(RazerWyvrnCamelCaseEnum("Chest") == "chest",
+	      "a single word becomes lowercase");
+	check(RazerWyvrnCamelCaseEnum("VeryHigh") == "veryHigh",
+	      "two words become camelCase");
+	check(RazerWyvrnCamelCaseEnum("KeyboardExtended") == "keyboardExtended",
+	      "the extended keyboard suffix becomes camelCase");
+	check(RazerWyvrnCamelCaseEnum("ChromaLink") == "chromaLink",
+	      "ChromaLink becomes chromaLink");
+
+	// "Waist" and "waist" both occur in the wild; they must land on one
+	// value so a caller can switch on it.
+	check(RazerWyvrnCamelCaseEnum("Waist") ==
+		      RazerWyvrnCamelCaseEnum("waist"),
+	      "a case split in the source data folds into one value");
+
+	// A genuine misspelling stays distinct -- correcting it here would
+	// hide a data problem behind a value the caller cannot tell apart
+	// from a real one.
+	check(RazerWyvrnCamelCaseEnum("Wasit") !=
+		      RazerWyvrnCamelCaseEnum("Waist"),
+	      "a misspelling is not silently mapped onto the correct value");
+
+	check(RazerWyvrnCamelCaseEnum("").empty(), "empty stays empty");
+}
 int main()
 {
 	test_filename_matching_is_case_insensitive();
@@ -298,6 +330,7 @@ int main()
 	test_entries_without_an_id_are_dropped();
 	test_partial_entries_do_not_lose_their_siblings();
 	test_targeting_oddities_in_the_shipped_data();
+	test_enum_values_are_camel_cased();
 
 	if (failures) {
 		std::fprintf(stderr, "%d check(s) failed\n", failures);

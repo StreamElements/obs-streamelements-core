@@ -3456,44 +3456,117 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_END();
 
 	//
-	// Fire an event by name.
+	// Fire an event.
 	//
-	// Takes the RazerWyvrnEventInfo object rather than a bare string, so a
-	// caller can hand back an item from getAllRazerWyvrnEvents unmodified;
-	// `id` is extracted here. A bare string is also accepted, since refusing
-	// it would be gratuitous.
+	// Accepts a RazerWyvrnEventInfo object rather than a bare string, so an
+	// item from getAllRazerWyvrnEvents can be handed straight back; only
+	// `id` and `fallback` are read. A bare string is accepted too.
 	//
-	// An empty or absent id stops playback, which is the SDK's own
-	// convention.
+	// Stopping playback -- the SDK's own convention for an empty name -- is
+	// spelled any of `null`, no argument at all, or an object whose `id` is
+	// empty. All three mean the same thing, because a caller clearing an
+	// event should not have to remember which shape we wanted.
+	//
+	// `fallback` names another event to try when this one is not declared by
+	// any configuration on this machine, and nests to arbitrary depth:
+	//
+	//     { id: "Headshot",
+	//       fallback: { id: "Hit", fallback: { id: "Generic_Impact" } } }
+	//
+	// The chain is resolved against the scan, not against the SDK: the SDK
+	// accepts an event belonging to another application and reports success,
+	// so asking it "did that work?" would always answer yes and the fallback
+	// would never fire.
 	//
 	// Nothing here blocks. API_HANDLER_BEGIN holds a process-wide recursive
 	// mutex that serialises every API call, and SetEventName only parks the
-	// name for the SDK thread -- the call into Razer's DLL happens on that
-	// thread, not this one.
+	// name for the SDK thread.
 	//
 	API_HANDLER_BEGIN("setRazerWyvrnEventName");
 	{
-		std::string name;
+		auto manager = GetRazerWyvrnManager();
 
-		if (args->GetSize() > 0) {
-			CefRefPtr<CefValue> arg = args->GetValue(0);
+		// Bounded so a pathological structure cannot spin here while the
+		// global API mutex is held.
+		const int kMaxFallbackDepth = 16;
 
-			if (arg->GetType() == VTYPE_DICTIONARY) {
-				CefRefPtr<CefDictionaryValue> d =
-					arg->GetDictionary();
+		std::string resolved;
+		std::string tried;
+		bool stopRequested = false;
+		bool sawCandidate = false;
+
+		CefRefPtr<CefValue> arg =
+			args->GetSize() > 0 ? args->GetValue(0) : nullptr;
+
+		if (arg.get() && arg->GetType() == VTYPE_STRING) {
+			const std::string id = arg->GetString().ToString();
+
+			sawCandidate = !id.empty();
+			stopRequested = id.empty();
+			tried = id;
+
+			if (manager.get() && !id.empty())
+				resolved = manager->ResolveEventId(id);
+		} else if (arg.get() && arg->GetType() == VTYPE_DICTIONARY) {
+			CefRefPtr<CefDictionaryValue> d = arg->GetDictionary();
+
+			for (int depth = 0;
+			     d.get() && depth < kMaxFallbackDepth; ++depth) {
+				std::string id;
 
 				if (d->HasKey("id") &&
 				    d->GetType("id") == VTYPE_STRING)
-					name = d->GetString("id").ToString();
-			} else if (arg->GetType() == VTYPE_STRING) {
-				name = arg->GetString().ToString();
+					id = d->GetString("id").ToString();
+
+				if (id.empty() && !d->HasKey("fallback")) {
+					// An explicit empty id, with nothing to
+					// fall back to, is a stop.
+					stopRequested = true;
+					break;
+				}
+
+				if (!id.empty()) {
+					sawCandidate = true;
+					tried += tried.empty() ? id
+							       : (" -> " + id);
+
+					if (manager.get()) {
+						resolved =
+							manager->ResolveEventId(
+								id);
+
+						if (!resolved.empty())
+							break;
+					}
+				}
+
+				if (d->HasKey("fallback") &&
+				    d->GetType("fallback") == VTYPE_DICTIONARY)
+					d = d->GetDictionary("fallback");
+				else
+					d = nullptr;
 			}
+		} else {
+			// null, or no argument at all.
+			stopRequested = true;
 		}
 
-		auto manager = GetRazerWyvrnManager();
+		if (!manager.get()) {
+			result->SetBool(false);
+		} else if (stopRequested || !sawCandidate) {
+			result->SetBool(manager->SetEventName(std::string()));
+		} else if (!resolved.empty()) {
+			result->SetBool(manager->SetEventName(resolved));
+		} else {
+			// Nothing in the chain exists here. Say so rather than
+			// firing a name that cannot render, so the caller can
+			// tell "sent" from "silently did nothing".
+			blog(LOG_INFO,
+			     "obs-streamelements-core: WYVRN: no configuration declares any of '%s'; nothing sent",
+			     tried.c_str());
 
-		result->SetBool(manager.get() ? manager->SetEventName(name)
-					      : false);
+			result->SetBool(false);
+		}
 	}
 	API_HANDLER_END();
 

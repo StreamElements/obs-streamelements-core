@@ -130,6 +130,21 @@ public:
 	size_t GetEventCount();
 
 	//
+	// The canonical id of a scanned event matching `id` case-insensitively,
+	// or an empty string when no configuration on this machine declares it.
+	//
+	// This is what makes a fallback chain resolvable. The SDK cannot answer
+	// the question -- CoreSetEventName accepts a name belonging to another
+	// application and returns success, so "did that work?" is not something
+	// it will tell us. The scan is the only source of truth for whether an
+	// event exists.
+	//
+	// Returns the id as the configuration spells it, so a caller may pass
+	// "aim_on" and the SDK still receives "Aim_On".
+	//
+	std::string ResolveEventId(const std::string &id);
+
+	//
 	// The `razerWyvrn` object shared by getHostCapabilities and the
 	// hostRazerWyvrnStatusChanged event. One serializer, so the two cannot
 	// disagree about what "status" means.
