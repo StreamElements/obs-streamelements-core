@@ -1,0 +1,9 @@
+# Build output: regenerate with `node build.mjs`.
+dist/
+
+# Machine-specific. It points at absolute paths under
+# C:\Program Files (x86)\Interhaptics\hapticFolders on whichever box built the
+# demo, so it cannot be shared. The README documents the format.
+demo-manifest.json
+
+__pycache__/
