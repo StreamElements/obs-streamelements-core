@@ -217,12 +217,19 @@ public:
 		: m_obsSceneManager(obsSceneManager),
 		  m_videoCompositionBase(videoCompositionBase)
 	{
+		// Cached now, while the composition is provably alive. Every later
+		// reader wants the id and nothing else, so caching it means the
+		// composition pointer never has to be dereferenced again -- which
+		// is what makes it safe for the composition to die first.
+		m_videoCompositionId = videoCompositionBase
+					       ? videoCompositionBase->GetId()
+					       : std::string();
+
 		m_asyncTaskQueue = std::make_shared<StreamElementsAsyncTaskQueue>(
 			(std::string(
 				 "SESignalHandlerData for video composition ") +
-			 std::string(videoCompositionBase
-					     ? videoCompositionBase->GetId()
-					     : "unknown"))
+			 (m_videoCompositionId.size() ? m_videoCompositionId
+						      : std::string("unknown")))
 				.c_str());
 
 		AddRef();
@@ -274,7 +281,13 @@ private:
 
 		// std::unique_lock lock(m_scenes_mutex);
 
-		m_videoCompositionBase = nullptr;
+		{
+			std::lock_guard<std::mutex> lock(
+				m_videoCompositionMutex);
+
+			m_videoCompositionBase = nullptr;
+		}
+
 		m_obsSceneManager = nullptr;
 
 		for (auto kv : m_scenes) {
@@ -320,9 +333,13 @@ public:
 		}
 		
 		if (shouldDelete) {
+			// The cached id, not m_videoCompositionBase->GetId():
+			// this runs on the teardown path, which is exactly when
+			// the composition is most likely to be gone already.
 			blog(LOG_INFO,
-			     "[obs-streamelements-core]: released SESignalHandlerData for video composition '%s'", m_videoCompositionBase->GetId().c_str());
-			
+			     "[obs-streamelements-core]: released SESignalHandlerData for video composition '%s'",
+			     m_videoCompositionId.c_str());
+
 			delete this;
 		}
 	}
@@ -496,10 +513,49 @@ public:
 	}
 
 public:
+	//
+	// The id of the video composition these signals belong to, or an empty
+	// string once it has been detached.
+	//
+	// Readers want the id, never the object. Handing back the cached string
+	// keeps the composition pointer from escaping to the OBS signal
+	// callbacks that run on the graphics thread -- which is where it used
+	// to be dereferenced after the composition had been destroyed
+	// (CORE-1114).
+	//
+	std::string GetVideoCompositionId()
+	{
+		std::lock_guard<std::mutex> lock(m_videoCompositionMutex);
+
+		return m_videoCompositionBase ? m_videoCompositionId
+					      : std::string();
+	}
+
+	//
+	// Called by the video composition as it is destroyed.
+	//
+	// Release() alone is not enough: it only reaches ~SESignalHandlerData,
+	// and therefore Clear(), when the refcount happens to drop to zero. If
+	// anything else still holds a reference, the back-pointer survives the
+	// composition and the next signal dereferences freed memory.
+	//
+	void DetachVideoComposition()
+	{
+		// Drain queued work first, so nothing is still using the
+		// composition when we let go of it.
+		Wait();
+
+		std::lock_guard<std::mutex> lock(m_videoCompositionMutex);
+
+		m_videoCompositionBase = nullptr;
+	}
+
 	// char m_header[7] = "header"; // TODO: Remvoe debug marker
 	StreamElementsObsSceneManager *m_obsSceneManager = nullptr;
 	StreamElementsVideoCompositionBase *m_videoCompositionBase = nullptr;
 	obs_scene_t* m_scene = nullptr;
+	std::string m_videoCompositionId;
+	std::mutex m_videoCompositionMutex;
 	// char m_footer[7] = "footer"; // TODO: Remvoe debug marker
 
 private:

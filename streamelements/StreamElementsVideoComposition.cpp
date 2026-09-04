@@ -1469,7 +1469,11 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 		m_currentScene = nullptr;
 	}
 
-	m_signalHandlerData->Wait();
+	// Detach before releasing. Release() only reaches Clear() when the
+	// refcount happens to hit zero here; if anything else still holds a
+	// reference, the back-pointer would outlive this composition and the
+	// next OBS signal would dereference freed memory (CORE-1114).
+	m_signalHandlerData->DetachVideoComposition();
 	m_signalHandlerData->Release();
 	m_signalHandlerData = nullptr;
 }
