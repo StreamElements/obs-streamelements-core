@@ -551,14 +551,19 @@ SerializeObsSceneItemCompositionSettings(obs_source_t *source,
 	return d;
 }
 
-static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
-					obs_scene_t* root_scene,
-					obs_source_t *source,
-					obs_sceneitem_t *sceneitem,
-					const int order = -1,
-					bool serializeDetails = true,
-					bool serializeProperties = false,
-					StreamElementsVideoCompositionBase *videoComposition = nullptr)
+static void SerializeSourceAndSceneItem(
+	CefRefPtr<CefValue> &result, obs_scene_t *root_scene,
+	obs_source_t *source, obs_sceneitem_t *sceneitem, const int order = -1,
+	bool serializeDetails = true, bool serializeProperties = false,
+	// An owning reference, never a raw pointer. A
+	// raw one used to arrive here from an OBS signal
+	// callback on the graphics thread and outlive
+	// what it pointed at (CORE-1114); holding a
+	// shared_ptr means the composition cannot be
+	// destroyed while this call is using it. Null
+	// means "look it up from the scene item".
+	std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition =
+		nullptr)
 {
 	result->SetNull();
 
@@ -575,8 +580,8 @@ static void SerializeSourceAndSceneItem(CefRefPtr<CefValue> &result,
 			return;
 
 		videoComposition = videoCompositionManager
-				->GetVideoCompositionBySceneItemId(sceneItemId,
-								   &root_scene).get();
+					   ->GetVideoCompositionBySceneItemId(
+						   sceneItemId, &root_scene);
 	}
 
 	root->SetString("id", sceneItemId);
@@ -927,14 +932,40 @@ static void dispatch_sceneitem_event(void *my_data, obs_sceneitem_t *sceneitem,
 		obs_source_t *sceneitem_source =
 			obs_sceneitem_get_source(sceneitem);
 
+		// Resolve the composition through the manager rather than
+		// following a back-pointer from the signal handler data. The
+		// handler data only remembers the composition's *id*; the
+		// manager owns the object, so what comes back is either a live
+		// owning reference or null. That is what makes it safe for the
+		// composition to be destroyed while signals are still being
+		// delivered on the graphics thread (CORE-1114).
+		std::shared_ptr<StreamElementsVideoCompositionBase>
+			videoComposition;
+
+		if (my_data &&
+		    StreamElementsGlobalStateManager::IsInstanceAvailable()) {
+			const std::string compositionId =
+				((SESignalHandlerData *)my_data)
+					->GetVideoCompositionId();
+
+			auto videoCompositionManager =
+				StreamElementsGlobalStateManager::GetInstance()
+					->GetVideoCompositionManager();
+
+			if (compositionId.size() &&
+			    videoCompositionManager.get())
+				videoComposition =
+					videoCompositionManager
+						->GetVideoCompositionById(
+							compositionId);
+		}
+
 		// this can deadlock due to full_lock(obs_scene) in obs_sceneitem_get_group
-		SerializeSourceAndSceneItem(
-			item, obs_sceneitem_get_scene(sceneitem),
-			sceneitem_source, sceneitem, -1, serializeDetails,
-			false,
-			my_data ? ((SESignalHandlerData *)my_data)
-					  ->m_videoCompositionBase
-				: nullptr);
+		SerializeSourceAndSceneItem(item,
+					    obs_sceneitem_get_scene(sceneitem),
+					    sceneitem_source, sceneitem, -1,
+					    serializeDetails, false,
+					    videoComposition);
 
 		std::string json =
 			CefWriteJSON(item, JSON_WRITER_DEFAULT).ToString();
@@ -2186,8 +2217,8 @@ void StreamElementsObsSceneManager::DeserializeObsBrowserSource(
 			// Result
 			SerializeSourceAndSceneItem(
 				output, obs_sceneitem_get_scene(sceneitem),
-				source, sceneitem, true, false,
-				videoComposition.get());
+				source, sceneitem, -1, true, false,
+				videoComposition);
 
 			obs_sceneitem_release(SETRACE_DECREF(sceneitem));
 		}
@@ -2290,8 +2321,8 @@ void StreamElementsObsSceneManager::DeserializeObsGameCaptureSource(
 			// Result
 			SerializeSourceAndSceneItem(
 				output, obs_sceneitem_get_scene(sceneitem),
-				source, sceneitem, true, false,
-				videoComposition.get());
+				source, sceneitem, -1, true, false,
+				videoComposition);
 
 			obs_sceneitem_release(SETRACE_DECREF(sceneitem));
 		}
@@ -2458,8 +2489,8 @@ void StreamElementsObsSceneManager::DeserializeObsVideoCaptureSource(
 				SerializeSourceAndSceneItem(
 					output,
 					obs_sceneitem_get_scene(sceneitem),
-					source, sceneitem, true, false,
-					videoComposition.get());
+					source, sceneitem, -1, true, false,
+					videoComposition);
 
 				obs_sceneitem_release(SETRACE_DECREF(sceneitem));
 			}
@@ -2582,8 +2613,8 @@ void StreamElementsObsSceneManager::DeserializeObsNativeSource(
 			// Result
 			SerializeSourceAndSceneItem(
 				output, obs_sceneitem_get_scene(sceneitem),
-				source, sceneitem, true, false,
-				videoComposition.get());
+				source, sceneitem, -1, true, false,
+				videoComposition);
 
 			obs_sceneitem_release(SETRACE_DECREF(sceneitem));
 		}
@@ -2667,7 +2698,7 @@ void StreamElementsObsSceneManager::DeserializeObsSceneItemGroup(
 		SerializeSourceAndSceneItem(
 			output, obs_sceneitem_get_scene(args.sceneitem),
 			obs_sceneitem_get_source(args.sceneitem),
-			args.sceneitem, true, false, videoComposition.get());
+			args.sceneitem, -1, true, false, videoComposition);
 
 		obs_sceneitem_release(SETRACE_DECREF(args.sceneitem));
 	}
@@ -2745,11 +2776,10 @@ void StreamElementsObsSceneManager::SerializeObsSceneItems(
 
 			CefRefPtr<CefValue> item = CefValue::Create();
 
-			SerializeSourceAndSceneItem(
-				item, scene, source, it,
-				context.list->GetSize(), true,
-				serializeProperties,
-				context.videoComposition.get());
+			SerializeSourceAndSceneItem(item, scene, source, it,
+						    context.list->GetSize(),
+						    true, serializeProperties,
+						    context.videoComposition);
 
 			context.list->SetValue(context.list->GetSize(), item);
 		}
@@ -3295,10 +3325,9 @@ void StreamElementsObsSceneManager::SetObsSceneItemPropertiesById(
 	}
 
 	// Result
-	SerializeSourceAndSceneItem(output,
-					obs_sceneitem_get_scene(sceneitem),
-					source, sceneitem, true, false,
-					videoComposition.get());
+	SerializeSourceAndSceneItem(output, obs_sceneitem_get_scene(sceneitem),
+				    source, sceneitem, -1, true, false,
+				    videoComposition);
 }
 
 void StreamElementsObsSceneManager::GetObsSceneItemPropertiesById(
@@ -3334,8 +3363,8 @@ void StreamElementsObsSceneManager::GetObsSceneItemPropertiesById(
 
 	// Result
 	SerializeSourceAndSceneItem(output, obs_sceneitem_get_scene(sceneitem),
-				    source, sceneitem, true, true,
-				    videoComposition.get());
+				    source, sceneitem, -1, true, true,
+				    videoComposition);
 }
 
 void StreamElementsObsSceneManager::SerializeInputSourceClasses(
