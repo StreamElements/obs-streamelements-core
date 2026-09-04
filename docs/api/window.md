@@ -867,7 +867,9 @@ Available since API version 6.6
 
 **Payload**: null
 
-### `hostRazerWyvrnStatusChanged`
+### `⚠️ hostRazerWyvrnStatusChanged`
+
+> **Not available in this release** — see [Razer WYVRN](host/razer-wyvrn.md).
 
 Fired when the [Razer WYVRN](host/razer-wyvrn.md) integration changes state — becoming ready, failing to initialize, or shutting down.
 

@@ -24,7 +24,9 @@ struct QCefCookieManager;
 #include "StreamElementsNativeOBSControlsManager.hpp"
 #include "StreamElementsProfilesManager.hpp"
 #include "StreamElementsBackupManager.hpp"
+#ifdef SE_ENABLE_WYVRN
 #include "StreamElementsRazerWyvrnManager.hpp"
+#endif
 #include "StreamElementsCleanupManager.hpp"
 #include "StreamElementsPreviewManager.hpp"
 #include "StreamElementsWebsocketApiServer.hpp"
@@ -186,10 +188,12 @@ public:
 	{
 		return m_backupManager;
 	}
+#ifdef SE_ENABLE_WYVRN
 	std::shared_ptr<StreamElementsRazerWyvrnManager> GetRazerWyvrnManager()
 	{
 		return m_razerWyvrnManager;
 	}
+#endif
 	std::shared_ptr<StreamElementsCleanupManager> GetCleanupManager()
 	{
 		return m_cleanupManager;
@@ -294,8 +298,10 @@ private:
 	std::shared_ptr<StreamElementsProfilesManager> m_profilesManager =
 		nullptr;
 	std::shared_ptr<StreamElementsBackupManager> m_backupManager = nullptr;
+#ifdef SE_ENABLE_WYVRN
 	std::shared_ptr<StreamElementsRazerWyvrnManager> m_razerWyvrnManager =
 		nullptr;
+#endif
 	std::shared_ptr<StreamElementsCleanupManager> m_cleanupManager =
 		nullptr;
 	std::shared_ptr<StreamElementsPreviewManager> m_previewManager =

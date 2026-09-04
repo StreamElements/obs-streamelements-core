@@ -76,7 +76,8 @@ grep -rho 'API_HANDLER_BEGIN("[^"]*"' streamelements/ | sed 's/.*("//;s/"//' | s
 
 Diffing that against the `##` signatures under `docs/api/host/` is what found
 both corrections above. It also lists calls documented but absent from the code
-(`dispatchKeyboardEvent`, `dispatchMouseEvent`, `reloadAllBrowserSources`,
+(`dispatchKeyboardEvent`, `dispatchMouseEvent`, `getHostCapabilities`,
+`reloadAllBrowserSources`,
 `getContainerForeignPopupWindowsProperties`,
 `setContainerForeignPopupWindowsProperties`, `setCurrentProfileById`), one
 registered but undocumented (`getCurrentSceneCollectionProperties`), and three
@@ -89,12 +90,12 @@ that was **removed** from one that was **never built** -- the code alone cannot.
 It distinguishes three cases: deprecated-and-removed (four calls, which say so in
 their own text), a name that does not match the implementation
 (`setCurrentProfileById` -> `setCurrentProfile`), and genuinely unexplained
-(`reloadAllBrowserSources` -- neither deprecated nor ever built).
+(`getHostCapabilities`, `reloadAllBrowserSources` -- neither deprecated nor
+ever built).
 
-`getHostCapabilities` was the second of those, documented since API 1.8 and
-never implemented. It is implemented as of API 6.8 (CORE-1022), which is where
-Razer WYVRN availability is reported, so it is no longer an anomaly and its
-marker is gone from the docs.
+`getHostCapabilities` has an implementation in the tree (CORE-1022), but it is
+compiled out along with the rest of API 6.8 while Razer WYVRN is held back, so
+it remains unregistered and still carries its marker.
 
 `getCurrentSceneCollectionProperties` was reported as registered but
 undocumented. It was in fact documented all along -- its heading had lost its
