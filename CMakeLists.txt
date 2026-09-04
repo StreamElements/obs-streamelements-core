@@ -62,7 +62,11 @@ message(STATUS "obs-streamelements-core: crash handler backend: ${STREAMELEMENTS
 # RzChromatic64.dll dynamically and verifies its Authenticode signature, so there
 # is no link-time dependency on Razer and a machine without Synapse simply
 # reports the subsystem unavailable.
-option(STREAMELEMENTS_ENABLE_WYVRN "Build the Razer WYVRN integration" ON)
+# Off for now. The integration is complete and tested, but is being held back
+# from a release while the hardware behaviour is confirmed -- with this off,
+# none of it compiles and none of its API is registered, so a build ships no
+# trace of it. Turning this back ON is the whole of reintegration.
+option(STREAMELEMENTS_ENABLE_WYVRN "Build the Razer WYVRN integration" OFF)
 
 if (STREAMELEMENTS_ENABLE_WYVRN AND NOT WIN32)
 	# Not a supported target. Forced off rather than failing, so a macOS
@@ -505,13 +509,7 @@ if(MSVC)
 	endforeach()
 endif()
 
-# The WYVRN manager and its config parser are always compiled: with the option
-# off they report "not compiled in" and the API calls still answer, so page
-# JavaScript sees a consistent surface on every platform. Only the vendored SDK
-# below is conditional.
 set(obs-streamelements-core_SOURCES
-	streamelements/StreamElementsRazerWyvrnConfig.cpp
-	streamelements/StreamElementsRazerWyvrnManager.cpp
 	obs-streamelements-core-plugin.cpp
 	deps/json11/json11.cpp
 	deps/base64/base64.cpp
@@ -666,8 +664,6 @@ if (ENABLE_SENTRY)
 endif()
 
 set(obs-streamelements-core_HEADERS
-	streamelements/StreamElementsRazerWyvrnConfig.hpp
-	streamelements/StreamElementsRazerWyvrnManager.hpp
 	deps/json11/json11.hpp
 	deps/base64/base64.hpp
 	deps/obs-websocket-api/obs-websocket-api.h
@@ -785,12 +781,16 @@ endif()
 # invariant in tests/ asserts it stays absent.
 if (STREAMELEMENTS_ENABLE_WYVRN)
 	list(APPEND obs-streamelements-core_SOURCES
+		streamelements/StreamElementsRazerWyvrnConfig.cpp
+		streamelements/StreamElementsRazerWyvrnManager.cpp
 		deps/wyvrn-sdk/WyvrnAPI.cpp
 		deps/wyvrn-sdk/UnicodeWyvrnAPI.cpp
 		deps/wyvrn-sdk/VerifyLibrarySignature.cpp
 		deps/wyvrn-sdk/WyvrnLogger.cpp)
 
 	list(APPEND obs-streamelements-core_HEADERS
+		streamelements/StreamElementsRazerWyvrnConfig.hpp
+		streamelements/StreamElementsRazerWyvrnManager.hpp
 		deps/wyvrn-sdk/WyvrnAPI.h
 		deps/wyvrn-sdk/UnicodeWyvrnAPI.h
 		deps/wyvrn-sdk/VerifyLibrarySignature.h

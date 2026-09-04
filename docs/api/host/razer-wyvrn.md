@@ -1,5 +1,12 @@
 # Razer WYVRN
 
+> ⚠️ **Not available in this release.** The integration is complete and lives in
+> the repository, but it is compiled out by default
+> (`STREAMELEMENTS_ENABLE_WYVRN=OFF`) while its behaviour is confirmed against
+> real hardware. In a build without it, none of the calls on this page are
+> registered and `getHostCapabilities` is not registered either. This page
+> documents what returns when the option is turned back on.
+
 `window.host`
 
 Chroma RGB lighting and Sensa HD haptics, driven by *naming* an event. What that

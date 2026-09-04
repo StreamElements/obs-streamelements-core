@@ -519,6 +519,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandler(
 
 static std::recursive_mutex s_sync_api_call_mutex;
 
+#ifdef SE_ENABLE_WYVRN
 //
 // The WYVRN manager, or null. Absent both before Initialize() has created it
 // and after Shutdown() has released it -- and Shutdown() is exactly when a page
@@ -559,6 +560,7 @@ static CefRefPtr<CefValue> SerializeRazerWyvrnStatus()
 
 	return result;
 }
+#endif
 
 #define API_HANDLER_BEGIN(name) \
 	RegisterIncomingApiCallHandler(name, []( \
@@ -3381,6 +3383,17 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_END();
 
 	//
+	// Held back for this release along with the rest of API 6.8.
+	//
+	// getHostCapabilities is grouped with the Razer WYVRN calls on purpose:
+	// the `razerWyvrn` member is the only thing it had to report, so
+	// shipping it alone would mean publishing a new API version whose sole
+	// content is an object saying the feature is absent. The whole 6.8
+	// surface returns together when STREAMELEMENTS_ENABLE_WYVRN goes back
+	// on, and HOST_API_VERSION_MINOR goes back to 8 with it.
+	//
+#ifdef SE_ENABLE_WYVRN
+	//
 	// Host capabilities. Documented since API 1.8 and never implemented until
 	// now -- so nothing can depend on the old shape, and the documented
 	// `sceneCollections` member is kept purely for fidelity with the
@@ -3569,6 +3582,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		}
 	}
 	API_HANDLER_END();
+#endif
 
 	API_HANDLER_BEGIN("crashProgram");
 	{

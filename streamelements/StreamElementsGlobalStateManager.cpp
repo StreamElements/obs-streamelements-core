@@ -472,6 +472,7 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		std::make_shared<WindowStateChangeEventFilter>(
 			mainWindow());
 
+#ifdef SE_ENABLE_WYVRN
 	// After the websocket API server, because reaching Ok or a failure
 	// status dispatches hostRazerWyvrnStatusChanged through it.
 	//
@@ -481,6 +482,7 @@ void StreamElementsGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_razerWyvrnManager =
 		std::make_shared<StreamElementsRazerWyvrnManager>();
 	m_razerWyvrnManager->Start();
+#endif
 
 	m_outputManager =
 		std::make_shared<StreamElementsOutputManager>(
@@ -716,9 +718,11 @@ void StreamElementsGlobalStateManager::Shutdown()
 	// websocket API server, so the ShuttingDown status reaches the page,
 	// and the crash handler below, so a fault inside Razer's DLL is still
 	// reported.
+#ifdef SE_ENABLE_WYVRN
 	if (m_razerWyvrnManager) {
 		m_razerWyvrnManager->Shutdown();
 	}
+#endif
 
 	// Shutdown on the main thread. No platform guard: StopAsyncHangDetection()
 	// is a no-op on backends that have no hang detection.
@@ -765,7 +769,9 @@ void StreamElementsGlobalStateManager::Shutdown()
 
 	m_profilesManager = nullptr;
 	m_backupManager = nullptr;
+#ifdef SE_ENABLE_WYVRN
 	m_razerWyvrnManager = nullptr;
+#endif
 	m_cleanupManager = nullptr;
 	m_previewManager = nullptr;
 	m_websocketApiServer = nullptr;
