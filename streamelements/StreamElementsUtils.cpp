@@ -440,6 +440,18 @@ std::future<void> __QtPostTask_Impl(std::function<void()> task,
 	return promise->get_future();
 }
 
+static std::atomic<bool> s_shuttingDown(false);
+
+bool IsShuttingDown()
+{
+	return s_shuttingDown.load();
+}
+
+void SetShuttingDown()
+{
+	s_shuttingDown.store(true);
+}
+
 std::future<void> __QtExecSync_Impl(std::function<void()> task,
 				    std::string file, int line)
 {
@@ -456,6 +468,21 @@ std::future<void> __QtExecSync_Impl(std::function<void()> task,
 		promise.set_value();
 		return promise.get_future();
 	} else {
+		// Same contract as the crash gate above, for the same reason:
+		// once the Qt thread has left its event loop the task will never
+		// run, so waiting for it is waiting forever.
+		//
+		// This is not hypothetical. The updater's shutdown blocks the Qt
+		// thread until an in-flight update check finishes, and that check
+		// finishes by calling QtExecSync -- each waiting on the other, a
+		// deadlock caught in a live dump with both halves visible
+		// (CORE-1131).
+		if (IsShuttingDown()) {
+			std::promise<void> promise;
+			promise.set_value();
+			return promise.get_future();
+		}
+
 		std::future<void> result = __QtPostTask_Impl(task, file, line);
 
 		result.wait();
