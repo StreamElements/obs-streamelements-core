@@ -24,15 +24,33 @@ StreamElementsBrowserWidgetManager::~StreamElementsBrowserWidgetManager()
 	// This runs before the base destructor deletes any dock, so on the OBS
 	// teardown path every entry here may already have been destroyed by Qt
 	// along with its dock. QPointer makes that visible (CORE-786).
+	//
+	// Closing each browser here, rather than leaving it to
+	// ~StreamElementsBrowserWidget, is deliberate and is the whole point of
+	// this loop (CORE-1060).
+	//
+	// QCefWidgetInternal::closeBrowser() runs a nested Qt event loop for up
+	// to a second: with CEF configured for an external message pump it is
+	// only driven by a Qt timer, so waiting for the browser to close means
+	// keeping Qt's loop turning. That loop delivers every other queued event
+	// too. Reached from the widget's destructor -- which is where the base
+	// class ends up, several frames inside ~QWidget and deleteChildren -- it
+	// hands control to unrelated code while our widget tree is half
+	// destroyed. A third-party plugin enumerating docks at that moment
+	// dereferenced a child that was already gone.
+	//
+	// Called here the same loop runs against an intact widget tree, which is
+	// what makes it safe. DestroyBrowser() is idempotent, so the destructor's
+	// own call becomes a no-op.
 	for (auto kv : m_browserWidgets) {
 		if (!kv.second)
 			continue;
 
-		kv.second->RemoveVideoCompositionView();
+		kv.second->DestroyBrowser();
 	}
 
 	if (m_notificationBarBrowserWidget) {
-		m_notificationBarBrowserWidget->RemoveVideoCompositionView();
+		m_notificationBarBrowserWidget->DestroyBrowser();
 	}
 }
 
