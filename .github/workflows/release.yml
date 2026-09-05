@@ -16,6 +16,7 @@ on:
         options:
           - windows
           - macos
+          - both
         required: true
         default: windows
 
@@ -43,6 +44,23 @@ jobs:
   main:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+
+    strategy:
+      # `both` runs this job twice, which is what promoting a version has always
+      # meant -- every hop below is convergent precisely because each version is
+      # promoted once per platform, and the second pass only re-asserts what the
+      # first wrote. Selecting `both` just stops that being two manual dispatches.
+      #
+      # Serialised, never parallel. The two legs share one GitHub release and one
+      # Linear release; running them at the same time would have them racing to
+      # create the same objects, and "convergent" only holds if the passes are
+      # ordered.
+      max-parallel: 1
+      # Stop if the first platform fails, rather than promoting the second on top
+      # of a broken hop. This matches what dispatching twice by hand would do.
+      fail-fast: true
+      matrix:
+        platform: ${{ fromJSON(github.event.inputs.platform == 'both' && '["windows","macos"]' || format('["{0}"]', github.event.inputs.platform)) }}
 
     # Which transitions touch a GitHub release. Naming them once here keeps the same
     # booleans out of several `if:` expressions further down.
@@ -81,7 +99,7 @@ jobs:
     steps:
       - name: debug
         run: |
-          echo "${{ github.event.inputs.platform }}: ${{ github.event.inputs.from }} -> ${{ github.event.inputs.to }}   (dry-run: ${{ github.event.inputs.dry-run }} ${{ github.event.inputs.dry-run == 'true' }})"
+          echo "${{ matrix.platform }}: ${{ github.event.inputs.from }} -> ${{ github.event.inputs.to }}   (dry-run: ${{ github.event.inputs.dry-run }} ${{ github.event.inputs.dry-run == 'true' }})"
       - name: Validate Input
         run: |
           if [ "${{ github.event.inputs.from }}" = "${{ github.event.inputs.to }}" ]; then
@@ -149,7 +167,7 @@ jobs:
               exit 1
           fi
 
-          echo "::notice::validation passed for transfer from '${{ github.event.inputs.from }}' to '${{ github.event.inputs.to}}' on ${{ github.event.inputs.platform}} (dry-run: ${{ github.event.inputs.dry-run }}; is-rollback: ${{ github.event.inputs.is-rollback }})"
+          echo "::notice::validation passed for transfer from '${{ github.event.inputs.from }}' to '${{ github.event.inputs.to}}' on ${{ matrix.platform}} (dry-run: ${{ github.event.inputs.dry-run }}; is-rollback: ${{ github.event.inputs.is-rollback }})"
 
       - uses: actions/checkout@v4
         with:
@@ -169,7 +187,7 @@ jobs:
       - name: Download manifest, version SVG and release notes
         id: download
         run: |
-          curl -f --output obs-streamelements.manifest https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.from }}/obs-streamelements.manifest
+          curl -f --output obs-streamelements.manifest https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ matrix.platform }}/${{ github.event.inputs.from }}/obs-streamelements.manifest
 
           # The version badge is cosmetic -- it is the image the README embeds -- and it
           # is missing from beta, latest and stable on both platforms. Fetching it with
@@ -182,7 +200,7 @@ jobs:
           # would be worse than none. So the upload is skipped instead and the
           # destination keeps whatever badge it had.
           if curl -fsS --output obs-streamelements.version.svg \
-              "https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.from }}/obs-streamelements.version.svg"; then
+              "https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ matrix.platform }}/${{ github.event.inputs.from }}/obs-streamelements.version.svg"; then
             echo "has_version_svg=true" >> $GITHUB_OUTPUT
           else
             echo "::warning::no obs-streamelements.version.svg on '${{ github.event.inputs.from }}'; the version badge on '${{ github.event.inputs.to }}' will not be updated"
@@ -199,7 +217,7 @@ jobs:
           # destination's previous notes in place would leave it describing a build it no
           # longer points at. Writing the placeholder keeps all three in step.
           if curl -fsS --output obs-streamelements.release_notes.md \
-              "https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.from }}/obs-streamelements.release_notes.md"; then
+              "https://cdn.streamelements.com/obs/dist/obs-streamelements/${{ matrix.platform }}/${{ github.event.inputs.from }}/obs-streamelements.release_notes.md"; then
             echo "::notice::fetched release notes from '${{ github.event.inputs.from }}'"
             echo "has_release_notes=true" >> $GITHUB_OUTPUT
           else
@@ -235,7 +253,7 @@ jobs:
           mode: resolve
           github-token: ${{ secrets.GITHUB_TOKEN }}
           manifest: ${{ github.workspace }}/obs-streamelements.manifest
-          platform: ${{ github.event.inputs.platform }}
+          platform: ${{ matrix.platform }}
           to: ${{ github.event.inputs.to }}
           is-rollback: ${{ github.event.inputs.is-rollback }}
           output-dir: ${{ github.workspace }}/.release-input
@@ -258,7 +276,7 @@ jobs:
           process_gcloudignore: false
           path: ${{ github.workspace }}
           glob: 'obs-streamelements.manifest'
-          destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.to }}'
+          destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/${{ matrix.platform }}/${{ github.event.inputs.to }}'
           headers: |
             content-type: text/plain; charset=utf-8
             cache-control: 'public, max-age=60'
@@ -280,7 +298,7 @@ jobs:
           process_gcloudignore: false
           path: ${{ github.workspace }}
           glob: 'obs-streamelements.release_notes.md'
-          destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.to }}'
+          destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/${{ matrix.platform }}/${{ github.event.inputs.to }}'
           headers: |
             content-type: text/markdown; charset=utf-8
             cache-control: 'public, max-age=60'
@@ -296,7 +314,7 @@ jobs:
           process_gcloudignore: false
           path: ${{ github.workspace }}
           glob: '{obs-streamelements.version.svg,obs-streamelements.*.version.svg}'
-          destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/${{ github.event.inputs.platform }}/${{ github.event.inputs.to }}'
+          destination: 'cdn.streamelements.com/obs/dist/obs-streamelements/${{ matrix.platform }}/${{ github.event.inputs.to }}'
           headers: |
             cache-control: 'no-store, no-cache, must-revalidate'
 
@@ -680,7 +698,7 @@ jobs:
       # destination channel and protected by manifest-urls.
       - name: Prune old versions from VirusTotal Monitor
         uses: StreamElements/virustotal-monitor-action@v1
-        if: ${{ github.event.inputs.dry-run == 'false' && github.event.inputs.platform == 'windows' }}
+        if: ${{ github.event.inputs.dry-run == 'false' && matrix.platform == 'windows' }}
         with:
           # The action has no default and reads no environment variable — the key is always
           # passed in. Point this at whatever your repo or org calls the secret.
@@ -767,7 +785,7 @@ jobs:
       # every promotion regardless of whether this hop submitted anything.
       - name: Download signed installers for VirusTotal
         id: vt_installers
-        if: ${{ github.event.inputs.dry-run == 'false' && github.event.inputs.platform == 'windows'
+        if: ${{ github.event.inputs.dry-run == 'false' && matrix.platform == 'windows'
           && github.event.inputs.from == 'signed' && github.event.inputs.to == 'qa' }}
         run: |
           set -euo pipefail
@@ -803,7 +821,7 @@ jobs:
           echo "::notice::submitting $name_32 and $name_64 (version $version_number) to VirusTotal Monitor"
 
       - name: Upload signed installers to VirusTotal Monitor
-        if: ${{ github.event.inputs.dry-run == 'false' && github.event.inputs.platform == 'windows'
+        if: ${{ github.event.inputs.dry-run == 'false' && matrix.platform == 'windows'
           && github.event.inputs.from == 'signed' && github.event.inputs.to == 'qa' }}
         uses: StreamElements/virustotal-monitor-action@v1
         with:
