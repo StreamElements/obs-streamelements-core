@@ -3495,7 +3495,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	// mutex that serialises every API call, and SetEventName only parks the
 	// name for the SDK thread.
 	//
-	API_HANDLER_BEGIN("setRazerWyvrnEventName");
+	API_HANDLER_BEGIN("setRazerWyvrnEvent");
 	{
 		auto manager = GetRazerWyvrnManager();
 

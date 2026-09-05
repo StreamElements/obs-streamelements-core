@@ -22,7 +22,7 @@ before assuming otherwise.
 
 **Initialization is asynchronous and takes about 3.4 seconds.** It never blocks
 OBS start, so for the first few seconds of a session the status is
-`initializing` and `setRazerWyvrnEventName` returns `false`. Call
+`initializing` and `setRazerWyvrnEvent` returns `false`. Call
 `getHostCapabilities` first, then subscribe to
 [`hostRazerWyvrnStatusChanged`](../window.md#hostrazerwyvrnstatuschanged) — a
 page that only subscribes will miss the event entirely if it loads after
@@ -82,7 +82,7 @@ whatever the user actually selected.
 
 **Data structures:** [`RazerWyvrnEventInfo`](../types/RazerWyvrnEventInfo.md)
 
-## `setRazerWyvrnEventName(RazerWyvrnEventInfo, ResultCallback<success>)`
+## `setRazerWyvrnEvent(RazerWyvrnEventInfo, ResultCallback<success>)`
 
 **Available since API version 6.8**
 
@@ -102,9 +102,9 @@ Three spellings mean the same thing, because a caller clearing an event should
 not have to remember which shape the API wanted:
 
 ```js
-window.host.setRazerWyvrnEventName(null, cb);       // null
-window.host.setRazerWyvrnEventName(cb);             // no argument at all
-window.host.setRazerWyvrnEventName({ id: '' }, cb); // an empty id
+window.host.setRazerWyvrnEvent(null, cb);       // null
+window.host.setRazerWyvrnEvent(cb);             // no argument at all
+window.host.setRazerWyvrnEvent({ id: '' }, cb); // an empty id
 ```
 
 ### `fallback`
@@ -114,7 +114,7 @@ configuration on the machine. It takes the same shape and nests to arbitrary
 depth:
 
 ```js
-window.host.setRazerWyvrnEventName({
+window.host.setRazerWyvrnEvent({
     id: 'Headshot',
     fallback: { id: 'Hit',
                 fallback: { id: 'Generic_Impact' } }
