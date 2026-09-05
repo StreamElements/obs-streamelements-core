@@ -452,7 +452,12 @@ static bool prompt_for_update(const bool allowUseLastResponse,
 			      const uint64_t avail_version_number,
 			      std::string release_notes)
 {
-	if (!streamelements_updater_is_running)
+	// IsShuttingDown() as well as the flag above: the flag is cleared by
+	// streamelements_updater_shutdown(), so a check that passed a moment
+	// earlier is already stale. Neither closes the race on its own -- the
+	// sliced wait in QtExecSync does that -- but between them an update
+	// prompt does not go up on screen while OBS is closing.
+	if (!streamelements_updater_is_running || IsShuttingDown())
 		return false;
 
 	bool result = false;
