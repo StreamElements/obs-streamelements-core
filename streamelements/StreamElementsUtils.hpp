@@ -564,6 +564,18 @@ void DispatchJSEventContainer(std::string target, std::string event,
 
 void DispatchJSEventGlobal(std::string event, std::string eventArgsJson);
 
+//
+// True once teardown has begun and the Qt main thread has left its event loop
+// for good.
+//
+// From that moment a cross-thread QtExecSync can never be served: the thread it
+// is waiting for is inside our own shutdown and will not process another
+// posted task. Anything still blocking on one deadlocks the shutdown it is
+// blocking (CORE-1131).
+//
+bool IsShuttingDown();
+void SetShuttingDown();
+
 /* ========================================================= */
 
 bool SecureJoinPaths(std::string base, std::string subpath,

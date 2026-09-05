@@ -61,7 +61,16 @@ private slots:
 		reject();
 	}
 
+protected:
+	///
+	// Watches the OBS main window for a close request while this prompt is
+	// up. See the implementation for why it cannot simply be let through.
+	//
+	bool eventFilter(QObject *watched, QEvent *event) override;
+
 private:
 	Ui::ConfirmPendingUpdateDialog *ui;
 	bool m_skipVersionClicked = false;
+	bool m_inExecDialog = false;
+	bool m_closeRequestedDuringExec = false;
 };

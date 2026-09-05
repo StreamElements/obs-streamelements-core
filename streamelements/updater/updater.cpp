@@ -452,7 +452,12 @@ static bool prompt_for_update(const bool allowUseLastResponse,
 			      const uint64_t avail_version_number,
 			      std::string release_notes)
 {
-	if (!streamelements_updater_is_running)
+	// IsShuttingDown() as well as the flag above: the flag is cleared by
+	// streamelements_updater_shutdown(), so a check that passed a moment
+	// earlier is already stale. Neither closes the race on its own -- the
+	// sliced wait in QtExecSync does that -- but between them an update
+	// prompt does not go up on screen while OBS is closing.
+	if (!streamelements_updater_is_running || IsShuttingDown())
 		return false;
 
 	bool result = false;
@@ -1019,10 +1024,29 @@ void streamelements_updater_shutdown(void)
 		streamelements_check_for_updates_signal_id,
 		streamelements_check_for_updates_signal_callback, nullptr);
 
-	os_event_wait(streamelements_check_for_updates_event);
-
-	os_event_destroy(streamelements_check_for_updates_event);
-	streamelements_check_for_updates_event = nullptr;
+	// Bounded, and deliberately so. This waits for an in-flight update check
+	// to release the slot, and that check releases it from a worker that may
+	// itself be waiting on the Qt main thread -- the thread running this
+	// function. The gate in QtExecSync now releases such a worker, so the
+	// wait below should complete promptly; the timeout is the backstop for
+	// anything else that holds the slot.
+	//
+	// A previous build hung here indefinitely on an early shutdown, with the
+	// two halves of the deadlock visible in a live dump.
+	if (os_event_timedwait(streamelements_check_for_updates_event, 5000) ==
+	    0) {
+		os_event_destroy(streamelements_check_for_updates_event);
+		streamelements_check_for_updates_event = nullptr;
+	} else {
+		// Left alive on purpose. Something still holds the slot and will
+		// signal this event when it is done; destroying it here would
+		// have that signal land on freed memory, and nulling the pointer
+		// would have it dereference null. Leaking one event handle as
+		// the process exits is much the lesser defect.
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: updater: an update check was still "
+		     "in flight at shutdown; continuing without waiting for it");
+	}
 
 	s_NetworkDialog = nullptr;
 	s_ConfirmPendingUpdateDialog = nullptr;

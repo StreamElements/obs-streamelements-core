@@ -704,6 +704,11 @@ void StreamElementsGlobalStateManager::Shutdown()
 		return;
 	}
 
+	// Before anything below blocks. From here the Qt main thread is ours and
+	// will not return to its event loop, so a worker waiting on QtExecSync
+	// must be released rather than left to deadlock us (CORE-1131).
+	SetShuttingDown();
+
 	obs_frontend_remove_event_callback(handle_obs_frontend_event, nullptr);
 
 	PersistState(false);
