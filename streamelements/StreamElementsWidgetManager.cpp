@@ -684,6 +684,11 @@ void StreamElementsWidgetManager::DeserializeDockingWidgets(std::string &input)
 	CefRefPtr<CefValue> root = CefParseJSON(
 		CefString(input), JSON_PARSER_ALLOW_TRAILING_COMMAS);
 
+	// Null for unparsable input, and the overload below dereferences it
+	// without checking. Same defect as CORE-1601, one call frame further on.
+	if (!root.get())
+		return;
+
 	DeserializeDockingWidgets(root);
 }
 
