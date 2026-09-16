@@ -1,12 +1,5 @@
 # Razer WYVRN
 
-> ⚠️ **Not available in this release.** The integration is complete and lives in
-> the repository, but it is compiled out by default
-> (`STREAMELEMENTS_ENABLE_WYVRN=OFF`) while its behaviour is confirmed against
-> real hardware. In a build without it, none of the calls on this page are
-> registered and `getHostCapabilities` is not registered either. This page
-> documents what returns when the option is turned back on.
-
 `window.host`
 
 Chroma RGB lighting and Sensa HD haptics, driven by *naming* an event. What that
@@ -14,11 +7,15 @@ event looks and feels like is decided by the WYVRN configurations installed on
 the viewer's machine, not by SE.Live.
 
 **The integration is optional and Windows-only.** It needs Razer Synapse 4 and
-the Chroma App, which most OBS users do not have. Every failure path ends in
-"unavailable" — the calls below still answer normally, they simply report that
-nothing is there. Check
-[`getHostCapabilities`](host-information.md#gethostcapabilitiesresultcallbackhostcapabilities)
-before assuming otherwise.
+the Chroma App, which most OBS users do not have.
+
+- **On Windows**, every failure path ends in "unavailable" — the calls below
+  still answer normally, they simply report that nothing is there. Check
+  [`getHostCapabilities`](host-information.md#gethostcapabilitiesresultcallbackhostcapabilities)
+  before assuming otherwise.
+- **On macOS** the integration is not built. None of the calls on this page
+  are registered, `getHostCapabilities` is not registered either, and the host
+  reports API version 6.7. Check the API version before calling anything here.
 
 **Initialization is asynchronous and takes about 3.4 seconds.** It never blocks
 OBS start, so for the first few seconds of a session the status is

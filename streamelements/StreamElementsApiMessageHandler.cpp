@@ -3383,14 +3383,15 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_END();
 
 	//
-	// Held back for this release along with the rest of API 6.8.
+	// API 6.8, registered only where SE_ENABLE_WYVRN is defined -- Windows
+	// builds, since the option is forced off on every other platform.
 	//
 	// getHostCapabilities is grouped with the Razer WYVRN calls on purpose:
-	// the `razerWyvrn` member is the only thing it had to report, so
-	// shipping it alone would mean publishing a new API version whose sole
+	// the `razerWyvrn` member is the only thing it has to report, so
+	// registering it alone would publish a new API version whose sole
 	// content is an object saying the feature is absent. The whole 6.8
-	// surface returns together when STREAMELEMENTS_ENABLE_WYVRN goes back
-	// on, and HOST_API_VERSION_MINOR goes back to 8 with it.
+	// surface is on or off together, and Version.hpp derives
+	// HOST_API_VERSION_MINOR from the same switch.
 	//
 #ifdef SE_ENABLE_WYVRN
 	//

@@ -62,11 +62,18 @@ message(STATUS "obs-streamelements-core: crash handler backend: ${STREAMELEMENTS
 # RzChromatic64.dll dynamically and verifies its Authenticode signature, so there
 # is no link-time dependency on Razer and a machine without Synapse simply
 # reports the subsystem unavailable.
-# Off for now. The integration is complete and tested, but is being held back
-# from a release while the hardware behaviour is confirmed -- with this off,
-# none of it compiles and none of its API is registered, so a build ships no
-# trace of it. Turning this back ON is the whole of reintegration.
-option(STREAMELEMENTS_ENABLE_WYVRN "Build the Razer WYVRN integration" OFF)
+# On by default. With it off, none of the integration compiles and none of its
+# API is registered -- getHostCapabilities included -- and the host reports API
+# 6.7 rather than 6.8. It was held back that way for one release (CORE-1022).
+#
+# Toggling this is the whole of the change in either direction: Version.hpp
+# derives HOST_API_VERSION_MINOR from the same switch, so the version a page
+# sees can never disagree with the calls that are actually registered.
+#
+# Note the CMake cache pins the value once set, so an existing build tree that
+# was configured while this defaulted OFF needs -DSTREAMELEMENTS_ENABLE_WYVRN=ON
+# explicitly; a fresh configure picks up the default.
+option(STREAMELEMENTS_ENABLE_WYVRN "Build the Razer WYVRN integration" ON)
 
 if (STREAMELEMENTS_ENABLE_WYVRN AND NOT WIN32)
 	# Not a supported target. Forced off rather than failing, so a macOS
