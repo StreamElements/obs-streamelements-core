@@ -1,2 +1,3 @@
 - Fix: OBS Studio could hang on exit, with the window gone but the process still running, when closed shortly after start-up while an update prompt was on screen
 - Fix: crash when exiting OBS Studio while a SE.Live dock was still starting up
+- Fix: SE.Live crashed on every start-up if its saved layout had been corrupted; the layout is now reset instead
