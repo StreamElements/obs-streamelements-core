@@ -1,2 +1,3 @@
 - Fix: OBS Studio could hang on exit, with the window gone but the process still running, when closed shortly after start-up while an update prompt was on screen
 - Fix: crash when exiting OBS Studio while a SE.Live dock was still starting up
+- Fix: OBS Studio could crash after a scene item group added through SE.Live was removed or ungrouped, the next time an item in that scene was selected, moved, renamed or changed
