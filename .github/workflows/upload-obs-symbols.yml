@@ -145,10 +145,20 @@ jobs:
                 exit 1
               fi
 
+              # Each archive into a folder of its own. The architectures share
+              # relative paths -- bin/64bit/obs.dll is in both Windows archives,
+              # and the Apple-silicon and Intel dSYMs have the same names -- so
+              # unpacking them all into one folder let whichever came last
+              # replace the other's files without a word. The first run of this
+              # workflow uploaded the arm64 obs.dll for every version and never
+              # the x64 one, and Intel dSYMs in place of Apple-silicon ones.
+              dest="$dir/extract/${suffix%%.*}"
+              mkdir -p "$dest"
               case "$name" in
-              *.zip) unzip -q -o "$dir/$name" -d "$dir/extract" ;;
-              *.tar.xz) tar -xJf "$dir/$name" -C "$dir/extract" ;;
+              *.zip) unzip -q -o "$dir/$name" -d "$dest" ;;
+              *.tar.xz) tar -xJf "$dir/$name" -C "$dest" ;;
               esac
+              echo "  $(basename "$dest"): $(find "$dest" -type f | wc -l) files"
               # Delete each archive as soon as it is unpacked: six versions of
               # everything at once does not fit in a runner's free space.
               rm -f "$dir/$name"
