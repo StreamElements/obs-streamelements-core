@@ -916,7 +916,21 @@ static void dispatch_scene_update(void* my_data, calldata_t* cd) {
 	dispatch_scene_update(my_data, cd, false);
 }
 
-static void dispatch_sceneitem_event(void *my_data, obs_sceneitem_t *sceneitem,
+// The id of the video composition a signal's handler data belongs to.
+//
+// Resolved on the signal thread, while the handler data is known to be alive,
+// and passed down by value from there: nothing below it -- and nothing queued
+// for later -- has to hold on to the handler data itself (CORE-1715).
+static std::string get_composition_id(void *my_data)
+{
+	auto signalHandlerData = static_cast<SESignalHandlerData *>(my_data);
+
+	return signalHandlerData ? signalHandlerData->GetVideoCompositionId()
+				 : std::string();
+}
+
+static void dispatch_sceneitem_event(const std::string &compositionId,
+				     obs_sceneitem_t *sceneitem,
 				     std::string eventName,
 				     bool serializeDetails = true)
 {
@@ -942,23 +956,31 @@ static void dispatch_sceneitem_event(void *my_data, obs_sceneitem_t *sceneitem,
 		std::shared_ptr<StreamElementsVideoCompositionBase>
 			videoComposition;
 
-		if (my_data &&
+		if (compositionId.size() &&
 		    StreamElementsGlobalStateManager::IsInstanceAvailable()) {
-			const std::string compositionId =
-				((SESignalHandlerData *)my_data)
-					->GetVideoCompositionId();
-
 			auto videoCompositionManager =
 				StreamElementsGlobalStateManager::GetInstance()
 					->GetVideoCompositionManager();
 
-			if (compositionId.size() &&
-			    videoCompositionManager.get())
+			if (videoCompositionManager.get())
 				videoComposition =
 					videoCompositionManager
 						->GetVideoCompositionById(
 							compositionId);
 		}
+
+		// No composition: it has been destroyed, or -- while the plugin
+		// is still initializing, when the scene manager announces the
+		// items that already exist -- it cannot be looked up yet. For a
+		// null composition SerializeSourceAndSceneItem searches every
+		// composition's scenes for the item, and for OBS's own
+		// composition that means obs_frontend_get_scenes(), which walks
+		// a Qt widget. That is fine on the UI thread. This also runs on
+		// the graphics thread and the task-queue worker, and there the
+		// event is dropped rather than searched for (CORE-1715).
+		const bool onUiThread = obs_in_task_thread(OBS_TASK_UI);
+		if (!videoComposition && !onUiThread)
+			return;
 
 		// this can deadlock due to full_lock(obs_scene) in obs_sceneitem_get_group
 		SerializeSourceAndSceneItem(item,
@@ -976,7 +998,8 @@ static void dispatch_sceneitem_event(void *my_data, obs_sceneitem_t *sceneitem,
 	}
 }
 
-static void dispatch_sceneitem_event(void *my_data, obs_sceneitem_t *sceneitem,
+static void dispatch_sceneitem_event(const std::string &compositionId,
+				     obs_sceneitem_t *sceneitem,
 				     std::string currentSceneEventName,
 				     std::string otherSceneEventName,
 				     bool serializeDetails = true)
@@ -988,12 +1011,12 @@ static void dispatch_sceneitem_event(void *my_data, obs_sceneitem_t *sceneitem,
 		return;
 
 	if (is_active_scene(sceneitem)) {
-		dispatch_sceneitem_event(my_data, sceneitem,
+		dispatch_sceneitem_event(compositionId, sceneitem,
 					 currentSceneEventName,
 					 serializeDetails);
 	}
 
-	dispatch_sceneitem_event(my_data, sceneitem, otherSceneEventName,
+	dispatch_sceneitem_event(compositionId, sceneitem, otherSceneEventName,
 				 serializeDetails);
 }
 
@@ -1010,23 +1033,33 @@ static void dispatch_sceneitem_event(void *my_data, calldata_t *cd,
 	if (!signalHandlerData)
 		return;
 
-	if (shouldDelay) {
-		obs_sceneitem_addref(SETRACE_ADDREF(sceneitem));
-		
-		signalHandlerData->Lock();
+	const std::string compositionId = get_composition_id(my_data);
 
-		signalHandlerData->EnqueueAsyncTask([=]() -> void {
-			dispatch_sceneitem_event(my_data, sceneitem,
+	if (shouldDelay) {
+		// The task must not hold signalHandlerData. That is a per-scene
+		// child, and RemoveSceneRef() deletes it without draining this
+		// queue, so a task still pending then would touch freed memory.
+		// It holds the root instead: the queue and the Lock()/Unlock()
+		// count belong to the root anyway, and the root drains its queue
+		// before it is destroyed (CORE-1715).
+		SESignalHandlerData *root = signalHandlerData->GetRoot();
+
+		obs_sceneitem_addref(SETRACE_ADDREF(sceneitem));
+
+		root->Lock();
+
+		root->EnqueueAsyncTask([=]() -> void {
+			dispatch_sceneitem_event(compositionId, sceneitem,
 						 currentSceneEventName,
 						 otherSceneEventName,
 						 serializeDetails);
 
 			obs_sceneitem_release(SETRACE_DECREF(sceneitem));
 
-			signalHandlerData->Unlock();
+			root->Unlock();
 		});
 	} else {
-		dispatch_sceneitem_event(my_data, sceneitem,
+		dispatch_sceneitem_event(compositionId, sceneitem,
 					 currentSceneEventName,
 					 otherSceneEventName, serializeDetails);
 	}
@@ -1057,12 +1090,14 @@ static void dispatch_source_event(void *my_data, calldata_t *cd,
 		return;
 	}
 
+	const std::string compositionId = get_composition_id(my_data);
+
 	ObsSceneEnumAllItems(scene, [&](obs_sceneitem_t *sceneitem) {
 		obs_source_t *sceneitem_source = obs_sceneitem_get_source(
 			sceneitem); // does not increase refcount
 
 		if (sceneitem_source == source) {
-			dispatch_sceneitem_event(my_data, sceneitem,
+			dispatch_sceneitem_event(compositionId, sceneitem,
 						 currentSceneEventName,
 						 otherSceneEventName, false);
 		}
@@ -1490,9 +1525,10 @@ static void process_scene_item_remove(obs_sceneitem_t *sceneitem,
 		OBSSceneAutoRelease sceneRef = SETRACE_AUTODECREF(
 			signalHandlerData->GetRootSceneRef());
 
-		dispatch_sceneitem_event(signalHandlerData, sceneitem,
-					 "hostActiveSceneItemRemoved",
-					 "hostSceneItemRemoved", false);
+		dispatch_sceneitem_event(
+			signalHandlerData->GetVideoCompositionId(), sceneitem,
+			"hostActiveSceneItemRemoved", "hostSceneItemRemoved",
+			false);
 		dispatch_scene_update(sceneRef, true, signalHandlerData);
 	}
 
@@ -1501,14 +1537,14 @@ static void process_scene_item_remove(obs_sceneitem_t *sceneitem,
 
 	obs_scene_t *group_scene = obs_sceneitem_group_get_scene(sceneitem);
 
+	// Read before remove_scene_signals(): when the group held the last
+	// count on its parent scene, that call deletes signalHandlerData.
+	auto sceneManager = signalHandlerData->m_obsSceneManager;
+
 	remove_scene_signals(group_scene, signalHandlerData);
 
-	if (signalHandlerData) {
-		auto sceneManager = signalHandlerData->m_obsSceneManager;
-
-		if (sceneManager)
-			sceneManager->Update();
-	}
+	if (sceneManager)
+		sceneManager->Update();
 }
 
 static void handle_scene_item_remove(void *my_data, calldata_t *cd)
