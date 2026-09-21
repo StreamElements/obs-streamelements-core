@@ -1603,6 +1603,126 @@ static void check_wyvrn_sdk_calls_stay_on_the_sdk_thread()
 	      "that ran CoreInitSDK");
 }
 
+// --- A null config_t must never reach libobs.
+//
+// GetConfig() ignored config_open()'s result. libobs leaves the config null
+// when it fails -- CONFIG_OPEN_ALWAYS creates the file, so a failure means the
+// directory could not be written at all -- and every accessor handed that
+// straight to libobs, which dereferences it at config->mutex without checking.
+// That is an access violation reading 0x18 on the start-up path, so OBS could
+// not finish launching: 30 users on 26.9.4.994 (CORE-1900, SELIVE-8A).
+//
+// Asserts the three halves of the fix:
+//   * GetConfig() checks the open result and bails out before it touches the
+//     config;
+//   * SaveConfig() skips the in-memory fallback, which has no file and would
+//     otherwise be written into the process working directory;
+//   * no accessor passes GetConfig() straight to a libobs config_* call, and
+//     every null-safe helper actually tests the pointer.
+static void check_config_never_hands_libobs_a_null_config()
+{
+	const std::string cpp = strip_line_comments(
+		slurp("streamelements/StreamElementsConfig.cpp"));
+	const std::string hpp = strip_line_comments(
+		slurp("streamelements/StreamElementsConfig.hpp"));
+
+	const std::string getConfig = function_body(
+		cpp, "config_t* StreamElementsConfig::GetConfig()");
+
+	check(!getConfig.empty(),
+	      "config: StreamElementsConfig::GetConfig() not found -- has it "
+	      "moved? Point this invariant at it (CORE-1900)");
+
+	if (!getConfig.empty()) {
+		const auto opened = getConfig.find("config_open(");
+		const auto tested = getConfig.find("CONFIG_SUCCESS");
+		const auto bailed = getConfig.find("return nullptr;");
+		const auto used = getConfig.find("config_set_default_");
+
+		check(opened != std::string::npos &&
+			      tested != std::string::npos && tested > opened,
+		      "config: GetConfig() must check config_open()'s result -- "
+		      "libobs leaves the config null when it fails (CORE-1900)");
+
+		check(bailed != std::string::npos &&
+			      used != std::string::npos && bailed < used,
+		      "config: GetConfig() must return before it uses a config "
+		      "it could not open (CORE-1900)");
+	}
+
+	const std::string saveConfig =
+		function_body(cpp, "void StreamElementsConfig::SaveConfig()");
+
+	check(saveConfig.find("m_configIsMemoryOnly") != std::string::npos,
+	      "config: SaveConfig() must skip the in-memory fallback, which has "
+	      "no file -- config_save_safe() would write .tmp and .bak into the "
+	      "working directory (CORE-1900)");
+
+	// The trim that reads index -1 when the path comes back empty.
+	check(cpp.find("[strlen(") == std::string::npos,
+	      "config: a path is trimmed with [strlen(...) - 1], which writes to "
+	      "index -1 when the path is empty -- measure it into a variable and "
+	      "test it first (CORE-1900)");
+
+	// Every accessor goes through the null-safe helpers instead. The
+	// helpers call GetConfig() themselves, so what is banned is GetConfig()
+	// appearing inside a libobs config_* call's arguments.
+	for (const char *call : {"config_get_", "config_set_"}) {
+		for (auto p = hpp.find(call); p != std::string::npos;
+		     p = hpp.find(call, p + 1)) {
+			// The call's own argument list, to its closing paren.
+			const auto open = hpp.find('(', p);
+			std::string args;
+			int depth = 0;
+
+			for (auto i = open;
+			     i != std::string::npos && i < hpp.size(); ++i) {
+				if (hpp[i] == '(')
+					++depth;
+				else if (hpp[i] == ')' && --depth == 0)
+					break;
+
+				args.push_back(hpp[i]);
+			}
+
+			check(args.find("GetConfig()") == std::string::npos,
+			      "config: an accessor in StreamElementsConfig.hpp "
+			      "passes GetConfig() to libobs directly; libobs "
+			      "does not null-check it. Use the Read*/Write* "
+			      "helpers (CORE-1900)");
+		}
+	}
+
+	const char *helpers[] = {"ReadUint",  "ReadBool",  "ReadString",
+				 "WriteUint", "WriteBool", "WriteString"};
+
+	for (const char *helper : helpers) {
+		const std::string body =
+			function_body(hpp, std::string(" ") + helper +
+						   "(const char *section");
+
+		check(!body.empty(),
+		      (std::string("config: the null-safe helper ") + helper +
+		       "() is missing from StreamElementsConfig.hpp (CORE-1900)")
+			      .c_str());
+
+		if (body.empty())
+			continue;
+
+		// Each one must test the config before using it: a read returns
+		// its default, a write does nothing.
+		const bool guarded =
+			body.find("config ?") != std::string::npos ||
+			body.find("if (config)") != std::string::npos;
+
+		check(guarded,
+		      (std::string("config: ") + helper +
+		       "() must check the config for null before handing it to "
+		       "libobs (CORE-1900)")
+			      .c_str());
+	}
+}
+
 // --- A rejected file-server request must stop, not fall through.
 //
 // StreamElementsLocalFilesystemHttpServer verifies a session signature before
@@ -1966,6 +2086,7 @@ int main()
 	check_no_config_handle_escapes_an_early_return();
 	check_wyvrn_signature_check_is_not_disabled();
 	check_wyvrn_sdk_calls_stay_on_the_sdk_thread();
+	check_config_never_hands_libobs_a_null_config();
 	check_rejected_signature_stops_the_handler();
 	check_crash_path_filesystem_calls_never_throw();
 

@@ -64,6 +64,74 @@ public:
 
 	config_t* GetObsUserConfig() { return m_obsUserConfig; }
 
+private:
+	//
+	// Every read and write below goes through these.
+	//
+	// GetConfig() can return null -- the profile directory can be
+	// unwritable, or the path invalid -- and libobs dereferences a null
+	// config_t at config->mutex without checking for it, which crashed OBS
+	// on the start-up path (CORE-1900, SELIVE-8A). Passing GetConfig()
+	// straight to a libobs config_* call is what made every accessor a
+	// crash of its own.
+	//
+	uint64_t ReadUint(const char *section, const char *name,
+			  uint64_t defaultValue = 0)
+	{
+		auto config = GetConfig();
+
+		return config ? config_get_uint(config, section, name)
+			      : defaultValue;
+	}
+
+	bool ReadBool(const char *section, const char *name,
+		      bool defaultValue = false)
+	{
+		auto config = GetConfig();
+
+		return config ? config_get_bool(config, section, name)
+			      : defaultValue;
+	}
+
+	std::string ReadString(const char *section, const char *name,
+			       const char *defaultValue = "")
+	{
+		auto config = GetConfig();
+
+		const char *value =
+			config ? config_get_string(config, section, name)
+			       : nullptr;
+
+		// config_get_string() returns null for a key that is not set,
+		// and constructing a std::string from null is undefined.
+		return value ? value : defaultValue;
+	}
+
+	void WriteUint(const char *section, const char *name, uint64_t value)
+	{
+		auto config = GetConfig();
+
+		if (config)
+			config_set_uint(config, section, name, value);
+	}
+
+	void WriteBool(const char *section, const char *name, bool value)
+	{
+		auto config = GetConfig();
+
+		if (config)
+			config_set_bool(config, section, name, value);
+	}
+
+	void WriteString(const char *section, const char *name,
+			 const char *value)
+	{
+		auto config = GetConfig();
+
+		if (config)
+			config_set_string(config, section, name, value);
+	}
+
 public:
 	std::string GetScopedConfigStorageRootPath();
 
@@ -95,48 +163,29 @@ public:
 public:
 	int64_t GetStreamElementsPluginVersion()
 	{
-		return config_get_uint(
-			StreamElementsConfig::GetInstance()->GetConfig(),
-			"Header",
-			"Version");
+		return (int64_t)ReadUint("Header", "Version");
 	}
 
 	int GetStartupFlags()
 	{
-		return (int)config_get_uint(
-			StreamElementsConfig::GetInstance()->GetConfig(),
-			"Startup",
-			"Flags");
+		return (int)ReadUint("Startup", "Flags",
+				     STARTUP_FLAGS_ONBOARDING_MODE);
 	}
 
 	void SetStartupFlags(int value)
 	{
-		config_set_uint(
-			StreamElementsConfig::GetInstance()->GetConfig(),
-			"Startup",
-			"Flags",
-			value);
+		WriteUint("Startup", "Flags", value);
 
 		SaveConfig();
 
 		StreamElementsMessageBus::GetInstance()->PublishSystemState();
 	}
 
-	std::string GetStartupState()
-	{
-		return config_get_string(
-			StreamElementsConfig::GetInstance()->GetConfig(),
-			"Startup",
-			"State");
-	}
+	std::string GetStartupState() { return ReadString("Startup", "State"); }
 
 	void SetStartupState(std::string value)
 	{
-		config_set_string(
-			StreamElementsConfig::GetInstance()->GetConfig(),
-			"Startup",
-			"State",
-			value.c_str());
+		WriteString("Startup", "State", value.c_str());
 
 		SaveConfig();
 	}
@@ -172,39 +221,24 @@ public:
 
 	std::string GetAuxMenuItemsConfig()
 	{
-		const char* value = config_get_string(
-			StreamElementsConfig::GetInstance()->GetConfig(),
-			"Startup", "AuxMenuItems");
-
-		if (!!value)
-			return value;
-		else
-			return "[]";
+		return ReadString("Startup", "AuxMenuItems", "[]");
 	}
 
 	void SetAuxMenuItemsConfig(std::string value)
 	{
-		config_set_string(
-			StreamElementsConfig::GetInstance()->GetConfig(),
-			"Startup", "AuxMenuItems", value.c_str());
+		WriteString("Startup", "AuxMenuItems", value.c_str());
 
 		SaveConfig();
 	}
 
 	bool GetShowBuiltInMenuItems()
 	{
-		const bool value = config_get_bool(
-			StreamElementsConfig::GetInstance()->GetConfig(),
-			"Startup", "ShowBuiltInMenuItems");
-
-		return value;
+		return ReadBool("Startup", "ShowBuiltInMenuItems", true);
 	}
 
 	void SetShowBuiltInMenuItems(bool value)
 	{
-		config_set_bool(
-			StreamElementsConfig::GetInstance()->GetConfig(),
-			"Startup", "ShowBuiltInMenuItems", value);
+		WriteBool("Startup", "ShowBuiltInMenuItems", value);
 
 		SaveConfig();
 	}
@@ -222,96 +256,60 @@ public:
 	//
 	std::string GetCrashReportUserName()
 	{
-		const char *value = config_get_string(
-			StreamElementsConfig::GetInstance()->GetConfig(),
-			"CrashReporting", "UserName");
-
-		return !!value ? value : "";
+		return ReadString("CrashReporting", "UserName");
 	}
 
 	void SetCrashReportUserName(std::string value)
 	{
-		config_set_string(
-			StreamElementsConfig::GetInstance()->GetConfig(),
-			"CrashReporting", "UserName", value.c_str());
+		WriteString("CrashReporting", "UserName", value.c_str());
 
 		SaveConfig();
 	}
 
 	std::string GetCrashReportUserEmail()
 	{
-		const char *value = config_get_string(
-			StreamElementsConfig::GetInstance()->GetConfig(),
-			"CrashReporting", "UserEmail");
-
-		return !!value ? value : "";
+		return ReadString("CrashReporting", "UserEmail");
 	}
 
 	void SetCrashReportUserEmail(std::string value)
 	{
-		config_set_string(
-			StreamElementsConfig::GetInstance()->GetConfig(),
-			"CrashReporting", "UserEmail", value.c_str());
+		WriteString("CrashReporting", "UserEmail", value.c_str());
 
 		SaveConfig();
 	}
 
 	std::string GetCrashReportUserDiscord()
 	{
-		const char *value = config_get_string(
-			StreamElementsConfig::GetInstance()->GetConfig(),
-			"CrashReporting", "UserDiscord");
-
-		return !!value ? value : "";
+		return ReadString("CrashReporting", "UserDiscord");
 	}
 
 	void SetCrashReportUserDiscord(std::string value)
 	{
-		config_set_string(
-			StreamElementsConfig::GetInstance()->GetConfig(),
-			"CrashReporting", "UserDiscord", value.c_str());
+		WriteString("CrashReporting", "UserDiscord", value.c_str());
 
 		SaveConfig();
 	}
 
 	std::string GetSceneItemsAuxActionsConfig()
 	{
-		const char *value = config_get_string(
-			StreamElementsConfig::GetInstance()->GetConfig(),
-			"Startup", "AuxSourcesActions");
-
-		if (!!value)
-			return value;
-		else
-			return "[]";
+		return ReadString("Startup", "AuxSourcesActions", "[]");
 	}
 
 	void SetSceneItemsAuxActionsConfig(std::string value)
 	{
-		config_set_string(
-			StreamElementsConfig::GetInstance()->GetConfig(),
-			"Startup", "AuxSourcesActions", value.c_str());
+		WriteString("Startup", "AuxSourcesActions", value.c_str());
 
 		SaveConfig();
 	}
 
 	std::string GetScenesAuxActionsConfig()
 	{
-		const char *value = config_get_string(
-			StreamElementsConfig::GetInstance()->GetConfig(),
-			"Startup", "AuxScenesActions");
-
-		if (!!value)
-			return value;
-		else
-			return "[]";
+		return ReadString("Startup", "AuxScenesActions", "[]");
 	}
 
 	void SetScenesAuxActionsConfig(std::string value)
 	{
-		config_set_string(
-			StreamElementsConfig::GetInstance()->GetConfig(),
-			"Startup", "AuxScenesActions", value.c_str());
+		WriteString("Startup", "AuxScenesActions", value.c_str());
 
 		SaveConfig();
 	}
@@ -322,6 +320,8 @@ public:
 
 private:
 	config_t* m_config = nullptr;
+	// True when m_config is the in-memory fallback, which has no file.
+	bool m_configIsMemoryOnly = false;
 	config_t *m_obsUserConfig = nullptr;
 
 private:
