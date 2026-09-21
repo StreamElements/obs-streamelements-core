@@ -10,7 +10,9 @@
 #include "source_paths.hpp"
 
 #include <cassert>
+#include <cctype>
 #include <cstdio>
+#include <cstring>
 #include <vector>
 #include <algorithm>
 #include <fstream>
@@ -1498,6 +1500,296 @@ static void check_rejected_signature_stops_the_handler()
 	      "the handler falls through, opens the file, and resets the status to 200");
 }
 
+// --- The crash path must never use a throwing std::filesystem overload.
+//
+// StreamElementsCrashContext::Collect() walked the profile with a range-for
+// over recursive_directory_iterator and the one-argument is_directory(). A
+// folder that vanished mid-walk -- CEF churns its cache directories, and a
+// crashing process is exactly when that is in flight -- threw
+// filesystem_error inside the crash handler. Nothing caught it, so the
+// handler aborted itself and the report of the original crash was replaced
+// by its own (CORE-1714, SELIVE-5M).
+//
+// Checked across every crash-path source file, not just the one that bit:
+//   * no range-for over a directory iterator (its operator++ throws);
+//   * no directory-iterator variable advanced with ++;
+//   * every call to a throwing std::filesystem operation passes an
+//     std::error_code that is declared in the same file;
+//   * no zero-argument directory_entry query (.is_directory() and friends).
+static std::vector<std::string> top_level_args(const std::string &s,
+					       std::size_t open)
+{
+	std::vector<std::string> args;
+	std::string cur;
+	int depth = 0;
+
+	for (std::size_t i = open; i < s.size(); ++i) {
+		const char c = s[i];
+
+		if (c == '(') {
+			if (depth++ == 0)
+				continue;
+		} else if (c == ')') {
+			if (--depth == 0) {
+				args.push_back(cur);
+				return args;
+			}
+		} else if (c == ',' && depth == 1) {
+			args.push_back(cur);
+			cur.clear();
+			continue;
+		}
+
+		cur.push_back(c);
+	}
+
+	return {}; // unbalanced: treat as no arguments
+}
+
+static std::string trim(const std::string &s)
+{
+	const auto b = s.find_first_not_of(" \t\r\n");
+	if (b == std::string::npos)
+		return std::string();
+	const auto e = s.find_last_not_of(" \t\r\n");
+	return s.substr(b, e - b + 1);
+}
+
+static bool is_ident_char(char c)
+{
+	return std::isalnum(static_cast<unsigned char>(c)) || c == '_';
+}
+
+static bool is_space(char c)
+{
+	return std::isspace(static_cast<unsigned char>(c)) != 0;
+}
+
+static std::vector<std::size_t> find_all(const std::string &code,
+					 const std::string &needle)
+{
+	std::vector<std::size_t> hits;
+	for (auto p = code.find(needle); p != std::string::npos;
+	     p = code.find(needle, p + 1))
+		hits.push_back(p);
+	return hits;
+}
+
+static void check_crash_path_filesystem_calls_never_throw()
+{
+	const char *files[] = {
+		"streamelements/StreamElementsCrashContext.cpp",
+		"streamelements/StreamElementsCrashHandler.cpp",
+		"streamelements/StreamElementsSentryCrashHandler.cpp",
+		"streamelements/StreamElementsSentryCrashHandler.mm",
+		"streamelements/StreamElementsBugSplatCrashHandler.cpp",
+		"streamelements/StreamElementsBugSplatCrashHandler.mm",
+		"streamelements/StreamElementsWerModule.cpp",
+		"streamelements/StreamElementsCrashConsentDialog.cpp",
+		"streamelements/StreamElementsCrashConsentDialog.mm",
+	};
+
+	// Operations whose default overload reports failure by throwing.
+	const char *throwingOps[] = {
+		"is_directory",
+		"is_regular_file",
+		"is_symlink",
+		"exists",
+		"file_size",
+		"status",
+		"symlink_status",
+		"remove",
+		"remove_all",
+		"create_directory",
+		"create_directories",
+		"copy",
+		"copy_file",
+		"rename",
+		"last_write_time",
+		"absolute",
+		"canonical",
+		"weakly_canonical",
+		"temp_directory_path",
+		"space",
+		"equivalent",
+		"hard_link_count",
+		"resize_file",
+		"permissions",
+		"read_symlink",
+		"relative",
+		"proximate",
+		"directory_iterator",
+		"recursive_directory_iterator",
+	};
+
+	// directory_entry queries whose zero-argument form throws.
+	const char *entryQueries[] = {
+		"is_directory",   "is_regular_file", "is_symlink",
+		"exists",         "file_size",       "status",
+		"symlink_status", "last_write_time",
+	};
+
+	const std::string ns = "std::filesystem::";
+
+	for (const char *relpath : files) {
+		const std::string code = strip_line_comments(slurp(relpath));
+
+		// Plain find() rather than regexes over whole files: MSVC's
+		// std::regex made this one check cost ~90 s. A file that never
+		// mentions std::filesystem has nothing to check -- and skipping
+		// it also keeps the member-query check below from flagging
+		// unrelated types' .exists().
+		if (code.find("filesystem") == std::string::npos)
+			continue;
+
+		const std::string where = std::string("crash path: ") + relpath;
+
+		std::vector<std::string> errorCodes;
+		for (auto p : find_all(code, "std::error_code")) {
+			std::size_t i = p + std::strlen("std::error_code");
+			while (i < code.size() && is_space(code[i]))
+				++i;
+			const std::size_t b = i;
+			while (i < code.size() && is_ident_char(code[i]))
+				++i;
+			if (i > b)
+				errorCodes.push_back(code.substr(b, i - b));
+		}
+
+		for (auto p : find_all(code, ns)) {
+			std::size_t i = p + ns.size();
+			const std::size_t b = i;
+			while (i < code.size() && is_ident_char(code[i]))
+				++i;
+			const std::string name = code.substr(b, i - b);
+
+			bool throwing = false;
+			for (const char *op : throwingOps)
+				if (name == op)
+					throwing = true;
+			if (!throwing)
+				continue;
+
+			const bool isIterator =
+				name == "directory_iterator" ||
+				name == "recursive_directory_iterator";
+
+			while (i < code.size() && is_space(code[i]))
+				++i;
+
+			// `recursive_directory_iterator walk(` names a variable.
+			std::string var;
+			if (isIterator) {
+				const std::size_t vb = i;
+				while (i < code.size() &&
+				       is_ident_char(code[i]))
+					++i;
+				var = code.substr(vb, i - vb);
+				while (i < code.size() && is_space(code[i]))
+					++i;
+			}
+
+			// A type mention or default construction, not a call.
+			if (i >= code.size() || code[i] != '(')
+				continue;
+
+			if (isIterator && var.empty()) {
+				std::size_t k = p;
+				while (k > 0 && is_space(code[k - 1]))
+					--k;
+				const bool rangeFor =
+					k >= 1 && code[k - 1] == ':' &&
+					(k < 2 || code[k - 2] != ':');
+
+				check(!rangeFor,
+				      (where +
+				       " iterates a directory with a "
+				       "range-for; its operator++ throws -- "
+				       "advance with increment(ec) instead "
+				       "(CORE-1714)")
+					      .c_str());
+			}
+
+			bool passesErrorCode = false;
+			for (const auto &arg : top_level_args(code, i))
+				for (const auto &ec : errorCodes)
+					if (trim(arg) == ec)
+						passesErrorCode = true;
+
+			check(passesErrorCode,
+			      (where + " calls 'std::filesystem::" + name +
+			       "(...)' without an std::error_code, so a "
+			       "filesystem error throws inside the crash handler "
+			       "(CORE-1714)")
+				      .c_str());
+
+			if (var.empty())
+				continue;
+
+			// A named iterator must advance with increment(ec).
+			for (auto q : find_all(code, var)) {
+				const std::size_t e = q + var.size();
+				if ((q > 0 && is_ident_char(code[q - 1])) ||
+				    (e < code.size() && is_ident_char(code[e])))
+					continue;
+
+				std::size_t a = q;
+				while (a > 0 && is_space(code[a - 1]))
+					--a;
+				std::size_t z = e;
+				while (z < code.size() && is_space(code[z]))
+					++z;
+
+				const bool pre = a >= 2 &&
+						 code.compare(a - 2, 2, "++") ==
+							 0;
+				const bool post = z + 2 <= code.size() &&
+						  code.compare(z, 2, "++") == 0;
+
+				check(!pre && !post,
+				      (where +
+				       " advances directory iterator '" + var +
+				       "' with ++, which throws -- use "
+				       "increment(ec) (CORE-1714)")
+					      .c_str());
+			}
+		}
+
+		// entry.is_directory() and friends, called with no arguments.
+		for (const char *query : entryQueries) {
+			const std::string call = std::string(query) + "(";
+			for (auto p : find_all(code, call)) {
+				if (p > 0 && is_ident_char(code[p - 1]))
+					continue; // the tail of a longer name
+
+				std::size_t a = p;
+				while (a > 0 && is_space(code[a - 1]))
+					--a;
+				if (a == 0 || code[a - 1] != '.')
+					continue; // not a member call
+
+				std::size_t z = p + call.size();
+				while (z < code.size() && is_space(code[z]))
+					++z;
+
+				check(z >= code.size() || code[z] != ')',
+				      (where + " calls ." + query +
+				       "() with no arguments, which throws -- "
+				       "pass an std::error_code (CORE-1714)")
+					      .c_str());
+			}
+		}
+	}
+
+	// Not vacuous: the profile walk this guards must still exist.
+	const std::string context = strip_line_comments(
+		slurp("streamelements/StreamElementsCrashContext.cpp"));
+	check(context.find("directory_iterator") != std::string::npos,
+	      "crash path: StreamElementsCrashContext.cpp no longer walks a "
+	      "directory -- has the profile walk moved? Point this invariant "
+	      "at it (CORE-1714)");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -1532,6 +1824,7 @@ int main()
 	check_wyvrn_signature_check_is_not_disabled();
 	check_wyvrn_sdk_calls_stay_on_the_sdk_thread();
 	check_rejected_signature_stops_the_handler();
+	check_crash_path_filesystem_calls_never_throw();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

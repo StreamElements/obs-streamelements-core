@@ -927,10 +927,43 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 		L"profiler_data/", L"obslive_restored_files/", L"crashes/"};
 
 	// Collect all files
-	for (auto &i : std::filesystem::recursive_directory_iterator(
-		     programDataPathBuf)) {
-		if (!std::filesystem::is_directory(i.path())) {
+	//
+	// Every filesystem call here uses its error_code overload. This runs
+	// inside the crash handler, and a crashing process is exactly when the
+	// profile is mid-write -- CEF creating and deleting cache directories,
+	// the Sentry SDK writing its database. The throwing overloads turned a
+	// folder that vanished mid-walk into an uncaught filesystem_error, and
+	// the handler aborted itself, replacing the report of the original crash
+	// with its own (CORE-1714). A walk error now stops the walk and keeps
+	// what was already gathered: a partial archive beats no report.
+	//
+	// Rooted at obsDataPath, not programDataPathBuf. The buffer is UTF-8,
+	// but std::filesystem decodes a narrow string with the process code
+	// page on Windows, so a non-ASCII profile path opened the wrong folder
+	// -- which, with the throwing overloads, was itself a self-abort.
+	// obsDataPath is already decoded correctly on both platforms, and it is
+	// also the prefix stripped below, so every walked path is known to
+	// start with it.
+	std::error_code walkError;
+	std::filesystem::recursive_directory_iterator walk(
+		std::filesystem::path(obsDataPath),
+		std::filesystem::directory_options::skip_permission_denied,
+		walkError);
+	const std::filesystem::recursive_directory_iterator walkEnd;
+
+	for (; !walkError && walk != walkEnd; walk.increment(walkError)) {
+		const std::filesystem::directory_entry &i = *walk;
+
+		std::error_code entryError;
+		const bool isDirectory = i.is_directory(entryError);
+
+		if (!entryError && !isDirectory) {
 			std::wstring local_path = i.path().wstring();
+
+			// substr() throws when the offset is past the end.
+			if (local_path.size() <= obsDataPath.size())
+				continue;
+
 			std::wstring zip_path =
 				local_path.substr(obsDataPath.size() + 1);
 
