@@ -159,7 +159,7 @@ public:
 	SerializeEvent(const StreamElementsRazerWyvrnEventInfo &event);
 
 	//
-	// The whole list, optionally filtered. `sourceFilter` matches the
+	// The whole list, optionally filtered. `groupFilter` matches the
 	// containing folder and `idPrefix` the event id; both are
 	// case-insensitive and either may be empty.
 	//
@@ -172,7 +172,7 @@ public:
 	// with Synapse installed, against 0.28 MB in ~65 ms with components
 	// off. The whole request runs inside the process-wide API mutex, so
 	// the cost is paid by every other caller too.
-	CefRefPtr<CefValue> SerializeEvents(const std::string &sourceFilter,
+	CefRefPtr<CefValue> SerializeEvents(const std::string &groupFilter,
 					    const std::string &idPrefix,
 					    bool components);
 
@@ -198,7 +198,7 @@ private:
 	//
 	struct Snapshot {
 		std::vector<StreamElementsRazerWyvrnEventInfo> events;
-		std::vector<std::pair<std::string, std::string>> sourcePaths;
+		std::vector<std::pair<std::string, std::string>> groupPaths;
 	};
 
 	Snapshot TakeSnapshot(bool refresh);
@@ -211,10 +211,10 @@ private:
 	// ("Interact_Keyboard" -> "Interact_Keyboard.chroma"). So this returns
 	// one asset, not a set, and the device comes from the name's suffix.
 	static std::pair<std::string, std::string>
-	FindChromaAsset(const Snapshot &snapshot, const std::string &source,
+	FindChromaAsset(const Snapshot &snapshot, const std::string &group,
 			const std::string &effect);
 	static std::string FindHapticAsset(const Snapshot &snapshot,
-					   const std::string &source,
+					   const std::string &group,
 					   const std::string &effect);
 
 	static CefRefPtr<CefValue>
@@ -249,7 +249,7 @@ private:
 	std::vector<StreamElementsRazerWyvrnEventInfo> m_events;
 	bool m_eventsScanned = false;
 
-	// Cache of source folder -> absolute path, filled during the scan so
+	// Cache of group folder -> absolute path, filled during the scan so
 	// asset lookup does not re-walk the tree per component.
-	std::vector<std::pair<std::string, std::string>> m_sourcePaths;
+	std::vector<std::pair<std::string, std::string>> m_groupPaths;
 };

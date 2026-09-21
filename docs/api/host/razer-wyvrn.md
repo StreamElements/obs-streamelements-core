@@ -46,13 +46,13 @@ events, so an optional filter object is accepted:
 
 ```js
 window.host.getAllRazerWyvrnEvents(
-    { source: '007 First Light', idPrefix: 'Aim_' },
+    { group: '007 First Light', idPrefix: 'Aim_' },
     function (events) { /* ... */ });
 ```
 
 | **Property** | **Type** | **Description** |
 | --- | --- | --- |
-| source | string | Match the containing configuration folder exactly, case-insensitively. Omit or leave empty for all. |
+| group | string | Match the event's group exactly, case-insensitively. Omit or leave empty for all. |
 | idPrefix | string | Match the beginning of the event id, case-insensitively. Omit or leave empty for all. |
 | components | bool | Include each event's components and asset URLs. Defaults to `true`. |
 
@@ -67,9 +67,17 @@ Measured on a machine with Synapse installed (4,044 events, 24,698 components):
 
 | Call | Time | Payload |
 | --- | --- | --- |
-| Filtered by source, with components | ~50 ms | 0.13 MB |
+| Filtered by group, with components | ~50 ms | 0.13 MB |
 | Unfiltered, `components: false` | ~65 ms | 0.28 MB |
 | Unfiltered, with components | ~2.1 s | 7.7 MB |
+
+A **group** is the configuration folder an event was declared in — the
+subfolder of `hapticFolders` that Synapse installed, named after the
+application it came with (`007 First Light`, `GenericEvent`). It is not part
+of an event's identity, since two applications may declare the same id, but it
+is what makes a 4,000-entry list browsable: group the ids-only sweep by
+[`group`](../types/RazerWyvrnEventInfo.md), then call back filtered by the one
+the user picked.
 
 **Filter, or turn components off.** Asking for all 4,044 events with their
 components is supported and correct, but it is a two-second request returning

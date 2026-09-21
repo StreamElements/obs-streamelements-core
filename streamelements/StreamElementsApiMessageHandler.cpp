@@ -3422,14 +3422,14 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	// session-signed URLs for their assets -- so a caller can see what firing
 	// an event would actually do, and preview it, without a second call.
 	//
-	// Optional filter argument: { source, idPrefix }. There are ~4,000 events
+	// Optional filter argument: { group, idPrefix }. There are ~4,000 events
 	// on a machine with Synapse installed, so callers are expected to use it.
 	//
 	// An unavailable subsystem yields an empty array, never an error.
 	//
 	API_HANDLER_BEGIN("getAllRazerWyvrnEvents");
 	{
-		std::string sourceFilter;
+		std::string groupFilter;
 		std::string idPrefix;
 
 		// Defaults to true: one call that fully answers "what would
@@ -3444,10 +3444,9 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			CefRefPtr<CefDictionaryValue> d =
 				args->GetValue(0)->GetDictionary();
 
-			if (d->HasKey("source") &&
-			    d->GetType("source") == VTYPE_STRING)
-				sourceFilter =
-					d->GetString("source").ToString();
+			if (d->HasKey("group") &&
+			    d->GetType("group") == VTYPE_STRING)
+				groupFilter = d->GetString("group").ToString();
 
 			if (d->HasKey("idPrefix") &&
 			    d->GetType("idPrefix") == VTYPE_STRING)
@@ -3461,8 +3460,8 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		auto manager = GetRazerWyvrnManager();
 
 		if (manager.get()) {
-			result = manager->SerializeEvents(sourceFilter,
-							  idPrefix, components);
+			result = manager->SerializeEvents(groupFilter, idPrefix,
+							  components);
 		} else {
 			result->SetList(CefListValue::Create());
 		}

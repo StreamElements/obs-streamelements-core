@@ -8,7 +8,7 @@ firing it would do.
 | **Property** | **Type** | **Description** |
 | --- | --- | --- |
 | id | string | The event name. Matched case-insensitively by [`setRazerWyvrnEvent`](../host/razer-wyvrn.md#setrazerwyvrneventrazerwyvrneventinfo-resultcallbacksuccess). |
-| source | string | The configuration folder the event came from, which is normally the application that installed it. |
+| group | string | The configuration folder the event was declared in — a subfolder of `hapticFolders`, normally named after the application that installed it. Accepted as a filter by [`getAllRazerWyvrnEvents`](../host/razer-wyvrn.md#getallrazerwyvrneventsresultcallbackrazerwyvrneventinfo). |
 | kind | string | `exact` for a literal event name, `fallbackPattern` for a regular expression matched against names that no exact entry claims. |
 | chroma | [`RazerWyvrnChromaComponent`](RazerWyvrnChromaComponent.md)[] | Lighting the event triggers. May be empty. |
 | haptics | [`RazerWyvrnHapticComponent`](RazerWyvrnHapticComponent.md)[] | Haptics the event triggers. May be empty. |
