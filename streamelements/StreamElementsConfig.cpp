@@ -30,25 +30,74 @@ StreamElementsConfig::~StreamElementsConfig()
 
 config_t* StreamElementsConfig::GetConfig()
 {
-	if (!m_config) {
-		char *configDir = obs_module_config_path("");
-		configDir[strlen(configDir) - 1] = 0; // remove last char
+	if (m_config)
+		return m_config;
+
+	char *configDir = obs_module_config_path("");
+
+	// Both checks are load-bearing: obs_module_config_path() returns null
+	// when the module has no config path, and the trim below writes to
+	// index -1 when it returns an empty string.
+	if (configDir) {
+		const size_t configDirLength = strlen(configDir);
+
+		if (configDirLength)
+			configDir[configDirLength - 1] = 0; // remove last char
+
 		os_mkdirs(configDir);
 		bfree(configDir);
+	}
 
-		char *configPath = obs_module_config_path(CONFIG_FILE_NAME);
-		config_open(
-			&m_config, configPath,
-			CONFIG_OPEN_ALWAYS);
-		SETRACE_ADDREF(m_config);
+	char *configPath = obs_module_config_path(CONFIG_FILE_NAME);
+
+	const int openResult = configPath ? config_open(&m_config, configPath,
+							CONFIG_OPEN_ALWAYS)
+					  : CONFIG_ERROR;
+
+	if (openResult != CONFIG_SUCCESS || !m_config) {
+		//
+		// config_open() leaves m_config null when it fails, and this
+		// function handed that straight back to callers, every one of
+		// which passes it to libobs -- which dereferences it at
+		// config->mutex without a null check. That is an access
+		// violation reading 0x18, on the start-up path, so OBS could
+		// not finish launching at all (CORE-1900, SELIVE-8A).
+		//
+		// CONFIG_OPEN_ALWAYS creates the file when it is missing, so
+		// reaching here means libobs could neither read nor create it:
+		// a read-only or unreachable profile directory, a path past
+		// MAX_PATH, a full disk.
+		//
+		blog(LOG_ERROR,
+		     "obs-streamelements-core: config: could not open '%s' (%d); continuing with settings that will not be saved",
+		     configPath ? configPath : "(no config path)", openResult);
+
+		m_config = nullptr;
+
+		// An empty in-memory config keeps every reader and writer
+		// working against the defaults below rather than crashing. It
+		// has no file, which is why SaveConfig() skips it.
+		if (config_open_string(&m_config, "") != CONFIG_SUCCESS)
+			m_config = nullptr;
+
+		m_configIsMemoryOnly = !!m_config;
+	}
+
+	if (configPath)
 		bfree(configPath);
 
-		config_set_default_uint(m_config, "Header", "Version", STREAMELEMENTS_PLUGIN_VERSION);
-		config_set_default_uint(m_config, "Startup", "Flags", STARTUP_FLAGS_ONBOARDING_MODE);
-		config_set_default_string(m_config, "Startup", "State", "");
-		config_set_default_bool(m_config, "Startup",
-					"ShowBuiltInMenuItems", true);
-	}
+	if (!m_config)
+		return nullptr;
+
+	SETRACE_ADDREF(m_config);
+
+	config_set_default_uint(m_config, "Header", "Version",
+				STREAMELEMENTS_PLUGIN_VERSION);
+	config_set_default_uint(m_config, "Startup", "Flags",
+				STARTUP_FLAGS_ONBOARDING_MODE);
+	config_set_default_string(m_config, "Startup", "State", "");
+	config_set_default_bool(m_config, "Startup", "ShowBuiltInMenuItems",
+				true);
 
 	return m_config;
 }
@@ -56,6 +105,12 @@ config_t* StreamElementsConfig::GetConfig()
 void StreamElementsConfig::SaveConfig()
 {
 	if (!m_config) return;
+
+	// The in-memory fallback has no file. config_save_safe() does not check
+	// for that: it would write ".tmp" and ".bak" into whatever the process
+	// working directory happens to be.
+	if (m_configIsMemoryOnly)
+		return;
 
 	config_set_uint(m_config, "Header", "Version", STREAMELEMENTS_PLUGIN_VERSION);
 
@@ -124,17 +179,33 @@ static bool isSecureFilename(std::string filename) {
 
 std::string StreamElementsConfig::GetScopedConfigStorageRootPath()
 {
+	std::string root;
+
 	char *configDir = obs_module_config_path("");
-	configDir[strlen(configDir) - 1] = 0; // remove last char
-	std::string root = configDir;
-	bfree(configDir);
+
+	// Same two traps as in GetConfig(): a null path, and a trim that writes
+	// to index -1 on an empty one.
+	if (configDir) {
+		const size_t configDirLength = strlen(configDir);
+
+		if (configDirLength)
+			configDir[configDirLength - 1] = 0; // remove last char
+
+		root = configDir;
+		bfree(configDir);
+	}
 
 	root += "/scoped_config_storage";
 
 #ifdef _WIN32
 	char* path = os_get_abs_path_ptr(root.c_str());
-	root = path;
-	bfree(path);
+
+	// Null when the path cannot be resolved; assigning it to a std::string
+	// is undefined.
+	if (path) {
+		root = path;
+		bfree(path);
+	}
 #endif
 
 	return root;

@@ -1,3 +1,4 @@
+- Fix: SE.Live could stop OBS Studio from starting when its own settings file could not be opened, for example on a read-only or unreachable settings folder; it now starts with default settings instead
 - Fix: closing a SE.Live panel could crash OBS Studio if the panel was redrawn while it was closing
 - Fix: the crash reporter could itself crash while preparing a report, for users whose Windows user name contains accented or non-Latin characters, or when files in the OBS Studio settings folder changed at that moment
 - Fix: OBS Studio could hang on exit, with the window gone but the process still running, when closed shortly after start-up while an update prompt was on screen
