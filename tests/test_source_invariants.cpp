@@ -13,6 +13,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <vector>
 #include <algorithm>
 #include <fstream>
@@ -1557,6 +1558,116 @@ static void check_scene_signal_handler_lifetime()
 	      "(CORE-1715)");
 }
 
+// --- A dock leaves the paint tree before it is destroyed, and says so.
+//
+// Qt aborts in _purecall when a virtual call reaches an object whose vtable is
+// in the construction or destruction state: a widget painted while it is being
+// destroyed. QMainWindow::removeDockWidget() hides a dock but leaves it
+// parented, and destroying our browser widget spins a nested event loop inside
+// obs-browser's closeBrowser() -- which is exactly when a repaint can walk into
+// a half-destroyed widget (CORE-1922, SELIVE-8G; CORE-777 is the same
+// mechanism reached from the event queue).
+//
+// Two halves, both asserted here:
+//   * hide() and setParent(nullptr) run before either delete;
+//   * both destruction paths carry an SEWidgetTeardownScope, so a crash during
+//     one says which widget it was -- the whole point, since Qt ships no
+//     symbols and no StreamElements frame appears in these stacks.
+//
+// The browser widget's marker must also strip the URL's query string. Those
+// carry access tokens and this value ends up on a crash report.
+static void check_widget_teardown_leaves_the_paint_tree()
+{
+	const std::string utils = strip_line_comments(
+		slurp("streamelements/StreamElementsUtils.cpp"));
+
+	const std::string deleteDock =
+		function_body(utils, "void SEDeleteDockWidgetWhenSafe(");
+
+	check(!deleteDock.empty(),
+	      "widget teardown: SEDeleteDockWidgetWhenSafe() not found -- has "
+	      "dock destruction moved? Point this invariant at it (CORE-1922)");
+
+	if (!deleteDock.empty()) {
+		const auto hidden = deleteDock.find("dock->hide();");
+		const auto later = deleteDock.find("deleteLater();");
+		const auto now = deleteDock.find("delete dock.data();");
+		const auto marked = deleteDock.find("SEWidgetTeardownScope");
+
+		check(hidden != std::string::npos &&
+			      later != std::string::npos &&
+			      now != std::string::npos && hidden < later &&
+			      hidden < now,
+		      "widget teardown: the dock must be hidden before it is "
+		      "destroyed -- removeDockWidget() leaves it parented and a "
+		      "repaint can still reach it (CORE-1922)");
+
+		// The unparenting that matters is the one on the destroy path,
+		// not the one in the early-return branch above it -- which is
+		// why the count matters as much as the position: with only one,
+		// the early branch alone would satisfy this.
+		const auto unparented =
+			deleteDock.rfind("dock->setParent(nullptr);");
+		std::size_t unparentings = 0;
+		for (auto p = deleteDock.find("dock->setParent(nullptr);");
+		     p != std::string::npos;
+		     p = deleteDock.find("dock->setParent(nullptr);", p + 1))
+			++unparentings;
+
+		check(unparentings >= 2 && unparented != std::string::npos &&
+			      unparented < later && unparented < now,
+		      "widget teardown: the dock must be unparented before it is "
+		      "destroyed, so a repaint cannot walk into it (CORE-1922)");
+
+		check(marked != std::string::npos && marked < now,
+		      "widget teardown: the synchronous delete must carry an "
+		      "SEWidgetTeardownScope, or a crash during it cannot name "
+		      "the widget (CORE-1922)");
+	}
+
+	const std::string browser = strip_line_comments(
+		slurp("streamelements/StreamElementsBrowserWidget.cpp"));
+
+	const std::string destroy = function_body(
+		browser, "void StreamElementsBrowserWidget::DestroyBrowser()");
+
+	check(!destroy.empty(),
+	      "widget teardown: StreamElementsBrowserWidget::DestroyBrowser() "
+	      "not found (CORE-1922)");
+
+	if (!destroy.empty()) {
+		check(destroy.find("SEWidgetTeardownScope") !=
+			      std::string::npos,
+		      "widget teardown: DestroyBrowser() must carry an "
+		      "SEWidgetTeardownScope -- it spins a nested event loop, "
+		      "which is when the repaint that crashes runs (CORE-1922)");
+
+		check(destroy.find("find_first_of(\"?#\")") !=
+			      std::string::npos,
+		      "widget teardown: the marker must strip the URL's query "
+		      "string; those carry access tokens and this value is "
+		      "reported on a crash (CORE-1922)");
+	}
+
+	// And the crash path has to report it, or none of the above is visible.
+	const std::string context = strip_line_comments(
+		slurp("streamelements/StreamElementsCrashContext.cpp"));
+
+	check(context.find("selive.widget.destroying") != std::string::npos &&
+		      context.find("SEWidgetTeardownScope::Current()") !=
+			      std::string::npos,
+	      "widget teardown: the crash context must report "
+	      "selive.widget.destroying from SEWidgetTeardownScope::Current() "
+	      "(CORE-1922)");
+
+	const std::string sentry = strip_line_comments(
+		slurp("streamelements/StreamElementsSentryCrashHandler.cpp"));
+
+	check(sentry.find("selive.widget.destroying") != std::string::npos,
+	      "widget teardown: selive.widget.destroying must be tag-worthy, or "
+	      "it cannot be searched for in Sentry (CORE-1922)");
+}
+
 // --- Every WYVRN SDK entry point must be called from the SDK thread only.
 //
 // The Chroma stack beneath the SDK is COM-based and thread-affine: CoreInitSDK,
@@ -2052,11 +2163,199 @@ static void check_crash_path_filesystem_calls_never_throw()
 	      "at it (CORE-1714)");
 }
 
+// --- CORE-1601: every CefParseJSON result must be null-checked before it is
+// dereferenced.
+//
+// CefParseJSON returns nullptr for anything it cannot parse
+// (deps/cef-stub/cef_value_json.cpp), and CefRefPtr is std::shared_ptr in this
+// codebase, so calling through the result is a hard dereference of null.
+//
+// Scope, stated plainly so this does not become the next check_c5: the scan
+// below sees a dereference IN THE SAME FUNCTION as the parse. It cannot
+// follow a value handed to a callee that dereferences it, so the two sites
+// of that shape are asserted by name afterwards. Both halves were confirmed
+// by reintroducing each bug and watching this test fail.
+//
+// check_c5_cefparsejson_null_guarded() above already claimed to cover this, but
+// it reads one variable in one file. That is why RestoreState shipped with the
+// bug anyway: it dereferenced the result one line BEFORE its guard, in a file
+// nothing was watching, and crashed every launch for any user whose persisted
+// state had been corrupted. This scans every production .cpp instead, so the
+// pattern cannot reappear somewhere unwatched.
+static void check_cefparsejson_results_are_guarded_everywhere()
+{
+	namespace fs = std::filesystem;
+
+	const fs::path root = fs::path(se_tests::kRepoRoot) / "streamelements";
+
+	std::size_t scanned = 0;
+	std::size_t guarded_sites = 0;
+
+	for (const auto &entry : fs::recursive_directory_iterator(root)) {
+		if (!entry.is_regular_file())
+			continue;
+
+		const fs::path path = entry.path();
+		if (path.extension() != ".cpp")
+			continue;
+
+		// Vendored third-party, including CefParseJSON's own definition.
+		if (path.string().find("deps") != std::string::npos)
+			continue;
+
+		std::ifstream in(path);
+		std::stringstream ss;
+		ss << in.rdbuf();
+
+		// Comments are stripped first. They would otherwise sit
+		// between the parse and the use and push the dereference
+		// past the window below, so the check would skip the site
+		// silently -- which is exactly how a regression gate stops
+		// being one. Found by deleting the guard while leaving its
+		// comment in place and watching this test still pass.
+		const std::string src = strip_line_comments(ss.str());
+
+		++scanned;
+
+		// std::regex over every production source costs seconds; a
+		// plain substring test first keeps this check in the
+		// milliseconds the rest of the file runs in.
+		if (src.find("CefParseJSON") == std::string::npos)
+			continue;
+
+		for (std::size_t call = src.find("CefParseJSON");
+		     call != std::string::npos;
+		     call = src.find("CefParseJSON", call + 1)) {
+			const std::size_t from = call > 160 ? call - 160 : 0;
+			const std::string before =
+				src.substr(from, call - from);
+
+			// Bind the call to the variable it is assigned to.
+			//
+			// Done by hand rather than with a `$`-anchored regex,
+			// because MSVC's std::regex matches `$` at every line
+			// end rather than only at end of input. An anchored
+			// pattern therefore bound the call to whichever earlier
+			// line happened to end in `=` - which is a real shape
+			// here, e.g. `CefRefPtr<CefListValue> callArgs =` - and
+			// reported a false violation against an unrelated
+			// variable.
+			const std::size_t eq =
+				before.find_last_not_of(" \t\r\n");
+			if (eq == std::string::npos || eq == 0 ||
+			    before[eq] != '=')
+				continue; // not bound to a named variable
+
+			// `==`, `!=`, `>=` and friends are comparisons.
+			const char prev = before[eq - 1];
+			if (prev == '=' || prev == '!' || prev == '<' ||
+			    prev == '>' || prev == '+' || prev == '-' ||
+			    prev == '*' || prev == '/' || prev == '%' ||
+			    prev == '&' || prev == '|' || prev == '^')
+				continue;
+
+			const std::size_t idEnd =
+				before.find_last_not_of(" \t\r\n", eq - 1);
+			if (idEnd == std::string::npos)
+				continue;
+
+			std::size_t idBegin = idEnd + 1;
+			while (idBegin > 0) {
+				const unsigned char c =
+					static_cast<unsigned char>(
+						before[idBegin - 1]);
+				if (!std::isalnum(c) && c != '_')
+					break;
+				--idBegin;
+			}
+
+			if (idBegin > idEnd)
+				continue;
+
+			const std::string var =
+				before.substr(idBegin, idEnd - idBegin + 1);
+
+			// Far enough to reach the guard and the first use; a
+			// site that defers use beyond this is not the shape
+			// this invariant is about.
+			const std::string window = src.substr(call, 600);
+
+			const std::size_t deref = window.find(var + "->");
+			if (deref == std::string::npos)
+				continue;
+
+			// Every null-test shape this codebase actually uses.
+			const std::string forms[] = {
+				"!" + var + ".get()", "!" + var + " ",
+				"!" + var + ")",      var + ".get() &&",
+				var + " &&",          var + " != nullptr",
+				var + " == nullptr",  var + ".get() ==",
+				var + ".get() !=",
+			};
+
+			std::size_t guard = std::string::npos;
+			for (const std::string &form : forms) {
+				const std::size_t at = window.find(form);
+				if (at < guard)
+					guard = at;
+			}
+
+			if (guard == std::string::npos || guard > deref) {
+				const std::string msg =
+					"CORE-1601: " +
+					path.filename().string() +
+					": CefParseJSON result '" + var +
+					"' is dereferenced before it is null-checked";
+				check(false, msg.c_str());
+			} else {
+				++guarded_sites;
+			}
+		}
+	}
+
+	// Guards against the scan silently covering nothing - a wrong root path
+	// or a regex that stopped matching would otherwise read as a pass.
+	check(scanned > 10,
+	      "CORE-1601: expected to scan the production sources for CefParseJSON");
+	check(guarded_sites >= 3,
+	      "CORE-1601: expected the known guarded CefParseJSON dereferences to be found");
+
+	// The two sites that hand the parsed value to an overload which
+	// dereferences it, rather than dereferencing it here. The scan above
+	// cannot see across that call, so they are named.
+	const struct {
+		const char *file;
+		const char *callee;
+	} handedOn[] = {
+		{"streamelements/StreamElementsBrowserWidgetManager.cpp",
+		 "DeserializeNotificationBar"},
+		{"streamelements/StreamElementsWidgetManager.cpp",
+		 "DeserializeDockingWidgets"},
+	};
+
+	for (const auto &site : handedOn) {
+		const std::string src = slurp(site.file);
+
+		const std::regex guarded(
+			std::string(
+				R"(CefParseJSON[\s\S]{0,300}?if\s*\(\s*!root\.get\(\)[\s\S]{0,200}?)") +
+			site.callee + R"(\s*\(\s*root\s*\))");
+
+		const std::string msg =
+			std::string("CORE-1601: ") + site.file +
+			": the CefParseJSON result must be null-checked before it is handed to " +
+			site.callee;
+
+		check(count_matches(src, guarded) >= 1, msg.c_str());
+	}
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
 	check_c4_no_self_assign_cefclientid();
 	check_c5_cefparsejson_null_guarded();
+	check_cefparsejson_results_are_guarded_everywhere();
 	check_c6_audio_encoder_bounds();
 	check_c10_no_duplicate_handler_setcurrentprofile();
 	check_menu_manager_update_guarded();
@@ -2083,6 +2382,7 @@ int main()
 	check_wer_skip_is_conditional_on_the_handler_flag();
 	check_consent_prompt_does_not_pump_foreign_messages();
 	check_no_dock_is_added_to_an_invalid_area();
+	check_widget_teardown_leaves_the_paint_tree();
 	check_no_config_handle_escapes_an_early_return();
 	check_wyvrn_signature_check_is_not_disabled();
 	check_wyvrn_sdk_calls_stay_on_the_sdk_thread();

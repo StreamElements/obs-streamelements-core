@@ -1197,6 +1197,24 @@ void StreamElementsGlobalStateManager::RestoreState()
 
 	CefRefPtr<CefValue> root =
 		CefParseJSON(json, JSON_PARSER_ALLOW_TRAILING_COMMAS);
+
+	// CefParseJSON returns null for anything it cannot parse, and CefRefPtr
+	// is std::shared_ptr here, so calling through it is a hard dereference of
+	// null. The check below used to be the only one, and it tests the wrong
+	// value one line too late.
+	//
+	// The state we are parsing is persisted, so this is not a one-off crash:
+	// every subsequent launch reads the same bad blob back and dies in the
+	// same place, before anything else runs (CORE-1601). Returning here
+	// leaves the user with default state, which is recoverable; crashing
+	// leaves them with an application that cannot start.
+	if (!root.get()) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: state: discarding unparsable startup state");
+
+		return;
+	}
+
 	CefRefPtr<CefDictionaryValue> rootDictionary = root->GetDictionary();
 
 	if (!rootDictionary.get()) {
