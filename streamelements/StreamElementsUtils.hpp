@@ -260,6 +260,72 @@ void SEDrainEventQueue();
 void SEDeleteDockWidgetWhenSafe(QPointer<QDockWidget> dock, const char *id,
 				bool useDeleteLater);
 
+//
+// Names the widget currently being destroyed, for whatever crash report the
+// process produces while that is true.
+//
+// Qt aborts in _purecall when a virtual call reaches an object whose vtable is
+// in the construction or destruction state -- a widget painted while it is
+// being destroyed. We have 22 of those across 19 users on 26.9.4.994
+// (SELIVE-8G) and cannot tell whether the widget is ours: Qt ships no PDBs in
+// anything OBS publishes, so the frames above _purecall are unresolved, and no
+// StreamElements frame appears in the stack at all.
+//
+// So the process records what it was doing instead. The crash context reads
+// Current() and, when it says something, reports it as
+// selive.widget.destroying. If those events start carrying it, the crash is
+// ours and names the widget; if they never do, it is not ours (CORE-1922).
+//
+// Header-only on purpose: the crash context is compiled only when a crash
+// backend is enabled, and this has to exist in every configuration that has
+// widgets to destroy.
+//
+// The storage is a fixed buffer written without allocating and read without a
+// lock. The reader runs on a dying process, possibly on this very thread a few
+// frames deeper: a torn read costs one garbled attribute, while a lock would
+// risk the crash handler waiting on the code that just crashed.
+//
+class SEWidgetTeardownScope {
+public:
+	SEWidgetTeardownScope(const char *kind, const char *id)
+	{
+		snprintf(m_previous, sizeof(m_previous), "%s", Buffer());
+
+		snprintf(Buffer(), kBufferSize, "%s:%s",
+			 kind ? kind : "(unnamed)", id ? id : "(unnamed)");
+	}
+
+	~SEWidgetTeardownScope()
+	{
+		// Restored rather than cleared: destroying a dock destroys the
+		// widget inside it, so these nest, and the outer one is still
+		// true afterwards.
+		snprintf(Buffer(), kBufferSize, "%s", m_previous);
+	}
+
+	SEWidgetTeardownScope(const SEWidgetTeardownScope &) = delete;
+	SEWidgetTeardownScope &
+	operator=(const SEWidgetTeardownScope &) = delete;
+
+	// Empty when nothing is being destroyed. snprintf always terminates, so
+	// this is always a valid C string.
+	static const char *Current() { return Buffer(); }
+
+private:
+	static const size_t kBufferSize = 160;
+
+	// Zero-initialised before any dynamic initialisation runs, so it is
+	// readable from the first instruction of the process.
+	static char *Buffer()
+	{
+		static char buffer[kBufferSize] = {0};
+
+		return buffer;
+	}
+
+	char m_previous[kBufferSize];
+};
+
 /* ========================================================= */
 
 std::string DockWidgetAreaToString(const Qt::DockWidgetArea area);

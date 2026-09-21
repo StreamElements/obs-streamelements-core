@@ -1558,6 +1558,116 @@ static void check_scene_signal_handler_lifetime()
 	      "(CORE-1715)");
 }
 
+// --- A dock leaves the paint tree before it is destroyed, and says so.
+//
+// Qt aborts in _purecall when a virtual call reaches an object whose vtable is
+// in the construction or destruction state: a widget painted while it is being
+// destroyed. QMainWindow::removeDockWidget() hides a dock but leaves it
+// parented, and destroying our browser widget spins a nested event loop inside
+// obs-browser's closeBrowser() -- which is exactly when a repaint can walk into
+// a half-destroyed widget (CORE-1922, SELIVE-8G; CORE-777 is the same
+// mechanism reached from the event queue).
+//
+// Two halves, both asserted here:
+//   * hide() and setParent(nullptr) run before either delete;
+//   * both destruction paths carry an SEWidgetTeardownScope, so a crash during
+//     one says which widget it was -- the whole point, since Qt ships no
+//     symbols and no StreamElements frame appears in these stacks.
+//
+// The browser widget's marker must also strip the URL's query string. Those
+// carry access tokens and this value ends up on a crash report.
+static void check_widget_teardown_leaves_the_paint_tree()
+{
+	const std::string utils = strip_line_comments(
+		slurp("streamelements/StreamElementsUtils.cpp"));
+
+	const std::string deleteDock =
+		function_body(utils, "void SEDeleteDockWidgetWhenSafe(");
+
+	check(!deleteDock.empty(),
+	      "widget teardown: SEDeleteDockWidgetWhenSafe() not found -- has "
+	      "dock destruction moved? Point this invariant at it (CORE-1922)");
+
+	if (!deleteDock.empty()) {
+		const auto hidden = deleteDock.find("dock->hide();");
+		const auto later = deleteDock.find("deleteLater();");
+		const auto now = deleteDock.find("delete dock.data();");
+		const auto marked = deleteDock.find("SEWidgetTeardownScope");
+
+		check(hidden != std::string::npos &&
+			      later != std::string::npos &&
+			      now != std::string::npos && hidden < later &&
+			      hidden < now,
+		      "widget teardown: the dock must be hidden before it is "
+		      "destroyed -- removeDockWidget() leaves it parented and a "
+		      "repaint can still reach it (CORE-1922)");
+
+		// The unparenting that matters is the one on the destroy path,
+		// not the one in the early-return branch above it -- which is
+		// why the count matters as much as the position: with only one,
+		// the early branch alone would satisfy this.
+		const auto unparented =
+			deleteDock.rfind("dock->setParent(nullptr);");
+		std::size_t unparentings = 0;
+		for (auto p = deleteDock.find("dock->setParent(nullptr);");
+		     p != std::string::npos;
+		     p = deleteDock.find("dock->setParent(nullptr);", p + 1))
+			++unparentings;
+
+		check(unparentings >= 2 && unparented != std::string::npos &&
+			      unparented < later && unparented < now,
+		      "widget teardown: the dock must be unparented before it is "
+		      "destroyed, so a repaint cannot walk into it (CORE-1922)");
+
+		check(marked != std::string::npos && marked < now,
+		      "widget teardown: the synchronous delete must carry an "
+		      "SEWidgetTeardownScope, or a crash during it cannot name "
+		      "the widget (CORE-1922)");
+	}
+
+	const std::string browser = strip_line_comments(
+		slurp("streamelements/StreamElementsBrowserWidget.cpp"));
+
+	const std::string destroy = function_body(
+		browser, "void StreamElementsBrowserWidget::DestroyBrowser()");
+
+	check(!destroy.empty(),
+	      "widget teardown: StreamElementsBrowserWidget::DestroyBrowser() "
+	      "not found (CORE-1922)");
+
+	if (!destroy.empty()) {
+		check(destroy.find("SEWidgetTeardownScope") !=
+			      std::string::npos,
+		      "widget teardown: DestroyBrowser() must carry an "
+		      "SEWidgetTeardownScope -- it spins a nested event loop, "
+		      "which is when the repaint that crashes runs (CORE-1922)");
+
+		check(destroy.find("find_first_of(\"?#\")") !=
+			      std::string::npos,
+		      "widget teardown: the marker must strip the URL's query "
+		      "string; those carry access tokens and this value is "
+		      "reported on a crash (CORE-1922)");
+	}
+
+	// And the crash path has to report it, or none of the above is visible.
+	const std::string context = strip_line_comments(
+		slurp("streamelements/StreamElementsCrashContext.cpp"));
+
+	check(context.find("selive.widget.destroying") != std::string::npos &&
+		      context.find("SEWidgetTeardownScope::Current()") !=
+			      std::string::npos,
+	      "widget teardown: the crash context must report "
+	      "selive.widget.destroying from SEWidgetTeardownScope::Current() "
+	      "(CORE-1922)");
+
+	const std::string sentry = strip_line_comments(
+		slurp("streamelements/StreamElementsSentryCrashHandler.cpp"));
+
+	check(sentry.find("selive.widget.destroying") != std::string::npos,
+	      "widget teardown: selive.widget.destroying must be tag-worthy, or "
+	      "it cannot be searched for in Sentry (CORE-1922)");
+}
+
 // --- Every WYVRN SDK entry point must be called from the SDK thread only.
 //
 // The Chroma stack beneath the SDK is COM-based and thread-affine: CoreInitSDK,
@@ -2152,6 +2262,7 @@ int main()
 	check_wer_skip_is_conditional_on_the_handler_flag();
 	check_consent_prompt_does_not_pump_foreign_messages();
 	check_no_dock_is_added_to_an_invalid_area();
+	check_widget_teardown_leaves_the_paint_tree();
 	check_no_config_handle_escapes_an_early_return();
 	check_wyvrn_signature_check_is_not_disabled();
 	check_wyvrn_sdk_calls_stay_on_the_sdk_thread();

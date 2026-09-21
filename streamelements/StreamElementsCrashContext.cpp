@@ -1282,6 +1282,14 @@ StreamElementsCrashContext::Result StreamElementsCrashContext::Collect()
 
 	result.attributes.push_back({"product", "SE.Live"});
 
+	// Only when it says something: an attribute present on every event
+	// would tell us nothing, and this one is read for exactly the crashes
+	// where a widget was being destroyed (CORE-1922).
+	if (SEWidgetTeardownScope::Current()[0]) {
+		result.attributes.push_back({"selive.widget.destroying",
+					     SEWidgetTeardownScope::Current()});
+	}
+
 	TryGetApiContext([&](StreamElementsApiContext_t *apiContext) {
 		auto apiContextList = CefListValue::Create();
 
