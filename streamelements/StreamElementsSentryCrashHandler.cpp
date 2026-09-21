@@ -641,7 +641,12 @@ static void StopCrashProgress()
 //
 static bool IsTagWorthyAttribute(const std::string &name)
 {
-	return name == "product" || name == "selive.api.calls";
+	// selive.widget.destroying is only present on a crash that happened
+	// while a widget was being torn down, so it costs a tag slot on those
+	// events alone -- and on those events it is the question being asked
+	// (CORE-1922).
+	return name == "product" || name == "selive.api.calls" ||
+	       name == "selive.widget.destroying";
 }
 
 //

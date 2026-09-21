@@ -491,6 +491,18 @@ void StreamElementsBrowserWidget::DestroyBrowser()
 	if (os_atomic_set_bool(&m_isDestroyed, true))
 		return;
 
+	//
+	// This is the window that matters: below, obs-browser's closeBrowser()
+	// spins a nested event loop, and Qt can repaint the main window while
+	// this widget is part-way destroyed (CORE-1922, SELIVE-8G).
+	//
+	// The panel's URL without its query string: those carry access tokens,
+	// and this ends up on a crash report.
+	//
+	const std::string panel = m_url.substr(0, m_url.find_first_of("?#"));
+
+	SEWidgetTeardownScope marker("browser-widget", panel.c_str());
+
 	ShutdownApiMessagehandler();
 
 	{
