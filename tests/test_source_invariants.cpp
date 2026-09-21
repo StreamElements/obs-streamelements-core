@@ -1416,6 +1416,148 @@ static void check_wyvrn_signature_check_is_not_disabled()
 	      "removed from the vendored SDK?");
 }
 
+// --- Scene-signal handler data must not be freed while it is still in use.
+//
+// Each scene has a child SESignalHandlerData, and every OBS signal on that
+// scene and its sources is connected with it. Its lifetime is a per-scene
+// count that groups fold into. libobs announces a group's removal but not
+// always its creation -- obs_scene_add_group(), which is how SE.Live creates
+// groups, emits no item_add -- so removing or ungrouping such a group took
+// back a count that was never added, and the scene's handler data was deleted
+// while its signals were still connected (CORE-1715, SELIVE-74/6C/6F/5M/4Y/
+// 4W/65/5T/44/3X). Reproduced in OBS with a script: 14 use-after-free calls
+// before the fix, 0 after.
+//
+// Asserts the fixed shape, each part of which was independently wrong:
+//   * a group's removal is only subtracted if its add was counted;
+//   * the retired child is deleted, and Release() called, outside the lock;
+//   * GetVideoCompositionId() answers from the root, because children never
+//     cache the id and every signal is connected with a child;
+//   * no queued task holds per-scene handler data or the raw signal pointer;
+//   * process_scene_item_remove reads what it needs before
+//     remove_scene_signals() can delete the handler data;
+//   * the scene-item dispatch never takes the composition fallback -- which
+//     walks OBS's scene QListWidget -- off the UI thread.
+static std::string function_body(const std::string &src,
+				 const std::string &marker)
+{
+	const auto begin = src.find(marker);
+	if (begin == std::string::npos)
+		return std::string();
+
+	const auto open = src.find('{', begin);
+	if (open == std::string::npos)
+		return std::string();
+
+	int depth = 0;
+	for (std::size_t i = open; i < src.size(); ++i) {
+		if (src[i] == '{')
+			++depth;
+		else if (src[i] == '}' && --depth == 0)
+			return src.substr(open, i - open + 1);
+	}
+
+	return std::string();
+}
+
+static void check_scene_signal_handler_lifetime()
+{
+	const std::string hpp = strip_line_comments(
+		slurp("streamelements/StreamElementsObsSceneManager.hpp"));
+	const std::string cpp = strip_line_comments(
+		slurp("streamelements/StreamElementsObsSceneManager.cpp"));
+
+	const std::string remove =
+		function_body(hpp, "void RemoveSceneRefAtRoot(");
+	check(!remove.empty(),
+	      "scene signals: SESignalHandlerData::RemoveSceneRefAtRoot() not "
+	      "found -- has the per-scene count moved? (CORE-1715)");
+
+	if (!remove.empty()) {
+		const auto groupCheck =
+			remove.find("m_groups_refcount.find(group)");
+		const auto decrement =
+			remove.find("--m_scenes_refcount[scene]");
+
+		check(groupCheck != std::string::npos &&
+			      decrement != std::string::npos &&
+			      groupCheck < decrement,
+		      "scene signals: RemoveSceneRefAtRoot() must check that a "
+		      "group's add was counted before subtracting it -- "
+		      "obs_scene_add_group() emits no item_add (CORE-1715)");
+
+		const auto del = remove.find("delete retired;");
+		const auto release = remove.find("Release();");
+		const auto lockScopeEnd = remove.find("m_scenes.erase(scene);");
+
+		check(del != std::string::npos &&
+			      release != std::string::npos &&
+			      lockScopeEnd != std::string::npos &&
+			      lockScopeEnd < del && del < release,
+		      "scene signals: RemoveSceneRefAtRoot() must delete the "
+		      "retired child and call Release() after the scene lock is "
+		      "released -- Release() can delete this object (CORE-1715)");
+	}
+
+	check(hpp.find("delete m_scenes[") == std::string::npos,
+	      "scene signals: a per-scene child is deleted in place "
+	      "(delete m_scenes[...]) -- retire it and delete it outside "
+	      "the lock (CORE-1715)");
+
+	const std::string compositionId =
+		function_body(hpp, "std::string GetVideoCompositionId()");
+	check(compositionId.find("m_parent->GetVideoCompositionId()") !=
+		      std::string::npos,
+	      "scene signals: GetVideoCompositionId() must forward to the root; "
+	      "children never cache the id, and every signal is connected "
+	      "with a child (CORE-1715)");
+
+	// No queued task may hold per-scene handler data or the raw signal
+	// pointer: a child is deleted without draining the queue.
+	const std::string enqueue = "EnqueueAsyncTask(";
+	std::size_t tasks = 0;
+	for (auto p = cpp.find(enqueue); p != std::string::npos;
+	     p = cpp.find(enqueue, p + 1)) {
+		const std::string task = function_body(cpp.substr(p), "[");
+		++tasks;
+
+		check(task.find("signalHandlerData") == std::string::npos &&
+			      task.find("my_data") == std::string::npos,
+		      "scene signals: a task queued with EnqueueAsyncTask() "
+		      "refers to signalHandlerData or my_data -- capture the "
+		      "root and resolved values instead (CORE-1715)");
+	}
+	check(tasks >= 2,
+	      "scene signals: expected the delayed scene-item and scene-update "
+	      "tasks in StreamElementsObsSceneManager.cpp (CORE-1715)");
+
+	const std::string itemRemove =
+		function_body(cpp, "static void process_scene_item_remove(");
+	const auto read = itemRemove.find("->m_obsSceneManager");
+	const auto removeGroup =
+		itemRemove.find("remove_scene_signals(group_scene");
+	check(read != std::string::npos && removeGroup != std::string::npos &&
+		      read < removeGroup,
+	      "scene signals: process_scene_item_remove() must read "
+	      "m_obsSceneManager before remove_scene_signals(), which can "
+	      "delete the handler data (CORE-1715)");
+
+	const std::string dispatch = function_body(
+		cpp,
+		"static void dispatch_sceneitem_event(const std::string "
+		"&compositionId,\n\t\t\t\t     obs_sceneitem_t *sceneitem,\n"
+		"\t\t\t\t     std::string eventName,");
+	const auto guard =
+		dispatch.find("if (!videoComposition && !onUiThread)");
+	const auto serialize = dispatch.find("SerializeSourceAndSceneItem(");
+	check(guard != std::string::npos && serialize != std::string::npos &&
+		      guard < serialize,
+	      "scene signals: the scene-item dispatch must not reach "
+	      "SerializeSourceAndSceneItem() with a null composition off the "
+	      "UI thread -- its fallback walks OBS's scene QListWidget "
+	      "(CORE-1715)");
+}
+
 // --- Every WYVRN SDK entry point must be called from the SDK thread only.
 //
 // The Chroma stack beneath the SDK is COM-based and thread-affine: CoreInitSDK,
@@ -2000,6 +2142,7 @@ int main()
 	check_guard_buffer_released_first();
 	check_consent_prompt_is_bounded();
 	check_encoder_released_once_per_object();
+	check_scene_signal_handler_lifetime();
 	check_sentry_wer_is_not_beside_the_host_executable();
 	check_wer_module_gates_before_forwarding();
 	check_prompt_discloses_automatic_reports();
