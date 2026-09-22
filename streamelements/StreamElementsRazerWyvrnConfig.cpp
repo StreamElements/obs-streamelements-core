@@ -135,7 +135,7 @@ ParseTargeting(CefRefPtr<CefDictionaryValue> hapticEvent)
 }
 
 void ParseCommandList(CefRefPtr<CefDictionaryValue> root, const char *key,
-		      const char *kind, const std::string &sourceName,
+		      const char *kind, const std::string &groupName,
 		      std::vector<StreamElementsRazerWyvrnEventInfo> &output)
 {
 	auto commands = ReadList(root, key);
@@ -149,7 +149,7 @@ void ParseCommandList(CefRefPtr<CefDictionaryValue> root, const char *key,
 
 		StreamElementsRazerWyvrnEventInfo info;
 		info.id = ReadString(command, "External_Command_ID");
-		info.source = sourceName;
+		info.group = groupName;
 		info.kind = kind;
 
 		// Without an id there is nothing to name, so the entry is
@@ -226,7 +226,7 @@ bool IsRazerWyvrnConfigFileName(const std::string &fileName)
 }
 
 std::vector<StreamElementsRazerWyvrnEventInfo>
-ParseRazerWyvrnConfig(const std::string &json, const std::string &sourceName)
+ParseRazerWyvrnConfig(const std::string &json, const std::string &groupName)
 {
 	std::vector<StreamElementsRazerWyvrnEventInfo> result;
 
@@ -248,9 +248,9 @@ ParseRazerWyvrnConfig(const std::string &json, const std::string &sourceName)
 	// A document with neither key is the audio-to-haptic profile schema -
 	// 124 of the 146 files on a stock machine. It declares no events, which
 	// is a normal outcome and not a parse failure.
-	ParseCommandList(root, "ExternalCommands", "exact", sourceName, result);
-	ParseCommandList(root, "FallbackCommands", "fallbackPattern",
-			 sourceName, result);
+	ParseCommandList(root, "ExternalCommands", "exact", groupName, result);
+	ParseCommandList(root, "FallbackCommands", "fallbackPattern", groupName,
+			 result);
 
 	return result;
 }

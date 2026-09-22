@@ -13,9 +13,22 @@
  * This value will be incremented each time a non-breaking change
  * to the API is introduced (additional functionality, bugfixes
  * of existing functionality).
+ *
+ * 6.8 is the Razer WYVRN surface: getHostCapabilities, getAllRazerWyvrnEvents,
+ * setRazerWyvrnEvent and hostRazerWyvrnStatusChanged. All of it is compiled
+ * out wherever SE_ENABLE_WYVRN is not defined -- always on macOS, where the
+ * SDK does not exist -- so the minor version follows the same switch rather
+ * than being set by hand. Hand-setting it let the two disagree: when the
+ * integration was held back the version had to be rolled back separately,
+ * and flipping the build option alone would have registered the 6.8 calls
+ * while still reporting 6.7.
  */
 #ifndef HOST_API_VERSION_MINOR
+#ifdef SE_ENABLE_WYVRN
+#define HOST_API_VERSION_MINOR 8
+#else
 #define HOST_API_VERSION_MINOR 7
+#endif
 #endif
 
 /* Numeric value in the YYYYMMDDHHmmss format, indicating the current
