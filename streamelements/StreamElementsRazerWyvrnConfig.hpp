@@ -79,11 +79,12 @@ struct StreamElementsRazerWyvrnEventInfo {
 	// `External_Command_ID`.
 	std::string id;
 
-	// The hapticFolders subfolder the config came from, e.g. "007 First
-	// Light". Not part of the event's identity - two applications may declare
-	// the same id - but it is how a caller filters a 4,000-entry list down to
-	// something browsable.
-	std::string source;
+	// The group the event belongs to: the hapticFolders subfolder the
+	// config came from, e.g. "007 First Light" or "GenericEvent". Not part
+	// of the event's identity - two applications may declare the same id -
+	// but it is how a caller filters a 4,000-entry list down to something
+	// browsable.
+	std::string group;
 
 	// "exact" for ExternalCommands, "fallbackPattern" for FallbackCommands.
 	// A fallback entry is a regex, so it is not directly fireable.
@@ -124,8 +125,8 @@ bool IsRazerWyvrnConfigFileName(const std::string &fileName);
 //
 // Parse one configuration document.
 //
-// `sourceName` is recorded on every event produced and is normally the
-// containing folder's name.
+// `groupName` is the group recorded on every event produced, and is
+// normally the containing folder's name.
 //
 // Returns an empty vector for a document that declares no events - including the
 // 124-of-146 case where the file is an audio-to-haptic profile with an entirely
@@ -134,7 +135,7 @@ bool IsRazerWyvrnConfigFileName(const std::string &fileName);
 // one unreadable file among 146 must not abort a scan.
 //
 std::vector<StreamElementsRazerWyvrnEventInfo>
-ParseRazerWyvrnConfig(const std::string &json, const std::string &sourceName);
+ParseRazerWyvrnConfig(const std::string &json, const std::string &groupName);
 
 //
 // Split a parsed document into the two command kinds, for callers that want to

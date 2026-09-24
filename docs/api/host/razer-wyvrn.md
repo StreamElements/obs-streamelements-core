@@ -1,12 +1,5 @@
 # Razer WYVRN
 
-> ⚠️ **Not available in this release.** The integration is complete and lives in
-> the repository, but it is compiled out by default
-> (`STREAMELEMENTS_ENABLE_WYVRN=OFF`) while its behaviour is confirmed against
-> real hardware. In a build without it, none of the calls on this page are
-> registered and `getHostCapabilities` is not registered either. This page
-> documents what returns when the option is turned back on.
-
 `window.host`
 
 Chroma RGB lighting and Sensa HD haptics, driven by *naming* an event. What that
@@ -14,11 +7,15 @@ event looks and feels like is decided by the WYVRN configurations installed on
 the viewer's machine, not by SE.Live.
 
 **The integration is optional and Windows-only.** It needs Razer Synapse 4 and
-the Chroma App, which most OBS users do not have. Every failure path ends in
-"unavailable" — the calls below still answer normally, they simply report that
-nothing is there. Check
-[`getHostCapabilities`](host-information.md#gethostcapabilitiesresultcallbackhostcapabilities)
-before assuming otherwise.
+the Chroma App, which most OBS users do not have.
+
+- **On Windows**, every failure path ends in "unavailable" — the calls below
+  still answer normally, they simply report that nothing is there. Check
+  [`getHostCapabilities`](host-information.md#gethostcapabilitiesresultcallbackhostcapabilities)
+  before assuming otherwise.
+- **On macOS** the integration is not built. None of the calls on this page
+  are registered, `getHostCapabilities` is not registered either, and the host
+  reports API version 6.7. Check the API version before calling anything here.
 
 **Initialization is asynchronous and takes about 3.4 seconds.** It never blocks
 OBS start, so for the first few seconds of a session the status is
@@ -49,13 +46,13 @@ events, so an optional filter object is accepted:
 
 ```js
 window.host.getAllRazerWyvrnEvents(
-    { source: '007 First Light', idPrefix: 'Aim_' },
+    { group: '007 First Light', idPrefix: 'Aim_' },
     function (events) { /* ... */ });
 ```
 
 | **Property** | **Type** | **Description** |
 | --- | --- | --- |
-| source | string | Match the containing configuration folder exactly, case-insensitively. Omit or leave empty for all. |
+| group | string | Match the event's group exactly, case-insensitively. Omit or leave empty for all. |
 | idPrefix | string | Match the beginning of the event id, case-insensitively. Omit or leave empty for all. |
 | components | bool | Include each event's components and asset URLs. Defaults to `true`. |
 
@@ -70,9 +67,17 @@ Measured on a machine with Synapse installed (4,044 events, 24,698 components):
 
 | Call | Time | Payload |
 | --- | --- | --- |
-| Filtered by source, with components | ~50 ms | 0.13 MB |
+| Filtered by group, with components | ~50 ms | 0.13 MB |
 | Unfiltered, `components: false` | ~65 ms | 0.28 MB |
 | Unfiltered, with components | ~2.1 s | 7.7 MB |
+
+A **group** is the configuration folder an event was declared in — the
+subfolder of `hapticFolders` that Synapse installed, named after the
+application it came with (`007 First Light`, `GenericEvent`). It is not part
+of an event's identity, since two applications may declare the same id, but it
+is what makes a 4,000-entry list browsable: group the ids-only sweep by
+[`group`](../types/RazerWyvrnEventInfo.md), then call back filtered by the one
+the user picked.
 
 **Filter, or turn components off.** Asking for all 4,044 events with their
 components is supported and correct, but it is a two-second request returning
@@ -93,8 +98,14 @@ rather than a bare string, so an item obtained from `getAllRazerWyvrnEvents` can
 be handed back unmodified; only `id` and `fallback` are read. A bare string is
 also accepted.
 
-`id` is matched case-insensitively, and the event is fired under the spelling
-the configuration uses — so `aim_on` reaches the SDK as `Aim_On`.
+`id` is matched case-insensitively against the scanned configurations, and the
+event is fired under the spelling the configuration uses — so `aim_on` reaches
+the SDK as `Aim_On`.
+
+**An id nothing declares is still sent**, exactly as you spelled it. The scan
+decides the spelling, not whether the call is allowed: it is a cache of what was
+on disk when it ran, so a configuration installed since then is invisible here
+and would otherwise be permanently unreachable. The SDK is left to judge.
 
 ### Stopping playback
 
@@ -121,9 +132,10 @@ window.host.setRazerWyvrnEvent({
 }, cb);
 ```
 
-The first entry in the chain that names a real event wins, and only that one is
-fired. If nothing in the chain exists on this machine, **nothing is sent** and
-the call returns `false` — the chain that was tried is written to the OBS log.
+The first entry in the chain that names a scanned event wins, and only that one
+is fired. If nothing in the chain is declared on this machine, the **first** id
+is sent as given — the chain that was tried is written to the OBS log, so a name
+that renders nothing is still visible to whoever asks why.
 
 The chain is resolved against the scanned configurations, not against the SDK.
 That is deliberate: `CoreSetEventName` accepts an event belonging to a different
@@ -136,8 +148,10 @@ process-wide API lock.
 ### Return value
 
 Returns `false` when the integration is not ready — including during the first
-few seconds of a session, while initialization is still running — and when no
-event in the chain exists on this machine.
+few seconds of a session, while initialization is still running, and once
+shutdown has begun. It does **not** report whether the event rendered: an
+unknown id is passed to the SDK and returns `true`, and the SDK accepts names
+belonging to other applications without rendering them.
 
 **Rate limiting is newest-wins.** The SDK accepts at most 30 events per second.
 An event arriving inside that window is parked rather than dropped, and if

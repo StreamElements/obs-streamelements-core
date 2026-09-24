@@ -512,7 +512,7 @@ bool StreamElementsRazerWyvrnManager::SetEventName(const std::string &name)
 void StreamElementsRazerWyvrnManager::ScanEventsLocked()
 {
 	m_events.clear();
-	m_sourcePaths.clear();
+	m_groupPaths.clear();
 	m_eventsScanned = true;
 
 	for (const auto &root : GetConfigRoots()) {
@@ -530,8 +530,8 @@ void StreamElementsRazerWyvrnManager::ScanEventsLocked()
 			if (entry->d_name[0] == '.')
 				continue;
 
-			const std::string source = entry->d_name;
-			const std::string folder = root + "/" + source;
+			const std::string group = entry->d_name;
+			const std::string folder = root + "/" + group;
 
 			os_dir_t *sub = os_opendir(folder.c_str());
 
@@ -551,7 +551,7 @@ void StreamElementsRazerWyvrnManager::ScanEventsLocked()
 					folder + "/" + file->d_name;
 
 				auto events = ParseRazerWyvrnConfig(
-					ReadWholeFile(path), source);
+					ReadWholeFile(path), group);
 
 				// An empty result is the normal outcome for
 				// most files - 124 of 146 on a stock machine
@@ -566,7 +566,7 @@ void StreamElementsRazerWyvrnManager::ScanEventsLocked()
 			// not at the end of a conditional.
 			os_closedir(sub);
 
-			m_sourcePaths.push_back({source, folder});
+			m_groupPaths.push_back({group, folder});
 		}
 
 		os_closedir(dir);
@@ -574,7 +574,7 @@ void StreamElementsRazerWyvrnManager::ScanEventsLocked()
 
 	blog(LOG_INFO,
 	     "obs-streamelements-core: WYVRN: scanned %zu event(s) from %zu folder(s)",
-	     m_events.size(), m_sourcePaths.size());
+	     m_events.size(), m_groupPaths.size());
 }
 
 std::vector<StreamElementsRazerWyvrnEventInfo>
@@ -598,7 +598,7 @@ StreamElementsRazerWyvrnManager::TakeSnapshot(bool refresh)
 
 	Snapshot snapshot;
 	snapshot.events = m_events;
-	snapshot.sourcePaths = m_sourcePaths;
+	snapshot.groupPaths = m_groupPaths;
 
 	return snapshot;
 }
@@ -672,11 +672,11 @@ static std::string ChromaDeviceFromEffectName(const std::string &effect)
 
 std::pair<std::string, std::string>
 StreamElementsRazerWyvrnManager::FindChromaAsset(const Snapshot &snapshot,
-						 const std::string &source,
+						 const std::string &group,
 						 const std::string &effect)
 {
-	for (const auto &kv : snapshot.sourcePaths) {
-		if (kv.first != source)
+	for (const auto &kv : snapshot.groupPaths) {
+		if (kv.first != group)
 			continue;
 
 		// The effect name is the file's base name, verbatim. An earlier
@@ -695,11 +695,11 @@ StreamElementsRazerWyvrnManager::FindChromaAsset(const Snapshot &snapshot,
 
 std::string
 StreamElementsRazerWyvrnManager::FindHapticAsset(const Snapshot &snapshot,
-						 const std::string &source,
+						 const std::string &group,
 						 const std::string &effect)
 {
-	for (const auto &kv : snapshot.sourcePaths) {
-		if (kv.first != source)
+	for (const auto &kv : snapshot.groupPaths) {
+		if (kv.first != group)
 			continue;
 
 		const std::string path = kv.second + "/" + effect + ".haps";
@@ -740,7 +740,7 @@ CefRefPtr<CefValue> StreamElementsRazerWyvrnManager::SerializeEventInternal(
 	CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
 
 	d->SetString("id", event.id);
-	d->SetString("source", event.source);
+	d->SetString("group", event.group);
 	d->SetString("kind", event.kind);
 
 	if (!components) {
@@ -757,7 +757,7 @@ CefRefPtr<CefValue> StreamElementsRazerWyvrnManager::SerializeEventInternal(
 		c->SetString("effect", component.effect);
 		c->SetBool("interrupt", component.interrupt);
 
-		const auto asset = FindChromaAsset(snapshot, event.source,
+		const auto asset = FindChromaAsset(snapshot, event.group,
 						   component.effect);
 
 		// Named even when the file is missing, so a caller can tell "this
@@ -788,7 +788,7 @@ CefRefPtr<CefValue> StreamElementsRazerWyvrnManager::SerializeEventInternal(
 		h->SetString("mixing", component.mixing);
 		h->SetString("priority", component.priority);
 
-		const std::string path = FindHapticAsset(snapshot, event.source,
+		const std::string path = FindHapticAsset(snapshot, event.group,
 							 component.effect);
 
 		if (!path.empty()) {
@@ -831,9 +831,10 @@ CefRefPtr<CefValue> StreamElementsRazerWyvrnManager::SerializeEvent(
 	return SerializeEventInternal(TakeSnapshot(false), event, true);
 }
 
-CefRefPtr<CefValue> StreamElementsRazerWyvrnManager::SerializeEvents(
-	const std::string &sourceFilter, const std::string &idPrefix,
-	bool components)
+CefRefPtr<CefValue>
+StreamElementsRazerWyvrnManager::SerializeEvents(const std::string &groupFilter,
+						 const std::string &idPrefix,
+						 bool components)
 {
 	// One snapshot for the whole list. Everything below is lock-free, which
 	// matters because serializing ~4,000 events means thousands of
@@ -845,8 +846,8 @@ CefRefPtr<CefValue> StreamElementsRazerWyvrnManager::SerializeEvents(
 	CefRefPtr<CefListValue> list = CefListValue::Create();
 
 	for (const auto &event : snapshot.events) {
-		if (!sourceFilter.empty() &&
-		    ToLower(event.source) != ToLower(sourceFilter))
+		if (!groupFilter.empty() &&
+		    ToLower(event.group) != ToLower(groupFilter))
 			continue;
 
 		if (!StartsWithNoCase(event.id, idPrefix))

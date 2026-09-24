@@ -117,7 +117,7 @@ static void test_real_config_parses_completely()
 	const auto &first = events[0];
 	check(first.id == "Interact_Environment",
 	      "id is the External_Command_ID");
-	check(first.source == "007 First Light", "source is recorded");
+	check(first.group == "007 First Light", "group is recorded");
 	check(first.kind == "exact", "ExternalCommands entries are exact");
 
 	check(first.chroma.size() == 1, "the chroma component is parsed");

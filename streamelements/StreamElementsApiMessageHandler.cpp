@@ -3383,14 +3383,15 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_END();
 
 	//
-	// Held back for this release along with the rest of API 6.8.
+	// API 6.8, registered only where SE_ENABLE_WYVRN is defined -- Windows
+	// builds, since the option is forced off on every other platform.
 	//
 	// getHostCapabilities is grouped with the Razer WYVRN calls on purpose:
-	// the `razerWyvrn` member is the only thing it had to report, so
-	// shipping it alone would mean publishing a new API version whose sole
+	// the `razerWyvrn` member is the only thing it has to report, so
+	// registering it alone would publish a new API version whose sole
 	// content is an object saying the feature is absent. The whole 6.8
-	// surface returns together when STREAMELEMENTS_ENABLE_WYVRN goes back
-	// on, and HOST_API_VERSION_MINOR goes back to 8 with it.
+	// surface is on or off together, and Version.hpp derives
+	// HOST_API_VERSION_MINOR from the same switch.
 	//
 #ifdef SE_ENABLE_WYVRN
 	//
@@ -3421,14 +3422,14 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	// session-signed URLs for their assets -- so a caller can see what firing
 	// an event would actually do, and preview it, without a second call.
 	//
-	// Optional filter argument: { source, idPrefix }. There are ~4,000 events
+	// Optional filter argument: { group, idPrefix }. There are ~4,000 events
 	// on a machine with Synapse installed, so callers are expected to use it.
 	//
 	// An unavailable subsystem yields an empty array, never an error.
 	//
 	API_HANDLER_BEGIN("getAllRazerWyvrnEvents");
 	{
-		std::string sourceFilter;
+		std::string groupFilter;
 		std::string idPrefix;
 
 		// Defaults to true: one call that fully answers "what would
@@ -3443,10 +3444,9 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			CefRefPtr<CefDictionaryValue> d =
 				args->GetValue(0)->GetDictionary();
 
-			if (d->HasKey("source") &&
-			    d->GetType("source") == VTYPE_STRING)
-				sourceFilter =
-					d->GetString("source").ToString();
+			if (d->HasKey("group") &&
+			    d->GetType("group") == VTYPE_STRING)
+				groupFilter = d->GetString("group").ToString();
 
 			if (d->HasKey("idPrefix") &&
 			    d->GetType("idPrefix") == VTYPE_STRING)
@@ -3460,8 +3460,8 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		auto manager = GetRazerWyvrnManager();
 
 		if (manager.get()) {
-			result = manager->SerializeEvents(sourceFilter,
-							  idPrefix, components);
+			result = manager->SerializeEvents(groupFilter, idPrefix,
+							  components);
 		} else {
 			result->SetList(CefListValue::Create());
 		}
@@ -3491,6 +3491,14 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 	// so asking it "did that work?" would always answer yes and the fallback
 	// would never fire.
 	//
+	// The scan decides the *spelling*, not whether the call is allowed. When
+	// nothing on this machine declares any name in the chain, the caller's
+	// own spelling of the first one is sent anyway. The scan is a cache of
+	// what was on disk when it ran, so it is not authoritative about what the
+	// SDK will accept -- a configuration installed since then is invisible to
+	// us and would otherwise be unreachable forever. Refusing on our own
+	// stale evidence is worse than letting the SDK decide.
+	//
 	// Nothing here blocks. API_HANDLER_BEGIN holds a process-wide recursive
 	// mutex that serialises every API call, and SetEventName only parks the
 	// name for the SDK thread.
@@ -3504,6 +3512,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		const int kMaxFallbackDepth = 16;
 
 		std::string resolved;
+		std::string firstId;
 		std::string tried;
 		bool stopRequested = false;
 		bool sawCandidate = false;
@@ -3517,6 +3526,7 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 			sawCandidate = !id.empty();
 			stopRequested = id.empty();
 			tried = id;
+			firstId = id;
 
 			if (manager.get() && !id.empty())
 				resolved = manager->ResolveEventId(id);
@@ -3540,6 +3550,10 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 				if (!id.empty()) {
 					sawCandidate = true;
+
+					if (firstId.empty())
+						firstId = id;
+
 					tried += tried.empty() ? id
 							       : (" -> " + id);
 
@@ -3571,14 +3585,16 @@ void StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()
 		} else if (!resolved.empty()) {
 			result->SetBool(manager->SetEventName(resolved));
 		} else {
-			// Nothing in the chain exists here. Say so rather than
-			// firing a name that cannot render, so the caller can
-			// tell "sent" from "silently did nothing".
+			// Nothing scanned declares any of these names, so there
+			// is no canonical spelling to correct to -- send the
+			// caller's own, and let the SDK be the judge. Logged
+			// because a name that renders nothing is worth seeing
+			// when someone asks why an event did not fire.
 			blog(LOG_INFO,
-			     "obs-streamelements-core: WYVRN: no configuration declares any of '%s'; nothing sent",
-			     tried.c_str());
+			     "obs-streamelements-core: WYVRN: no scanned configuration declares any of '%s'; sending '%s' as given",
+			     tried.c_str(), firstId.c_str());
 
-			result->SetBool(false);
+			result->SetBool(manager->SetEventName(firstId));
 		}
 	}
 	API_HANDLER_END();
