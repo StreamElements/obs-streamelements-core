@@ -9,27 +9,27 @@
 
 #include <shared_mutex>
 
-class StreamElementsAudioCompositionEventListener {
+class SEAudioCompositionEventListener {
 public:
-	StreamElementsAudioCompositionEventListener() {}
-	~StreamElementsAudioCompositionEventListener() {}
+	SEAudioCompositionEventListener() {}
+	~SEAudioCompositionEventListener() {}
 
 public:
 	//virtual void StopOutputRequested();
 };
 
-class StreamElementsAudioCompositionBase {
+class SEAudioCompositionBase {
 public:
 	class CompositionInfo {
 	private:
-		std::shared_ptr<StreamElementsAudioCompositionBase> m_owner;
-		StreamElementsAudioCompositionEventListener *m_listener;
+		std::shared_ptr<SEAudioCompositionBase> m_owner;
+		SEAudioCompositionEventListener *m_listener;
 
 	public:
 		CompositionInfo(
-			std::shared_ptr<StreamElementsAudioCompositionBase>
+			std::shared_ptr<SEAudioCompositionBase>
 				owner,
-			StreamElementsAudioCompositionEventListener *listener)
+			SEAudioCompositionEventListener *listener)
 			: m_owner(owner), m_listener(listener)
 		{
 			m_owner->AddRef();
@@ -38,7 +38,7 @@ public:
 		virtual ~CompositionInfo() { m_owner->RemoveRef(); }
 
 	public:
-		std::shared_ptr<StreamElementsAudioCompositionBase>
+		std::shared_ptr<SEAudioCompositionBase>
 		GetComposition()
 		{
 			return m_owner;
@@ -115,7 +115,7 @@ public:
 	}
 
 	virtual std::shared_ptr<CompositionInfo> GetCompositionInfo(
-		StreamElementsAudioCompositionEventListener *listener) = 0;
+		SEAudioCompositionEventListener *listener) = 0;
 
 private:
 	std::string m_id;
@@ -124,12 +124,12 @@ private:
 	std::shared_mutex m_mutex;
 
 protected:
-	StreamElementsAudioCompositionBase(const std::string id,
+	SEAudioCompositionBase(const std::string id,
 					   const std::string name)
 		: m_id(id), m_name(name)
 	{
 	}
-	virtual ~StreamElementsAudioCompositionBase() {}
+	virtual ~SEAudioCompositionBase() {}
 
 public:
 	std::string GetId() { return m_id; }
@@ -150,10 +150,10 @@ public:
 };
 
 // OBS Main Composition
-class StreamElementsObsNativeAudioComposition
-	: public StreamElementsAudioCompositionBase,
+class SEObsNativeAudioComposition
+	: public SEAudioCompositionBase,
 	  public std::enable_shared_from_this<
-		  StreamElementsAudioCompositionBase> {
+		  SEAudioCompositionBase> {
 private:
 	struct Private {
 		explicit Private() = default;
@@ -161,17 +161,17 @@ private:
 
 public:
 	// ctor only usable by this class
-	StreamElementsObsNativeAudioComposition(Private)
-		: StreamElementsAudioCompositionBase("default", "Default")
+	SEObsNativeAudioComposition(Private)
+		: SEAudioCompositionBase("default", "Default")
 	{
 	}
 
-	virtual ~StreamElementsObsNativeAudioComposition() {}
+	virtual ~SEObsNativeAudioComposition() {}
 
 public:
-	static std::shared_ptr<StreamElementsAudioCompositionBase> Create()
+	static std::shared_ptr<SEAudioCompositionBase> Create()
 	{
-		return std::make_shared<StreamElementsObsNativeAudioComposition>(
+		return std::make_shared<SEObsNativeAudioComposition>(
 			Private());
 	}
 
@@ -179,9 +179,9 @@ public:
 	virtual bool IsObsNativeComposition() { return true; }
 
 	virtual std::shared_ptr<
-		StreamElementsAudioCompositionBase::CompositionInfo>
+		SEAudioCompositionBase::CompositionInfo>
 	GetCompositionInfo(
-		StreamElementsAudioCompositionEventListener *listener);
+		SEAudioCompositionEventListener *listener);
 
 	virtual bool CanRemove() { return false; }
 
@@ -189,10 +189,10 @@ public:
 };
 
 // Custom Composition
-class StreamElementsCustomAudioComposition
-	: public StreamElementsAudioCompositionBase,
+class SECustomAudioComposition
+	: public SEAudioCompositionBase,
 	  public std::enable_shared_from_this<
-		  StreamElementsAudioCompositionBase> {
+		  SEAudioCompositionBase> {
 private:
 	struct Private {
 		explicit Private() = default;
@@ -203,27 +203,27 @@ private:
 
 public:
 	// ctor only usable by this class
-	StreamElementsCustomAudioComposition(
+	SECustomAudioComposition(
 		Private, std::string id, std::string name, std::string streamingAudioEncoderId,
 		obs_data_t *streamingAudioEncoderSettings,
 		obs_data_t *streamingAudioEncoderHotkeyData);
 
-	virtual ~StreamElementsCustomAudioComposition();
+	virtual ~SECustomAudioComposition();
 
 public:
-	static std::shared_ptr<StreamElementsCustomAudioComposition>
+	static std::shared_ptr<SECustomAudioComposition>
 	Create(std::string id, std::string name,
 	       std::string streamingAudioEncoderId,
 	       obs_data_t *streamingAudioEncoderSettings,
 	       obs_data_t *streamingAudioEncoderHotkeyData)
 	{
-		return std::make_shared<StreamElementsCustomAudioComposition>(
+		return std::make_shared<SECustomAudioComposition>(
 			Private(), id, name, streamingAudioEncoderId,
 			streamingAudioEncoderSettings,
 			streamingAudioEncoderHotkeyData);
 	}
 
-	static std::shared_ptr<StreamElementsCustomAudioComposition>
+	static std::shared_ptr<SECustomAudioComposition>
 	Create(std::string id, std::string name,
 	       CefRefPtr<CefValue> streamingAudioEncoders,
 	       CefRefPtr<CefValue> recordingAudioEncoders);
@@ -242,9 +242,9 @@ private:
 	virtual bool IsObsNativeComposition() { return false; }
 
 	virtual std::shared_ptr<
-		StreamElementsAudioCompositionBase::CompositionInfo>
+		SEAudioCompositionBase::CompositionInfo>
 	GetCompositionInfo(
-		StreamElementsAudioCompositionEventListener *listener);
+		SEAudioCompositionEventListener *listener);
 
 	virtual void SerializeComposition(CefRefPtr<CefValue> &output);
 };

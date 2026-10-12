@@ -38,14 +38,14 @@ using namespace json11;
 /* ========================================================================= */
 
 #include <obs-frontend-api.h>
-#include "streamelements/StreamElementsGlobalStateManager.hpp"
+#include "streamelements/SEGlobalStateManager.hpp"
 #include "streamelements/StreamElementsUtils.hpp"
 
 /* ========================================================================= */
 
 static void log_remaining_objects()
 {
-	StreamElementsVideoCompositionBase::CompositionInfo::
+	SEVideoCompositionBase::CompositionInfo::
 		LogRemainingCompositionInfos();
 
 	obs_enum_sources(
@@ -280,7 +280,7 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 		{
 			StreamElementsInitializeScope initializeScope;
 
-			StreamElementsGlobalStateManager::GetInstance()
+			SEGlobalStateManager::GetInstance()
 				->Initialize(static_cast<QMainWindow *>(
 					obs_frontend_get_main_window()));
 		}
@@ -320,14 +320,14 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 			// tree, so do not run them at all. The process is
 			// exiting and about to be replaced by the updater; a
 			// leak is strictly better than a crash.
-			StreamElementsGlobalStateManager::Leak();
+			SEGlobalStateManager::Leak();
 			break;
 		}
 
 		// Shutdown StreamElements plug-in
 		blog(LOG_INFO, "[obs-streamelements-core]: shutting down");
 
-		StreamElementsGlobalStateManager::Destroy();
+		SEGlobalStateManager::Destroy();
 		break;
 	default:
 		break;

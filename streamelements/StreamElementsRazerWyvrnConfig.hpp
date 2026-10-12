@@ -7,7 +7,7 @@
 // nothing but the standard library and the local CefValue data model, so the
 // ctest suite can compile it directly and exercise it against real config files
 // without an obs-studio tree. Everything that needs the filesystem or OBS lives
-// in StreamElementsRazerWyvrnManager.
+// in SERazerWyvrnManager.
 //
 // WYVRN has no enumeration API: the set of events a machine can render is
 // whatever the `wyvrn.config` files under the Interhaptics install declare. Those
@@ -37,7 +37,7 @@
 //
 // One Chroma effect attached to an event, from the config's `Chroma_Events`.
 //
-struct StreamElementsRazerWyvrnChromaComponent {
+struct SERazerWyvrnChromaComponent {
 	// `Chroma_Effect`: the base filename of the .chroma assets, without the
 	// device suffix. "Aim_On" yields "Aim_On_Keyboard.chroma" and friends.
 	std::string effect;
@@ -48,7 +48,7 @@ struct StreamElementsRazerWyvrnChromaComponent {
 //
 // One haptic effect attached to an event, from the config's `Haptic_Events`.
 //
-struct StreamElementsRazerWyvrnHapticTarget {
+struct SERazerWyvrnHapticTarget {
 	// Head, Chest, Waist, Hand, Leg, All, Top, Down. Passed through as
 	// written: the data contains both `waist` and the misspelling `Wasit`,
 	// and silently normalising them here would hide that from the caller.
@@ -60,7 +60,7 @@ struct StreamElementsRazerWyvrnHapticTarget {
 	double gain = 1.0;
 };
 
-struct StreamElementsRazerWyvrnHapticComponent {
+struct SERazerWyvrnHapticComponent {
 	// `Haptic_Effect`: the base filename of the .haps asset.
 	std::string effect;
 
@@ -69,13 +69,13 @@ struct StreamElementsRazerWyvrnHapticComponent {
 	std::string priority;
 
 	// Where on the body this lands. Usually several entries.
-	std::vector<StreamElementsRazerWyvrnHapticTarget> targeting;
+	std::vector<SERazerWyvrnHapticTarget> targeting;
 };
 
 //
 // One event a caller may name.
 //
-struct StreamElementsRazerWyvrnEventInfo {
+struct SERazerWyvrnEventInfo {
 	// `External_Command_ID`.
 	std::string id;
 
@@ -90,8 +90,8 @@ struct StreamElementsRazerWyvrnEventInfo {
 	// A fallback entry is a regex, so it is not directly fireable.
 	std::string kind;
 
-	std::vector<StreamElementsRazerWyvrnChromaComponent> chroma;
-	std::vector<StreamElementsRazerWyvrnHapticComponent> haptics;
+	std::vector<SERazerWyvrnChromaComponent> chroma;
+	std::vector<SERazerWyvrnHapticComponent> haptics;
 };
 
 /* ========================================================================= */
@@ -134,7 +134,7 @@ bool IsRazerWyvrnConfigFileName(const std::string &fileName);
 // Malformed JSON likewise yields an empty vector rather than throwing, because
 // one unreadable file among 146 must not abort a scan.
 //
-std::vector<StreamElementsRazerWyvrnEventInfo>
+std::vector<SERazerWyvrnEventInfo>
 ParseRazerWyvrnConfig(const std::string &json, const std::string &groupName);
 
 //
@@ -142,5 +142,5 @@ ParseRazerWyvrnConfig(const std::string &json, const std::string &groupName);
 // know whether anything was recognised at all without inspecting every entry.
 //
 size_t CountRazerWyvrnEventsOfKind(
-	const std::vector<StreamElementsRazerWyvrnEventInfo> &events,
+	const std::vector<SERazerWyvrnEventInfo> &events,
 	const std::string &kind);

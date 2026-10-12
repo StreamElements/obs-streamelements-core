@@ -6,7 +6,7 @@
 #include "cef-headers.hpp"
 
 #include "StreamElementsUtils.hpp"
-#include "StreamElementsScenesListWidgetManager.hpp"
+#include "SEScenesListWidgetManager.hpp"
 
 #include <shared_mutex>
 
@@ -14,16 +14,16 @@
 #include <strings.h>
 #endif
 
-class StreamElementsVideoCompositionEventListener {
+class SEVideoCompositionEventListener {
 public:
-	StreamElementsVideoCompositionEventListener() {}
-	~StreamElementsVideoCompositionEventListener() {}
+	SEVideoCompositionEventListener() {}
+	~SEVideoCompositionEventListener() {}
 
 public:
 	//virtual void StopOutputRequested();
 };
 
-class StreamElementsVideoCompositionBase {
+class SEVideoCompositionBase {
 public:
 	class scenes_t : public std::vector<obs_scene_t*> {
 	public:
@@ -47,8 +47,8 @@ private:
 public:
 	class CompositionInfo {
 	private:
-		std::shared_ptr<StreamElementsVideoCompositionBase> m_owner;
-		StreamElementsVideoCompositionEventListener *m_listener;
+		std::shared_ptr<SEVideoCompositionBase> m_owner;
+		SEVideoCompositionEventListener *m_listener;
 		std::string m_holder;
 
 	private:
@@ -62,8 +62,8 @@ public:
 
 	public:
 		CompositionInfo(
-			std::shared_ptr<StreamElementsVideoCompositionBase> owner,
-			StreamElementsVideoCompositionEventListener* listener,
+			std::shared_ptr<SEVideoCompositionBase> owner,
+			SEVideoCompositionEventListener* listener,
 			std::string holder)
 			: m_owner(owner), m_listener(listener), m_holder(holder)
 		{
@@ -81,7 +81,7 @@ public:
 		}
 
 	public:
-		std::shared_ptr<StreamElementsVideoCompositionBase> GetComposition()
+		std::shared_ptr<SEVideoCompositionBase> GetComposition()
 		{
 			return m_owner;
 		}
@@ -210,7 +210,7 @@ public:
 	}
 
 	virtual std::shared_ptr<CompositionInfo>
-		GetCompositionInfo(StreamElementsVideoCompositionEventListener* listener, std::string holder) = 0;
+		GetCompositionInfo(SEVideoCompositionEventListener* listener, std::string holder) = 0;
 
 private:
 	std::string m_id;
@@ -219,19 +219,19 @@ private:
 	std::shared_mutex m_mutex;
 
 protected:
-	StreamElementsVideoCompositionBase(const std::string internal_type,
+	SEVideoCompositionBase(const std::string internal_type,
 					   const std::string id,
 					   const std::string name)
 		: m_internal_type(internal_type), m_id(id), m_name(name)
 	{
 		obs_frontend_add_event_callback(
-			StreamElementsVideoCompositionBase::
+			SEVideoCompositionBase::
 				handle_obs_frontend_event,
 			this);
 	}
-	virtual ~StreamElementsVideoCompositionBase() {
+	virtual ~SEVideoCompositionBase() {
 		obs_frontend_remove_event_callback(
-			StreamElementsVideoCompositionBase::
+			SEVideoCompositionBase::
 				handle_obs_frontend_event,
 			this);
 
@@ -397,26 +397,26 @@ public:
 
 #if SE_ENABLE_SCENE_ICONS
 		d->SetValue("icon",
-			    StreamElementsScenesListWidgetManager::GetSceneIcon(
+			    SEScenesListWidgetManager::GetSceneIcon(
 				    scene)
 				    ->Copy());
 #endif
 
 		d->SetValue("auxiliaryData",
-			    StreamElementsScenesListWidgetManager::
+			    SEScenesListWidgetManager::
 				    GetSceneAuxiliaryData(scene)
 					    ->Copy());
 
 #if SE_ENABLE_SCENE_DEFAULT_ACTION
 		d->SetValue("defaultAction",
-			    StreamElementsScenesListWidgetManager::
+			    SEScenesListWidgetManager::
 				    GetSceneDefaultAction(scene)
 					    ->Copy());
 #endif
 
 #if SE_ENABLE_SCENE_CONTEXT_MENU
 		d->SetValue("contextMenu",
-			    StreamElementsScenesListWidgetManager::
+			    SEScenesListWidgetManager::
 				    GetSceneContextMenu(scene)
 					    ->Copy());
 #endif
@@ -495,8 +495,8 @@ public:
 };
 
 // OBS Main Composition
-class StreamElementsObsNativeVideoComposition : public StreamElementsVideoCompositionBase,
-	  public std::enable_shared_from_this<StreamElementsVideoCompositionBase> {
+class SEObsNativeVideoComposition : public SEVideoCompositionBase,
+	  public std::enable_shared_from_this<SEVideoCompositionBase> {
 private:
 	struct Private {
 		explicit Private() = default;
@@ -509,9 +509,9 @@ private:
 
 public:
 	// ctor only usable by this class
-	StreamElementsObsNativeVideoComposition(Private);
+	SEObsNativeVideoComposition(Private);
 
-	virtual ~StreamElementsObsNativeVideoComposition();
+	virtual ~SEObsNativeVideoComposition();
 
 	virtual void HandleTransitionChanged() override;
 
@@ -524,9 +524,9 @@ public:
 	}
 
 public:
-	static std::shared_ptr<StreamElementsVideoCompositionBase> Create()
+	static std::shared_ptr<SEVideoCompositionBase> Create()
 	{
-		return std::make_shared<StreamElementsObsNativeVideoComposition>(
+		return std::make_shared<SEObsNativeVideoComposition>(
 			Private());
 	}
 
@@ -538,8 +538,8 @@ public:
 	virtual bool IsObsNativeComposition() override { return true; }
 
 	virtual std::shared_ptr<
-		StreamElementsVideoCompositionBase::CompositionInfo>
-		GetCompositionInfo(StreamElementsVideoCompositionEventListener* listener, std::string holder) override;
+		SEVideoCompositionBase::CompositionInfo>
+		GetCompositionInfo(SEVideoCompositionEventListener* listener, std::string holder) override;
 
 	virtual bool CanRemove() override { return false; }
 
@@ -584,10 +584,10 @@ protected:
 class SESignalHandlerData;
 
 // Custom Composition
-class StreamElementsCustomVideoComposition
-	: public StreamElementsVideoCompositionBase,
+class SECustomVideoComposition
+	: public SEVideoCompositionBase,
 	  public std::enable_shared_from_this<
-		  StreamElementsCustomVideoComposition> {
+		  SECustomVideoComposition> {
 private:
 	struct Private {
 		explicit Private() = default;
@@ -611,13 +611,13 @@ private:
 
 public:
 	// ctor only usable by this class
-	StreamElementsCustomVideoComposition(
+	SECustomVideoComposition(
 		Private, std::string id, std::string name, uint32_t baseWidth,
 		uint32_t baseHeight, std::vector<std::string> &streamingVideoEncoderIds,
 		std::vector<OBSDataAutoRelease> &streamingVideoEncoderSettings,
 		std::vector<OBSDataAutoRelease> &streamingVideoEncoderHotkeyData);
 
-	virtual ~StreamElementsCustomVideoComposition();
+	virtual ~SECustomVideoComposition();
 
 	virtual void HandleTransitionChanged() override;
 
@@ -644,19 +644,19 @@ public:
 	}
 
 private:
-	static std::shared_ptr<StreamElementsCustomVideoComposition>
+	static std::shared_ptr<SECustomVideoComposition>
 	Create(std::string id, std::string name, uint32_t width,
 	       uint32_t height,
 	       std::vector<std::string> &streamingVideoEncoderIds,
 	       std::vector<OBSDataAutoRelease> &streamingVideoEncoderSettings,
 	       std::vector<OBSDataAutoRelease> &streamingVideoEncoderHotkeyData)
 	{
-		return std::make_shared<StreamElementsCustomVideoComposition>(
+		return std::make_shared<SECustomVideoComposition>(
 			Private(), id, name, width, height, streamingVideoEncoderIds, streamingVideoEncoderSettings, streamingVideoEncoderHotkeyData);
 	}
 
 public:
-	static std::shared_ptr<StreamElementsCustomVideoComposition>
+	static std::shared_ptr<SECustomVideoComposition>
 	Create(std::string id, std::string name, uint32_t width,
 	       uint32_t height, CefRefPtr<CefValue> streamingVideoEncoders,
 	       CefRefPtr<CefValue> recordingVideoEncoders);
@@ -687,8 +687,8 @@ public:
 	virtual bool IsObsNativeComposition() override { return false; }
 
 	virtual std::shared_ptr<
-		StreamElementsVideoCompositionBase::CompositionInfo>
-	GetCompositionInfo(StreamElementsVideoCompositionEventListener *listener, std::string holder) override;
+		SEVideoCompositionBase::CompositionInfo>
+	GetCompositionInfo(SEVideoCompositionEventListener *listener, std::string holder) override;
 
 	virtual void SerializeComposition(CefRefPtr<CefValue> &output) override;
 
@@ -724,10 +724,10 @@ public:
 };
 
 // Virtual main canvas WITH CUSTOM ENCODERS video composition
-class StreamElementsObsNativeVideoCompositionWithCustomEncoders
-	: public StreamElementsVideoCompositionBase,
+class SEObsNativeVideoCompositionWithCustomEncoders
+	: public SEVideoCompositionBase,
 	  public std::enable_shared_from_this<
-		  StreamElementsVideoCompositionBase> {
+		  SEVideoCompositionBase> {
 private:
 	struct Private {
 		explicit Private() = default;
@@ -743,14 +743,14 @@ private:
 
 public:
 	// ctor only usable by this class
-	StreamElementsObsNativeVideoCompositionWithCustomEncoders(
+	SEObsNativeVideoCompositionWithCustomEncoders(
 		Private, std::string id, std::string name,
 		std::vector<std::string> &streamingVideoEncoderIds,
 		std::vector<OBSDataAutoRelease> &streamingVideoEncoderSettings,
 		std::vector<OBSDataAutoRelease>
 			&streamingVideoEncoderHotkeyData);
 
-	virtual ~StreamElementsObsNativeVideoCompositionWithCustomEncoders();
+	virtual ~SEObsNativeVideoCompositionWithCustomEncoders();
 
 	virtual void HandleTransitionChanged() override;
 
@@ -764,21 +764,21 @@ public:
 	}
 
 private:
-	static std::shared_ptr<StreamElementsObsNativeVideoCompositionWithCustomEncoders>
+	static std::shared_ptr<SEObsNativeVideoCompositionWithCustomEncoders>
 	Create(std::string id, std::string name,
 	       std::vector<std::string> &streamingVideoEncoderIds,
 	       std::vector<OBSDataAutoRelease> &streamingVideoEncoderSettings,
 	       std::vector<OBSDataAutoRelease> &streamingVideoEncoderHotkeyData)
 	{
 		return std::make_shared<
-			StreamElementsObsNativeVideoCompositionWithCustomEncoders>(
+			SEObsNativeVideoCompositionWithCustomEncoders>(
 			Private(), id, name,
 			streamingVideoEncoderIds, streamingVideoEncoderSettings,
 			streamingVideoEncoderHotkeyData);
 	}
 
 public:
-	static std::shared_ptr<StreamElementsObsNativeVideoCompositionWithCustomEncoders>
+	static std::shared_ptr<SEObsNativeVideoCompositionWithCustomEncoders>
 	Create(std::string id, std::string name, CefRefPtr<CefValue> streamingVideoEncoders,
 	       CefRefPtr<CefValue> recordingVideoEncoders);
 
@@ -797,8 +797,8 @@ public:
 	virtual bool IsObsNativeComposition() override { return true; }
 
 	virtual std::shared_ptr<
-		StreamElementsVideoCompositionBase::CompositionInfo>
-	GetCompositionInfo(StreamElementsVideoCompositionEventListener *listener,
+		SEVideoCompositionBase::CompositionInfo>
+	GetCompositionInfo(SEVideoCompositionEventListener *listener,
 			   std::string holder) override;
 
 	virtual void SerializeComposition(CefRefPtr<CefValue> &output) override;

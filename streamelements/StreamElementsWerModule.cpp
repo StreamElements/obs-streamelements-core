@@ -234,7 +234,7 @@ static BOOL SEWerIsModuleOfInterest(const SEWerRegistration *registration,
 // So the leading run of our own frames is skipped, and the verdict is taken from
 // what lies beneath it. A fault genuinely inside our code still passes: our
 // frames reappear further down, below the CRT and OBS frames that called us.
-// This is the same discipline StreamElementsCrashContext::WalkStack applies
+// This is the same discipline SECrashContext::WalkStack applies
 // in-process via SetSkipLeadingOwnFrames, and for the same stated reason --
 // "That is not a gate, it is a rubber stamp."
 //

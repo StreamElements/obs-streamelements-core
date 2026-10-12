@@ -5,9 +5,9 @@
 #include "deps/json11/json11.hpp"
 
 #include "StreamElementsUtils.hpp"
-#include "StreamElementsObsSceneManager.hpp"
-#include "StreamElementsMessageBus.hpp"
-#include "StreamElementsGlobalStateManager.hpp"
+#include "SEObsSceneManager.hpp"
+#include "SEMessageBus.hpp"
+#include "SEGlobalStateManager.hpp"
 
 #include "audio-wrapper-source.h"
 
@@ -18,20 +18,20 @@
 #endif
 
 std::shared_mutex
-	StreamElementsVideoCompositionBase::CompositionInfo::s_mutex;
+	SEVideoCompositionBase::CompositionInfo::s_mutex;
 std::map<std::string,
-		StreamElementsVideoCompositionBase::CompositionInfo*>
-	StreamElementsVideoCompositionBase::CompositionInfo::
+		SEVideoCompositionBase::CompositionInfo*>
+	SEVideoCompositionBase::CompositionInfo::
 		s_heldCompositionInfos;
 
-void StreamElementsVideoCompositionBase::CompositionInfo::
+void SEVideoCompositionBase::CompositionInfo::
 	LogRemainingCompositionInfos()
 {
 	std::shared_lock guard(s_mutex);
 
 	for (auto kv : s_heldCompositionInfos) {
 		blog(LOG_INFO,
-		     "[obs-streamelements-core]: remaining StreamElementsVideoCompositionBase::CompositionInfo: holder '%s', canvas: '%s': '%s'",
+		     "[obs-streamelements-core]: remaining SEVideoCompositionBase::CompositionInfo: holder '%s', canvas: '%s': '%s'",
 		     kv.second->m_holder.c_str(),
 		     kv.second->m_owner->GetId().c_str(),
 		     kv.second->m_owner->GetName().c_str());
@@ -99,19 +99,19 @@ static void dispatch_external_event(std::string name, std::string args)
 	externalEventName[0] =
 		tolower(externalEventName[0]); /* lower case first letter */
 
-	StreamElementsMessageBus::GetInstance()->NotifyAllExternalEventListeners(
-		StreamElementsMessageBus::DEST_ALL_EXTERNAL,
-		StreamElementsMessageBus::SOURCE_APPLICATION, "OBS",
+	SEMessageBus::GetInstance()->NotifyAllExternalEventListeners(
+		SEMessageBus::DEST_ALL_EXTERNAL,
+		SEMessageBus::SOURCE_APPLICATION, "OBS",
 		externalEventName,
 		CefParseJSON(args, JSON_PARSER_ALLOW_TRAILING_COMMAS));
 }
 
 static void dispatch_js_event(std::string name, std::string args)
 {
-	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+	if (!SEGlobalStateManager::IsInstanceAvailable())
 		return;
 
-	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
+	auto apiServer = SEGlobalStateManager::GetInstance()
 				 ->GetWebsocketApiServer();
 
 	if (!apiServer)
@@ -121,7 +121,7 @@ static void dispatch_js_event(std::string name, std::string args)
 }
 
 static void
-dispatch_scene_changed_event(StreamElementsVideoCompositionBase *self,
+dispatch_scene_changed_event(SEVideoCompositionBase *self,
 			     obs_scene_t *scene)
 {
 	auto source = obs_scene_get_source(scene);
@@ -149,7 +149,7 @@ dispatch_scene_changed_event(StreamElementsVideoCompositionBase *self,
 }
 
 static void
-dispatch_scene_list_changed_event(StreamElementsVideoCompositionBase *self)
+dispatch_scene_list_changed_event(SEVideoCompositionBase *self)
 {
 	json11::Json json = json11::Json::object{
 		{"videoCompositionId", self->GetId()},
@@ -163,7 +163,7 @@ dispatch_scene_list_changed_event(StreamElementsVideoCompositionBase *self)
 }
 
 static void
-dispatch_scenes_reset_begin_event(StreamElementsVideoCompositionBase *self)
+dispatch_scenes_reset_begin_event(SEVideoCompositionBase *self)
 {
 	json11::Json json = json11::Json::object{
 		{"videoCompositionId", self->GetId()},
@@ -177,7 +177,7 @@ dispatch_scenes_reset_begin_event(StreamElementsVideoCompositionBase *self)
 }
 
 static void
-dispatch_scenes_reset_end_event(StreamElementsVideoCompositionBase *self)
+dispatch_scenes_reset_end_event(SEVideoCompositionBase *self)
 {
 	json11::Json json = json11::Json::object{
 		{"videoCompositionId", self->GetId()},
@@ -191,7 +191,7 @@ dispatch_scenes_reset_end_event(StreamElementsVideoCompositionBase *self)
 }
 
 static void
-dispatch_scene_item_list_changed_event(StreamElementsVideoCompositionBase *self,
+dispatch_scene_item_list_changed_event(SEVideoCompositionBase *self,
 				       obs_scene_t *scene)
 {
 	auto source = obs_scene_get_source(scene);
@@ -262,7 +262,7 @@ ParseEncodersList(CefRefPtr<CefValue> encodersList,
 	return encoderIds.size() > 0;
 }
 
-static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* composition, CefRefPtr<CefDictionaryValue>& root)
+static void SerializeObsVideoEncoders(SEVideoCompositionBase* composition, CefRefPtr<CefDictionaryValue>& root)
 {
 	auto info = composition->GetCompositionInfo(nullptr, "SerializeObsVideoEncoders");
 
@@ -323,7 +323,7 @@ static void SerializeObsVideoEncoders(StreamElementsVideoCompositionBase* compos
 ////////////////////////////////////////////////////////////////////////////////
 
 static void
-dispatch_transition_changed_event(StreamElementsVideoCompositionBase *self)
+dispatch_transition_changed_event(SEVideoCompositionBase *self)
 {
 	json11::Json json = json11::Json::object{
 		{"videoCompositionId", self->GetId()},
@@ -342,8 +342,8 @@ static void handle_transition_change(void* my_data, calldata_t* cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	StreamElementsVideoCompositionBase *self =
-		static_cast<StreamElementsVideoCompositionBase *>(my_data);
+	SEVideoCompositionBase *self =
+		static_cast<SEVideoCompositionBase *>(my_data);
 
 	dispatch_transition_changed_event(self);
 }
@@ -352,8 +352,8 @@ static void handle_transition_start(void *my_data, calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	StreamElementsVideoCompositionBase *self =
-		static_cast<StreamElementsVideoCompositionBase *>(my_data);
+	SEVideoCompositionBase *self =
+		static_cast<SEVideoCompositionBase *>(my_data);
 
 
 	obs_source_t *source =
@@ -377,7 +377,7 @@ static void handle_transition_start(void *my_data, calldata_t *cd)
 	json11::Json json = json11::Json::object{
 		{"sceneId", GetIdFromPointer(destSource.Get())},
 		{"videoCompositionId",
-		 StreamElementsGlobalStateManager::GetInstance()
+		 SEGlobalStateManager::GetInstance()
 			 ->GetVideoCompositionManager()
 			 ->GetObsNativeVideoComposition()
 			 ->GetId()},
@@ -396,8 +396,8 @@ static void handle_transition_stop(void *my_data, calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	StreamElementsVideoCompositionBase *self =
-		static_cast<StreamElementsVideoCompositionBase *>(my_data);
+	SEVideoCompositionBase *self =
+		static_cast<SEVideoCompositionBase *>(my_data);
 
 	OBSSceneAutoRelease scene =
 		SETRACE_AUTODECREF(self->GetCurrentSceneRef());
@@ -406,7 +406,7 @@ static void handle_transition_stop(void *my_data, calldata_t *cd)
 	dispatch_scene_item_list_changed_event(self, scene);
 }
 
-void StreamElementsVideoCompositionBase::ConnectTransitionEvents(
+void SEVideoCompositionBase::ConnectTransitionEvents(
 	obs_source_t *source)
 {
 	if (!source)
@@ -433,7 +433,7 @@ void StreamElementsVideoCompositionBase::ConnectTransitionEvents(
 			       handle_transition_stop, this);
 }
 
-void StreamElementsVideoCompositionBase::DisconnectTransitionEvents(
+void SEVideoCompositionBase::DisconnectTransitionEvents(
 	obs_source_t *source)
 {
 	if (!source)
@@ -460,13 +460,13 @@ void StreamElementsVideoCompositionBase::DisconnectTransitionEvents(
 				  handle_transition_stop, this);
 }
 
-void StreamElementsVideoCompositionBase::handle_obs_frontend_event(
+void SEVideoCompositionBase::handle_obs_frontend_event(
 	enum obs_frontend_event event, void* data)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	StreamElementsVideoCompositionBase *self =
-		static_cast < StreamElementsVideoCompositionBase*>(data);
+	SEVideoCompositionBase *self =
+		static_cast < SEVideoCompositionBase*>(data);
 
 	switch (event) {
 	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CLEANUP:
@@ -486,7 +486,7 @@ void StreamElementsVideoCompositionBase::handle_obs_frontend_event(
 	}
 }
 
-void StreamElementsVideoCompositionBase::SetName(std::string name)
+void SEVideoCompositionBase::SetName(std::string name)
 {
 	{
 		std::unique_lock<decltype(m_mutex)> lock(m_mutex);
@@ -506,7 +506,7 @@ void StreamElementsVideoCompositionBase::SetName(std::string name)
 	dispatch_external_event("hostVideoCompositionChanged", json);
 }
 
-static std::string GetUniqueSceneNameInternal(std::string name, StreamElementsVideoCompositionBase::scenes_t& scenes)
+static std::string GetUniqueSceneNameInternal(std::string name, SEVideoCompositionBase::scenes_t& scenes)
 {
 	std::string result(name);
 
@@ -585,7 +585,7 @@ GetUniqueSceneNameInternal(std::string name,
 }
 
 std::string
-StreamElementsVideoCompositionBase::GetUniqueSceneName(std::string name)
+SEVideoCompositionBase::GetUniqueSceneName(std::string name)
 {
 	std::string result(name);
 
@@ -599,7 +599,7 @@ StreamElementsVideoCompositionBase::GetUniqueSceneName(std::string name)
 	return GetUniqueSceneNameInternal(name, scenes);
 }
 
-bool StreamElementsVideoCompositionBase::SafeRemoveScene(
+bool SEVideoCompositionBase::SafeRemoveScene(
 	obs_scene_t *sceneToRemove)
 {
 	if (!sceneToRemove)
@@ -630,7 +630,7 @@ bool StreamElementsVideoCompositionBase::SafeRemoveScene(
 	return RemoveScene(sceneToRemove);
 }
 
-obs_sceneitem_t *StreamElementsVideoCompositionBase::GetSceneItemById(
+obs_sceneitem_t *SEVideoCompositionBase::GetSceneItemById(
 	std::string id, obs_scene_t **result_scene, bool addRef)
 {
 	if (!id.size())
@@ -681,13 +681,13 @@ obs_sceneitem_t *StreamElementsVideoCompositionBase::GetSceneItemById(
 }
 
 obs_sceneitem_t *
-StreamElementsVideoCompositionBase::GetSceneItemById(std::string id,
+SEVideoCompositionBase::GetSceneItemById(std::string id,
 						     bool addRef)
 {
 	return GetSceneItemById(id, nullptr, addRef);
 }
 
-obs_sceneitem_t *StreamElementsVideoCompositionBase::GetSceneItemByName(
+obs_sceneitem_t *SEVideoCompositionBase::GetSceneItemByName(
 	std::string name, obs_scene_t **result_scene, bool addRef)
 {
 	if (!name.size())
@@ -736,13 +736,13 @@ obs_sceneitem_t *StreamElementsVideoCompositionBase::GetSceneItemByName(
 }
 
 obs_sceneitem_t *
-StreamElementsVideoCompositionBase::GetSceneItemByName(std::string name,
+SEVideoCompositionBase::GetSceneItemByName(std::string name,
 						       bool addRef)
 {
 	return GetSceneItemByName(name, nullptr, addRef);
 }
 
-void StreamElementsVideoCompositionBase::SerializeTransition(
+void SEVideoCompositionBase::SerializeTransition(
 	CefRefPtr<CefValue>& output)
 {
 	OBSSourceAutoRelease transition =
@@ -752,7 +752,7 @@ void StreamElementsVideoCompositionBase::SerializeTransition(
 			       GetTransitionDurationMilliseconds(), output);
 }
 
-void StreamElementsVideoCompositionBase::DeserializeTransition(
+void SEVideoCompositionBase::DeserializeTransition(
 	CefRefPtr<CefValue> input,
 	CefRefPtr<CefValue>& output)
 {
@@ -778,23 +778,23 @@ void StreamElementsVideoCompositionBase::DeserializeTransition(
 // OBS Main Composition
 ////////////////////////////////////////////////////////////////////////////////
 
-class StreamElementsDefaultVideoCompositionInfo
-	: public StreamElementsVideoCompositionBase::CompositionInfo {
+class SEDefaultVideoCompositionInfo
+	: public SEVideoCompositionBase::CompositionInfo {
 private:
-	StreamElementsVideoCompositionEventListener *m_listener;
+	SEVideoCompositionEventListener *m_listener;
 
 public:
-	StreamElementsDefaultVideoCompositionInfo(
-		std::shared_ptr<StreamElementsVideoCompositionBase> owner,
-		StreamElementsVideoCompositionEventListener *listener,
+	SEDefaultVideoCompositionInfo(
+		std::shared_ptr<SEVideoCompositionBase> owner,
+		SEVideoCompositionEventListener *listener,
 		std::string holder)
-		: StreamElementsVideoCompositionBase::CompositionInfo(
+		: SEVideoCompositionBase::CompositionInfo(
 			  owner, listener, holder),
 		  m_listener(listener)
 	{
 	}
 
-	virtual ~StreamElementsDefaultVideoCompositionInfo() {}
+	virtual ~SEDefaultVideoCompositionInfo() {}
 
 public:
 	virtual std::shared_ptr<SELazyOBSVideoEncoderProvider>
@@ -823,7 +823,7 @@ public:
 			return nullptr;
 
 		return std::make_shared<SELazyOBSVideoEncoderProvider>(
-			FormatString("StreamElementsDefaultVideoCompositionInfo::GetStreamingVideoEncoderProvider(%d)", index),
+			FormatString("SEDefaultVideoCompositionInfo::GetStreamingVideoEncoderProvider(%d)", index),
 			SELazyOBSVideoEncoderProvider::
 				ExternallyAllocatedEncoderAllocator::Create(
 					result));
@@ -878,7 +878,7 @@ public:
 				return std::make_shared<
 					SELazyOBSVideoEncoderProvider>(
 					FormatString(
-						"StreamElementsDefaultVideoCompositionInfo::GetRecordingVideoEncoderProvider(%d)",
+						"SEDefaultVideoCompositionInfo::GetRecordingVideoEncoderProvider(%d)",
 						index),
 					SELazyOBSVideoEncoderProvider::
 						ExternallyAllocatedEncoderAllocator::
@@ -910,9 +910,9 @@ public:
 	virtual void Render() { obs_render_main_texture(); }
 };
 
-StreamElementsObsNativeVideoComposition::StreamElementsObsNativeVideoComposition(
-	StreamElementsObsNativeVideoComposition::Private)
-	: StreamElementsVideoCompositionBase("obs_native_video_composition", "default", "Default")
+SEObsNativeVideoComposition::SEObsNativeVideoComposition(
+	SEObsNativeVideoComposition::Private)
+	: SEVideoCompositionBase("obs_native_video_composition", "default", "Default")
 {
 	m_rootSource = SETRACE_ADDREF(obs_source_create_private(
 		"cut_transition", "SE.Live OBS main canvas root source",
@@ -921,8 +921,8 @@ StreamElementsObsNativeVideoComposition::StreamElementsObsNativeVideoComposition
 	HandleTransitionChanged();
 }
 
-StreamElementsObsNativeVideoComposition::
-	~StreamElementsObsNativeVideoComposition()
+SEObsNativeVideoComposition::
+	~SEObsNativeVideoComposition()
 {
 	std::unique_lock guard(m_mutex);
 
@@ -933,7 +933,7 @@ StreamElementsObsNativeVideoComposition::
 	m_rootSource = nullptr;
 }
 
-void StreamElementsObsNativeVideoComposition::HandleTransitionChanged()
+void SEObsNativeVideoComposition::HandleTransitionChanged()
 {
 	std::shared_lock guard(m_mutex);
 
@@ -947,22 +947,22 @@ void StreamElementsObsNativeVideoComposition::HandleTransitionChanged()
 }
 
 std::shared_ptr<
-	StreamElementsVideoCompositionBase::CompositionInfo>
-StreamElementsObsNativeVideoComposition::GetCompositionInfo(
-	StreamElementsVideoCompositionEventListener* listener, std::string holder)
+	SEVideoCompositionBase::CompositionInfo>
+SEObsNativeVideoComposition::GetCompositionInfo(
+	SEVideoCompositionEventListener* listener, std::string holder)
 {
-	return std::make_shared<StreamElementsDefaultVideoCompositionInfo>(
+	return std::make_shared<SEDefaultVideoCompositionInfo>(
 		shared_from_this(), listener, holder);
 }
 
 obs_scene_t *
-StreamElementsObsNativeVideoComposition::AddScene(std::string requestName)
+SEObsNativeVideoComposition::AddScene(std::string requestName)
 {
 	return SETRACE_ADDREF(
 		obs_scene_create(GetUniqueSceneName(requestName).c_str()));
 }
 
-bool StreamElementsObsNativeVideoComposition::RemoveScene(
+bool SEObsNativeVideoComposition::RemoveScene(
 	obs_scene_t *sceneToRemove)
 {
 	scenes_t scenes;
@@ -980,7 +980,7 @@ bool StreamElementsObsNativeVideoComposition::RemoveScene(
 	return false;
 }
 
-void StreamElementsObsNativeVideoComposition::SetTransition(
+void SEObsNativeVideoComposition::SetTransition(
 	obs_source_t *transition)
 {
 	obs_frontend_set_current_transition(transition);
@@ -994,7 +994,7 @@ void StreamElementsObsNativeVideoComposition::SetTransition(
 	dispatch_external_event("hostVideoCompositionChanged", json);
 }
 
-void StreamElementsObsNativeVideoComposition::SetTransitionDurationMilliseconds(
+void SEObsNativeVideoComposition::SetTransitionDurationMilliseconds(
 	int duration)
 {
 	obs_frontend_set_transition_duration(duration);
@@ -1008,12 +1008,12 @@ void StreamElementsObsNativeVideoComposition::SetTransitionDurationMilliseconds(
 	dispatch_external_event("hostVideoCompositionChanged", json);
 }
 
-obs_source_t* StreamElementsObsNativeVideoComposition::GetTransitionRef()
+obs_source_t* SEObsNativeVideoComposition::GetTransitionRef()
 {
 	return SETRACE_ADDREF(obs_frontend_get_current_transition());
 }
 
-bool StreamElementsObsNativeVideoComposition::SetCurrentScene(
+bool SEObsNativeVideoComposition::SetCurrentScene(
 	obs_scene_t* scene)
 {
 	if (!scene)
@@ -1035,7 +1035,7 @@ bool StreamElementsObsNativeVideoComposition::SetCurrentScene(
 	return false;
 }
 
-void StreamElementsObsNativeVideoComposition::GetAllScenesInternal(
+void SEObsNativeVideoComposition::GetAllScenesInternal(
 	scenes_t &result)
 {
 	result.clear();
@@ -1061,7 +1061,7 @@ void StreamElementsObsNativeVideoComposition::GetAllScenesInternal(
 	obs_frontend_source_list_free(&frontendScenes);
 }
 
-void StreamElementsObsNativeVideoComposition::SerializeComposition(
+void SEObsNativeVideoComposition::SerializeComposition(
 	CefRefPtr<CefValue> &output)
 {
 	obs_video_info ovi;
@@ -1095,7 +1095,7 @@ void StreamElementsObsNativeVideoComposition::SerializeComposition(
 	output->SetDictionary(root);
 }
 
-obs_scene_t* StreamElementsObsNativeVideoComposition::GetCurrentScene()
+obs_scene_t* SEObsNativeVideoComposition::GetCurrentScene()
 {
 	auto source = SETRACE_NOREF(obs_frontend_get_current_scene());
 	auto scene = obs_scene_from_source(source);
@@ -1105,7 +1105,7 @@ obs_scene_t* StreamElementsObsNativeVideoComposition::GetCurrentScene()
 	return scene;
 }
 
-obs_scene_t *StreamElementsObsNativeVideoComposition::GetCurrentSceneRef()
+obs_scene_t *SEObsNativeVideoComposition::GetCurrentSceneRef()
 {
 	auto source = obs_frontend_get_current_scene();
 	auto scene = SETRACE_ADDREF(obs_scene_from_source(source));
@@ -1117,10 +1117,10 @@ obs_scene_t *StreamElementsObsNativeVideoComposition::GetCurrentSceneRef()
 // Custom Views
 ////////////////////////////////////////////////////////////////////////////////
 
-class StreamElementsCustomVideoCompositionInfo
-	: public StreamElementsVideoCompositionBase::CompositionInfo {
+class SECustomVideoCompositionInfo
+	: public SEVideoCompositionBase::CompositionInfo {
 private:
-	StreamElementsVideoCompositionEventListener *m_listener;
+	SEVideoCompositionEventListener *m_listener;
 
 	video_t *m_video = nullptr;
 	//obs_view_t *m_view = nullptr;
@@ -1131,13 +1131,13 @@ private:
 	uint32_t m_baseWidth = 1920;
 	uint32_t m_baseHeight = 1080;
 
-	std::shared_ptr<StreamElementsVideoCompositionBase> m_compositionOwner =
+	std::shared_ptr<SEVideoCompositionBase> m_compositionOwner =
 		nullptr;
 
 public:
-	StreamElementsCustomVideoCompositionInfo(
-		std::shared_ptr<StreamElementsVideoCompositionBase> owner,
-		StreamElementsVideoCompositionEventListener *listener,
+	SECustomVideoCompositionInfo(
+		std::shared_ptr<SEVideoCompositionBase> owner,
+		SEVideoCompositionEventListener *listener,
 		std::string holder,
 		video_t *video, uint32_t baseWidth, uint32_t baseHeight,
 		std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider>>
@@ -1146,7 +1146,7 @@ public:
 			recordingVideoEncoders,
 		obs_canvas_t* canvas
 		/* obs_view_t *view*/)
-		: StreamElementsVideoCompositionBase::CompositionInfo(
+		: SEVideoCompositionBase::CompositionInfo(
 			  owner, listener, holder),
 		  m_compositionOwner(owner),
 		  m_video(video),
@@ -1165,7 +1165,7 @@ public:
 		}
 	}
 
-	virtual ~StreamElementsCustomVideoCompositionInfo()
+	virtual ~SECustomVideoCompositionInfo()
 	{
 		m_streamingVideoEncoders.clear();
 		m_recordingVideoEncoders.clear();
@@ -1215,13 +1215,13 @@ public:
 };
 
 // ctor only usable by this class
-StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
-	StreamElementsCustomVideoComposition::Private, std::string id,
+SECustomVideoComposition::SECustomVideoComposition(
+	SECustomVideoComposition::Private, std::string id,
 	std::string name, uint32_t baseWidth, uint32_t baseHeight,
 	std::vector<std::string> &streamingVideoEncoderIds,
 	std::vector<OBSDataAutoRelease> &streamingVideoEncoderSettings,
 	std::vector<OBSDataAutoRelease> &streamingVideoEncoderHotkeyData)
-	: StreamElementsVideoCompositionBase("custom_video_composition",  id, name),
+	: SEVideoCompositionBase("custom_video_composition",  id, name),
 	  m_baseWidth(baseWidth),
 	  m_baseHeight(baseHeight),
 	  m_transitionDurationMs(0)
@@ -1311,8 +1311,8 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 
 	aw->param = this;
 	aw->target = [](void *param) -> obs_source_t* {
-		StreamElementsCustomVideoComposition *self =
-			reinterpret_cast<StreamElementsCustomVideoComposition *>(
+		SECustomVideoComposition *self =
+			reinterpret_cast<SECustomVideoComposition *>(
 				param);
 
 		std::shared_lock<decltype(self->m_mutex)> lock(self->m_mutex);
@@ -1342,7 +1342,7 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 		auto encoderProvider = std::make_shared<
 			SELazyOBSVideoEncoderProvider>(
 			FormatString(
-				"StreamElementsCustomVideoComposition::ctor(streamingVideoEncoder[%d])",
+				"SECustomVideoComposition::ctor(streamingVideoEncoder[%d])",
 				idx),
 			SELazyOBSVideoEncoderProvider::CreateEncoderAllocator::
 				Create(streamingVideoEncoderIds[idx],
@@ -1359,7 +1359,7 @@ StreamElementsCustomVideoComposition::StreamElementsCustomVideoComposition(
 	ConnectTransitionEvents(m_transition);
 }
 
-void StreamElementsCustomVideoComposition::SetRecordingEncoders(
+void SECustomVideoComposition::SetRecordingEncoders(
 	std::vector<std::string> &recordingVideoEncoderIds,
 	std::vector<OBSDataAutoRelease> &recordingVideoEncoderSettings,
 	std::vector<OBSDataAutoRelease> &recordingVideoEncoderHotkeyData)
@@ -1381,7 +1381,7 @@ void StreamElementsCustomVideoComposition::SetRecordingEncoders(
 		auto encoderProvider = std::make_shared<
 			SELazyOBSVideoEncoderProvider>(
 			FormatString(
-				"StreamElementsCustomVideoComposition::SetRecordingEncoders(recordingVideoEncoder[%d])",
+				"SECustomVideoComposition::SetRecordingEncoders(recordingVideoEncoder[%d])",
 				idx),
 			SELazyOBSVideoEncoderProvider::CreateEncoderAllocator::
 				Create(recordingVideoEncoderIds[idx],
@@ -1395,7 +1395,7 @@ void StreamElementsCustomVideoComposition::SetRecordingEncoders(
 	}
 }
 
-StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
+SECustomVideoComposition::~SECustomVideoComposition()
 {
 	m_streamingVideoEncoders.clear();
 	m_recordingVideoEncoders.clear();
@@ -1478,26 +1478,26 @@ StreamElementsCustomVideoComposition::~StreamElementsCustomVideoComposition()
 	m_signalHandlerData = nullptr;
 }
 
-void StreamElementsCustomVideoComposition::HandleTransitionChanged() {
+void SECustomVideoComposition::HandleTransitionChanged() {
 	// NOP
 	//
 	// Handled individually by obs_transition_set(m_rootSource, ...) in the code
 }
 
-std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
-StreamElementsCustomVideoComposition::GetCompositionInfo(
-	StreamElementsVideoCompositionEventListener *listener,
+std::shared_ptr<SEVideoCompositionBase::CompositionInfo>
+SECustomVideoComposition::GetCompositionInfo(
+	SEVideoCompositionEventListener *listener,
 	std::string holder)
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
-	return std::make_shared<StreamElementsCustomVideoCompositionInfo>(
+	return std::make_shared<SECustomVideoCompositionInfo>(
 		shared_from_this(), listener, holder, m_video, m_baseWidth,
 		m_baseHeight, m_streamingVideoEncoders,
 		m_recordingVideoEncoders, m_canvas /*m_view*/);
 }
 
-obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentScene()
+obs_scene_t *SECustomVideoComposition::GetCurrentScene()
 {
 	//std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 	std::shared_lock<decltype(m_currentSceneMutex)> currentSceneLock(m_currentSceneMutex);
@@ -1505,7 +1505,7 @@ obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentScene()
 	return m_currentScene;
 }
 
-obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentSceneRef()
+obs_scene_t *SECustomVideoComposition::GetCurrentSceneRef()
 {
 	//std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 	std::shared_lock<decltype(m_currentSceneMutex)> currentSceneLock(m_currentSceneMutex);
@@ -1516,7 +1516,7 @@ obs_scene_t *StreamElementsCustomVideoComposition::GetCurrentSceneRef()
 		return nullptr;
 }
 
-void StreamElementsCustomVideoComposition::SerializeComposition(
+void SECustomVideoComposition::SerializeComposition(
 	CefRefPtr<CefValue> &output)
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
@@ -1543,8 +1543,8 @@ void StreamElementsCustomVideoComposition::SerializeComposition(
 	output->SetDictionary(root);
 }
 
-std::shared_ptr<StreamElementsCustomVideoComposition>
-StreamElementsCustomVideoComposition::Create(
+std::shared_ptr<SECustomVideoComposition>
+SECustomVideoComposition::Create(
 	std::string id, std::string name, uint32_t width, uint32_t height,
        CefRefPtr<CefValue> streamingVideoEncoders, CefRefPtr<CefValue> recordingVideoEncoders)
 {
@@ -1558,7 +1558,7 @@ StreamElementsCustomVideoComposition::Create(
 		      streamingVideoEncoderHotkeyData);
 
 	std::exception_ptr exception = nullptr;
-	std::shared_ptr<StreamElementsCustomVideoComposition> result = nullptr;
+	std::shared_ptr<SECustomVideoComposition> result = nullptr;
 
 	try {
 		result = Create(id, name, width, height,
@@ -1615,7 +1615,7 @@ StreamElementsCustomVideoComposition::Create(
 	return result;
 }
 
-void StreamElementsCustomVideoComposition::GetAllScenesInternal(scenes_t &result)
+void SECustomVideoComposition::GetAllScenesInternal(scenes_t &result)
 {
 	result.clear();
 
@@ -1625,7 +1625,7 @@ void StreamElementsCustomVideoComposition::GetAllScenesInternal(scenes_t &result
 }
 
 obs_scene_t *
-StreamElementsCustomVideoComposition::AddScene(std::string requestName)
+SECustomVideoComposition::AddScene(std::string requestName)
 {
 	auto scene = scene_create_private_with_custom_size(
 		GetUniqueSceneName(requestName).c_str(), m_baseWidth,
@@ -1650,7 +1650,7 @@ StreamElementsCustomVideoComposition::AddScene(std::string requestName)
 	return SETRACE_ADDREF(obs_scene_get_ref(scene)); // caller will release
 }
 
-bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
+bool SECustomVideoComposition::RemoveScene(obs_scene_t* scene)
 {
 	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
@@ -1675,7 +1675,7 @@ bool StreamElementsCustomVideoComposition::RemoveScene(obs_scene_t* scene)
 	return false;
 }
 
-void StreamElementsCustomVideoComposition::SetTransition(
+void SECustomVideoComposition::SetTransition(
 	obs_source_t *transition)
 {
 	obs_source_t *old_transition = nullptr;
@@ -1718,14 +1718,14 @@ void StreamElementsCustomVideoComposition::SetTransition(
 	dispatch_transition_changed_event(this);
 }
 
-obs_source_t *StreamElementsCustomVideoComposition::GetTransitionRef()
+obs_source_t *SECustomVideoComposition::GetTransitionRef()
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	return SETRACE_ADDREF(obs_source_get_ref(m_transition));
 }
 
-void StreamElementsCustomVideoComposition::ProcessRenderingRoot(
+void SECustomVideoComposition::ProcessRenderingRoot(
 	std::function<void(obs_source_t*)> callback)
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
@@ -1733,7 +1733,7 @@ void StreamElementsCustomVideoComposition::ProcessRenderingRoot(
 	callback(m_transition);
 }
 
-void StreamElementsCustomVideoComposition::SetTransitionDurationMilliseconds(
+void SECustomVideoComposition::SetTransitionDurationMilliseconds(
 	int duration)
 {
 	m_transitionDurationMs = duration > 0 ? duration : 0;
@@ -1748,7 +1748,7 @@ void StreamElementsCustomVideoComposition::SetTransitionDurationMilliseconds(
 	dispatch_transition_changed_event(this);
 }
 
-bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
+bool SECustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 {
 	if (!scene)
 		return false;
@@ -1827,7 +1827,7 @@ bool StreamElementsCustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 	return false;
 }
 
-void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
+void SECustomVideoComposition::HandleObsSceneCollectionCleanup()
 {
 	dispatch_scenes_reset_begin_event(this);
 
@@ -1876,7 +1876,7 @@ void StreamElementsCustomVideoComposition::HandleObsSceneCollectionCleanup()
 	}
 }
 
-void StreamElementsCustomVideoComposition::
+void SECustomVideoComposition::
 	HandleObsSceneCollectionCleanupComplete()
 {
 	// Recreate current scene here
@@ -1928,29 +1928,29 @@ void StreamElementsCustomVideoComposition::
 // OBS Native Virtual Composition - WITH CUSTOM ENCODERS
 ////////////////////////////////////////////////////////////////////////////////
 
-std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
-StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetCompositionInfo(
-	StreamElementsVideoCompositionEventListener *listener,
+std::shared_ptr<SEVideoCompositionBase::CompositionInfo>
+SEObsNativeVideoCompositionWithCustomEncoders::GetCompositionInfo(
+	SEVideoCompositionEventListener *listener,
 	std::string holder)
 {
 	obs_video_info ovi = {0};
 	obs_get_video_info(&ovi);
 
-	return std::make_shared<StreamElementsCustomVideoCompositionInfo>(
+	return std::make_shared<SECustomVideoCompositionInfo>(
 		shared_from_this(), listener, holder, obs_get_video(),
 		ovi.base_width,
 		ovi.base_height, m_streamingVideoEncoders,
 		m_recordingVideoEncoders, nullptr /* render native OBS canvas */);
 }
 
-obs_scene_t *StreamElementsObsNativeVideoCompositionWithCustomEncoders::AddScene(
+obs_scene_t *SEObsNativeVideoCompositionWithCustomEncoders::AddScene(
 	std::string requestName)
 {
 	return SETRACE_ADDREF(
 		obs_scene_create(GetUniqueSceneName(requestName).c_str()));
 }
 
-bool StreamElementsObsNativeVideoCompositionWithCustomEncoders::RemoveScene(
+bool SEObsNativeVideoCompositionWithCustomEncoders::RemoveScene(
 	obs_scene_t *sceneToRemove)
 {
 	scenes_t scenes;
@@ -1968,7 +1968,7 @@ bool StreamElementsObsNativeVideoCompositionWithCustomEncoders::RemoveScene(
 	return false;
 }
 
-void StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetTransition(
+void SEObsNativeVideoCompositionWithCustomEncoders::SetTransition(
 	obs_source_t *transition)
 {
 	obs_frontend_set_current_transition(transition);
@@ -1982,7 +1982,7 @@ void StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetTransition(
 	dispatch_external_event("hostVideoCompositionChanged", json);
 }
 
-void StreamElementsObsNativeVideoCompositionWithCustomEncoders::
+void SEObsNativeVideoCompositionWithCustomEncoders::
 	SetTransitionDurationMilliseconds(int duration)
 {
 	obs_frontend_set_transition_duration(duration);
@@ -1996,12 +1996,12 @@ void StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 	dispatch_external_event("hostVideoCompositionChanged", json);
 }
 
-obs_source_t *StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetTransitionRef()
+obs_source_t *SEObsNativeVideoCompositionWithCustomEncoders::GetTransitionRef()
 {
 	return SETRACE_ADDREF(obs_frontend_get_current_transition());
 }
 
-bool StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetCurrentScene(
+bool SEObsNativeVideoCompositionWithCustomEncoders::SetCurrentScene(
 	obs_scene_t *scene)
 {
 	if (!scene)
@@ -2023,7 +2023,7 @@ bool StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetCurrentScene(
 	return false;
 }
 
-void StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetAllScenesInternal(
+void SEObsNativeVideoCompositionWithCustomEncoders::GetAllScenesInternal(
 	scenes_t &result)
 {
 	result.clear();
@@ -2047,7 +2047,7 @@ void StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetAllScenesInte
 	obs_frontend_source_list_free(&frontendScenes);
 }
 
-void StreamElementsObsNativeVideoCompositionWithCustomEncoders::SerializeComposition(
+void SEObsNativeVideoCompositionWithCustomEncoders::SerializeComposition(
 	CefRefPtr<CefValue> &output)
 {
 	obs_video_info ovi;
@@ -2081,7 +2081,7 @@ void StreamElementsObsNativeVideoCompositionWithCustomEncoders::SerializeComposi
 	output->SetDictionary(root);
 }
 
-obs_scene_t *StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetCurrentScene()
+obs_scene_t *SEObsNativeVideoCompositionWithCustomEncoders::GetCurrentScene()
 {
 	auto source = SETRACE_NOREF(obs_frontend_get_current_scene());
 	auto scene = obs_scene_from_source(source);
@@ -2092,7 +2092,7 @@ obs_scene_t *StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetCurre
 }
 
 obs_scene_t *
-StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetCurrentSceneRef()
+SEObsNativeVideoCompositionWithCustomEncoders::GetCurrentSceneRef()
 {
 	auto source = obs_frontend_get_current_scene();
 	auto scene = SETRACE_ADDREF(obs_scene_from_source(source));
@@ -2100,16 +2100,16 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::GetCurrentSceneRef()
 	return scene;
 }
 
-StreamElementsObsNativeVideoCompositionWithCustomEncoders::
-		StreamElementsObsNativeVideoCompositionWithCustomEncoders(
-			StreamElementsObsNativeVideoCompositionWithCustomEncoders::Private,
+SEObsNativeVideoCompositionWithCustomEncoders::
+		SEObsNativeVideoCompositionWithCustomEncoders(
+			SEObsNativeVideoCompositionWithCustomEncoders::Private,
 			std::string id,
 		std::string name,
 		std::vector<std::string> & streamingVideoEncoderIds,
 		std::vector<OBSDataAutoRelease> & streamingVideoEncoderSettings,
 		std::vector<OBSDataAutoRelease> &
 			streamingVideoEncoderHotkeyData)
-		: StreamElementsVideoCompositionBase("custom_obs_native_video_composition",
+		: SEVideoCompositionBase("custom_obs_native_video_composition",
 						     id, name)
 {
 		if (streamingVideoEncoderIds.size() !=
@@ -2131,7 +2131,7 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 
 			auto encoderProvider = std::make_shared<
 				SELazyOBSVideoEncoderProvider>(
-				FormatString("StreamElementsObsNativeVideoCompositionWithCustomEncoders::ctor(streamingVideoEncoders[%d])", idx),
+				FormatString("SEObsNativeVideoCompositionWithCustomEncoders::ctor(streamingVideoEncoders[%d])", idx),
 				SELazyOBSVideoEncoderProvider::
 					CreateEncoderAllocator::Create(
 						streamingVideoEncoderIds[idx],
@@ -2157,8 +2157,8 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 		HandleTransitionChanged();
 }
 
-StreamElementsObsNativeVideoCompositionWithCustomEncoders::
-	~StreamElementsObsNativeVideoCompositionWithCustomEncoders()
+SEObsNativeVideoCompositionWithCustomEncoders::
+	~SEObsNativeVideoCompositionWithCustomEncoders()
 {
 	m_streamingVideoEncoders.clear();
 	m_recordingVideoEncoders.clear();
@@ -2172,7 +2172,7 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 	m_rootSource = nullptr;
 }
 
-void StreamElementsObsNativeVideoCompositionWithCustomEncoders::
+void SEObsNativeVideoCompositionWithCustomEncoders::
 	HandleTransitionChanged()
 {
 	std::shared_lock guard(m_mutex);
@@ -2186,7 +2186,7 @@ void StreamElementsObsNativeVideoCompositionWithCustomEncoders::
 	obs_transition_set(m_rootSource, currentTransition);
 }
 
-void StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetRecordingEncoders(
+void SEObsNativeVideoCompositionWithCustomEncoders::SetRecordingEncoders(
 	std::vector<std::string> &recordingVideoEncoderIds,
 	std::vector<OBSDataAutoRelease> &recordingVideoEncoderSettings,
 	std::vector<OBSDataAutoRelease> &recordingVideoEncoderHotkeyData)
@@ -2205,7 +2205,7 @@ void StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetRecordingEnco
 	     ++idx) {
 		auto encoderProvider =
 			std::make_shared<SELazyOBSVideoEncoderProvider>(
-				FormatString("StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetRecordingEncoders(recordingVideoEncoder[%d])", idx),
+				FormatString("SEObsNativeVideoCompositionWithCustomEncoders::SetRecordingEncoders(recordingVideoEncoder[%d])", idx),
 				SELazyOBSVideoEncoderProvider::
 							 CreateEncoderAllocator::Create(
 					recordingVideoEncoderIds[idx],
@@ -2221,8 +2221,8 @@ void StreamElementsObsNativeVideoCompositionWithCustomEncoders::SetRecordingEnco
 	}
 }
 
-std::shared_ptr<StreamElementsObsNativeVideoCompositionWithCustomEncoders>
-StreamElementsObsNativeVideoCompositionWithCustomEncoders::Create(
+std::shared_ptr<SEObsNativeVideoCompositionWithCustomEncoders>
+SEObsNativeVideoCompositionWithCustomEncoders::Create(
 	std::string id, std::string name,
 	CefRefPtr<CefValue> streamingVideoEncoders,
 	CefRefPtr<CefValue> recordingVideoEncoders)
@@ -2237,7 +2237,7 @@ StreamElementsObsNativeVideoCompositionWithCustomEncoders::Create(
 			  streamingVideoEncoderHotkeyData);
 
 	std::exception_ptr exception = nullptr;
-	std::shared_ptr<StreamElementsObsNativeVideoCompositionWithCustomEncoders> result =
+	std::shared_ptr<SEObsNativeVideoCompositionWithCustomEncoders> result =
 		nullptr;
 
 	try {

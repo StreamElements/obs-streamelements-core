@@ -3,7 +3,7 @@
 
 #include "StreamElementsUtils.hpp"
 #include "StreamElementsOutput.hpp"
-#include "StreamElementsGlobalStateManager.hpp"
+#include "SEGlobalStateManager.hpp"
 
 #include <ctime>
 
@@ -38,10 +38,10 @@ static std::string getRecordingsFolderPath()
 	return std::string(path);
 }
 
-static std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoderTemplate>>
+static std::vector<std::shared_ptr<SEOutputBase::VideoEncoderTemplate>>
 GetVideoEncodersFromOutput(obs_output_t *output)
 {
-	std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoderTemplate>>
+	std::vector<std::shared_ptr<SEOutputBase::VideoEncoderTemplate>>
 		result;
 
 	if (output) {
@@ -56,13 +56,13 @@ GetVideoEncodersFromOutput(obs_output_t *output)
 
 			result.push_back(
 				std::make_shared <
-				StreamElementsOutputBase::VideoEncoderTemplate>(idx));
+				SEOutputBase::VideoEncoderTemplate>(idx));
 		}
 	}
 
 	if (!result.size()) {
 		result.push_back(std::make_shared <
-				 StreamElementsOutputBase::VideoEncoderTemplate>(0));
+				 SEOutputBase::VideoEncoderTemplate>(0));
 	}
 
 	return result;
@@ -152,10 +152,10 @@ DeserializeAudioTracks(CefRefPtr<CefDictionaryValue> rootDict)
 	return DeserializeTracks(rootDict, "audioTracks", MAX_AUDIO_MIXES);
 }
 
-static std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoderTemplate>>
+static std::vector<std::shared_ptr<SEOutputBase::VideoEncoderTemplate>>
 DeserializeVideoEncoders(CefRefPtr<CefDictionaryValue> rootDict)
 {
-	std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoderTemplate>>
+	std::vector<std::shared_ptr<SEOutputBase::VideoEncoderTemplate>>
 		result;
 
 
@@ -178,7 +178,7 @@ DeserializeVideoEncoders(CefRefPtr<CefDictionaryValue> rootDict)
 					continue; // Invalid encoder
 
 				result.push_back(std::make_shared<
-						 StreamElementsOutputBase::
+						 SEOutputBase::
 							 VideoEncoderTemplate>(value));
 
 			} else if (list->GetType(i) == VTYPE_INT) {
@@ -199,7 +199,7 @@ DeserializeVideoEncoders(CefRefPtr<CefDictionaryValue> rootDict)
 					if (!hasValue) {
 						result.push_back(
 							std::make_shared<
-								StreamElementsOutputBase::
+								SEOutputBase::
 									VideoEncoderTemplate>(
 								trackIndex));
 					}
@@ -210,13 +210,13 @@ DeserializeVideoEncoders(CefRefPtr<CefDictionaryValue> rootDict)
 
 	if (!result.size()) {
 		result.push_back(
-			std::make_shared<StreamElementsOutputBase::VideoEncoderTemplate>(0));
+			std::make_shared<SEOutputBase::VideoEncoderTemplate>(0));
 	}
 
 	return result;
 }
 
-static void dispatch_list_change_event(StreamElementsOutputBase *output)
+static void dispatch_list_change_event(SEOutputBase *output)
 {
 	if (output->GetOutputType() == StreamingOutput)
 		DispatchJSEventGlobal("hostStreamingOutputListChanged", "null");
@@ -227,7 +227,7 @@ static void dispatch_list_change_event(StreamElementsOutputBase *output)
 }
 
 static void dispatch_event(
-	StreamElementsOutputBase *output, std::string eventName,
+	SEOutputBase *output, std::string eventName,
 	CefRefPtr<CefDictionaryValue> args = CefDictionaryValue::Create())
 {
 	args->SetString("outputId", output->GetId());
@@ -240,12 +240,12 @@ static void dispatch_event(
 	DispatchJSEventGlobal(eventName, json);
 }
 
-void StreamElementsOutputBase::handle_output_start(void *my_data,
+void SEOutputBase::handle_output_start(void *my_data,
 							  calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	auto self = (StreamElementsOutputBase *)my_data;
+	auto self = (SEOutputBase *)my_data;
 
 	if (self->GetOutputType() == StreamingOutput)
 		dispatch_event(self, "hostStreamingOutputStarted");
@@ -257,12 +257,12 @@ void StreamElementsOutputBase::handle_output_start(void *my_data,
 	dispatch_list_change_event(self);
 }
 
-void StreamElementsOutputBase::handle_output_stop(void *my_data,
+void SEOutputBase::handle_output_stop(void *my_data,
 							 calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	auto self = (StreamElementsOutputBase *)my_data;
+	auto self = (SEOutputBase *)my_data;
 
 	int code = calldata_int(cd, "code");
 
@@ -332,12 +332,12 @@ void StreamElementsOutputBase::handle_output_stop(void *my_data,
 	dispatch_list_change_event(self);
 }
 
-void StreamElementsOutputBase::handle_output_pause(void *my_data,
+void SEOutputBase::handle_output_pause(void *my_data,
 							  calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	auto self = (StreamElementsOutputBase *)my_data;
+	auto self = (SEOutputBase *)my_data;
 
 	if (self->GetOutputType() == StreamingOutput)
 		dispatch_event(self, "hostStreamingOutputPaused");
@@ -349,12 +349,12 @@ void StreamElementsOutputBase::handle_output_pause(void *my_data,
 	dispatch_list_change_event(self);
 }
 
-void StreamElementsOutputBase::handle_output_unpause(void *my_data,
+void SEOutputBase::handle_output_unpause(void *my_data,
 							    calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	auto self = (StreamElementsOutputBase *)my_data;
+	auto self = (SEOutputBase *)my_data;
 
 	if (self->GetOutputType() == StreamingOutput)
 		dispatch_event(self, "hostStreamingOutputUnpaused");
@@ -366,12 +366,12 @@ void StreamElementsOutputBase::handle_output_unpause(void *my_data,
 	dispatch_list_change_event(self);
 }
 
-void StreamElementsOutputBase::handle_output_starting(void *my_data,
+void SEOutputBase::handle_output_starting(void *my_data,
 							     calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	auto self = (StreamElementsOutputBase *)my_data;
+	auto self = (SEOutputBase *)my_data;
 
 	if (self->GetOutputType() == StreamingOutput)
 		dispatch_event(self, "hostStreamingOutputStarting");
@@ -383,12 +383,12 @@ void StreamElementsOutputBase::handle_output_starting(void *my_data,
 	dispatch_list_change_event(self);
 }
 
-void StreamElementsOutputBase::handle_output_stopping(void *my_data,
+void SEOutputBase::handle_output_stopping(void *my_data,
 							     calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	auto self = (StreamElementsOutputBase *)my_data;
+	auto self = (SEOutputBase *)my_data;
 
 	if (self->GetOutputType() == StreamingOutput)
 		dispatch_event(self, "hostStreamingOutputStopping");
@@ -400,12 +400,12 @@ void StreamElementsOutputBase::handle_output_stopping(void *my_data,
 	dispatch_list_change_event(self);
 }
 
-void StreamElementsOutputBase::handle_output_activate(void *my_data,
+void SEOutputBase::handle_output_activate(void *my_data,
 							     calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	auto self = (StreamElementsOutputBase *)my_data;
+	auto self = (SEOutputBase *)my_data;
 
 	if (self->GetOutputType() == StreamingOutput)
 		dispatch_event(self, "hostStreamingOutputActivated");
@@ -417,12 +417,12 @@ void StreamElementsOutputBase::handle_output_activate(void *my_data,
 	dispatch_list_change_event(self);
 }
 
-void StreamElementsOutputBase::handle_output_deactivate(void *my_data,
+void SEOutputBase::handle_output_deactivate(void *my_data,
 							       calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	auto self = (StreamElementsOutputBase *)my_data;
+	auto self = (SEOutputBase *)my_data;
 
 	if (self->GetOutputType() == StreamingOutput)
 		dispatch_event(self, "hostStreamingOutputDeactivated");
@@ -434,12 +434,12 @@ void StreamElementsOutputBase::handle_output_deactivate(void *my_data,
 	dispatch_list_change_event(self);
 }
 
-void StreamElementsOutputBase::handle_output_reconnect(void *my_data,
+void SEOutputBase::handle_output_reconnect(void *my_data,
 							      calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	auto self = (StreamElementsOutputBase *)my_data;
+	auto self = (SEOutputBase *)my_data;
 
 	if (self->GetOutputType() == StreamingOutput)
 		dispatch_event(self, "hostStreamingOutputReconnecting");
@@ -452,12 +452,12 @@ void StreamElementsOutputBase::handle_output_reconnect(void *my_data,
 }
 
 void
-StreamElementsOutputBase::handle_output_reconnect_success(void *my_data,
+SEOutputBase::handle_output_reconnect_success(void *my_data,
 							  calldata_t *cd)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	auto self = (StreamElementsOutputBase *)my_data;
+	auto self = (SEOutputBase *)my_data;
 
 	if (self->GetOutputType() == StreamingOutput)
 		dispatch_event(self, "hostStreamingOutputReconnected");
@@ -469,13 +469,13 @@ StreamElementsOutputBase::handle_output_reconnect_success(void *my_data,
 	dispatch_list_change_event(self);
 }
 
-void StreamElementsOutputBase::handle_obs_frontend_event(
+void SEOutputBase::handle_obs_frontend_event(
 	enum obs_frontend_event event,
 	void* data)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	StreamElementsOutputBase *self = (StreamElementsOutputBase *)data;
+	SEOutputBase *self = (SEOutputBase *)data;
 
 	switch (event) {
 	case OBS_FRONTEND_EVENT_STREAMING_STARTED:
@@ -547,7 +547,7 @@ void StreamElementsOutputBase::handle_obs_frontend_event(
 	}
 }
 
-void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
+void SEOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
@@ -653,11 +653,11 @@ void StreamElementsOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 	output->SetDictionary(d);
 }
 
-StreamElementsOutputBase::StreamElementsOutputBase(
+SEOutputBase::SEOutputBase(
 	std::string id, std::string name, ObsOutputType obsOutputType,
 	ObsStateDependencyType obsStateDependency,
-	std::shared_ptr<StreamElementsVideoCompositionBase> videoComposition,
-	std::shared_ptr<StreamElementsAudioCompositionBase> audioComposition,
+	std::shared_ptr<SEVideoCompositionBase> videoComposition,
+	std::shared_ptr<SEAudioCompositionBase> audioComposition,
 	CefRefPtr<CefDictionaryValue> auxData)
 	: m_id(id),
 	  m_name(name),
@@ -669,7 +669,7 @@ StreamElementsOutputBase::StreamElementsOutputBase(
 {
 	m_auxData = auxData.get() ? auxData : CefDictionaryValue::Create();
 
-	m_videoCompositionInfo = videoComposition->GetCompositionInfo(this, std::string("StreamElementsOutputBase(") + m_id + std::string(")"));
+	m_videoCompositionInfo = videoComposition->GetCompositionInfo(this, std::string("SEOutputBase(") + m_id + std::string(")"));
 	m_audioCompositionInfo = audioComposition->GetCompositionInfo(this);
 
 	m_enabled = IsObsNativeOutput();
@@ -678,23 +678,23 @@ StreamElementsOutputBase::StreamElementsOutputBase(
 	dispatch_list_change_event(this);
 
 	obs_frontend_add_event_callback(
-		StreamElementsOutputBase::handle_obs_frontend_event, this);
+		SEOutputBase::handle_obs_frontend_event, this);
 }
 
-StreamElementsOutputBase::~StreamElementsOutputBase()
+SEOutputBase::~SEOutputBase()
 {
 	obs_frontend_remove_event_callback(
-		StreamElementsOutputBase::handle_obs_frontend_event, this);
+		SEOutputBase::handle_obs_frontend_event, this);
 
 	dispatch_list_change_event(this);
 }
 
-bool StreamElementsOutputBase::IsEnabled()
+bool SEOutputBase::IsEnabled()
 {
 	return m_enabled;
 }
 
-bool StreamElementsOutputBase::IsActive()
+bool SEOutputBase::IsActive()
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
@@ -707,7 +707,7 @@ bool StreamElementsOutputBase::IsActive()
 	return obs_output_active(output);
 }
 
-void StreamElementsOutputBase::SetEnabled(bool enabled)
+void SEOutputBase::SetEnabled(bool enabled)
 {
 	if (!enabled && !CanDisable())
 		return;
@@ -728,7 +728,7 @@ void StreamElementsOutputBase::SetEnabled(bool enabled)
 	}
 }
 
-bool StreamElementsOutputBase::CanStart()
+bool SEOutputBase::CanStart()
 {
 	if (!CanDisable()) {
 		return false;
@@ -754,7 +754,7 @@ bool StreamElementsOutputBase::CanStart()
 	}
 }
 
-bool StreamElementsOutputBase::Start()
+bool SEOutputBase::Start()
 {
 	SetError("");
 
@@ -766,7 +766,7 @@ bool StreamElementsOutputBase::Start()
 	return StartInternal(m_videoCompositionInfo, m_audioCompositionInfo);
 }
 
-void StreamElementsOutputBase::ConnectOutputEvents()
+void SEOutputBase::ConnectOutputEvents()
 {
 	if (m_outputEventsConnected)
 		return;
@@ -798,7 +798,7 @@ void StreamElementsOutputBase::ConnectOutputEvents()
 	m_outputEventsConnected = true;
 }
 
-void StreamElementsOutputBase::DisconnectOutputEvents()
+void SEOutputBase::DisconnectOutputEvents()
 {
 	if (!m_outputEventsConnected)
 		return;
@@ -831,7 +831,7 @@ void StreamElementsOutputBase::DisconnectOutputEvents()
 	m_outputEventsConnected = false;
 }
 
-void StreamElementsOutputBase::Stop()
+void SEOutputBase::Stop()
 {
 	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
@@ -841,18 +841,18 @@ void StreamElementsOutputBase::Stop()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// StreamElementsCustomStreamingOutput
+// SECustomStreamingOutput
 ////////////////////////////////////////////////////////////////////////////////
 
-bool StreamElementsCustomStreamingOutput::CanDisable()
+bool SECustomStreamingOutput::CanDisable()
 {
 	return true;
 }
 
-bool StreamElementsCustomStreamingOutput::StartInternal(
-	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
+bool SECustomStreamingOutput::StartInternal(
+	std::shared_ptr<SEVideoCompositionBase::CompositionInfo>
 		videoCompositionInfo,
-	std::shared_ptr<StreamElementsAudioCompositionBase::CompositionInfo>
+	std::shared_ptr<SEAudioCompositionBase::CompositionInfo>
 		audioCompositionInfo)
 {
 	if (!videoCompositionInfo)
@@ -996,7 +996,7 @@ bool StreamElementsCustomStreamingOutput::StartInternal(
 	return result;
 }
 
-void StreamElementsCustomStreamingOutput::StopInternal()
+void SECustomStreamingOutput::StopInternal()
 {
 	if (!m_videoCompositionInfo)
 		return;
@@ -1014,7 +1014,7 @@ void StreamElementsCustomStreamingOutput::StopInternal()
 	m_videoEncoderProviders.clear();
 }
 
-void StreamElementsCustomStreamingOutput::SerializeOutputSettings(
+void SECustomStreamingOutput::SerializeOutputSettings(
 	CefRefPtr<CefValue>& output)
 {
 	auto d = CefDictionaryValue::Create();
@@ -1047,7 +1047,7 @@ void StreamElementsCustomStreamingOutput::SerializeOutputSettings(
 	output->SetDictionary(d);
 }
 
-std::shared_ptr <StreamElementsCustomStreamingOutput> StreamElementsCustomStreamingOutput::Create(CefRefPtr<CefValue> input)
+std::shared_ptr <SECustomStreamingOutput> SECustomStreamingOutput::Create(CefRefPtr<CefValue> input)
 {
 	if (!input.get())
 		return nullptr;
@@ -1107,25 +1107,25 @@ std::shared_ptr <StreamElementsCustomStreamingOutput> StreamElementsCustomStream
 					   : "";
 
 	auto videoComposition =
-		StreamElementsGlobalStateManager::GetInstance()
+		SEGlobalStateManager::GetInstance()
 			->GetVideoCompositionManager()
 			->GetVideoCompositionById(videoCompositionId);
 
 	auto audioComposition =
-		StreamElementsGlobalStateManager::GetInstance()
+		SEGlobalStateManager::GetInstance()
 			->GetAudioCompositionManager()
 			->GetAudioCompositionById(audioCompositionId);
 
 	if (!videoComposition.get() && !videoCompositionId.size()) {
 		videoComposition =
-			StreamElementsGlobalStateManager::GetInstance()
+			SEGlobalStateManager::GetInstance()
 				->GetVideoCompositionManager()
 				->GetObsNativeVideoComposition();
 	}
 
 	if (!audioComposition.get() && !audioCompositionId.size()) {
 		audioComposition =
-			StreamElementsGlobalStateManager::GetInstance()
+			SEGlobalStateManager::GetInstance()
 				->GetAudioCompositionManager()
 				->GetObsNativeAudioComposition();
 	}
@@ -1163,7 +1163,7 @@ std::shared_ptr <StreamElementsCustomStreamingOutput> StreamElementsCustomStream
 	auto audioTracks = DeserializeAudioTracks(rootDict);
 	auto videoEncoders = DeserializeVideoEncoders(rootDict);
 
-	auto result = std::make_shared<StreamElementsCustomStreamingOutput>(
+	auto result = std::make_shared<SECustomStreamingOutput>(
 		id, name, videoComposition, audioComposition, audioTracks,
 		videoEncoders, service, bindToIP, auxData);
 
@@ -1173,13 +1173,13 @@ std::shared_ptr <StreamElementsCustomStreamingOutput> StreamElementsCustomStream
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// StreamElementsObsNativeStreamingOutput
+// SEObsNativeStreamingOutput
 ////////////////////////////////////////////////////////////////////////////////
 
-bool StreamElementsObsNativeStreamingOutput::StartInternal(
-	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
+bool SEObsNativeStreamingOutput::StartInternal(
+	std::shared_ptr<SEVideoCompositionBase::CompositionInfo>
 		videoCompositionInfo,
-	std::shared_ptr<StreamElementsAudioCompositionBase::CompositionInfo>
+	std::shared_ptr<SEAudioCompositionBase::CompositionInfo>
 		audioCompositionInfo)
 {
 	// NOP: This is managed by the OBS front-end
@@ -1189,14 +1189,14 @@ bool StreamElementsObsNativeStreamingOutput::StartInternal(
 	return true;
 }
 
-void StreamElementsObsNativeStreamingOutput::StopInternal()
+void SEObsNativeStreamingOutput::StopInternal()
 {
 	// NOP: This is managed by the OBS front-end
 
 	DisconnectOutputEvents();
 }
 
-void StreamElementsObsNativeStreamingOutput::SerializeOutputSettings(
+void SEObsNativeStreamingOutput::SerializeOutputSettings(
 	CefRefPtr<CefValue> &output)
 {
 	auto d = CefDictionaryValue::Create();
@@ -1249,7 +1249,7 @@ void StreamElementsObsNativeStreamingOutput::SerializeOutputSettings(
 	output->SetDictionary(d);
 }
 
-std::vector<uint32_t> StreamElementsObsNativeStreamingOutput::GetAudioTracks()
+std::vector<uint32_t> SEObsNativeStreamingOutput::GetAudioTracks()
 {
 	std::vector<uint32_t> result;
 
@@ -1272,8 +1272,8 @@ std::vector<uint32_t> StreamElementsObsNativeStreamingOutput::GetAudioTracks()
 	return result;
 }
 
-std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoderTemplate>>
-StreamElementsObsNativeStreamingOutput::GetVideoEncoders()
+std::vector<std::shared_ptr<SEOutputBase::VideoEncoderTemplate>>
+SEObsNativeStreamingOutput::GetVideoEncoders()
 {
 	OBSOutputAutoRelease output = SETRACE_AUTODECREF(GetOutput());
 
@@ -1281,13 +1281,13 @@ StreamElementsObsNativeStreamingOutput::GetVideoEncoders()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// StreamElementsObsNativeRecordingOutput
+// SEObsNativeRecordingOutput
 ////////////////////////////////////////////////////////////////////////////////
 
-bool StreamElementsObsNativeRecordingOutput::StartInternal(
-	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
+bool SEObsNativeRecordingOutput::StartInternal(
+	std::shared_ptr<SEVideoCompositionBase::CompositionInfo>
 		videoCompositionInfo,
-	std::shared_ptr<StreamElementsAudioCompositionBase::CompositionInfo>
+	std::shared_ptr<SEAudioCompositionBase::CompositionInfo>
 		audioCompositionInfo)
 {
 	// NOP: This is managed by the OBS front-end
@@ -1297,14 +1297,14 @@ bool StreamElementsObsNativeRecordingOutput::StartInternal(
 	return true;
 }
 
-void StreamElementsObsNativeRecordingOutput::StopInternal()
+void SEObsNativeRecordingOutput::StopInternal()
 {
 	// NOP: This is managed by the OBS front-end
 
 	DisconnectOutputEvents();
 }
 
-void StreamElementsObsNativeRecordingOutput::SerializeOutputSettings(
+void SEObsNativeRecordingOutput::SerializeOutputSettings(
 	CefRefPtr<CefValue> &output)
 {
 	auto d = CefDictionaryValue::Create();
@@ -1325,7 +1325,7 @@ void StreamElementsObsNativeRecordingOutput::SerializeOutputSettings(
 	output->SetDictionary(d);
 }
 
-std::vector<uint32_t> StreamElementsObsNativeRecordingOutput::GetAudioTracks()
+std::vector<uint32_t> SEObsNativeRecordingOutput::GetAudioTracks()
 {
 	std::vector<uint32_t> result;
 
@@ -1346,8 +1346,8 @@ std::vector<uint32_t> StreamElementsObsNativeRecordingOutput::GetAudioTracks()
 	return result;
 }
 
-std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoderTemplate>>
-StreamElementsObsNativeRecordingOutput::GetVideoEncoders()
+std::vector<std::shared_ptr<SEOutputBase::VideoEncoderTemplate>>
+SEObsNativeRecordingOutput::GetVideoEncoders()
 {
 	OBSOutputAutoRelease output = SETRACE_AUTODECREF(GetOutput());
 
@@ -1355,15 +1355,15 @@ StreamElementsObsNativeRecordingOutput::GetVideoEncoders()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// StreamElementsCustomRecordingOutput
+// SECustomRecordingOutput
 ////////////////////////////////////////////////////////////////////////////////
 
-bool StreamElementsCustomRecordingOutput::CanDisable()
+bool SECustomRecordingOutput::CanDisable()
 {
 	return true;
 }
 
-bool StreamElementsCustomRecordingOutput::CanSplitRecordingOutput()
+bool SECustomRecordingOutput::CanSplitRecordingOutput()
 {
 	OBSOutputAutoRelease output = SETRACE_AUTODECREF(GetOutput());
 
@@ -1379,7 +1379,7 @@ bool StreamElementsCustomRecordingOutput::CanSplitRecordingOutput()
 	return true;
 }
 
-bool StreamElementsCustomRecordingOutput::TriggerSplitRecordingOutput()
+bool SECustomRecordingOutput::TriggerSplitRecordingOutput()
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
@@ -1398,10 +1398,10 @@ bool StreamElementsCustomRecordingOutput::TriggerSplitRecordingOutput()
 	return result;
 }
 
-bool StreamElementsCustomRecordingOutput::StartInternal(
-	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
+bool SECustomRecordingOutput::StartInternal(
+	std::shared_ptr<SEVideoCompositionBase::CompositionInfo>
 		videoCompositionInfo,
-	std::shared_ptr<StreamElementsAudioCompositionBase::CompositionInfo>
+	std::shared_ptr<SEAudioCompositionBase::CompositionInfo>
 		audioCompositionInfo)
 {
 	if (m_output)
@@ -1678,7 +1678,7 @@ bool StreamElementsCustomRecordingOutput::StartInternal(
 	return result;
 }
 
-void StreamElementsCustomRecordingOutput::StopInternal()
+void SECustomRecordingOutput::StopInternal()
 {
 	if (!m_videoCompositionInfo)
 		return;
@@ -1696,14 +1696,14 @@ void StreamElementsCustomRecordingOutput::StopInternal()
 	m_output = nullptr;
 }
 
-void StreamElementsCustomRecordingOutput::SerializeOutputSettings(
+void SECustomRecordingOutput::SerializeOutputSettings(
 	CefRefPtr<CefValue> &output)
 {
 	output->SetDictionary(m_recordingSettings);
 }
 
-std::shared_ptr<StreamElementsCustomRecordingOutput>
-StreamElementsCustomRecordingOutput::Create(CefRefPtr<CefValue> input)
+std::shared_ptr<SECustomRecordingOutput>
+SECustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 {
 	if (!input.get())
 		return nullptr;
@@ -1746,12 +1746,12 @@ StreamElementsCustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 				 : true;
 
 	auto videoComposition =
-		StreamElementsGlobalStateManager::GetInstance()
+		SEGlobalStateManager::GetInstance()
 			->GetVideoCompositionManager()
 			->GetVideoCompositionById(videoCompositionId);
 
 	auto audioComposition =
-		StreamElementsGlobalStateManager::GetInstance()
+		SEGlobalStateManager::GetInstance()
 			->GetAudioCompositionManager()
 			->GetAudioCompositionById(audioCompositionId);
 
@@ -1765,14 +1765,14 @@ StreamElementsCustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 
 	if (!videoComposition.get() && !videoCompositionId.size()) {
 		videoComposition =
-			StreamElementsGlobalStateManager::GetInstance()
+			SEGlobalStateManager::GetInstance()
 				->GetVideoCompositionManager()
 				->GetObsNativeVideoComposition();
 	}
 
 	if (!audioComposition.get() && !audioCompositionId.size()) {
 		audioComposition =
-			StreamElementsGlobalStateManager::GetInstance()
+			SEGlobalStateManager::GetInstance()
 				->GetAudioCompositionManager()
 				->GetObsNativeAudioComposition();
 	}
@@ -1788,7 +1788,7 @@ StreamElementsCustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 	auto audioTracks = DeserializeAudioTracks(rootDict);
 	auto videoEncoders = DeserializeVideoEncoders(rootDict);
 
-	auto result = std::make_shared<StreamElementsCustomRecordingOutput>(
+	auto result = std::make_shared<SECustomRecordingOutput>(
 		id, name, recordingSettings, videoComposition, audioComposition,
 		audioTracks, videoEncoders, auxData);
 
@@ -1798,15 +1798,15 @@ StreamElementsCustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// StreamElementsObsNativeReplayBufferOutput
+// SEObsNativeReplayBufferOutput
 ////////////////////////////////////////////////////////////////////////////////
 
-bool StreamElementsObsNativeReplayBufferOutput::CanSaveReplayBuffer()
+bool SEObsNativeReplayBufferOutput::CanSaveReplayBuffer()
 {
 	return IsActive() && obs_frontend_replay_buffer_active();
 }
 
-bool StreamElementsObsNativeReplayBufferOutput::TriggerSaveReplayBuffer()
+bool SEObsNativeReplayBufferOutput::TriggerSaveReplayBuffer()
 {
 	if (!CanSaveReplayBuffer())
 		return false;
@@ -1816,10 +1816,10 @@ bool StreamElementsObsNativeReplayBufferOutput::TriggerSaveReplayBuffer()
 	return true;
 }
 
-bool StreamElementsObsNativeReplayBufferOutput::StartInternal(
-	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
+bool SEObsNativeReplayBufferOutput::StartInternal(
+	std::shared_ptr<SEVideoCompositionBase::CompositionInfo>
 		videoCompositionInfo,
-	std::shared_ptr<StreamElementsAudioCompositionBase::CompositionInfo>
+	std::shared_ptr<SEAudioCompositionBase::CompositionInfo>
 		audioCompositionInfo)
 {
 	// NOP: This is managed by the OBS front-end
@@ -1829,14 +1829,14 @@ bool StreamElementsObsNativeReplayBufferOutput::StartInternal(
 	return true;
 }
 
-void StreamElementsObsNativeReplayBufferOutput::StopInternal()
+void SEObsNativeReplayBufferOutput::StopInternal()
 {
 	// NOP: This is managed by the OBS front-end
 
 	DisconnectOutputEvents();
 }
 
-void StreamElementsObsNativeReplayBufferOutput::SerializeOutputSettings(
+void SEObsNativeReplayBufferOutput::SerializeOutputSettings(
 	CefRefPtr<CefValue> &output)
 {
 	auto d = CefDictionaryValue::Create();
@@ -1858,7 +1858,7 @@ void StreamElementsObsNativeReplayBufferOutput::SerializeOutputSettings(
 }
 
 std::vector<uint32_t>
-StreamElementsObsNativeReplayBufferOutput::GetAudioTracks()
+SEObsNativeReplayBufferOutput::GetAudioTracks()
 {
 	std::vector<uint32_t> result;
 
@@ -1879,8 +1879,8 @@ StreamElementsObsNativeReplayBufferOutput::GetAudioTracks()
 	return result;
 }
 
-std::vector<std::shared_ptr<StreamElementsOutputBase::VideoEncoderTemplate>>
-StreamElementsObsNativeReplayBufferOutput::GetVideoEncoders()
+std::vector<std::shared_ptr<SEOutputBase::VideoEncoderTemplate>>
+SEObsNativeReplayBufferOutput::GetVideoEncoders()
 {
 	OBSOutputAutoRelease output = SETRACE_AUTODECREF(GetOutput());
 
@@ -1888,18 +1888,18 @@ StreamElementsObsNativeReplayBufferOutput::GetVideoEncoders()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// StreamElementsCustomReplayBufferOutput
+// SECustomReplayBufferOutput
 ////////////////////////////////////////////////////////////////////////////////
 
-bool StreamElementsCustomReplayBufferOutput::CanDisable()
+bool SECustomReplayBufferOutput::CanDisable()
 {
 	return true;
 }
 
-bool StreamElementsCustomReplayBufferOutput::StartInternal(
-	std::shared_ptr<StreamElementsVideoCompositionBase::CompositionInfo>
+bool SECustomReplayBufferOutput::StartInternal(
+	std::shared_ptr<SEVideoCompositionBase::CompositionInfo>
 		videoCompositionInfo,
-	std::shared_ptr<StreamElementsAudioCompositionBase::CompositionInfo>
+	std::shared_ptr<SEAudioCompositionBase::CompositionInfo>
 		audioCompositionInfo)
 {
 	if (m_output)
@@ -2168,7 +2168,7 @@ bool StreamElementsCustomReplayBufferOutput::StartInternal(
 	return result;
 }
 
-void StreamElementsCustomReplayBufferOutput::StopInternal()
+void SECustomReplayBufferOutput::StopInternal()
 {
 	if (!m_videoCompositionInfo)
 		return;
@@ -2187,14 +2187,14 @@ void StreamElementsCustomReplayBufferOutput::StopInternal()
 	m_videoEncoderProviders.clear();
 }
 
-void StreamElementsCustomReplayBufferOutput::SerializeOutputSettings(
+void SECustomReplayBufferOutput::SerializeOutputSettings(
 	CefRefPtr<CefValue> &output)
 {
 	output->SetDictionary(m_recordingSettings);
 }
 
-std::shared_ptr<StreamElementsCustomReplayBufferOutput>
-StreamElementsCustomReplayBufferOutput::Create(CefRefPtr<CefValue> input)
+std::shared_ptr<SECustomReplayBufferOutput>
+SECustomReplayBufferOutput::Create(CefRefPtr<CefValue> input)
 {
 	if (!input.get())
 		return nullptr;
@@ -2237,12 +2237,12 @@ StreamElementsCustomReplayBufferOutput::Create(CefRefPtr<CefValue> input)
 				 : true;
 
 	auto videoComposition =
-		StreamElementsGlobalStateManager::GetInstance()
+		SEGlobalStateManager::GetInstance()
 			->GetVideoCompositionManager()
 			->GetVideoCompositionById(videoCompositionId);
 
 	auto audioComposition =
-		StreamElementsGlobalStateManager::GetInstance()
+		SEGlobalStateManager::GetInstance()
 			->GetAudioCompositionManager()
 			->GetAudioCompositionById(audioCompositionId);
 
@@ -2256,14 +2256,14 @@ StreamElementsCustomReplayBufferOutput::Create(CefRefPtr<CefValue> input)
 
 	if (!videoComposition.get() && !videoCompositionId.size()) {
 		videoComposition =
-			StreamElementsGlobalStateManager::GetInstance()
+			SEGlobalStateManager::GetInstance()
 				->GetVideoCompositionManager()
 				->GetObsNativeVideoComposition();
 	}
 
 	if (!audioComposition.get() && !audioCompositionId.size()) {
 		audioComposition =
-			StreamElementsGlobalStateManager::GetInstance()
+			SEGlobalStateManager::GetInstance()
 				->GetAudioCompositionManager()
 				->GetObsNativeAudioComposition();
 	}
@@ -2279,7 +2279,7 @@ StreamElementsCustomReplayBufferOutput::Create(CefRefPtr<CefValue> input)
 	auto audioTracks = DeserializeAudioTracks(rootDict);
 	auto videoEncoders = DeserializeVideoEncoders(rootDict);
 
-	auto result = std::make_shared<StreamElementsCustomReplayBufferOutput>(
+	auto result = std::make_shared<SECustomReplayBufferOutput>(
 		id, name, recordingSettings, videoComposition, audioComposition,
 		audioTracks, videoEncoders, auxData);
 
@@ -2288,9 +2288,9 @@ StreamElementsCustomReplayBufferOutput::Create(CefRefPtr<CefValue> input)
 	return result;
 }
 
-void StreamElementsCustomReplayBufferOutput::ConnectOutputEvents()
+void SECustomReplayBufferOutput::ConnectOutputEvents()
 {
-	StreamElementsOutputBase::ConnectOutputEvents();
+	SEOutputBase::ConnectOutputEvents();
 
 	if (!m_output)
 		return;
@@ -2300,7 +2300,7 @@ void StreamElementsCustomReplayBufferOutput::ConnectOutputEvents()
 	signal_handler_connect(handler, "saved", handle_output_saved, this);
 }
 
-void StreamElementsCustomReplayBufferOutput::DisconnectOutputEvents()
+void SECustomReplayBufferOutput::DisconnectOutputEvents()
 {
 	if (!m_output)
 		return;
@@ -2309,14 +2309,14 @@ void StreamElementsCustomReplayBufferOutput::DisconnectOutputEvents()
 
 	signal_handler_disconnect(handler, "saved", handle_output_saved, this);
 
-	StreamElementsOutputBase::DisconnectOutputEvents();
+	SEOutputBase::DisconnectOutputEvents();
 }
 
-void StreamElementsCustomReplayBufferOutput::handle_output_saved(
+void SECustomReplayBufferOutput::handle_output_saved(
 	void* my_data, calldata_t* cd)
 {
 	auto self =
-		static_cast<StreamElementsCustomReplayBufferOutput *>(my_data);
+		static_cast<SECustomReplayBufferOutput *>(my_data);
 
 	if (!self->GetOutput())
 		return;
@@ -2337,7 +2337,7 @@ void StreamElementsCustomReplayBufferOutput::handle_output_saved(
 	calldata_destroy(SETRACE_DECREF(proc_cd));
 }
 
-bool StreamElementsCustomReplayBufferOutput::TriggerSaveReplayBuffer()
+bool SECustomReplayBufferOutput::TriggerSaveReplayBuffer()
 {
 	if (!IsActive() || !GetOutput())
 		return false;

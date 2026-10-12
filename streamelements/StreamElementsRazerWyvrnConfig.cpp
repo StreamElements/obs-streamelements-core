@@ -104,10 +104,10 @@ CefRefPtr<CefDictionaryValue> DictAt(CefRefPtr<CefListValue> list, size_t index)
 	return list->GetDictionary(index);
 }
 
-std::vector<StreamElementsRazerWyvrnHapticTarget>
+std::vector<SERazerWyvrnHapticTarget>
 ParseTargeting(CefRefPtr<CefDictionaryValue> hapticEvent)
 {
-	std::vector<StreamElementsRazerWyvrnHapticTarget> result;
+	std::vector<SERazerWyvrnHapticTarget> result;
 
 	auto list = ReadList(hapticEvent, "Targeting");
 	if (!list.get())
@@ -118,7 +118,7 @@ ParseTargeting(CefRefPtr<CefDictionaryValue> hapticEvent)
 		if (!entry.get())
 			continue;
 
-		StreamElementsRazerWyvrnHapticTarget target;
+		SERazerWyvrnHapticTarget target;
 		target.target =
 			RazerWyvrnCamelCaseEnum(ReadString(entry, "Target"));
 		target.spatialization = RazerWyvrnCamelCaseEnum(
@@ -136,7 +136,7 @@ ParseTargeting(CefRefPtr<CefDictionaryValue> hapticEvent)
 
 void ParseCommandList(CefRefPtr<CefDictionaryValue> root, const char *key,
 		      const char *kind, const std::string &groupName,
-		      std::vector<StreamElementsRazerWyvrnEventInfo> &output)
+		      std::vector<SERazerWyvrnEventInfo> &output)
 {
 	auto commands = ReadList(root, key);
 	if (!commands.get())
@@ -147,7 +147,7 @@ void ParseCommandList(CefRefPtr<CefDictionaryValue> root, const char *key,
 		if (!command.get())
 			continue;
 
-		StreamElementsRazerWyvrnEventInfo info;
+		SERazerWyvrnEventInfo info;
 		info.id = ReadString(command, "External_Command_ID");
 		info.group = groupName;
 		info.kind = kind;
@@ -164,7 +164,7 @@ void ParseCommandList(CefRefPtr<CefDictionaryValue> root, const char *key,
 				if (!entry.get())
 					continue;
 
-				StreamElementsRazerWyvrnChromaComponent chroma;
+				SERazerWyvrnChromaComponent chroma;
 				chroma.effect =
 					ReadString(entry, "Chroma_Effect");
 				chroma.interrupt = ReadBool(entry, "Interrupt");
@@ -182,7 +182,7 @@ void ParseCommandList(CefRefPtr<CefDictionaryValue> root, const char *key,
 				if (!entry.get())
 					continue;
 
-				StreamElementsRazerWyvrnHapticComponent haptic;
+				SERazerWyvrnHapticComponent haptic;
 				haptic.effect =
 					ReadString(entry, "Haptic_Effect");
 				haptic.loop = ReadInt(entry, "Loop");
@@ -225,10 +225,10 @@ bool IsRazerWyvrnConfigFileName(const std::string &fileName)
 	return ToLower(fileName) == "wyvrn.config";
 }
 
-std::vector<StreamElementsRazerWyvrnEventInfo>
+std::vector<SERazerWyvrnEventInfo>
 ParseRazerWyvrnConfig(const std::string &json, const std::string &groupName)
 {
-	std::vector<StreamElementsRazerWyvrnEventInfo> result;
+	std::vector<SERazerWyvrnEventInfo> result;
 
 	if (json.empty())
 		return result;
@@ -256,12 +256,12 @@ ParseRazerWyvrnConfig(const std::string &json, const std::string &groupName)
 }
 
 size_t CountRazerWyvrnEventsOfKind(
-	const std::vector<StreamElementsRazerWyvrnEventInfo> &events,
+	const std::vector<SERazerWyvrnEventInfo> &events,
 	const std::string &kind)
 {
 	return (size_t)std::count_if(
 		events.begin(), events.end(),
-		[&](const StreamElementsRazerWyvrnEventInfo &e) {
+		[&](const SERazerWyvrnEventInfo &e) {
 			return e.kind == kind;
 		});
 }

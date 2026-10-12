@@ -80,7 +80,7 @@ typedef struct {
 	DWORD seHandlerActive;
 
 	// Modules of interest, lower-cased base names with no extension,
-	// mirroring the in-process gate in StreamElementsCrashContext. Sent
+	// mirroring the in-process gate in SECrashContext. Sent
 	// along because the remote settings.json can replace the built-in list
 	// at runtime, and a gate that disagreed with the in-process one would
 	// be worse than no gate at all.

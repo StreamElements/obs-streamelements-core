@@ -97,9 +97,9 @@ template<typename... Args> std::string FormatString(const char *format, ...)
 
 /* ========================================================= */
 
-class StreamElementsApiContextItem {
+class SEApiContextItem {
 public:
-	StreamElementsApiContextItem(CefString method_,
+	SEApiContextItem(CefString method_,
 				     CefRefPtr<CefListValue> args_,
 				     uint32_t thread_)
 		: method(method_), args(args_), thread(thread_)
@@ -112,28 +112,28 @@ public:
 	uint32_t thread;
 };
 
-class StreamElementsApiContext_t
-	: public std::list<std::shared_ptr<StreamElementsApiContextItem>> {
+class SEApiContext_t
+	: public std::list<std::shared_ptr<SEApiContextItem>> {
 public:
-	StreamElementsApiContext_t() {}
-	~StreamElementsApiContext_t() { clear(); }
+	SEApiContext_t() {}
+	~SEApiContext_t() { clear(); }
 };
 
-void GetApiContext(std::function<void(StreamElementsApiContext_t *)> callback);
+void GetApiContext(std::function<void(SEApiContext_t *)> callback);
 
 // Non-blocking variant for the crash path; false means the lock was held
 // and the callback did not run. See the definition for why.
 bool TryGetApiContext(
-	std::function<void(StreamElementsApiContext_t *)> callback);
-std::shared_ptr<StreamElementsApiContextItem>
+	std::function<void(SEApiContext_t *)> callback);
+std::shared_ptr<SEApiContextItem>
 PushApiContext(CefString method, CefRefPtr<CefListValue> args);
-void RemoveApiContext(std::shared_ptr<StreamElementsApiContextItem> item);
+void RemoveApiContext(std::shared_ptr<SEApiContextItem> item);
 
 /* ========================================================= */
 
-class StreamElementsAsyncCallContextItem {
+class SEAsyncCallContextItem {
 public:
-	StreamElementsAsyncCallContextItem(std::string &file_, int line_,
+	SEAsyncCallContextItem(std::string &file_, int line_,
 					   bool running_)
 		: file(file_), line(line_), running(running_)
 	{
@@ -151,31 +151,31 @@ public:
 	bool running = false;
 };
 
-class StreamElementsAsyncCallContextStack_t
-	: public std::list<std::shared_ptr<StreamElementsAsyncCallContextItem>> {
+class SEAsyncCallContextStack_t
+	: public std::list<std::shared_ptr<SEAsyncCallContextItem>> {
 public:
-	StreamElementsAsyncCallContextStack_t() {}
-	~StreamElementsAsyncCallContextStack_t() { clear(); }
+	SEAsyncCallContextStack_t() {}
+	~SEAsyncCallContextStack_t() { clear(); }
 };
 
 void GetAsyncCallContextStack(
-	std::function<void(const StreamElementsAsyncCallContextStack_t *)>
+	std::function<void(const SEAsyncCallContextStack_t *)>
 		callback);
 
 // Non-blocking variant for the crash path; false means the lock was held and
 // the callback did not run. See the definition for why.
 bool TryGetAsyncCallContextStack(
-	std::function<void(const StreamElementsAsyncCallContextStack_t *)>
+	std::function<void(const SEAsyncCallContextStack_t *)>
 		callback);
 
-std::shared_ptr<StreamElementsAsyncCallContextItem>
+std::shared_ptr<SEAsyncCallContextItem>
 AsyncCallContextPush(std::string file, int line, bool running);
 void AsyncCallContextRemove(
-	std::shared_ptr<StreamElementsAsyncCallContextItem> item);
+	std::shared_ptr<SEAsyncCallContextItem> item);
 
 class SEAsyncCallContextMarker {
 private:
-	std::shared_ptr<StreamElementsAsyncCallContextItem> m_contextItem =
+	std::shared_ptr<SEAsyncCallContextItem> m_contextItem =
 		nullptr;
 
 public:
@@ -511,8 +511,8 @@ std::string GetStreamElementsOverlayEditorURL(std::string overlayId,
 /* ========================================================= */
 
 #if ENABLE_DECRYPT_COOKIES
-void StreamElementsDecryptCefCookiesFile(const char *path_utf8);
-void StreamElementsDecryptCefCookiesStoragePath(const char *path_utf8);
+void SEDecryptCefCookiesFile(const char *path_utf8);
+void SEDecryptCefCookiesStoragePath(const char *path_utf8);
 #endif /* ENABLE_DECRYPT_COOKIES */
 
 /* ========================================================= */

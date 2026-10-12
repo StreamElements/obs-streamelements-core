@@ -1,11 +1,11 @@
 #include <string.h>
 
-#include "StreamElementsLocalFilesystemHttpServer.hpp"
+#include "SELocalFilesystemHttpServer.hpp"
 #include "StreamElementsUtils.hpp"
-#include "StreamElementsConfig.hpp"
-#include "StreamElementsGlobalStateManager.hpp"
-#include "StreamElementsRemoteIconLoader.hpp"
-#include "StreamElementsPleaseWaitWindow.hpp"
+#include "SEConfig.hpp"
+#include "SEGlobalStateManager.hpp"
+#include "SERemoteIconLoader.hpp"
+#include "SEPleaseWaitWindow.hpp"
 #include "Version.hpp"
 #include "wide-string.hpp"
 #include "deps/utf8.h"
@@ -77,7 +77,7 @@ static const char *ENV_PRODUCT_NAME = "OBS.Live";
 
 static config_t *obs_fe_user_config()
 {
-	auto config = StreamElementsConfig::GetInstance();
+	auto config = SEConfig::GetInstance();
 
 	if (config) {
 		return config->GetObsUserConfig();
@@ -201,10 +201,10 @@ static std::vector<std::string> tokenizeString(const std::string &str,
 
 /* ========================================================= */
 
-StreamElementsApiContext_t s_apiContext;
+SEApiContext_t s_apiContext;
 std::shared_mutex s_apiContextMutex;
 
-void GetApiContext(std::function<void(StreamElementsApiContext_t *)> callback)
+void GetApiContext(std::function<void(SEApiContext_t *)> callback)
 {
 	std::shared_lock lock(s_apiContextMutex);
 
@@ -213,7 +213,7 @@ void GetApiContext(std::function<void(StreamElementsApiContext_t *)> callback)
 
 // Non-blocking variant, for the crash path. Same reasoning as
 // TryGetAsyncCallContextStack.
-bool TryGetApiContext(std::function<void(StreamElementsApiContext_t *)> callback)
+bool TryGetApiContext(std::function<void(SEApiContext_t *)> callback)
 {
 	std::shared_lock lock(s_apiContextMutex, std::try_to_lock);
 
@@ -225,12 +225,12 @@ bool TryGetApiContext(std::function<void(StreamElementsApiContext_t *)> callback
 	return true;
 }
 
-std::shared_ptr<StreamElementsApiContextItem>
+std::shared_ptr<SEApiContextItem>
 PushApiContext(CefString method, CefRefPtr<CefListValue> args)
 {
 	std::unique_lock lock(s_apiContextMutex);
 
-	auto item = std::make_shared<StreamElementsApiContextItem>(
+	auto item = std::make_shared<SEApiContextItem>(
 		method, args,
 #ifdef _WIN32
 		GetCurrentThreadId()
@@ -244,7 +244,7 @@ PushApiContext(CefString method, CefRefPtr<CefListValue> args)
 	return item;
 }
 
-void RemoveApiContext(std::shared_ptr<StreamElementsApiContextItem> item)
+void RemoveApiContext(std::shared_ptr<SEApiContextItem> item)
 {
 	std::unique_lock lock(s_apiContextMutex);
 
@@ -253,11 +253,11 @@ void RemoveApiContext(std::shared_ptr<StreamElementsApiContextItem> item)
 
 /* ========================================================= */
 
-static StreamElementsAsyncCallContextStack_t s_asyncCallContextStack;
+static SEAsyncCallContextStack_t s_asyncCallContextStack;
 static std::shared_mutex s_asyncCallContextStackMutex;
 
 void GetAsyncCallContextStack(
-	std::function<void(const StreamElementsAsyncCallContextStack_t *)>
+	std::function<void(const SEAsyncCallContextStack_t *)>
 		callback)
 {
 	std::shared_lock lock(s_asyncCallContextStackMutex);
@@ -281,7 +281,7 @@ void GetAsyncCallContextStack(
 // that never returns, which produces no report at all.
 //
 bool TryGetAsyncCallContextStack(
-	std::function<void(const StreamElementsAsyncCallContextStack_t *)>
+	std::function<void(const SEAsyncCallContextStack_t *)>
 		callback)
 {
 	std::shared_lock lock(s_asyncCallContextStackMutex, std::try_to_lock);
@@ -294,12 +294,12 @@ bool TryGetAsyncCallContextStack(
 	return true;
 }
 
-std::shared_ptr<StreamElementsAsyncCallContextItem>
+std::shared_ptr<SEAsyncCallContextItem>
 AsyncCallContextPush(std::string file, int line, bool running)
 {
 	std::unique_lock lock(s_asyncCallContextStackMutex);
 
-	auto item = std::make_shared<StreamElementsAsyncCallContextItem>(
+	auto item = std::make_shared<SEAsyncCallContextItem>(
 		file, line, running);
 
 	s_asyncCallContextStack.push_back(item);
@@ -308,7 +308,7 @@ AsyncCallContextPush(std::string file, int line, bool running)
 }
 
 void AsyncCallContextRemove(
-	std::shared_ptr<StreamElementsAsyncCallContextItem> item)
+	std::shared_ptr<SEAsyncCallContextItem> item)
 {
 	std::unique_lock lock(s_asyncCallContextStackMutex);
 
@@ -2670,7 +2670,7 @@ std::string CreateSessionSignedAbsolutePathURL(std::wstring path)
 	path = std::regex_replace(path, kHash, L"%23");
 	path = std::regex_replace(path, kAmp, L"%26");
 
-	QUrl parts(StreamElementsGlobalStateManager::GetInstance()
+	QUrl parts(SEGlobalStateManager::GetInstance()
 			   ->GetLocalFilesystemHttpServer()
 			   ->GetBaseUrl()
 			   .c_str());
@@ -3070,7 +3070,7 @@ class QRemoteIconMenu : public QMenu {
 public:
 	QRemoteIconMenu(const char *iconUrl, QPixmap *defaultPixmap = nullptr)
 		: QMenu(),
-		  loader(StreamElementsRemoteIconLoader::Create(
+		  loader(SERemoteIconLoader::Create(
 			  [this](const QIcon &m_icon) { setIcon(m_icon); },
 			  iconUrl, defaultPixmap, false))
 	{
@@ -3079,14 +3079,14 @@ public:
 	}
 
 private:
-	CefRefPtr<StreamElementsRemoteIconLoader> loader;
+	CefRefPtr<SERemoteIconLoader> loader;
 };
 
 class QRemoteIconAction : public QAction {
 public:
 	QRemoteIconAction(const char *iconUrl, QPixmap *defaultPixmap = nullptr)
 		: QAction(),
-		  loader(StreamElementsRemoteIconLoader::Create(
+		  loader(SERemoteIconLoader::Create(
 			  [this](const QIcon &m_icon) { setIcon(m_icon); },
 			  iconUrl, defaultPixmap, false))
 	{
@@ -3095,7 +3095,7 @@ public:
 	}
 
 private:
-	CefRefPtr<StreamElementsRemoteIconLoader> loader;
+	CefRefPtr<SERemoteIconLoader> loader;
 };
 
 class QRemoteIconPushButton : public QPushButton {
@@ -3103,7 +3103,7 @@ public:
 	QRemoteIconPushButton(const char *iconUrl,
 			      QPixmap *defaultPixmap = nullptr)
 		: QPushButton(),
-		  loader(StreamElementsRemoteIconLoader::Create(
+		  loader(SERemoteIconLoader::Create(
 			  [this](const QIcon &m_icon) { setIcon(m_icon); },
 			  iconUrl, defaultPixmap, false))
 	{
@@ -3113,7 +3113,7 @@ public:
 
 		setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
 
-		CefRefPtr<StreamElementsRemoteIconLoader> loaderCopy = loader;
+		CefRefPtr<SERemoteIconLoader> loaderCopy = loader;
 
 		QObject::connect(this, &QObject::destroyed,
 				 [loaderCopy]() { loaderCopy->Cancel(); });
@@ -3140,12 +3140,12 @@ public:
 	}
 
 private:
-	CefRefPtr<StreamElementsRemoteIconLoader> loader;
+	CefRefPtr<SERemoteIconLoader> loader;
 };
 
 bool DeserializeDocksMenu(QMenu &menu)
 {
-	auto widgetManager = StreamElementsGlobalStateManager::GetInstance()
+	auto widgetManager = SEGlobalStateManager::GetInstance()
 				     ->GetWidgetManager();
 
 	if (!widgetManager)
@@ -3157,7 +3157,7 @@ bool DeserializeDocksMenu(QMenu &menu)
 
 	widgetManager->GetDockBrowserWidgetIdentifiers(widgetIds);
 
-	std::vector<StreamElementsBrowserWidgetManager::DockBrowserWidgetInfo *>
+	std::vector<SEBrowserWidgetManager::DockBrowserWidgetInfo *>
 		widgets;
 
 	if (widgetManager) {
@@ -3173,8 +3173,8 @@ bool DeserializeDocksMenu(QMenu &menu)
 
 	std::sort(
 		widgets.begin(), widgets.end(),
-		[](StreamElementsBrowserWidgetManager::DockBrowserWidgetInfo *a,
-		   StreamElementsBrowserWidgetManager::DockBrowserWidgetInfo
+		[](SEBrowserWidgetManager::DockBrowserWidgetInfo *a,
+		   SEBrowserWidgetManager::DockBrowserWidgetInfo
 			   *b) { return a->m_title < b->m_title; });
 
 	for (auto widget : widgets) {
@@ -3191,7 +3191,7 @@ bool DeserializeDocksMenu(QMenu &menu)
 
 		QObject::connect(widget_action, &QAction::triggered, [id, isVisible, widget_action] {
 			auto widgetManager =
-				StreamElementsGlobalStateManager::GetInstance()
+				SEGlobalStateManager::GetInstance()
 					->GetWidgetManager();
 
 			if (!widgetManager)
@@ -3205,7 +3205,7 @@ bool DeserializeDocksMenu(QMenu &menu)
 			if (dock) {
 				if (isVisible) {
 					// Hide
-					StreamElementsGlobalStateManager::GetInstance()
+					SEGlobalStateManager::GetInstance()
 						->GetAnalyticsEventsManager()
 						->trackEvent(
 							"se_live_dock_hide_click",
@@ -3220,7 +3220,7 @@ bool DeserializeDocksMenu(QMenu &menu)
 									.toStdString()}});
 				} else {
 					// Show
-					StreamElementsGlobalStateManager::GetInstance()
+					SEGlobalStateManager::GetInstance()
 						->GetAnalyticsEventsManager()
 						->trackEvent(
 							"se_live_dock_show_click",
@@ -3237,7 +3237,7 @@ bool DeserializeDocksMenu(QMenu &menu)
 
 				dock->setVisible(!isVisible);
 
-				StreamElementsGlobalStateManager::GetInstance()
+				SEGlobalStateManager::GetInstance()
 					->GetMenuManager()
 					->Update();
 			}
@@ -3585,7 +3585,7 @@ bool DeserializeAndInvokeAction(CefRefPtr<CefValue> input,
 		// No action
 		return true;
 	} else {
-		return StreamElementsApiMessageHandler::InvokeHandler::
+		return SEApiMessageHandler::InvokeHandler::
 			GetInstance()
 				->InvokeApiCallAsync(invoke, invokeArgs,
 						     [](CefRefPtr<CefValue>) {
@@ -3731,7 +3731,7 @@ public:
 			id, timeoutMilliseconds, [id]() { Destroy(id); });
 
 		if (s_map.size() == 1) {
-			StreamElementsPleaseWaitWindow::GetInstance()->Show();
+			SEPleaseWaitWindow::GetInstance()->Show();
 
 			obs_frontend_defer_save_begin();
 		}
@@ -3753,7 +3753,7 @@ public:
 		if (s_map.size() == 0) {
 			obs_frontend_defer_save_end();
 
-			StreamElementsPleaseWaitWindow::GetInstance()->Hide();
+			SEPleaseWaitWindow::GetInstance()->Hide();
 		}
 	}
 
@@ -3906,10 +3906,10 @@ bool IsSafeFileExtension(std::string path)
 
 void DispatchClientMessage(std::string target, CefRefPtr<CefProcessMessage> msg)
 {
-	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+	if (!SEGlobalStateManager::IsInstanceAvailable())
 		return;
 
-	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
+	auto apiServer = SEGlobalStateManager::GetInstance()
 				 ->GetWebsocketApiServer();
 
 	if (!apiServer)
@@ -3920,10 +3920,10 @@ void DispatchClientMessage(std::string target, CefRefPtr<CefProcessMessage> msg)
 
 void DispatchJSEventGlobal(std::string event, std::string eventArgsJson)
 {
-	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+	if (!SEGlobalStateManager::IsInstanceAvailable())
 		return;
 
-	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
+	auto apiServer = SEGlobalStateManager::GetInstance()
 				 ->GetWebsocketApiServer();
 
 	if (!apiServer)
@@ -3935,10 +3935,10 @@ void DispatchJSEventGlobal(std::string event, std::string eventArgsJson)
 void DispatchJSEventContainer(std::string target, std::string event,
 			      std::string eventArgsJson)
 {
-	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+	if (!SEGlobalStateManager::IsInstanceAvailable())
 		return;
 
-	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
+	auto apiServer = SEGlobalStateManager::GetInstance()
 				 ->GetWebsocketApiServer();
 
 	if (!apiServer)

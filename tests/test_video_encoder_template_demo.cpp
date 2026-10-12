@@ -2,7 +2,7 @@
 // streamelements/StreamElementsOutput.hpp.
 //
 // The production VideoEncoderTemplate class is nested inside
-// StreamElementsOutputBase and pulls in libobs/Qt transitively. To
+// SEOutputBase and pulls in libobs/Qt transitively. To
 // exercise the matching-index logic without that build burden we mirror
 // the relevant slice of the class here and verify it behaves correctly.
 //

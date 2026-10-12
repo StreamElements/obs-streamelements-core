@@ -4,9 +4,9 @@
 #include "deps/json11/json11.hpp"
 
 #include "StreamElementsUtils.hpp"
-#include "StreamElementsObsSceneManager.hpp"
-#include "StreamElementsMessageBus.hpp"
-#include "StreamElementsGlobalStateManager.hpp"
+#include "SEObsSceneManager.hpp"
+#include "SEMessageBus.hpp"
+#include "SEGlobalStateManager.hpp"
 
 #include <exception>
 
@@ -21,19 +21,19 @@ static void dispatch_external_event(std::string name, std::string args)
 	externalEventName[0] =
 		tolower(externalEventName[0]); /* lower case first letter */
 
-	StreamElementsMessageBus::GetInstance()->NotifyAllExternalEventListeners(
-		StreamElementsMessageBus::DEST_ALL_EXTERNAL,
-		StreamElementsMessageBus::SOURCE_APPLICATION, "OBS",
+	SEMessageBus::GetInstance()->NotifyAllExternalEventListeners(
+		SEMessageBus::DEST_ALL_EXTERNAL,
+		SEMessageBus::SOURCE_APPLICATION, "OBS",
 		externalEventName,
 		CefParseJSON(args, JSON_PARSER_ALLOW_TRAILING_COMMAS));
 }
 
 static void dispatch_js_event(std::string name, std::string args)
 {
-	if (!StreamElementsGlobalStateManager::IsInstanceAvailable())
+	if (!SEGlobalStateManager::IsInstanceAvailable())
 		return;
 
-	auto apiServer = StreamElementsGlobalStateManager::GetInstance()
+	auto apiServer = SEGlobalStateManager::GetInstance()
 				 ->GetWebsocketApiServer();
 
 	if (!apiServer)
@@ -43,7 +43,7 @@ static void dispatch_js_event(std::string name, std::string args)
 }
 
 static void
-SerializeObsAudioEncoders(StreamElementsAudioCompositionBase *composition,
+SerializeObsAudioEncoders(SEAudioCompositionBase *composition,
 			  CefRefPtr<CefDictionaryValue> &root)
 {
 	auto info = composition->GetCompositionInfo(nullptr);
@@ -109,7 +109,7 @@ SerializeObsAudioEncoders(StreamElementsAudioCompositionBase *composition,
 }
 
 static void
-SerializeObsAudioTracks(StreamElementsAudioCompositionBase *composition,
+SerializeObsAudioTracks(SEAudioCompositionBase *composition,
 			CefRefPtr<CefDictionaryValue> &root)
 {
 	const char *mode = config_get_string(obs_frontend_get_profile_config(),
@@ -150,7 +150,7 @@ SerializeObsAudioTracks(StreamElementsAudioCompositionBase *composition,
 // Composition base
 ////////////////////////////////////////////////////////////////////////////////
 
-void StreamElementsAudioCompositionBase::SetName(std::string name)
+void SEAudioCompositionBase::SetName(std::string name)
 {
 	{
 		std::unique_lock<decltype(m_mutex)> lock(m_mutex);
@@ -174,22 +174,22 @@ void StreamElementsAudioCompositionBase::SetName(std::string name)
 // OBS Main Composition
 ////////////////////////////////////////////////////////////////////////////////
 
-class StreamElementsDefaultAudioCompositionInfo
-	: public StreamElementsAudioCompositionBase::CompositionInfo {
+class SEDefaultAudioCompositionInfo
+	: public SEAudioCompositionBase::CompositionInfo {
 private:
-	StreamElementsAudioCompositionEventListener* m_listener;
+	SEAudioCompositionEventListener* m_listener;
 
 public:
-	StreamElementsDefaultAudioCompositionInfo(
-		std::shared_ptr<StreamElementsAudioCompositionBase> owner,
-		StreamElementsAudioCompositionEventListener* listener)
-		: StreamElementsAudioCompositionBase::CompositionInfo(owner,
+	SEDefaultAudioCompositionInfo(
+		std::shared_ptr<SEAudioCompositionBase> owner,
+		SEAudioCompositionEventListener* listener)
+		: SEAudioCompositionBase::CompositionInfo(owner,
 			listener),
 		m_listener(listener)
 	{
 	}
 
-	virtual ~StreamElementsDefaultAudioCompositionInfo() {}
+	virtual ~SEDefaultAudioCompositionInfo() {}
 
 protected:
 	virtual obs_encoder_t* GetStreamingAudioEncoder(size_t index)
@@ -251,15 +251,15 @@ public:
 	virtual audio_t *GetAudio() { return obs_get_audio(); }
 };
 
-std::shared_ptr<StreamElementsAudioCompositionBase::CompositionInfo>
-StreamElementsObsNativeAudioComposition::GetCompositionInfo(
-	StreamElementsAudioCompositionEventListener *listener)
+std::shared_ptr<SEAudioCompositionBase::CompositionInfo>
+SEObsNativeAudioComposition::GetCompositionInfo(
+	SEAudioCompositionEventListener *listener)
 {
-	return std::make_shared<StreamElementsDefaultAudioCompositionInfo>(
+	return std::make_shared<SEDefaultAudioCompositionInfo>(
 		shared_from_this(), listener);
 }
 
-void StreamElementsObsNativeAudioComposition::SerializeComposition(
+void SEObsNativeAudioComposition::SerializeComposition(
 	CefRefPtr<CefValue> &output)
 {
 	auto root = CefDictionaryValue::Create();
@@ -280,23 +280,23 @@ void StreamElementsObsNativeAudioComposition::SerializeComposition(
 // Custom audio encoding
 ////////////////////////////////////////////////////////////////////////////////
 
-class StreamElementsCustomAudioCompositionInfo
-	: public StreamElementsAudioCompositionBase::CompositionInfo {
+class SECustomAudioCompositionInfo
+	: public SEAudioCompositionBase::CompositionInfo {
 private:
-	StreamElementsAudioCompositionEventListener *m_listener;
+	SEAudioCompositionEventListener *m_listener;
 
 	audio_t *m_audio = nullptr;
 	obs_encoder_t *m_streamingAudioEncoders[MAX_AUDIO_MIXES] = {nullptr};
 	obs_encoder_t *m_recordingAudioEncoders[MAX_AUDIO_MIXES] = {nullptr};
 
 public:
-	StreamElementsCustomAudioCompositionInfo(
-		std::shared_ptr<StreamElementsAudioCompositionBase> owner,
-		StreamElementsAudioCompositionEventListener *listener,
+	SECustomAudioCompositionInfo(
+		std::shared_ptr<SEAudioCompositionBase> owner,
+		SEAudioCompositionEventListener *listener,
 		audio_t *audio,
 		obs_encoder_t *streamingAudioEncoders[MAX_AUDIO_MIXES],
 		obs_encoder_t *recordingAudioEncoders[MAX_AUDIO_MIXES])
-		: StreamElementsAudioCompositionBase::CompositionInfo(owner,
+		: SEAudioCompositionBase::CompositionInfo(owner,
 								      listener),
 		  m_audio(audio),
 		  m_listener(listener)
@@ -309,7 +309,7 @@ public:
 		}
 	}
 
-	virtual ~StreamElementsCustomAudioCompositionInfo()
+	virtual ~SECustomAudioCompositionInfo()
 	{
 		for (size_t i = 0; i < MAX_AUDIO_MIXES; ++i) {
 			obs_encoder_release(
@@ -343,12 +343,12 @@ public:
 };
 
 // ctor only usable by this class
-StreamElementsCustomAudioComposition::StreamElementsCustomAudioComposition(
-	StreamElementsCustomAudioComposition::Private, std::string id,
+SECustomAudioComposition::SECustomAudioComposition(
+	SECustomAudioComposition::Private, std::string id,
 	std::string name, std::string streamingAudioEncoderId,
 	obs_data_t *streamingAudioEncoderSettings,
 	obs_data_t *streamingAudioEncoderHotkeyData)
-	: StreamElementsAudioCompositionBase(id, name)
+	: SEAudioCompositionBase(id, name)
 {
 	m_audio = obs_get_audio();
 
@@ -375,7 +375,7 @@ StreamElementsCustomAudioComposition::StreamElementsCustomAudioComposition(
 	}
 }
 
-void StreamElementsCustomAudioComposition::SetRecordingEncoder(
+void SECustomAudioComposition::SetRecordingEncoder(
 	std::string recordingAudioEncoderId,
 	obs_data_t *recordingAudioEncoderSettings,
 	obs_data_t *recordingAudioEncoderHotkeyData)
@@ -408,7 +408,7 @@ void StreamElementsCustomAudioComposition::SetRecordingEncoder(
 	}
 }
 
-StreamElementsCustomAudioComposition::~StreamElementsCustomAudioComposition()
+SECustomAudioComposition::~SECustomAudioComposition()
 {
 	for (size_t i = 0; i < MAX_AUDIO_MIXES; ++i) {
 		if (m_streamingAudioEncoders[i]) {
@@ -427,18 +427,18 @@ StreamElementsCustomAudioComposition::~StreamElementsCustomAudioComposition()
 	m_audio = nullptr;
 }
 
-std::shared_ptr<StreamElementsAudioCompositionBase::CompositionInfo>
-StreamElementsCustomAudioComposition::GetCompositionInfo(
-	StreamElementsAudioCompositionEventListener *listener)
+std::shared_ptr<SEAudioCompositionBase::CompositionInfo>
+SECustomAudioComposition::GetCompositionInfo(
+	SEAudioCompositionEventListener *listener)
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
-	return std::make_shared<StreamElementsCustomAudioCompositionInfo>(
+	return std::make_shared<SECustomAudioCompositionInfo>(
 		shared_from_this(), listener, m_audio, m_streamingAudioEncoders,
 		m_recordingAudioEncoders);
 }
 
-void StreamElementsCustomAudioComposition::SerializeComposition(
+void SECustomAudioComposition::SerializeComposition(
 	CefRefPtr<CefValue> &output)
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
@@ -457,8 +457,8 @@ void StreamElementsCustomAudioComposition::SerializeComposition(
 	output->SetDictionary(root);
 }
 
-std::shared_ptr<StreamElementsCustomAudioComposition>
-StreamElementsCustomAudioComposition::Create(
+std::shared_ptr<SECustomAudioComposition>
+SECustomAudioComposition::Create(
 	std::string id, std::string name,
 	CefRefPtr<CefValue> streamingAudioEncoder,
 	CefRefPtr<CefValue> recordingAudioEncoder)
@@ -497,7 +497,7 @@ StreamElementsCustomAudioComposition::Create(
 	}
 
 	std::exception_ptr exception = nullptr;
-	std::shared_ptr<StreamElementsCustomAudioComposition> result = nullptr;
+	std::shared_ptr<SECustomAudioComposition> result = nullptr;
 
 	try {
 		result = Create(id, name, streamingAudioEncoderId,

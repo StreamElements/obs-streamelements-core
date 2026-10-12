@@ -18,7 +18,7 @@
 //     operator new throws std::bad_alloc, malloc returns NULL.
 //
 // Mirrors SentryNewHandler and the crash.kind precedence from
-// StreamElementsSentryCrashHandler.cpp. The real ones need the CRT and sentry;
+// SESentryCrashHandler.cpp. The real ones need the CRT and sentry;
 // the logic under test is the twenty lines reproduced here.
 
 #include <cstdio>
@@ -50,7 +50,7 @@ static bool g_guardBufferHeld = true;
 
 static NewHandler g_previousNewHandler = nullptr;
 
-// Mirror of StreamElementsCrashContext::ReleaseGuardBuffer -- idempotent.
+// Mirror of SECrashContext::ReleaseGuardBuffer -- idempotent.
 static void ReleaseGuardBuffer()
 {
 	++g_guardReleaseCount;
