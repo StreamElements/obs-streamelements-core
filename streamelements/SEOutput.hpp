@@ -6,6 +6,13 @@
 
 #include <shared_mutex>
 
+//
+// Forward declarations: the custom output factories resolve composition ids
+// through these, and take them as borrowed pointers rather than reaching for
+// the global state manager.
+//
+class SEVideoCompositionManager;
+class SEAudioCompositionManager;
 
 enum ObsOutputType { StreamingOutput, RecordingOutput, ReplayBufferOutput };
 
@@ -577,7 +584,9 @@ public:
 	}
 
 	static std::shared_ptr<SECustomStreamingOutput>
-	Create(CefRefPtr<CefValue> input);
+	Create(CefRefPtr<CefValue> input,
+	       SEVideoCompositionManager *videoCompositionManager,
+	       SEAudioCompositionManager *audioCompositionManager);
 
 	virtual bool IsObsNativeOutput() override { return false; }
 
@@ -747,7 +756,9 @@ public:
 	}
 
 	static std::shared_ptr<SECustomRecordingOutput>
-	Create(CefRefPtr<CefValue> input);
+	Create(CefRefPtr<CefValue> input,
+	       SEVideoCompositionManager *videoCompositionManager,
+	       SEAudioCompositionManager *audioCompositionManager);
 
 	virtual bool IsObsNativeOutput() override { return false; }
 
@@ -885,7 +896,9 @@ public:
 	}
 
 	static std::shared_ptr<SECustomReplayBufferOutput>
-	Create(CefRefPtr<CefValue> input);
+	Create(CefRefPtr<CefValue> input,
+	       SEVideoCompositionManager *videoCompositionManager,
+	       SEAudioCompositionManager *audioCompositionManager);
 
 	virtual bool IsObsNativeOutput() override { return false; }
 

@@ -1986,6 +1986,8 @@ static void check_injected_services_are_not_also_fetched_globally()
 		 "GetVideoCompositionManager"},
 		{"streamelements/SEObsActiveSceneTracker.cpp",
 		 "GetVideoCompositionManager"},
+		{"streamelements/SEOutput.cpp", "GetVideoCompositionManager"},
+		{"streamelements/SEOutput.cpp", "GetAudioCompositionManager"},
 	};
 
 	for (const auto &consumer : consumers) {
