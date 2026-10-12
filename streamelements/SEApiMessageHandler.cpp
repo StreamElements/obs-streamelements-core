@@ -783,7 +783,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			CefRefPtr<CefValue> barInfo = args->GetValue(0);
 
-			self->m_services->GetWidgetManager()
+			self->m_services->GetHost()
+				->GetWidgetManager()
 				->DeserializeNotificationBar(barInfo);
 
 			self->m_services->GetHost()->PersistState();
@@ -795,7 +796,9 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("hideNotificationBar");
 	{
-		self->m_services->GetWidgetManager()->HideNotificationBar();
+		self->m_services->GetHost()
+			->GetWidgetManager()
+			->HideNotificationBar();
 
 		self->m_services->GetHost()->PersistState();
 
@@ -812,7 +815,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 			if (rootDictionary.get() &&
 			    rootDictionary->HasKey("url")) {
 				// Remove all central widgets
-				while (self->m_services->GetWidgetManager()
+				while (self->m_services->GetHost()
+					       ->GetWidgetManager()
 					       ->DestroyCurrentCentralBrowserWidget()) {
 				}
 
@@ -827,7 +831,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 							.ToString();
 				}
 
-				self->m_services->GetWidgetManager()
+				self->m_services->GetHost()
+					->GetWidgetManager()
 					->PushCentralBrowserWidget(
 						rootDictionary->GetString("url")
 							.ToString()
@@ -846,7 +851,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("hideCentralWidget");
 	{
-		while (self->m_services->GetWidgetManager()
+		while (self->m_services->GetHost()
+			       ->GetWidgetManager()
 			       ->DestroyCurrentCentralBrowserWidget()) {
 		}
 
@@ -863,10 +869,12 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 			CefRefPtr<CefValue> widgetInfo = args->GetValue(0);
 
 			std::string id =
-				self->m_services->GetWidgetManager()
+				self->m_services->GetHost()
+					->GetWidgetManager()
 					->AddDockBrowserWidget(widgetInfo);
 
-			QDockWidget *dock = self->m_services->GetWidgetManager()
+			QDockWidget *dock = self->m_services->GetHost()
+						    ->GetWidgetManager()
 						    ->GetDockWidget(id.c_str());
 
 			if (dock) {
@@ -888,7 +896,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				for (size_t i = 0; i < list->GetSize(); ++i) {
 					CefString id = list->GetString(i);
 
-					self->m_services->GetWidgetManager()
+					self->m_services->GetHost()
+						->GetWidgetManager()
 						->RemoveDockWidget(
 							id.ToString().c_str());
 				}
@@ -904,15 +913,17 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAllDockingWidgets");
 	{
-		self->m_services->GetWidgetManager()->SerializeDockingWidgets(
-			result);
+		self->m_services->GetHost()
+			->GetWidgetManager()
+			->SerializeDockingWidgets(result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("toggleDockingWidgetFloatingById");
 	{
 		if (args->GetSize() && args->GetType(0) == VTYPE_STRING) {
-			result->SetBool(self->m_services->GetWidgetManager()
+			result->SetBool(self->m_services->GetHost()
+						->GetWidgetManager()
 						->ToggleWidgetFloatingStateById(
 							args->GetString(0)
 								.ToString()
@@ -946,7 +957,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				height = d->GetInt("height");
 			}
 
-			result->SetBool(self->m_services->GetWidgetManager()
+			result->SetBool(self->m_services->GetHost()
+						->GetWidgetManager()
 						->SetWidgetDimensionsById(
 							args->GetString(0)
 								.ToString()
@@ -981,7 +993,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				top = d->GetInt("top");
 			}
 
-			result->SetBool(self->m_services->GetWidgetManager()
+			result->SetBool(self->m_services->GetHost()
+						->GetWidgetManager()
 						->SetWidgetPositionById(
 							args->GetString(0)
 								.ToString()
@@ -1001,7 +1014,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
 		    args->GetType(1) == VTYPE_STRING) {
 			result->SetBool(
-				self->m_services->GetWidgetManager()
+				self->m_services->GetHost()
+					->GetWidgetManager()
 					->SetWidgetUrlById(args->GetString(0)
 								   .ToString()
 								   .c_str(),
@@ -1022,7 +1036,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
 		    args->GetType(1) == VTYPE_STRING) {
 			result->SetBool(
-				self->m_services->GetWidgetManager()
+				self->m_services->GetHost()
+					->GetWidgetManager()
 					->SetWidgetTitleById(args->GetString(0)
 								     .ToString()
 								     .c_str(),
@@ -1042,7 +1057,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize() >= 1 && args->GetType(0) == VTYPE_STRING) {
 			result->SetBool(
-				self->m_services->GetWidgetManager()
+				self->m_services->GetHost()
+					->GetWidgetManager()
 					->ShowDockWidgetById(args->GetString(0)
 								     .ToString()
 								     .c_str()));
@@ -1059,7 +1075,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize() >= 1 && args->GetType(0) == VTYPE_STRING) {
 			result->SetBool(
-				self->m_services->GetWidgetManager()
+				self->m_services->GetHost()
+					->GetWidgetManager()
 					->HideDockWidgetById(args->GetString(0)
 								     .ToString()
 								     .c_str()));
@@ -1075,7 +1092,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("groupDockingWidgetsPairByIds");
 	{
 		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING && args->GetType(1) == VTYPE_STRING) {
-			result->SetBool(self->m_services->GetWidgetManager()
+			result->SetBool(self->m_services->GetHost()
+						->GetWidgetManager()
 						->GroupDockingWidgetPairByIds(
 							args->GetString(0)
 								.ToString()
@@ -1097,7 +1115,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
 		    args->GetType(1) == VTYPE_STRING) {
 			result->SetBool(
-				self->m_services->GetWidgetManager()
+				self->m_services->GetHost()
+					->GetWidgetManager()
 					->InsertDockingWidgetRelativeToId(
 						args->GetString(0)
 							.ToString()
@@ -1120,7 +1139,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
 		    args->GetType(1) == VTYPE_STRING) {
 			result->SetBool(
-				self->m_services->GetWidgetManager()
+				self->m_services->GetHost()
+					->GetWidgetManager()
 					->InsertDockingWidgetRelativeToId(
 						args->GetString(0)
 							.ToString()
@@ -1148,7 +1168,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("completeOnBoarding");
 	{
-		while (self->m_services->GetWidgetManager()
+		while (self->m_services->GetHost()
+			       ->GetWidgetManager()
 			       ->DestroyCurrentCentralBrowserWidget()) {
 		}
 
@@ -1290,7 +1311,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		std::string dockingArea = "none";
 
 		SEBrowserWidgetManager::DockBrowserWidgetInfo *info =
-			self->m_services->GetWidgetManager()
+			self->m_services->GetHost()
+				->GetWidgetManager()
 				->GetDockBrowserWidgetInfo(
 					target->m_target.c_str());
 
@@ -1325,7 +1347,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize()) {
 			result->SetString(
-				self->m_services->GetWorkerManager()
+				self->m_services->GetHost()
+					->GetWorkerManager()
 					->DeserializeOne(args->GetValue(0)));
 
 			self->m_services->GetHost()->PersistState(false);
@@ -1335,7 +1358,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAllBackgroundWorkers");
 	{
-		self->m_services->GetWorkerManager()->Serialize(result);
+		self->m_services->GetHost()->GetWorkerManager()->Serialize(
+			result);
 	}
 	API_HANDLER_END();
 
@@ -1348,7 +1372,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				for (size_t i = 0; i < list->GetSize(); ++i) {
 					CefString id = list->GetString(i);
 
-					self->m_services->GetWorkerManager()
+					self->m_services->GetHost()
+						->GetWorkerManager()
 						->Remove(id);
 				}
 
@@ -2171,7 +2196,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("requestStreamingStart");
 	{
-		self->m_services->GetNativeOBSControlsManager()
+		self->m_services->GetHost()
+			->GetNativeOBSControlsManager()
 			->StartStreaming();
 
 		result->SetBool(true);
@@ -2190,7 +2216,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize()) {
 			result->SetBool(
-				self->m_services->GetNativeOBSControlsManager()
+				self->m_services->GetHost()
+					->GetNativeOBSControlsManager()
 					->DeserializeStartStreamingUIHandlerProperties(
 						args->GetValue(0)));
 		}
@@ -2199,7 +2226,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("adviseStreamingStartUIRequestAccepted");
 	{
-		self->m_services->GetNativeOBSControlsManager()
+		self->m_services->GetHost()
+			->GetNativeOBSControlsManager()
 			->AdviseRequestStartStreamingAccepted();
 
 		result->SetBool(true);
@@ -2208,7 +2236,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("adviseStreamingStartUIRequestRejected");
 	{
-		self->m_services->GetNativeOBSControlsManager()
+		self->m_services->GetHost()
+			->GetNativeOBSControlsManager()
 			->AdviseRequestStartStreamingRejected();
 
 		result->SetBool(true);
@@ -2491,10 +2520,10 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("showOutputPreviewTitleBar");
 	{
 		if (args->GetSize()) {
-			result->SetBool(
-				self->m_services->GetNativeOBSControlsManager()
-					->DeserializePreviewTitleBar(
-						args->GetValue(0)));
+			result->SetBool(self->m_services->GetHost()
+						->GetNativeOBSControlsManager()
+						->DeserializePreviewTitleBar(
+							args->GetValue(0)));
 
 			self->m_services->GetHost()->PersistState();
 		}
@@ -2503,7 +2532,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("hideOutputPreviewTitleBar");
 	{
-		self->m_services->GetNativeOBSControlsManager()
+		self->m_services->GetHost()
+			->GetNativeOBSControlsManager()
 			->HidePreviewTitleBar();
 
 		result->SetBool(true);
@@ -2515,10 +2545,10 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("showOutputPreviewFrame");
 	{
 		if (args->GetSize()) {
-			result->SetBool(
-				self->m_services->GetNativeOBSControlsManager()
-					->DeserializePreviewFrame(
-						args->GetValue(0)));
+			result->SetBool(self->m_services->GetHost()
+						->GetNativeOBSControlsManager()
+						->DeserializePreviewFrame(
+							args->GetValue(0)));
 
 			self->m_services->GetHost()->PersistState();
 		}
@@ -2527,7 +2557,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("hideOutputPreviewFrame");
 	{
-		self->m_services->GetNativeOBSControlsManager()
+		self->m_services->GetHost()
+			->GetNativeOBSControlsManager()
 			->HidePreviewFrame();
 
 		result->SetBool(true);
@@ -2540,7 +2571,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getNativeStreamingServiceIntegrationStatus");
 	{
 		bool manageBroadcastButtonVisible =
-			self->m_services->GetNativeOBSControlsManager()
+			self->m_services->GetHost()
+				->GetNativeOBSControlsManager()
 				->GetNativeManageBroadcastButtonVisibility();
 
 		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();

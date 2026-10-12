@@ -371,13 +371,11 @@ void SEGlobalStateManager::PublishApiServices()
 
 	m_apiServices->SetObsSceneManager(m_obsSceneManager);
 	m_apiServices->SetMenuManager(m_menuManager);
-	m_apiServices->SetWidgetManager(m_widgetManager);
 	m_apiServices->SetOutputManager(m_outputManager);
 	m_apiServices->SetVideoCompositionManager(m_videoCompositionManager);
 	m_apiServices->SetAudioCompositionManager(m_audioCompositionManager);
 	m_apiServices->SetSharedVideoCompositionManager(
 		m_sharedVideoCompositionManager);
-	m_apiServices->SetNativeOBSControlsManager(m_nativeObsControlsManager);
 	m_apiServices->SetOutputSettingsManager(m_outputSettingsManager);
 	m_apiServices->SetHotkeyManager(m_hotkeyManager);
 	m_apiServices->SetBackupManager(m_backupManager);
@@ -386,7 +384,6 @@ void SEGlobalStateManager::PublishApiServices()
 	m_apiServices->SetExternalSceneDataProviderManager(
 		m_externalSceneDataProviderManager);
 	m_apiServices->SetProfilesManager(m_profilesManager);
-	m_apiServices->SetWorkerManager(m_workerManager);
 	m_apiServices->SetAnalyticsEventsManager(m_analyticsEventsManager);
 	m_apiServices->SetHttpClient(m_httpClient);
 
@@ -798,23 +795,6 @@ void SEGlobalStateManager::Shutdown()
 		m_appStateListener->deleteLater();
 		m_appStateListener = nullptr;
 	}
-
-	//
-	// Before the releases below, and the reason they release anything at
-	// all. Every API handler and browser widget holds the services bundle,
-	// and the bundle holds the widget manager, the worker manager and the
-	// native controls manager, each of which reaches back to a widget --
-	// so the references form a ring that refcounting alone never breaks.
-	// Left in place, the widgets outlive OBS's own teardown and the Qt
-	// event loop never returns, which looks like a hang in here rather
-	// than the leak it is.
-	//
-	// It happens here rather than at the top of Shutdown() so that a page
-	// still calling in while we tear down gets its services, right up to
-	// the point where they are actually going away.
-	//
-	if (m_apiServices)
-		m_apiServices->Clear();
 
 	m_obsActiveSceneTracker = nullptr;
 	m_analyticsEventsManager = nullptr;

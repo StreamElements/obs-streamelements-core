@@ -7,12 +7,10 @@ class SEGlobalStateManager;
 
 class SEObsSceneManager;
 class SEMenuManager;
-class SEBrowserWidgetManager;
 class SEOutputManager;
 class SEVideoCompositionManager;
 class SEAudioCompositionManager;
 class SESharedVideoCompositionManager;
-class SENativeOBSControlsManager;
 class SEOutputSettingsManager;
 class SEHotkeyManager;
 class SEBackupManager;
@@ -20,7 +18,6 @@ class SEWebsocketApiServer;
 class SEBandwidthTestManager;
 class SEExternalSceneDataProviderManager;
 class SEProfilesManager;
-class SEWorkerManager;
 class SEAnalyticsEventsManager;
 class SERazerWyvrnManager;
 class SEHttpClient;
@@ -42,17 +39,19 @@ class SEHttpClient;
 // methods that use it rather than registering one that fails when called.
 //
 // The slots own what they hold, so a service cannot be destroyed underneath
-// a page that is still calling it. That does mean a cycle: every handler and
-// browser widget holds the bundle, and three of the services in it reach
-// back to widgets of their own -- the widget manager has the docks, a
-// background worker has an off-screen one, the native controls manager has
-// the preview title bar. Nothing in that cycle is freed by refcounting
-// alone, and the symptom is not a leak anyone would go looking for: the
-// widgets outlive OBS's own teardown and the Qt event loop never returns,
-// which reads exactly like a hang in our shutdown path.
+// a page that is still calling it, and it lives for exactly as long as
+// something can still call it.
 //
-// Clear() is where that cycle is cut, and SEGlobalStateManager::Shutdown()
-// is the one caller. Until then every reference here is a real one.
+// Three services are deliberately absent for that same reason, and adding
+// them here would be a mistake: the browser widget manager, the worker
+// manager and the native controls manager each own a widget, every widget
+// owns a handler, and every handler owns this bundle. Owning them from here
+// closes a ring that refcounting never breaks -- and it does not read as a
+// leak when it happens. The widgets outlive OBS's own teardown, the Qt event
+// loop never returns, and it looks exactly like a hang in our shutdown path.
+//
+// A handler that needs one of those three asks the host for it, which is
+// where they are owned.
 //
 class SEApiServices {
 public:
@@ -69,40 +68,6 @@ public:
 	SEApiServices(SEGlobalStateManager *host) : m_host(host) {}
 
 	SEGlobalStateManager *GetHost() const { return m_host; }
-
-	//
-	// Releases every service. Called by SEGlobalStateManager::Shutdown()
-	// to break the cycle described above, so that dropping the manager's
-	// own references actually destroys what they point at. After this the
-	// getters return null, which is the same thing they return before
-	// Initialize() has published anything.
-	//
-	void Clear()
-	{
-		std::unique_lock<std::shared_mutex> lock(m_mutex);
-
-		m_obsSceneManager = nullptr;
-		m_menuManager = nullptr;
-		m_widgetManager = nullptr;
-		m_outputManager = nullptr;
-		m_videoCompositionManager = nullptr;
-		m_audioCompositionManager = nullptr;
-		m_sharedVideoCompositionManager = nullptr;
-		m_nativeObsControlsManager = nullptr;
-		m_outputSettingsManager = nullptr;
-		m_hotkeyManager = nullptr;
-		m_backupManager = nullptr;
-		m_websocketApiServer = nullptr;
-		m_bandwidthTestManager = nullptr;
-		m_externalSceneDataProviderManager = nullptr;
-		m_profilesManager = nullptr;
-		m_workerManager = nullptr;
-		m_analyticsEventsManager = nullptr;
-#ifdef SE_ENABLE_WYVRN
-		m_razerWyvrnManager = nullptr;
-#endif
-		m_httpClient = nullptr;
-	}
 
 	std::shared_ptr<SEObsSceneManager> GetObsSceneManager() const
 	{
@@ -130,20 +95,6 @@ public:
 		std::unique_lock<std::shared_mutex> lock(m_mutex);
 
 		m_menuManager = value;
-	}
-
-	std::shared_ptr<SEBrowserWidgetManager> GetWidgetManager() const
-	{
-		std::shared_lock<std::shared_mutex> lock(m_mutex);
-
-		return m_widgetManager;
-	}
-
-	void SetWidgetManager(std::shared_ptr<SEBrowserWidgetManager> value)
-	{
-		std::unique_lock<std::shared_mutex> lock(m_mutex);
-
-		m_widgetManager = value;
 	}
 
 	std::shared_ptr<SEOutputManager> GetOutputManager() const
@@ -206,22 +157,6 @@ public:
 		std::unique_lock<std::shared_mutex> lock(m_mutex);
 
 		m_sharedVideoCompositionManager = value;
-	}
-
-	std::shared_ptr<SENativeOBSControlsManager>
-	GetNativeOBSControlsManager() const
-	{
-		std::shared_lock<std::shared_mutex> lock(m_mutex);
-
-		return m_nativeObsControlsManager;
-	}
-
-	void SetNativeOBSControlsManager(
-		std::shared_ptr<SENativeOBSControlsManager> value)
-	{
-		std::unique_lock<std::shared_mutex> lock(m_mutex);
-
-		m_nativeObsControlsManager = value;
 	}
 
 	std::shared_ptr<SEOutputSettingsManager>
@@ -327,20 +262,6 @@ public:
 		m_profilesManager = value;
 	}
 
-	std::shared_ptr<SEWorkerManager> GetWorkerManager() const
-	{
-		std::shared_lock<std::shared_mutex> lock(m_mutex);
-
-		return m_workerManager;
-	}
-
-	void SetWorkerManager(std::shared_ptr<SEWorkerManager> value)
-	{
-		std::unique_lock<std::shared_mutex> lock(m_mutex);
-
-		m_workerManager = value;
-	}
-
 	std::shared_ptr<SEAnalyticsEventsManager>
 	GetAnalyticsEventsManager() const
 	{
@@ -394,13 +315,11 @@ private:
 
 	std::shared_ptr<SEObsSceneManager> m_obsSceneManager;
 	std::shared_ptr<SEMenuManager> m_menuManager;
-	std::shared_ptr<SEBrowserWidgetManager> m_widgetManager;
 	std::shared_ptr<SEOutputManager> m_outputManager;
 	std::shared_ptr<SEVideoCompositionManager> m_videoCompositionManager;
 	std::shared_ptr<SEAudioCompositionManager> m_audioCompositionManager;
 	std::shared_ptr<SESharedVideoCompositionManager>
 		m_sharedVideoCompositionManager;
-	std::shared_ptr<SENativeOBSControlsManager> m_nativeObsControlsManager;
 	std::shared_ptr<SEOutputSettingsManager> m_outputSettingsManager;
 	std::shared_ptr<SEHotkeyManager> m_hotkeyManager;
 	std::shared_ptr<SEBackupManager> m_backupManager;
@@ -409,7 +328,6 @@ private:
 	std::shared_ptr<SEExternalSceneDataProviderManager>
 		m_externalSceneDataProviderManager;
 	std::shared_ptr<SEProfilesManager> m_profilesManager;
-	std::shared_ptr<SEWorkerManager> m_workerManager;
 	std::shared_ptr<SEAnalyticsEventsManager> m_analyticsEventsManager;
 #ifdef SE_ENABLE_WYVRN
 	std::shared_ptr<SERazerWyvrnManager> m_razerWyvrnManager;

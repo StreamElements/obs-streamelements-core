@@ -2078,6 +2078,39 @@ static void check_api_handler_takes_its_services_by_injection()
 	      "bundle -- this invariant would then pass vacuously");
 }
 
+static void check_api_services_bundle_owns_no_widget_owners()
+{
+	//
+	// The bundle owns what it holds, and every API handler owns the
+	// bundle. So a service that owns a widget must not be in it: a widget
+	// owns its handler, the handler owns the bundle, and the bundle would
+	// own the service that owns the widget. Refcounting never breaks that
+	// ring, and it does not present as a leak -- the widgets outlive OBS's
+	// own teardown, the Qt event loop never returns, and it reads as a
+	// hang in SEGlobalStateManager::Shutdown().
+	//
+	// These three own widgets. A handler that needs one asks the host.
+	//
+	const std::string src =
+		strip_line_comments(slurp("streamelements/SEApiServices.hpp"));
+
+	const char *const widget_owners[] = {"WidgetManager", "WorkerManager",
+					     "NativeOBSControlsManager"};
+
+	for (const char *const owner : widget_owners) {
+		const std::string message =
+			std::string("SEApiServices holds ") + owner +
+			" -- it owns a widget, and widgets own handlers that "
+			"own this bundle, so this closes a reference ring that "
+			"hangs the Qt event loop at shutdown. Reach it through "
+			"GetHost() instead";
+
+		check(src.find(std::string("Get") + owner + "()") ==
+			      std::string::npos,
+		      message.c_str());
+	}
+}
+
 static void check_crash_path_filesystem_calls_never_throw()
 {
 	const char *files[] = {
@@ -2520,6 +2553,7 @@ int main()
 	check_rejected_signature_stops_the_handler();
 	check_injected_services_are_not_also_fetched_globally();
 	check_api_handler_takes_its_services_by_injection();
+	check_api_services_bundle_owns_no_widget_owners();
 	check_crash_path_filesystem_calls_never_throw();
 
 	if (failures) {
