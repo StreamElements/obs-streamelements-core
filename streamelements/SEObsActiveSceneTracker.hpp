@@ -4,7 +4,7 @@
 #include "obs.hpp"
 #include "obs-frontend-api.h"
 
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 
 class SEObsActiveSceneTracker
 {

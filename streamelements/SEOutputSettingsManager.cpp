@@ -1,5 +1,5 @@
 #include "SEOutputSettingsManager.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 
 #include <string.h>
 #include <obs-frontend-api.h>

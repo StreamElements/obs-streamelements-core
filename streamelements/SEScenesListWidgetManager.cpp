@@ -1,5 +1,5 @@
 #include "SEScenesListWidgetManager.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include "SERemoteIconLoader.hpp"
 #include "SEConfig.hpp"
 

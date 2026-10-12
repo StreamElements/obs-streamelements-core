@@ -1,5 +1,5 @@
 #include "SESceneItemsMonitor.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include "SEApiMessageHandler.hpp"
 #include "SERemoteIconLoader.hpp"
 #include "SEConfig.hpp"

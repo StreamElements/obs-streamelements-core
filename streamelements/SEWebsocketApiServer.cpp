@@ -1,5 +1,5 @@
 #include "SEWebsocketApiServer.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 
 #include <asio.hpp>
 #include <asio/ts/buffer.hpp>

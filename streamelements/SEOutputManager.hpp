@@ -1,6 +1,6 @@
 #pragma once
 
-#include "StreamElementsOutput.hpp"
+#include "SEOutput.hpp"
 #include "SEVideoCompositionManager.hpp"
 #include "SEAudioCompositionManager.hpp"
 

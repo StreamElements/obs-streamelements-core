@@ -1,6 +1,6 @@
 #pragma once
 
-#include "StreamElementsVideoComposition.hpp"
+#include "SEVideoComposition.hpp"
 #include <shared_mutex>
 #include <string>
 #include <map>

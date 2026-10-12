@@ -27,7 +27,7 @@
 
 #include "networkdialog.hpp"
 #include "confirmpendingupdatedialog.hpp"
-#include "../StreamElementsUtils.hpp"
+#include "../SEUtils.hpp"
 #include "../Version.hpp"
 
 #ifdef APPLE

@@ -3,7 +3,7 @@
 #include "SEConfig.hpp"
 #include "SECrashConsentDialog.hpp"
 #include "SECrashContext.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 
 #include <util/base.h>
 #include <obs.h>
@@ -772,7 +772,7 @@ SESentryCrashHandler::SESentryCrashHandler()
 	sentry_options_set_dsn(options, dsn.c_str());
 
 	const std::string release = "obs-streamelements-core@" +
-				    GetStreamElementsPluginVersionString();
+				    GetSEPluginVersionString();
 	sentry_options_set_release(options, release.c_str());
 
 	//

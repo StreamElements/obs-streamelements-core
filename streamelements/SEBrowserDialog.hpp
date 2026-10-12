@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include "SEBrowserWidget.hpp"
 
 class SEDialogApiMessageHandler;

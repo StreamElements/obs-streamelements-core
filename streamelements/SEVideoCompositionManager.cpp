@@ -3,7 +3,7 @@
 #include <QDialog>
 #include <QVBoxLayout>
 #include "SEVideoCompositionViewWidget.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include "SEGlobalStateManager.hpp"
 
 #include "SEBrowserDialog.hpp"

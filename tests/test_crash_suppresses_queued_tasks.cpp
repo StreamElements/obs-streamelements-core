@@ -19,7 +19,7 @@
 // releasing the promise would wedge that thread instead of the crashing one.
 // That is the property most worth pinning down, and it is what this tests.
 //
-// Mirrors the executor lambda from __QtPostTask_Impl in StreamElementsUtils.cpp
+// Mirrors the executor lambda from __QtPostTask_Impl in SEUtils.cpp
 // -- the real one needs qApp and a Qt event loop, neither of which belongs in a
 // unit test. The control flow under test is reproduced exactly.
 

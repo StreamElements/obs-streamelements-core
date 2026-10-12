@@ -1,8 +1,8 @@
 #pragma once
 
 #include <obs-frontend-api.h>
-#include "StreamElementsVideoComposition.hpp"
-#include "StreamElementsAudioComposition.hpp"
+#include "SEVideoComposition.hpp"
+#include "SEAudioComposition.hpp"
 
 #include <shared_mutex>
 

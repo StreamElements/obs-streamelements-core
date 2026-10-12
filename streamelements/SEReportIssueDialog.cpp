@@ -1,6 +1,6 @@
 #include "SEReportIssueDialog.hpp"
 #include "SEProgressDialog.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include "SEGlobalStateManager.hpp"
 #include "SENetworkDialog.hpp"
 #include "SESecretRedactor.hpp"
@@ -594,7 +594,7 @@ void SEReportIssueDialog::accept()
 
                 d->SetString(
 					"streamelementsPluginVersion",
-					GetStreamElementsPluginVersionString());
+					GetSEPluginVersionString());
 				d->SetDouble("cpuCoreBenchmarkScore",
 					     (double)cpu_benchmark);
 				d->SetDouble("cpuCoreBenchmarkOpsCount",

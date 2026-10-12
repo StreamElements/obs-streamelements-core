@@ -1,6 +1,6 @@
 #include <obs.hpp>
 #include "SEObsSceneManager.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include "SEConfig.hpp"
 
 #include <util/platform.h>

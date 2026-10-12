@@ -28,7 +28,7 @@
 #include "cef-headers.hpp"
 #include "SECrashContext.hpp"
 #include "SEGlobalStateManager.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include <util/base.h>
 #include <util/platform.h>
 #include <obs-frontend-api.h>
@@ -445,7 +445,7 @@ SEBugSplatCrashHandler::SEBugSplatCrashHandler()
 	}
 
 	std::wstring plugin_version =
-		utf8_to_wstring(GetStreamElementsPluginVersionString());
+		utf8_to_wstring(GetSEPluginVersionString());
 	std::wstring obs_version = utf8_to_wstring(obs_get_version_string());
 
 	std::wstring app_id = std::wstring(L"OBS ") + obs_version;

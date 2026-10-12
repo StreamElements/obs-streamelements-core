@@ -59,19 +59,19 @@ static void check(bool cond, const char *msg)
 // than comparing. The fix is:  return m_index == index;
 static void check_c2_video_encoder_template_match()
 {
-	auto src = slurp("streamelements/StreamElementsOutput.hpp");
+	auto src = slurp("streamelements/SEOutput.hpp");
 
 	// The buggy assignment form must be gone. Match `m_index` followed
 	// by `=` with no neighbouring `=` (i.e. real assignment, not `==`).
 	std::regex bad(R"(return\s+m_index\s*=\s*[^=])");
 	check(count_matches(src, bad) == 0,
-	      "C2: StreamElementsOutput.hpp must not assign to m_index in IsMatchingIndex "
+	      "C2: SEOutput.hpp must not assign to m_index in IsMatchingIndex "
 	      "(should be `return m_index == index;`)");
 
 	// And the correct comparison form must be present.
 	std::regex good(R"(return\s+m_index\s*==\s*index\s*;)");
 	check(count_matches(src, good) >= 1,
-	      "C2: StreamElementsOutput.hpp must contain `return m_index == index;`");
+	      "C2: SEOutput.hpp must contain `return m_index == index;`");
 }
 
 // --- C4: self-assignment of cefClientId in batchInvokeSeries leaves
@@ -115,7 +115,7 @@ static void check_c5_cefparsejson_null_guarded()
 // has MAX_AUDIO_MIXES slots, valid indices are [0, MAX_AUDIO_MIXES).
 static void check_c6_audio_encoder_bounds()
 {
-	auto src = slurp("streamelements/StreamElementsAudioComposition.cpp");
+	auto src = slurp("streamelements/SEAudioComposition.cpp");
 
 	std::regex bad(R"(if\s*\(\s*index\s*>\s*MAX_AUDIO_MIXES\s*\))");
 	check(count_matches(src, bad) == 0,
@@ -312,7 +312,7 @@ static void check_widget_maps_hold_qpointer()
 // counting the pumps we run ourselves. A bare QApplication::sendPostedEvents()
 // anywhere in the plugin is invisible to that counter, so the gate could open
 // while OBSInit() is still on the stack -- which is the exact condition that
-// corrupts the widget tree. The wrapper in StreamElementsUtils.cpp is the only
+// corrupts the widget tree. The wrapper in SEUtils.cpp is the only
 // legitimate caller.
 static void check_event_pumps_are_counted()
 {
@@ -339,15 +339,15 @@ static void check_event_pumps_are_counted()
 
 	// And the wrapper itself must still contain exactly one real pump.
 	auto utils = strip_line_comments(
-		slurp("streamelements/StreamElementsUtils.cpp"));
+		slurp("streamelements/SEUtils.cpp"));
 
 	std::regex pump(R"(QApplication::sendPostedEvents\(\);)");
 
 	check(count_matches(utils, pump) == 1,
-	      "CORE-786: StreamElementsUtils.cpp must contain exactly one QApplication::sendPostedEvents(), inside SEDrainEventQueue()");
+	      "CORE-786: SEUtils.cpp must contain exactly one QApplication::sendPostedEvents(), inside SEDrainEventQueue()");
 
 	check(utils.find("void SEDrainEventQueue()") != std::string::npos,
-	      "CORE-786: SEDrainEventQueue() must exist in StreamElementsUtils.cpp");
+	      "CORE-786: SEDrainEventQueue() must exist in SEUtils.cpp");
 
 	// The pump must stop once the close has been caught: every further
 	// dispatch feeds events into a world that is being torn down.
@@ -381,7 +381,7 @@ static void check_dock_deletion_is_gated()
 	}
 
 	auto utils = strip_line_comments(
-		slurp("streamelements/StreamElementsUtils.cpp"));
+		slurp("streamelements/SEUtils.cpp"));
 
 	check(utils.find("SEIsUiTeardownSafe()") != std::string::npos,
 	      "CORE-786: SEDeleteDockWidgetWhenSafe() must gate on SEIsUiTeardownSafe()");
@@ -620,7 +620,7 @@ static void check_sentry_init_is_diagnosable()
 static void check_queued_tasks_suppressed_during_crash()
 {
 	auto code = strip_line_comments(
-		slurp("streamelements/StreamElementsUtils.cpp"));
+		slurp("streamelements/SEUtils.cpp"));
 
 	// Both queued paths -- QtPostTask's executor and QtDelayTask's timer
 	// lambda -- must skip the task AND release the waiter. Dropping a task
@@ -827,7 +827,7 @@ static void check_consent_prompt_is_bounded()
 static void check_encoder_released_once_per_object()
 {
 	auto code = strip_line_comments(
-		slurp("streamelements/StreamElementsUtils.hpp"));
+		slurp("streamelements/SEUtils.hpp"));
 
 	auto remove = code.find("void RemoveConsumer()");
 	check(remove != std::string::npos,
@@ -925,7 +925,7 @@ static void check_sentry_wer_is_not_beside_the_host_executable()
 // the crash to the daemon, which writes and uploads it.
 static void check_wer_module_gates_before_forwarding()
 {
-	auto code = slurp("streamelements/StreamElementsWerModule.cpp");
+	auto code = slurp("streamelements/SEWerModule.cpp");
 
 	// Anchored on the CALL SITES, never on the definitions. A check that
 	// matched "static BOOL SEWerStackTouchesModuleOfInterest(" would still
@@ -971,7 +971,7 @@ static void check_prompt_discloses_automatic_reports()
 	// And the disclosure has to stay true. It promises those reports carry
 	// no configuration archive and no screenshot, which holds only because
 	// the WER module never collects a payload.
-	auto module = slurp("streamelements/StreamElementsWerModule.cpp");
+	auto module = slurp("streamelements/SEWerModule.cpp");
 
 	check(module.find("Collect(") == std::string::npos,
 	      "CORE-864: the WER module must not collect a payload -- the prompt tells the user these reports carry none");
@@ -987,7 +987,7 @@ static void check_prompt_discloses_automatic_reports()
 static void check_wer_registration_prefix_is_asserted()
 {
 	auto header =
-		slurp("streamelements/StreamElementsWerRegistration.h");
+		slurp("streamelements/SEWerRegistration.h");
 
 	check(header.find("static_assert(offsetof(SEWerRegistration, seMagic) == 16") !=
 		      std::string::npos,
@@ -1158,7 +1158,7 @@ static void check_full_release_adopts_before_cancelling()
 // the module's skip must be derived from it rather than hard-coded either way.
 static void check_wer_skip_is_conditional_on_the_handler_flag()
 {
-	auto header = slurp("streamelements/StreamElementsWerRegistration.h");
+	auto header = slurp("streamelements/SEWerRegistration.h");
 
 	check(header.find("DWORD seHandlerActive;") != std::string::npos,
 	      "CORE-968: the registration block must carry seHandlerActive");
@@ -1173,7 +1173,7 @@ static void check_wer_skip_is_conditional_on_the_handler_flag()
 		      std::string::npos,
 	      "CORE-968: it must also clear the flag, or every later crash looks like one inside the handler");
 
-	auto module = slurp("streamelements/StreamElementsWerModule.cpp");
+	auto module = slurp("streamelements/SEWerModule.cpp");
 
 	// The skip must be derived from the flag. Anchored on the assignment so
 	// that hard-coding it TRUE or FALSE -- the two ways to get this wrong --
@@ -1579,7 +1579,7 @@ static void check_scene_signal_handler_lifetime()
 static void check_widget_teardown_leaves_the_paint_tree()
 {
 	const std::string utils = strip_line_comments(
-		slurp("streamelements/StreamElementsUtils.cpp"));
+		slurp("streamelements/SEUtils.cpp"));
 
 	const std::string deleteDock =
 		function_body(utils, "void SEDeleteDockWidgetWhenSafe(");
@@ -1957,7 +1957,7 @@ static void check_crash_path_filesystem_calls_never_throw()
 		"streamelements/SESentryCrashHandler.mm",
 		"streamelements/SEBugSplatCrashHandler.cpp",
 		"streamelements/SEBugSplatCrashHandler.mm",
-		"streamelements/StreamElementsWerModule.cpp",
+		"streamelements/SEWerModule.cpp",
 		"streamelements/SECrashConsentDialog.cpp",
 		"streamelements/SECrashConsentDialog.mm",
 	};

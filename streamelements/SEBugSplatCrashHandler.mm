@@ -262,7 +262,7 @@ extern "C" {
 - (NSString *)applicationKeyForBugSplat:(BugSplat *)bugSplat signal:(NSString *)signal exceptionName:(NSString *)exceptionName exceptionReason:(NSString *)exceptionReason API_AVAILABLE(macosx(10.13)) {
     NSLog(@"applicationKeyForBugSplat called");
 
-    auto appKey = GetStreamElementsPluginVersionString();
+    auto appKey = GetSEPluginVersionString();
 	
     id appKeyNSString = [NSString stringWithCString:appKey.c_str()
 					   encoding:[NSString defaultCStringEncoding]];

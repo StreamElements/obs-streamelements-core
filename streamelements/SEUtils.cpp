@@ -1,7 +1,7 @@
 #include <string.h>
 
 #include "SELocalFilesystemHttpServer.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include "SEConfig.hpp"
 #include "SEGlobalStateManager.hpp"
 #include "SERemoteIconLoader.hpp"
@@ -1712,7 +1712,7 @@ std::string GetCefUniversalApiHash()
 	return std::string(buf);
 }
 
-std::string GetStreamElementsPluginVersionString()
+std::string GetSEPluginVersionString()
 {
 	char version_buf[64];
 	sprintf(version_buf, "%d.%d.%d.%d",
@@ -1726,7 +1726,7 @@ std::string GetStreamElementsPluginVersionString()
 	return version_buf;
 }
 
-std::string GetStreamElementsApiVersionString()
+std::string GetSEApiVersionString()
 {
 	char version_buf[64];
 
@@ -2408,7 +2408,7 @@ std::string CreateCryptoSecureRandomNumberString()
 #pragma comment(lib, "wbemuuid.lib")
 #pragma comment(lib, "OleAut32.lib")
 #pragma comment(lib, "Advapi32.lib")
-// MacOS version implemented in StreamElementsUtils.mm
+// MacOS version implemented in SEUtils.mm
 std::string GetComputerSystemUniqueId()
 {
 	const char *REG_VALUE_NAME = "MachineUniqueIdentifier";

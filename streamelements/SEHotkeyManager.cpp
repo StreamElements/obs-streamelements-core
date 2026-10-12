@@ -1,5 +1,5 @@
 #include "SEHotkeyManager.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 
 #include <util/dstr.h>
 #include <obs-module.h>

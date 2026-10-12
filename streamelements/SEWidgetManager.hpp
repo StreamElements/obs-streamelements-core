@@ -11,7 +11,7 @@
 #include "../cef-headers.hpp"
 
 #include "SEObsAppMonitor.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 
 class SEWidgetManager :
 	public SEObsAppMonitor

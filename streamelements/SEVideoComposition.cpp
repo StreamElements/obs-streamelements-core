@@ -1,10 +1,10 @@
-#include "StreamElementsVideoComposition.hpp"
+#include "SEVideoComposition.hpp"
 #include <obs-frontend-api.h>
 #include <util/config-file.h>
 
 #include "deps/json11/json11.hpp"
 
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include "SEObsSceneManager.hpp"
 #include "SEMessageBus.hpp"
 #include "SEGlobalStateManager.hpp"

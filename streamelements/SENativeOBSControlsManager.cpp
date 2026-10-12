@@ -1,6 +1,6 @@
 #include "SENativeOBSControlsManager.hpp"
 #include "SEGlobalStateManager.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include <QDockWidget>
 #include <QVBoxLayout>
 #include <QPushButton>

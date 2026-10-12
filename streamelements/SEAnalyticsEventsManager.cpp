@@ -1,6 +1,6 @@
 #include "SEAnalyticsEventsManager.hpp"
 #include "SEGlobalStateManager.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 
 #include <obs.h>
 #include <util/platform.h>
@@ -77,7 +77,7 @@ void SEAnalyticsEventsManager::AddRawEvent(
 
 	json11::Json::array fields = json11::Json::array{
 		json11::Json::array{"plugin_version",
-				    GetStreamElementsPluginVersionString()},
+				    GetSEPluginVersionString()},
 		json11::Json::array{"obs_version", obs_get_version_string()},
 		json11::Json::array{"seconds_since_start",
 				    itoa(secondsSinceStart, atoi_buf, 10)},

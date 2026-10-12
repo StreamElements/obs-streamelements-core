@@ -2,7 +2,7 @@
 // The registration block a WER runtime exception module reads back out of the
 // crashed process. Shared verbatim between the plugin, which fills it in and
 // hands its address to WerRegisterRuntimeExceptionModule(), and
-// StreamElementsWerModule.cpp, which runs inside WerFault.exe and reads it
+// SEWerModule.cpp, which runs inside WerFault.exe and reads it
 // back with ReadProcessMemory(). No dependencies either side: the module
 // links neither libobs, nor Qt, nor sentry.
 //

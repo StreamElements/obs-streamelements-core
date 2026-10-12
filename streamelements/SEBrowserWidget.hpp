@@ -1,6 +1,6 @@
 #pragma once
 
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include "SEBrowserWidget.hpp"
 #include "SEMessageBus.hpp"
 #include "SEWebsocketApiServer.hpp"
@@ -20,7 +20,7 @@
 
 #include "SEApiMessageHandler.hpp"
 
-#include "StreamElementsVideoComposition.hpp"
+#include "SEVideoComposition.hpp"
 #include "SEVideoCompositionViewWidget.hpp"
 
 #include <QtWidgets>

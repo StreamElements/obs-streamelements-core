@@ -1,5 +1,5 @@
 #include "SEProfilesManager.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include <string.h>
 #include <obs.h>
 #include <obs-frontend-api.h>

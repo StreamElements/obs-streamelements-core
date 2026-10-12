@@ -1,7 +1,7 @@
 #include "SEPleaseWaitWindow.hpp"
 #include "ui_SEPleaseWaitWindow.h"
 
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 
 #include <QMainWindow>
 

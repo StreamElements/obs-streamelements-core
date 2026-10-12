@@ -44,7 +44,7 @@
 //     sentry's module claims, and never on our own account.
 //
 
-#include "StreamElementsWerRegistration.h"
+#include "SEWerRegistration.h"
 
 #include <werapi.h>
 #include <dbghelp.h>

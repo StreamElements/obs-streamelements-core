@@ -8,7 +8,7 @@
 #include <shared_mutex>
 #include <set>
 
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include "SEMessageBus.hpp"
 
 class SEConfig
@@ -161,7 +161,7 @@ public:
 				  CefRefPtr<CefValue> &output);
 
 public:
-	int64_t GetStreamElementsPluginVersion()
+	int64_t GetSEPluginVersion()
 	{
 		return (int64_t)ReadUint("Header", "Version");
 	}

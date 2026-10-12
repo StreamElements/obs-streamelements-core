@@ -1,5 +1,5 @@
 // Behavioural demonstration of the IsMatchingIndex bug in
-// streamelements/StreamElementsOutput.hpp.
+// streamelements/SEOutput.hpp.
 //
 // The production VideoEncoderTemplate class is nested inside
 // SEOutputBase and pulls in libobs/Qt transitively. To

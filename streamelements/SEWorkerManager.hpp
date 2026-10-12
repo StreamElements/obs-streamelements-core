@@ -1,6 +1,6 @@
 #pragma once
 
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include "SEObsAppMonitor.hpp"
 #include "SEBrowserWidget.hpp"
 

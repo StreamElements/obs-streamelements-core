@@ -3,8 +3,8 @@
 #include "SEConfig.hpp"
 #include "SECrashConsentDialog.hpp"
 #include "SECrashContext.hpp"
-#include "StreamElementsWerRegistration.h"
-#include "StreamElementsUtils.hpp"
+#include "SEWerRegistration.h"
+#include "SEUtils.hpp"
 
 #include <util/base.h>
 #include <obs.h>
@@ -915,7 +915,7 @@ static void DisarmPromptWatchdog()
 // every fast-fail in the process, OBS's own and every other plug-in's, with no
 // gate at all. That is exactly what CORE-860 exists to stop. So se-crash-wer.dll
 // is registered instead: it applies the gate and the consent check, then
-// forwards to sentry's module. See StreamElementsWerModule.cpp.
+// forwards to sentry's module. See SEWerModule.cpp.
 //
 // What the plug-in side owes that arrangement is a registration struct that
 // outlives everything, because WER hands its address to the module and the
@@ -1394,7 +1394,7 @@ SESentryCrashHandler::SESentryCrashHandler()
 	// Matches the tag CI creates for the same build, so a Sentry release lines
 	// up with the GitHub release and the CDN manifest version.
 	const std::string release = "obs-streamelements-core@" +
-				    GetStreamElementsPluginVersionString();
+				    GetSEPluginVersionString();
 	sentry_options_set_release(options, release.c_str());
 
 	std::wstring moduleDirectory;

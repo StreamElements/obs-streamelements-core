@@ -1,5 +1,5 @@
 #include "SEBackupManager.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include "SENetworkDialog.hpp"
 #include "SEGlobalStateManager.hpp"
 

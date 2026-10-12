@@ -2,7 +2,7 @@
 
 #include "cef-headers.hpp"
 #include "SEVideoCompositionManager.hpp"
-#include "StreamElementsVideoComposition.hpp"
+#include "SEVideoComposition.hpp"
 
 class SESharedVideoCompositionManager: public SEVideoCompositionEventListener {
 private:

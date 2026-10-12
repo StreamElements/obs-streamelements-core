@@ -381,8 +381,8 @@ if (ENABLE_SENTRY)
 	# that is what keeps ours the only module registered.
 	if (WIN32)
 		add_library(se-crash-wer SHARED
-			streamelements/StreamElementsWerModule.cpp
-			streamelements/StreamElementsWerModule.def
+			streamelements/SEWerModule.cpp
+			streamelements/SEWerModule.def
 		)
 
 		# No "lib" prefix and no debug postfix: WerFault loads it by the
@@ -545,7 +545,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEOutputSettingsManager.cpp
 	streamelements/SEWorkerManager.cpp
 	streamelements/SEBrowserDialog.cpp
-	streamelements/StreamElementsUtils.cpp
+	streamelements/SEUtils.cpp
 	streamelements/SEHotkeyManager.cpp
 	streamelements/SEReportIssueDialog.cpp
 	streamelements/SESecretRedactor.cpp
@@ -571,13 +571,13 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEHttpServerManager.cpp
 	streamelements/SEWebsocketApiServer.cpp
 	streamelements/SELocalFilesystemHttpServer.cpp
-	streamelements/StreamElementsVideoComposition.cpp
+	streamelements/SEVideoComposition.cpp
 	streamelements/SEVideoCompositionManager.cpp
 	streamelements/SEVideoCompositionViewWidget.cpp
-	streamelements/StreamElementsAudioComposition.cpp
+	streamelements/SEAudioComposition.cpp
 	streamelements/SEAudioCompositionManager.cpp
 	streamelements/SESharedVideoCompositionManager.cpp
-	streamelements/StreamElementsOutput.cpp
+	streamelements/SEOutput.cpp
 	streamelements/SEOutputManager.cpp
 	streamelements/SEObsActiveSceneTracker.cpp
 	streamelements/SETrace.cpp
@@ -594,7 +594,7 @@ set(obs-streamelements-core_SOURCES
 
 if (APPLE)
 list(APPEND obs-streamelements-core_SOURCES
-        streamelements/StreamElementsUtils.mm
+        streamelements/SEUtils.mm
     )
 
 	# The mig-generated Mach exception server belongs to the BugSplat handler,
@@ -688,7 +688,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/Version.hpp
 	streamelements/Version.generated.hpp
 	streamelements/audio-wrapper-source.h
-	streamelements/StreamElementsUtils.hpp
+	streamelements/SEUtils.hpp
 	streamelements/SEAsyncTaskQueue.hpp
 	streamelements/SEBrowserWidget.hpp
 	streamelements/SEBrowserWidgetManager.hpp
@@ -716,7 +716,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SECrashConsentDialog.hpp
 	streamelements/SEBugSplatCrashHandler.hpp
 	streamelements/SESentryCrashHandler.hpp
-	streamelements/StreamElementsWerRegistration.h
+	streamelements/SEWerRegistration.h
 	streamelements/SEMessageBus.hpp
 	streamelements/SEControllerServer.hpp
 	streamelements/SEObsSceneManager.hpp
@@ -737,13 +737,13 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEHttpServerManager.hpp
 	streamelements/SEWebsocketApiServer.hpp
 	streamelements/SELocalFilesystemHttpServer.hpp
-	streamelements/StreamElementsVideoComposition.hpp
+	streamelements/SEVideoComposition.hpp
 	streamelements/SEVideoCompositionManager.hpp
 	streamelements/SEVideoCompositionViewWidget.hpp
-	streamelements/StreamElementsAudioComposition.hpp
+	streamelements/SEAudioComposition.hpp
 	streamelements/SEAudioCompositionManager.hpp
 	streamelements/SESharedVideoCompositionManager.hpp
-	streamelements/StreamElementsOutput.hpp
+	streamelements/SEOutput.hpp
 	streamelements/SEOutputManager.hpp
 	streamelements/SEObsActiveSceneTracker.hpp
 	streamelements/canvas-config.hpp
@@ -788,7 +788,7 @@ endif()
 # invariant in tests/ asserts it stays absent.
 if (STREAMELEMENTS_ENABLE_WYVRN)
 	list(APPEND obs-streamelements-core_SOURCES
-		streamelements/StreamElementsRazerWyvrnConfig.cpp
+		streamelements/SERazerWyvrnConfig.cpp
 		streamelements/SERazerWyvrnManager.cpp
 		deps/wyvrn-sdk/WyvrnAPI.cpp
 		deps/wyvrn-sdk/UnicodeWyvrnAPI.cpp
@@ -796,7 +796,7 @@ if (STREAMELEMENTS_ENABLE_WYVRN)
 		deps/wyvrn-sdk/WyvrnLogger.cpp)
 
 	list(APPEND obs-streamelements-core_HEADERS
-		streamelements/StreamElementsRazerWyvrnConfig.hpp
+		streamelements/SERazerWyvrnConfig.hpp
 		streamelements/SERazerWyvrnManager.hpp
 		deps/wyvrn-sdk/WyvrnAPI.h
 		deps/wyvrn-sdk/UnicodeWyvrnAPI.h

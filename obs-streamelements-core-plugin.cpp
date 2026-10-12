@@ -39,7 +39,7 @@ using namespace json11;
 
 #include <obs-frontend-api.h>
 #include "streamelements/SEGlobalStateManager.hpp"
-#include "streamelements/StreamElementsUtils.hpp"
+#include "streamelements/SEUtils.hpp"
 
 /* ========================================================================= */
 
@@ -104,7 +104,7 @@ static void log_remaining_objects()
 MODULE_EXPORT bool obs_module_load(void)
 {
 #if ENABLE_PLUGIN
-	std::string version = GetStreamElementsPluginVersionString();
+	std::string version = GetSEPluginVersionString();
 
 	blog(LOG_INFO, "[obs-streamelements-core]: Version %s",
 	     version.c_str());
@@ -173,7 +173,7 @@ static void NoteObsCloseRequested(const char *source)
 	     source);
 }
 
-// Declared in StreamElementsUtils.hpp; called from every UI teardown site.
+// Declared in SEUtils.hpp; called from every UI teardown site.
 bool SEIsUiTeardownSafe()
 {
 	return !s_closedBeforeInitCompleted.load();

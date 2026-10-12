@@ -1,5 +1,5 @@
 #include "SEHttpServerManager.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 
 SEHttpServerManager::SEHttpServerManager(
 	HttpServer::request_handler_t handler)

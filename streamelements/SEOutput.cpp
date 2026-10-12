@@ -1,8 +1,8 @@
 #include <obs.hpp>
 #include <obs-frontend-api.h>
 
-#include "StreamElementsUtils.hpp"
-#include "StreamElementsOutput.hpp"
+#include "SEUtils.hpp"
+#include "SEOutput.hpp"
 #include "SEGlobalStateManager.hpp"
 
 #include <ctime>

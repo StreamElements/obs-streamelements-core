@@ -5,7 +5,7 @@
 #include <obs-frontend-api.h>
 #include "cef-headers.hpp"
 
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include "SEScenesListWidgetManager.hpp"
 
 #include <shared_mutex>

@@ -1,5 +1,5 @@
 #include "SENetworkDialog.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include "ui_SENetworkDialog.h"
 
 #ifdef WIN32

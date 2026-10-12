@@ -2,7 +2,7 @@
 
 #include "SESceneItemsMonitor.hpp"
 #include "SEScenesListWidgetManager.hpp"
-#include "StreamElementsVideoComposition.hpp"
+#include "SEVideoComposition.hpp"
 #include "SEAsyncTaskQueue.hpp"
 
 #include "cef-headers.hpp"

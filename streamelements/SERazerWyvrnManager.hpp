@@ -33,7 +33,7 @@
 #include <thread>
 #include <vector>
 
-#include "StreamElementsRazerWyvrnConfig.hpp"
+#include "SERazerWyvrnConfig.hpp"
 
 #include "deps/cef-stub/cef_value.hpp"
 

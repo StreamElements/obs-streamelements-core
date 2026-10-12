@@ -12,7 +12,7 @@
 #include "Version.hpp"
 #include "SEConfig.hpp"
 #include "SEGlobalStateManager.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include "SEMessageBus.hpp"
 #include "SEPleaseWaitWindow.hpp"
 #include "SEWebsocketApiServer.hpp"
@@ -1682,9 +1682,9 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		d->SetString("cefPlatformApiHash", GetCefPlatformApiHash());
 		d->SetString("cefUniversalApiHash", GetCefUniversalApiHash());
 		d->SetString("hostPluginVersionString",
-			     GetStreamElementsPluginVersionString());
+			     GetSEPluginVersionString());
 		d->SetString("hostApiVersionString",
-			     GetStreamElementsApiVersionString());
+			     GetSEApiVersionString());
 		d->SetString("hostMachineUniqueId",
 			     SEGlobalStateManager::GetInstance()
 				     ->GetAnalyticsEventsManager()

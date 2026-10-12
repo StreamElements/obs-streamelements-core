@@ -372,8 +372,8 @@ std::string GetAppStyleSheetSelectorContent(std::string selector);
 std::string GetCefVersionString();
 std::string GetCefPlatformApiHash();
 std::string GetCefUniversalApiHash();
-std::string GetStreamElementsPluginVersionString();
-std::string GetStreamElementsApiVersionString();
+std::string GetSEPluginVersionString();
+std::string GetSEApiVersionString();
 
 /* ========================================================= */
 

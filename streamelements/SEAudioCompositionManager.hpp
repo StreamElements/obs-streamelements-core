@@ -1,12 +1,12 @@
 #pragma once
 
-#include "StreamElementsAudioComposition.hpp"
+#include "SEAudioComposition.hpp"
 
 #include <obs.h>
 #include <obs.hpp>
 #include <obs-frontend-api.h>
 #include "cef-headers.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 
 #include <string>
 #include <map>

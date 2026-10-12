@@ -1,4 +1,4 @@
-#include "StreamElementsRazerWyvrnConfig.hpp"
+#include "SERazerWyvrnConfig.hpp"
 
 #include <algorithm>
 #include <cctype>

@@ -1,6 +1,6 @@
 #include "confirmpendingupdatedialog.hpp"
 #include "ui_confirmpendingupdatedialog.h"
-#include "../StreamElementsUtils.hpp"
+#include "../SEUtils.hpp"
 #include <obs-frontend-api.h>
 
 #include <QEvent>

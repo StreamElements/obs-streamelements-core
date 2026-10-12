@@ -1,6 +1,6 @@
 #include "SECrashConsentDialog.hpp"
 
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 
 #include <vector>
 

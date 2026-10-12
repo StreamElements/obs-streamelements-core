@@ -1,6 +1,6 @@
 #include "SEGlobalStateManager.hpp"
 #include "SEApiMessageHandler.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include "Version.hpp"
 #include "SEBrowserDialog.hpp"
 #include "SEReportIssueDialog.hpp"
@@ -575,7 +575,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 #else
 			"SE.Live %s",
 #endif
-			GetStreamElementsPluginVersionString()
+			GetSEPluginVersionString()
 				.c_str());
 
 		container->layout()->addWidget(
@@ -605,7 +605,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		isOnBoarding = true;
 		onBoardingReason = "New cookie storage folder";
 	} else if (SEConfig::GetInstance()
-				->GetStreamElementsPluginVersion() !=
+				->GetSEPluginVersion() !=
 			STREAMELEMENTS_PLUGIN_VERSION) {
 		blog(LOG_INFO,
 			"obs-streamelements-core: init: set on-boarding mode due to configuration version mismatch");

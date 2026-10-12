@@ -1,5 +1,5 @@
 #include "SEBandwidthTestManager.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 
 SEBandwidthTestManager::SEBandwidthTestManager()
 {

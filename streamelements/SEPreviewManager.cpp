@@ -7,7 +7,7 @@
 #include <QEvent>
 
 #include "SEObsAppMonitor.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 
 class PreviewMouseEventFilter : public QObject {
 private:

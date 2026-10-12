@@ -3,7 +3,7 @@
 #include "cef-headers.hpp"
 #include "SEGlobalStateManager.hpp"
 #include "SESecretRedactor.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include "deps/zip/zip.h"
 
 #include <util/base.h>
@@ -1114,7 +1114,7 @@ SECrashContext::Result SECrashContext::Collect()
 		}
 
 		d->SetString("streamelementsPluginVersion",
-			     GetStreamElementsPluginVersionString());
+			     GetSEPluginVersionString());
 
 		d->SetString("machineUniqueId", GetComputerSystemUniqueId());
 

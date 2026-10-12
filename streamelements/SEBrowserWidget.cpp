@@ -1,6 +1,6 @@
 #include "SEBrowserWidget.hpp"
 #include "SEApiMessageHandler.hpp"
-#include "StreamElementsUtils.hpp"
+#include "SEUtils.hpp"
 #include "SEGlobalStateManager.hpp"
 #include "SEVideoCompositionViewWidget.hpp"
 
