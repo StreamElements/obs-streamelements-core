@@ -16,7 +16,10 @@ class SEBrowserDialog: public QDialog
 	friend SEDialogApiMessageHandler;
 
 public:
-	SEBrowserDialog(QWidget* parent, std::string url, std::string executeJavaScriptOnLoad, bool isIncognito, std::string containerType);
+	SEBrowserDialog(QWidget *parent, std::string url,
+			std::string executeJavaScriptOnLoad, bool isIncognito,
+			std::string containerType,
+			std::shared_ptr<SEApiServices> apiServices);
 	~SEBrowserDialog();
 
 	std::string result() { return m_result; }
@@ -38,6 +41,8 @@ public:
 private:
 	SEBrowserWidget* m_browser = nullptr;
 	std::string m_result;
+
+	std::shared_ptr<SEApiServices> m_apiServices;
 
 	std::string m_url;
 	std::string m_executeJavaScriptOnLoad;

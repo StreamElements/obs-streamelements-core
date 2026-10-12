@@ -177,14 +177,12 @@ bool SEApiMessageHandler::OnProcessMessageReceived(
 							context->result,
 							JSON_WRITER_DEFAULT));
 
-					if (!SEGlobalStateManager::
-						    IsInstanceAvailable())
-						return;
-
 					auto apiServer =
-						SEGlobalStateManager::
-							GetInstance()
-								->GetWebsocketApiServer();
+						context->self->m_services
+							? context->self
+								  ->m_services
+								  ->GetWebsocketApiServer()
+							: nullptr;
 
 					if (!apiServer)
 						return;
@@ -309,7 +307,7 @@ void SEApiMessageHandler::InvokeApiCallHandlerAsync(
 	const long cefClientId,
 	const bool enable_logging)
 {
-	if (!SEGlobalStateManager::GetInstance()->IsInitialized())
+	if (!m_services || !m_services->GetHost()->IsInitialized())
 		return;
 
 	auto runtimeStatus = m_runtimeStatus;
@@ -432,11 +430,14 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlersInternal(
 	msg->GetArgumentList()->SetString(0, "host");
 	msg->GetArgumentList()->SetString(1, jsonString);
 
-	if (!SEGlobalStateManager::IsInstanceAvailable())
-		return;
-
-	auto apiServer = SEGlobalStateManager::GetInstance()
-				 ->GetWebsocketApiServer();
+	//
+	// No availability check: this holds its own reference to the server,
+	// so it does not care whether the global state manager is still
+	// there. A handler built without services dispatches nothing, which
+	// is the same thing it registers.
+	//
+	auto apiServer = m_services ? m_services->GetWebsocketApiServer()
+				    : nullptr;
 
 	if (!apiServer)
 		return;
@@ -476,11 +477,14 @@ void SEApiMessageHandler::RegisterApiPropsInternal(
 	msg->GetArgumentList()->SetString(0, "host");
 	msg->GetArgumentList()->SetString(1, jsonString);
 
-	if (!SEGlobalStateManager::IsInstanceAvailable())
-		return;
-
-	auto apiServer = SEGlobalStateManager::GetInstance()
-				 ->GetWebsocketApiServer();
+	//
+	// No availability check: this holds its own reference to the server,
+	// so it does not care whether the global state manager is still
+	// there. A handler built without services dispatches nothing, which
+	// is the same thing it registers.
+	//
+	auto apiServer = m_services ? m_services->GetWebsocketApiServer()
+				    : nullptr;
 
 	if (!apiServer)
 		return;
@@ -499,11 +503,14 @@ void SEApiMessageHandler::DispatchEventInternal(
 	std::string event,
 	std::string eventArgsJson)
 {
-	if (!SEGlobalStateManager::IsInstanceAvailable())
-		return;
-
-	auto apiServer = SEGlobalStateManager::GetInstance()
-				 ->GetWebsocketApiServer();
+	//
+	// No availability check: this holds its own reference to the server,
+	// so it does not care whether the global state manager is still
+	// there. A handler built without services dispatches nothing, which
+	// is the same thing it registers.
+	//
+	auto apiServer = m_services ? m_services->GetWebsocketApiServer()
+				    : nullptr;
 
 	if (!apiServer)
 		return;
@@ -589,6 +596,22 @@ static CefRefPtr<CefValue> SerializeRazerWyvrnStatus()
 
 void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 {
+	//
+	// Without the bundle there is nothing for the methods below to call,
+	// so register none of them. A page then sees a host object without
+	// those functions -- which is what it already copes with when it talks
+	// to an older plugin -- rather than a function that crashes when
+	// called. Every handler built by the plugin itself is given the
+	// bundle; this is for anything that forgets to.
+	//
+	if (!m_services) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core[%s]: API: no services, host API not registered",
+		     m_containerType.c_str());
+
+		return;
+	}
+
 	RegisterIncomingApiCallHandler(
 		"batchInvokeSeries",
 		[](std::shared_ptr<SEApiMessageHandler> self,
@@ -735,7 +758,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("deleteAllCookies");
 	{
-		SEGlobalStateManager::GetInstance()->DeleteCookies();
+		self->m_services->GetHost()->DeleteCookies();
 
 		result->SetBool(true);
 	}
@@ -760,12 +783,10 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			CefRefPtr<CefValue> barInfo = args->GetValue(0);
 
-			SEGlobalStateManager::GetInstance()
-				->GetWidgetManager()
+			self->m_services->GetWidgetManager()
 				->DeserializeNotificationBar(barInfo);
 
-			SEGlobalStateManager::GetInstance()
-				->PersistState();
+			self->m_services->GetHost()->PersistState();
 
 			result->SetBool(true);
 		}
@@ -774,11 +795,9 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("hideNotificationBar");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetWidgetManager()
-			->HideNotificationBar();
+		self->m_services->GetWidgetManager()->HideNotificationBar();
 
-		SEGlobalStateManager::GetInstance()->PersistState();
+		self->m_services->GetHost()->PersistState();
 
 		result->SetBool(true);
 	}
@@ -793,8 +812,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 			if (rootDictionary.get() &&
 			    rootDictionary->HasKey("url")) {
 				// Remove all central widgets
-				while (SEGlobalStateManager::GetInstance()
-					       ->GetWidgetManager()
+				while (self->m_services->GetWidgetManager()
 					       ->DestroyCurrentCentralBrowserWidget()) {
 				}
 
@@ -809,8 +827,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 							.ToString();
 				}
 
-				SEGlobalStateManager::GetInstance()
-					->GetWidgetManager()
+				self->m_services->GetWidgetManager()
 					->PushCentralBrowserWidget(
 						rootDictionary->GetString("url")
 							.ToString()
@@ -818,11 +835,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 						executeJavaScriptCodeOnLoad
 							.c_str());
 
-				SEGlobalStateManager::GetInstance()
-					->GetMenuManager()
-					->Update();
-				SEGlobalStateManager::GetInstance()
-					->PersistState();
+				self->m_services->GetMenuManager()->Update();
+				self->m_services->GetHost()->PersistState();
 
 				result->SetBool(true);
 			}
@@ -832,15 +846,12 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("hideCentralWidget");
 	{
-		while (SEGlobalStateManager::GetInstance()
-			       ->GetWidgetManager()
+		while (self->m_services->GetWidgetManager()
 			       ->DestroyCurrentCentralBrowserWidget()) {
 		}
 
-		SEGlobalStateManager::GetInstance()
-			->GetMenuManager()
-			->Update();
-		SEGlobalStateManager::GetInstance()->PersistState();
+		self->m_services->GetMenuManager()->Update();
+		self->m_services->GetHost()->PersistState();
 
 		result->SetBool(true);
 	}
@@ -852,21 +863,15 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 			CefRefPtr<CefValue> widgetInfo = args->GetValue(0);
 
 			std::string id =
-				SEGlobalStateManager::GetInstance()
-					->GetWidgetManager()
+				self->m_services->GetWidgetManager()
 					->AddDockBrowserWidget(widgetInfo);
 
-			QDockWidget *dock =
-				SEGlobalStateManager::GetInstance()
-					->GetWidgetManager()
-					->GetDockWidget(id.c_str());
+			QDockWidget *dock = self->m_services->GetWidgetManager()
+						    ->GetDockWidget(id.c_str());
 
 			if (dock) {
-				SEGlobalStateManager::GetInstance()
-					->GetMenuManager()
-					->Update();
-				SEGlobalStateManager::GetInstance()
-					->PersistState();
+				self->m_services->GetMenuManager()->Update();
+				self->m_services->GetHost()->PersistState();
 
 				result->SetString(id);
 			}
@@ -883,19 +888,13 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				for (size_t i = 0; i < list->GetSize(); ++i) {
 					CefString id = list->GetString(i);
 
-					SEGlobalStateManager::
-						GetInstance()
-							->GetWidgetManager()
-							->RemoveDockWidget(
-								id.ToString()
-									.c_str());
+					self->m_services->GetWidgetManager()
+						->RemoveDockWidget(
+							id.ToString().c_str());
 				}
 
-				SEGlobalStateManager::GetInstance()
-					->GetMenuManager()
-					->Update();
-				SEGlobalStateManager::GetInstance()
-					->PersistState();
+				self->m_services->GetMenuManager()->Update();
+				self->m_services->GetHost()->PersistState();
 
 				result->SetBool(true);
 			}
@@ -905,29 +904,23 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAllDockingWidgets");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetWidgetManager()
-			->SerializeDockingWidgets(result);
+		self->m_services->GetWidgetManager()->SerializeDockingWidgets(
+			result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("toggleDockingWidgetFloatingById");
 	{
 		if (args->GetSize() && args->GetType(0) == VTYPE_STRING) {
-			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetWidgetManager()
-					->ToggleWidgetFloatingStateById(
-						args->GetString(0)
-							.ToString()
-							.c_str()));
+			result->SetBool(self->m_services->GetWidgetManager()
+						->ToggleWidgetFloatingStateById(
+							args->GetString(0)
+								.ToString()
+								.c_str()));
 
 			if (result->GetBool()) {
-				SEGlobalStateManager::GetInstance()
-					->GetMenuManager()
-					->Update();
-				SEGlobalStateManager::GetInstance()
-					->PersistState();
+				self->m_services->GetMenuManager()->Update();
+				self->m_services->GetHost()->PersistState();
 			}
 		}
 	}
@@ -953,21 +946,16 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				height = d->GetInt("height");
 			}
 
-			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetWidgetManager()
-					->SetWidgetDimensionsById(
-						args->GetString(0)
-							.ToString()
-							.c_str(),
-						width, height));
+			result->SetBool(self->m_services->GetWidgetManager()
+						->SetWidgetDimensionsById(
+							args->GetString(0)
+								.ToString()
+								.c_str(),
+							width, height));
 
 			if (result->GetBool()) {
-				SEGlobalStateManager::GetInstance()
-					->GetMenuManager()
-					->Update();
-				SEGlobalStateManager::GetInstance()
-					->PersistState();
+				self->m_services->GetMenuManager()->Update();
+				self->m_services->GetHost()->PersistState();
 			}
 		}
 	}
@@ -993,21 +981,16 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				top = d->GetInt("top");
 			}
 
-			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetWidgetManager()
-					->SetWidgetPositionById(
-						args->GetString(0)
-							.ToString()
-							.c_str(),
-						left, top));
+			result->SetBool(self->m_services->GetWidgetManager()
+						->SetWidgetPositionById(
+							args->GetString(0)
+								.ToString()
+								.c_str(),
+							left, top));
 
 			if (result->GetBool()) {
-				SEGlobalStateManager::GetInstance()
-					->GetMenuManager()
-					->Update();
-				SEGlobalStateManager::GetInstance()
-					->PersistState();
+				self->m_services->GetMenuManager()->Update();
+				self->m_services->GetHost()->PersistState();
 			}
 		}
 	}
@@ -1018,8 +1001,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
 		    args->GetType(1) == VTYPE_STRING) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetWidgetManager()
+				self->m_services->GetWidgetManager()
 					->SetWidgetUrlById(args->GetString(0)
 								   .ToString()
 								   .c_str(),
@@ -1028,11 +1010,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 								   .c_str()));
 
 			if (result->GetBool()) {
-				SEGlobalStateManager::GetInstance()
-					->GetMenuManager()
-					->Update();
-				SEGlobalStateManager::GetInstance()
-					->PersistState();
+				self->m_services->GetMenuManager()->Update();
+				self->m_services->GetHost()->PersistState();
 			}
 		}
 	}
@@ -1043,8 +1022,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
 		    args->GetType(1) == VTYPE_STRING) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetWidgetManager()
+				self->m_services->GetWidgetManager()
 					->SetWidgetTitleById(args->GetString(0)
 								     .ToString()
 								     .c_str(),
@@ -1053,11 +1031,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 								     .c_str()));
 
 			if (result->GetBool()) {
-				SEGlobalStateManager::GetInstance()
-					->GetMenuManager()
-					->Update();
-				SEGlobalStateManager::GetInstance()
-					->PersistState();
+				self->m_services->GetMenuManager()->Update();
+				self->m_services->GetHost()->PersistState();
 			}
 		}
 	}
@@ -1067,18 +1042,14 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize() >= 1 && args->GetType(0) == VTYPE_STRING) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetWidgetManager()
+				self->m_services->GetWidgetManager()
 					->ShowDockWidgetById(args->GetString(0)
 								     .ToString()
 								     .c_str()));
 
 			if (result->GetBool()) {
-				SEGlobalStateManager::GetInstance()
-					->GetMenuManager()
-					->Update();
-				SEGlobalStateManager::GetInstance()
-					->PersistState();
+				self->m_services->GetMenuManager()->Update();
+				self->m_services->GetHost()->PersistState();
 			}
 		}
 	}
@@ -1088,18 +1059,14 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize() >= 1 && args->GetType(0) == VTYPE_STRING) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetWidgetManager()
+				self->m_services->GetWidgetManager()
 					->HideDockWidgetById(args->GetString(0)
 								     .ToString()
 								     .c_str()));
 
 			if (result->GetBool()) {
-				SEGlobalStateManager::GetInstance()
-					->GetMenuManager()
-					->Update();
-				SEGlobalStateManager::GetInstance()
-					->PersistState();
+				self->m_services->GetMenuManager()->Update();
+				self->m_services->GetHost()->PersistState();
 			}
 		}
 	}
@@ -1108,23 +1075,18 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("groupDockingWidgetsPairByIds");
 	{
 		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING && args->GetType(1) == VTYPE_STRING) {
-			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetWidgetManager()
-					->GroupDockingWidgetPairByIds(
-						args->GetString(0)
-							.ToString()
-							.c_str(),
-						args->GetString(1)
-							.ToString()
-							.c_str()));
+			result->SetBool(self->m_services->GetWidgetManager()
+						->GroupDockingWidgetPairByIds(
+							args->GetString(0)
+								.ToString()
+								.c_str(),
+							args->GetString(1)
+								.ToString()
+								.c_str()));
 
 			if (result->GetBool()) {
-				SEGlobalStateManager::GetInstance()
-					->GetMenuManager()
-					->Update();
-				SEGlobalStateManager::GetInstance()
-					->PersistState();
+				self->m_services->GetMenuManager()->Update();
+				self->m_services->GetHost()->PersistState();
 			}
 		}
 	}
@@ -1135,8 +1097,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
 		    args->GetType(1) == VTYPE_STRING) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetWidgetManager()
+				self->m_services->GetWidgetManager()
 					->InsertDockingWidgetRelativeToId(
 						args->GetString(0)
 							.ToString()
@@ -1147,11 +1108,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 						true));
 
 			if (result->GetBool()) {
-				SEGlobalStateManager::GetInstance()
-					->GetMenuManager()
-					->Update();
-				SEGlobalStateManager::GetInstance()
-					->PersistState();
+				self->m_services->GetMenuManager()->Update();
+				self->m_services->GetHost()->PersistState();
 			}
 		}
 	}
@@ -1162,8 +1120,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
 		    args->GetType(1) == VTYPE_STRING) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetWidgetManager()
+				self->m_services->GetWidgetManager()
 					->InsertDockingWidgetRelativeToId(
 						args->GetString(0)
 							.ToString()
@@ -1174,11 +1131,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 						false));
 
 			if (result->GetBool()) {
-				SEGlobalStateManager::GetInstance()
-					->GetMenuManager()
-					->Update();
-				SEGlobalStateManager::GetInstance()
-					->PersistState();
+				self->m_services->GetMenuManager()->Update();
+				self->m_services->GetHost()->PersistState();
 			}
 		}
 	}
@@ -1186,7 +1140,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("beginOnBoarding");
 	{
-		SEGlobalStateManager::GetInstance()->Reset();
+		self->m_services->GetHost()->Reset();
 
 		result->SetBool(true);
 	}
@@ -1194,8 +1148,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("completeOnBoarding");
 	{
-		while (SEGlobalStateManager::GetInstance()
-			       ->GetWidgetManager()
+		while (self->m_services->GetWidgetManager()
 			       ->DestroyCurrentCentralBrowserWidget()) {
 		}
 
@@ -1215,10 +1168,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 			SEConfig::GetInstance()->GetStartupFlags() |
 			SEConfig::STARTUP_FLAGS_SIGNED_IN);
 
-		SEGlobalStateManager::GetInstance()
-			->GetMenuManager()
-			->Update();
-		SEGlobalStateManager::GetInstance()->PersistState();
+		self->m_services->GetMenuManager()->Update();
+		self->m_services->GetHost()->PersistState();
 
 		result->SetBool(true);
 	}
@@ -1228,7 +1179,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize()) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
+				self->m_services->GetHost()
 					->DeserializeStatusBarTemporaryMessage(
 						args->GetValue(0)));
 		}
@@ -1239,8 +1190,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize() >= 2) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetBandwidthTestManager()
+				self->m_services->GetBandwidthTestManager()
 					->BeginBandwidthTest(args->GetValue(0),
 							     args->GetValue(1),
 							     target->m_target));
@@ -1256,8 +1206,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 			options = args->GetValue(0);
 		}
 		result->SetDictionary(
-			SEGlobalStateManager::GetInstance()
-				->GetBandwidthTestManager()
+			self->m_services->GetBandwidthTestManager()
 				->EndBandwidthTest(options));
 	}
 	API_HANDLER_END();
@@ -1265,8 +1214,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("streamingBandwidthTestGetStatus");
 	{
 		result->SetDictionary(
-			SEGlobalStateManager::GetInstance()
-				->GetBandwidthTestManager()
+			self->m_services->GetBandwidthTestManager()
 				->GetBandwidthTestStatus());
 	}
 	API_HANDLER_END();
@@ -1274,8 +1222,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getEncoderProperties");
 	{
 		if (args->GetSize() > 0) {
-			SEGlobalStateManager::GetInstance()
-				->GetOutputSettingsManager()
+			self->m_services->GetOutputSettingsManager()
 				->GetEncoderProperties(args->GetValue(0),
 						       result);
 		}
@@ -1284,8 +1231,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAvailableEncoders");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetOutputSettingsManager()
+		self->m_services->GetOutputSettingsManager()
 			->GetAvailableEncoders(result, nullptr);
 	}
 	API_HANDLER_END();
@@ -1294,8 +1240,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		obs_encoder_type type = OBS_ENCODER_VIDEO;
 
-		SEGlobalStateManager::GetInstance()
-			->GetOutputSettingsManager()
+		self->m_services->GetOutputSettingsManager()
 			->GetAvailableEncoders(result, &type);
 	}
 	API_HANDLER_END();
@@ -1304,8 +1249,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		obs_encoder_type type = OBS_ENCODER_AUDIO;
 
-		SEGlobalStateManager::GetInstance()
-			->GetOutputSettingsManager()
+		self->m_services->GetOutputSettingsManager()
 			->GetAvailableEncoders(result, &type);
 	}
 	API_HANDLER_END();
@@ -1314,8 +1258,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize()) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetOutputSettingsManager()
+				self->m_services->GetOutputSettingsManager()
 					->SetStreamingSettings(
 						args->GetValue(0)));
 		}
@@ -1324,8 +1267,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getEncodingSettings");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetOutputSettingsManager()
+		self->m_services->GetOutputSettingsManager()
 			->GetEncodingSettings(result);
 	}
 	API_HANDLER_END();
@@ -1334,8 +1276,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize()) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetOutputSettingsManager()
+				self->m_services->GetOutputSettingsManager()
 					->SetEncodingSettings(
 						args->GetValue(0)));
 		}
@@ -1348,12 +1289,10 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 		std::string dockingArea = "none";
 
-		SEBrowserWidgetManager::DockBrowserWidgetInfo
-			*info = SEGlobalStateManager::
-					GetInstance()
-						->GetWidgetManager()
-						->GetDockBrowserWidgetInfo(
-							target->m_target.c_str());
+		SEBrowserWidgetManager::DockBrowserWidgetInfo *info =
+			self->m_services->GetWidgetManager()
+				->GetDockBrowserWidgetInfo(
+					target->m_target.c_str());
 
 		if (info) {
 			dockingArea = info->m_dockingArea;
@@ -1375,10 +1314,9 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("openPopupWindow");
 	{
 		if (args->GetSize()) {
-			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->DeserializePopupWindow(
-						args->GetValue(0)));
+			result->SetBool(self->m_services->GetHost()
+						->DeserializePopupWindow(
+							args->GetValue(0)));
 		}
 	}
 	API_HANDLER_END();
@@ -1387,21 +1325,17 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize()) {
 			result->SetString(
-				SEGlobalStateManager::GetInstance()
-					->GetWorkerManager()
+				self->m_services->GetWorkerManager()
 					->DeserializeOne(args->GetValue(0)));
 
-			SEGlobalStateManager::GetInstance()
-				->PersistState(false);
+			self->m_services->GetHost()->PersistState(false);
 		}
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAllBackgroundWorkers");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetWorkerManager()
-			->Serialize(result);
+		self->m_services->GetWorkerManager()->Serialize(result);
 	}
 	API_HANDLER_END();
 
@@ -1414,14 +1348,12 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				for (size_t i = 0; i < list->GetSize(); ++i) {
 					CefString id = list->GetString(i);
 
-					SEGlobalStateManager::
-						GetInstance()
-							->GetWorkerManager()
-							->Remove(id);
+					self->m_services->GetWorkerManager()
+						->Remove(id);
 				}
 
-				SEGlobalStateManager::GetInstance()
-					->PersistState(false);
+				self->m_services->GetHost()->PersistState(
+					false);
 
 				result->SetBool(true);
 			}
@@ -1432,9 +1364,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("showModalDialog");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->DeserializeModalDialog(args->GetValue(0),
-							 result);
+			self->m_services->GetHost()->DeserializeModalDialog(
+				args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
@@ -1442,10 +1373,9 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("showNonModalDialog");
 	{
 		if (args->GetSize()) {
-			auto promise_ptr =
-				SEGlobalStateManager::GetInstance()
-					->DeserializeNonModalDialog(
-						args->GetValue(0));
+			auto promise_ptr = self->m_services->GetHost()
+						   ->DeserializeNonModalDialog(
+							   args->GetValue(0));
 
 			std::thread([complete_callback, promise_ptr, result]() -> void {
 				auto future = promise_ptr->get_future();
@@ -1466,8 +1396,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAllNonModalDialogs");
 	{
-		SEGlobalStateManager::GetInstance()
-			->SerializeAllNonModalDialogs(result);
+		self->m_services->GetHost()->SerializeAllNonModalDialogs(
+			result);
 	}
 	API_HANDLER_END();
 
@@ -1475,7 +1405,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize() >= 1) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
+				self->m_services->GetHost()
 					->DeserializeCloseNonModalDialogsByIds(
 						args->GetValue(0)));
 		}
@@ -1486,7 +1416,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize() >= 1) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
+				self->m_services->GetHost()
 					->DeserializeFocusNonModalDialogById(
 						args->GetValue(0)));
 		}
@@ -1497,9 +1427,10 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize() >= 2) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
+				self->m_services->GetHost()
 					->DeserializeNonModalDialogDimensionsById(
-						args->GetValue(0), args->GetValue(1)));
+						args->GetValue(0),
+						args->GetValue(1)));
 		}
 	}
 	API_HANDLER_END();
@@ -1612,17 +1543,15 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAllHotkeyBindings");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetHotkeyManager()
-			->SerializeHotkeyBindings(result);
+		self->m_services->GetHotkeyManager()->SerializeHotkeyBindings(
+			result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAllManagedHotkeyBindings");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetHotkeyManager()
-			->SerializeHotkeyBindings(result, true);
+		self->m_services->GetHotkeyManager()->SerializeHotkeyBindings(
+			result, true);
 	}
 	API_HANDLER_END();
 
@@ -1630,8 +1559,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize()) {
 			obs_hotkey_id id =
-				SEGlobalStateManager::GetInstance()
-					->GetHotkeyManager()
+				self->m_services->GetHotkeyManager()
 					->DeserializeSingleHotkeyBinding(
 						args->GetValue(0));
 
@@ -1648,11 +1576,9 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("setHotkeyBindingTriggers");
 	{
 		if (args->GetSize()) {
-			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetHotkeyManager()
-					->DeserializeHotkeyTriggers(
-						args->GetValue(0)));
+			result->SetBool(self->m_services->GetHotkeyManager()
+						->DeserializeHotkeyTriggers(
+							args->GetValue(0)));
 		} else {
 			result->SetNull();
 		}
@@ -1662,11 +1588,9 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("removeHotkeyBindingById");
 	{
 		if (args->GetSize() && args->GetType(0) == VTYPE_INT) {
-			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetHotkeyManager()
-					->RemoveHotkeyBindingById(
-						args->GetInt(0)));
+			result->SetBool(self->m_services->GetHotkeyManager()
+						->RemoveHotkeyBindingById(
+							args->GetInt(0)));
 		} else {
 			result->SetNull();
 		}
@@ -1686,12 +1610,10 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		d->SetString("hostApiVersionString",
 			     GetSEApiVersionString());
 		d->SetString("hostMachineUniqueId",
-			     SEGlobalStateManager::GetInstance()
-				     ->GetAnalyticsEventsManager()
+			     self->m_services->GetAnalyticsEventsManager()
 				     ->identity());
 		d->SetString("hostSessionUniqueId",
-			     SEGlobalStateManager::GetInstance()
-				     ->GetAnalyticsEventsManager()
+			     self->m_services->GetAnalyticsEventsManager()
 				     ->sessionId());
 
 #ifdef WIN32
@@ -1721,11 +1643,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 			config->GetStartupFlags() |
 			SEConfig::STARTUP_FLAGS_SIGNED_IN);
 
-		SEGlobalStateManager::GetInstance()
-			->GetMenuManager()
-			->Update();
-		SEGlobalStateManager::GetInstance()->PersistState(
-			false);
+		self->m_services->GetMenuManager()->Update();
+		self->m_services->GetHost()->PersistState(false);
 
 		result->SetBool(true);
 	}
@@ -1740,11 +1659,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 			config->GetStartupFlags() &
 			~SEConfig::STARTUP_FLAGS_SIGNED_IN);
 
-		SEGlobalStateManager::GetInstance()
-			->GetMenuManager()
-			->Update();
-		SEGlobalStateManager::GetInstance()->PersistState(
-			false);
+		self->m_services->GetMenuManager()->Update();
+		self->m_services->GetHost()->PersistState(false);
 
 		result->SetBool(true);
 	}
@@ -1809,8 +1725,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		result->SetNull();
 
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->DeserializeObsBrowserSource(args->GetValue(0),
 							      result);
 		}
@@ -1822,8 +1737,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		result->SetNull();
 
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->DeserializeObsBrowserSource(args->GetValue(0),
 							      result);
 		}
@@ -1835,8 +1749,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		result->SetNull();
 
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->DeserializeObsGameCaptureSource(
 					args->GetValue(0), result);
 		}
@@ -1848,8 +1761,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		result->SetNull();
 
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->DeserializeObsGameCaptureSource(
 					args->GetValue(0), result);
 		}
@@ -1861,8 +1773,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		result->SetNull();
 
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->DeserializeObsVideoCaptureSource(
 					args->GetValue(0), result);
 		}
@@ -1874,8 +1785,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		result->SetNull();
 
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->DeserializeObsVideoCaptureSource(
 					args->GetValue(0), result);
 		}
@@ -1887,8 +1797,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		result->SetNull();
 
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->DeserializeObsNativeSource(args->GetValue(0),
 							     result);
 		}
@@ -1900,8 +1809,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		result->SetNull();
 
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->DeserializeObsNativeSource(args->GetValue(0),
 							     result);
 		}
@@ -1913,8 +1821,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		result->SetNull();
 
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->DeserializeObsSceneItemGroup(
 					args->GetValue(0), result);
 		}
@@ -1926,8 +1833,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		result->SetNull();
 
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->DeserializeObsSceneItemGroup(
 					args->GetValue(0), result);
 		}
@@ -1937,16 +1843,15 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getAllCurrentSceneItems");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->SerializeObsSceneItems(args->GetValue(0),
 							 result, false);
 		} else {
 			CefRefPtr<CefValue> nullArg = CefValue::Create();
 
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
-				->SerializeObsSceneItems(nullArg, result, false);
+			self->m_services->GetObsSceneManager()
+				->SerializeObsSceneItems(nullArg, result,
+							 false);
 		}
 	}
 	API_HANDLER_END();
@@ -1954,16 +1859,15 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getAllSceneItems");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->SerializeObsSceneItems(args->GetValue(0),
 							 result, false);
 		} else {
 			CefRefPtr<CefValue> nullArg = CefValue::Create();
 
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
-				->SerializeObsSceneItems(nullArg, result, false);
+			self->m_services->GetObsSceneManager()
+				->SerializeObsSceneItems(nullArg, result,
+							 false);
 		}
 	}
 	API_HANDLER_END();
@@ -1971,8 +1875,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("removeCurrentSceneItemsByIds");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->RemoveObsSceneItemsByIds(args->GetValue(0),
 							   result);
 		}
@@ -1982,8 +1885,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("removeSceneItemsByIds");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->RemoveObsSceneItemsByIds(args->GetValue(0),
 							   result);
 		}
@@ -1993,8 +1895,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("invokeCurrentSceneItemDefaultActionById");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->InvokeCurrentSceneItemDefaultActionById(
 					args->GetValue(0), result);
 		}
@@ -2004,8 +1905,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("invokeCurrentSceneItemDefaultContextMenuById");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->InvokeCurrentSceneItemDefaultContextMenuById(
 					args->GetValue(0), result);
 		}
@@ -2015,8 +1915,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("setCurrentSceneItemsAuxiliaryActions");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->DeserializeSceneItemsAuxiliaryActions(
 					args->GetValue(0), result);
 		}
@@ -2025,8 +1924,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getCurrentSceneItemsAuxiliaryActions");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetObsSceneManager()
+		self->m_services->GetObsSceneManager()
 			->SerializeSceneItemsAuxiliaryActions(result);
 	}
 	API_HANDLER_END();
@@ -2034,8 +1932,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("setScenesAuxiliaryActions");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->DeserializeScenesAuxiliaryActions(
 					args->GetValue(0), result);
 		}
@@ -2044,8 +1941,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getScenesAuxiliaryActions");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetObsSceneManager()
+		self->m_services->GetObsSceneManager()
 			->SerializeScenesAuxiliaryActions(result);
 	}
 	API_HANDLER_END();
@@ -2053,8 +1949,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("setCurrentSceneItemPropertiesById");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->SetObsSceneItemPropertiesById(
 					args->GetValue(0), result);
 		}
@@ -2064,8 +1959,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("setSceneItemPropertiesById");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->SetObsSceneItemPropertiesById(
 					args->GetValue(0), result);
 		}
@@ -2075,8 +1969,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getCurrentSceneItemPropertiesById");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->GetObsSceneItemPropertiesById(
 					args->GetValue(0), result);
 		}
@@ -2086,8 +1979,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getSceneItemPropertiesById");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->GetObsSceneItemPropertiesById(
 					args->GetValue(0), result);
 		}
@@ -2097,8 +1989,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("ungroupCurrentSceneItemGroupById");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->UngroupObsSceneItemsByGroupId(
 					args->GetValue(0), result);
 		}
@@ -2108,8 +1999,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("ungroupSceneItemGroupById");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->UngroupObsSceneItemsByGroupId(
 					args->GetValue(0), result);
 		}
@@ -2118,8 +2008,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAvailableInputSourceClasses");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetObsSceneManager()
+		self->m_services->GetObsSceneManager()
 			->SerializeInputSourceClasses(result);
 	}
 	API_HANDLER_END();
@@ -2127,8 +2016,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getSourceClassProperties");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->SerializeSourceClassProperties(
 					args->GetValue(0), result);
 		}
@@ -2235,8 +2123,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getExternalSceneDataProviders");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetExternalSceneDataProviderManager()
+		self->m_services->GetExternalSceneDataProviderManager()
 			->SerializeProviders(result);
 	}
 	API_HANDLER_END();
@@ -2244,8 +2131,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getExternalSceneDataSceneCollections");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetExternalSceneDataProviderManager()
+			self->m_services->GetExternalSceneDataProviderManager()
 				->SerializeProviderSceneCollections(
 					args->GetValue(0), result);
 		}
@@ -2255,8 +2141,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getExternalSceneDataSceneCollectionContent");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetExternalSceneDataProviderManager()
+			self->m_services->GetExternalSceneDataProviderManager()
 				->SerializeProviderSceneColletion(
 					args->GetValue(0), result);
 		}
@@ -2266,8 +2151,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("httpRequestText");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetHttpClient()
+			self->m_services->GetHttpClient()
 				->DeserializeHttpRequestText(args->GetValue(0),
 							     result);
 		}
@@ -2287,8 +2171,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("requestStreamingStart");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetNativeOBSControlsManager()
+		self->m_services->GetNativeOBSControlsManager()
 			->StartStreaming();
 
 		result->SetBool(true);
@@ -2307,8 +2190,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize()) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetNativeOBSControlsManager()
+				self->m_services->GetNativeOBSControlsManager()
 					->DeserializeStartStreamingUIHandlerProperties(
 						args->GetValue(0)));
 		}
@@ -2317,8 +2199,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("adviseStreamingStartUIRequestAccepted");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetNativeOBSControlsManager()
+		self->m_services->GetNativeOBSControlsManager()
 			->AdviseRequestStartStreamingAccepted();
 
 		result->SetBool(true);
@@ -2327,8 +2208,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("adviseStreamingStartUIRequestRejected");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetNativeOBSControlsManager()
+		self->m_services->GetNativeOBSControlsManager()
 			->AdviseRequestStartStreamingRejected();
 
 		result->SetBool(true);
@@ -2337,18 +2217,17 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getUserInterfaceState");
 	{
-		SEGlobalStateManager::GetInstance()
-			->SerializeUserInterfaceState(result);
+		self->m_services->GetHost()->SerializeUserInterfaceState(
+			result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("setUserInterfaceState");
 	{
 		if (args->GetSize()) {
-			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->DeserializeUserInterfaceState(
-						args->GetValue(0)));
+			result->SetBool(self->m_services->GetHost()
+						->DeserializeUserInterfaceState(
+							args->GetValue(0)));
 		}
 	}
 	API_HANDLER_END();
@@ -2362,9 +2241,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		else
 			input->SetNull();
 
-		SEGlobalStateManager::GetInstance()
-			->GetObsSceneManager()
-			->SerializeObsScenes(input, result);
+		self->m_services->GetObsSceneManager()->SerializeObsScenes(
+			input, result);
 	}
 	API_HANDLER_END();
 
@@ -2377,17 +2255,15 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		else
 			input->SetNull();
 
-		SEGlobalStateManager::GetInstance()
-			->GetObsSceneManager()
-			->SerializeObsCurrentScene(input, result);
+		self->m_services->GetObsSceneManager()->SerializeObsCurrentScene(
+			input, result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("addScene");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->DeserializeObsScene(args->GetValue(0),
 						      result);
 		}
@@ -2397,8 +2273,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("setCurrentSceneById");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->SetCurrentObsSceneById(args->GetValue(0),
 							 result);
 		}
@@ -2408,8 +2283,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("removeScenesByIds");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->RemoveObsScenesByIds(args->GetValue(0),
 						       result);
 		}
@@ -2419,8 +2293,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("setScenePropertiesById");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->SetObsScenePropertiesById(args->GetValue(0),
 							    result);
 		}
@@ -2430,63 +2303,54 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("setAuxiliaryMenuItems");
 	{
 		if (args->GetSize()) {
-			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetMenuManager()
-					->DeserializeAuxiliaryMenuItems(
-						args->GetValue(0)));
+			result->SetBool(self->m_services->GetMenuManager()
+						->DeserializeAuxiliaryMenuItems(
+							args->GetValue(0)));
 		}
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAuxiliaryMenuItems");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetMenuManager()
-			->SerializeAuxiliaryMenuItems(result);
+		self->m_services->GetMenuManager()->SerializeAuxiliaryMenuItems(
+			result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAllProfiles");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetProfilesManager()
-			->SerializeAllProfiles(result);
+		self->m_services->GetProfilesManager()->SerializeAllProfiles(
+			result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getCurrentProfile");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetProfilesManager()
-			->SerializeCurrentProfile(result);
+		self->m_services->GetProfilesManager()->SerializeCurrentProfile(
+			result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("setCurrentProfile");
 	{
 		if (args->GetSize()) {
-			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetProfilesManager()
-					->DeserializeCurrentProfileById(
-						args->GetValue(0)));
+			result->SetBool(self->m_services->GetProfilesManager()
+						->DeserializeCurrentProfileById(
+							args->GetValue(0)));
 		}
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAllSceneCollections");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetObsSceneManager()
+		self->m_services->GetObsSceneManager()
 			->SerializeObsSceneCollections(result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getCurrentSceneCollectionProperties");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetObsSceneManager()
+		self->m_services->GetObsSceneManager()
 			->SerializeObsCurrentSceneCollection(result);
 	}
 	API_HANDLER_END();
@@ -2494,8 +2358,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("addSceneCollection");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->DeserializeObsSceneCollection(
 					args->GetValue(0), result);
 		}
@@ -2505,8 +2368,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("setCurrentSceneCollectionById");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->DeserializeObsCurrentSceneCollectionById(
 					args->GetValue(0), result);
 		}
@@ -2516,8 +2378,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("queryUserEnvironmentBackupReferencedFiles");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetBackupManager()
+			self->m_services->GetBackupManager()
 				->QueryLocalBackupPackageReferencedFiles(
 					args->GetValue(0), result);
 		}
@@ -2527,8 +2388,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("createUserEnvironmentBackupPackage");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetBackupManager()
+			self->m_services->GetBackupManager()
 				->CreateLocalBackupPackage(args->GetValue(0),
 							   result);
 		}
@@ -2538,8 +2398,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("queryUserEnvironmentBackupPackageContent");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetBackupManager()
+			self->m_services->GetBackupManager()
 				->QueryBackupPackageContent(args->GetValue(0),
 							    result);
 		}
@@ -2549,8 +2408,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("restoreUserEnvironmentBackupPackageContent");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetBackupManager()
+			self->m_services->GetBackupManager()
 				->RestoreBackupPackageContent(args->GetValue(0),
 							      result);
 		}
@@ -2614,8 +2472,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("setShowBuiltInMenuItems");
 	{
 		if (args->GetSize() >= 1 && args->GetType(0) == VTYPE_BOOL) {
-			SEGlobalStateManager::GetInstance()
-				->GetMenuManager()
+			self->m_services->GetMenuManager()
 				->SetShowBuiltInMenuItems(args->GetBool(0));
 
 			result->SetBool(true);
@@ -2625,8 +2482,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getShowBuiltInMenuItems");
 	{
-		result->SetBool(SEGlobalStateManager::GetInstance()
-					->GetMenuManager()
+		result->SetBool(self->m_services->GetMenuManager()
 					->GetShowBuiltInMenuItems());
 	}
 	API_HANDLER_END();
@@ -2636,26 +2492,23 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize()) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetNativeOBSControlsManager()
+				self->m_services->GetNativeOBSControlsManager()
 					->DeserializePreviewTitleBar(
 						args->GetValue(0)));
 
-			SEGlobalStateManager::GetInstance()
-				->PersistState();
+			self->m_services->GetHost()->PersistState();
 		}
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("hideOutputPreviewTitleBar");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetNativeOBSControlsManager()
+		self->m_services->GetNativeOBSControlsManager()
 			->HidePreviewTitleBar();
 
 		result->SetBool(true);
 
-		SEGlobalStateManager::GetInstance()->PersistState();
+		self->m_services->GetHost()->PersistState();
 	}
 	API_HANDLER_END();
 
@@ -2663,26 +2516,23 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize()) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
-					->GetNativeOBSControlsManager()
+				self->m_services->GetNativeOBSControlsManager()
 					->DeserializePreviewFrame(
 						args->GetValue(0)));
 
-			SEGlobalStateManager::GetInstance()
-				->PersistState();
+			self->m_services->GetHost()->PersistState();
 		}
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("hideOutputPreviewFrame");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetNativeOBSControlsManager()
+		self->m_services->GetNativeOBSControlsManager()
 			->HidePreviewFrame();
 
 		result->SetBool(true);
 
-		SEGlobalStateManager::GetInstance()->PersistState();
+		self->m_services->GetHost()->PersistState();
 	}
 	API_HANDLER_END();
 	#endif
@@ -2690,8 +2540,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getNativeStreamingServiceIntegrationStatus");
 	{
 		bool manageBroadcastButtonVisible =
-			SEGlobalStateManager::GetInstance()
-				->GetNativeOBSControlsManager()
+			self->m_services->GetNativeOBSControlsManager()
 				->GetNativeManageBroadcastButtonVisibility();
 
 		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
@@ -2706,22 +2555,16 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAllStreamingOutputs");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetOutputManager()
-			->SerializeAllOutputs(
-				StreamingOutput,
-				result);
+		self->m_services->GetOutputManager()->SerializeAllOutputs(
+			StreamingOutput, result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("addStreamingOutput");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetOutputManager()
-				->DeserializeOutput(
-					StreamingOutput,
-					args->GetValue(0), result);
+			self->m_services->GetOutputManager()->DeserializeOutput(
+				StreamingOutput, args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
@@ -2729,11 +2572,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("removeStreamingOutputsByIds");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetOutputManager()
-				->RemoveOutputsByIds(
-					StreamingOutput,
-					args->GetValue(0), result);
+			self->m_services->GetOutputManager()->RemoveOutputsByIds(
+				StreamingOutput, args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
@@ -2741,11 +2581,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("enableStreamingOutputsByIds");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetOutputManager()
-				->EnableOutputsByIds(
-					StreamingOutput,
-					args->GetValue(0), result);
+			self->m_services->GetOutputManager()->EnableOutputsByIds(
+				StreamingOutput, args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
@@ -2753,33 +2590,26 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("disableStreamingOutputsByIds");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetOutputManager()
-				->DisableOutputsByIds(
-					StreamingOutput,
-					args->GetValue(0), result);
+			self->m_services->GetOutputManager()
+				->DisableOutputsByIds(StreamingOutput,
+						      args->GetValue(0),
+						      result);
 		}
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAllRecordingOutputs");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetOutputManager()
-			->SerializeAllOutputs(
-				RecordingOutput,
-				result);
+		self->m_services->GetOutputManager()->SerializeAllOutputs(
+			RecordingOutput, result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("addRecordingOutput");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetOutputManager()
-				->DeserializeOutput(
-					RecordingOutput,
-					args->GetValue(0), result);
+			self->m_services->GetOutputManager()->DeserializeOutput(
+				RecordingOutput, args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
@@ -2787,11 +2617,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("removeRecordingOutputsByIds");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetOutputManager()
-				->RemoveOutputsByIds(
-					RecordingOutput,
-					args->GetValue(0), result);
+			self->m_services->GetOutputManager()->RemoveOutputsByIds(
+				RecordingOutput, args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
@@ -2799,11 +2626,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("enableRecordingOutputsByIds");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetOutputManager()
-				->EnableOutputsByIds(
-					RecordingOutput,
-					args->GetValue(0), result);
+			self->m_services->GetOutputManager()->EnableOutputsByIds(
+				RecordingOutput, args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
@@ -2811,11 +2635,10 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("disableRecordingOutputsByIds");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetOutputManager()
-				->DisableOutputsByIds(
-					RecordingOutput,
-					args->GetValue(0), result);
+			self->m_services->GetOutputManager()
+				->DisableOutputsByIds(RecordingOutput,
+						      args->GetValue(0),
+						      result);
 		}
 	}
 	API_HANDLER_END();
@@ -2823,8 +2646,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("triggerRecordingOutputSplitById");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetOutputManager()
+			self->m_services->GetOutputManager()
 				->TriggerSplitRecordingOutputById(
 					args->GetValue(0), result);
 		}
@@ -2833,21 +2655,16 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAllReplayBufferOutputs");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetOutputManager()
-			->SerializeAllOutputs(
-				ReplayBufferOutput,
-				result);
+		self->m_services->GetOutputManager()->SerializeAllOutputs(
+			ReplayBufferOutput, result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("addReplayBufferOutput");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetOutputManager()
-				->DeserializeOutput(ReplayBufferOutput,
-						    args->GetValue(0), result);
+			self->m_services->GetOutputManager()->DeserializeOutput(
+				ReplayBufferOutput, args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
@@ -2855,10 +2672,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("removeReplayBufferOutputsByIds");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetOutputManager()
-				->RemoveOutputsByIds(ReplayBufferOutput,
-						     args->GetValue(0), result);
+			self->m_services->GetOutputManager()->RemoveOutputsByIds(
+				ReplayBufferOutput, args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
@@ -2866,10 +2681,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("enableReplayBufferOutputsByIds");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetOutputManager()
-				->EnableOutputsByIds(ReplayBufferOutput,
-						     args->GetValue(0), result);
+			self->m_services->GetOutputManager()->EnableOutputsByIds(
+				ReplayBufferOutput, args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
@@ -2877,8 +2690,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("disableReplayBufferOutputsByIds");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetOutputManager()
+			self->m_services->GetOutputManager()
 				->DisableOutputsByIds(ReplayBufferOutput,
 						      args->GetValue(0),
 						      result);
@@ -2889,10 +2701,9 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("triggerReplayBufferOutputSaveById");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetOutputManager()
-				->TriggerSaveReplayBufferById(
-					args->GetValue(0), result);
+			self->m_services->GetOutputManager()
+				->TriggerSaveReplayBufferById(args->GetValue(0),
+							      result);
 		}
 	}
 	API_HANDLER_END();
@@ -2936,8 +2747,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAllAvailableVideoEncoderClasses");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetVideoCompositionManager()
+		self->m_services->GetVideoCompositionManager()
 			->SerializeAvailableEncoderClasses(OBS_ENCODER_VIDEO,
 							   result);
 	}
@@ -2945,8 +2755,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAllAvailableAudioEncoderClasses");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetVideoCompositionManager()
+		self->m_services->GetVideoCompositionManager()
 			->SerializeAvailableEncoderClasses(OBS_ENCODER_AUDIO,
 							   result);
 	}
@@ -2954,8 +2763,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAvailableAudioEncoderClassProperties");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetVideoCompositionManager()
+		self->m_services->GetVideoCompositionManager()
 			->SerializeAvailableEncoderClassPropertiesForSettings(
 				args->GetValue(0), result, OBS_ENCODER_AUDIO);
 	}
@@ -2963,8 +2771,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAvailableVideoEncoderClassProperties");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetVideoCompositionManager()
+		self->m_services->GetVideoCompositionManager()
 			->SerializeAvailableEncoderClassPropertiesForSettings(
 				args->GetValue(0), result, OBS_ENCODER_VIDEO);
 	}
@@ -2973,16 +2780,14 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAllVideoCompositions");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetVideoCompositionManager()
+		self->m_services->GetVideoCompositionManager()
 			->SerializeAllCompositions(result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAllAudioCompositions");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetAudioCompositionManager()
+		self->m_services->GetAudioCompositionManager()
 			->SerializeAllCompositions(result);
 	}
 	API_HANDLER_END();
@@ -2990,9 +2795,9 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("removeVideoCompositionsByIds");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetVideoCompositionManager()
-				->RemoveCompositionsByIds(args->GetValue(0), result);
+			self->m_services->GetVideoCompositionManager()
+				->RemoveCompositionsByIds(args->GetValue(0),
+							  result);
 		}
 	}
 	API_HANDLER_END();
@@ -3000,8 +2805,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("removeAudioCompositionsByIds");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetAudioCompositionManager()
+			self->m_services->GetAudioCompositionManager()
 				->RemoveCompositionsByIds(args->GetValue(0),
 							  result);
 		}
@@ -3011,8 +2815,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("addVideoComposition");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetVideoCompositionManager()
+			self->m_services->GetVideoCompositionManager()
 				->DeserializeComposition(args->GetValue(0),
 							 result);
 		}
@@ -3022,8 +2825,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("addAudioComposition");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetAudioCompositionManager()
+			self->m_services->GetAudioCompositionManager()
 				->DeserializeComposition(args->GetValue(0),
 							 result);
 		}
@@ -3033,8 +2835,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("setVideoCompositionProperties");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetVideoCompositionManager()
+			self->m_services->GetVideoCompositionManager()
 				->DeserializeExistingCompositionProperties(
 					args->GetValue(0), result);
 		}
@@ -3044,8 +2845,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("setAudioCompositionProperties");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetAudioCompositionManager()
+			self->m_services->GetAudioCompositionManager()
 				->DeserializeExistingCompositionProperties(
 					args->GetValue(0), result);
 		}
@@ -3097,8 +2897,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		result->SetNull();
 
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetSharedVideoCompositionManager()
+			self->m_services->GetSharedVideoCompositionManager()
 				->DeserializeSharedVideoComposition(
 					args->GetValue(0), result);
 		}
@@ -3110,8 +2909,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		result->SetNull();
 
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetSharedVideoCompositionManager()
+			self->m_services->GetSharedVideoCompositionManager()
 				->DeserializeSharedVideoCompositionProperties(
 					args->GetValue(0), result);
 		}
@@ -3123,8 +2921,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		result->SetNull();
 
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetSharedVideoCompositionManager()
+			self->m_services->GetSharedVideoCompositionManager()
 				->RemoveSharedVideoCompositionsByIds(
 					args->GetValue(0), result);
 		}
@@ -3135,8 +2932,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		result->SetNull();
 
-		SEGlobalStateManager::GetInstance()
-			->GetSharedVideoCompositionManager()
+		self->m_services->GetSharedVideoCompositionManager()
 			->SerializeAllSharedVideoCompositions(result);
 	}
 	API_HANDLER_END();
@@ -3146,8 +2942,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		result->SetNull();
 
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetSharedVideoCompositionManager()
+			self->m_services->GetSharedVideoCompositionManager()
 				->ConnectVideoCompositionToSharedVideoComposition(
 					args->GetValue(0), result);
 		}
@@ -3159,8 +2954,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		result->SetNull();
 
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetSharedVideoCompositionManager()
+			self->m_services->GetSharedVideoCompositionManager()
 				->DisconnectVideoCompositionsFromSharedVideoCompositionsByIds(
 					args->GetValue(0), result);
 		}
@@ -3170,8 +2964,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("openSceneItemPropertiesDialogById");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->OpenSceneItemPropertiesById(args->GetValue(0),
 							      result);
 		}
@@ -3181,8 +2974,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("openSceneItemFiltersDialogById");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->OpenSceneItemFiltersById(args->GetValue(0),
 							   result);
 		}
@@ -3192,8 +2984,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("openSceneItemInteractionDialogById");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->OpenSceneItemInteractionById(
 					args->GetValue(0), result);
 		}
@@ -3203,8 +2994,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("openSceneItemTransformEditorDialogById");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->OpenSceneItemTransformEditorById(
 					args->GetValue(0), result);
 		}
@@ -3214,8 +3004,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getSceneItemRotationInViewport");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->SerializeSceneItemViewportRotation(
 					args->GetValue(0), result);
 		}
@@ -3225,8 +3014,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("setSceneItemRotationInViewport");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->DeserializeSceneItemViewportRotation(
 					args->GetValue(0), result);
 		}
@@ -3236,8 +3024,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getSceneItemBoundingBoxInViewport");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->SerializeSceneItemViewportBoundingRectangle(
 					args->GetValue(0), result);
 		}
@@ -3247,8 +3034,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("setSceneItemPositionInViewport");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
-				->GetObsSceneManager()
+			self->m_services->GetObsSceneManager()
 				->DeserializeSceneItemViewportPosition(
 					args->GetValue(0), result);
 		}
@@ -3263,7 +3049,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				auto d = input->GetDictionary();
 
 				auto videoCompositionManager =
-					SEGlobalStateManager::GetInstance()
+					self->m_services
 						->GetVideoCompositionManager();
 
 				std::shared_ptr<
@@ -3295,8 +3081,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAvailableTransitionClasses");
 	{
-		SEGlobalStateManager::GetInstance()
-			->GetVideoCompositionManager()
+		self->m_services->GetVideoCompositionManager()
 			->SerializeAvailableTransitionClasses(result);
 	}
 	API_HANDLER_END();
@@ -3305,16 +3090,14 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize()) {
 			auto videoComposition =
-				SEGlobalStateManager::GetInstance()
-					->GetVideoCompositionManager()
+				self->m_services->GetVideoCompositionManager()
 					->GetVideoCompositionById(
 						args->GetValue(0));
 
 			if (videoComposition.get())
 				videoComposition->SerializeTransition(result);
 		} else {
-			SEGlobalStateManager::GetInstance()
-				->GetVideoCompositionManager()
+			self->m_services->GetVideoCompositionManager()
 				->GetObsNativeVideoComposition()
 				->SerializeTransition(result);
 		}
@@ -3325,8 +3108,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize()) {
 			auto videoComposition =
-				SEGlobalStateManager::GetInstance()
-					->GetVideoCompositionManager()
+				self->m_services->GetVideoCompositionManager()
 					->GetVideoCompositionById(
 						args->GetValue(0));
 
@@ -3340,8 +3122,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize()) {
 			auto videoComposition =
-				SEGlobalStateManager::GetInstance()
-					->GetVideoCompositionManager()
+				self->m_services->GetVideoCompositionManager()
 					->GetVideoCompositionById(
 						args->GetValue(0));
 

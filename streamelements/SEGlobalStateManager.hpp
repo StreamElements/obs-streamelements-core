@@ -30,6 +30,7 @@ struct QCefCookieManager;
 #include "SECleanupManager.hpp"
 #include "SEPreviewManager.hpp"
 #include "SEWebsocketApiServer.hpp"
+#include "SEApiServices.hpp"
 #include "SEBrowserDialog.hpp"
 #include "SEVideoCompositionManager.hpp"
 #include "SEAudioCompositionManager.hpp"
@@ -102,6 +103,14 @@ public:
 	void Initialize(QMainWindow *obs_main_window);
 	void Shutdown();
 
+private:
+	//
+	// Publishes the constructed services into m_apiServices. Called from
+	// Initialize() once they all exist.
+	//
+	void PublishApiServices();
+
+public:
 	bool IsInitialized() { return m_initialized; }
 
 	void Reset(bool deleteAllCookies = true,
@@ -206,6 +215,17 @@ public:
 	GetWebsocketApiServer()
 	{
 		return m_websocketApiServer;
+	}
+
+	//
+	// The bundle the API handlers and browser widgets are given. Handed to
+	// them at construction; this accessor exists for the one caller that
+	// cannot be handed anything -- the lazily created InvokeHandler
+	// singleton in SEUtils -- and goes away with it.
+	//
+	std::shared_ptr<SEApiServices> GetApiServices()
+	{
+		return m_apiServices;
 	}
 	std::shared_ptr <SESharedVideoCompositionManager>
 		GetSharedVideoCompositionManager()
@@ -319,6 +339,7 @@ private:
 	std::shared_ptr<SEOutputManager> m_outputManager = nullptr;
 	std::shared_ptr<SEObsActiveSceneTracker>
 		m_obsActiveSceneTracker = nullptr;
+	std::shared_ptr<SEApiServices> m_apiServices = nullptr;
 
 private:
 	static std::shared_ptr<

@@ -33,10 +33,10 @@ static std::recursive_mutex s_sync_api_call_mutex;
 class SEDialogApiMessageHandler : public SEApiMessageHandler
 {
 public:
-	SEDialogApiMessageHandler(
-		SEBrowserDialog *dialog, std::string containerType)
-		: SEApiMessageHandler(containerType),
-		  m_dialog(dialog)
+	SEDialogApiMessageHandler(SEBrowserDialog *dialog,
+				  std::string containerType,
+				  std::shared_ptr<SEApiServices> services)
+		: SEApiMessageHandler(containerType, services), m_dialog(dialog)
 	{
 		// RegisterIncomingApiCallHandlers();
 	}
@@ -44,7 +44,8 @@ public:
 	/*
 	virtual std::shared_ptr<SEApiMessageHandler> Clone() override
 	{
-		return std::make_shared<SEDialogApiMessageHandler>(m_dialog, m_containerType);
+		return std::make_shared<SEDialogApiMessageHandler>(
+			m_dialog, m_containerType, m_services);
 	}
 	*/
 
@@ -165,10 +166,12 @@ protected:
 	}
 };
 
-SEBrowserDialog::SEBrowserDialog(
-	QWidget *parent, std::string url, std::string executeJavaScriptOnLoad,
-	bool isIncognito, std::string containerType)
+SEBrowserDialog::SEBrowserDialog(QWidget *parent, std::string url,
+				 std::string executeJavaScriptOnLoad,
+				 bool isIncognito, std::string containerType,
+				 std::shared_ptr<SEApiServices> apiServices)
 	: QDialog(parent),
+	  m_apiServices(apiServices),
 	  m_url(url),
 	  m_executeJavaScriptOnLoad(executeJavaScriptOnLoad),
 	  m_isIncognito(isIncognito),
@@ -235,9 +238,9 @@ void SEBrowserDialog::showEvent(QShowEvent* event)
 	m_browser = new SEBrowserWidget(
 		nullptr, SEMessageBus::DEST_UI, m_url.c_str(),
 		m_executeJavaScriptOnLoad.c_str(), "reload", "dialog",
-		CreateGloballyUniqueIdString().c_str(),
+		CreateGloballyUniqueIdString().c_str(), m_apiServices,
 		std::make_shared<SEDialogApiMessageHandler>(
-			this, m_containerType),
+			this, m_containerType, m_apiServices),
 		m_isIncognito);
 
 	layout()->addWidget(m_browser);

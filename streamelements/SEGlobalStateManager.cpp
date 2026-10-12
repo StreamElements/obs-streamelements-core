@@ -359,6 +359,37 @@ bool SEGlobalStateManager::IsInstanceAvailable()
 #include <QWindow>
 #include <QObjectList>
 
+void SEGlobalStateManager::PublishApiServices()
+{
+	if (!m_apiServices)
+		return;
+
+	m_apiServices->SetObsSceneManager(m_obsSceneManager);
+	m_apiServices->SetMenuManager(m_menuManager);
+	m_apiServices->SetWidgetManager(m_widgetManager);
+	m_apiServices->SetOutputManager(m_outputManager);
+	m_apiServices->SetVideoCompositionManager(m_videoCompositionManager);
+	m_apiServices->SetAudioCompositionManager(m_audioCompositionManager);
+	m_apiServices->SetSharedVideoCompositionManager(
+		m_sharedVideoCompositionManager);
+	m_apiServices->SetNativeOBSControlsManager(m_nativeObsControlsManager);
+	m_apiServices->SetOutputSettingsManager(m_outputSettingsManager);
+	m_apiServices->SetHotkeyManager(m_hotkeyManager);
+	m_apiServices->SetBackupManager(m_backupManager);
+	m_apiServices->SetWebsocketApiServer(m_websocketApiServer);
+	m_apiServices->SetBandwidthTestManager(m_bwTestManager);
+	m_apiServices->SetExternalSceneDataProviderManager(
+		m_externalSceneDataProviderManager);
+	m_apiServices->SetProfilesManager(m_profilesManager);
+	m_apiServices->SetWorkerManager(m_workerManager);
+	m_apiServices->SetAnalyticsEventsManager(m_analyticsEventsManager);
+	m_apiServices->SetHttpClient(m_httpClient);
+
+#ifdef SE_ENABLE_WYVRN
+	m_apiServices->SetRazerWyvrnManager(m_razerWyvrnManager);
+#endif
+}
+
 void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 {
 	m_mainWindow = obs_main_window;
@@ -420,15 +451,22 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 	m_cefCookieManager = m_cef->create_cookie_manager(storagePath, true);
 
+	//
+	// Created before any service, and filled in by PublishApiServices()
+	// once they all exist: the widget manager and the worker manager are
+	// constructed here and hand the bundle on to every API handler they
+	// create, which happens later, when a page loads.
+	//
+	m_apiServices = std::make_shared<SEApiServices>(this);
+
 	m_httpClient =
 		std::make_shared<SEHttpClient>();
 	m_localFilesystemHttpServer = std::make_shared<
 		SELocalFilesystemHttpServer>();
 	m_analyticsEventsManager = std::make_shared<
 		SEAnalyticsEventsManager>();
-	m_widgetManager = std::make_shared<
-		SEBrowserWidgetManager>(
-		obs_main_window);
+	m_widgetManager = std::make_shared<SEBrowserWidgetManager>(
+		obs_main_window, m_apiServices);
 
 	//
 	// Constructed ahead of everything that takes it. Its constructor binds
@@ -454,8 +492,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		SEBandwidthTestManager>();
 	m_outputSettingsManager = std::make_shared<
 		SEOutputSettingsManager>();
-	m_workerManager =
-		std::make_shared<SEWorkerManager>();
+	m_workerManager = std::make_shared<SEWorkerManager>(m_apiServices);
 	m_hotkeyManager =
 		std::make_shared<SEHotkeyManager>();
 	m_performanceHistoryTracker = std::make_shared<
@@ -465,6 +502,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_nativeObsControlsManager =
 		SENativeOBSControlsManager::
 			GetInstance();
+	m_nativeObsControlsManager->SetApiServices(m_apiServices);
 	m_profilesManager =
 		std::make_shared<SEProfilesManager>();
 	// Constructed before the backup manager, which now takes it: a
@@ -503,6 +541,8 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 	m_obsActiveSceneTracker = std::make_shared<SEObsActiveSceneTracker>(
 		m_websocketApiServer, m_videoCompositionManager);
+
+	PublishApiServices();
 
 	m_appStateListener = new ApplicationStateListener();
 	m_themeChangeListener = new ThemeChangeListener();
@@ -757,6 +797,23 @@ void SEGlobalStateManager::Shutdown()
 		m_appStateListener = nullptr;
 	}
 
+	//
+	// Before the releases below, and the reason they release anything at
+	// all. Every API handler and browser widget holds the services bundle,
+	// and the bundle holds the widget manager, the worker manager and the
+	// native controls manager, each of which reaches back to a widget --
+	// so the references form a ring that refcounting alone never breaks.
+	// Left in place, the widgets outlive OBS's own teardown and the Qt
+	// event loop never returns, which looks like a hang in here rather
+	// than the leak it is.
+	//
+	// It happens here rather than at the top of Shutdown() so that a page
+	// still calling in while we tear down gets its services, right up to
+	// the point where they are actually going away.
+	//
+	if (m_apiServices)
+		m_apiServices->Clear();
+
 	m_obsActiveSceneTracker = nullptr;
 	m_analyticsEventsManager = nullptr;
 	m_performanceHistoryTracker = nullptr;
@@ -790,6 +847,7 @@ void SEGlobalStateManager::Shutdown()
 	m_previewManager = nullptr;
 	m_websocketApiServer = nullptr;
 	m_windowStateEventFilter = nullptr;
+	m_apiServices = nullptr;
 
 	if (m_cefCookieManager) {
 		delete m_cefCookieManager;
@@ -1378,9 +1436,10 @@ bool SEGlobalStateManager::DeserializeModalDialog(
 			isIncognito = true;
 		}
 
-		auto dialog = new SEBrowserDialog(
-			mainWindow(), url, executeJavaScriptOnLoad, isIncognito,
-			"modalDialog");
+		auto dialog = new SEBrowserDialog(mainWindow(), url,
+						  executeJavaScriptOnLoad,
+						  isIncognito, "modalDialog",
+						  m_apiServices);
 
 		if (d->HasKey("title")) {
 			dialog->setWindowTitle(QString(
@@ -1601,9 +1660,10 @@ std::shared_ptr<std::promise<CefRefPtr<CefValue>>> SEGlobalStateManager::Deseria
 			isIncognito = true;
 		}
 
-		auto dialog = new SEBrowserDialog(
-			mainWindow(), url, executeJavaScriptOnLoad, isIncognito,
-			"nonModalDialog");
+		auto dialog = new SEBrowserDialog(mainWindow(), url,
+						  executeJavaScriptOnLoad,
+						  isIncognito, "nonModalDialog",
+						  m_apiServices);
 
 		if (d->HasKey("title")) {
 			dialog->setWindowTitle(QString(
@@ -1682,17 +1742,16 @@ bool SEGlobalStateManager::DeserializePopupWindow(
 		std::shared_ptr<SEApiMessageHandler>
 			apiMessageHandler = nullptr;
 
-		apiMessageHandler =
-			std::make_shared<SEApiMessageHandler>("popupWindow");
+		apiMessageHandler = std::make_shared<SEApiMessageHandler>(
+			"popupWindow", m_apiServices);
 
 		QMainWindow *window = new QMainWindow();
 
 		auto browserWidget = new SEBrowserWidget(
 			nullptr, SEMessageBus::DEST_UI, url.c_str(),
-			executeJavaScriptOnLoad.c_str(),
-			"reload", "popupWindow",
-			CreateGloballyUniqueIdString().c_str(),
-			apiMessageHandler, false);
+			executeJavaScriptOnLoad.c_str(), "reload",
+			"popupWindow", CreateGloballyUniqueIdString().c_str(),
+			m_apiServices, apiMessageHandler, false);
 
 		window->setCentralWidget(browserWidget);
 

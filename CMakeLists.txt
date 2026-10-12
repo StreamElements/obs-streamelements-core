@@ -697,6 +697,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEWidgetManager.hpp
 	streamelements/SEObsAppMonitor.hpp
 	streamelements/SEApiMessageHandler.hpp
+	streamelements/SEApiServices.hpp
 	streamelements/SEConfig.hpp
 	streamelements/SEGlobalStateManager.hpp
 	streamelements/SEMenuManager.hpp

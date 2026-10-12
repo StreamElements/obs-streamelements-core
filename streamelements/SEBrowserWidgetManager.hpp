@@ -39,7 +39,8 @@ public:
 	};
 
 public:
-	SEBrowserWidgetManager(QMainWindow* parent);
+	SEBrowserWidgetManager(QMainWindow *parent,
+			       std::shared_ptr<SEApiServices> apiServices);
 	virtual ~SEBrowserWidgetManager();
 
 	/********************/
@@ -164,5 +165,10 @@ private:
 		m_browserWidgets;
 
 	QPointer<QToolBar> m_notificationBarToolBar = nullptr;
+
+	//
+	// Handed to every browser widget and API handler created here.
+	//
+	std::shared_ptr<SEApiServices> m_apiServices;
 	QPointer<SEBrowserWidget> m_notificationBarBrowserWidget = nullptr;
 };

@@ -11,18 +11,17 @@
 
 class SEWorkerManager::SEWorker {
 public:
-	SEWorker(std::string id,
-			     std::string url,
-			     std::string executeJavascriptOnLoad)
-		: m_url(url),
-		  m_executeJavascriptOnLoad(executeJavascriptOnLoad)
+	SEWorker(std::string id, std::string url,
+		 std::string executeJavascriptOnLoad,
+		 std::shared_ptr<SEApiServices> apiServices)
+		: m_url(url), m_executeJavascriptOnLoad(executeJavascriptOnLoad)
 	{
 		auto browserWidget = new SEBrowserWidget(
-			nullptr, SEMessageBus::DEST_WORKER,
-			m_url.c_str(), m_executeJavascriptOnLoad.c_str(),
-			"default", "popup",
-			CreateGloballyUniqueIdString().c_str(),
-			std::make_shared<SEApiMessageHandler>("backgroundWorker"),
+			nullptr, SEMessageBus::DEST_WORKER, m_url.c_str(),
+			m_executeJavascriptOnLoad.c_str(), "default", "popup",
+			CreateGloballyUniqueIdString().c_str(), apiServices,
+			std::make_shared<SEApiMessageHandler>(
+				"backgroundWorker", apiServices),
 			false);
 
 		auto mainWindow =
@@ -94,7 +93,10 @@ private:
 	QDockWidget *m_dockWidget = nullptr;
 };
 
-SEWorkerManager::SEWorkerManager() {}
+SEWorkerManager::SEWorkerManager(std::shared_ptr<SEApiServices> apiServices)
+	: m_apiServices(apiServices)
+{
+}
 
 SEWorkerManager::~SEWorkerManager() {
 	RemoveAll();
@@ -122,8 +124,8 @@ SEWorkerManager::Add(std::string requestedId,
 		id = QUuid::createUuid().toString().toStdString();
 	}
 
-	m_items[id] = std::make_shared<SEWorker>(id, url,
-					       executeJavascriptOnLoad);
+	m_items[id] = std::make_shared<SEWorker>(
+		id, url, executeJavascriptOnLoad, m_apiServices);
 
 	return id;
 }

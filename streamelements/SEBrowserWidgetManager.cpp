@@ -14,8 +14,10 @@
 #include <obs-module.h>
 
 SEBrowserWidgetManager::SEBrowserWidgetManager(
-	QMainWindow *parent)
-	: SEWidgetManager(parent), m_notificationBarToolBar(nullptr)
+	QMainWindow *parent, std::shared_ptr<SEApiServices> apiServices)
+	: SEWidgetManager(parent),
+	  m_notificationBarToolBar(nullptr),
+	  m_apiServices(apiServices)
 {
 }
 
@@ -87,8 +89,9 @@ void SEBrowserWidgetManager::PushCentralBrowserWidget(
 	SEBrowserWidget *widget = new SEBrowserWidget(
 		nullptr, SEMessageBus::DEST_UI, url,
 		executeJavaScriptCodeOnLoad, "reload", "center",
-		CreateGloballyUniqueIdString().c_str(),
-		std::make_shared<SEApiMessageHandler>("centralWidget"));
+		CreateGloballyUniqueIdString().c_str(), m_apiServices,
+		std::make_shared<SEApiMessageHandler>("centralWidget",
+						      m_apiServices));
 
 	PushCentralWidget(widget);
 }
@@ -306,9 +309,11 @@ bool SEBrowserWidgetManager::AddDockBrowserWidget(
 	std::string my_url = url;
 
 	SEBrowserWidget *widget = new SEBrowserWidget(
-		nullptr, SEMessageBus::DEST_UI, my_url.c_str(), executeJavaScriptCodeOnLoad, reloadPolicy,
-		DockWidgetAreaToString(area).c_str(), id,
-		std::make_shared<SEApiMessageHandler>("dockingWidget"));
+		nullptr, SEMessageBus::DEST_UI, my_url.c_str(),
+		executeJavaScriptCodeOnLoad, reloadPolicy,
+		DockWidgetAreaToString(area).c_str(), id, m_apiServices,
+		std::make_shared<SEApiMessageHandler>("dockingWidget",
+						      m_apiServices));
 
 	//main->setCentralWidget(widget);
 
@@ -1014,10 +1019,11 @@ void SEBrowserWidgetManager::ShowNotificationBar(
 	HideNotificationBar();
 
 	m_notificationBarBrowserWidget = new SEBrowserWidget(
-		nullptr, SEMessageBus::DEST_UI, url, executeJavaScriptCodeOnLoad, "reload", "notification",
-		CreateGloballyUniqueIdString().c_str(),
-		std::make_shared<SEApiMessageHandler>(
-			"notificationBar"));
+		nullptr, SEMessageBus::DEST_UI, url,
+		executeJavaScriptCodeOnLoad, "reload", "notification",
+		CreateGloballyUniqueIdString().c_str(), m_apiServices,
+		std::make_shared<SEApiMessageHandler>("notificationBar",
+						      m_apiServices));
 
 	const Qt::ToolBarArea NOTIFICATION_BAR_AREA = Qt::TopToolBarArea;
 

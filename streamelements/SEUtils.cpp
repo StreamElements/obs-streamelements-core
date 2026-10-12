@@ -3585,11 +3585,14 @@ bool DeserializeAndInvokeAction(CefRefPtr<CefValue> input,
 		// No action
 		return true;
 	} else {
-		return SEApiMessageHandler::InvokeHandler::
-			GetInstance()
-				->InvokeApiCallAsync(invoke, invokeArgs,
-						     [](CefRefPtr<CefValue>) {
-						     });
+		if (!SEGlobalStateManager::IsInstanceAvailable())
+			return false;
+
+		return SEApiMessageHandler::InvokeHandler::GetInstance(
+			       SEGlobalStateManager::GetInstance()
+				       ->GetApiServices())
+			->InvokeApiCallAsync(invoke, invokeArgs,
+					     [](CefRefPtr<CefValue>) {});
 	}
 }
 

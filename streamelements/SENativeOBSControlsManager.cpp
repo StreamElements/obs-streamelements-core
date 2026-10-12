@@ -296,7 +296,7 @@ bool SENativeOBSControlsManager::DeserializePreviewTitleBar(
 		nullptr, SEMessageBus::DEST_UI, url.c_str(),
 		executeJavaScriptOnLoad.c_str(), "reload",
 		"obsPreviewAreaTitleBar",
-		CreateGloballyUniqueIdString().c_str());
+		CreateGloballyUniqueIdString().c_str(), m_apiServices);
 
 	m_previewTitleBrowser->setSizePolicy(QSizePolicy(
 		QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding));

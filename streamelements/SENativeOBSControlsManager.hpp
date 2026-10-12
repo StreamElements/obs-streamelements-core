@@ -19,6 +19,8 @@
 
 #include "cef-headers.hpp"
 
+#include "SEApiServices.hpp"
+
 #include "SEBrowserWidget.hpp"
 
 #define SE_ENABLE_CENTRAL_WIDGET_DECORATIONS 0
@@ -97,6 +99,18 @@ public:
 
 public:
 	QMainWindow* mainWindow() { return m_mainWindow; }
+
+	//
+	// A setter rather than a constructor argument because this class hands
+	// out its own instance through GetInstance(), so Initialize() cannot
+	// get a word in while it is being built. It is called there, right
+	// after that instance is obtained, and the only thing it feeds is the
+	// preview title bar browser, which is created later on demand.
+	//
+	void SetApiServices(std::shared_ptr<SEApiServices> apiServices)
+	{
+		m_apiServices = apiServices;
+	}
 
 	void SetStartStreamingMode(start_streaming_mode_t mode) { m_start_streaming_mode = mode; }
 	start_streaming_mode_t GetStartStreamingMode() { return m_start_streaming_mode; }
@@ -179,7 +193,9 @@ private:
 
 	bool m_isStreamingTransitionState = false;
 
-	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
+	std::shared_ptr<SEApiServices> m_apiServices;
+
+#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
 	QPointer<QFrame> m_previewFrame = nullptr;
 	QPointer<QVBoxLayout> m_previewFrameLayout = nullptr;
 	QPointer<QLayout> m_nativePreviewLayout = nullptr;

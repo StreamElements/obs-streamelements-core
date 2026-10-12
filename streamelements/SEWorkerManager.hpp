@@ -17,7 +17,7 @@ private:
 	class SEWorker;
 
 public:
-	SEWorkerManager();
+	SEWorkerManager(std::shared_ptr<SEApiServices> apiServices);
 	~SEWorkerManager();
 
 public:
@@ -42,4 +42,6 @@ private:
 	std::recursive_mutex m_mutex;
 
 	std::map<std::string, std::shared_ptr<SEWorker>> m_items;
+
+	std::shared_ptr<SEApiServices> m_apiServices;
 };

@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "SEWebsocketApiServer.hpp"
+#include "SEApiServices.hpp"
 
 class SEBrowserWidget;
 
@@ -31,9 +32,17 @@ protected:
 	std::string m_containerType;
 	SEBrowserWidget *m_browserWidget = nullptr;
 
+	//
+	// The services this handler's methods are allowed to use. Injected, so
+	// a handler can be built against anything -- including a bundle with
+	// only the two services a test cares about.
+	//
+	std::shared_ptr<SEApiServices> m_services;
+
 public:
-	SEApiMessageHandler(std::string containerType)
-		: m_containerType(containerType)		  
+	SEApiMessageHandler(std::string containerType,
+			    std::shared_ptr<SEApiServices> services)
+		: m_containerType(containerType), m_services(services)
 	{
 		// RegisterIncomingApiCallHandlers();
 	}
@@ -139,8 +148,9 @@ public:
 class SEApiMessageHandler::InvokeHandler
 	: public SEApiMessageHandler {
 public:
-	InvokeHandler(std::string containerType)
-		: SEApiMessageHandler(containerType)
+	InvokeHandler(std::string containerType,
+		      std::shared_ptr<SEApiServices> services)
+		: SEApiMessageHandler(containerType, services)
 	{
 		// We must init this here since Invoke handler does not get "context initialized" event from
 		// the browser script which does not exist here :)
@@ -150,7 +160,16 @@ public:
 public:
 	~InvokeHandler() {}
 
-	static std::shared_ptr<SEApiMessageHandler::InvokeHandler> GetInstance()
+	//
+	// Still a singleton, and still built on first use: its only caller is a
+	// free function in SEUtils with nothing to hand it. The services come
+	// from the caller for that reason -- whoever first invokes an auxiliary
+	// action decides which bundle this handler keeps for the rest of the
+	// session, which is the last thing standing between this file and a
+	// second SEGlobalStateManager instance.
+	//
+	static std::shared_ptr<SEApiMessageHandler::InvokeHandler>
+	GetInstance(std::shared_ptr<SEApiServices> services)
 	{
 		static std::mutex mutex;
 
@@ -159,8 +178,8 @@ public:
 
 			if (!s_singleton) {
 				s_singleton = std::make_shared<
-					SEApiMessageHandler::
-						InvokeHandler>("globalInvokeHandler");
+					SEApiMessageHandler::InvokeHandler>(
+					"globalInvokeHandler", services);
 			}
 		}
 

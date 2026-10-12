@@ -2010,6 +2010,74 @@ static void check_injected_services_are_not_also_fetched_globally()
 	}
 }
 
+static void check_api_handler_takes_its_services_by_injection()
+{
+	//
+	// The handler's two hundred methods reach their services through the
+	// injected SEApiServices bundle. The reach they used to make wrapped
+	// across as many as four lines, so flatten the file before looking for
+	// it.
+	//
+	std::string src = strip_line_comments(
+		slurp("streamelements/SEApiMessageHandler.cpp"));
+
+	std::string flat;
+	flat.reserve(src.size());
+
+	for (std::size_t i = 0; i < src.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(src[i])))
+			flat += src[i];
+	}
+
+	//
+	// GetRazerWyvrnManager is deliberately absent: it is fetched by a
+	// file-local helper that has no object to be injected into, and that
+	// helper documents why. Everything else must come from the bundle.
+	//
+	const char *const services[] = {"GetObsSceneManager",
+					"GetMenuManager",
+					"GetWidgetManager",
+					"GetOutputManager",
+					"GetVideoCompositionManager",
+					"GetAudioCompositionManager",
+					"GetSharedVideoCompositionManager",
+					"GetNativeOBSControlsManager",
+					"GetOutputSettingsManager",
+					"GetHotkeyManager",
+					"GetBackupManager",
+					"GetWebsocketApiServer",
+					"GetBandwidthTestManager",
+					"GetExternalSceneDataProviderManager",
+					"GetProfilesManager",
+					"GetWorkerManager",
+					"GetAnalyticsEventsManager",
+					"GetHttpClient"};
+
+	for (const char *const service : services) {
+		const std::string reach =
+			std::string("SEGlobalStateManager::GetInstance()->") +
+			service;
+
+		const std::string message =
+			std::string("SEApiMessageHandler.cpp fetches ") +
+			service +
+			"() from the singleton -- it is in the injected "
+			"SEApiServices bundle, so use m_services (or "
+			"self->m_services inside a handler body)";
+
+		check(flat.find(reach) == std::string::npos, message.c_str());
+	}
+
+	//
+	// And the bundle has to actually be used, or the check above passes
+	// for the wrong reason.
+	//
+	check(flat.find("m_services->GetObsSceneManager()") !=
+		      std::string::npos,
+	      "SEApiMessageHandler.cpp no longer uses the injected services "
+	      "bundle -- this invariant would then pass vacuously");
+}
+
 static void check_crash_path_filesystem_calls_never_throw()
 {
 	const char *files[] = {
@@ -2451,6 +2519,7 @@ int main()
 	check_config_never_hands_libobs_a_null_config();
 	check_rejected_signature_stops_the_handler();
 	check_injected_services_are_not_also_fetched_globally();
+	check_api_handler_takes_its_services_by_injection();
 	check_crash_path_filesystem_calls_never_throw();
 
 	if (failures) {
