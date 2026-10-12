@@ -175,6 +175,14 @@ void SEGlobalStateManager::ThemeChangeListener::changeEvent(
 
 static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 {
+	//
+	// Registered with the manager as its callback data, so this does not
+	// have to look one up. Valid for as long as callbacks can arrive:
+	// Shutdown() removes this one before the manager is destroyed, and the
+	// Leak() path never destroys it at all.
+	//
+	auto self = static_cast<SEGlobalStateManager *>(data);
+
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
 	UNUSED_PARAMETER(data);
@@ -216,11 +224,9 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 
 			if (sourceName) {
 				json11::Json json = json11::Json::object{
-					{"sceneId",
-					 GetIdFromPointer(source)},
+					{"sceneId", GetIdFromPointer(source)},
 					{"videoCompositionId",
-					 SEGlobalStateManager::GetInstance()
-						 ->GetVideoCompositionManager()
+					 self->GetVideoCompositionManager()
 						 ->GetObsNativeVideoComposition()
 						 ->GetId()},
 					{"name", sourceName},
@@ -276,8 +282,7 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 		if (!SEGlobalStateManager::IsInstanceAvailable())
 			return;
 
-		auto apiServer = SEGlobalStateManager::GetInstance()
-					 ->GetWebsocketApiServer();
+		auto apiServer = self->GetWebsocketApiServer();
 
 		if (!apiServer)
 			return;
@@ -588,16 +593,13 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 		QObject::connect(
 			liveSupport, &QPushButton::clicked,
-			[]() {
-				SEGlobalStateManager::GetInstance()
-					->GetAnalyticsEventsManager()
-					->trackEvent(
-						"live_support_click",
-						json11::Json::object{
-							{"type",
-								"button_click"},
-							{"placement",
-								"live_support_button"}});
+			[analytics = m_analyticsEventsManager]() {
+				analytics->trackEvent(
+					"live_support_click",
+					json11::Json::object{
+						{"type", "button_click"},
+						{"placement",
+						 "live_support_button"}});
 
 				QUrl navigate_url = QUrl(
 					obs_module_text(
@@ -742,7 +744,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	// normally (CORE-786).
 	SENoteInitializeCompleted();
 
-	obs_frontend_add_event_callback(handle_obs_frontend_event, nullptr);
+	obs_frontend_add_event_callback(handle_obs_frontend_event, this);
 }
 
 void SEGlobalStateManager::Shutdown()
@@ -758,7 +760,7 @@ void SEGlobalStateManager::Shutdown()
 	// must be released rather than left to deadlock us (CORE-1131).
 	SetShuttingDown();
 
-	obs_frontend_remove_event_callback(handle_obs_frontend_event, nullptr);
+	obs_frontend_remove_event_callback(handle_obs_frontend_event, this);
 
 	PersistState(false);
 
@@ -972,8 +974,7 @@ void SEGlobalStateManager::SwitchToOBSStudio()
 			QMessageBox::Ok | QMessageBox::Cancel);
 
 		if (reply == QMessageBox::Ok) {
-			SEGlobalStateManager::GetInstance()
-				->StopOnBoardingUI();
+			StopOnBoardingUI();
 
 			///
 			// Also resets SEConfig::STARTUP_FLAGS_SIGNED_IN
