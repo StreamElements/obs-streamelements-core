@@ -2034,7 +2034,15 @@ static void check_api_handler_takes_its_services_by_injection()
 	// file-local helper that has no object to be injected into, and that
 	// helper documents why. Everything else must come from the bundle.
 	//
-	const char *const services[] = {"GetObsSceneManager",
+	//
+	// Not all of these are services: PersistState and the
+	// user-interface-state pair moved onto SEStatePersistence, which the
+	// handler reaches through the container like any other service.
+	//
+	const char *const services[] = {"PersistState",
+					"SerializeUserInterfaceState",
+					"DeserializeUserInterfaceState",
+					"GetObsSceneManager",
 					"GetMenuManager",
 					"GetWidgetManager",
 					"GetOutputManager",

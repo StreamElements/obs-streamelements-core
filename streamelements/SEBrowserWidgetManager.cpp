@@ -15,9 +15,8 @@
 
 SEBrowserWidgetManager::SEBrowserWidgetManager(
 	QMainWindow *parent, std::shared_ptr<SEApiServices> apiServices)
-	: SEWidgetManager(parent),
-	  m_notificationBarToolBar(nullptr),
-	  m_apiServices(apiServices)
+	: SEWidgetManager(parent, apiServices),
+	  m_notificationBarToolBar(nullptr)
 {
 }
 

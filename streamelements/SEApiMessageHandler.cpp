@@ -784,7 +784,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 			self->m_services->widgetManager
 				->DeserializeNotificationBar(barInfo);
 
-			SEGlobalStateManager::GetInstance()->PersistState();
+			self->m_services->statePersistence->PersistState();
 
 			result->SetBool(true);
 		}
@@ -795,7 +795,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		self->m_services->widgetManager->HideNotificationBar();
 
-		SEGlobalStateManager::GetInstance()->PersistState();
+		self->m_services->statePersistence->PersistState();
 
 		result->SetBool(true);
 	}
@@ -834,7 +834,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 							.c_str());
 
 				self->m_services->menuManager->Update();
-				SEGlobalStateManager::GetInstance()
+				self->m_services->statePersistence
 					->PersistState();
 
 				result->SetBool(true);
@@ -850,7 +850,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		}
 
 		self->m_services->menuManager->Update();
-		SEGlobalStateManager::GetInstance()->PersistState();
+		self->m_services->statePersistence->PersistState();
 
 		result->SetBool(true);
 	}
@@ -871,7 +871,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 			if (dock) {
 				self->m_services->menuManager->Update();
-				SEGlobalStateManager::GetInstance()
+				self->m_services->statePersistence
 					->PersistState();
 
 				result->SetString(id);
@@ -895,7 +895,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				}
 
 				self->m_services->menuManager->Update();
-				SEGlobalStateManager::GetInstance()
+				self->m_services->statePersistence
 					->PersistState();
 
 				result->SetBool(true);
@@ -922,7 +922,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 			if (result->GetBool()) {
 				self->m_services->menuManager->Update();
-				SEGlobalStateManager::GetInstance()
+				self->m_services->statePersistence
 					->PersistState();
 			}
 		}
@@ -958,7 +958,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 			if (result->GetBool()) {
 				self->m_services->menuManager->Update();
-				SEGlobalStateManager::GetInstance()
+				self->m_services->statePersistence
 					->PersistState();
 			}
 		}
@@ -994,7 +994,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 			if (result->GetBool()) {
 				self->m_services->menuManager->Update();
-				SEGlobalStateManager::GetInstance()
+				self->m_services->statePersistence
 					->PersistState();
 			}
 		}
@@ -1012,7 +1012,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 			if (result->GetBool()) {
 				self->m_services->menuManager->Update();
-				SEGlobalStateManager::GetInstance()
+				self->m_services->statePersistence
 					->PersistState();
 			}
 		}
@@ -1030,7 +1030,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 			if (result->GetBool()) {
 				self->m_services->menuManager->Update();
-				SEGlobalStateManager::GetInstance()
+				self->m_services->statePersistence
 					->PersistState();
 			}
 		}
@@ -1048,7 +1048,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 			if (result->GetBool()) {
 				self->m_services->menuManager->Update();
-				SEGlobalStateManager::GetInstance()
+				self->m_services->statePersistence
 					->PersistState();
 			}
 		}
@@ -1066,7 +1066,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 			if (result->GetBool()) {
 				self->m_services->menuManager->Update();
-				SEGlobalStateManager::GetInstance()
+				self->m_services->statePersistence
 					->PersistState();
 			}
 		}
@@ -1087,7 +1087,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 			if (result->GetBool()) {
 				self->m_services->menuManager->Update();
-				SEGlobalStateManager::GetInstance()
+				self->m_services->statePersistence
 					->PersistState();
 			}
 		}
@@ -1111,7 +1111,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 			if (result->GetBool()) {
 				self->m_services->menuManager->Update();
-				SEGlobalStateManager::GetInstance()
+				self->m_services->statePersistence
 					->PersistState();
 			}
 		}
@@ -1135,7 +1135,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 			if (result->GetBool()) {
 				self->m_services->menuManager->Update();
-				SEGlobalStateManager::GetInstance()
+				self->m_services->statePersistence
 					->PersistState();
 			}
 		}
@@ -1173,7 +1173,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 			SEConfig::STARTUP_FLAGS_SIGNED_IN);
 
 		self->m_services->menuManager->Update();
-		SEGlobalStateManager::GetInstance()->PersistState();
+		self->m_services->statePersistence->PersistState();
 
 		result->SetBool(true);
 	}
@@ -1328,8 +1328,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				self->m_services->workerManager->DeserializeOne(
 					args->GetValue(0)));
 
-			SEGlobalStateManager::GetInstance()->PersistState(
-				false);
+			self->m_services->statePersistence->PersistState(false);
 		}
 	}
 	API_HANDLER_END();
@@ -1353,8 +1352,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 						id);
 				}
 
-				SEGlobalStateManager::GetInstance()
-					->PersistState(false);
+				self->m_services->statePersistence->PersistState(
+					false);
 
 				result->SetBool(true);
 			}
@@ -1646,7 +1645,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 			SEConfig::STARTUP_FLAGS_SIGNED_IN);
 
 		self->m_services->menuManager->Update();
-		SEGlobalStateManager::GetInstance()->PersistState(false);
+		self->m_services->statePersistence->PersistState(false);
 
 		result->SetBool(true);
 	}
@@ -1662,7 +1661,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 			~SEConfig::STARTUP_FLAGS_SIGNED_IN);
 
 		self->m_services->menuManager->Update();
-		SEGlobalStateManager::GetInstance()->PersistState(false);
+		self->m_services->statePersistence->PersistState(false);
 
 		result->SetBool(true);
 	}
@@ -2217,7 +2216,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getUserInterfaceState");
 	{
-		SEGlobalStateManager::GetInstance()->SerializeUserInterfaceState(
+		self->m_services->statePersistence->SerializeUserInterfaceState(
 			result);
 	}
 	API_HANDLER_END();
@@ -2225,7 +2224,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("setUserInterfaceState");
 	{
 		if (args->GetSize()) {
-			result->SetBool(SEGlobalStateManager::GetInstance()
+			result->SetBool(self->m_services->statePersistence
 						->DeserializeUserInterfaceState(
 							args->GetValue(0)));
 		}
@@ -2493,7 +2492,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 					->DeserializePreviewTitleBar(
 						args->GetValue(0)));
 
-			SEGlobalStateManager::GetInstance()->PersistState();
+			self->m_services->statePersistence->PersistState();
 		}
 	}
 	API_HANDLER_END();
@@ -2505,7 +2504,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 		result->SetBool(true);
 
-		SEGlobalStateManager::GetInstance()->PersistState();
+		self->m_services->statePersistence->PersistState();
 	}
 	API_HANDLER_END();
 
@@ -2517,7 +2516,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 					->DeserializePreviewFrame(
 						args->GetValue(0)));
 
-			SEGlobalStateManager::GetInstance()->PersistState();
+			self->m_services->statePersistence->PersistState();
 		}
 	}
 	API_HANDLER_END();
@@ -2528,7 +2527,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 		result->SetBool(true);
 
-		SEGlobalStateManager::GetInstance()->PersistState();
+		self->m_services->statePersistence->PersistState();
 	}
 	API_HANDLER_END();
 	#endif

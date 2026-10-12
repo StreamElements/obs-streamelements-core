@@ -1,5 +1,7 @@
 #pragma once
 
+#include "SEApiServices.hpp"
+
 #include <QWidget>
 #include <QPointer>
 #include <QDockWidget>
@@ -49,7 +51,17 @@ public:
 	};
 
 public:
-	SEWidgetManager(QMainWindow* parent);
+	SEWidgetManager(QMainWindow *parent,
+			std::shared_ptr<SEApiServices> apiServices);
+
+protected:
+	//
+	// Handed to every browser widget and API handler created by a widget
+	// manager, and read by the deferred tasks that save window state.
+	//
+	std::shared_ptr<SEApiServices> m_apiServices;
+
+public:
 	~SEWidgetManager();
 
 	/* central widget */

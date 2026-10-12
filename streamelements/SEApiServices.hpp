@@ -26,6 +26,7 @@ class SEVideoCompositionManager;
 class SEAudioCompositionManager;
 class SEOutputManager;
 class SEObsActiveSceneTracker;
+class SEStatePersistence;
 
 //
 // The objects SEGlobalStateManager::Initialize() creates, in one place, so
@@ -68,4 +69,5 @@ struct SEApiServices {
 	std::shared_ptr<SEAudioCompositionManager> audioCompositionManager;
 	std::shared_ptr<SEOutputManager> outputManager;
 	std::shared_ptr<SEObsActiveSceneTracker> obsActiveSceneTracker;
+	std::shared_ptr<SEStatePersistence> statePersistence;
 };

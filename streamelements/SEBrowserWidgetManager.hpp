@@ -166,9 +166,5 @@ private:
 
 	QPointer<QToolBar> m_notificationBarToolBar = nullptr;
 
-	//
-	// Handed to every browser widget and API handler created here.
-	//
-	std::shared_ptr<SEApiServices> m_apiServices;
 	QPointer<SEBrowserWidget> m_notificationBarBrowserWidget = nullptr;
 };

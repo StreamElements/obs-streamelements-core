@@ -7,8 +7,11 @@
 
 #include <QApplication>
 
-SEWidgetManager::SEWidgetManager(QMainWindow *parent)
-	: m_parent(parent), m_nativeCentralWidget(nullptr)
+SEWidgetManager::SEWidgetManager(QMainWindow *parent,
+				 std::shared_ptr<SEApiServices> apiServices)
+	: m_parent(parent),
+	  m_nativeCentralWidget(nullptr),
+	  m_apiServices(apiServices)
 {
 	assert(parent);
 }
@@ -326,24 +329,20 @@ bool SEWidgetManager::AddDockWidget(
 
 			m_dockWidgetAreas[savedId] = area;
 
-			QtPostTask([]() -> void {
-				if (!SEGlobalStateManager::
-					    IsInstanceAvailable())
+			QtPostTask([services = m_apiServices]() -> void {
+				if (!services->statePersistence)
 					return;
 
-				SEGlobalStateManager::GetInstance()
-					->PersistState();
+				services->statePersistence->PersistState();
 			});
 		});
 
 	QObject::connect(dock, &QDockWidget::visibilityChanged, [this]() {
-		QtPostTask([]() -> void {
-			if (!SEGlobalStateManager::
-				    IsInstanceAvailable())
+		QtPostTask([services = m_apiServices]() -> void {
+			if (!services->statePersistence)
 				return;
 
-			SEGlobalStateManager::GetInstance()
-				->PersistState();
+			services->statePersistence->PersistState();
 		});
 
 		QtDelayTask(

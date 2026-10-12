@@ -31,6 +31,7 @@ struct QCefCookieManager;
 #include "SEPreviewManager.hpp"
 #include "SEWebsocketApiServer.hpp"
 #include "SEApiServices.hpp"
+#include "SEStatePersistence.hpp"
 #include "SEBrowserDialog.hpp"
 #include "SEVideoCompositionManager.hpp"
 #include "SEAudioCompositionManager.hpp"
@@ -120,8 +121,6 @@ public:
 	void StopOnBoardingUI();
 	void SwitchToOBSStudio();
 
-	void PersistState(bool sendEventToGuest = true);
-	void RestoreState();
 
 	QCef *GetCef() { return m_cef; }
 
@@ -262,8 +261,6 @@ public:
 	void ReportIssue();
 	void UninstallPlugin();
 
-	void SerializeUserInterfaceState(CefRefPtr<CefValue> &output);
-	bool DeserializeUserInterfaceState(CefRefPtr<CefValue> input);
 
 public:
 	std::shared_ptr<std::promise<CefRefPtr<CefValue>>>
@@ -288,7 +285,6 @@ protected:
 	virtual void OnObsExit() override;
 
 private:
-	bool m_persistStateEnabled = false;
 	bool m_initialized = false;
 	QPointer<QMainWindow> m_mainWindow = nullptr;
 	QPointer<QWidget> m_nativeCentralWidget = nullptr;
@@ -340,6 +336,7 @@ private:
 	std::shared_ptr<SEObsActiveSceneTracker>
 		m_obsActiveSceneTracker = nullptr;
 	std::shared_ptr<SEApiServices> m_apiServices = nullptr;
+	std::shared_ptr<SEStatePersistence> m_statePersistence = nullptr;
 
 private:
 	static std::shared_ptr<
