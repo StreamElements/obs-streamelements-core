@@ -4,8 +4,18 @@
 #include "SEVideoCompositionManager.hpp"
 #include "SEVideoComposition.hpp"
 
+#include <memory>
+
+//
+// Forward declaration rather than an include: the real header drags windows.h
+// in ahead of winsock2.h on these translation units.
+//
+class SEWebsocketApiServer;
+
 class SESharedVideoCompositionManager: public SEVideoCompositionEventListener {
 private:
+	std::shared_ptr<SEWebsocketApiServer> m_apiServer;
+
 	std::shared_mutex m_mutex;
 
 	std::map<std::string,
@@ -25,7 +35,9 @@ private:
 
 public:
 	SESharedVideoCompositionManager(
-		std::shared_ptr<SEVideoCompositionManager> videoCompositionManager);
+		std::shared_ptr<SEWebsocketApiServer> apiServer,
+		std::shared_ptr<SEVideoCompositionManager>
+			videoCompositionManager);
 
 	~SESharedVideoCompositionManager();
 

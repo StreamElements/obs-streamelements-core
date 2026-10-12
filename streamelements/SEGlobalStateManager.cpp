@@ -430,10 +430,19 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		SEBrowserWidgetManager>(
 		obs_main_window);
 
-	m_videoCompositionManager = std::make_shared<
-		SEVideoCompositionManager>();
-	m_audioCompositionManager = std::make_shared<
-		SEAudioCompositionManager>();
+	//
+	// Constructed ahead of everything that takes it. Its constructor binds
+	// port 27952 and starts accepting, so this opens the socket a few
+	// microseconds earlier in startup than it used to -- the managers
+	// between here and its old position are synchronous and immediate, and
+	// the panels that connect to it take seconds to come up.
+	//
+	m_websocketApiServer = std::make_shared<SEWebsocketApiServer>();
+
+	m_videoCompositionManager = std::make_shared<SEVideoCompositionManager>(
+		m_websocketApiServer);
+	m_audioCompositionManager = std::make_shared<SEAudioCompositionManager>(
+		m_websocketApiServer);
 
 	m_obsSceneManager =
 		std::make_shared<SEObsSceneManager>(
@@ -468,8 +477,6 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		std::make_shared<SEPreviewManager>(
 			mainWindow());
 
-	m_websocketApiServer = std::make_shared<
-		SEWebsocketApiServer>();
 	m_windowStateEventFilter =
 		std::make_shared<WindowStateChangeEventFilter>(
 			mainWindow());
@@ -492,10 +499,10 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 	m_sharedVideoCompositionManager =
 		std::make_shared<SESharedVideoCompositionManager>(
-			m_videoCompositionManager);
+			m_websocketApiServer, m_videoCompositionManager);
 
-	m_obsActiveSceneTracker =
-		std::make_shared<SEObsActiveSceneTracker>();
+	m_obsActiveSceneTracker = std::make_shared<SEObsActiveSceneTracker>(
+		m_websocketApiServer, m_videoCompositionManager);
 
 	m_appStateListener = new ApplicationStateListener();
 	m_themeChangeListener = new ThemeChangeListener();

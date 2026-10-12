@@ -1974,6 +1974,18 @@ static void check_injected_services_are_not_also_fetched_globally()
 		 "GetPerformanceHistoryTracker"},
 		{"streamelements/SEReportIssueDialog.cpp",
 		 "GetAnalyticsEventsManager"},
+		{"streamelements/SEVideoCompositionManager.cpp",
+		 "GetWebsocketApiServer"},
+		{"streamelements/SEAudioCompositionManager.cpp",
+		 "GetWebsocketApiServer"},
+		{"streamelements/SESharedVideoCompositionManager.cpp",
+		 "GetWebsocketApiServer"},
+		{"streamelements/SEObsActiveSceneTracker.cpp",
+		 "GetWebsocketApiServer"},
+		{"streamelements/SESharedVideoCompositionManager.cpp",
+		 "GetVideoCompositionManager"},
+		{"streamelements/SEObsActiveSceneTracker.cpp",
+		 "GetVideoCompositionManager"},
 	};
 
 	for (const auto &consumer : consumers) {

@@ -6,8 +6,18 @@
 #include <map>
 #include "cef-headers.hpp"
 
+#include <memory>
+
+//
+// Forward declaration rather than an include: the real header drags windows.h
+// in ahead of winsock2.h on these translation units.
+//
+class SEWebsocketApiServer;
+
 class SEVideoCompositionManager {
 private:
+	std::shared_ptr<SEWebsocketApiServer> m_apiServer;
+
 	std::shared_mutex m_mutex;
 	std::map<std::string, std::shared_ptr<SEVideoCompositionBase>> m_videoCompositionsMap;
 	std::shared_ptr<SEVideoCompositionBase> m_nativeVideoComposition;
@@ -16,7 +26,8 @@ private:
 		m_availableEncoderClassesCache;
 
 public:
-	SEVideoCompositionManager();
+	SEVideoCompositionManager(
+		std::shared_ptr<SEWebsocketApiServer> apiServer);
 	~SEVideoCompositionManager();
 
 public:

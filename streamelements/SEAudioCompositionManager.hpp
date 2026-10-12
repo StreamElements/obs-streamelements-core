@@ -12,8 +12,18 @@
 #include <map>
 #include <shared_mutex>
 
+#include <memory>
+
+//
+// Forward declaration rather than an include: the real header drags windows.h
+// in ahead of winsock2.h on these translation units.
+//
+class SEWebsocketApiServer;
+
 class SEAudioCompositionManager {
 private:
+	std::shared_ptr<SEWebsocketApiServer> m_apiServer;
+
 	std::shared_mutex m_mutex;
 	std::map<std::string,
 		 std::shared_ptr<SEAudioCompositionBase>>
@@ -25,7 +35,8 @@ private:
 		m_availableEncoderClassesCache;
 
 public:
-	SEAudioCompositionManager();
+	SEAudioCompositionManager(
+		std::shared_ptr<SEWebsocketApiServer> apiServer);
 	~SEAudioCompositionManager();
 
 public:
