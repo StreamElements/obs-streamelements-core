@@ -1,0 +1,3700 @@
+#include "SEApiMessageHandler.hpp"
+
+// __fastfail, for the crashProgramFastFail test hook below. Windows only: this
+// file is in the unconditional source list, and neither the intrinsic nor the
+// header exists on macOS.
+#ifdef WIN32
+#include <intrin.h>
+#endif
+
+#include "cef-headers.hpp"
+
+#include "Version.hpp"
+#include "SEConfig.hpp"
+#include "SEGlobalStateManager.hpp"
+#include "SEUtils.hpp"
+#include "SEMessageBus.hpp"
+#include "SEPleaseWaitWindow.hpp"
+#include "SEWebsocketApiServer.hpp"
+
+#include <QDesktopServices>
+#include <QUrl>
+
+std::shared_ptr<SEApiMessageHandler::InvokeHandler>
+	SEApiMessageHandler::InvokeHandler::s_singleton = nullptr;
+
+/* Incoming messages from renderer process */
+const char *MSG_ON_CONTEXT_CREATED =
+	"CefRenderProcessHandler::OnContextCreated";
+const char *MSG_INCOMING_API_CALL =
+	"SEApiMessageHandler::OnIncomingApiCall";
+
+/* Outgoing messages to renderer process */
+const char *MSG_BIND_JAVASCRIPT_FUNCTIONS =
+	"CefRenderProcessHandler::BindJavaScriptFunctions";
+const char *MSG_BIND_JAVASCRIPT_PROPS =
+	"CefRenderProcessHandler::BindJavaScriptProperties";
+
+static bool IsPluginInitialized()
+{
+	if (!obs_initialized())
+		return false;
+
+	if (!SEGlobalStateManager::IsInstanceAvailable())
+		return false;
+
+	if (!SEGlobalStateManager::GetInstance()->IsInitialized())
+		return false;
+
+	return true;
+}
+
+bool SEApiMessageHandler::OnProcessMessageReceived(
+	std::shared_ptr<SEWebsocketApiServer::ClientInfo> source,
+	CefRefPtr<CefProcessMessage> message,
+	const long cefClientId)
+{
+	if (!IsPluginInitialized())
+		return true;
+	
+	// This should prevent concurrent access to m_apiCallHandlers during initialization
+	std::unique_lock processMessageReceivedLock(
+		m_processMessageReceivedMutex);
+
+	const std::string &name = message->GetName();
+
+	if (name == MSG_ON_CONTEXT_CREATED) {
+		RegisterIncomingApiCallHandlers();
+
+		RegisterIncomingApiCallHandlersInternal(source);
+		RegisterApiPropsInternal(source);
+		DispatchHostReadyEventInternal(source);
+
+		return true;
+	} else if (name == MSG_INCOMING_API_CALL) {
+		CefRefPtr<CefValue> result = CefValue::Create();
+		result->SetBool(false);
+
+		CefRefPtr<CefListValue> args = message->GetArgumentList();
+
+		const int headerSize = args->GetInt(0);
+		std::string id = args->GetString(2).ToString();
+
+		id = id.substr(id.find_last_of('.') +
+			       1); // window.host.XXX -> XXX
+
+		if (m_apiCallHandlers.count(id)) {
+			CefRefPtr<CefListValue> callArgs =
+				CefListValue::Create();
+
+			for (size_t i = headerSize; i < args->GetSize() - 1; ++i) {
+				CefRefPtr<CefValue> parsedValue = CefParseJSON(
+					args->GetString(i),
+					JSON_PARSER_ALLOW_TRAILING_COMMAS);
+
+				if (!parsedValue) {
+					parsedValue = CefValue::Create();
+					parsedValue->SetNull();
+				}
+
+				callArgs->SetValue(callArgs->GetSize(),
+						   parsedValue);
+			}
+
+			struct local_context {
+				std::shared_ptr<SEApiMessageHandler> self;
+				std::string id;
+				std::shared_ptr<SEWebsocketApiServer::ClientInfo> target;
+				CefRefPtr<CefProcessMessage> message;
+				CefRefPtr<CefListValue> callArgs;
+				CefRefPtr<CefValue> result;
+				std::function<void()> complete;
+				int cef_app_callback_id;
+				long cefClientId;
+				std::shared_ptr<SEWebsocketApiServer::
+							ClientInfo>
+					source;
+
+				std::shared_ptr<SEApiContextItem>
+					apiContextHandle;
+			};
+
+			local_context *context = new local_context();
+
+			context->self = this->Clone();
+			context->id = id;
+			context->target = source;
+			context->message = message;
+			context->callArgs = callArgs;
+			context->result = result;
+			context->cef_app_callback_id =
+				message->GetArgumentList()->GetInt(
+					message->GetArgumentList()->GetSize() -
+					1);
+			context->cefClientId = cefClientId;
+			context->source = source;
+			context->complete = [context]() {
+				if (!IsPluginInitialized()) {
+					blog(LOG_ERROR,
+					     "obs-streamelements-core[%s %s]: API: plugin is no longer initialized while completing call to '%s', callback id %d",
+					     context->target->m_target.c_str(),
+					     context->target->m_unique_id.c_str(),
+					     context->id.c_str(),
+					     context->cef_app_callback_id);
+
+					RemoveApiContext(
+						context->apiContextHandle);
+
+					delete context;
+
+					return;
+				}
+
+				if (IsTraceLogLevel()) {
+					blog(LOG_INFO,
+					     "obs-streamelements-core[%s %s]: API: completed call to '%s', callback id %d",
+					     context->target->m_target.c_str(),
+					     context->target->m_unique_id
+						     .c_str(),
+					     context->id.c_str(),
+					     context->cef_app_callback_id);
+				}
+
+				if (context->cef_app_callback_id != -1) {
+					// Invoke result callback
+					CefRefPtr<CefProcessMessage> msg =
+						CefProcessMessage::Create(
+							"executeCallback");
+
+					CefRefPtr<CefListValue> callbackArgs =
+						msg->GetArgumentList();
+					callbackArgs->SetInt(
+						0,
+						context->cef_app_callback_id);
+					callbackArgs->SetString(
+						1,
+						CefWriteJSON(
+							context->result,
+							JSON_WRITER_DEFAULT));
+
+					if (!SEGlobalStateManager::
+						    IsInstanceAvailable())
+						return;
+
+					auto apiServer =
+						SEGlobalStateManager::
+							GetInstance()
+								->GetWebsocketApiServer();
+
+					if (!apiServer)
+						return;
+
+					apiServer->DispatchClientMessage(
+						"system", context->source, msg);
+				}
+
+				RemoveApiContext(context->apiContextHandle);
+
+				delete context;
+			};
+
+			{
+				CefRefPtr<CefValue> callArgsValue =
+					CefValue::Create();
+				callArgsValue->SetList(context->callArgs);
+				if (IsTraceLogLevel()) {
+					blog(LOG_INFO,
+					     "obs-streamelements-core[%s %s]: API: posting call to '%s', callback id %d, args: %s",
+					     context->target->m_target.c_str(),
+					     context->target->m_unique_id
+						     .c_str(),
+					     context->id.c_str(),
+					     context->cef_app_callback_id,
+					     CefWriteJSON(callArgsValue,
+							  JSON_WRITER_DEFAULT)
+						     .ToString()
+						     .c_str());
+				}
+			}
+
+			QtPostTask (
+				[context]() -> void {
+					if (!IsPluginInitialized())
+					{
+						blog(LOG_ERROR,
+						     "obs-streamelements-core[%s %s]: API: plugin is no longer initialized while performing call to '%s', callback id %d",
+						     context->target->m_target
+							     .c_str(),
+						     context->target->m_unique_id
+							     .c_str(),
+						     context->id.c_str(),
+						     context->cef_app_callback_id);
+
+						context->complete();
+						return;
+					}
+
+					if (!context->self->m_runtimeStatus
+						     ->m_running) {
+						blog(LOG_ERROR,
+						     "obs-streamelements-core[%s %s]: API: message handler no longer initialized while performing call to '%s', callback id %d",
+						     context->target->m_target
+							     .c_str(),
+						     context->target->m_unique_id
+							     .c_str(),
+						     context->id.c_str(),
+						     context->cef_app_callback_id);
+
+						context->complete();
+						return;
+					}
+
+					// The crash consent prompt is modal, and a
+					// modal loop keeps draining this queue --
+					// so without this, calls posted before
+					// the fault run inside the crash handler,
+					// on the thread that crashed. See
+					// IsCrashReportingInProgress().
+					if (IsCrashReportingInProgress()) {
+						blog(LOG_ERROR,
+						     "obs-streamelements-core[%s %s]: API: a crash is being reported; refusing call to '%s', callback id %d",
+						     context->target->m_target
+							     .c_str(),
+						     context->target->m_unique_id
+							     .c_str(),
+						     context->id.c_str(),
+						     context->cef_app_callback_id);
+
+						context->complete();
+						return;
+					}
+
+					if (IsTraceLogLevel()) {
+						blog(LOG_INFO,
+						     "obs-streamelements-core[%s %s]: API: performing call to '%s', callback id %d",
+						     context->target->m_target
+							     .c_str(),
+						     context->target->m_unique_id
+							     .c_str(),
+						     context->id.c_str(),
+						     context->cef_app_callback_id);
+					}
+
+					context->apiContextHandle = PushApiContext(
+						context->id, context->callArgs);
+
+					context->self
+						->m_apiCallHandlers[context->id](
+							context->self,
+							context->message,
+							context->callArgs,
+							context->result,
+							context->target,
+							context->cefClientId,
+							context->complete);
+				});
+		}
+
+		return true;
+	}
+
+	return false;
+}
+
+void SEApiMessageHandler::InvokeApiCallHandlerAsync(
+	CefRefPtr<CefProcessMessage> message,
+	std::shared_ptr<SEWebsocketApiServer::ClientInfo> target,
+	std::string invokeId, CefRefPtr<CefListValue> invokeArgs,
+	std::function<void(CefRefPtr<CefValue>)> result_callback,
+	const long cefClientId,
+	const bool enable_logging)
+{
+	if (!SEGlobalStateManager::GetInstance()->IsInitialized())
+		return;
+
+	auto runtimeStatus = m_runtimeStatus;
+
+	if (!runtimeStatus->m_running)
+		return;
+
+	CefRefPtr<CefValue> result = CefValue::Create();
+	result->SetNull();
+
+	if (!m_apiCallHandlers.count(invokeId)) {
+		blog(LOG_ERROR,
+		     "obs-streamelements-core[%s %s]: API: invalid API call to '%s'",
+		     target->m_target.c_str(), target->m_unique_id.c_str(),
+		     invokeId.c_str());
+
+		result_callback(result);
+
+		return;
+	}
+
+	if (enable_logging) {
+		blog(LOG_INFO,
+		     "obs-streamelements-core[%s %s]: API: performing call to '%s'",
+		     target->m_target.c_str(), target->m_unique_id.c_str(),
+		     invokeId.c_str());
+	}
+
+	auto handler = m_apiCallHandlers[invokeId];
+
+	handler(this->Clone(), message, invokeArgs, result, target, cefClientId, [=]() {
+		if (enable_logging) {
+				blog(LOG_INFO,
+				     "obs-streamelements-core[%s %s]: API: completed call to '%s'",
+				     target->m_target.c_str(),
+				     target->m_unique_id.c_str(),
+				     invokeId.c_str());
+		}
+
+		if (runtimeStatus->m_running) {
+			result_callback(result);
+		}
+	});
+}
+
+#if ENABLE_CREATE_BROWSER_API
+CefRefPtr<CefDictionaryValue>
+SEApiMessageHandler::CreateBrowserArgsDictionary()
+{
+	CefRefPtr<CefDictionaryValue> rootDictionary =
+		CefDictionaryValue::Create();
+
+	CefRefPtr<CefDictionaryValue> seRoot = CefDictionaryValue::Create();
+
+	seRoot->SetDictionary("api", CreateApiSpecDictionaryInternal());
+
+	rootDictionary->SetDictionary("streamelements", seRoot);
+
+	return rootDictionary;
+}
+
+CefRefPtr<CefDictionaryValue>
+SEApiMessageHandler::CreateApiSpecDictionaryInternal()
+{
+	CefRefPtr<CefDictionaryValue> rootDictionary =
+		CefDictionaryValue::Create();
+
+	CefRefPtr<CefDictionaryValue> propsRoot = CefDictionaryValue::Create();
+
+	propsRoot->SetString("container", "host");
+	propsRoot->SetDictionary("items", CreateApiPropsDictionaryInternal());
+
+	rootDictionary->SetDictionary("properties", propsRoot);
+
+	CefRefPtr<CefDictionaryValue> funcsRoot = CefDictionaryValue::Create();
+
+	funcsRoot->SetString("container", "host");
+	funcsRoot->SetDictionary("items",
+				 CreateApiCallHandlersDictionaryInternal());
+
+	rootDictionary->SetDictionary("functions", funcsRoot);
+
+	return rootDictionary;
+}
+#endif
+
+CefRefPtr<CefDictionaryValue>
+SEApiMessageHandler::CreateApiCallHandlersDictionaryInternal()
+{
+	CefRefPtr<CefDictionaryValue> rootDictionary =
+		CefDictionaryValue::Create();
+
+	for (auto apiCallHandler : m_apiCallHandlers) {
+		CefRefPtr<CefDictionaryValue> function =
+			CefDictionaryValue::Create();
+
+		function->SetString("message", MSG_INCOMING_API_CALL);
+
+		rootDictionary->SetDictionary(apiCallHandler.first, function);
+	}
+
+	return rootDictionary;
+}
+
+void SEApiMessageHandler::RegisterIncomingApiCallHandlersInternal(
+	std::shared_ptr<SEWebsocketApiServer::ClientInfo> target)
+{
+	// Context created, request creation of window.host object
+	// with API methods
+	CefRefPtr<CefValue> root = CefValue::Create();
+
+	root->SetDictionary(CreateApiCallHandlersDictionaryInternal());
+
+	// Convert data to JSON
+	CefString jsonString = CefWriteJSON(root, JSON_WRITER_DEFAULT);
+
+	// Send request to renderer process
+	CefRefPtr<CefProcessMessage> msg =
+		CefProcessMessage::Create(MSG_BIND_JAVASCRIPT_FUNCTIONS);
+	msg->GetArgumentList()->SetString(0, "host");
+	msg->GetArgumentList()->SetString(1, jsonString);
+
+	if (!SEGlobalStateManager::IsInstanceAvailable())
+		return;
+
+	auto apiServer = SEGlobalStateManager::GetInstance()
+				 ->GetWebsocketApiServer();
+
+	if (!apiServer)
+		return;
+
+	apiServer->DispatchClientMessage("system", target, msg);
+}
+
+CefRefPtr<CefDictionaryValue>
+SEApiMessageHandler::CreateApiPropsDictionaryInternal()
+{
+	CefRefPtr<CefDictionaryValue> rootDictionary =
+		CefDictionaryValue::Create();
+
+	rootDictionary->SetBool("hostReady", true);
+	rootDictionary->SetBool("hostContainerHidden", m_initialHiddenState);
+	rootDictionary->SetInt("apiMajorVersion", HOST_API_VERSION_MAJOR);
+	rootDictionary->SetInt("apiMinorVersion", HOST_API_VERSION_MINOR);
+
+	return rootDictionary;
+}
+
+void SEApiMessageHandler::RegisterApiPropsInternal(
+	std::shared_ptr<SEWebsocketApiServer::ClientInfo> target)
+{
+	// Context created, request creation of window.host object
+	// with API methods
+	CefRefPtr<CefValue> root = CefValue::Create();
+
+	root->SetDictionary(CreateApiPropsDictionaryInternal());
+
+	// Convert data to JSON
+	CefString jsonString = CefWriteJSON(root, JSON_WRITER_DEFAULT);
+
+	// Send request to renderer process
+	CefRefPtr<CefProcessMessage> msg =
+		CefProcessMessage::Create(MSG_BIND_JAVASCRIPT_PROPS);
+	msg->GetArgumentList()->SetString(0, "host");
+	msg->GetArgumentList()->SetString(1, jsonString);
+
+	if (!SEGlobalStateManager::IsInstanceAvailable())
+		return;
+
+	auto apiServer = SEGlobalStateManager::GetInstance()
+				 ->GetWebsocketApiServer();
+
+	if (!apiServer)
+		return;
+
+	apiServer->DispatchClientMessage("system", target, msg);
+}
+
+void SEApiMessageHandler::DispatchHostReadyEventInternal(
+	std::shared_ptr<SEWebsocketApiServer::ClientInfo> target)
+{
+	DispatchEventInternal(target, "hostReady", "null");
+}
+
+void SEApiMessageHandler::DispatchEventInternal(
+	std::shared_ptr<SEWebsocketApiServer::ClientInfo> target,
+	std::string event,
+	std::string eventArgsJson)
+{
+	if (!SEGlobalStateManager::IsInstanceAvailable())
+		return;
+
+	auto apiServer = SEGlobalStateManager::GetInstance()
+				 ->GetWebsocketApiServer();
+
+	if (!apiServer)
+		return;
+
+	apiServer->DispatchJSEvent("system", target, event, eventArgsJson);
+}
+
+void SEApiMessageHandler::RegisterIncomingApiCallHandler(
+	std::string id, incoming_call_handler_t handler)
+{
+	m_apiCallHandlers[id] = handler;
+}
+
+static std::recursive_mutex s_sync_api_call_mutex;
+
+#ifdef SE_ENABLE_WYVRN
+//
+// The WYVRN manager, or null. Absent both before Initialize() has created it
+// and after Shutdown() has released it -- and Shutdown() is exactly when a page
+// is most likely to still be calling.
+//
+static std::shared_ptr<SERazerWyvrnManager> GetRazerWyvrnManager()
+{
+	if (!SEGlobalStateManager::IsInstanceAvailable())
+		return nullptr;
+
+	return SEGlobalStateManager::GetInstance()
+		->GetRazerWyvrnManager();
+}
+
+//
+// The `razerWyvrn` object. One serializer shared with the
+// hostRazerWyvrnStatusChanged event, so a page cannot be told two different
+// things about the same state.
+//
+static CefRefPtr<CefValue> SerializeRazerWyvrnStatus()
+{
+	auto manager = GetRazerWyvrnManager();
+
+	if (manager.get())
+		return manager->SerializeStatus();
+
+	// No manager at all: report the same shape rather than null, so a
+	// caller never has to branch on its absence.
+	CefRefPtr<CefValue> result = CefValue::Create();
+	CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+
+	d->SetBool("available", false);
+	d->SetBool("initialized", false);
+	d->SetString("status", "notCompiledIn");
+	d->SetInt("eventCount", 0);
+
+	result->SetDictionary(d);
+
+	return result;
+}
+#endif
+
+#define API_HANDLER_BEGIN(name) \
+	RegisterIncomingApiCallHandler(name, []( \
+		std::shared_ptr<SEApiMessageHandler> self, \
+		CefRefPtr<CefProcessMessage> message, \
+		CefRefPtr<CefListValue> args, \
+		CefRefPtr<CefValue>& result, \
+		std::shared_ptr<SEWebsocketApiServer::ClientInfo> target, \
+		const long cefClientId, \
+		std::function<void()> complete_callback) \
+		{ \
+			(void)self; \
+			(void)message; \
+			(void)args; \
+			(void)result; \
+			(void)target; \
+			(void)cefClientId; \
+			(void)complete_callback; \
+			std::lock_guard<std::recursive_mutex> _api_sync_guard(s_sync_api_call_mutex);
+#define API_HANDLER_END() \
+	complete_callback(); \
+	});
+
+#define API_HANDLER_END_ASYNC() \
+	});
+
+void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
+{
+	RegisterIncomingApiCallHandler(
+		"batchInvokeSeries",
+		[](std::shared_ptr<SEApiMessageHandler> self,
+		   CefRefPtr<CefProcessMessage> message,
+		   CefRefPtr<CefListValue> args, CefRefPtr<CefValue> &result,
+		   std::shared_ptr<SEWebsocketApiServer::ClientInfo>
+			   target,
+		   const long cefClientId,
+		   std::function<void()> complete_callback) {
+			result->SetNull();
+
+			if (!self->m_runtimeStatus->m_running) {
+				complete_callback();
+				return;
+			}
+
+			if (args->GetSize() < 1) {
+				complete_callback();
+				return;
+			}
+
+			if (args->GetType(0) != VTYPE_LIST) {
+				complete_callback();
+				return;
+			}
+
+			struct local_context {
+				CefRefPtr<CefValue> queueIndex =
+					CefValue::Create();
+				CefRefPtr<CefListValue> queue =
+					CefListValue::Create();
+				CefRefPtr<CefListValue> results =
+					CefListValue::Create();
+				std::function<void()> process;
+				std::function<void()> done;
+
+				std::shared_ptr<SEApiMessageHandler> self;
+				CefRefPtr<CefProcessMessage> message;
+				CefRefPtr<CefListValue> args;
+				CefRefPtr<CefValue> result;
+				std::shared_ptr<SEWebsocketApiServer::ClientInfo> target;
+				long cefClientId;
+				std::function<void()> complete_callback;
+			};
+
+			local_context *context = new local_context();
+
+			context->self = self;
+			context->message = message;
+			context->args = args;
+			context->result = result;
+			context->target = target;
+			context->cefClientId = cefClientId;
+			context->complete_callback = complete_callback;
+
+			context->queueIndex->SetInt(0);
+			context->queue = args->GetList(0);
+			context->done = [context]() {
+				obs_frontend_defer_save_end();
+
+				context->result->SetList(context->results);
+				context->complete_callback();
+				delete context;
+			};
+
+			context->process = [context]() {
+				size_t index = context->queueIndex->GetInt();
+
+				if (index >= context->queue->GetSize()) {
+					// End of queue
+					context->done();
+					return;
+				}
+
+				if (context->queue->GetType(index) !=
+				    VTYPE_DICTIONARY) {
+					// Invalid queue element type
+					context->done();
+					return;
+				}
+
+				CefRefPtr<CefDictionaryValue> d =
+					context->queue->GetDictionary(index);
+
+				if (!d->HasKey("invoke") ||
+				    !d->HasKey("invokeArgs") ||
+				    d->GetType("invoke") != VTYPE_STRING ||
+				    d->GetType("invokeArgs") != VTYPE_LIST) {
+					// Invalid queue element structure
+					context->done();
+					return;
+				}
+
+				std::string invokeId =
+					d->GetString("invoke").ToString();
+
+				CefRefPtr<CefListValue> invokeArgs =
+					d->GetList("invokeArgs");
+
+				context->self->InvokeApiCallHandlerAsync(
+					context->message,
+					context->target,
+					invokeId,
+					invokeArgs,
+					[=](CefRefPtr<CefValue> callResult) {
+						context->results->SetValue(
+							context->results
+								->GetSize(),
+							callResult);
+
+						context->queueIndex->SetInt(
+							context->queueIndex
+								->GetInt() +
+							1);
+
+						context->process();
+					},
+					context->cefClientId,
+					IsTraceLogLevel() /* enable_logging */);
+			};
+
+			obs_frontend_defer_save_begin();
+
+			context->process();
+		});
+
+	API_HANDLER_BEGIN("getStartupFlags");
+	{
+		result->SetInt(
+			SEConfig::GetInstance()->GetStartupFlags());
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setStartupFlags");
+	{
+		if (args->GetSize()) {
+			SEConfig::GetInstance()->SetStartupFlags(
+				args->GetValue(0)->GetInt());
+
+			result->SetBool(true);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("deleteAllCookies");
+	{
+		SEGlobalStateManager::GetInstance()->DeleteCookies();
+
+		result->SetBool(true);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("openDefaultBrowser");
+	{
+		if (args->GetSize()) {
+			CefString url = args->GetValue(0)->GetString();
+
+			QUrl navigate_url = QUrl(url.ToString().c_str(),
+						 QUrl::TolerantMode);
+			QDesktopServices::openUrl(navigate_url);
+
+			result->SetBool(true);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("showNotificationBar");
+	{
+		if (args->GetSize()) {
+			CefRefPtr<CefValue> barInfo = args->GetValue(0);
+
+			SEGlobalStateManager::GetInstance()
+				->GetWidgetManager()
+				->DeserializeNotificationBar(barInfo);
+
+			SEGlobalStateManager::GetInstance()
+				->PersistState();
+
+			result->SetBool(true);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("hideNotificationBar");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetWidgetManager()
+			->HideNotificationBar();
+
+		SEGlobalStateManager::GetInstance()->PersistState();
+
+		result->SetBool(true);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("showCentralWidget");
+	{
+		if (args->GetSize()) {
+			CefRefPtr<CefDictionaryValue> rootDictionary =
+				args->GetValue(0)->GetDictionary();
+
+			if (rootDictionary.get() &&
+			    rootDictionary->HasKey("url")) {
+				// Remove all central widgets
+				while (SEGlobalStateManager::GetInstance()
+					       ->GetWidgetManager()
+					       ->DestroyCurrentCentralBrowserWidget()) {
+				}
+
+				std::string executeJavaScriptCodeOnLoad;
+
+				if (rootDictionary->HasKey(
+					    "executeJavaScriptCodeOnLoad")) {
+					executeJavaScriptCodeOnLoad =
+						rootDictionary
+							->GetString(
+								"executeJavaScriptCodeOnLoad")
+							.ToString();
+				}
+
+				SEGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->PushCentralBrowserWidget(
+						rootDictionary->GetString("url")
+							.ToString()
+							.c_str(),
+						executeJavaScriptCodeOnLoad
+							.c_str());
+
+				SEGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				SEGlobalStateManager::GetInstance()
+					->PersistState();
+
+				result->SetBool(true);
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("hideCentralWidget");
+	{
+		while (SEGlobalStateManager::GetInstance()
+			       ->GetWidgetManager()
+			       ->DestroyCurrentCentralBrowserWidget()) {
+		}
+
+		SEGlobalStateManager::GetInstance()
+			->GetMenuManager()
+			->Update();
+		SEGlobalStateManager::GetInstance()->PersistState();
+
+		result->SetBool(true);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addDockingWidget");
+	{
+		if (args->GetSize()) {
+			CefRefPtr<CefValue> widgetInfo = args->GetValue(0);
+
+			std::string id =
+				SEGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->AddDockBrowserWidget(widgetInfo);
+
+			QDockWidget *dock =
+				SEGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->GetDockWidget(id.c_str());
+
+			if (dock) {
+				SEGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				SEGlobalStateManager::GetInstance()
+					->PersistState();
+
+				result->SetString(id);
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeDockingWidgetsByIds");
+	{
+		if (args->GetSize()) {
+			CefRefPtr<CefListValue> list = args->GetList(0);
+
+			if (list.get()) {
+				for (size_t i = 0; i < list->GetSize(); ++i) {
+					CefString id = list->GetString(i);
+
+					SEGlobalStateManager::
+						GetInstance()
+							->GetWidgetManager()
+							->RemoveDockWidget(
+								id.ToString()
+									.c_str());
+				}
+
+				SEGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				SEGlobalStateManager::GetInstance()
+					->PersistState();
+
+				result->SetBool(true);
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllDockingWidgets");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetWidgetManager()
+			->SerializeDockingWidgets(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("toggleDockingWidgetFloatingById");
+	{
+		if (args->GetSize() && args->GetType(0) == VTYPE_STRING) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->ToggleWidgetFloatingStateById(
+						args->GetString(0)
+							.ToString()
+							.c_str()));
+
+			if (result->GetBool()) {
+				SEGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				SEGlobalStateManager::GetInstance()
+					->PersistState();
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setDockingWidgetDimensionsById");
+	{
+		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
+		    args->GetType(1) == VTYPE_DICTIONARY) {
+			int width = -1;
+			int height = -1;
+
+			CefRefPtr<CefDictionaryValue> d =
+				args->GetDictionary(1);
+
+			if (d->HasKey("width") &&
+			    d->GetType("width") == VTYPE_INT) {
+				width = d->GetInt("width");
+			}
+
+			if (d->HasKey("height") &&
+			    d->GetType("height") == VTYPE_INT) {
+				height = d->GetInt("height");
+			}
+
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->SetWidgetDimensionsById(
+						args->GetString(0)
+							.ToString()
+							.c_str(),
+						width, height));
+
+			if (result->GetBool()) {
+				SEGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				SEGlobalStateManager::GetInstance()
+					->PersistState();
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setDockingWidgetPositionById");
+	{
+		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
+		    args->GetType(1) == VTYPE_DICTIONARY) {
+			int left = -1;
+			int top = -1;
+
+			CefRefPtr<CefDictionaryValue> d =
+				args->GetDictionary(1);
+
+			if (d->HasKey("left") &&
+			    d->GetType("left") == VTYPE_INT) {
+				left = d->GetInt("left");
+			}
+
+			if (d->HasKey("top") &&
+			    d->GetType("top") == VTYPE_INT) {
+				top = d->GetInt("top");
+			}
+
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->SetWidgetPositionById(
+						args->GetString(0)
+							.ToString()
+							.c_str(),
+						left, top));
+
+			if (result->GetBool()) {
+				SEGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				SEGlobalStateManager::GetInstance()
+					->PersistState();
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setDockingWidgetUrlById");
+	{
+		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
+		    args->GetType(1) == VTYPE_STRING) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->SetWidgetUrlById(args->GetString(0)
+								   .ToString()
+								   .c_str(),
+							   args->GetString(1)
+								   .ToString()
+								   .c_str()));
+
+			if (result->GetBool()) {
+				SEGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				SEGlobalStateManager::GetInstance()
+					->PersistState();
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setDockingWidgetTitleById");
+	{
+		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
+		    args->GetType(1) == VTYPE_STRING) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->SetWidgetTitleById(args->GetString(0)
+								     .ToString()
+								     .c_str(),
+							     args->GetString(1)
+								     .ToString()
+								     .c_str()));
+
+			if (result->GetBool()) {
+				SEGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				SEGlobalStateManager::GetInstance()
+					->PersistState();
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("showDockingWidgetById");
+	{
+		if (args->GetSize() >= 1 && args->GetType(0) == VTYPE_STRING) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->ShowDockWidgetById(args->GetString(0)
+								     .ToString()
+								     .c_str()));
+
+			if (result->GetBool()) {
+				SEGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				SEGlobalStateManager::GetInstance()
+					->PersistState();
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("hideDockingWidgetById");
+	{
+		if (args->GetSize() >= 1 && args->GetType(0) == VTYPE_STRING) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->HideDockWidgetById(args->GetString(0)
+								     .ToString()
+								     .c_str()));
+
+			if (result->GetBool()) {
+				SEGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				SEGlobalStateManager::GetInstance()
+					->PersistState();
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("groupDockingWidgetsPairByIds");
+	{
+		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING && args->GetType(1) == VTYPE_STRING) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->GroupDockingWidgetPairByIds(
+						args->GetString(0)
+							.ToString()
+							.c_str(),
+						args->GetString(1)
+							.ToString()
+							.c_str()));
+
+			if (result->GetBool()) {
+				SEGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				SEGlobalStateManager::GetInstance()
+					->PersistState();
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("insertDockingWidgetBeforeId");
+	{
+		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
+		    args->GetType(1) == VTYPE_STRING) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->InsertDockingWidgetRelativeToId(
+						args->GetString(0)
+							.ToString()
+							.c_str(),
+						args->GetString(1)
+							.ToString()
+							.c_str(),
+						true));
+
+			if (result->GetBool()) {
+				SEGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				SEGlobalStateManager::GetInstance()
+					->PersistState();
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("insertDockingWidgetAfterId");
+	{
+		if (args->GetSize() >= 2 && args->GetType(0) == VTYPE_STRING &&
+		    args->GetType(1) == VTYPE_STRING) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetWidgetManager()
+					->InsertDockingWidgetRelativeToId(
+						args->GetString(0)
+							.ToString()
+							.c_str(),
+						args->GetString(1)
+							.ToString()
+							.c_str(),
+						false));
+
+			if (result->GetBool()) {
+				SEGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->Update();
+				SEGlobalStateManager::GetInstance()
+					->PersistState();
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("beginOnBoarding");
+	{
+		SEGlobalStateManager::GetInstance()->Reset();
+
+		result->SetBool(true);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("completeOnBoarding");
+	{
+		while (SEGlobalStateManager::GetInstance()
+			       ->GetWidgetManager()
+			       ->DestroyCurrentCentralBrowserWidget()) {
+		}
+
+		SEConfig::GetInstance()->SetStartupFlags(
+			SEConfig::GetInstance()->GetStartupFlags() &
+			~SEConfig::STARTUP_FLAGS_ONBOARDING_MODE);
+
+		//
+		// Once on-boarding is complete, we assume our state is signed-in.
+		//
+		// This is not enough. There are edge cases where the user is signed-in
+		// but not yet has completed on-boarding.
+		//
+		// For those cases, we provide the adviseSignedIn() API call.
+		//
+		SEConfig::GetInstance()->SetStartupFlags(
+			SEConfig::GetInstance()->GetStartupFlags() |
+			SEConfig::STARTUP_FLAGS_SIGNED_IN);
+
+		SEGlobalStateManager::GetInstance()
+			->GetMenuManager()
+			->Update();
+		SEGlobalStateManager::GetInstance()->PersistState();
+
+		result->SetBool(true);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("showStatusBarTemporaryMessage");
+	{
+		if (args->GetSize()) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->DeserializeStatusBarTemporaryMessage(
+						args->GetValue(0)));
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("streamingBandwidthTestBegin");
+	{
+		if (args->GetSize() >= 2) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetBandwidthTestManager()
+					->BeginBandwidthTest(args->GetValue(0),
+							     args->GetValue(1),
+							     target->m_target));
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("streamingBandwidthTestEnd");
+	{
+		CefRefPtr<CefValue> options;
+
+		if (args->GetSize()) {
+			options = args->GetValue(0);
+		}
+		result->SetDictionary(
+			SEGlobalStateManager::GetInstance()
+				->GetBandwidthTestManager()
+				->EndBandwidthTest(options));
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("streamingBandwidthTestGetStatus");
+	{
+		result->SetDictionary(
+			SEGlobalStateManager::GetInstance()
+				->GetBandwidthTestManager()
+				->GetBandwidthTestStatus());
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getEncoderProperties");
+	{
+		if (args->GetSize() > 0) {
+			SEGlobalStateManager::GetInstance()
+				->GetOutputSettingsManager()
+				->GetEncoderProperties(args->GetValue(0),
+						       result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAvailableEncoders");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetOutputSettingsManager()
+			->GetAvailableEncoders(result, nullptr);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAvailableVideoEncoders");
+	{
+		obs_encoder_type type = OBS_ENCODER_VIDEO;
+
+		SEGlobalStateManager::GetInstance()
+			->GetOutputSettingsManager()
+			->GetAvailableEncoders(result, &type);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAvailableAudioEncoders");
+	{
+		obs_encoder_type type = OBS_ENCODER_AUDIO;
+
+		SEGlobalStateManager::GetInstance()
+			->GetOutputSettingsManager()
+			->GetAvailableEncoders(result, &type);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setStreamingSettings");
+	{
+		if (args->GetSize()) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetOutputSettingsManager()
+					->SetStreamingSettings(
+						args->GetValue(0)));
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getEncodingSettings");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetOutputSettingsManager()
+			->GetEncodingSettings(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setEncodingSettings");
+	{
+		if (args->GetSize()) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetOutputSettingsManager()
+					->SetEncodingSettings(
+						args->GetValue(0)));
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getCurrentContainerProperties");
+	{
+		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+
+		std::string dockingArea = "none";
+
+		SEBrowserWidgetManager::DockBrowserWidgetInfo
+			*info = SEGlobalStateManager::
+					GetInstance()
+						->GetWidgetManager()
+						->GetDockBrowserWidgetInfo(
+							target->m_target.c_str());
+
+		if (info) {
+			dockingArea = info->m_dockingArea;
+
+			d->SetString("url", info->m_url);
+
+			delete info;
+		}
+
+		d->SetString("id", target->m_target);
+		d->SetString("dockingArea", dockingArea);
+		d->SetString("theme", GetCurrentThemeName());
+		d->SetString("type", self->m_containerType);
+
+		result->SetDictionary(d);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("openPopupWindow");
+	{
+		if (args->GetSize()) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->DeserializePopupWindow(
+						args->GetValue(0)));
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addBackgroundWorker");
+	{
+		if (args->GetSize()) {
+			result->SetString(
+				SEGlobalStateManager::GetInstance()
+					->GetWorkerManager()
+					->DeserializeOne(args->GetValue(0)));
+
+			SEGlobalStateManager::GetInstance()
+				->PersistState(false);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllBackgroundWorkers");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetWorkerManager()
+			->Serialize(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeBackgroundWorkersByIds");
+	{
+		if (args->GetSize()) {
+			CefRefPtr<CefListValue> list = args->GetList(0);
+
+			if (list.get()) {
+				for (size_t i = 0; i < list->GetSize(); ++i) {
+					CefString id = list->GetString(i);
+
+					SEGlobalStateManager::
+						GetInstance()
+							->GetWorkerManager()
+							->Remove(id);
+				}
+
+				SEGlobalStateManager::GetInstance()
+					->PersistState(false);
+
+				result->SetBool(true);
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("showModalDialog");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->DeserializeModalDialog(args->GetValue(0),
+							 result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("showNonModalDialog");
+	{
+		if (args->GetSize()) {
+			auto promise_ptr =
+				SEGlobalStateManager::GetInstance()
+					->DeserializeNonModalDialog(
+						args->GetValue(0));
+
+			std::thread([complete_callback, promise_ptr, result]() -> void {
+				auto future = promise_ptr->get_future();
+
+				future.wait();
+
+				if (!future.valid()) {
+					result->SetNull();
+				} else {
+					result->SetValue(future.get());
+				}
+
+				complete_callback();
+			}).detach();
+		}
+	}
+	API_HANDLER_END_ASYNC();
+
+	API_HANDLER_BEGIN("getAllNonModalDialogs");
+	{
+		SEGlobalStateManager::GetInstance()
+			->SerializeAllNonModalDialogs(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("closeNonModalDialogsByIds");
+	{
+		if (args->GetSize() >= 1) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->DeserializeCloseNonModalDialogsByIds(
+						args->GetValue(0)));
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("focusNonModalDialogById");
+	{
+		if (args->GetSize() >= 1) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->DeserializeFocusNonModalDialogById(
+						args->GetValue(0)));
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setNonModalDialogDimensionsById");
+	{
+		if (args->GetSize() >= 2) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->DeserializeNonModalDialogDimensionsById(
+						args->GetValue(0), args->GetValue(1)));
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getSystemCPUUsageTimes");
+	{
+		SerializeSystemTimes(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getSystemMemoryUsage");
+	{
+		SerializeSystemMemoryUsage(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getSystemHardwareProperties");
+	{
+		SerializeSystemHardwareProperties(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAvailableFilterSourceTypes");
+	{
+		SerializeAvailableInputSourceTypes(
+			result, OBS_SOURCE_VIDEO | OBS_SOURCE_AUDIO,
+			{OBS_SOURCE_TYPE_FILTER}, false);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAvailableAudioFilterSourceTypes");
+	{
+		SerializeAvailableInputSourceTypes(
+			result, OBS_SOURCE_AUDIO,
+			{OBS_SOURCE_TYPE_FILTER}, false);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAvailableVideoFilterSourceTypes");
+	{
+		SerializeAvailableInputSourceTypes(
+			result, OBS_SOURCE_VIDEO,
+			{OBS_SOURCE_TYPE_FILTER}, false);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getInputSourceProperties");
+	{
+		if (args->GetSize() > 0) {
+			SerializeObsSourceProperties(args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getFilterSourceProperties");
+	{
+		if (args->GetSize() > 0) {
+			SerializeObsSourceProperties(args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAvailableInputSourceTypes");
+	{
+		SerializeAvailableInputSourceTypes(
+			result, OBS_SOURCE_VIDEO | OBS_SOURCE_AUDIO,
+			{OBS_SOURCE_TYPE_INPUT, OBS_SOURCE_TYPE_SCENE}, false);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAvailableVideoInputSourceTypes");
+	{
+		SerializeAvailableInputSourceTypes(result, OBS_SOURCE_VIDEO,
+						   {OBS_SOURCE_TYPE_INPUT,
+						    OBS_SOURCE_TYPE_SCENE}, false);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAvailableAudioInputSourceTypes");
+	{
+		SerializeAvailableInputSourceTypes(result, OBS_SOURCE_AUDIO,
+						   {OBS_SOURCE_TYPE_INPUT,
+						    OBS_SOURCE_TYPE_SCENE}, false);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllExistingVideoInputSources");
+	{
+		SerializeExistingInputSources(result, OBS_SOURCE_VIDEO, 0L,
+					      {OBS_SOURCE_TYPE_INPUT,
+					       OBS_SOURCE_TYPE_SCENE}, false);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllExistingAudioInputSources");
+	{
+		SerializeExistingInputSources(result, OBS_SOURCE_AUDIO, 0L,
+					      {OBS_SOURCE_TYPE_INPUT,
+					       OBS_SOURCE_TYPE_SCENE}, false);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllExistingInputSources");
+	{
+		SerializeExistingInputSources(
+			result, OBS_SOURCE_VIDEO | OBS_SOURCE_AUDIO, 0L,
+			{OBS_SOURCE_TYPE_INPUT, OBS_SOURCE_TYPE_SCENE}, false);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllHotkeyBindings");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetHotkeyManager()
+			->SerializeHotkeyBindings(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllManagedHotkeyBindings");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetHotkeyManager()
+			->SerializeHotkeyBindings(result, true);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addHotkeyBinding");
+	{
+		if (args->GetSize()) {
+			obs_hotkey_id id =
+				SEGlobalStateManager::GetInstance()
+					->GetHotkeyManager()
+					->DeserializeSingleHotkeyBinding(
+						args->GetValue(0));
+
+			if (id != OBS_INVALID_HOTKEY_ID) {
+				result->SetInt((int)id);
+			} else {
+				result->SetNull();
+			}
+		} else
+			result->SetNull();
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setHotkeyBindingTriggers");
+	{
+		if (args->GetSize()) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetHotkeyManager()
+					->DeserializeHotkeyTriggers(
+						args->GetValue(0)));
+		} else {
+			result->SetNull();
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeHotkeyBindingById");
+	{
+		if (args->GetSize() && args->GetType(0) == VTYPE_INT) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetHotkeyManager()
+					->RemoveHotkeyBindingById(
+						args->GetInt(0)));
+		} else {
+			result->SetNull();
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getHostProperties");
+	{
+		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+
+		d->SetString("obsVersionString", obs_get_version_string());
+		d->SetString("cefVersionString", GetCefVersionString());
+		d->SetString("cefPlatformApiHash", GetCefPlatformApiHash());
+		d->SetString("cefUniversalApiHash", GetCefUniversalApiHash());
+		d->SetString("hostPluginVersionString",
+			     GetSEPluginVersionString());
+		d->SetString("hostApiVersionString",
+			     GetSEApiVersionString());
+		d->SetString("hostMachineUniqueId",
+			     SEGlobalStateManager::GetInstance()
+				     ->GetAnalyticsEventsManager()
+				     ->identity());
+		d->SetString("hostSessionUniqueId",
+			     SEGlobalStateManager::GetInstance()
+				     ->GetAnalyticsEventsManager()
+				     ->sessionId());
+
+#ifdef WIN32
+		d->SetString("platform", "windows");
+#elif defined(__APPLE__)
+		d->SetString("platform", "macos");
+#elif defined(__linux__)
+		d->SetString("platform", "linux");
+#endif
+
+		if (sizeof(void*) == 8) {
+			d->SetString("platformArch", "64bit");
+		} else {
+			d->SetString("platformArch", "32bit");
+		}
+
+		result->SetDictionary(d);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("adviseSignedIn");
+	{
+		SEConfig *config =
+			SEConfig::GetInstance();
+
+		config->SetStartupFlags(
+			config->GetStartupFlags() |
+			SEConfig::STARTUP_FLAGS_SIGNED_IN);
+
+		SEGlobalStateManager::GetInstance()
+			->GetMenuManager()
+			->Update();
+		SEGlobalStateManager::GetInstance()->PersistState(
+			false);
+
+		result->SetBool(true);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("adviseSignedOut");
+	{
+		SEConfig *config =
+			SEConfig::GetInstance();
+
+		config->SetStartupFlags(
+			config->GetStartupFlags() &
+			~SEConfig::STARTUP_FLAGS_SIGNED_IN);
+
+		SEGlobalStateManager::GetInstance()
+			->GetMenuManager()
+			->Update();
+		SEGlobalStateManager::GetInstance()->PersistState(
+			false);
+
+		result->SetBool(true);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("broadcastMessage");
+	{
+		if (args->GetSize() && args->GetType(0) == VTYPE_DICTIONARY) {
+			CefRefPtr<CefValue> message = args->GetValue(0);
+
+			SEMessageBus::GetInstance()
+				->NotifyAllMessageListeners(
+					SEMessageBus::DEST_ALL_LOCAL,
+					SEMessageBus::SOURCE_WEB,
+					"urn:streamelements:internal:" + target->m_target,
+					message);
+
+			result->SetBool(true);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("broadcastEvent");
+	{
+		if (args->GetSize() && args->GetType(0) == VTYPE_DICTIONARY) {
+			CefRefPtr<CefDictionaryValue> d =
+				args->GetDictionary(0);
+
+			if (d->HasKey("name") &&
+			    d->GetType("name") == VTYPE_STRING) {
+				std::string sourceUrl =
+					"urn:streamelements:internal:" + target->m_target;
+
+				SEMessageBus::GetInstance()
+					->NotifyAllLocalEventListeners(
+						SEMessageBus::
+								DEST_ALL_LOCAL &
+							~SEMessageBus::
+								DEST_BROWSER_SOURCE,
+						SEMessageBus::
+							SOURCE_WEB,
+						sourceUrl, "hostEventReceived",
+						args->GetValue(0));
+
+				SEMessageBus::GetInstance()
+					->NotifyAllExternalEventListeners(
+						SEMessageBus::
+							DEST_ALL_EXTERNAL,
+						SEMessageBus::
+							SOURCE_WEB,
+						sourceUrl, d->GetString("name"),
+						d->GetValue("data"));
+
+				result->SetBool(true);
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addCurrentSceneItemBrowserSource");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsBrowserSource(args->GetValue(0),
+							      result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addSceneItemBrowserSource");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsBrowserSource(args->GetValue(0),
+							      result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addCurrentSceneItemGameCaptureSource");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsGameCaptureSource(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addSceneItemGameCaptureSource");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsGameCaptureSource(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addCurrentSceneItemVideoCaptureSource");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsVideoCaptureSource(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addSceneItemVideoCaptureSource");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsVideoCaptureSource(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addCurrentSceneItemObsNativeSource");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsNativeSource(args->GetValue(0),
+							     result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addSceneItemObsNativeSource");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsNativeSource(args->GetValue(0),
+							     result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addCurrentSceneItemGroup");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsSceneItemGroup(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addSceneItemGroup");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsSceneItemGroup(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllCurrentSceneItems");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SerializeObsSceneItems(args->GetValue(0),
+							 result, false);
+		} else {
+			CefRefPtr<CefValue> nullArg = CefValue::Create();
+
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SerializeObsSceneItems(nullArg, result, false);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllSceneItems");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SerializeObsSceneItems(args->GetValue(0),
+							 result, false);
+		} else {
+			CefRefPtr<CefValue> nullArg = CefValue::Create();
+
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SerializeObsSceneItems(nullArg, result, false);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeCurrentSceneItemsByIds");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->RemoveObsSceneItemsByIds(args->GetValue(0),
+							   result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeSceneItemsByIds");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->RemoveObsSceneItemsByIds(args->GetValue(0),
+							   result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("invokeCurrentSceneItemDefaultActionById");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->InvokeCurrentSceneItemDefaultActionById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("invokeCurrentSceneItemDefaultContextMenuById");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->InvokeCurrentSceneItemDefaultContextMenuById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setCurrentSceneItemsAuxiliaryActions");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeSceneItemsAuxiliaryActions(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getCurrentSceneItemsAuxiliaryActions");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetObsSceneManager()
+			->SerializeSceneItemsAuxiliaryActions(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setScenesAuxiliaryActions");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeScenesAuxiliaryActions(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getScenesAuxiliaryActions");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetObsSceneManager()
+			->SerializeScenesAuxiliaryActions(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setCurrentSceneItemPropertiesById");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SetObsSceneItemPropertiesById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setSceneItemPropertiesById");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SetObsSceneItemPropertiesById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getCurrentSceneItemPropertiesById");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->GetObsSceneItemPropertiesById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getSceneItemPropertiesById");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->GetObsSceneItemPropertiesById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("ungroupCurrentSceneItemGroupById");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->UngroupObsSceneItemsByGroupId(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("ungroupSceneItemGroupById");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->UngroupObsSceneItemsByGroupId(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAvailableInputSourceClasses");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetObsSceneManager()
+			->SerializeInputSourceClasses(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getSourceClassProperties");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SerializeSourceClassProperties(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getHostReleaseGroupProperties");
+	{
+		std::string quality =
+			ReadProductEnvironmentConfigurationString("Quality");
+		std::string manifestUrl =
+			ReadProductEnvironmentConfigurationString(
+				"ManifestUrl");
+
+		if (quality.size() && manifestUrl.size()) {
+			CefRefPtr<CefDictionaryValue> d =
+				CefDictionaryValue::Create();
+
+			d->SetString("quality", quality.c_str());
+			d->SetString("manifestUrl", manifestUrl.c_str());
+
+			result->SetDictionary(d);
+		} else {
+			result->SetNull();
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setHostReleaseGroupProperties");
+	{
+		if (args->GetSize() && args->GetType(0) == VTYPE_DICTIONARY) {
+			CefRefPtr<CefDictionaryValue> d =
+				args->GetDictionary(0);
+
+			if (d->HasKey("quality") &&
+			    d->GetType("quality") == VTYPE_STRING &&
+			    d->HasKey("manifestUrl") &&
+			    d->GetType("manifestUrl") == VTYPE_STRING) {
+				std::string quality = d->GetString("quality");
+				std::string manifestUrl =
+					d->GetString("manifestUrl");
+
+				bool writeResult =
+					WriteProductEnvironmentConfigurationStrings(
+						{{"", "Quality", quality},
+						 {"", "ManifestUrl",
+						  manifestUrl}});
+
+				result->SetBool(writeResult);
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("queryHostReleaseGroupUpdateAvailability");
+	{
+		bool allowDowngrade = false;
+		bool forceInstall = false;
+		bool allowUseLastResponse = true;
+
+		if (args->GetSize() > 0) {
+			if (args->GetValue(0)->GetType() == VTYPE_DICTIONARY) {
+				CefRefPtr<CefDictionaryValue> d =
+					args->GetDictionary(0);
+
+				if (d->HasKey("allowDowngrade") &&
+				    d->GetType("allowDowngrade") ==
+					    VTYPE_BOOL) {
+					allowDowngrade =
+						d->GetBool("allowDowngrade");
+				}
+
+				if (d->HasKey("forceInstall") &&
+				    d->GetType("forceInstall") ==
+					    VTYPE_BOOL) {
+					forceInstall =
+						d->GetBool("forceInstall");
+				}
+
+				if (d->HasKey("allowUseLastResponse") &&
+				    d->GetType("allowUseLastResponse") == VTYPE_BOOL) {
+					allowUseLastResponse =
+						d->GetBool("allowUseLastResponse");
+				}
+			}
+		}
+
+		calldata_t *cd = SETRACE_ADDREF(calldata_create());
+		calldata_set_bool(cd, "allow_downgrade", allowDowngrade);
+		calldata_set_bool(cd, "force_install", forceInstall);
+		calldata_set_bool(cd, "allow_use_last_response",
+				  allowUseLastResponse);
+
+		signal_handler_signal(
+			obs_get_signal_handler(),
+			"streamelements_request_check_for_updates_silent",
+			cd);
+
+		calldata_destroy(SETRACE_DECREF(cd));
+
+		result->SetBool(true);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getExternalSceneDataProviders");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetExternalSceneDataProviderManager()
+			->SerializeProviders(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getExternalSceneDataSceneCollections");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetExternalSceneDataProviderManager()
+				->SerializeProviderSceneCollections(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getExternalSceneDataSceneCollectionContent");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetExternalSceneDataProviderManager()
+				->SerializeProviderSceneColletion(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("httpRequestText");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetHttpClient()
+				->DeserializeHttpRequestText(args->GetValue(0),
+							     result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getStreamingStatus");
+	{
+		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+
+		d->SetBool("isStreamingActive",
+			   obs_frontend_streaming_active());
+
+		result->SetDictionary(d);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("requestStreamingStart");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetNativeOBSControlsManager()
+			->StartStreaming();
+
+		result->SetBool(true);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("requestStreamingStop");
+	{
+		obs_frontend_streaming_stop();
+
+		result->SetBool(true);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setStreamingStartUIHandlerProperties");
+	{
+		if (args->GetSize()) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetNativeOBSControlsManager()
+					->DeserializeStartStreamingUIHandlerProperties(
+						args->GetValue(0)));
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("adviseStreamingStartUIRequestAccepted");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetNativeOBSControlsManager()
+			->AdviseRequestStartStreamingAccepted();
+
+		result->SetBool(true);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("adviseStreamingStartUIRequestRejected");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetNativeOBSControlsManager()
+			->AdviseRequestStartStreamingRejected();
+
+		result->SetBool(true);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getUserInterfaceState");
+	{
+		SEGlobalStateManager::GetInstance()
+			->SerializeUserInterfaceState(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setUserInterfaceState");
+	{
+		if (args->GetSize()) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->DeserializeUserInterfaceState(
+						args->GetValue(0)));
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllScenes");
+	{
+		CefRefPtr<CefValue> input = CefValue::Create();
+
+		if (args->GetSize())
+			input = args->GetValue(0);
+		else
+			input->SetNull();
+
+		SEGlobalStateManager::GetInstance()
+			->GetObsSceneManager()
+			->SerializeObsScenes(input, result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getCurrentScene");
+	{
+		CefRefPtr<CefValue> input = CefValue::Create();
+
+		if (args->GetSize())
+			input = args->GetValue(0);
+		else
+			input->SetNull();
+
+		SEGlobalStateManager::GetInstance()
+			->GetObsSceneManager()
+			->SerializeObsCurrentScene(input, result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addScene");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsScene(args->GetValue(0),
+						      result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setCurrentSceneById");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SetCurrentObsSceneById(args->GetValue(0),
+							 result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeScenesByIds");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->RemoveObsScenesByIds(args->GetValue(0),
+						       result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setScenePropertiesById");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SetObsScenePropertiesById(args->GetValue(0),
+							    result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setAuxiliaryMenuItems");
+	{
+		if (args->GetSize()) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->DeserializeAuxiliaryMenuItems(
+						args->GetValue(0)));
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAuxiliaryMenuItems");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetMenuManager()
+			->SerializeAuxiliaryMenuItems(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllProfiles");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetProfilesManager()
+			->SerializeAllProfiles(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getCurrentProfile");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetProfilesManager()
+			->SerializeCurrentProfile(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setCurrentProfile");
+	{
+		if (args->GetSize()) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetProfilesManager()
+					->DeserializeCurrentProfileById(
+						args->GetValue(0)));
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllSceneCollections");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetObsSceneManager()
+			->SerializeObsSceneCollections(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getCurrentSceneCollectionProperties");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetObsSceneManager()
+			->SerializeObsCurrentSceneCollection(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addSceneCollection");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsSceneCollection(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setCurrentSceneCollectionById");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeObsCurrentSceneCollectionById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("queryUserEnvironmentBackupReferencedFiles");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetBackupManager()
+				->QueryLocalBackupPackageReferencedFiles(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("createUserEnvironmentBackupPackage");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetBackupManager()
+				->CreateLocalBackupPackage(args->GetValue(0),
+							   result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("queryUserEnvironmentBackupPackageContent");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetBackupManager()
+				->QueryBackupPackageContent(args->GetValue(0),
+							    result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("restoreUserEnvironmentBackupPackageContent");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetBackupManager()
+				->RestoreBackupPackageContent(args->GetValue(0),
+							      result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("beginDeferSaveTransaction");
+	{
+		result->SetString(CreateTimedObsApiTransaction());
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("completeDeferSaveTransaction");
+	{
+		if (args->GetSize() && args->GetType(0) == VTYPE_STRING) {
+			CompleteTimedObsApiTransaction(args->GetString(0));
+
+			result->SetBool(true);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addBrowserScopedHttpServer");
+	{
+		if (args->GetSize()) {
+			SEMessageBus::GetInstance()
+				->DeserializeBrowserHttpServer(
+					target->m_target, args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllBrowserScopedHttpServers");
+	{
+		SEMessageBus::GetInstance()
+			->SerializeBrowserHttpServers(target->m_target, result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeBrowserScopedHttpServersByIds");
+	{
+		if (args->GetSize()) {
+			SEMessageBus::GetInstance()
+				->RemoveBrowserHttpServersByIds(
+					target->m_target, args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("sendHttpRequestResponse");
+	{
+		if (args->GetSize() >= 2) {
+			SEMessageBus::GetInstance()
+				->DeserializeHttpRequestResponse(
+					args->GetValue(0), args->GetValue(1),
+					result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setShowBuiltInMenuItems");
+	{
+		if (args->GetSize() >= 1 && args->GetType(0) == VTYPE_BOOL) {
+			SEGlobalStateManager::GetInstance()
+				->GetMenuManager()
+				->SetShowBuiltInMenuItems(args->GetBool(0));
+
+			result->SetBool(true);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getShowBuiltInMenuItems");
+	{
+		result->SetBool(SEGlobalStateManager::GetInstance()
+					->GetMenuManager()
+					->GetShowBuiltInMenuItems());
+	}
+	API_HANDLER_END();
+
+	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
+	API_HANDLER_BEGIN("showOutputPreviewTitleBar");
+	{
+		if (args->GetSize()) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetNativeOBSControlsManager()
+					->DeserializePreviewTitleBar(
+						args->GetValue(0)));
+
+			SEGlobalStateManager::GetInstance()
+				->PersistState();
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("hideOutputPreviewTitleBar");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetNativeOBSControlsManager()
+			->HidePreviewTitleBar();
+
+		result->SetBool(true);
+
+		SEGlobalStateManager::GetInstance()->PersistState();
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("showOutputPreviewFrame");
+	{
+		if (args->GetSize()) {
+			result->SetBool(
+				SEGlobalStateManager::GetInstance()
+					->GetNativeOBSControlsManager()
+					->DeserializePreviewFrame(
+						args->GetValue(0)));
+
+			SEGlobalStateManager::GetInstance()
+				->PersistState();
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("hideOutputPreviewFrame");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetNativeOBSControlsManager()
+			->HidePreviewFrame();
+
+		result->SetBool(true);
+
+		SEGlobalStateManager::GetInstance()->PersistState();
+	}
+	API_HANDLER_END();
+	#endif
+
+	API_HANDLER_BEGIN("getNativeStreamingServiceIntegrationStatus");
+	{
+		bool manageBroadcastButtonVisible =
+			SEGlobalStateManager::GetInstance()
+				->GetNativeOBSControlsManager()
+				->GetNativeManageBroadcastButtonVisibility();
+
+		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+		d->SetBool("manageBroadcastButton",
+			   manageBroadcastButtonVisible);
+
+		result->SetDictionary(d);
+
+	}
+
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllStreamingOutputs");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetOutputManager()
+			->SerializeAllOutputs(
+				StreamingOutput,
+				result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addStreamingOutput");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->DeserializeOutput(
+					StreamingOutput,
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeStreamingOutputsByIds");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->RemoveOutputsByIds(
+					StreamingOutput,
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("enableStreamingOutputsByIds");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->EnableOutputsByIds(
+					StreamingOutput,
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("disableStreamingOutputsByIds");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->DisableOutputsByIds(
+					StreamingOutput,
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllRecordingOutputs");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetOutputManager()
+			->SerializeAllOutputs(
+				RecordingOutput,
+				result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addRecordingOutput");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->DeserializeOutput(
+					RecordingOutput,
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeRecordingOutputsByIds");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->RemoveOutputsByIds(
+					RecordingOutput,
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("enableRecordingOutputsByIds");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->EnableOutputsByIds(
+					RecordingOutput,
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("disableRecordingOutputsByIds");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->DisableOutputsByIds(
+					RecordingOutput,
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("triggerRecordingOutputSplitById");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->TriggerSplitRecordingOutputById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllReplayBufferOutputs");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetOutputManager()
+			->SerializeAllOutputs(
+				ReplayBufferOutput,
+				result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addReplayBufferOutput");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->DeserializeOutput(ReplayBufferOutput,
+						    args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeReplayBufferOutputsByIds");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->RemoveOutputsByIds(ReplayBufferOutput,
+						     args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("enableReplayBufferOutputsByIds");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->EnableOutputsByIds(ReplayBufferOutput,
+						     args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("disableReplayBufferOutputsByIds");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->DisableOutputsByIds(ReplayBufferOutput,
+						      args->GetValue(0),
+						      result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("triggerReplayBufferOutputSaveById");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetOutputManager()
+				->TriggerSaveReplayBufferById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("readScopedStorageJsonItem");
+	{
+		if (args->GetSize()) {
+			SEConfig::GetInstance()->ReadScopedJsonFile(
+				args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("writeScopedStorageJsonItem");
+	{
+		if (args->GetSize()) {
+			SEConfig::GetInstance()->WriteScopedJsonFile(
+				args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeScopedStorageJsonItem");
+	{
+		if (args->GetSize()) {
+			SEConfig::GetInstance()->RemoveScopedJsonFile(
+				args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllScopedStorageJsonItems");
+	{
+		if (args->GetSize()) {
+			SEConfig::GetInstance()
+				->ReadScopedJsonFilesList(args->GetValue(0),
+							  result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllAvailableVideoEncoderClasses");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->SerializeAvailableEncoderClasses(OBS_ENCODER_VIDEO,
+							   result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllAvailableAudioEncoderClasses");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->SerializeAvailableEncoderClasses(OBS_ENCODER_AUDIO,
+							   result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAvailableAudioEncoderClassProperties");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->SerializeAvailableEncoderClassPropertiesForSettings(
+				args->GetValue(0), result, OBS_ENCODER_AUDIO);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAvailableVideoEncoderClassProperties");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->SerializeAvailableEncoderClassPropertiesForSettings(
+				args->GetValue(0), result, OBS_ENCODER_VIDEO);
+	}
+	API_HANDLER_END();
+
+
+	API_HANDLER_BEGIN("getAllVideoCompositions");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->SerializeAllCompositions(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllAudioCompositions");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetAudioCompositionManager()
+			->SerializeAllCompositions(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeVideoCompositionsByIds");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetVideoCompositionManager()
+				->RemoveCompositionsByIds(args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeAudioCompositionsByIds");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetAudioCompositionManager()
+				->RemoveCompositionsByIds(args->GetValue(0),
+							  result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addVideoComposition");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetVideoCompositionManager()
+				->DeserializeComposition(args->GetValue(0),
+							 result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addAudioComposition");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetAudioCompositionManager()
+				->DeserializeComposition(args->GetValue(0),
+							 result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setVideoCompositionProperties");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetVideoCompositionManager()
+				->DeserializeExistingCompositionProperties(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setAudioCompositionProperties");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetAudioCompositionManager()
+				->DeserializeExistingCompositionProperties(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeVideoCompositionViewOverlay");
+	{
+		auto browserWidget = self->GetBrowserWidget();
+
+		if (browserWidget) {
+			browserWidget->RemoveVideoCompositionView();
+
+			result->SetBool(true);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getVideoCompositionViewOverlayProperties");
+	{
+		result->SetNull();
+
+		auto browserWidget = self->GetBrowserWidget();
+
+		if (browserWidget) {
+			browserWidget->SerializeVideoCompositionView(result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setVideoCompositionViewOverlayProperties");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			auto browserWidget = self->GetBrowserWidget();
+
+			if (browserWidget) {
+				browserWidget->DeserializeVideoCompositionView(
+					args->GetValue(0),
+					result);
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("addSharedVideoComposition");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetSharedVideoCompositionManager()
+				->DeserializeSharedVideoComposition(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setSharedVideoCompositionProperties");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetSharedVideoCompositionManager()
+				->DeserializeSharedVideoCompositionProperties(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("removeSharedVideoCompositionsByIds");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetSharedVideoCompositionManager()
+				->RemoveSharedVideoCompositionsByIds(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllSharedVideoCompositions");
+	{
+		result->SetNull();
+
+		SEGlobalStateManager::GetInstance()
+			->GetSharedVideoCompositionManager()
+			->SerializeAllSharedVideoCompositions(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("connectVideoCompositionToSharedVideoComposition");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetSharedVideoCompositionManager()
+				->ConnectVideoCompositionToSharedVideoComposition(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("disconnectVideoCompositionsFromSharedVideoCompositionsByIds");
+	{
+		result->SetNull();
+
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetSharedVideoCompositionManager()
+				->DisconnectVideoCompositionsFromSharedVideoCompositionsByIds(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("openSceneItemPropertiesDialogById");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->OpenSceneItemPropertiesById(args->GetValue(0),
+							      result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("openSceneItemFiltersDialogById");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->OpenSceneItemFiltersById(args->GetValue(0),
+							   result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("openSceneItemInteractionDialogById");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->OpenSceneItemInteractionById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("openSceneItemTransformEditorDialogById");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->OpenSceneItemTransformEditorById(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getSceneItemRotationInViewport");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SerializeSceneItemViewportRotation(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setSceneItemRotationInViewport");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeSceneItemViewportRotation(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getSceneItemBoundingBoxInViewport");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->SerializeSceneItemViewportBoundingRectangle(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setSceneItemPositionInViewport");
+	{
+		if (args->GetSize()) {
+			SEGlobalStateManager::GetInstance()
+				->GetObsSceneManager()
+				->DeserializeSceneItemViewportPosition(
+					args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("takeScreenshot");
+	{
+		if (args->GetSize()) {
+			auto input = args->GetValue(0);
+			if (input->GetType() == VTYPE_DICTIONARY) {
+				auto d = input->GetDictionary();
+
+				auto videoCompositionManager =
+					SEGlobalStateManager::GetInstance()
+						->GetVideoCompositionManager();
+
+				std::shared_ptr<
+					SEVideoCompositionBase>
+					videoComposition = nullptr;
+
+				if (d->HasKey("videoCompositionId") &&
+				    d->GetType("videoCompositionId") ==
+					    VTYPE_STRING) {
+					videoComposition =
+						videoCompositionManager->GetVideoCompositionById(
+							d->GetString(
+								"videoCompositionId"));
+				} else {
+					videoComposition =
+						videoCompositionManager
+							->GetObsNativeVideoComposition();
+				}
+
+				if (videoComposition.get()) {
+					videoComposition->TakeScreenshot();
+
+					result->SetBool(true);
+				}
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAvailableTransitionClasses");
+	{
+		SEGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager()
+			->SerializeAvailableTransitionClasses(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getVideoCompositionTransition");
+	{
+		if (args->GetSize()) {
+			auto videoComposition =
+				SEGlobalStateManager::GetInstance()
+					->GetVideoCompositionManager()
+					->GetVideoCompositionById(
+						args->GetValue(0));
+
+			if (videoComposition.get())
+				videoComposition->SerializeTransition(result);
+		} else {
+			SEGlobalStateManager::GetInstance()
+				->GetVideoCompositionManager()
+				->GetObsNativeVideoComposition()
+				->SerializeTransition(result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("setVideoCompositionTransition");
+	{
+		if (args->GetSize()) {
+			auto videoComposition =
+				SEGlobalStateManager::GetInstance()
+					->GetVideoCompositionManager()
+					->GetVideoCompositionById(
+						args->GetValue(0));
+
+			if (videoComposition.get())
+				videoComposition->DeserializeTransition(args->GetValue(0), result);
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("showVideoCompositionTransitionPropertiesDialog");
+	{
+		if (args->GetSize()) {
+			auto videoComposition =
+				SEGlobalStateManager::GetInstance()
+					->GetVideoCompositionManager()
+					->GetVideoCompositionById(
+						args->GetValue(0));
+
+			if (videoComposition.get()) {
+				result->SetBool(
+					videoComposition
+						->ShowTransitionPropertiesDialog());
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("showPopupMenuAtMousePointerPosition");
+	{
+		if (args->GetSize()) {
+			QMenu menu;
+			if (DeserializeMenu(args->GetValue(0), menu)) {
+				menu.exec(QCursor::pos());
+
+				result->SetBool(true);
+			}
+		}
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("getAllLoadedHostModules");
+	{
+		SerializeLoadedObsModules(result);
+	}
+	API_HANDLER_END();
+
+	API_HANDLER_BEGIN("openFileLocationInHostFileManager");
+	{
+		if (args->GetSize() > 0) {
+			DeserializeRevealFileInGraphicalShell(args->GetValue(0),
+							      result);
+		}
+	}
+	API_HANDLER_END();
+
+	//
+	// API 6.8, registered only where SE_ENABLE_WYVRN is defined -- Windows
+	// builds, since the option is forced off on every other platform.
+	//
+	// getHostCapabilities is grouped with the Razer WYVRN calls on purpose:
+	// the `razerWyvrn` member is the only thing it has to report, so
+	// registering it alone would publish a new API version whose sole
+	// content is an object saying the feature is absent. The whole 6.8
+	// surface is on or off together, and Version.hpp derives
+	// HOST_API_VERSION_MINOR from the same switch.
+	//
+#ifdef SE_ENABLE_WYVRN
+	//
+	// Host capabilities. Documented since API 1.8 and never implemented until
+	// now -- so nothing can depend on the old shape, and the documented
+	// `sceneCollections` member is kept purely for fidelity with the
+	// specification.
+	//
+	// This is deliberately the ONLY place WYVRN availability is reported. A
+	// separate status call would be a second source of truth that could
+	// disagree with this one.
+	//
+	API_HANDLER_BEGIN("getHostCapabilities");
+	{
+		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
+
+		d->SetString("sceneCollections", "available");
+
+		d->SetValue("razerWyvrn", SerializeRazerWyvrnStatus());
+
+		result->SetDictionary(d);
+	}
+	API_HANDLER_END();
+
+	//
+	// Every event declared by every WYVRN configuration installed on this
+	// machine, each carrying its Chroma and haptic components and
+	// session-signed URLs for their assets -- so a caller can see what firing
+	// an event would actually do, and preview it, without a second call.
+	//
+	// Optional filter argument: { group, idPrefix }. There are ~4,000 events
+	// on a machine with Synapse installed, so callers are expected to use it.
+	//
+	// An unavailable subsystem yields an empty array, never an error.
+	//
+	API_HANDLER_BEGIN("getAllRazerWyvrnEvents");
+	{
+		std::string groupFilter;
+		std::string idPrefix;
+
+		// Defaults to true: one call that fully answers "what would
+		// this do" is the point of the call. Pass false to get ids
+		// only -- unfiltered, that is the difference between 7.7 MB in
+		// ~2.1 s and 0.28 MB in ~65 ms, and the whole request runs
+		// inside the API lock.
+		bool components = true;
+
+		if (args->GetSize() > 0 &&
+		    args->GetValue(0)->GetType() == VTYPE_DICTIONARY) {
+			CefRefPtr<CefDictionaryValue> d =
+				args->GetValue(0)->GetDictionary();
+
+			if (d->HasKey("group") &&
+			    d->GetType("group") == VTYPE_STRING)
+				groupFilter = d->GetString("group").ToString();
+
+			if (d->HasKey("idPrefix") &&
+			    d->GetType("idPrefix") == VTYPE_STRING)
+				idPrefix = d->GetString("idPrefix").ToString();
+
+			if (d->HasKey("components") &&
+			    d->GetType("components") == VTYPE_BOOL)
+				components = d->GetBool("components");
+		}
+
+		auto manager = GetRazerWyvrnManager();
+
+		if (manager.get()) {
+			result = manager->SerializeEvents(groupFilter, idPrefix,
+							  components);
+		} else {
+			result->SetList(CefListValue::Create());
+		}
+	}
+	API_HANDLER_END();
+
+	//
+	// Fire an event.
+	//
+	// Accepts a RazerWyvrnEventInfo object rather than a bare string, so an
+	// item from getAllRazerWyvrnEvents can be handed straight back; only
+	// `id` and `fallback` are read. A bare string is accepted too.
+	//
+	// Stopping playback -- the SDK's own convention for an empty name -- is
+	// spelled any of `null`, no argument at all, or an object whose `id` is
+	// empty. All three mean the same thing, because a caller clearing an
+	// event should not have to remember which shape we wanted.
+	//
+	// `fallback` names another event to try when this one is not declared by
+	// any configuration on this machine, and nests to arbitrary depth:
+	//
+	//     { id: "Headshot",
+	//       fallback: { id: "Hit", fallback: { id: "Generic_Impact" } } }
+	//
+	// The chain is resolved against the scan, not against the SDK: the SDK
+	// accepts an event belonging to another application and reports success,
+	// so asking it "did that work?" would always answer yes and the fallback
+	// would never fire.
+	//
+	// The scan decides the *spelling*, not whether the call is allowed. When
+	// nothing on this machine declares any name in the chain, the caller's
+	// own spelling of the first one is sent anyway. The scan is a cache of
+	// what was on disk when it ran, so it is not authoritative about what the
+	// SDK will accept -- a configuration installed since then is invisible to
+	// us and would otherwise be unreachable forever. Refusing on our own
+	// stale evidence is worse than letting the SDK decide.
+	//
+	// Nothing here blocks. API_HANDLER_BEGIN holds a process-wide recursive
+	// mutex that serialises every API call, and SetEventName only parks the
+	// name for the SDK thread.
+	//
+	API_HANDLER_BEGIN("setRazerWyvrnEvent");
+	{
+		auto manager = GetRazerWyvrnManager();
+
+		// Bounded so a pathological structure cannot spin here while the
+		// global API mutex is held.
+		const int kMaxFallbackDepth = 16;
+
+		std::string resolved;
+		std::string firstId;
+		std::string tried;
+		bool stopRequested = false;
+		bool sawCandidate = false;
+
+		CefRefPtr<CefValue> arg =
+			args->GetSize() > 0 ? args->GetValue(0) : nullptr;
+
+		if (arg.get() && arg->GetType() == VTYPE_STRING) {
+			const std::string id = arg->GetString().ToString();
+
+			sawCandidate = !id.empty();
+			stopRequested = id.empty();
+			tried = id;
+			firstId = id;
+
+			if (manager.get() && !id.empty())
+				resolved = manager->ResolveEventId(id);
+		} else if (arg.get() && arg->GetType() == VTYPE_DICTIONARY) {
+			CefRefPtr<CefDictionaryValue> d = arg->GetDictionary();
+
+			for (int depth = 0;
+			     d.get() && depth < kMaxFallbackDepth; ++depth) {
+				std::string id;
+
+				if (d->HasKey("id") &&
+				    d->GetType("id") == VTYPE_STRING)
+					id = d->GetString("id").ToString();
+
+				if (id.empty() && !d->HasKey("fallback")) {
+					// An explicit empty id, with nothing to
+					// fall back to, is a stop.
+					stopRequested = true;
+					break;
+				}
+
+				if (!id.empty()) {
+					sawCandidate = true;
+
+					if (firstId.empty())
+						firstId = id;
+
+					tried += tried.empty() ? id
+							       : (" -> " + id);
+
+					if (manager.get()) {
+						resolved =
+							manager->ResolveEventId(
+								id);
+
+						if (!resolved.empty())
+							break;
+					}
+				}
+
+				if (d->HasKey("fallback") &&
+				    d->GetType("fallback") == VTYPE_DICTIONARY)
+					d = d->GetDictionary("fallback");
+				else
+					d = nullptr;
+			}
+		} else {
+			// null, or no argument at all.
+			stopRequested = true;
+		}
+
+		if (!manager.get()) {
+			result->SetBool(false);
+		} else if (stopRequested || !sawCandidate) {
+			result->SetBool(manager->SetEventName(std::string()));
+		} else if (!resolved.empty()) {
+			result->SetBool(manager->SetEventName(resolved));
+		} else {
+			// Nothing scanned declares any of these names, so there
+			// is no canonical spelling to correct to -- send the
+			// caller's own, and let the SDK be the judge. Logged
+			// because a name that renders nothing is worth seeing
+			// when someone asks why an event did not fire.
+			blog(LOG_INFO,
+			     "obs-streamelements-core: WYVRN: no scanned configuration declares any of '%s'; sending '%s' as given",
+			     tried.c_str(), firstId.c_str());
+
+			result->SetBool(manager->SetEventName(firstId));
+		}
+	}
+	API_HANDLER_END();
+#endif
+
+	API_HANDLER_BEGIN("crashProgram");
+	{
+		// Crash
+		*(static_cast<volatile int*>(nullptr)) = 12345; // exception
+		// *((int *)nullptr) = 12345; // exception
+        
+		UNUSED_PARAMETER(result);
+	}
+	API_HANDLER_END();
+
+#ifdef WIN32
+	// Windows only, and not for want of a macOS equivalent: the door this
+	// exists to test is a WER runtime exception module, which is a Windows
+	// mechanism. There is nothing on macOS for the call to prove.
+	API_HANDLER_BEGIN("crashProgramFastFail");
+	{
+		// The counterpart to crashProgram above, and the only way to
+		// exercise the fast-fail door (CORE-864).
+		//
+		// __fastfail raises STATUS_STACK_BUFFER_OVERRUN, which bypasses
+		// SEH entirely: our top-level filter never runs, the SIGABRT
+		// door never runs, and OBS's own handler never runs. The one
+		// thing that can capture it is the WER runtime exception module,
+		// out of process, after we are already dead -- so without a
+		// trigger there is no way to confirm that path works until a
+		// real user hits it.
+		//
+		// It matters that the call sits HERE, in the plug-in's own
+		// module. The gate that module applies asks whether the crashed
+		// thread's stack passes through our code, so a trigger placed
+		// anywhere else would be declined by design -- and would prove
+		// the opposite of what it set out to.
+		//
+		// Nothing runs after this line: not the UNUSED_PARAMETER, not
+		// the handler's epilogue. The process is gone.
+		__fastfail(FAST_FAIL_FATAL_APP_EXIT);
+	}
+	API_HANDLER_END();
+#endif
+
+	API_HANDLER_BEGIN("deadlockProgram");
+	{
+		// Deadlock
+		os_event_t *event = nullptr;
+		os_event_init(&event, OS_EVENT_TYPE_AUTO);
+
+		os_event_wait(event);
+		os_event_wait(event);
+		os_event_wait(event);
+		os_event_wait(event);
+		os_event_wait(event);
+
+		os_event_destroy(event);
+
+		UNUSED_PARAMETER(result);
+	}
+	API_HANDLER_END();
+}
+
+bool SEApiMessageHandler::InvokeHandler::InvokeApiCallAsync(
+	std::string invoke, CefRefPtr<CefListValue> args,
+	std::function<void(CefRefPtr<CefValue>)> callback)
+{
+	if (!m_apiCallHandlers.count(invoke))
+		return false;
+
+	if (IsTraceLogLevel()) {
+		blog(LOG_INFO,
+		     "obs-streamelements-core: SEApiMessageHandler::InvokeHandler::InvokeApiCallAsync: '%s', [%d]",
+		     invoke.c_str(), int(args->GetSize()));
+	}
+
+	incoming_call_handler_t handler = m_apiCallHandlers[invoke];
+
+	struct local_context {
+		CefRefPtr<CefValue> result;
+		std::function<void(CefRefPtr<CefValue>)> callback;
+	};
+
+	local_context *context = new local_context();
+
+	context->result = CefValue::Create();
+	context->result->SetBool(false);
+	context->callback = callback;
+
+	
+	static auto nullTarget =
+		std::make_shared<SEWebsocketApiServer::ClientInfo>(
+			"", "");
+
+	handler(this->Clone(), nullptr, args, context->result, nullTarget, -1, [context]() {
+		context->callback(context->result);
+
+		delete context;
+	});
+
+	return true;
+}

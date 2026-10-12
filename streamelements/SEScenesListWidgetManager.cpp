@@ -1,0 +1,903 @@
+#include "SEScenesListWidgetManager.hpp"
+#include "SEUtils.hpp"
+#include "SERemoteIconLoader.hpp"
+#include "SEConfig.hpp"
+
+#include <obs.h>
+#include <obs-frontend-api.h>
+
+#include <QDockWidget>
+#include <QLayout>
+#include <QSizePolicy>
+#include <QLabel>
+#include <QPushButton>
+#include <QAbstractListModel>
+#include <QMouseEvent>
+
+#include <map>
+#include <unordered_map>
+
+static const char *ITEM_PRIVATE_DATA_KEY_UI_ICON = "streamelements_ui_icon";
+
+static const char *ITEM_PRIVATE_DATA_KEY_APPDATA = "streamelements_app_data";
+
+static const char *WIDGET_PROP_SCENE_ID = "streamelements_scene_id";
+
+static const char *WIDGET_PROP_DEFAULT_ACTION_BYPASS_COUNT =
+	"streamelements_default_action_bypass_count";
+
+static const char *ITEM_PRIVATE_DATA_KEY_UI_DEFAULT_ACTION =
+	"streamelements_ui_default_action";
+
+static const char *ITEM_PRIVATE_DATA_KEY_UI_CONTEXT_MENU =
+	"streamelements_ui_context_menu";
+
+/* ================================================================= */
+/* ================================================================= */
+/* ================================================================= */
+
+static bool IsSupportedOBSVersion()
+{
+	// OBS 29 has breaking changes in functions related to updating
+	// toolbars' styles on Scenes and Scene Items.
+	//
+	// We have submitted a patch which will be included in OBS 30.
+	//
+	// For the moment, we'll disable related functionality in OBS 29 specifically.
+	//
+	auto obs_version = obs_get_version();
+
+	if (obs_version >= MAKE_SEMANTIC_VERSION(29, 0, 0) &&
+	    obs_version < MAKE_SEMANTIC_VERSION(30, 0, 0)) {
+		return false;
+	}
+
+	return true;
+}
+
+/* ================================================================= */
+/* ================================================================= */
+/* ================================================================= */
+
+class ItemData : public QObject {
+private:
+	QIcon m_icon;
+	CefRefPtr<CefValue> m_defaultAction;
+	CefRefPtr<CefValue> m_contextMenu;
+	CefRefPtr<SERemoteIconLoader> m_iconLoader = nullptr;
+	std::function<void()> m_updateListener;
+
+	void ClearIcon()
+	{
+		QPixmap pm(16, 16);
+		pm.fill(Qt::transparent);
+		m_icon = QIcon(pm);
+	}
+
+public:
+	ItemData(std::function<void()> updateListener)
+		: m_updateListener(updateListener),
+		  m_defaultAction(CefValue::Create()),
+		  m_contextMenu(CefValue::Create())
+	{
+		ClearIcon();
+	}
+
+	~ItemData()
+	{
+		if (m_iconLoader)
+			m_iconLoader->Cancel();
+	}
+
+	QIcon icon() { return m_icon; }
+	CefRefPtr<CefValue> defaultAction() { return m_defaultAction; }
+	CefRefPtr<CefValue> contextMenu() { return m_contextMenu; }
+
+	void LoadIconUrl(std::string url)
+	{
+		if (m_iconLoader)
+			m_iconLoader->Cancel();
+
+		m_iconLoader = SERemoteIconLoader::Create(
+			[this](const QIcon &newIcon) {
+				m_icon = QIcon(newIcon);
+
+				m_updateListener();
+			},
+			nullptr);
+
+		m_iconLoader->LoadUrl(url.c_str());
+	}
+
+	void DeserializeDefaultAction(CefRefPtr<CefValue> input)
+	{
+		m_defaultAction = input->Copy();
+	}
+
+	void DeserializeContextMenu(CefRefPtr<CefValue> input)
+	{
+		m_contextMenu = input->Copy();
+	}
+
+	void DeserializeIcon(CefRefPtr<CefValue> input)
+	{
+		ClearIcon();
+
+		QtPostTask([this]() { m_updateListener(); });
+
+		if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
+			return;
+
+		CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
+
+		if (!d->HasKey("url") || d->GetType("url") != VTYPE_STRING)
+			return;
+
+		LoadIconUrl(d->GetString("url").ToString());
+	}
+};
+
+class SourceDataManager : public QObject {
+private:
+	std::map<obs_source_t *, ItemData *> m_itemData;
+
+protected:
+	SourceDataManager() {}
+
+public:
+	void clear()
+	{
+		for (auto kv : m_itemData) {
+			kv.second->deleteLater();
+		}
+
+		m_itemData.clear();
+	}
+
+	void removeData(obs_source_t *key)
+	{
+		if (!m_itemData.count(key))
+			return;
+
+		m_itemData[key]->deleteLater();
+		m_itemData.erase(key);
+	}
+
+	void removeDataNotInList(obs_frontend_source_list sources)
+	{
+		std::unordered_map<obs_source_t *, bool> sourcesMap;
+		for (size_t i = 0; i < sources.sources.num; ++i) {
+			sourcesMap[sources.sources.array[i]] = true;
+		}
+
+		std::vector<obs_source_t *> deleteList;
+
+		for (auto kv : m_itemData) {
+			if (!sourcesMap.count(kv.first)) {
+				deleteList.emplace_back(kv.first);
+			}
+		}
+
+		for (obs_source_t *key : deleteList) {
+			removeData(key);
+		}
+	}
+
+	void setData(obs_source_t *key, ItemData *value)
+	{
+		removeData(key);
+
+		m_itemData[key] = value;
+	}
+
+	ItemData *data(obs_source_t *key) const
+	{
+		for (auto kv : m_itemData) {
+			if (kv.first == key)
+				return kv.second;
+		}
+
+		return nullptr;
+	}
+
+	static SourceDataManager *instance() { return &s_instance; }
+
+private:
+	static SourceDataManager s_instance;
+};
+
+SourceDataManager SourceDataManager::s_instance;
+
+/* ================================================================= */
+/* ================================================================= */
+/* ================================================================= */
+
+class ScenesLocalEventFilter : public QObject {
+private:
+	SEScenesListWidgetManager *m_manager;
+
+public:
+	ScenesLocalEventFilter(SEScenesListWidgetManager *manager)
+		: m_manager(manager)
+	{
+	}
+
+	~ScenesLocalEventFilter() {}
+
+protected:
+	virtual bool eventFilter(QObject *o, QEvent *e) override
+	{
+		if (!o)
+			return false;
+
+		if (e->type() == QEvent::Paint) {
+			/* Every time the widget is painted, check whether it's viewMode()
+			 * has changed.
+			 *
+			 * If so, widgets must be updated with features supported by each
+			 * viewMode()
+			 */
+			m_manager->CheckViewMode();
+		}
+
+		if (e->type() != QEvent::MouseButtonDblClick && e->type() != QEvent::ContextMenu)
+			return false;
+
+		if (!m_manager->GetScenesListWidget() ||
+		    !m_manager->GetScenesListWidget()->viewport() ||
+		    (o != m_manager->GetScenesListWidget()->viewport() &&
+		     o != m_manager->GetScenesListWidget()))
+			return false;
+
+		if (e->type() == QEvent::MouseButtonDblClick) {
+			QVariant bypassValue = o->property(
+				WIDGET_PROP_DEFAULT_ACTION_BYPASS_COUNT);
+			if (bypassValue.isValid()) {
+				if (bypassValue.value<int>() > 0) {
+					bypassValue.setValue<int>(
+						bypassValue.value<int>() - 1);
+
+					o->setProperty(
+						WIDGET_PROP_DEFAULT_ACTION_BYPASS_COUNT,
+						bypassValue);
+
+					return false;
+				}
+			}
+
+			obs_source_t *scene = SETRACE_ADDREF(
+				obs_frontend_get_current_scene());
+
+			if (!scene)
+				return false;
+
+			bool handled = false;
+
+			#if SE_ENABLE_SCENE_DEFAULT_ACTION
+			CefRefPtr<CefValue> value =
+				m_manager->GetSceneDefaultAction(scene);
+
+			if (value->GetType() == VTYPE_DICTIONARY) {
+				auto defaultAction = [this, scene]() {
+					if (!scene)
+						return;
+
+					m_manager->InvokeCurrentSceneDefaultAction();
+				};
+
+				auto defaultContextMenu = [this, scene]() {
+					if (!scene)
+						return;
+
+					m_manager->InvokeCurrentSceneDefaultContextMenu();
+				};
+
+				handled = DeserializeAndInvokeAction(
+					value, defaultAction,
+					defaultContextMenu);
+			}
+			#endif
+
+			obs_source_release(SETRACE_DECREF(scene));
+
+			return handled;
+		}
+
+		if (e->type() == QEvent::ContextMenu) {
+			obs_source_t *scene = SETRACE_ADDREF(
+				obs_frontend_get_current_scene());
+
+			if (!scene)
+				return false;
+
+			bool handled = false;
+
+			#if SE_ENABLE_SCENE_CONTEXT_MENU
+			CefRefPtr<CefValue> value =
+				m_manager->GetSceneContextMenu(scene);
+
+			if (value->GetType() == VTYPE_LIST &&
+			    value->GetList()->GetSize()) {
+				auto defaultAction = [this, scene]() {
+					if (!scene)
+						return;
+
+					m_manager
+						->InvokeCurrentSceneDefaultAction();
+				};
+
+				auto defaultContextMenu = [this, scene]() {
+					if (!scene)
+						return;
+
+					m_manager
+						->InvokeCurrentSceneDefaultContextMenu();
+				};
+
+				QMenu menu; //(m_mainWindow);
+
+				handled = DeserializeMenu(value, menu,
+							  defaultAction,
+							  defaultContextMenu);
+
+				if (handled) {
+					QContextMenuEvent *event = dynamic_cast<
+						QContextMenuEvent *>(e);
+
+					if (event)
+						menu.exec(event->globalPos());
+					else
+						handled = false;
+				}
+			}
+			#endif
+
+			obs_source_release(SETRACE_DECREF(scene));
+
+			return handled;
+		}
+
+		return false;
+	}
+};
+
+/* ================================================================= */
+/* ================================================================= */
+/* ================================================================= */
+
+SEScenesListWidgetManager::SEScenesListWidgetManager(
+	QMainWindow *mainWindow)
+	: m_mainWindow(mainWindow)
+{
+	QDockWidget *scenesDock =
+		(QDockWidget *)m_mainWindow->findChild<QDockWidget *>(
+			"scenesDock");
+
+	if (!scenesDock)
+		return;
+
+	m_nativeWidget =
+		(QListWidget *)scenesDock->findChild<QListWidget *>("scenes");
+
+	if (!m_nativeWidget)
+		return;
+
+	m_prevViewMode = m_nativeWidget->viewMode();
+
+	m_eventFilter = new ScenesLocalEventFilter(this);
+
+	QApplication::instance()->installEventFilter(m_eventFilter);
+
+	m_scenesToolBar =
+		(QToolBar *)scenesDock->findChild<QToolBar *>("scenesToolbar");
+
+	if (!m_scenesToolBar)
+		return;
+
+	m_scenesToolBarActions->SetNull();
+
+	//QtPostTask([this]() {
+
+		/* Subscribe to signals */
+
+		#if SE_ENABLE_SCENES_UI_EXTENSIONS
+		auto model = m_nativeWidget->model();
+
+		QObject::connect(model, &QAbstractItemModel::modelReset, this,
+				 &SEScenesListWidgetManager::
+					 HandleScenesModelReset);
+
+		QObject::connect(model, &QAbstractItemModel::rowsInserted, this,
+				 &SEScenesListWidgetManager::
+					 HandleScenesModelItemInsertedRemoved);
+
+		QObject::connect(model, &QAbstractItemModel::rowsRemoved, this,
+				 &SEScenesListWidgetManager::
+					 HandleScenesModelItemInsertedRemoved);
+
+		QObject::connect(model, &QAbstractItemModel::rowsMoved, this,
+				 &SEScenesListWidgetManager::
+					 HandleScenesModelItemMoved);
+
+		signal_handler_connect(
+			obs_get_signal_handler(), "source_rename",
+			SEScenesListWidgetManager::HandleSceneRename,
+			this);
+
+		QObject::connect(m_nativeWidget,
+				 &QListWidget::itemDoubleClicked, this,
+				 &SEScenesListWidgetManager::
+					 HandleScenesItemDoubleClicked);
+		#endif
+
+		#if SE_ENABLE_SCENES_UI_EXTENSIONS
+		ScheduleUpdateWidgets();
+		#endif
+
+		UpdateScenesToolbar();
+
+		m_enableSignals = true;
+	//});
+}
+
+void SEScenesListWidgetManager::CheckViewMode()
+{
+	// OBS owns this list; it is gone during shutdown and rebuilt on a UI
+	// reset. See CORE-635.
+	if (!m_nativeWidget)
+		return;
+
+	QListWidget::ViewMode mode = m_nativeWidget->viewMode();
+
+	if (mode != m_prevViewMode) {
+		m_prevViewMode = mode;
+
+		#if SE_ENABLE_SCENES_UI_EXTENSIONS
+		ScheduleUpdateWidgets();
+		#endif
+	}
+}
+
+SEScenesListWidgetManager::
+		~SEScenesListWidgetManager()
+{
+	m_enableSignals = false;
+
+	if (!m_nativeWidget)
+		return;
+
+	//if (!m_nativeWidget->viewport())
+	//	return;
+
+	QApplication::instance()->removeEventFilter(m_eventFilter);
+	//m_nativeWidget->viewport()->removeEventFilter(m_eventFilter);
+	//m_nativeWidget->removeEventFilter(m_eventFilter);
+
+	m_eventFilter->deleteLater();
+
+	#if SE_ENABLE_SCENES_UI_EXTENSIONS
+	auto model = m_nativeWidget->model();
+
+	QObject::disconnect(m_nativeWidget, &QListWidget::itemDoubleClicked,
+			    this,
+			    &SEScenesListWidgetManager::
+				    HandleScenesItemDoubleClicked);
+
+	signal_handler_disconnect(
+		obs_get_signal_handler(), "source_rename",
+		SEScenesListWidgetManager::HandleSceneRename, this);
+
+	QObject::disconnect(
+		model, &QAbstractItemModel::modelReset, this,
+		&SEScenesListWidgetManager::HandleScenesModelReset);
+
+	QObject::disconnect(model, &QAbstractItemModel::rowsInserted, this,
+			    &SEScenesListWidgetManager::
+				    HandleScenesModelItemInsertedRemoved);
+
+	QObject::disconnect(model, &QAbstractItemModel::rowsRemoved, this,
+			    &SEScenesListWidgetManager::
+				    HandleScenesModelItemInsertedRemoved);
+
+	QObject::disconnect(model, &QAbstractItemModel::rowsMoved, this,
+			    &SEScenesListWidgetManager::
+				    HandleScenesModelItemMoved);
+	#endif
+
+	//m_nativeWidget->setItemDelegate(m_prevEditDelegate);
+	//m_editDelegate->deleteLater();
+}
+
+void SEScenesListWidgetManager::HandleSceneRename(
+	void *data, calldata_t *params)
+{
+	#if SE_ENABLE_SCENES_UI_EXTENSIONS
+	SEScenesListWidgetManager *self =
+		(SEScenesListWidgetManager *)data;
+
+	self->ScheduleUpdateWidgets();
+	#endif
+}
+
+void SEScenesListWidgetManager::HandleScenesModelReset()
+{
+	if (!m_enableSignals)
+		return;
+
+	#if SE_ENABLE_SCENES_UI_EXTENSIONS
+	ScheduleUpdateWidgets();
+	#endif
+}
+
+void SEScenesListWidgetManager::HandleScenesModelItemInsertedRemoved(
+	const QModelIndex &, int, int)
+{
+	if (!m_enableSignals)
+		return;
+
+	#if SE_ENABLE_SCENES_UI_EXTENSIONS
+	ScheduleUpdateWidgets();
+	#endif
+}
+
+void SEScenesListWidgetManager::HandleScenesModelItemMoved(
+	const QModelIndex &, int, int, const QModelIndex &, int)
+{
+	if (!m_enableSignals)
+		return;
+
+	#if SE_ENABLE_SCENES_UI_EXTENSIONS
+	ScheduleUpdateWidgets();
+	#endif
+}
+
+CefRefPtr<CefValue>
+SEScenesListWidgetManager::GetScenePropertyValue(
+	obs_source_t *scene, const char *key)
+{
+	CefRefPtr<CefValue> result = CefValue::Create();
+	result->SetNull();
+
+	obs_data_t *private_data =
+		SETRACE_ADDREF(obs_source_get_private_settings(scene));
+
+	const char *json = obs_data_get_string(private_data, key);
+
+	if (json) {
+		result = CefParseJSON(json, JSON_PARSER_ALLOW_TRAILING_COMMAS);
+	}
+
+	obs_data_release(SETRACE_DECREF(private_data));
+
+	if (!result.get()) {
+		result = CefValue::Create();
+
+		result->SetNull();
+	}
+
+	return result;
+}
+
+void SEScenesListWidgetManager::SetScenePropertyValue(
+	obs_source_t *scene, const char *key, CefRefPtr<CefValue> value,
+	bool triggerUpdate)
+{
+	obs_data_t *private_data =
+		SETRACE_ADDREF(obs_source_get_private_settings(scene));
+
+	std::string json = CefWriteJSON(value, JSON_WRITER_DEFAULT).ToString();
+
+	obs_data_set_string(private_data, key, json.c_str());
+
+	obs_data_release(SETRACE_DECREF(private_data));
+
+	#if SE_ENABLE_SCENES_UI_EXTENSIONS
+	if (triggerUpdate) {
+		ScheduleUpdateWidgets();
+	}
+	#endif
+}
+
+CefRefPtr<CefValue>
+SEScenesListWidgetManager::GetSceneAuxiliaryData(obs_source_t *scene)
+{
+	return GetScenePropertyValue(scene, ITEM_PRIVATE_DATA_KEY_APPDATA);
+}
+
+void SEScenesListWidgetManager::SetSceneAuxiliaryData(
+	obs_source_t *scene, CefRefPtr<CefValue> data)
+{
+	SetScenePropertyValue(scene, ITEM_PRIVATE_DATA_KEY_APPDATA, data,
+			      false);
+}
+
+#if SE_ENABLE_SCENE_ICONS
+CefRefPtr<CefValue>
+SEScenesListWidgetManager::GetSceneIcon(obs_source_t *scene)
+{
+	CefRefPtr<CefValue> iconValue =
+		GetScenePropertyValue(scene, ITEM_PRIVATE_DATA_KEY_UI_ICON);
+
+	if (iconValue->GetType() != VTYPE_DICTIONARY) {
+		iconValue->SetNull();
+	}
+
+	return iconValue;
+}
+
+void SEScenesListWidgetManager::SetSceneIcon(
+	obs_source_t *scene, CefRefPtr<CefValue> icon)
+{
+	auto data = SourceDataManager::instance()->data(scene);
+	if (data) {
+		data->DeserializeIcon(icon);
+	}
+
+	SetScenePropertyValue(scene, ITEM_PRIVATE_DATA_KEY_UI_ICON, icon);
+}
+#endif
+
+#if SE_ENABLE_SCENE_DEFAULT_ACTION
+CefRefPtr<CefValue>
+SEScenesListWidgetManager::GetSceneDefaultAction(obs_source_t *scene)
+{
+	CefRefPtr<CefValue> data = GetScenePropertyValue(
+		scene, ITEM_PRIVATE_DATA_KEY_UI_DEFAULT_ACTION);
+
+	if (data->GetType() != VTYPE_DICTIONARY) {
+		data->SetNull();
+	}
+
+	return data;
+}
+
+void SEScenesListWidgetManager::SetSceneDefaultAction(
+	obs_source_t *scene, CefRefPtr<CefValue> defaultAction)
+{
+	auto data = SourceDataManager::instance()->data(scene);
+	if (data) {
+		data->DeserializeDefaultAction(defaultAction);
+	}
+
+	SetScenePropertyValue(scene, ITEM_PRIVATE_DATA_KEY_UI_DEFAULT_ACTION,
+			      defaultAction);
+}
+#endif
+
+#if SE_ENABLE_SCENE_CONTEXT_MENU
+CefRefPtr<CefValue>
+SEScenesListWidgetManager::GetSceneContextMenu(obs_source_t *scene)
+{
+	CefRefPtr<CefValue> data = GetScenePropertyValue(
+		scene, ITEM_PRIVATE_DATA_KEY_UI_CONTEXT_MENU);
+
+	if (data->GetType() != VTYPE_LIST) {
+		data->SetNull();
+	}
+
+	return data;
+}
+
+void SEScenesListWidgetManager::SetSceneContextMenu(
+	obs_source_t *scene, CefRefPtr<CefValue> contextMenu)
+{
+	auto data = SourceDataManager::instance()->data(scene);
+	if (data) {
+		data->DeserializeContextMenu(contextMenu);
+	}
+
+	SetScenePropertyValue(scene, ITEM_PRIVATE_DATA_KEY_UI_CONTEXT_MENU,
+			      contextMenu);
+}
+#endif
+
+#if SE_ENABLE_SCENES_UI_EXTENSIONS
+void SEScenesListWidgetManager::ScheduleUpdateWidgets()
+{
+	if (!m_enableSignals)
+		return;
+
+	m_updateWidgetsDeferredExecutive.Signal([this]() { UpdateWidgets(); },
+						250);
+}
+#endif
+
+void SEScenesListWidgetManager::UpdateScenesToolbar()
+{
+	if (!IsSupportedOBSVersion())
+		return;
+
+	// OBS owns the toolbar. See CORE-635.
+	if (!m_scenesToolBar)
+		return;
+
+	QWidget *widget = m_scenesToolBar->findChild<QWidget *>(
+		"streamelements_scenes_toolbar_aux_actions");
+
+	if (widget)
+		m_scenesToolBar->layout()->removeWidget(widget);
+
+	widget = new QWidget();
+	widget->setObjectName(
+		"streamelements_scenes_toolbar_aux_actions");
+
+	QHBoxLayout *layout = new QHBoxLayout();
+	layout->setContentsMargins(0, 0, 0, 0);
+	widget->setLayout(layout);
+
+	layout->addSpacerItem(new QSpacerItem(
+		16, 16, QSizePolicy::Expanding, QSizePolicy::Minimum));
+
+	if (!m_scenesToolBarActions.get() ||
+		m_scenesToolBarActions->GetType() != VTYPE_LIST)
+		return;
+
+	CefRefPtr<CefListValue> list =
+		m_scenesToolBarActions->GetList();
+
+	for (size_t index = 0; index < list->GetSize(); ++index) {
+		QWidget *control = DeserializeAuxiliaryControlWidget(
+			list->GetValue(index));
+
+		if (!control)
+			continue;
+
+		layout->addWidget(control);
+		layout->addSpacing(1);
+	}
+
+	widget->setStyleSheet("background: none");
+
+	widget->setSizePolicy(QSizePolicy::Expanding,
+				QSizePolicy::Minimum);
+
+	m_scenesToolBar->addWidget(widget);
+
+	QMainWindow *mainWindow = (QMainWindow *)obs_frontend_get_main_window();
+
+	QDockWidget *scenesDock =
+		(QDockWidget *)mainWindow->findChild<QDockWidget *>(
+			"scenesDock");
+
+	if (list->GetSize()) {
+		scenesDock->setFixedWidth(
+			m_scenesToolBar->sizeHint().width());
+		
+		QtPostTask([scenesDock, this]() {
+			scenesDock->setMinimumWidth(
+				m_scenesToolBar->sizeHint().width());
+
+			scenesDock->setMaximumWidth(16777215); // default according to Qt docs
+		});
+
+	} else {
+		scenesDock->setMinimumWidth(0);
+	}
+}
+
+#if SE_ENABLE_SCENES_UI_EXTENSIONS
+void SEScenesListWidgetManager::UpdateWidgets()
+{
+	// Every row access below goes through the OBS-owned list. See CORE-635.
+	if (!m_nativeWidget)
+		return;
+
+	struct obs_frontend_source_list sources = {};
+
+	obs_frontend_get_scenes(&sources);
+
+	obs_source_t *current_scene = SETRACE_ADDREF(obs_frontend_get_current_scene());
+
+	if (!current_scene)
+		return;
+
+	bool isSignedIn =
+		!SEConfig::GetInstance()->IsOnBoardingMode();
+
+	SourceDataManager::instance()->removeDataNotInList(sources);
+
+	for (int rowIndex = 0; rowIndex < m_nativeWidget->count() &&
+				rowIndex < sources.sources.num;
+		++rowIndex) {
+		if (!isSignedIn) {
+			#if SE_ENABLE_SCENE_ICONS
+			m_nativeWidget->item(rowIndex)->setIcon(
+				QIcon());
+			#endif
+
+			continue;
+		}
+
+		obs_source_t *scene = sources.sources.array[rowIndex];
+
+		ItemData *data =
+			SourceDataManager::instance()->data(scene);
+
+		if (!data) {
+			data = new ItemData(
+				[this]() { ScheduleUpdateWidgets(); });
+
+			SourceDataManager::instance()->setData(scene,
+								data);
+
+			#if SE_ENABLE_SCENE_ICONS
+			data->DeserializeIcon(GetSceneIcon(scene));
+			#endif
+
+			#if SE_ENABLE_SCENE_DEFAULT_ACTION
+			data->DeserializeDefaultAction(
+				GetSceneDefaultAction(scene));
+			#endif
+
+			#if SE_ENABLE_SCENE_CONTEXT_MENU
+			data->DeserializeContextMenu(
+				GetSceneContextMenu(scene));
+			#endif
+		}
+
+		#if SE_ENABLE_SCENE_ICONS
+		if (m_nativeWidget->viewMode() == QListView::IconMode) {
+			/* Grid Mode: icons are not supported */
+			m_nativeWidget->item(rowIndex)->setIcon(QIcon());
+		} else {
+			m_nativeWidget->item(rowIndex)->setIcon(data->icon());
+		}
+		#endif
+	}
+
+	obs_source_release(SETRACE_DECREF(current_scene));
+
+	obs_frontend_source_list_free(
+		(obs_frontend_source_list *)&sources);
+}
+#endif
+
+void SEScenesListWidgetManager::HandleScenesItemDoubleClicked(
+	QListWidgetItem *item)
+{
+}
+
+bool SEScenesListWidgetManager::InvokeCurrentSceneDefaultAction()
+{
+	if (!m_nativeWidget)
+		return false;
+
+	QWidget *widget = m_nativeWidget->viewport();
+
+	if (!widget)
+		return false;
+
+	QVariant value =
+		widget->property(WIDGET_PROP_DEFAULT_ACTION_BYPASS_COUNT);
+	if (!value.isValid()) {
+		value.setValue<int>(1);
+	} else {
+		value.setValue<int>(value.value<int>() + 1);
+	}
+
+	widget->setProperty(WIDGET_PROP_DEFAULT_ACTION_BYPASS_COUNT, value);
+
+	QApplication::sendEvent(
+		widget,
+		new QMouseEvent(QMouseEvent::MouseButtonDblClick, QPoint(0, 0),
+				Qt::LeftButton, Qt::NoButton, Qt::NoModifier));
+
+	return true;
+}
+
+bool SEScenesListWidgetManager::InvokeCurrentSceneDefaultContextMenu()
+{
+	if (!m_nativeWidget)
+		return false;
+
+	const QRect rect =
+		m_nativeWidget->visualRect(m_nativeWidget->currentIndex());
+
+	QtPostTask([=]() {
+		m_nativeWidget->customContextMenuRequested(
+			QPoint(rect.left() + (rect.width() / 2),
+			       rect.top() + (rect.height() / 2)));
+	});
+
+	return true;
+}

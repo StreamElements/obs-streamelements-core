@@ -59,19 +59,19 @@ static void check(bool cond, const char *msg)
 // than comparing. The fix is:  return m_index == index;
 static void check_c2_video_encoder_template_match()
 {
-	auto src = slurp("streamelements/StreamElementsOutput.hpp");
+	auto src = slurp("streamelements/SEOutput.hpp");
 
 	// The buggy assignment form must be gone. Match `m_index` followed
 	// by `=` with no neighbouring `=` (i.e. real assignment, not `==`).
 	std::regex bad(R"(return\s+m_index\s*=\s*[^=])");
 	check(count_matches(src, bad) == 0,
-	      "C2: StreamElementsOutput.hpp must not assign to m_index in IsMatchingIndex "
+	      "C2: SEOutput.hpp must not assign to m_index in IsMatchingIndex "
 	      "(should be `return m_index == index;`)");
 
 	// And the correct comparison form must be present.
 	std::regex good(R"(return\s+m_index\s*==\s*index\s*;)");
 	check(count_matches(src, good) >= 1,
-	      "C2: StreamElementsOutput.hpp must contain `return m_index == index;`");
+	      "C2: SEOutput.hpp must contain `return m_index == index;`");
 }
 
 // --- C4: self-assignment of cefClientId in batchInvokeSeries leaves
@@ -79,12 +79,12 @@ static void check_c2_video_encoder_template_match()
 // to CEF clients as a callback id.
 static void check_c4_no_self_assign_cefclientid()
 {
-	auto src = slurp("streamelements/StreamElementsApiMessageHandler.cpp");
+	auto src = slurp("streamelements/SEApiMessageHandler.cpp");
 
 	std::regex bad(
 		R"(context\s*->\s*cefClientId\s*=\s*context\s*->\s*cefClientId)");
 	check(count_matches(src, bad) == 0,
-	      "C4: StreamElementsApiMessageHandler.cpp must not contain "
+	      "C4: SEApiMessageHandler.cpp must not contain "
 	      "`context->cefClientId = context->cefClientId` (self-assign)");
 }
 
@@ -93,7 +93,7 @@ static void check_c4_no_self_assign_cefclientid()
 // check, because that dereferences a null CefRefPtr.
 static void check_c5_cefparsejson_null_guarded()
 {
-	auto src = slurp("streamelements/StreamElementsApiMessageHandler.cpp");
+	auto src = slurp("streamelements/SEApiMessageHandler.cpp");
 
 	// The fix guards parsedValue against null before SetValue.
 	// We assert one of two acceptable patterns:
@@ -115,7 +115,7 @@ static void check_c5_cefparsejson_null_guarded()
 // has MAX_AUDIO_MIXES slots, valid indices are [0, MAX_AUDIO_MIXES).
 static void check_c6_audio_encoder_bounds()
 {
-	auto src = slurp("streamelements/StreamElementsAudioComposition.cpp");
+	auto src = slurp("streamelements/SEAudioComposition.cpp");
 
 	std::regex bad(R"(if\s*\(\s*index\s*>\s*MAX_AUDIO_MIXES\s*\))");
 	check(count_matches(src, bad) == 0,
@@ -133,7 +133,7 @@ static void check_c6_audio_encoder_bounds()
 // appears exactly once.
 static void check_c10_no_duplicate_handler_setcurrentprofile()
 {
-	auto src = slurp("streamelements/StreamElementsApiMessageHandler.cpp");
+	auto src = slurp("streamelements/SEApiMessageHandler.cpp");
 
 	std::regex reg(R"(API_HANDLER_BEGIN\(\"setCurrentProfile\"\))");
 	std::size_t count = count_matches(src, reg);
@@ -162,7 +162,7 @@ static void check_c10_no_duplicate_handler_setcurrentprofile()
 //   UpdateInternal+0x54  mov rcx,[rsi+18h]  rsi=0  ->  read of 0x18
 static void check_menu_manager_update_guarded()
 {
-	auto src = slurp("streamelements/StreamElementsGlobalStateManager.cpp");
+	auto src = slurp("streamelements/SEGlobalStateManager.cpp");
 
 	// Every occurrence must be the guarded one. Counting both forms and
 	// comparing is what distinguishes them: the call sits on its own line
@@ -187,7 +187,7 @@ static void check_menu_manager_update_guarded()
 	}
 }
 
-// --- CORE-777: ~StreamElementsWidgetManager must not drain the Qt event
+// --- CORE-777: ~SEWidgetManager must not drain the Qt event
 // queue while tearing down its dock widgets.
 //
 // The destructor used to call QApplication::sendPostedEvents() between
@@ -220,23 +220,23 @@ static std::string strip_line_comments(const std::string &src)
 
 static void check_widget_manager_dtor_does_not_drain_events()
 {
-	auto src = slurp("streamelements/StreamElementsWidgetManager.cpp");
+	auto src = slurp("streamelements/SEWidgetManager.cpp");
 
 	// Isolate the destructor body: from its signature to the first
 	// closing brace in column 0. Scanning the whole file would trip over
 	// the deliberate drains in PushCentralWidget() and friends.
 	const std::string sig =
-		"StreamElementsWidgetManager::~StreamElementsWidgetManager()";
+		"SEWidgetManager::~SEWidgetManager()";
 
 	auto start = src.find(sig);
 	check(start != std::string::npos,
-	      "CORE-777: ~StreamElementsWidgetManager() not found -- update this invariant");
+	      "CORE-777: ~SEWidgetManager() not found -- update this invariant");
 	if (start == std::string::npos)
 		return;
 
 	auto end = src.find("\n}", start);
 	check(end != std::string::npos,
-	      "CORE-777: could not find the end of ~StreamElementsWidgetManager()");
+	      "CORE-777: could not find the end of ~SEWidgetManager()");
 	if (end == std::string::npos)
 		return;
 
@@ -248,12 +248,12 @@ static void check_widget_manager_dtor_does_not_drain_events()
 	std::string code = strip_line_comments(body);
 
 	check(code.find("sendPostedEvents") == std::string::npos,
-	      "CORE-777: ~StreamElementsWidgetManager() must not call QApplication::sendPostedEvents() -- it turns a pending deleteLater() into a double delete");
+	      "CORE-777: ~SEWidgetManager() must not call QApplication::sendPostedEvents() -- it turns a pending deleteLater() into a double delete");
 
 	// And the widget must be reached through a QPointer, so a dock
 	// destroyed behind our back reads back as null rather than dangling.
 	check(code.find("QPointer<QDockWidget>") != std::string::npos,
-	      "CORE-777: ~StreamElementsWidgetManager() must hold each dock widget in a QPointer before deleting it");
+	      "CORE-777: ~SEWidgetManager() must hold each dock widget in a QPointer before deleting it");
 }
 
 // --- CORE-786: the widget maps must hold QPointer, not raw pointers.
@@ -261,7 +261,7 @@ static void check_widget_manager_dtor_does_not_drain_events()
 // Docks are children of the OBS main window (addDockWidget), and browser
 // widgets are children of their dock. Qt owns both and destroys them with
 // their parent -- which, on the OBSInit re-entrancy path, happens before
-// ~StreamElementsWidgetManager runs. Raw pointers in these maps went stale
+// ~SEWidgetManager runs. Raw pointers in these maps went stale
 // and were then deleted a second time.
 //
 // Guarding at the point of use is not enough and was the gap in the first
@@ -270,7 +270,7 @@ static void check_widget_manager_dtor_does_not_drain_events()
 static void check_widget_maps_hold_qpointer()
 {
 	auto wm = strip_line_comments(
-		slurp("streamelements/StreamElementsWidgetManager.hpp"));
+		slurp("streamelements/SEWidgetManager.hpp"));
 
 	check(wm.find("std::map<std::string, QPointer<QDockWidget>>") !=
 		      std::string::npos,
@@ -280,24 +280,24 @@ static void check_widget_maps_hold_qpointer()
 	      "CORE-786: m_dockWidgets must not hold raw QDockWidget*");
 
 	auto bwm = strip_line_comments(
-		slurp("streamelements/StreamElementsBrowserWidgetManager.hpp"));
+		slurp("streamelements/SEBrowserWidgetManager.hpp"));
 
-	check(bwm.find("QPointer<StreamElementsBrowserWidget>>") !=
+	check(bwm.find("QPointer<SEBrowserWidget>>") !=
 		      std::string::npos,
-	      "CORE-786: m_browserWidgets must hold QPointer<StreamElementsBrowserWidget>");
-	check(bwm.find("std::map<std::string, StreamElementsBrowserWidget*>") ==
+	      "CORE-786: m_browserWidgets must hold QPointer<SEBrowserWidget>");
+	check(bwm.find("std::map<std::string, SEBrowserWidget*>") ==
 		      std::string::npos,
-	      "CORE-786: m_browserWidgets must not hold raw StreamElementsBrowserWidget*");
+	      "CORE-786: m_browserWidgets must not hold raw SEBrowserWidget*");
 
 	// The composition view widgets are hand-deleted, so they must be
 	// QPointer too or the delete can run twice.
 	auto bw = strip_line_comments(
-		slurp("streamelements/StreamElementsBrowserWidget.hpp"));
+		slurp("streamelements/SEBrowserWidget.hpp"));
 
 	check(bw.find("QPointer<QWidget> m_activeVideoCompositionViewWidgetContainer") !=
 		      std::string::npos,
 	      "CORE-786: m_activeVideoCompositionViewWidgetContainer must be a QPointer");
-	check(bw.find("QPointer<StreamElementsVideoCompositionViewWidget>") !=
+	check(bw.find("QPointer<SEVideoCompositionViewWidget>") !=
 		      std::string::npos,
 	      "CORE-786: m_activeVideoCompositionViewWidget must be a QPointer");
 }
@@ -312,17 +312,17 @@ static void check_widget_maps_hold_qpointer()
 // counting the pumps we run ourselves. A bare QApplication::sendPostedEvents()
 // anywhere in the plugin is invisible to that counter, so the gate could open
 // while OBSInit() is still on the stack -- which is the exact condition that
-// corrupts the widget tree. The wrapper in StreamElementsUtils.cpp is the only
+// corrupts the widget tree. The wrapper in SEUtils.cpp is the only
 // legitimate caller.
 static void check_event_pumps_are_counted()
 {
 	static const char *const kSources[] = {
-		"streamelements/StreamElementsBrowserWidgetManager.cpp",
-		"streamelements/StreamElementsGlobalStateManager.cpp",
-		"streamelements/StreamElementsNativeOBSControlsManager.cpp",
-		"streamelements/StreamElementsWidgetManager.cpp",
-		"streamelements/StreamElementsWorkerManager.cpp",
-		"streamelements/StreamElementsReportIssueDialog.cpp",
+		"streamelements/SEBrowserWidgetManager.cpp",
+		"streamelements/SEGlobalStateManager.cpp",
+		"streamelements/SENativeOBSControlsManager.cpp",
+		"streamelements/SEWidgetManager.cpp",
+		"streamelements/SEWorkerManager.cpp",
+		"streamelements/SEReportIssueDialog.cpp",
 	};
 
 	for (const char *const relpath : kSources) {
@@ -339,15 +339,15 @@ static void check_event_pumps_are_counted()
 
 	// And the wrapper itself must still contain exactly one real pump.
 	auto utils = strip_line_comments(
-		slurp("streamelements/StreamElementsUtils.cpp"));
+		slurp("streamelements/SEUtils.cpp"));
 
 	std::regex pump(R"(QApplication::sendPostedEvents\(\);)");
 
 	check(count_matches(utils, pump) == 1,
-	      "CORE-786: StreamElementsUtils.cpp must contain exactly one QApplication::sendPostedEvents(), inside SEDrainEventQueue()");
+	      "CORE-786: SEUtils.cpp must contain exactly one QApplication::sendPostedEvents(), inside SEDrainEventQueue()");
 
 	check(utils.find("void SEDrainEventQueue()") != std::string::npos,
-	      "CORE-786: SEDrainEventQueue() must exist in StreamElementsUtils.cpp");
+	      "CORE-786: SEDrainEventQueue() must exist in SEUtils.cpp");
 
 	// The pump must stop once the close has been caught: every further
 	// dispatch feeds events into a world that is being torn down.
@@ -364,8 +364,8 @@ static void check_dock_deletion_is_gated()
 {
 	// Every dock teardown site must go through the shared helper.
 	static const char *const kSources[] = {
-		"streamelements/StreamElementsWidgetManager.cpp",
-		"streamelements/StreamElementsWorkerManager.cpp",
+		"streamelements/SEWidgetManager.cpp",
+		"streamelements/SEWorkerManager.cpp",
 	};
 
 	for (const char *const relpath : kSources) {
@@ -381,13 +381,13 @@ static void check_dock_deletion_is_gated()
 	}
 
 	auto utils = strip_line_comments(
-		slurp("streamelements/StreamElementsUtils.cpp"));
+		slurp("streamelements/SEUtils.cpp"));
 
 	check(utils.find("SEIsUiTeardownSafe()") != std::string::npos,
 	      "CORE-786: SEDeleteDockWidgetWhenSafe() must gate on SEIsUiTeardownSafe()");
 
 	auto code = strip_line_comments(
-		slurp("streamelements/StreamElementsWidgetManager.cpp"));
+		slurp("streamelements/SEWidgetManager.cpp"));
 
 	// The two raw deletion forms are legitimate inside the helper and
 	// nowhere else, so cut the helper out before looking for them.
@@ -437,7 +437,7 @@ static void check_obs_close_is_watched()
 
 	// The gate has to actually be consulted on the teardown path, and the
 	// unsafe branch must leak rather than destroy.
-	check(code.find("StreamElementsGlobalStateManager::Leak()") !=
+	check(code.find("SEGlobalStateManager::Leak()") !=
 		      std::string::npos,
 	      "CORE-786: the EXIT path must leak rather than tear down when teardown is unsafe");
 
@@ -461,7 +461,7 @@ static void check_obs_close_is_watched()
 
 	// And Initialize() must record completion, or the gate never opens.
 	auto gsm = strip_line_comments(
-		slurp("streamelements/StreamElementsGlobalStateManager.cpp"));
+		slurp("streamelements/SEGlobalStateManager.cpp"));
 
 	check(gsm.find("SENoteInitializeCompleted();") != std::string::npos,
 	      "CORE-786: Initialize() must call SENoteInitializeCompleted() on completion");
@@ -476,7 +476,7 @@ static void check_obs_close_is_watched()
 static void check_both_sentry_doors_are_owned()
 {
 	auto code = strip_line_comments(
-		slurp("streamelements/StreamElementsSentryCrashHandler.cpp"));
+		slurp("streamelements/SESentryCrashHandler.cpp"));
 
 	check(code.find("SetUnhandledExceptionFilter(SentryExceptionFilter)") !=
 		      std::string::npos,
@@ -517,13 +517,13 @@ static void check_both_sentry_doors_are_owned()
 static void check_abort_path_drops_own_frames()
 {
 	auto hpp = strip_line_comments(
-		slurp("streamelements/StreamElementsCrashContext.hpp"));
+		slurp("streamelements/SECrashContext.hpp"));
 
 	check(hpp.find("bool skipOwnLeadingFrames") != std::string::npos,
 	      "CORE-860: WalkStack() must offer the leading-frame skip");
 
 	auto cpp = strip_line_comments(
-		slurp("streamelements/StreamElementsCrashContext.cpp"));
+		slurp("streamelements/SECrashContext.cpp"));
 
 	check(cpp.find("SetSkipLeadingOwnFrames(skipOwnLeadingFrames)") !=
 		      std::string::npos,
@@ -560,7 +560,7 @@ static void check_abort_path_drops_own_frames()
 static void check_sentry_init_is_diagnosable()
 {
 	auto code = strip_line_comments(
-		slurp("streamelements/StreamElementsSentryCrashHandler.cpp"));
+		slurp("streamelements/SESentryCrashHandler.cpp"));
 
 	check(code.find("sentry_options_set_logger(") != std::string::npos,
 	      "CORE-861: sentry's own diagnostics must be routed into the OBS log");
@@ -620,7 +620,7 @@ static void check_sentry_init_is_diagnosable()
 static void check_queued_tasks_suppressed_during_crash()
 {
 	auto code = strip_line_comments(
-		slurp("streamelements/StreamElementsUtils.cpp"));
+		slurp("streamelements/SEUtils.cpp"));
 
 	// Both queued paths -- QtPostTask's executor and QtDelayTask's timer
 	// lambda -- must skip the task AND release the waiter. Dropping a task
@@ -660,7 +660,7 @@ static void check_queued_tasks_suppressed_during_crash()
 static void check_oom_handler_observes_and_chains()
 {
 	auto code = strip_line_comments(
-		slurp("streamelements/StreamElementsSentryCrashHandler.cpp"));
+		slurp("streamelements/SESentryCrashHandler.cpp"));
 
 	check(code.find("_set_new_handler(SentryNewHandler)") !=
 		      std::string::npos,
@@ -741,7 +741,7 @@ static void check_oom_handler_observes_and_chains()
 static void check_guard_buffer_released_first()
 {
 	auto code = strip_line_comments(
-		slurp("streamelements/StreamElementsSentryCrashHandler.cpp"));
+		slurp("streamelements/SESentryCrashHandler.cpp"));
 
 	auto entry = code.find(
 		"static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,");
@@ -752,7 +752,7 @@ static void check_guard_buffer_released_first()
 		return;
 
 	auto release = code.find(
-		"StreamElementsCrashContext::ReleaseGuardBuffer();", entry);
+		"SECrashContext::ReleaseGuardBuffer();", entry);
 	auto walk = code.find("WalkStack(", entry);
 
 	check(release != std::string::npos,
@@ -776,7 +776,7 @@ static void check_guard_buffer_released_first()
 static void check_consent_prompt_is_bounded()
 {
 	auto code = strip_line_comments(
-		slurp("streamelements/StreamElementsSentryCrashHandler.cpp"));
+		slurp("streamelements/SESentryCrashHandler.cpp"));
 
 	check(code.find("CRASH_PROMPT_DEADLINE_MS") != std::string::npos,
 	      "CORE-862: the consent prompt must have a deadline");
@@ -785,7 +785,7 @@ static void check_consent_prompt_is_bounded()
 	// scoped to the prompt alone, because everything after it is already
 	// bounded and a watchdog spanning the upload would have to outlast it.
 	auto arm = code.find("ArmPromptWatchdog();");
-	auto prompt = code.find("StreamElementsCrashConsentDialog::Prompt(");
+	auto prompt = code.find("SECrashConsentDialog::Prompt(");
 	auto disarm = code.find("DisarmPromptWatchdog();");
 
 	check(arm != std::string::npos && prompt != std::string::npos &&
@@ -827,7 +827,7 @@ static void check_consent_prompt_is_bounded()
 static void check_encoder_released_once_per_object()
 {
 	auto code = strip_line_comments(
-		slurp("streamelements/StreamElementsUtils.hpp"));
+		slurp("streamelements/SEUtils.hpp"));
 
 	auto remove = code.find("void RemoveConsumer()");
 	check(remove != std::string::npos,
@@ -925,7 +925,7 @@ static void check_sentry_wer_is_not_beside_the_host_executable()
 // the crash to the daemon, which writes and uploads it.
 static void check_wer_module_gates_before_forwarding()
 {
-	auto code = slurp("streamelements/StreamElementsWerModule.cpp");
+	auto code = slurp("streamelements/SEWerModule.cpp");
 
 	// Anchored on the CALL SITES, never on the definitions. A check that
 	// matched "static BOOL SEWerStackTouchesModuleOfInterest(" would still
@@ -959,7 +959,7 @@ static void check_wer_module_gates_before_forwarding()
 static void check_prompt_discloses_automatic_reports()
 {
 	auto dialog =
-		slurp("streamelements/StreamElementsCrashConsentDialog.cpp");
+		slurp("streamelements/SECrashConsentDialog.cpp");
 
 	// Anchored on the AddControl that DISPLAYS it, not on the string's
 	// definition -- a dialog that defines the text and never shows it would
@@ -971,7 +971,7 @@ static void check_prompt_discloses_automatic_reports()
 	// And the disclosure has to stay true. It promises those reports carry
 	// no configuration archive and no screenshot, which holds only because
 	// the WER module never collects a payload.
-	auto module = slurp("streamelements/StreamElementsWerModule.cpp");
+	auto module = slurp("streamelements/SEWerModule.cpp");
 
 	check(module.find("Collect(") == std::string::npos,
 	      "CORE-864: the WER module must not collect a payload -- the prompt tells the user these reports carry none");
@@ -987,7 +987,7 @@ static void check_prompt_discloses_automatic_reports()
 static void check_wer_registration_prefix_is_asserted()
 {
 	auto header =
-		slurp("streamelements/StreamElementsWerRegistration.h");
+		slurp("streamelements/SEWerRegistration.h");
 
 	check(header.find("static_assert(offsetof(SEWerRegistration, seMagic) == 16") !=
 		      std::string::npos,
@@ -1158,13 +1158,13 @@ static void check_full_release_adopts_before_cancelling()
 // the module's skip must be derived from it rather than hard-coded either way.
 static void check_wer_skip_is_conditional_on_the_handler_flag()
 {
-	auto header = slurp("streamelements/StreamElementsWerRegistration.h");
+	auto header = slurp("streamelements/SEWerRegistration.h");
 
 	check(header.find("DWORD seHandlerActive;") != std::string::npos,
 	      "CORE-968: the registration block must carry seHandlerActive");
 
 	auto handler =
-		slurp("streamelements/StreamElementsSentryCrashHandler.cpp");
+		slurp("streamelements/SESentryCrashHandler.cpp");
 
 	check(handler.find("s_werRegistration.seHandlerActive = 1;") !=
 		      std::string::npos,
@@ -1173,7 +1173,7 @@ static void check_wer_skip_is_conditional_on_the_handler_flag()
 		      std::string::npos,
 	      "CORE-968: it must also clear the flag, or every later crash looks like one inside the handler");
 
-	auto module = slurp("streamelements/StreamElementsWerModule.cpp");
+	auto module = slurp("streamelements/SEWerModule.cpp");
 
 	// The skip must be derived from the flag. Anchored on the assignment so
 	// that hard-coding it TRUE or FALSE -- the two ways to get this wrong --
@@ -1205,7 +1205,7 @@ static void check_wer_skip_is_conditional_on_the_handler_flag()
 // dispatched 0, with the dialog behaving identically.
 static void check_consent_prompt_does_not_pump_foreign_messages()
 {
-	auto dialog = slurp("streamelements/StreamElementsCrashConsentDialog.cpp");
+	auto dialog = slurp("streamelements/SECrashConsentDialog.cpp");
 
 	check(dialog.find("DialogBoxIndirectParamW(") == std::string::npos,
 	      "CORE-967: the prompt must not use DialogBoxIndirectParamW -- its modal loop dispatches Qt's messages and re-enters the crash");
@@ -1252,10 +1252,10 @@ static void check_consent_prompt_does_not_pump_foreign_messages()
 static void check_no_dock_is_added_to_an_invalid_area()
 {
 	static const char *const sources[] = {
-		"streamelements/StreamElementsWidgetManager.cpp",
-		"streamelements/StreamElementsWorkerManager.cpp",
-		"streamelements/StreamElementsGlobalStateManager.cpp",
-		"streamelements/StreamElementsBrowserWidgetManager.cpp",
+		"streamelements/SEWidgetManager.cpp",
+		"streamelements/SEWorkerManager.cpp",
+		"streamelements/SEGlobalStateManager.cpp",
+		"streamelements/SEBrowserWidgetManager.cpp",
 	};
 
 	// Matches the argument as written at a call site, across the line break
@@ -1276,7 +1276,7 @@ static void check_no_dock_is_added_to_an_invalid_area()
 	// The theme listener is a QDockWidget in the main window, so saveState()
 	// and restoreState() identify it by objectName. Qt requires one to be
 	// set for every dock in the window; this had none.
-	auto global = slurp("streamelements/StreamElementsGlobalStateManager.cpp");
+	auto global = slurp("streamelements/SEGlobalStateManager.cpp");
 
 	check(global.find("m_themeChangeListener->setObjectName(") !=
 		      std::string::npos,
@@ -1463,9 +1463,9 @@ static std::string function_body(const std::string &src,
 static void check_scene_signal_handler_lifetime()
 {
 	const std::string hpp = strip_line_comments(
-		slurp("streamelements/StreamElementsObsSceneManager.hpp"));
+		slurp("streamelements/SEObsSceneManager.hpp"));
 	const std::string cpp = strip_line_comments(
-		slurp("streamelements/StreamElementsObsSceneManager.cpp"));
+		slurp("streamelements/SEObsSceneManager.cpp"));
 
 	const std::string remove =
 		function_body(hpp, "void RemoveSceneRefAtRoot(");
@@ -1529,7 +1529,7 @@ static void check_scene_signal_handler_lifetime()
 	}
 	check(tasks >= 2,
 	      "scene signals: expected the delayed scene-item and scene-update "
-	      "tasks in StreamElementsObsSceneManager.cpp (CORE-1715)");
+	      "tasks in SEObsSceneManager.cpp (CORE-1715)");
 
 	const std::string itemRemove =
 		function_body(cpp, "static void process_scene_item_remove(");
@@ -1579,7 +1579,7 @@ static void check_scene_signal_handler_lifetime()
 static void check_widget_teardown_leaves_the_paint_tree()
 {
 	const std::string utils = strip_line_comments(
-		slurp("streamelements/StreamElementsUtils.cpp"));
+		slurp("streamelements/SEUtils.cpp"));
 
 	const std::string deleteDock =
 		function_body(utils, "void SEDeleteDockWidgetWhenSafe(");
@@ -1626,13 +1626,13 @@ static void check_widget_teardown_leaves_the_paint_tree()
 	}
 
 	const std::string browser = strip_line_comments(
-		slurp("streamelements/StreamElementsBrowserWidget.cpp"));
+		slurp("streamelements/SEBrowserWidget.cpp"));
 
 	const std::string destroy = function_body(
-		browser, "void StreamElementsBrowserWidget::DestroyBrowser()");
+		browser, "void SEBrowserWidget::DestroyBrowser()");
 
 	check(!destroy.empty(),
-	      "widget teardown: StreamElementsBrowserWidget::DestroyBrowser() "
+	      "widget teardown: SEBrowserWidget::DestroyBrowser() "
 	      "not found (CORE-1922)");
 
 	if (!destroy.empty()) {
@@ -1651,7 +1651,7 @@ static void check_widget_teardown_leaves_the_paint_tree()
 
 	// And the crash path has to report it, or none of the above is visible.
 	const std::string context = strip_line_comments(
-		slurp("streamelements/StreamElementsCrashContext.cpp"));
+		slurp("streamelements/SECrashContext.cpp"));
 
 	check(context.find("selive.widget.destroying") != std::string::npos &&
 		      context.find("SEWidgetTeardownScope::Current()") !=
@@ -1661,7 +1661,7 @@ static void check_widget_teardown_leaves_the_paint_tree()
 	      "(CORE-1922)");
 
 	const std::string sentry = strip_line_comments(
-		slurp("streamelements/StreamElementsSentryCrashHandler.cpp"));
+		slurp("streamelements/SESentryCrashHandler.cpp"));
 
 	check(sentry.find("selive.widget.destroying") != std::string::npos,
 	      "widget teardown: selive.widget.destroying must be tag-worthy, or "
@@ -1677,20 +1677,20 @@ static void check_widget_teardown_leaves_the_paint_tree()
 // machine -- which is exactly what this gate exists to prevent.
 static void check_wyvrn_sdk_calls_stay_on_the_sdk_thread()
 {
-	auto src = slurp("streamelements/StreamElementsRazerWyvrnManager.cpp");
+	auto src = slurp("streamelements/SERazerWyvrnManager.cpp");
 
 	const std::string marker =
-		"void StreamElementsRazerWyvrnManager::ThreadProc()";
+		"void SERazerWyvrnManager::ThreadProc()";
 	auto begin = src.find(marker);
 	check(begin != std::string::npos,
-	      "WYVRN: StreamElementsRazerWyvrnManager.cpp must define ThreadProc()");
+	      "WYVRN: SERazerWyvrnManager.cpp must define ThreadProc()");
 	if (begin == std::string::npos)
 		return;
 
 	// ThreadProc runs to the start of the next member definition.
 	auto end = src.find("\nStreamElementsRazerWyvrnManager::", begin);
 	auto end2 =
-		src.find("\nvoid StreamElementsRazerWyvrnManager::", begin + 1);
+		src.find("\nvoid SERazerWyvrnManager::", begin + 1);
 	if (end2 != std::string::npos &&
 	    (end == std::string::npos || end2 < end))
 		end = end2;
@@ -1733,15 +1733,15 @@ static void check_wyvrn_sdk_calls_stay_on_the_sdk_thread()
 static void check_config_never_hands_libobs_a_null_config()
 {
 	const std::string cpp = strip_line_comments(
-		slurp("streamelements/StreamElementsConfig.cpp"));
+		slurp("streamelements/SEConfig.cpp"));
 	const std::string hpp = strip_line_comments(
-		slurp("streamelements/StreamElementsConfig.hpp"));
+		slurp("streamelements/SEConfig.hpp"));
 
 	const std::string getConfig = function_body(
-		cpp, "config_t* StreamElementsConfig::GetConfig()");
+		cpp, "config_t* SEConfig::GetConfig()");
 
 	check(!getConfig.empty(),
-	      "config: StreamElementsConfig::GetConfig() not found -- has it "
+	      "config: SEConfig::GetConfig() not found -- has it "
 	      "moved? Point this invariant at it (CORE-1900)");
 
 	if (!getConfig.empty()) {
@@ -1762,7 +1762,7 @@ static void check_config_never_hands_libobs_a_null_config()
 	}
 
 	const std::string saveConfig =
-		function_body(cpp, "void StreamElementsConfig::SaveConfig()");
+		function_body(cpp, "void SEConfig::SaveConfig()");
 
 	check(saveConfig.find("m_configIsMemoryOnly") != std::string::npos,
 	      "config: SaveConfig() must skip the in-memory fallback, which has "
@@ -1797,7 +1797,7 @@ static void check_config_never_hands_libobs_a_null_config()
 			}
 
 			check(args.find("GetConfig()") == std::string::npos,
-			      "config: an accessor in StreamElementsConfig.hpp "
+			      "config: an accessor in SEConfig.hpp "
 			      "passes GetConfig() to libobs directly; libobs "
 			      "does not null-check it. Use the Read*/Write* "
 			      "helpers (CORE-1900)");
@@ -1814,7 +1814,7 @@ static void check_config_never_hands_libobs_a_null_config()
 
 		check(!body.empty(),
 		      (std::string("config: the null-safe helper ") + helper +
-		       "() is missing from StreamElementsConfig.hpp (CORE-1900)")
+		       "() is missing from SEConfig.hpp (CORE-1900)")
 			      .c_str());
 
 		if (body.empty())
@@ -1836,7 +1836,7 @@ static void check_config_never_hands_libobs_a_null_config()
 
 // --- A rejected file-server request must stop, not fall through.
 //
-// StreamElementsLocalFilesystemHttpServer verifies a session signature before
+// SELocalFilesystemHttpServer verifies a session signature before
 // serving an absolute path. The rejection branch originally had no `return`: it
 // set 429 and a JSON body, then carried on to open the file, attach a content
 // provider for its bytes, and reset the status to 200. The bytes did not escape
@@ -1849,7 +1849,7 @@ static void check_config_never_hands_libobs_a_null_config()
 static void check_rejected_signature_stops_the_handler()
 {
 	auto src = slurp(
-		"streamelements/StreamElementsLocalFilesystemHttpServer.cpp");
+		"streamelements/SELocalFilesystemHttpServer.cpp");
 
 	auto begin = src.find("if (!VerifySessionSignedAbsolutePathURL(");
 	check(begin != std::string::npos,
@@ -1875,7 +1875,7 @@ static void check_rejected_signature_stops_the_handler()
 
 // --- The crash path must never use a throwing std::filesystem overload.
 //
-// StreamElementsCrashContext::Collect() walked the profile with a range-for
+// SECrashContext::Collect() walked the profile with a range-for
 // over recursive_directory_iterator and the one-argument is_directory(). A
 // folder that vanished mid-walk -- CEF churns its cache directories, and a
 // crashing process is exactly when that is in flight -- threw
@@ -1951,15 +1951,15 @@ static std::vector<std::size_t> find_all(const std::string &code,
 static void check_crash_path_filesystem_calls_never_throw()
 {
 	const char *files[] = {
-		"streamelements/StreamElementsCrashContext.cpp",
-		"streamelements/StreamElementsCrashHandler.cpp",
-		"streamelements/StreamElementsSentryCrashHandler.cpp",
-		"streamelements/StreamElementsSentryCrashHandler.mm",
-		"streamelements/StreamElementsBugSplatCrashHandler.cpp",
-		"streamelements/StreamElementsBugSplatCrashHandler.mm",
-		"streamelements/StreamElementsWerModule.cpp",
-		"streamelements/StreamElementsCrashConsentDialog.cpp",
-		"streamelements/StreamElementsCrashConsentDialog.mm",
+		"streamelements/SECrashContext.cpp",
+		"streamelements/SECrashHandler.cpp",
+		"streamelements/SESentryCrashHandler.cpp",
+		"streamelements/SESentryCrashHandler.mm",
+		"streamelements/SEBugSplatCrashHandler.cpp",
+		"streamelements/SEBugSplatCrashHandler.mm",
+		"streamelements/SEWerModule.cpp",
+		"streamelements/SECrashConsentDialog.cpp",
+		"streamelements/SECrashConsentDialog.mm",
 	};
 
 	// Operations whose default overload reports failure by throwing.
@@ -2156,9 +2156,9 @@ static void check_crash_path_filesystem_calls_never_throw()
 
 	// Not vacuous: the profile walk this guards must still exist.
 	const std::string context = strip_line_comments(
-		slurp("streamelements/StreamElementsCrashContext.cpp"));
+		slurp("streamelements/SECrashContext.cpp"));
 	check(context.find("directory_iterator") != std::string::npos,
-	      "crash path: StreamElementsCrashContext.cpp no longer walks a "
+	      "crash path: SECrashContext.cpp no longer walks a "
 	      "directory -- has the profile walk moved? Point this invariant "
 	      "at it (CORE-1714)");
 }
@@ -2327,9 +2327,9 @@ static void check_cefparsejson_results_are_guarded_everywhere()
 		const char *file;
 		const char *callee;
 	} handedOn[] = {
-		{"streamelements/StreamElementsBrowserWidgetManager.cpp",
+		{"streamelements/SEBrowserWidgetManager.cpp",
 		 "DeserializeNotificationBar"},
-		{"streamelements/StreamElementsWidgetManager.cpp",
+		{"streamelements/SEWidgetManager.cpp",
 		 "DeserializeDockingWidgets"},
 	};
 

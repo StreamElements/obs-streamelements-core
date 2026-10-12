@@ -7,10 +7,10 @@
 #include "canvas-draw.hpp"
 #include "canvas-mutate.hpp"
 
-#include "StreamElementsConfig.hpp"
+#include "SEConfig.hpp"
 
 static config_t* obs_fe_user_config() {
-	auto config = StreamElementsConfig::GetInstance();
+	auto config = SEConfig::GetInstance();
 
 	if (config) {
 		return config->GetObsUserConfig();
@@ -108,15 +108,15 @@ static vec3 getSnapOffset(const vec3 &tl, const vec3 &br, double worldWidth, dou
 }
 
 class SceneItemControlBase
-	: public StreamElementsVideoCompositionViewWidget::VisualElementBase {
+	: public SEVideoCompositionViewWidget::VisualElementBase {
 protected:
 	obs_scene_t *m_scene;
 	obs_sceneitem_t *m_sceneItem;
 	obs_sceneitem_t *m_parentSceneItem;
-	StreamElementsVideoCompositionViewWidget *m_view;
+	SEVideoCompositionViewWidget *m_view;
 
 public:
-	SceneItemControlBase(StreamElementsVideoCompositionViewWidget *view,
+	SceneItemControlBase(SEVideoCompositionViewWidget *view,
 			     obs_scene_t *scene, obs_sceneitem_t *sceneItem,
 			     obs_sceneitem_t *parentSceneItem)
 		: m_view(view),
@@ -582,7 +582,7 @@ private:
 	}
 
 public:
-	SceneItemMoveControlBox(StreamElementsVideoCompositionViewWidget *view,
+	SceneItemMoveControlBox(SEVideoCompositionViewWidget *view,
 			    obs_scene_t *scene, obs_sceneitem_t *sceneItem,
 			    obs_sceneitem_t *parentSceneItem)
 		: SceneItemControlBase(view, scene, sceneItem, parentSceneItem)
@@ -1038,7 +1038,7 @@ public:
 
 class SceneItemOverflowBox : public SceneItemControlBase {
 public:
-	SceneItemOverflowBox(StreamElementsVideoCompositionViewWidget *view,
+	SceneItemOverflowBox(SEVideoCompositionViewWidget *view,
 			     obs_scene_t *scene, obs_sceneitem_t *sceneItem,
 			     obs_sceneitem_t *parentSceneItem)
 		: SceneItemControlBase(view, scene, sceneItem, parentSceneItem)
@@ -1152,7 +1152,7 @@ private:
 
 public:
 	SceneItemControlPoint(
-		StreamElementsVideoCompositionViewWidget *view,
+		SEVideoCompositionViewWidget *view,
 		obs_scene_t *scene, obs_sceneitem_t *sceneItem,
 		obs_sceneitem_t *parentSceneItem, double x,
 		double y, double width, double height,
@@ -1224,7 +1224,7 @@ public:
 class SceneItemRotationControlPoint : public SceneItemControlPoint {
 public:
 	SceneItemRotationControlPoint(
-		StreamElementsVideoCompositionViewWidget *view,
+		SEVideoCompositionViewWidget *view,
 		obs_scene_t *scene, obs_sceneitem_t *sceneItem,
 		obs_sceneitem_t *parentSceneItem,
 		double width, double height,
@@ -1431,7 +1431,7 @@ private:
 
 public:
 	SceneItemStretchControlPoint(
-		StreamElementsVideoCompositionViewWidget *view,
+		SEVideoCompositionViewWidget *view,
 		obs_scene_t *scene, obs_sceneitem_t *sceneItem,
 		obs_sceneitem_t *parentSceneItem, double x, double y,
 		double width, double height)

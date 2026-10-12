@@ -26,7 +26,7 @@ endif()
 
 # Which crash-reporting backend is compiled in. CI drives this; it decides in
 # one place which implementation compiles, which SDK is linked, and which
-# SE_CRASH_HANDLER_* definition the factory in StreamElementsCrashHandler.cpp
+# SE_CRASH_HANDLER_* definition the factory in SECrashHandler.cpp
 # sees -- so those three can never disagree. Exactly one backend is ever linked,
 # which is what keeps two of them from contending for the process-wide
 # exception filter.
@@ -381,8 +381,8 @@ if (ENABLE_SENTRY)
 	# that is what keeps ours the only module registered.
 	if (WIN32)
 		add_library(se-crash-wer SHARED
-			streamelements/StreamElementsWerModule.cpp
-			streamelements/StreamElementsWerModule.def
+			streamelements/SEWerModule.cpp
+			streamelements/SEWerModule.def
 		)
 
 		# No "lib" prefix and no debug postfix: WerFault loads it by the
@@ -530,56 +530,56 @@ set(obs-streamelements-core_SOURCES
 	deps/cef-stub/cef_value_list.cpp
 	streamelements/Version.cpp
 	streamelements/audio-wrapper-source.c
-	streamelements/StreamElementsAsyncTaskQueue.cpp
-	streamelements/StreamElementsBrowserWidget.cpp
-	streamelements/StreamElementsBrowserWidgetManager.cpp
-	streamelements/StreamElementsBandwidthTestClient.cpp
-	streamelements/StreamElementsObsBandwidthTestClient.cpp
-	streamelements/StreamElementsWidgetManager.cpp
-	streamelements/StreamElementsObsAppMonitor.cpp
-	streamelements/StreamElementsApiMessageHandler.cpp
-	streamelements/StreamElementsConfig.cpp
-	streamelements/StreamElementsGlobalStateManager.cpp
-	streamelements/StreamElementsMenuManager.cpp
-	streamelements/StreamElementsBandwidthTestManager.cpp
-	streamelements/StreamElementsOutputSettingsManager.cpp
-	streamelements/StreamElementsWorkerManager.cpp
-	streamelements/StreamElementsBrowserDialog.cpp
-	streamelements/StreamElementsUtils.cpp
-	streamelements/StreamElementsHotkeyManager.cpp
-	streamelements/StreamElementsReportIssueDialog.cpp
-	streamelements/StreamElementsSecretRedactor.cpp
-	streamelements/StreamElementsProgressDialog.cpp
-	streamelements/StreamElementsPerformanceHistoryTracker.cpp
-	streamelements/StreamElementsNetworkDialog.cpp
-	streamelements/StreamElementsAnalyticsEventsManager.cpp
-	streamelements/StreamElementsMessageBus.cpp
-	streamelements/StreamElementsControllerServer.cpp
-	streamelements/StreamElementsObsSceneManager.cpp
-	streamelements/StreamElementsExternalSceneDataProviderSlobsClient.cpp
-	streamelements/StreamElementsHttpClient.cpp
-	streamelements/StreamElementsNativeOBSControlsManager.cpp
-	streamelements/StreamElementsProfilesManager.cpp
-	streamelements/StreamElementsBackupManager.cpp
-	streamelements/StreamElementsCleanupManager.cpp
-	streamelements/StreamElementsPreviewManager.cpp
-	streamelements/StreamElementsSceneItemsMonitor.cpp
-	streamelements/StreamElementsDeferredExecutive.cpp
-	streamelements/StreamElementsRemoteIconLoader.cpp
-	streamelements/StreamElementsScenesListWidgetManager.cpp
-	streamelements/StreamElementsPleaseWaitWindow.cpp
-	streamelements/StreamElementsHttpServerManager.cpp
-	streamelements/StreamElementsWebsocketApiServer.cpp
-	streamelements/StreamElementsLocalFilesystemHttpServer.cpp
-	streamelements/StreamElementsVideoComposition.cpp
-	streamelements/StreamElementsVideoCompositionManager.cpp
-	streamelements/StreamElementsVideoCompositionViewWidget.cpp
-	streamelements/StreamElementsAudioComposition.cpp
-	streamelements/StreamElementsAudioCompositionManager.cpp
-	streamelements/StreamElementsSharedVideoCompositionManager.cpp
-	streamelements/StreamElementsOutput.cpp
-	streamelements/StreamElementsOutputManager.cpp
-	streamelements/StreamElementsObsActiveSceneTracker.cpp
+	streamelements/SEAsyncTaskQueue.cpp
+	streamelements/SEBrowserWidget.cpp
+	streamelements/SEBrowserWidgetManager.cpp
+	streamelements/SEBandwidthTestClient.cpp
+	streamelements/SEObsBandwidthTestClient.cpp
+	streamelements/SEWidgetManager.cpp
+	streamelements/SEObsAppMonitor.cpp
+	streamelements/SEApiMessageHandler.cpp
+	streamelements/SEConfig.cpp
+	streamelements/SEGlobalStateManager.cpp
+	streamelements/SEMenuManager.cpp
+	streamelements/SEBandwidthTestManager.cpp
+	streamelements/SEOutputSettingsManager.cpp
+	streamelements/SEWorkerManager.cpp
+	streamelements/SEBrowserDialog.cpp
+	streamelements/SEUtils.cpp
+	streamelements/SEHotkeyManager.cpp
+	streamelements/SEReportIssueDialog.cpp
+	streamelements/SESecretRedactor.cpp
+	streamelements/SEProgressDialog.cpp
+	streamelements/SEPerformanceHistoryTracker.cpp
+	streamelements/SENetworkDialog.cpp
+	streamelements/SEAnalyticsEventsManager.cpp
+	streamelements/SEMessageBus.cpp
+	streamelements/SEControllerServer.cpp
+	streamelements/SEObsSceneManager.cpp
+	streamelements/SEExternalSceneDataProviderSlobsClient.cpp
+	streamelements/SEHttpClient.cpp
+	streamelements/SENativeOBSControlsManager.cpp
+	streamelements/SEProfilesManager.cpp
+	streamelements/SEBackupManager.cpp
+	streamelements/SECleanupManager.cpp
+	streamelements/SEPreviewManager.cpp
+	streamelements/SESceneItemsMonitor.cpp
+	streamelements/SEDeferredExecutive.cpp
+	streamelements/SERemoteIconLoader.cpp
+	streamelements/SEScenesListWidgetManager.cpp
+	streamelements/SEPleaseWaitWindow.cpp
+	streamelements/SEHttpServerManager.cpp
+	streamelements/SEWebsocketApiServer.cpp
+	streamelements/SELocalFilesystemHttpServer.cpp
+	streamelements/SEVideoComposition.cpp
+	streamelements/SEVideoCompositionManager.cpp
+	streamelements/SEVideoCompositionViewWidget.cpp
+	streamelements/SEAudioComposition.cpp
+	streamelements/SEAudioCompositionManager.cpp
+	streamelements/SESharedVideoCompositionManager.cpp
+	streamelements/SEOutput.cpp
+	streamelements/SEOutputManager.cpp
+	streamelements/SEObsActiveSceneTracker.cpp
 	streamelements/SETrace.cpp
 	streamelements/updater/confirmpendingupdatedialog.cpp
 	streamelements/updater/networkdialog.cpp
@@ -594,12 +594,12 @@ set(obs-streamelements-core_SOURCES
 
 if (APPLE)
 list(APPEND obs-streamelements-core_SOURCES
-        streamelements/StreamElementsUtils.mm
+        streamelements/SEUtils.mm
     )
 
 	# The mig-generated Mach exception server belongs to the BugSplat handler,
 	# not to the platform: the catch_mach_exception_* callbacks it dispatches
-	# to are defined in StreamElementsBugSplatCrashHandler.mm and nowhere
+	# to are defined in SEBugSplatCrashHandler.mm and nowhere
 	# else. Compiled unconditionally they leave those symbols undefined in any
 	# macOS build that selects another backend, which is why this only
 	# surfaced once one was built.
@@ -615,7 +615,7 @@ endif(APPLE)
 # contributes its own platform-specific implementation. A 'none' build gets the
 # factory alone, which returns nullptr.
 list(APPEND obs-streamelements-core_SOURCES
-	streamelements/StreamElementsCrashHandler.cpp
+	streamelements/SECrashHandler.cpp
 )
 
 # Backend-agnostic crash-time collection, shared by whichever backend is
@@ -625,18 +625,18 @@ list(APPEND obs-streamelements-core_SOURCES
 # fork, and those are #ifdef'd inside.
 if (ENABLE_BUGSPLAT OR ENABLE_SENTRY)
 	list(APPEND obs-streamelements-core_SOURCES
-		streamelements/StreamElementsCrashContext.cpp
+		streamelements/SECrashContext.cpp
 	)
 endif()
 
 if (ENABLE_BUGSPLAT)
 	if (APPLE)
 		list(APPEND obs-streamelements-core_SOURCES
-			streamelements/StreamElementsBugSplatCrashHandler.mm
+			streamelements/SEBugSplatCrashHandler.mm
 		)
 	else()
 		list(APPEND obs-streamelements-core_SOURCES
-			streamelements/StreamElementsBugSplatCrashHandler.cpp
+			streamelements/SEBugSplatCrashHandler.cpp
 		)
 	endif(APPLE)
 endif()
@@ -646,14 +646,14 @@ if (ENABLE_SENTRY)
 	# arm, hand off, ask -- but not the mechanism: Windows chains SEH filters,
 	# macOS chains signal handlers and leans on sentry's own consent gate,
 	# because sentry's macOS handler chains to its predecessor and its Windows
-	# one does not. See StreamElementsSentryCrashHandler.hpp.
+	# one does not. See SESentryCrashHandler.hpp.
 	if (APPLE)
 		list(APPEND obs-streamelements-core_SOURCES
-			streamelements/StreamElementsSentryCrashHandler.mm
+			streamelements/SESentryCrashHandler.mm
 		)
 	else()
 		list(APPEND obs-streamelements-core_SOURCES
-			streamelements/StreamElementsSentryCrashHandler.cpp
+			streamelements/SESentryCrashHandler.cpp
 		)
 	endif()
 
@@ -661,11 +661,11 @@ if (ENABLE_SENTRY)
 	# shows a prompt of its own, whereas Sentry uploads silently.
 	if (WIN32)
 		list(APPEND obs-streamelements-core_SOURCES
-			streamelements/StreamElementsCrashConsentDialog.cpp
+			streamelements/SECrashConsentDialog.cpp
 		)
 	elseif (APPLE)
 		list(APPEND obs-streamelements-core_SOURCES
-			streamelements/StreamElementsCrashConsentDialog.mm
+			streamelements/SECrashConsentDialog.mm
 		)
 	endif()
 endif()
@@ -688,64 +688,64 @@ set(obs-streamelements-core_HEADERS
 	streamelements/Version.hpp
 	streamelements/Version.generated.hpp
 	streamelements/audio-wrapper-source.h
-	streamelements/StreamElementsUtils.hpp
-	streamelements/StreamElementsAsyncTaskQueue.hpp
-	streamelements/StreamElementsBrowserWidget.hpp
-	streamelements/StreamElementsBrowserWidgetManager.hpp
-	streamelements/StreamElementsBandwidthTestClient.hpp
-	streamelements/StreamElementsObsBandwidthTestClient.hpp
-	streamelements/StreamElementsWidgetManager.hpp
-	streamelements/StreamElementsObsAppMonitor.hpp
-	streamelements/StreamElementsApiMessageHandler.hpp
-	streamelements/StreamElementsConfig.hpp
-	streamelements/StreamElementsGlobalStateManager.hpp
-	streamelements/StreamElementsMenuManager.hpp
-	streamelements/StreamElementsBandwidthTestManager.hpp
-	streamelements/StreamElementsOutputSettingsManager.hpp
-	streamelements/StreamElementsWorkerManager.cpp
-	streamelements/StreamElementsBrowserDialog.hpp
-	streamelements/StreamElementsHotkeyManager.hpp
-	streamelements/StreamElementsReportIssueDialog.hpp
-	streamelements/StreamElementsSecretRedactor.hpp
-	streamelements/StreamElementsProgressDialog.hpp
-	streamelements/StreamElementsPerformanceHistoryTracker.hpp
-	streamelements/StreamElementsNetworkDialog.hpp
-	streamelements/StreamElementsAnalyticsEventsManager.hpp
-	streamelements/StreamElementsCrashHandler.hpp
-	streamelements/StreamElementsCrashContext.hpp
-	streamelements/StreamElementsCrashConsentDialog.hpp
-	streamelements/StreamElementsBugSplatCrashHandler.hpp
-	streamelements/StreamElementsSentryCrashHandler.hpp
-	streamelements/StreamElementsWerRegistration.h
-	streamelements/StreamElementsMessageBus.hpp
-	streamelements/StreamElementsControllerServer.hpp
-	streamelements/StreamElementsObsSceneManager.hpp
-	streamelements/StreamElementsExternalSceneDataProviderManager.hpp
-	streamelements/StreamElementsExternalSceneDataProviderSlobsClient.hpp
-	streamelements/StreamElementsExternalSceneDataProvider.hpp
-	streamelements/StreamElementsHttpClient.hpp
-	streamelements/StreamElementsNativeOBSControlsManager.hpp
-	streamelements/StreamElementsProfilesManager.hpp
-	streamelements/StreamElementsBackupManager.hpp
-	streamelements/StreamElementsCleanupManager.hpp
-	streamelements/StreamElementsPreviewManager.hpp
-	streamelements/StreamElementsSceneItemsMonitor.hpp
-	streamelements/StreamElementsDeferredExecutive.hpp
-	streamelements/StreamElementsRemoteIconLoader.hpp
-	streamelements/StreamElementsScenesListWidgetManager.hpp
-	streamelements/StreamElementsPleaseWaitWindow.hpp
-	streamelements/StreamElementsHttpServerManager.hpp
-	streamelements/StreamElementsWebsocketApiServer.hpp
-	streamelements/StreamElementsLocalFilesystemHttpServer.hpp
-	streamelements/StreamElementsVideoComposition.hpp
-	streamelements/StreamElementsVideoCompositionManager.hpp
-	streamelements/StreamElementsVideoCompositionViewWidget.hpp
-	streamelements/StreamElementsAudioComposition.hpp
-	streamelements/StreamElementsAudioCompositionManager.hpp
-	streamelements/StreamElementsSharedVideoCompositionManager.hpp
-	streamelements/StreamElementsOutput.hpp
-	streamelements/StreamElementsOutputManager.hpp
-	streamelements/StreamElementsObsActiveSceneTracker.hpp
+	streamelements/SEUtils.hpp
+	streamelements/SEAsyncTaskQueue.hpp
+	streamelements/SEBrowserWidget.hpp
+	streamelements/SEBrowserWidgetManager.hpp
+	streamelements/SEBandwidthTestClient.hpp
+	streamelements/SEObsBandwidthTestClient.hpp
+	streamelements/SEWidgetManager.hpp
+	streamelements/SEObsAppMonitor.hpp
+	streamelements/SEApiMessageHandler.hpp
+	streamelements/SEConfig.hpp
+	streamelements/SEGlobalStateManager.hpp
+	streamelements/SEMenuManager.hpp
+	streamelements/SEBandwidthTestManager.hpp
+	streamelements/SEOutputSettingsManager.hpp
+	streamelements/SEWorkerManager.cpp
+	streamelements/SEBrowserDialog.hpp
+	streamelements/SEHotkeyManager.hpp
+	streamelements/SEReportIssueDialog.hpp
+	streamelements/SESecretRedactor.hpp
+	streamelements/SEProgressDialog.hpp
+	streamelements/SEPerformanceHistoryTracker.hpp
+	streamelements/SENetworkDialog.hpp
+	streamelements/SEAnalyticsEventsManager.hpp
+	streamelements/SECrashHandler.hpp
+	streamelements/SECrashContext.hpp
+	streamelements/SECrashConsentDialog.hpp
+	streamelements/SEBugSplatCrashHandler.hpp
+	streamelements/SESentryCrashHandler.hpp
+	streamelements/SEWerRegistration.h
+	streamelements/SEMessageBus.hpp
+	streamelements/SEControllerServer.hpp
+	streamelements/SEObsSceneManager.hpp
+	streamelements/SEExternalSceneDataProviderManager.hpp
+	streamelements/SEExternalSceneDataProviderSlobsClient.hpp
+	streamelements/SEExternalSceneDataProvider.hpp
+	streamelements/SEHttpClient.hpp
+	streamelements/SENativeOBSControlsManager.hpp
+	streamelements/SEProfilesManager.hpp
+	streamelements/SEBackupManager.hpp
+	streamelements/SECleanupManager.hpp
+	streamelements/SEPreviewManager.hpp
+	streamelements/SESceneItemsMonitor.hpp
+	streamelements/SEDeferredExecutive.hpp
+	streamelements/SERemoteIconLoader.hpp
+	streamelements/SEScenesListWidgetManager.hpp
+	streamelements/SEPleaseWaitWindow.hpp
+	streamelements/SEHttpServerManager.hpp
+	streamelements/SEWebsocketApiServer.hpp
+	streamelements/SELocalFilesystemHttpServer.hpp
+	streamelements/SEVideoComposition.hpp
+	streamelements/SEVideoCompositionManager.hpp
+	streamelements/SEVideoCompositionViewWidget.hpp
+	streamelements/SEAudioComposition.hpp
+	streamelements/SEAudioCompositionManager.hpp
+	streamelements/SESharedVideoCompositionManager.hpp
+	streamelements/SEOutput.hpp
+	streamelements/SEOutputManager.hpp
+	streamelements/SEObsActiveSceneTracker.hpp
 	streamelements/canvas-config.hpp
 	streamelements/canvas-scan.hpp
 	streamelements/canvas-math.hpp
@@ -788,16 +788,16 @@ endif()
 # invariant in tests/ asserts it stays absent.
 if (STREAMELEMENTS_ENABLE_WYVRN)
 	list(APPEND obs-streamelements-core_SOURCES
-		streamelements/StreamElementsRazerWyvrnConfig.cpp
-		streamelements/StreamElementsRazerWyvrnManager.cpp
+		streamelements/SERazerWyvrnConfig.cpp
+		streamelements/SERazerWyvrnManager.cpp
 		deps/wyvrn-sdk/WyvrnAPI.cpp
 		deps/wyvrn-sdk/UnicodeWyvrnAPI.cpp
 		deps/wyvrn-sdk/VerifyLibrarySignature.cpp
 		deps/wyvrn-sdk/WyvrnLogger.cpp)
 
 	list(APPEND obs-streamelements-core_HEADERS
-		streamelements/StreamElementsRazerWyvrnConfig.hpp
-		streamelements/StreamElementsRazerWyvrnManager.hpp
+		streamelements/SERazerWyvrnConfig.hpp
+		streamelements/SERazerWyvrnManager.hpp
 		deps/wyvrn-sdk/WyvrnAPI.h
 		deps/wyvrn-sdk/UnicodeWyvrnAPI.h
 		deps/wyvrn-sdk/VerifyLibrarySignature.h
@@ -898,7 +898,7 @@ if (APPLE)
 
 			list(APPEND obs-streamelements-code_LIBRARIES "$<LINK_LIBRARY:FRAMEWORK,${BUGSPLATMAC_FRAMEWORK}>")
 
-			set_source_files_properties(streamelements/StreamElementsBugSplatCrashHandler.mm PROPERTIES COMPILE_FLAGS "-fmodules -fcxx-modules")
+			set_source_files_properties(streamelements/SEBugSplatCrashHandler.mm PROPERTIES COMPILE_FLAGS "-fmodules -fcxx-modules")
 
 			set_target_properties(obs-streamelements-core PROPERTIES
 				XCODE_EMBED_FRAMEWORKS "${BUGSPLATMAC_FRAMEWORK}"

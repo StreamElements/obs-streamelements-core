@@ -62,12 +62,12 @@ endfunction()
 # --- Behavioural test: the WYVRN configuration parser -----------------------
 #
 # Compiles the real production parser, not a mirror of it. That is possible
-# because StreamElementsRazerWyvrnConfig.cpp deliberately depends on nothing but
+# because SERazerWyvrnConfig.cpp deliberately depends on nothing but
 # the standard library and the local CefValue model - no libobs, no Qt - so the
 # thing under test here is the code that actually ships.
 se_add_test(test_razer_wyvrn_config
   test_razer_wyvrn_config.cpp
-  "${REPO_ROOT}/streamelements/StreamElementsRazerWyvrnConfig.cpp"
+  "${REPO_ROOT}/streamelements/SERazerWyvrnConfig.cpp"
   "${REPO_ROOT}/deps/cef-stub/cef_string.cpp"
   "${REPO_ROOT}/deps/cef-stub/cef_value.cpp"
   "${REPO_ROOT}/deps/cef-stub/cef_value_binary.cpp"

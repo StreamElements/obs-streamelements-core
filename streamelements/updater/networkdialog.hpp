@@ -6,7 +6,7 @@
 
 #include <util/config-file.h>
 
-#include "../StreamElementsAsyncTaskQueue.hpp"
+#include "../SEAsyncTaskQueue.hpp"
 
 namespace Ui {
 	class NetworkDialog;
@@ -27,7 +27,7 @@ private:
 	Ui::NetworkDialog *ui;
 
 private:
-	StreamElementsAsyncTaskQueue m_taskQueue; // asynchronous tasks queue
+	SEAsyncTaskQueue m_taskQueue; // asynchronous tasks queue
 	bool m_cancel_pending; // set to true to cancel current download
 
 	///

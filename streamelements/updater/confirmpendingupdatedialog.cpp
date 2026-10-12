@@ -1,6 +1,6 @@
 #include "confirmpendingupdatedialog.hpp"
 #include "ui_confirmpendingupdatedialog.h"
-#include "../StreamElementsUtils.hpp"
+#include "../SEUtils.hpp"
 #include <obs-frontend-api.h>
 
 #include <QEvent>
@@ -74,7 +74,7 @@ bool ConfirmPendingUpdateDialog::eventFilter(QObject *watched, QEvent *event)
 	// loop. It cannot finish there: finishing means joining the updater's
 	// worker thread, and that thread is blocked waiting for this exec() to
 	// return. Both halves of that standoff were captured in one live dump
-	// (CORE-1193), with the whole of StreamElementsGlobalStateManager::
+	// (CORE-1193), with the whole of SEGlobalStateManager::
 	// Shutdown() sitting on the stack between QDialog::exec and
 	// os_event_wait.
 	//

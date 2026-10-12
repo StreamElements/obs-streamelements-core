@@ -12,7 +12,7 @@
 // reported as errors, or a malformed entry taking the whole enumeration with it.
 //
 
-#include "streamelements/StreamElementsRazerWyvrnConfig.hpp"
+#include "streamelements/SERazerWyvrnConfig.hpp"
 
 #include <cstdio>
 #include <string>

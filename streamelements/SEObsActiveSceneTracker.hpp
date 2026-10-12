@@ -1,0 +1,28 @@
+#pragma once
+
+#include "obs.h"
+#include "obs.hpp"
+#include "obs-frontend-api.h"
+
+#include "SEUtils.hpp"
+
+class SEObsActiveSceneTracker
+{
+public:
+	SEObsActiveSceneTracker();
+	~SEObsActiveSceneTracker();
+
+private:
+	static void handle_obs_frontend_event(enum obs_frontend_event event,
+					      void *data);
+	static void handle_transition_start(void *my_data, calldata_t *cd);
+	static void handle_transition_changed(void *my_data, calldata_t *cd);
+
+	void ClearTransition();
+	void UpdateTransition();
+
+	void DispatchTransitionChanged();
+
+private:
+	obs_source_t* m_currentTransition = nullptr;
+};

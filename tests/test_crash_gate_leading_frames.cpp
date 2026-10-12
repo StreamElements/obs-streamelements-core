@@ -18,7 +18,7 @@
 // The fix is to drop the leading frames that belong to us before anything is
 // recorded or tested, and to stop dropping at the first frame that is not ours.
 //
-// This mirrors MyStackWalker's frame filter from StreamElementsCrashContext.cpp
+// This mirrors MyStackWalker's frame filter from SECrashContext.cpp
 // -- the real one derives from StackWalker and is entangled with CEF, HTTP and
 // dbghelp, none of which belong in a unit test. The logic under test is the
 // twenty lines of frame filtering, reproduced exactly.
@@ -38,7 +38,7 @@ static void check(bool cond, const char *msg)
 	}
 }
 
-// Mirror of MyStackWalker (Windows branch) in StreamElementsCrashContext.cpp.
+// Mirror of MyStackWalker (Windows branch) in SECrashContext.cpp.
 struct Walker {
 	std::vector<std::string> modulesOfInterest = {"obs-streamelements-core",
 						      "obs-streamelements"};

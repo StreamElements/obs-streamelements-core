@@ -38,14 +38,14 @@ using namespace json11;
 /* ========================================================================= */
 
 #include <obs-frontend-api.h>
-#include "streamelements/StreamElementsGlobalStateManager.hpp"
-#include "streamelements/StreamElementsUtils.hpp"
+#include "streamelements/SEGlobalStateManager.hpp"
+#include "streamelements/SEUtils.hpp"
 
 /* ========================================================================= */
 
 static void log_remaining_objects()
 {
-	StreamElementsVideoCompositionBase::CompositionInfo::
+	SEVideoCompositionBase::CompositionInfo::
 		LogRemainingCompositionInfos();
 
 	obs_enum_sources(
@@ -104,7 +104,7 @@ static void log_remaining_objects()
 MODULE_EXPORT bool obs_module_load(void)
 {
 #if ENABLE_PLUGIN
-	std::string version = GetStreamElementsPluginVersionString();
+	std::string version = GetSEPluginVersionString();
 
 	blog(LOG_INFO, "[obs-streamelements-core]: Version %s",
 	     version.c_str());
@@ -173,7 +173,7 @@ static void NoteObsCloseRequested(const char *source)
 	     source);
 }
 
-// Declared in StreamElementsUtils.hpp; called from every UI teardown site.
+// Declared in SEUtils.hpp; called from every UI teardown site.
 bool SEIsUiTeardownSafe()
 {
 	return !s_closedBeforeInitCompleted.load();
@@ -280,7 +280,7 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 		{
 			StreamElementsInitializeScope initializeScope;
 
-			StreamElementsGlobalStateManager::GetInstance()
+			SEGlobalStateManager::GetInstance()
 				->Initialize(static_cast<QMainWindow *>(
 					obs_frontend_get_main_window()));
 		}
@@ -320,14 +320,14 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 			// tree, so do not run them at all. The process is
 			// exiting and about to be replaced by the updater; a
 			// leak is strictly better than a crash.
-			StreamElementsGlobalStateManager::Leak();
+			SEGlobalStateManager::Leak();
 			break;
 		}
 
 		// Shutdown StreamElements plug-in
 		blog(LOG_INFO, "[obs-streamelements-core]: shutting down");
 
-		StreamElementsGlobalStateManager::Destroy();
+		SEGlobalStateManager::Destroy();
 		break;
 	default:
 		break;

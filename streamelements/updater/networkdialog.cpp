@@ -4,7 +4,7 @@
 #include <obs.h>
 #include <util/platform.h>
 
-#include "../StreamElementsUtils.hpp"
+#include "../SEUtils.hpp"
 
 NetworkDialog::NetworkDialog(QWidget *parent)
 	: QDialog(parent),

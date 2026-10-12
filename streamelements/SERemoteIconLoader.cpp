@@ -1,0 +1,178 @@
+#include "SERemoteIconLoader.hpp"
+
+#include <QCache>
+#include <QReadWriteLock>
+
+class CachedPixmap : QObject {
+private:
+	QIcon m_icon;
+
+public:
+	CachedPixmap(QIcon icon) : m_icon(icon) {}
+	~CachedPixmap() {}
+
+	QIcon icon() { return m_icon; }
+};
+
+static QCache<QString, CachedPixmap> s_cache;
+QReadWriteLock s_cacheLock;
+
+static bool GetCached(const QString &key, QIcon &icon)
+{
+	bool result = false;
+
+	s_cacheLock.lockForRead();
+
+	CachedPixmap *object = s_cache.object(key);
+
+	if (object) {
+		icon = object->icon();
+
+		result = true;
+	}
+
+	s_cacheLock.unlock();
+
+	return result;
+}
+
+static void SetCached(const QString &key, const QIcon &icon)
+{
+	s_cacheLock.lockForWrite();
+
+	s_cache.insert(key, new CachedPixmap(icon));
+
+	s_cacheLock.unlock();
+}
+
+SERemoteIconLoader::SERemoteIconLoader(
+	setIcon_callback_t setIcon, const char *url, QPixmap *defaultPixmap,
+	bool requireQtPostTaskOnCached)
+	: m_setIcon(setIcon)
+{
+	if (url && *url) {
+		LoadUrlInternal(url, requireQtPostTaskOnCached);
+	} else {
+		if (defaultPixmap) {
+			QPixmap pixmap(16, 16);
+
+			if (defaultPixmap) {
+				pixmap = *defaultPixmap;
+			} else {
+				pixmap.fill(Qt::transparent);
+			}
+
+			if (!requireQtPostTaskOnCached) {
+				std::lock_guard<std::recursive_mutex> guard(
+					m_mutex);
+
+				if (!m_cancelled) {
+					m_setIcon(QIcon(pixmap));
+				}
+			} else {
+				QtPostTask([=]() {
+					std::lock_guard<std::recursive_mutex>
+						guard(m_mutex);
+
+					if (!m_cancelled) {
+						m_setIcon(QIcon(pixmap));
+					}
+				});
+			}
+		}
+	}
+}
+
+SERemoteIconLoader::~SERemoteIconLoader()
+{
+	Cancel();
+}
+
+CefRefPtr<SERemoteIconLoader>
+SERemoteIconLoader::Create(setIcon_callback_t setIcon,
+				       const char *url, QPixmap *defaultPixmap,
+				       bool requireQtPostTaskOnCached)
+{
+	return std::make_shared<SERemoteIconLoader>(setIcon, url, defaultPixmap,
+						  requireQtPostTaskOnCached);
+}
+
+void SERemoteIconLoader::Cancel()
+{
+	std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
+	m_cancelled = true;
+
+	if (m_task) {
+		m_task->Cancel();
+
+		m_task = nullptr;
+	}
+}
+
+void SERemoteIconLoader::LoadUrl(const char* url)
+{
+	LoadUrlInternal(url, true);
+}
+
+void SERemoteIconLoader::LoadUrlInternal(
+	const char *url, bool requireQtPostTaskOnCached)
+{
+	if (!url)
+		return;
+
+	std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
+	Cancel();
+
+	m_cancelled = false;
+
+	QString cacheKey(url);
+
+	QIcon cached;
+	if (GetCached(cacheKey, cached)) {
+		if (!requireQtPostTaskOnCached) {
+			if (!m_cancelled) {
+				m_setIcon(cached);
+			}
+		} else {
+			QtPostTask([this, cached]() {
+				std::lock_guard<std::recursive_mutex> guard(
+					m_mutex);
+
+				if (!m_cancelled) {
+					m_setIcon(cached);
+				}
+			});
+		}
+
+		return;
+	}
+
+	m_task = HttpGetAsync(
+		url,
+		[this, cacheKey](bool success, void *data, size_t len) {
+			std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
+			if (success && !m_task->IsCancelled()) {
+				QByteArray buffer = QByteArray::fromRawData(
+					(char *)data, len);
+				QPixmap pixmap;
+				if (pixmap.loadFromData(buffer)) {
+					QIcon icon(pixmap);
+
+					SetCached(cacheKey, icon);
+
+					QtPostTask([this, icon]() {
+						std::lock_guard<
+							std::recursive_mutex>
+							guard(m_mutex);
+
+						if (!m_cancelled) {
+							m_setIcon(icon);
+						}
+					});
+				}
+			}
+		});
+}

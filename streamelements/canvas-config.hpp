@@ -4,7 +4,7 @@
 
 #include <string>
 
-#include "StreamElementsConfig.hpp"
+#include "SEConfig.hpp"
 
 class ConfigAccessibilityColor {
 	std::string m_name;
@@ -19,7 +19,7 @@ public:
 	~ConfigAccessibilityColor() {}
 
 	QColor get() {
-		auto config = StreamElementsConfig::GetInstance();
+		auto config = SEConfig::GetInstance();
 
 		if (!config)
 			return m_defaultValue;

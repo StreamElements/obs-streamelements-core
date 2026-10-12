@@ -1,0 +1,288 @@
+#include "SEOutputManager.hpp"
+#include "SEUtils.hpp"
+
+SEOutputManager::SEOutputManager(
+	std::shared_ptr<SEVideoCompositionManager>
+		videoCompositionManager,
+	std::shared_ptr<SEAudioCompositionManager>
+		audioCompositionManager)
+	: m_videoCompositionManager(videoCompositionManager), m_audioCompositionManager(audioCompositionManager)
+{
+	auto nativeStreamingOutput = std::make_shared<
+		SEObsNativeStreamingOutput>(
+		"default", "OBS Native Streaming",
+		m_videoCompositionManager->GetObsNativeVideoComposition(),
+		m_audioCompositionManager->GetObsNativeAudioComposition());
+
+	m_map[StreamingOutput] = std::make_shared<std::map<
+		std::string, std::shared_ptr<SEOutputBase>>>();
+
+	m_map[RecordingOutput] = std::make_shared<std::map<
+		std::string, std::shared_ptr<SEOutputBase>>>();
+
+	m_map[ReplayBufferOutput] = std::make_shared<std::map<
+		std::string, std::shared_ptr<SEOutputBase>>>();
+
+	(*m_map[StreamingOutput].get())[nativeStreamingOutput->GetId()] = nativeStreamingOutput;
+
+	auto nativeRecordingOutput =
+		std::make_shared<SEObsNativeRecordingOutput>(
+			"default", "OBS Native Recording",
+		m_videoCompositionManager->GetObsNativeVideoComposition(),
+		m_audioCompositionManager->GetObsNativeAudioComposition());
+
+	(*m_map[RecordingOutput].get())[nativeRecordingOutput->GetId()] = nativeRecordingOutput;
+
+	auto nativeReplayBufferOutput = std::make_shared<
+		SEObsNativeReplayBufferOutput>(
+		"default", "OBS Native Replay Buffer",
+		m_videoCompositionManager->GetObsNativeVideoComposition(),
+		m_audioCompositionManager->GetObsNativeAudioComposition());
+
+	(*m_map[ReplayBufferOutput].get())[nativeReplayBufferOutput->GetId()] =
+		nativeReplayBufferOutput;
+}
+
+SEOutputManager::~SEOutputManager()
+{
+	Reset();
+
+	m_map.clear();
+}
+
+void SEOutputManager::Reset()
+{
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
+
+	for (const auto &kv : m_map) {
+		std::list<std::string> keys_to_delete;
+		
+		for (const auto &pair : *kv.second.get()) {
+			if (!pair.second->IsObsNativeOutput())
+				keys_to_delete.push_back(pair.first);
+		}
+		
+		for (auto &key : keys_to_delete) {
+			kv.second->erase(key);
+		}
+	}
+}
+
+void SEOutputManager::DeserializeOutput(ObsOutputType outputType,
+	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
+{
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
+
+	output->SetBool(false);
+
+	if (!input.get())
+		return;
+
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return;
+
+	auto d = input->GetDictionary();
+
+	std::string id = "";
+	if (d->HasKey("id") && d->GetType("id") == VTYPE_STRING) {
+		id = d->GetString("id");
+	}
+
+	while (!id.size() || m_map[outputType]->count(id)) {
+		id = CreateGloballyUniqueIdString();
+	}
+
+	d->SetString("id", id);
+
+	input->SetDictionary(d);
+
+	if (outputType == StreamingOutput) {
+		auto customOutput =
+			SECustomStreamingOutput::Create(input);
+
+		if (!customOutput.get())
+			return;
+
+		(*m_map[outputType].get())[customOutput->GetId()] =
+			customOutput;
+
+		customOutput->SerializeOutput(output);
+	}
+	else if (outputType == RecordingOutput) {
+		auto customOutput =
+			SECustomRecordingOutput::Create(input);
+
+		if (!customOutput.get())
+			return;
+
+		(*m_map[outputType].get())[customOutput->GetId()] =
+			customOutput;
+
+		customOutput->SerializeOutput(output);
+	} else {
+		auto customOutput =
+			SECustomReplayBufferOutput::Create(input);
+
+		if (!customOutput.get())
+			return;
+
+		(*m_map[outputType].get())[customOutput->GetId()] =
+			customOutput;
+
+		customOutput->SerializeOutput(output);
+	}
+}
+
+void SEOutputManager::SerializeAllOutputs(
+	ObsOutputType outputType,
+	CefRefPtr<CefValue> &output)
+{
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+
+	auto d = CefDictionaryValue::Create();
+
+	for (auto &kv : (*m_map[outputType].get())) {
+		auto serializedOutput = CefValue::Create();
+
+		kv.second->SerializeOutput(serializedOutput);
+
+		d->SetValue(kv.first, serializedOutput);
+	}
+
+	output->SetDictionary(d);
+}
+
+void SEOutputManager::RemoveOutputsByIds(ObsOutputType outputType,
+	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
+{
+	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
+
+	output->SetBool(false);
+
+	std::map<std::string, bool> map;
+
+	if (!GetValidIds(outputType, input, map, true, false))
+		return;
+
+	// Remove all valid IDs
+	for (const auto &kv : map) {
+		m_map[outputType]->erase(kv.first);
+	}
+
+	output->SetBool(true);
+}
+
+void SEOutputManager::EnableOutputsByIds(ObsOutputType outputType,
+	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
+{
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+
+	output->SetBool(false);
+
+	std::map<std::string, bool> map;
+
+	if (!GetValidIds(outputType, input, map, false, false))
+		return;
+
+	// Remove all valid IDs
+	for (auto kv : map) {
+		(*m_map[outputType].get())[kv.first]->SetEnabled(true);
+	}
+
+	output->SetBool(true);
+}
+
+void SEOutputManager::DisableOutputsByIds(
+	ObsOutputType outputType,
+	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
+{
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+
+	output->SetBool(false);
+
+	std::map<std::string, bool> map;
+
+	if (!GetValidIds(outputType, input, map, false, true))
+		return;
+
+	// Remove all valid IDs
+	for (auto kv : map) {
+		(*m_map[outputType].get())[kv.first]->SetEnabled(false);
+	}
+
+	output->SetBool(true);
+}
+
+void SEOutputManager::TriggerSplitRecordingOutputById(
+	CefRefPtr<CefValue> input,
+	CefRefPtr<CefValue>& output)
+{
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+
+	output->SetBool(false);
+
+	if (input->GetType() != VTYPE_STRING)
+		return;
+
+	std::string id = input->GetString();
+
+	if (m_map[RecordingOutput]->count(id)) {
+		output->SetBool((*m_map[RecordingOutput].get())[id]
+					->TriggerSplitRecordingOutput());
+	}
+}
+
+void SEOutputManager::TriggerSaveReplayBufferById(
+	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
+{
+	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
+
+	output->SetBool(false);
+
+	if (input->GetType() != VTYPE_STRING)
+		return;
+
+	std::string id = input->GetString();
+
+	if (m_map[ReplayBufferOutput]->count(id)) {
+		output->SetBool((*m_map[ReplayBufferOutput].get())[id]
+					->TriggerSaveReplayBuffer());
+	}
+}
+
+bool SEOutputManager::GetValidIds(
+	ObsOutputType outputType, CefRefPtr<CefValue> input,
+	std::map<std::string, bool>& output, bool testRemove, bool testDisable)
+{
+	if (input->GetType() != VTYPE_LIST)
+		return false;
+
+	auto list = input->GetList();
+
+	std::map<std::string, bool> map;
+
+	// Check if all IDs are valid
+	for (size_t i = 0; i < list->GetSize(); ++i) {
+		if (list->GetType(i) != VTYPE_STRING)
+			return false;
+
+		std::string id = list->GetString(i);
+
+		if (!id.size())
+			return false;
+
+		if (!m_map[outputType]->count(id))
+			return false;
+
+		if (testRemove && !(*m_map[outputType].get())[id]->CanRemove())
+			return false;
+
+		if (testDisable &&
+		    !(*m_map[outputType].get())[id]->CanDisable())
+			return false;
+
+		output[id] = true;
+	}
+
+	return true;
+}

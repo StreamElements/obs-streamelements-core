@@ -1,0 +1,53 @@
+#pragma once
+
+#include "SEExternalSceneDataProvider.hpp"
+#include <util/platform.h>
+#include <string>
+#include <filesystem>
+
+#ifndef WIN32
+#include <stdio.h>
+#define MAX_PATH FILENAME_MAX
+#endif
+
+class SEExternalSceneDataProviderSlobsClient :
+	public SEExternalSceneDataProvider
+{
+public:
+	SEExternalSceneDataProviderSlobsClient(std::string providerId) :
+		SEExternalSceneDataProvider(providerId, "Streamlabs OBS")
+	{
+		char* path = new char[MAX_PATH];
+
+		if (os_get_config_path(path, MAX_PATH, "slobs-client/SceneCollections") >= 0) {
+			m_basePath = path;
+
+			std::replace(m_basePath.begin(), m_basePath.end(), '\\', '/');
+
+			if (!std::filesystem::is_directory(
+				    m_basePath)) {
+				blog(LOG_INFO,
+					"obs-streamelements-core: SEExternalSceneDataProviderSlobsClient: path does not exist: %s",
+					m_basePath.c_str());
+
+				m_basePath = "";
+			}
+		}
+		else {
+			m_basePath = "";
+		}
+
+		delete[] path;
+	}
+
+protected:
+	virtual bool GetSceneCollections(
+		std::vector<scene_collection_t>& result) override;
+
+	virtual bool GetSceneCollection(
+		std::string collectionId,
+		scene_collection_content_t& result) override;
+
+private:
+	std::string m_basePath;
+};
