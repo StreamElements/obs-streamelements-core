@@ -1948,6 +1948,54 @@ static std::vector<std::size_t> find_all(const std::string &code,
 	return hits;
 }
 
+//
+// Dependency injection, stage 1: the services a consumer was handed must not
+// also be reachable through the global singleton from inside that consumer.
+//
+// The point of the refactor is lifetime -- an injected shared_ptr keeps the
+// service alive exactly as long as its consumer needs it, instead of until
+// SEGlobalStateManager::Shutdown() decides. A single surviving
+// GetInstance()->GetX() defeats that for the whole object, because the
+// shutdown ordering is back in charge on that path.
+//
+// Listed per consumer rather than globally: other reaches (mainWindow(), the
+// config getters) are later stages and must not fail this check early.
+//
+static void check_injected_services_are_not_also_fetched_globally()
+{
+	struct Consumer {
+		const char *file;
+		const char *service;
+	};
+
+	const Consumer consumers[] = {
+		{"streamelements/SEBackupManager.cpp", "GetCleanupManager"},
+		{"streamelements/SEReportIssueDialog.cpp",
+		 "GetPerformanceHistoryTracker"},
+		{"streamelements/SEReportIssueDialog.cpp",
+		 "GetAnalyticsEventsManager"},
+	};
+
+	for (const auto &consumer : consumers) {
+		const std::string src =
+			strip_line_comments(slurp(consumer.file));
+
+		const bool reaches =
+			src.find(std::string("GetInstance()")) !=
+				std::string::npos &&
+			src.find(consumer.service) != std::string::npos;
+
+		const std::string message =
+			std::string(consumer.file) + " still calls " +
+			consumer.service +
+			"() -- it is injected now, so use the member. "
+			"Reaching through the singleton puts this object's "
+			"lifetime back under Shutdown()";
+
+		check(!reaches, message.c_str());
+	}
+}
+
 static void check_crash_path_filesystem_calls_never_throw()
 {
 	const char *files[] = {
@@ -2388,6 +2436,7 @@ int main()
 	check_wyvrn_sdk_calls_stay_on_the_sdk_thread();
 	check_config_never_hands_libobs_a_null_config();
 	check_rejected_signature_stops_the_handler();
+	check_injected_services_are_not_also_fetched_globally();
 	check_crash_path_filesystem_calls_never_throw();
 
 	if (failures) {

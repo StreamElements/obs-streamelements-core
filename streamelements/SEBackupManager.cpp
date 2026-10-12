@@ -1,4 +1,5 @@
 #include "SEBackupManager.hpp"
+#include "SECleanupManager.hpp"
 #include "SEUtils.hpp"
 #include "SENetworkDialog.hpp"
 #include "SEGlobalStateManager.hpp"
@@ -89,7 +90,13 @@ static void glob_files(std::string pattern,
 	os_globfree(glob);
 }
 
-static bool GetLocalPathFromURL(std::string url, std::string &path)
+//
+// Takes the cleanup manager as a borrowed raw pointer: it neither owns nor
+// extends the lifetime, and the caller is a member whose own reference
+// outlives the call.
+//
+static bool GetLocalPathFromURL(std::string url, std::string &path,
+				SECleanupManager *cleanupManager)
 {
 	if (VerifySessionSignedAbsolutePathURL(url, path))
 		return true;
@@ -117,9 +124,7 @@ static bool GetLocalPathFromURL(std::string url, std::string &path)
 	if (!result)
 		os_unlink(path.c_str());
 	else
-		SEGlobalStateManager::GetInstance()
-			->GetCleanupManager()
-			->AddPath(path);
+		cleanupManager->AddPath(path);
 
 	return result;
 }
@@ -744,7 +749,11 @@ static void ReadListOfIdsFromCefValue(CefRefPtr<CefValue> input,
 	}
 }
 
-SEBackupManager::SEBackupManager() {}
+SEBackupManager::SEBackupManager(
+	std::shared_ptr<SECleanupManager> cleanupManager)
+	: m_cleanupManager(cleanupManager)
+{
+}
 
 SEBackupManager::~SEBackupManager() {}
 
@@ -879,9 +888,7 @@ void SEBackupManager::CreateLocalBackupPackage(
 	if (!zip)
 		return;
 
-	SEGlobalStateManager::GetInstance()
-		->GetCleanupManager()
-		->AddPath(backupPackagePath);
+	m_cleanupManager->AddPath(backupPackagePath);
 
 	for (auto profile : requestProfiles) {
 		if (!AddProfileToZip(zip, basePath, profile))
@@ -949,7 +956,7 @@ void SEBackupManager::QueryBackupPackageContent(
 
 	std::string localPath;
 
-	if (!GetLocalPathFromURL(url, localPath))
+	if (!GetLocalPathFromURL(url, localPath, m_cleanupManager.get()))
 		return;
 
 	zip_t *zip = zip_open(localPath.c_str(), 0, 'r');
@@ -1128,9 +1135,7 @@ void SEBackupManager::RestoreBackupPackageContent(
 	if (!GetTemporaryFilePath("obs-live-restore-content", extractPath))
 		return;
 
-	SEGlobalStateManager::GetInstance()
-		->GetCleanupManager()
-		->AddPath(extractPath);
+	m_cleanupManager->AddPath(extractPath);
 
 	std::string extractRootPath = extractPath + ".dir";
 
@@ -1144,7 +1149,7 @@ void SEBackupManager::RestoreBackupPackageContent(
     
 	std::string localPath;
 
-	if (!GetLocalPathFromURL(url, localPath))
+	if (!GetLocalPathFromURL(url, localPath, m_cleanupManager.get()))
 		return;
 
 	zip_t *zip = zip_open(localPath.c_str(), 0, 'r');
@@ -1387,9 +1392,7 @@ void SEBackupManager::RestoreBackupPackageContent(
 
             /* Cleanup temporary resources */
 
-            SEGlobalStateManager::GetInstance()
-                ->GetCleanupManager()
-                ->Clean();
+            m_cleanupManager->Clean();
 
             /* Exit OBS */
 
@@ -1412,9 +1415,7 @@ void SEBackupManager::RestoreBackupPackageContent(
     if (ScanForFileReferencesMonikersToRestore(extractPath, destBasePath)) {
         /* Cleanup temporary resources */
 
-        SEGlobalStateManager::GetInstance()
-            ->GetCleanupManager()
-            ->Clean();
+        m_cleanupManager->Clean();
 
 	// Prevent front-end from saving it's shit and overwriting our backup
 	obs_frontend_defer_save_begin();

@@ -458,10 +458,12 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			GetInstance();
 	m_profilesManager =
 		std::make_shared<SEProfilesManager>();
-	m_backupManager =
-		std::make_shared<SEBackupManager>();
+	// Constructed before the backup manager, which now takes it: a
+	// dependency has to exist before the thing that holds it.
 	m_cleanupManager =
 		std::make_shared<SECleanupManager>();
+	m_backupManager =
+		std::make_shared<SEBackupManager>(m_cleanupManager);
 	m_previewManager =
 		std::make_shared<SEPreviewManager>(
 			mainWindow());
@@ -1699,7 +1701,8 @@ void SEGlobalStateManager::ReportIssue()
 {
 	obs_frontend_push_ui_translation(obs_module_get_string);
 
-	SEReportIssueDialog dialog(mainWindow());
+	SEReportIssueDialog dialog(m_performanceHistoryTracker,
+				   m_analyticsEventsManager, mainWindow());
 
 	obs_frontend_pop_ui_translation();
 
