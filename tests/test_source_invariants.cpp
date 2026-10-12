@@ -2072,43 +2072,62 @@ static void check_api_handler_takes_its_services_by_injection()
 	// And the bundle has to actually be used, or the check above passes
 	// for the wrong reason.
 	//
-	check(flat.find("m_services->GetObsSceneManager()") !=
-		      std::string::npos,
+	check(flat.find("m_services->obsSceneManager") != std::string::npos,
 	      "SEApiMessageHandler.cpp no longer uses the injected services "
 	      "bundle -- this invariant would then pass vacuously");
 }
 
-static void check_api_services_bundle_owns_no_widget_owners()
+static void check_api_services_container_is_emptied_when_manager_dies()
 {
 	//
-	// The bundle owns what it holds, and every API handler owns the
-	// bundle. So a service that owns a widget must not be in it: a widget
-	// owns its handler, the handler owns the bundle, and the bundle would
-	// own the service that owns the widget. Refcounting never breaks that
-	// ring, and it does not present as a leak -- the widgets outlive OBS's
-	// own teardown, the Qt event loop never returns, and it reads as a
+	// Three of the services in SEApiServices own widgets, every widget
+	// owns an API handler and every handler holds a reference to the
+	// container, so the references form a ring that refcounting never
+	// unwinds. The manager's destructor empties the container, which is
+	// the one thing that breaks it.
+	//
+	// Worth a test because deleting those two lines looks harmless and the
+	// consequence does not read as a leak: the widgets outlive OBS's own
+	// teardown and the Qt event loop never returns, which looks like a
 	// hang in SEGlobalStateManager::Shutdown().
 	//
-	// These three own widgets. A handler that needs one asks the host.
+	const std::string src = strip_line_comments(
+		slurp("streamelements/SEGlobalStateManager.cpp"));
+
+	const std::string dtor = function_body(
+		src, "SEGlobalStateManager::~SEGlobalStateManager");
+
+	check(!dtor.empty(),
+	      "cannot find SEGlobalStateManager's destructor -- this invariant "
+	      "needs updating");
+
+	check(dtor.find("*m_apiServices = SEApiServices()") !=
+		      std::string::npos,
+	      "SEGlobalStateManager's destructor no longer empties "
+	      "m_apiServices -- the API handlers and the widget managers then "
+	      "keep each other alive and the Qt event loop never returns");
+}
+
+static void check_api_services_is_a_container_and_nothing_else()
+{
+	//
+	// No methods, no accessors, no policy: a consumer takes the one or two
+	// members it needs, and a container with behaviour on it would grow
+	// into the singleton this refactor is removing.
 	//
 	const std::string src =
 		strip_line_comments(slurp("streamelements/SEApiServices.hpp"));
 
-	const char *const widget_owners[] = {"WidgetManager", "WorkerManager",
-					     "NativeOBSControlsManager"};
+	const std::string body = function_body(src, "struct SEApiServices");
 
-	for (const char *const owner : widget_owners) {
-		const std::string message =
-			std::string("SEApiServices holds ") + owner +
-			" -- it owns a widget, and widgets own handlers that "
-			"own this bundle, so this closes a reference ring that "
-			"hangs the Qt event loop at shutdown. Reach it through "
-			"GetHost() instead";
+	check(!body.empty(),
+	      "cannot find struct SEApiServices -- this invariant needs "
+	      "updating");
 
-		check(src.find(std::string("Get") + owner + "()") ==
-			      std::string::npos,
-		      message.c_str());
-	}
+	check(body.find('(') == std::string::npos,
+	      "SEApiServices has something callable in it -- it is a container "
+	      "of shared_ptr members, and anything else belongs on the service "
+	      "that owns the behaviour");
 }
 
 static void check_crash_path_filesystem_calls_never_throw()
@@ -2553,7 +2572,8 @@ int main()
 	check_rejected_signature_stops_the_handler();
 	check_injected_services_are_not_also_fetched_globally();
 	check_api_handler_takes_its_services_by_injection();
-	check_api_services_bundle_owns_no_widget_owners();
+	check_api_services_container_is_emptied_when_manager_dies();
+	check_api_services_is_a_container_and_nothing_else();
 	check_crash_path_filesystem_calls_never_throw();
 
 	if (failures) {

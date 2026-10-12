@@ -322,6 +322,24 @@ SEGlobalStateManager::SEGlobalStateManager(
 SEGlobalStateManager::~SEGlobalStateManager()
 {
 	Shutdown();
+
+	//
+	// Emptied here, not in Shutdown(): while this object exists its
+	// services are still legitimately reachable through the container, and
+	// deciding their lifetime any earlier is what this refactor is getting
+	// rid of.
+	//
+	// It has to happen, though. Three of the services in there own widgets,
+	// every widget owns an API handler and every handler holds a reference
+	// to the container, so the references form a ring that refcounting
+	// never unwinds. Left alone it does not read as a leak: the widgets
+	// outlive OBS's own teardown and the Qt event loop never returns.
+	//
+	if (m_apiServices) {
+		*m_apiServices = SEApiServices();
+
+		m_apiServices = nullptr;
+	}
 }
 
 std::shared_ptr<SEGlobalStateManager>
@@ -369,27 +387,34 @@ void SEGlobalStateManager::PublishApiServices()
 	if (!m_apiServices)
 		return;
 
-	m_apiServices->SetObsSceneManager(m_obsSceneManager);
-	m_apiServices->SetMenuManager(m_menuManager);
-	m_apiServices->SetOutputManager(m_outputManager);
-	m_apiServices->SetVideoCompositionManager(m_videoCompositionManager);
-	m_apiServices->SetAudioCompositionManager(m_audioCompositionManager);
-	m_apiServices->SetSharedVideoCompositionManager(
-		m_sharedVideoCompositionManager);
-	m_apiServices->SetOutputSettingsManager(m_outputSettingsManager);
-	m_apiServices->SetHotkeyManager(m_hotkeyManager);
-	m_apiServices->SetBackupManager(m_backupManager);
-	m_apiServices->SetWebsocketApiServer(m_websocketApiServer);
-	m_apiServices->SetBandwidthTestManager(m_bwTestManager);
-	m_apiServices->SetExternalSceneDataProviderManager(
-		m_externalSceneDataProviderManager);
-	m_apiServices->SetProfilesManager(m_profilesManager);
-	m_apiServices->SetAnalyticsEventsManager(m_analyticsEventsManager);
-	m_apiServices->SetHttpClient(m_httpClient);
-
+	m_apiServices->widgetManager = m_widgetManager;
+	m_apiServices->obsSceneManager = m_obsSceneManager;
+	m_apiServices->menuManager = m_menuManager;
+	m_apiServices->bandwidthTestManager = m_bwTestManager;
+	m_apiServices->outputSettingsManager = m_outputSettingsManager;
+	m_apiServices->workerManager = m_workerManager;
+	m_apiServices->hotkeyManager = m_hotkeyManager;
+	m_apiServices->performanceHistoryTracker = m_performanceHistoryTracker;
+	m_apiServices->analyticsEventsManager = m_analyticsEventsManager;
+	m_apiServices->externalSceneDataProviderManager =
+		m_externalSceneDataProviderManager;
+	m_apiServices->httpClient = m_httpClient;
+	m_apiServices->localFilesystemHttpServer = m_localFilesystemHttpServer;
+	m_apiServices->nativeObsControlsManager = m_nativeObsControlsManager;
+	m_apiServices->profilesManager = m_profilesManager;
+	m_apiServices->backupManager = m_backupManager;
 #ifdef SE_ENABLE_WYVRN
-	m_apiServices->SetRazerWyvrnManager(m_razerWyvrnManager);
+	m_apiServices->razerWyvrnManager = m_razerWyvrnManager;
 #endif
+	m_apiServices->cleanupManager = m_cleanupManager;
+	m_apiServices->previewManager = m_previewManager;
+	m_apiServices->websocketApiServer = m_websocketApiServer;
+	m_apiServices->sharedVideoCompositionManager =
+		m_sharedVideoCompositionManager;
+	m_apiServices->videoCompositionManager = m_videoCompositionManager;
+	m_apiServices->audioCompositionManager = m_audioCompositionManager;
+	m_apiServices->outputManager = m_outputManager;
+	m_apiServices->obsActiveSceneTracker = m_obsActiveSceneTracker;
 }
 
 void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
@@ -459,7 +484,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	// constructed here and hand the bundle on to every API handler they
 	// create, which happens later, when a page loads.
 	//
-	m_apiServices = std::make_shared<SEApiServices>(this);
+	m_apiServices = std::make_shared<SEApiServices>();
 
 	m_httpClient =
 		std::make_shared<SEHttpClient>();
@@ -829,7 +854,6 @@ void SEGlobalStateManager::Shutdown()
 	m_previewManager = nullptr;
 	m_websocketApiServer = nullptr;
 	m_windowStateEventFilter = nullptr;
-	m_apiServices = nullptr;
 
 	if (m_cefCookieManager) {
 		delete m_cefCookieManager;
