@@ -1,4 +1,5 @@
 #include "SERazerWyvrnManager.hpp"
+#include "SEHostEventDispatcher.hpp"
 #include "SEUtils.hpp"
 #include "Version.hpp"
 
@@ -97,7 +98,9 @@ std::string ReadWholeFile(const std::string &path)
 
 /* ========================================================================= */
 
-SERazerWyvrnManager::SERazerWyvrnManager()
+SERazerWyvrnManager::SERazerWyvrnManager(
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
+	: m_hostEventDispatcher(hostEventDispatcher)
 {
 #ifdef SE_ENABLE_WYVRN
 	m_status = SERazerWyvrnStatus::Initializing;
@@ -308,7 +311,10 @@ void SERazerWyvrnManager::DispatchStatusChanged()
 	blog(LOG_INFO, "obs-streamelements-core: WYVRN: status %s",
 	     json.c_str());
 
-	DispatchJSEventGlobal("hostRazerWyvrnStatusChanged", json);
+	if (m_hostEventDispatcher) {
+		m_hostEventDispatcher->DispatchJSEventGlobal(
+			"hostRazerWyvrnStatusChanged", json);
+	}
 }
 
 /* ========================================================================= */

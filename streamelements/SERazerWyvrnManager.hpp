@@ -78,9 +78,12 @@ SERazerWyvrnStatusToString(SERazerWyvrnStatus status);
 
 /* ========================================================================= */
 
+class SEHostEventDispatcher;
+
 class SERazerWyvrnManager {
 public:
-	SERazerWyvrnManager();
+	SERazerWyvrnManager(
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher);
 	~SERazerWyvrnManager();
 
 	//
@@ -180,6 +183,8 @@ public:
 	static std::vector<std::string> GetConfigRoots();
 
 private:
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+
 	void ThreadProc();
 	void SetStatus(SERazerWyvrnStatus status, long result);
 	void DispatchStatusChanged();

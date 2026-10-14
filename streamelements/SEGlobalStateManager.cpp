@@ -546,8 +546,8 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_menuManager = std::make_shared<SEMenuManager>(
 		obs_main_window, m_sessionManager,
 		m_performanceHistoryTracker, m_analyticsEventsManager);
-	m_bwTestManager = std::make_shared<
-		SEBandwidthTestManager>();
+	m_bwTestManager = std::make_shared<SEBandwidthTestManager>(
+		m_hostEventDispatcher);
 	m_outputSettingsManager = std::make_shared<
 		SEOutputSettingsManager>();
 	m_workerManager = std::make_shared<SEWorkerManager>(m_apiServices);
@@ -569,7 +569,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		std::make_shared<SEBackupManager>(m_cleanupManager);
 	m_previewManager =
 		std::make_shared<SEPreviewManager>(
-			mainWindow());
+			mainWindow(), m_hostEventDispatcher);
 
 	m_windowStateEventFilter =
 		std::make_shared<WindowStateChangeEventFilter>(
@@ -583,7 +583,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	// runs on the manager's own SDK thread and OBS start is not delayed;
 	// WYVRN becomes available a few seconds into the session.
 	m_razerWyvrnManager =
-		std::make_shared<SERazerWyvrnManager>();
+		std::make_shared<SERazerWyvrnManager>(m_hostEventDispatcher);
 	m_razerWyvrnManager->Start();
 #endif
 

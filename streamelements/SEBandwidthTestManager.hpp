@@ -7,10 +7,13 @@
 #include <mutex>
 #include <string>
 
+class SEHostEventDispatcher;
+
 class SEBandwidthTestManager
 {
 public:
-	SEBandwidthTestManager();
+	SEBandwidthTestManager(
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher);
 	virtual ~SEBandwidthTestManager();
 
 	bool BeginBandwidthTest(CefRefPtr<CefValue> settingsValue, CefRefPtr<CefValue> serversValue, std::string target);
@@ -18,6 +21,8 @@ public:
 	CefRefPtr<CefDictionaryValue> GetBandwidthTestStatus();
 
 private:
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+
 	std::mutex m_mutex;
 
 	bool m_isTestInProgress;
