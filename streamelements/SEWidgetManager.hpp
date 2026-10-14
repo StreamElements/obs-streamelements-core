@@ -61,7 +61,23 @@ protected:
 	// Handed to every browser widget and API handler created by a widget
 	// manager.
 	//
-	std::shared_ptr<SEApiServices> m_apiServices;
+	// Weak: this manager's destructor removes and deletes the docks, each
+	// dock destroys its browser widget, and every widget's API handler
+	// holds a strong reference to the bundle. A strong reference here is
+	// therefore a ring -- and the one that stalled shutdown, because the
+	// loop runs through a destructor rather than through refcounts, so
+	// nothing unwinds it.
+	//
+	std::weak_ptr<SEApiServices> m_apiServices;
+
+	//
+	// Locks it. Every caller is about to build a widget or an API
+	// handler, and a dead bundle means not building one.
+	//
+	std::shared_ptr<SEApiServices> ApiServices() const
+	{
+		return m_apiServices.lock();
+	}
 
 	//
 	// Read by the deferred tasks that save window state.
