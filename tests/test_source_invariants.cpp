@@ -827,7 +827,7 @@ static void check_consent_prompt_is_bounded()
 static void check_encoder_released_once_per_object()
 {
 	auto code = strip_line_comments(
-		slurp("streamelements/SEUtils.hpp"));
+		slurp("streamelements/SEUtils/SELazyOBSVideoEncoderProvider.hpp"));
 
 	auto remove = code.find("void RemoveConsumer()");
 	check(remove != std::string::npos,

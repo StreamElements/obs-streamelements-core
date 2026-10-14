@@ -16,6 +16,8 @@
 
 #ifdef WIN32
 #include <windows.h>
+#include <algorithm>
+#include <regex>
 #endif
 
 bool GetTemporaryFilePath(std::string prefixString, std::string &result)

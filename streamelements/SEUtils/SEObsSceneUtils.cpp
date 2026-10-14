@@ -4,6 +4,7 @@
 
 #include <obs.hpp>
 #include <obs-frontend-api.h>
+#include <vector>
 
 void ObsSceneEnumAllItems(obs_scene_t *scene,
 			  std::function<bool(obs_sceneitem_t *)> func)

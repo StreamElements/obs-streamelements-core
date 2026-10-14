@@ -1,4 +1,5 @@
 #include "SECefValueUtils.hpp"
+#include <string>
 
 bool IsCefValueEqual(CefRefPtr<CefValue> a, CefRefPtr<CefValue> b)
 {

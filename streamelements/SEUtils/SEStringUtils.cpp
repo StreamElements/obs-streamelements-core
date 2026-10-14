@@ -3,6 +3,7 @@
 #include "../deps/utf8.h"
 
 #include <regex>
+#include <iterator>
 
 #ifndef WIN32
 #define sprintf_s sprintf
