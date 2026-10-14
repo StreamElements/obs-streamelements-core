@@ -364,6 +364,11 @@ HttpGetAsync(std::string url, async_http_request_callback_t callback)
 		});
 }
 
+#ifdef WIN32
+//
+// Windows-only body; the macOS half is in SEUtils.mm. The guard came
+// with it out of the single translation unit.
+//
 //
 // Rejoined this domain once the platform split could be handled explicitly:
 // the Windows body is here, the macOS one is in SEUtils.mm, because the proxy
@@ -451,3 +456,4 @@ void SetGlobalCURLOptions(CURL *curl, const char *url)
 		curl_easy_setopt(curl, CURLOPT_PROXY, proxy.c_str());
 	}
 }
+#endif /* WIN32 */

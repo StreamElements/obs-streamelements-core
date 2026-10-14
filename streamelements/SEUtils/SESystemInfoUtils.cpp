@@ -61,6 +61,10 @@ typedef void *HKEY;
 #endif
 #endif
 
+#ifdef WIN32
+//
+// Windows-only helper, used only by the branch below.
+//
 static uint64_t FromFileTime(const FILETIME &ft)
 {
 	ULARGE_INTEGER uli = {0};
@@ -68,6 +72,7 @@ static uint64_t FromFileTime(const FILETIME &ft)
 	uli.HighPart = ft.dwHighDateTime;
 	return uli.QuadPart;
 }
+#endif /* WIN32 */
 void SerializeSystemTimes(CefRefPtr<CefValue> &output)
 {
 	SYNC_ACCESS();
@@ -287,6 +292,11 @@ static DWORD getRegDWORD(HKEY parent, const WCHAR *subkey, const WCHAR *key)
 
 	return result;
 }
+#ifdef WIN32
+//
+// Windows-only body; the macOS half is in SEUtils.mm. The guard came
+// with it out of the single translation unit.
+//
 void SerializeSystemHardwareProperties(CefRefPtr<CefValue> &output)
 {
 	output->SetNull();
@@ -439,6 +449,7 @@ void SerializeSystemHardwareProperties(CefRefPtr<CefValue> &output)
 
 	d->SetString("os", "Windows");
 }
+#endif /* WIN32 */
 std::string GetCefVersionString()
 {
 	char buf[64] = "unknown";
@@ -590,6 +601,11 @@ std::string CreateGloballyUniqueIdString()
 
 	return result;
 }
+#ifdef WIN32
+//
+// Windows-only body; the macOS half is in SEUtils.mm. The guard came
+// with it out of the single translation unit.
+//
 std::string CreateCryptoSecureRandomNumberString()
 {
 	std::string result = "0";
@@ -796,3 +812,4 @@ std::string GetComputerSystemUniqueId()
 
 	return result;
 }
+#endif /* WIN32 */

@@ -170,6 +170,11 @@ void RemoveObsDirtyShutdownMarker()
 	}
 	bfree(safeModeMarkerPathPtr);
 }
+#ifdef WIN32
+//
+// Windows-only body; the macOS half is in SEUtils.mm. The guard came
+// with it out of the single translation unit.
+//
 void RestartCurrentApplication()
 {
 	bool success = false;
@@ -200,3 +205,4 @@ void RestartCurrentApplication()
 		//mainWindow->close();
 	}
 }
+#endif /* WIN32 */

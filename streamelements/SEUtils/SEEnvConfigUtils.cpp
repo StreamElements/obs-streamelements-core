@@ -129,6 +129,10 @@ bool WriteEnvironmentConfigString(const char *regValueName,
 #endif
 	return result;
 }
+#ifdef WIN32
+//
+// Windows-only helper, used only by the branch below.
+//
 static std::wstring GetCurrentDllFolderPathW()
 {
 	std::wstring result = L"";
@@ -151,6 +155,7 @@ static std::wstring GetCurrentDllFolderPathW()
 
 	return result;
 }
+#endif /* WIN32 */
 bool WriteEnvironmentConfigStrings(streamelements_env_update_requests requests)
 {
 #ifndef WIN32
