@@ -34,6 +34,7 @@ struct QCefCookieManager;
 #include "SEStatePersistence.hpp"
 #include "SEStatusBarMessageManager.hpp"
 #include "SEPopupWindowManager.hpp"
+#include "SEBrowserDialogManager.hpp"
 #include "SEBrowserDialog.hpp"
 #include "SEVideoCompositionManager.hpp"
 #include "SEAudioCompositionManager.hpp"
@@ -255,31 +256,9 @@ public:
 	QMainWindow *mainWindow() { return m_mainWindow; }
 
 public:
-	bool DeserializeModalDialog(CefRefPtr<CefValue> input,
-				    CefRefPtr<CefValue> &output);
-
 	void ReportIssue();
 	void UninstallPlugin();
 
-
-public:
-	std::shared_ptr<std::promise<CefRefPtr<CefValue>>>
-	DeserializeNonModalDialog(CefRefPtr<CefValue> input);
-
-	bool HasNonModalDialog(const char *id);
-	std::string GetNonModalDialogUrl(const char *id);
-	void SerializeAllNonModalDialogs(CefRefPtr<CefValue> &output);
-	bool DeserializeCloseNonModalDialogsByIds(CefRefPtr<CefValue> input);
-	bool DeserializeFocusNonModalDialogById(CefRefPtr<CefValue> input);
-	bool DeserializeNonModalDialogDimensionsById(CefRefPtr<CefValue> dialogId, CefRefPtr<CefValue> dimensions);
-
-private:
-	std::map<std::string, SEBrowserDialog*>
-		m_nonModalDialogs;
-
-private:
-	std::recursive_mutex m_mutex;
-	long m_apiTransactionLevel = 0;
 
 protected:
 	virtual void OnObsExit() override;
@@ -340,6 +319,8 @@ private:
 	std::shared_ptr<SEStatusBarMessageManager>
 		m_statusBarMessageManager = nullptr;
 	std::shared_ptr<SEPopupWindowManager> m_popupWindowManager =
+		nullptr;
+	std::shared_ptr<SEBrowserDialogManager> m_browserDialogManager =
 		nullptr;
 
 private:

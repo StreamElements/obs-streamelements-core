@@ -2010,6 +2010,45 @@ static void check_injected_services_are_not_also_fetched_globally()
 	}
 }
 
+static void check_non_modal_dialogs_are_closed_by_their_owner()
+{
+	//
+	// A non-modal dialog destroyed without emitting finished() used to
+	// park the API handler's detached thread on future.wait() for the
+	// life of the process, because the promise lived only in the finished
+	// handler's capture. SEBrowserDialogManager holds it, so its
+	// destructor has to both reject the dialog and satisfy the promise.
+	//
+	const std::string dtor = function_body(
+		strip_line_comments(
+			slurp("streamelements/SEBrowserDialogManager.cpp")),
+		"SEBrowserDialogManager::~SEBrowserDialogManager");
+
+	check(!dtor.empty(),
+	      "SEBrowserDialogManager has no destructor -- the dialogs it owns "
+	      "would ride into Qt teardown with a live CEF browser");
+
+	check(dtor.find("reject()") != std::string::npos,
+	      "~SEBrowserDialogManager does not reject() the dialogs still "
+	      "open: their browsers and API handlers are then torn down from "
+	      "inside ~QWidget");
+
+	check(dtor.find("set_value") != std::string::npos,
+	      "~SEBrowserDialogManager does not satisfy the promises of the "
+	      "dialogs still open -- showNonModalDialog's detached thread "
+	      "stays parked on future.wait() forever");
+
+	//
+	// And the disarm, without which the destructor's own reject() lets a
+	// finished handler run and call set_value on a promise this
+	// destructor has already satisfied -- std::future_error.
+	//
+	check(dtor.find("*m_alive = false") != std::string::npos,
+	      "~SEBrowserDialogManager does not disarm the queued finished "
+	      "handlers before rejecting, so one of them can double-satisfy a "
+	      "promise");
+}
+
 static void check_api_handler_takes_its_services_by_injection()
 {
 	//
@@ -2061,7 +2100,13 @@ static void check_api_handler_takes_its_services_by_injection()
 					"GetAnalyticsEventsManager",
 					"GetHttpClient",
 					"DeserializeStatusBarTemporaryMessage",
-					"DeserializePopupWindow"};
+					"DeserializePopupWindow",
+					"DeserializeModalDialog",
+					"DeserializeNonModalDialog",
+					"SerializeAllNonModalDialogs",
+					"DeserializeCloseNonModalDialogsByIds",
+					"DeserializeFocusNonModalDialogById",
+					"DeserializeNonModalDialogDimensionsById"};
 
 	for (const char *const service : services) {
 		const std::string reach =
@@ -2582,6 +2627,7 @@ int main()
 	check_rejected_signature_stops_the_handler();
 	check_injected_services_are_not_also_fetched_globally();
 	check_api_handler_takes_its_services_by_injection();
+	check_non_modal_dialogs_are_closed_by_their_owner();
 	check_api_services_container_is_emptied_when_manager_dies();
 	check_api_services_is_a_container_and_nothing_else();
 	check_crash_path_filesystem_calls_never_throw();

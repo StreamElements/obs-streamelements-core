@@ -29,6 +29,7 @@ class SEObsActiveSceneTracker;
 class SEStatePersistence;
 class SEStatusBarMessageManager;
 class SEPopupWindowManager;
+class SEBrowserDialogManager;
 
 //
 // The objects SEGlobalStateManager::Initialize() creates, in one place, so
@@ -81,4 +82,5 @@ struct SEApiServices {
 	//
 	std::shared_ptr<SEStatusBarMessageManager> statusBarMessageManager;
 	std::shared_ptr<SEPopupWindowManager> popupWindowManager;
+	std::shared_ptr<SEBrowserDialogManager> browserDialogManager;
 };

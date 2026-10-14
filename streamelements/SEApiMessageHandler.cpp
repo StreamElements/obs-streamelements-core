@@ -1365,7 +1365,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("showModalDialog");
 	{
 		if (args->GetSize()) {
-			SEGlobalStateManager::GetInstance()
+			self->m_services->browserDialogManager
 				->DeserializeModalDialog(args->GetValue(0),
 							 result);
 		}
@@ -1375,9 +1375,10 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("showNonModalDialog");
 	{
 		if (args->GetSize()) {
-			auto promise_ptr = SEGlobalStateManager::GetInstance()
-						   ->DeserializeNonModalDialog(
-							   args->GetValue(0));
+			auto promise_ptr =
+				self->m_services->browserDialogManager
+					->DeserializeNonModalDialog(
+						args->GetValue(0));
 
 			std::thread([complete_callback, promise_ptr, result]() -> void {
 				auto future = promise_ptr->get_future();
@@ -1398,8 +1399,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAllNonModalDialogs");
 	{
-		SEGlobalStateManager::GetInstance()->SerializeAllNonModalDialogs(
-			result);
+		self->m_services->browserDialogManager
+			->SerializeAllNonModalDialogs(result);
 	}
 	API_HANDLER_END();
 
@@ -1407,7 +1408,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize() >= 1) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
+				self->m_services->browserDialogManager
 					->DeserializeCloseNonModalDialogsByIds(
 						args->GetValue(0)));
 		}
@@ -1418,7 +1419,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize() >= 1) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
+				self->m_services->browserDialogManager
 					->DeserializeFocusNonModalDialogById(
 						args->GetValue(0)));
 		}
@@ -1429,7 +1430,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize() >= 2) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
+				self->m_services->browserDialogManager
 					->DeserializeNonModalDialogDimensionsById(
 						args->GetValue(0),
 						args->GetValue(1)));
