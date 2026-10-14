@@ -12,6 +12,7 @@
 // emitted, which is the .cpp.
 //
 class SECleanupManager;
+class SELocalFilesystemHttpServer;
 
 class SEBackupManager
 {
@@ -21,7 +22,13 @@ public:
 	// than reaching for it through the global singleton. The reference
 	// keeps it alive for exactly as long as this object needs it.
 	//
-	SEBackupManager(std::shared_ptr<SECleanupManager> cleanupManager);
+	// The local filesystem HTTP server is taken for the same reason: the
+	// URLs this manager hands a page are signed against that server's
+	// base url, and that was its last use of global state.
+	//
+	SEBackupManager(
+		std::shared_ptr<SECleanupManager> cleanupManager,
+		std::shared_ptr<SELocalFilesystemHttpServer> httpServer);
 	~SEBackupManager();
 
 public:
@@ -40,6 +47,7 @@ public:
 
 private:
 	std::shared_ptr<SECleanupManager> m_cleanupManager;
+	std::shared_ptr<SELocalFilesystemHttpServer> m_httpServer;
 
 	std::recursive_mutex m_mutex;
 };

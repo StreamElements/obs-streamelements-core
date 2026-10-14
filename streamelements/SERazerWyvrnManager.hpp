@@ -79,11 +79,17 @@ SERazerWyvrnStatusToString(SERazerWyvrnStatus status);
 /* ========================================================================= */
 
 class SEHostEventDispatcher;
+class SELocalFilesystemHttpServer;
 
 class SERazerWyvrnManager {
 public:
+	//
+	// The HTTP server signs the asset URLs SerializeEventInternal hands a
+	// page, which was this class's last reach for global state.
+	//
 	SERazerWyvrnManager(
-		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher);
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+		std::shared_ptr<SELocalFilesystemHttpServer> httpServer);
 	~SERazerWyvrnManager();
 
 	//
@@ -184,6 +190,7 @@ public:
 
 private:
 	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+	std::shared_ptr<SELocalFilesystemHttpServer> m_httpServer;
 
 	void ThreadProc();
 	void SetStatus(SERazerWyvrnStatus status, long result);
@@ -222,10 +229,17 @@ private:
 					   const std::string &group,
 					   const std::string &effect);
 
+	//
+	// The HTTP server arrives as a borrowed raw pointer: this is static,
+	// both callers are members whose own reference outlives the call, and
+	// serializing ~4,000 events signs thousands of URLs -- a shared_ptr
+	// copy per event would be refcount traffic for nothing.
+	//
 	static CefRefPtr<CefValue>
 	SerializeEventInternal(const Snapshot &snapshot,
 			       const SERazerWyvrnEventInfo &event,
-			       bool components);
+			       bool components,
+			       SELocalFilesystemHttpServer *httpServer);
 
 	mutable std::mutex m_mutex;
 	std::condition_variable m_wake;

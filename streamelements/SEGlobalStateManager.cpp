@@ -550,7 +550,8 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_hotkeyManager =
 		std::make_shared<SEHotkeyManager>(m_hostEventDispatcher);
 	m_externalSceneDataProviderManager = std::make_shared<
-		SEExternalSceneDataProviderManager>();
+		SEExternalSceneDataProviderManager>(
+		m_localFilesystemHttpServer);
 	m_nativeObsControlsManager =
 		SENativeOBSControlsManager::
 			GetInstance();
@@ -561,8 +562,8 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	// dependency has to exist before the thing that holds it.
 	m_cleanupManager =
 		std::make_shared<SECleanupManager>();
-	m_backupManager =
-		std::make_shared<SEBackupManager>(m_cleanupManager);
+	m_backupManager = std::make_shared<SEBackupManager>(
+		m_cleanupManager, m_localFilesystemHttpServer);
 	m_previewManager =
 		std::make_shared<SEPreviewManager>(
 			mainWindow(), m_hostEventDispatcher);
@@ -579,7 +580,8 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	// runs on the manager's own SDK thread and OBS start is not delayed;
 	// WYVRN becomes available a few seconds into the session.
 	m_razerWyvrnManager =
-		std::make_shared<SERazerWyvrnManager>(m_hostEventDispatcher);
+		std::make_shared<SERazerWyvrnManager>(
+			m_hostEventDispatcher, m_localFilesystemHttpServer);
 	m_razerWyvrnManager->Start();
 #endif
 

@@ -2,14 +2,25 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 #include "SEUtils.hpp"
+#include "SELocalFilesystemHttpServer.hpp"
 
 class SEExternalSceneDataProvider
 {
 protected:
-	SEExternalSceneDataProvider(std::string providerId, std::string name) :
+	//
+	// The HTTP server signs the URLs a provider hands a page for the
+	// files a scene collection references. Threaded down from the
+	// provider manager rather than fetched, which was the one piece of
+	// global state in this hierarchy.
+	//
+	SEExternalSceneDataProvider(
+		std::string providerId, std::string name,
+		std::shared_ptr<SELocalFilesystemHttpServer> httpServer) :
 		m_providerId(providerId),
-		m_name(name)
+		m_name(name),
+		m_httpServer(httpServer)
 	{
 	}
 
@@ -111,7 +122,10 @@ public:
 				}
 
 				uniqueReferencedFiles[file] =
-					CreateSessionSignedAbsolutePathURL(file);
+					m_httpServer
+						? m_httpServer->CreateSessionSignedAbsolutePathURL(
+							  file)
+						: std::string();
 			}
 
 			for (auto kv : uniqueReferencedFiles) {
@@ -134,4 +148,5 @@ public:
 private:
 	std::string m_name;
 	std::string m_providerId;
+	std::shared_ptr<SELocalFilesystemHttpServer> m_httpServer;
 };

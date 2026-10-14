@@ -553,7 +553,6 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEUtils/SESystemInfoUtils.cpp
 	streamelements/SEUtils/SEAppEnvUtils.cpp
 	streamelements/SEUtils/SEOverlayUrlUtils.cpp
-	streamelements/SEUtils/SESessionSigningUtils.cpp
 	streamelements/SEUtils/SEWidgetUtils.cpp
 	streamelements/SEUtils/SELifecycleUtils.cpp
 	streamelements/SEUtils/SEObsEncoderUtils.cpp
@@ -739,7 +738,6 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEUtils/SESystemInfoUtils.hpp
 	streamelements/SEUtils/SEAppEnvUtils.hpp
 	streamelements/SEUtils/SEOverlayUrlUtils.hpp
-	streamelements/SEUtils/SESessionSigningUtils.hpp
 	streamelements/SEUtils/SEWidgetUtils.hpp
 	streamelements/SEUtils/SELifecycleUtils.hpp
 	streamelements/SEUtils/SEReentrancyUtils.hpp

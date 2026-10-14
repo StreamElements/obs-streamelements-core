@@ -1,5 +1,6 @@
 #include "SERazerWyvrnManager.hpp"
 #include "SEHostEventDispatcher.hpp"
+#include "SELocalFilesystemHttpServer.hpp"
 #include "SEUtils.hpp"
 #include "Version.hpp"
 
@@ -99,8 +100,9 @@ std::string ReadWholeFile(const std::string &path)
 /* ========================================================================= */
 
 SERazerWyvrnManager::SERazerWyvrnManager(
-	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
-	: m_hostEventDispatcher(hostEventDispatcher)
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+	std::shared_ptr<SELocalFilesystemHttpServer> httpServer)
+	: m_hostEventDispatcher(hostEventDispatcher), m_httpServer(httpServer)
 {
 #ifdef SE_ENABLE_WYVRN
 	m_status = SERazerWyvrnStatus::Initializing;
@@ -739,8 +741,8 @@ CefRefPtr<CefValue> SERazerWyvrnManager::SerializeStatus()
 }
 
 CefRefPtr<CefValue> SERazerWyvrnManager::SerializeEventInternal(
-	const Snapshot &snapshot,
-	const SERazerWyvrnEventInfo &event, bool components)
+	const Snapshot &snapshot, const SERazerWyvrnEventInfo &event,
+	bool components, SELocalFilesystemHttpServer *httpServer)
 {
 	CefRefPtr<CefValue> result = CefValue::Create();
 	CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
@@ -771,13 +773,14 @@ CefRefPtr<CefValue> SERazerWyvrnManager::SerializeEventInternal(
 		// "this event has nothing to do with the keyboard".
 		c->SetString("device", asset.first);
 
-		if (!asset.second.empty()) {
+		if (!asset.second.empty() && httpServer) {
 			// A session-signed URL, so the page fetches the bytes
 			// through the local file server rather than being handed a
 			// raw filesystem path it could not use anyway.
-			c->SetString("url",
-				     CreateSessionSignedAbsolutePathURL(
-					     utf8_to_wstring(asset.second)));
+			c->SetString(
+				"url",
+				httpServer->CreateSessionSignedAbsolutePathURL(
+					utf8_to_wstring(asset.second)));
 		}
 		chroma->SetDictionary(chroma->GetSize(), c);
 	}
@@ -797,9 +800,11 @@ CefRefPtr<CefValue> SERazerWyvrnManager::SerializeEventInternal(
 		const std::string path = FindHapticAsset(snapshot, event.group,
 							 component.effect);
 
-		if (!path.empty()) {
-			h->SetString("url", CreateSessionSignedAbsolutePathURL(
-						    utf8_to_wstring(path)));
+		if (!path.empty() && httpServer) {
+			h->SetString(
+				"url",
+				httpServer->CreateSessionSignedAbsolutePathURL(
+					utf8_to_wstring(path)));
 		}
 
 		CefRefPtr<CefListValue> targeting = CefListValue::Create();
@@ -834,7 +839,8 @@ CefRefPtr<CefValue> SERazerWyvrnManager::SerializeEventInternal(
 CefRefPtr<CefValue> SERazerWyvrnManager::SerializeEvent(
 	const SERazerWyvrnEventInfo &event)
 {
-	return SerializeEventInternal(TakeSnapshot(false), event, true);
+	return SerializeEventInternal(TakeSnapshot(false), event, true,
+				      m_httpServer.get());
 }
 
 CefRefPtr<CefValue>
@@ -861,7 +867,8 @@ SERazerWyvrnManager::SerializeEvents(const std::string &groupFilter,
 
 		list->SetValue(list->GetSize(),
 			       SerializeEventInternal(snapshot, event,
-						      components));
+						      components,
+						      m_httpServer.get()));
 	}
 
 	result->SetList(list);

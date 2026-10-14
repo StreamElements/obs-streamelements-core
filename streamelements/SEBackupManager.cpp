@@ -1,5 +1,6 @@
 #include "SEBackupManager.hpp"
 #include "SECleanupManager.hpp"
+#include "SELocalFilesystemHttpServer.hpp"
 #include "SEUtils.hpp"
 #include "SENetworkDialog.hpp"
 #include "SEGlobalStateManager.hpp"
@@ -99,7 +100,8 @@ static void glob_files(std::string pattern,
 static bool GetLocalPathFromURL(std::string url, std::string &path,
 				SECleanupManager *cleanupManager)
 {
-	if (VerifySessionSignedAbsolutePathURL(url, path))
+	if (SELocalFilesystemHttpServer::VerifySessionSignedAbsolutePathURL(
+		    url, path))
 		return true;
 
 	if (!GetTemporaryFilePath("obs-live-restore", path))
@@ -401,16 +403,24 @@ static bool ScanForFileReferencesMonikersToRestore(std::string srcBasePath,
 	return true;
 }
 
+//
+// Takes the HTTP server as a borrowed raw pointer, for the same reason
+// GetLocalPathFromURL above takes the cleanup manager that way: it neither
+// owns it nor extends its lifetime, and the caller is a member whose own
+// reference outlives the whole recursion.
+//
 static bool
-ScanForFileReferences(CefRefPtr<CefValue> &node, std::map<std::string, std::string> &filesMap)
+ScanForFileReferences(CefRefPtr<CefValue> &node,
+		      std::map<std::string, std::string> &filesMap,
+		      SELocalFilesystemHttpServer *httpServer)
 {
 	if (node->GetType() == VTYPE_STRING) {
 		std::string path = node->GetString().ToString();
 
 		if (!filesMap.count(path)) {
-			if (os_file_exists(path.c_str())) {
+			if (os_file_exists(path.c_str()) && httpServer) {
 				filesMap[path] =
-					CreateSessionSignedAbsolutePathURL(
+					httpServer->CreateSessionSignedAbsolutePathURL(
 						utf8_to_wstring(path));
 			}
 		}
@@ -421,7 +431,8 @@ ScanForFileReferences(CefRefPtr<CefValue> &node, std::map<std::string, std::stri
 			CefRefPtr<CefValue> value =
 				list->GetValue(index)->Copy();
 
-			if (!ScanForFileReferences(value, filesMap))
+			if (!ScanForFileReferences(value, filesMap,
+						   httpServer))
 				return false;
 		}
 	} else if (node->GetType() == VTYPE_DICTIONARY) {
@@ -433,7 +444,8 @@ ScanForFileReferences(CefRefPtr<CefValue> &node, std::map<std::string, std::stri
 				CefRefPtr<CefValue> value =
 					d->GetValue(key)->Copy();
 
-				if (!ScanForFileReferences(value, filesMap))
+				if (!ScanForFileReferences(value, filesMap,
+							   httpServer))
 					return false;
 			}
 		}
@@ -750,8 +762,9 @@ static void ReadListOfIdsFromCefValue(CefRefPtr<CefValue> input,
 }
 
 SEBackupManager::SEBackupManager(
-	std::shared_ptr<SECleanupManager> cleanupManager)
-	: m_cleanupManager(cleanupManager)
+	std::shared_ptr<SECleanupManager> cleanupManager,
+	std::shared_ptr<SELocalFilesystemHttpServer> httpServer)
+	: m_cleanupManager(cleanupManager), m_httpServer(httpServer)
 {
 }
 
@@ -795,7 +808,8 @@ void SEBackupManager::QueryLocalBackupPackageReferencedFiles(
 
 		std::map<std::string, std::string> filesMap;
 
-		if (!ScanForFileReferences(collectionValue, filesMap))
+		if (!ScanForFileReferences(collectionValue, filesMap,
+					   m_httpServer.get()))
 			continue;
 
 		CefRefPtr<CefListValue> list = CefListValue::Create();
@@ -931,8 +945,11 @@ void SEBackupManager::CreateLocalBackupPackage(
 
 	out->SetList("profiles", addedProfiles);
 	out->SetList("sceneCollections", addedCollections);
-	out->SetString("url", CreateSessionSignedAbsolutePathURL(
-				      utf8_to_wstring(backupPackagePath)));
+	out->SetString("url",
+		       m_httpServer ? m_httpServer->CreateSessionSignedAbsolutePathURL(
+					      utf8_to_wstring(
+						      backupPackagePath))
+				    : std::string());
 
 	output->SetDictionary(out);
 }
@@ -1018,8 +1035,11 @@ void SEBackupManager::QueryBackupPackageContent(
 
 	CefRefPtr<CefDictionaryValue> result = CefDictionaryValue::Create();
 
-	result->SetString("url", CreateSessionSignedAbsolutePathURL(
-					 utf8_to_wstring(localPath)));
+	result->SetString("url",
+			  m_httpServer
+				  ? m_httpServer->CreateSessionSignedAbsolutePathURL(
+					    utf8_to_wstring(localPath))
+				  : std::string());
 	result->SetList("profiles", profilesList);
 	result->SetList("sceneCollections", collectionsList);
 

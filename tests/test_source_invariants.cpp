@@ -1861,7 +1861,28 @@ static void check_rejected_signature_stops_the_handler()
 	auto src = slurp(
 		"streamelements/SELocalFilesystemHttpServer.cpp");
 
-	auto begin = src.find("if (!VerifySessionSignedAbsolutePathURL(");
+	//
+	// The call moved onto this class in CORE-757, so it is qualified and
+	// wrapped across three lines now. Flattened for the shape of the
+	// check, so that the invariant pins the rejection and not the
+	// formatting -- and it still pins the negation, because a check whose
+	// `!` went missing would accept every forged path.
+	//
+	std::string flat;
+	flat.reserve(src.size());
+
+	for (std::size_t i = 0; i < src.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(src[i])))
+			flat += src[i];
+	}
+
+	check(flat.find("if(!SELocalFilesystemHttpServer::"
+			"VerifySessionSignedAbsolutePathURL(") !=
+		      std::string::npos,
+	      "file server: the session signature check must still be present, "
+	      "and must still be a rejection");
+
+	auto begin = src.find("VerifySessionSignedAbsolutePathURL(");
 	check(begin != std::string::npos,
 	      "file server: the session signature check must still be present");
 	if (begin == std::string::npos)
@@ -2176,16 +2197,16 @@ static void check_the_invoke_handler_is_not_immortal()
 //
 // The migration off SEGlobalStateManager::GetInstance() is monotone by
 // construction: this counts what is left and fails if it grows. 291 reaches
-// at the start of the work, 5 now: one in SESessionSigningUtils, two on the
-// crash path, one in SEGlobalStateManager itself and the bootstrap reach in
-// the module entry point.
+// at the start of the work, 4 now: two on the crash path, one in
+// SEGlobalStateManager itself and the bootstrap reach in the module entry
+// point.
 //
 // When you remove reaches, lower kMaxSingletonReaches in the same commit.
 // Never raise it: a new reach is a new consumer that should have been handed
 // what it needs, and this is the check that makes that a build failure rather
 // than a review comment nobody makes.
 //
-static const int kMaxSingletonReaches = 5;
+static const int kMaxSingletonReaches = 4;
 
 static void check_singleton_reaches_only_go_down()
 {
