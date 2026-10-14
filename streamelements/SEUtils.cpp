@@ -71,7 +71,6 @@ typedef void *HKEY;
 
 /* ========================================================= */
 
-static const char *ENV_PRODUCT_NAME = "OBS.Live";
 
 /* ========================================================= */
 
@@ -1981,205 +1980,17 @@ bool HttpPostString(const char *url, http_client_headers_t request_headers,
 
 /* ========================================================= */
 
-static std::string GetEnvironmentConfigRegKeyPath(const char *productName)
-{
-#ifdef _WIN64
-	std::string REG_KEY_PATH = "SOFTWARE\\WOW6432Node\\StreamElements";
-#else
-	std::string REG_KEY_PATH = "SOFTWARE\\StreamElements";
-#endif
 
-	if (productName && productName[0]) {
-		REG_KEY_PATH += "\\";
-		REG_KEY_PATH += productName;
-	}
 
-	return REG_KEY_PATH;
-}
-
-static std::string ReadEnvironmentConfigString(const char *regValueName,
-					       const char *productName)
-{
-	std::string result = "";
-
-#ifdef WIN32
-	std::string REG_KEY_PATH = GetEnvironmentConfigRegKeyPath(productName);
-
-	DWORD bufLen = 16384;
-	char *buffer = new char[bufLen];
-
-	LSTATUS lResult = RegGetValueA(HKEY_LOCAL_MACHINE, REG_KEY_PATH.c_str(),
-				       regValueName, RRF_RT_REG_SZ, NULL,
-				       buffer, &bufLen);
-
-	if (ERROR_SUCCESS == lResult) {
-		result = buffer;
-	}
-
-	delete[] buffer;
-#else
-	config_t *config;
-
-	char *filePath = os_get_config_path_ptr(GLOBAL_ENV_CONFIG_FILE_NAME);
-	config_open(&config, filePath, CONFIG_OPEN_ALWAYS);
-	SETRACE_ADDREF(config);
-	bfree(filePath);
-
-	const char *str = config_get_string(
-		config, productName ? productName : "Global", regValueName);
-
-	if (str) {
-		result = str;
-	}
-
-	config_close(SETRACE_DECREF(config));
-#endif
-
-	return result;
-}
-
-bool WriteEnvironmentConfigString(const char *regValueName,
-				  const char *regValue, const char *productName)
-{
-	bool result = false;
-
-#ifdef WIN32
-	std::string REG_KEY_PATH = GetEnvironmentConfigRegKeyPath(productName);
-
-	// +1 for the terminator. RegSetKeyValueA does not add one, and the docs
-	// are explicit that a REG_SZ written without it leaves readers to cope
-	// with an unterminated value.
-	LSTATUS lResult = RegSetKeyValueA(HKEY_LOCAL_MACHINE,
-					  REG_KEY_PATH.c_str(), regValueName,
-					  REG_SZ, regValue,
-					  (DWORD)(strlen(regValue) + 1));
-
-	if (lResult != ERROR_SUCCESS) {
-		result = WriteEnvironmentConfigStrings(
-			{{productName ? productName : "", regValueName,
-			  regValue}});
-	} else {
-		result = true;
-	}
-#else
-	config_t *config;
-
-	char *filePath = os_get_config_path_ptr(GLOBAL_ENV_CONFIG_FILE_NAME);
-	config_open(&config, filePath, CONFIG_OPEN_ALWAYS);
-	SETRACE_ADDREF(config);
-	bfree(filePath);
-
-	config_set_string(config, productName ? productName : "Global",
-			  regValueName, regValue);
-
-	config_save_safe(config, "tmp", "bak");
-
-	config_close(SETRACE_DECREF(config));
-
-	result = true;
-#endif
-	return result;
-}
 
 #ifdef WIN32
 #include <shlwapi.h>
 #pragma comment(lib, "Shlwapi.lib")
-static std::wstring GetCurrentDllFolderPathW()
-{
-	std::wstring result = L"";
-
-	WCHAR path[MAX_PATH];
-	HMODULE hModule;
-
-	if (GetModuleHandleExW(
-		    GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-			    GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-		    (LPWSTR)&GetCurrentDllFolderPathW, &hModule)) {
-		GetModuleFileNameW(hModule, path, sizeof(path));
-		PathRemoveFileSpecW(path);
-
-		result = std::wstring(path);
-
-		if (!result.empty() && result[result.size() - 1] != '\\')
-			result += L"\\";
-	}
-
-	return result;
-}
 #endif
 
-bool WriteEnvironmentConfigStrings(streamelements_env_update_requests requests)
-{
-#ifndef WIN32
-	for (auto req : requests) {
-		if (!WriteEnvironmentConfigString(req.key.c_str(),
-						  req.value.c_str(),
-						  req.product.c_str())) {
-			return false;
-		}
-	}
 
-	return true;
-#else
-	std::vector<std::string> args;
 
-	for (auto req : requests) {
-		if (req.product.size()) {
-			args.push_back(req.product + "/" + req.key + "=" +
-				       req.value);
-		} else {
-			args.push_back(req.key + "=" + req.value);
-		}
-	}
 
-	STARTUPINFOW startInf;
-	memset(&startInf, 0, sizeof startInf);
-	startInf.cb = sizeof(startInf);
-
-	PROCESS_INFORMATION procInf;
-	memset(&procInf, 0, sizeof procInf);
-
-	std::wstring wArgs;
-	for (auto arg : args) {
-		wArgs += L"\"" + utf8_to_wstring(arg) + L"\" ";
-	}
-	if (!wArgs.empty()) {
-		// Remove trailing space
-		wArgs = wArgs.substr(0, wArgs.size() - 1);
-	}
-
-	std::wstring wExePath = GetCurrentDllFolderPathW() +
-				L"obs-streamelements-set-machine-config.exe";
-
-	HINSTANCE hInst = ShellExecuteW(NULL, L"runas", wExePath.c_str(),
-					wArgs.c_str(), NULL, SW_SHOW);
-
-	BOOL bResult = hInst > (HINSTANCE)32;
-
-	return bResult;
-#endif
-}
-
-std::string ReadProductEnvironmentConfigurationString(const char *key)
-{
-	return ReadEnvironmentConfigString(key, ENV_PRODUCT_NAME);
-}
-
-bool WriteProductEnvironmentConfigurationString(const char *key,
-						const char *value)
-{
-	return WriteEnvironmentConfigString(key, value, ENV_PRODUCT_NAME);
-}
-
-bool WriteProductEnvironmentConfigurationStrings(
-	streamelements_env_update_requests requests)
-{
-	for (size_t i = 0; i < requests.size(); ++i) {
-		requests[i].product = ENV_PRODUCT_NAME;
-	}
-
-	return WriteEnvironmentConfigStrings(requests);
-}
 
 /* ========================================================= */
 
@@ -2607,198 +2418,10 @@ std::string GetStreamElementsOverlayEditorURL(std::string overlayId,
 	       std::string("/editor");
 }
 
-bool GetTemporaryFilePath(std::string prefixString, std::string &result)
-{
-#ifdef WIN32
-	const size_t BUF_LEN = 2048;
-	wchar_t *pathBuffer = new wchar_t[BUF_LEN];
 
-	if (!::GetTempPathW(BUF_LEN, pathBuffer)) {
-		delete[] pathBuffer;
 
-		return false;
-	}
 
-	std::wstring wtempBufPath(pathBuffer);
 
-	if (0 == ::GetTempFileNameW(wtempBufPath.c_str(),
-				    utf8_to_wstring(prefixString).c_str(), 0,
-				    pathBuffer)) {
-		delete[] pathBuffer;
-
-		return false;
-	}
-
-	wtempBufPath = pathBuffer;
-
-	result = wstring_to_utf8(wtempBufPath);
-
-	delete[] pathBuffer;
-
-	return true;
-#else
-	static int serial = 0;
-
-	++serial;
-
-	result = "/tmp/";
-	char pid_str[32];
-	sprintf(pid_str, "%d", getpid());
-	result += prefixString;
-	result += ".";
-	result += pid_str;
-	result += ".";
-	char serial_str[32];
-	sprintf(serial_str, "%d", serial);
-	result += serial_str;
-
-	return true;
-#endif
-}
-
-std::string GetUniqueFileNameFromPath(std::string fullPath, size_t maxLength)
-{
-	std::filesystem::path path =
-		std::filesystem::path(utf8_to_wstring(fullPath).c_str());
-
-	auto stem = std::regex_replace(path.stem().wstring(),
-				       std::wregex(L"[ ]"), L"_");
-
-	auto ext = std::regex_replace(path.extension().wstring(),
-				      std::wregex(L"[ ]"), L"_");
-
-	std::wstring guid = utf8_to_wstring(
-		clean_guid_string(CreateGloballyUniqueIdString()));
-
-	std::wstring result = stem + std::wstring(L"_") + guid + ext;
-
-	if (maxLength > 0 && maxLength < result.size()) {
-		result = result.substr(result.size() - maxLength);
-	}
-
-	return wstring_to_utf8(result);
-}
-
-std::string GetFolderPathFromFilePath(std::string filePath)
-{
-	std::string path(filePath);
-
-	std::transform(path.begin(), path.end(), path.begin(), [](char ch) {
-		if (ch == '\\')
-			return '/';
-		else
-			return ch;
-	});
-
-	size_t pos = path.find_last_of('/');
-
-	if (pos > 0)
-		return path.substr(0, pos);
-	else
-		return ".";
-}
-
-bool ReadListOfObsSceneCollections(std::map<std::string, std::string> &output)
-{
-	char *basePathPtr = os_get_config_path_ptr("obs-studio/basic/scenes");
-	std::string basePath = basePathPtr;
-	bfree(basePathPtr);
-
-	os_dir_t *dir = os_opendir(basePath.c_str());
-
-	if (!dir)
-		return false;
-
-	struct os_dirent *entry;
-
-	while ((entry = os_readdir(dir)) != NULL) {
-		if (entry->directory || *entry->d_name == '.')
-			continue;
-
-		std::string fileName = entry->d_name;
-
-		std::smatch match;
-
-		if (!std::regex_search(fileName, match,
-				       std::regex("^(.+?)\\.json$")))
-			continue;
-
-		std::string id = match[1].str();
-
-		std::string filePath = basePath + "/" + fileName;
-
-		char *content = os_quick_read_utf8_file(filePath.c_str());
-
-		if (content) {
-			CefRefPtr<CefValue> root =
-				CefParseJSON(CefString(content),
-					     JSON_PARSER_ALLOW_TRAILING_COMMAS);
-
-			if (root.get() && root->GetType() == VTYPE_DICTIONARY) {
-				CefRefPtr<CefDictionaryValue> d =
-					root->GetDictionary();
-
-				if (d->HasKey("name") &&
-				    d->GetType("name") == VTYPE_STRING) {
-					std::string name = d->GetString("name");
-
-					output[id] = name;
-				}
-			}
-
-			bfree(content);
-		}
-	}
-
-	os_closedir(dir);
-
-	return true;
-}
-
-bool ReadListOfObsProfiles(std::map<std::string, std::string> &output)
-{
-	char *basePathPtr = os_get_config_path_ptr("obs-studio/basic/profiles");
-	std::string basePath = basePathPtr;
-	bfree(basePathPtr);
-
-	os_dir_t *dir = os_opendir(basePath.c_str());
-
-	if (!dir)
-		return false;
-
-	struct os_dirent *entry;
-
-	while ((entry = os_readdir(dir)) != NULL) {
-		if (!entry->directory || *entry->d_name == '.')
-			continue;
-
-		std::string id = entry->d_name;
-
-		std::string filePath = basePath + "/" + id + "/basic.ini";
-
-		config_t *ini;
-
-		if (config_open(&ini, filePath.c_str(), CONFIG_OPEN_EXISTING) ==
-		    CONFIG_SUCCESS) {
-			SETRACE_ADDREF(ini);
-
-			const char *value =
-				config_get_string(ini, "General", "Name");
-
-			if (value) {
-				std::string name = value;
-
-				output[id] = name;
-			}
-
-			config_close(SETRACE_DECREF(ini));
-		}
-	}
-
-	os_closedir(dir);
-
-	return true;
-}
 
 std::shared_ptr<CancelableTask>
 HttpGetAsync(std::string url, async_http_request_callback_t callback)
@@ -3435,13 +3058,6 @@ void ObsCurrentSceneEnumAllItems(std::function<bool(obs_sceneitem_t *)> func)
 	obs_source_release(SETRACE_DECREF(sceneSource));
 }
 
-bool IsCefValueEqual(CefRefPtr<CefValue> a, CefRefPtr<CefValue> b)
-{
-	std::string json1 = CefWriteJSON(a, JSON_WRITER_DEFAULT);
-	std::string json2 = CefWriteJSON(a, JSON_WRITER_DEFAULT);
-
-	return json1 == json2;
-}
 
 void ObsEnumAllScenes(std::function<bool(obs_source_t *scene)> func)
 {
@@ -3642,26 +3258,6 @@ void RestartCurrentApplication()
 }
 #endif
 
-bool IsSafeFileExtension(std::string path)
-{
-	const char *fileExtension = os_get_path_extension(path.c_str());
-
-	if (!fileExtension) {
-		// No file extension, file is safe.
-		return true;
-	}
-
-	const char *extensions[] = {".dll",   ".exe", ".vst", ".ax",  ".so",
-				    ".dylib", ".com", ".msi", ".bat", ".vbs",
-				    ".vb",    ".vbe", NULL};
-
-	for (size_t i = 0; extensions[i]; ++i) {
-		if (strcasecmp(fileExtension, extensions[i]) == 0)
-			return false;
-	}
-
-	return true;
-}
 
 void DispatchClientMessage(std::string target, CefRefPtr<CefProcessMessage> msg)
 {
@@ -3707,30 +3303,6 @@ void DispatchJSEventContainer(std::string target, std::string event,
 					 eventArgsJson);
 }
 
-bool SecureJoinPaths(std::string base, std::string subpath, std::string &result)
-{
-	char *absPath = os_get_abs_path_ptr(base.c_str());
-	std::string root = absPath;
-	bfree(absPath);
-
-	root += "/";
-
-	absPath = os_get_abs_path_ptr((root + subpath).c_str());
-	std::string joined = absPath;
-	bfree(absPath);
-
-	if (joined.size() < root.size()) {
-		return false;
-	}
-
-	if (strncmp(root.c_str(), joined.c_str(), root.size()) != 0) {
-		return false;
-	}
-
-	result = joined;
-
-	return true;
-}
 
 bool SerializeObsProperty(obs_property_t *prop, CefRefPtr<CefValue> &output)
 {

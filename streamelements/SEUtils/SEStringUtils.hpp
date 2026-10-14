@@ -47,5 +47,12 @@ template<typename... Args> std::string FormatString(const char *format, ...)
 bool ParseQueryString(std::string input,
 		      std::map<std::string, std::string> &result);
 
+//
+// Declared here, still defined in SEUtils.cpp: it picks between CoCreateGuid
+// and libuuid, so moving that body is a platform question rather than a
+// mechanical one.
+//
+std::string CreateGloballyUniqueIdString();
+
 std::string GetIdFromPointer(const void *ptr);
 const void *GetPointerFromId(const char *id);

@@ -5,6 +5,9 @@
 #include "SEUtils/SEStringUtils.hpp"
 #include "SEUtils/SECryptoUtils.hpp"
 #include "SEUtils/SEDiagnosticsUtils.hpp"
+#include "SEUtils/SECefValueUtils.hpp"
+#include "SEUtils/SEEnvConfigUtils.hpp"
+#include "SEUtils/SEPathUtils.hpp"
 
 #include <cef-headers.hpp>
 #include <obs.h>
@@ -222,30 +225,7 @@ bool HttpPostString(const char *url, http_client_headers_t request_headers,
 
 /* ========================================================= */
 
-std::string CreateGloballyUniqueIdString();
 std::string GetComputerSystemUniqueId();
-
-/* ========================================================= */
-
-struct streamelements_env_update_request {
-public:
-	std::string product;
-	std::string key;
-	std::string value;
-};
-
-typedef std::vector<streamelements_env_update_request>
-	streamelements_env_update_requests;
-
-std::string ReadProductEnvironmentConfigurationString(const char *key);
-bool WriteProductEnvironmentConfigurationString(const char *key,
-						const char *value);
-bool WriteProductEnvironmentConfigurationStrings(
-	streamelements_env_update_requests requests);
-bool WriteEnvironmentConfigStrings(streamelements_env_update_requests requests);
-bool WriteEnvironmentConfigString(const char *regValueName,
-				  const char *regValue,
-				  const char *productName);
 
 /* ========================================================= */
 
@@ -303,17 +283,6 @@ std::string GetStreamElementsOverlayEditorURL(std::string overlayId,
 void SEDecryptCefCookiesFile(const char *path_utf8);
 void SEDecryptCefCookiesStoragePath(const char *path_utf8);
 #endif /* ENABLE_DECRYPT_COOKIES */
-
-/* ========================================================= */
-
-bool GetTemporaryFilePath(std::string prefixString, std::string &result);
-std::string GetUniqueFileNameFromPath(std::string path, size_t maxLength);
-std::string GetFolderPathFromFilePath(std::string filePath);
-
-/* ========================================================= */
-
-bool ReadListOfObsSceneCollections(std::map<std::string, std::string> &output);
-bool ReadListOfObsProfiles(std::map<std::string, std::string> &output);
 
 /* ========================================================= */
 
@@ -385,10 +354,6 @@ void ObsCurrentSceneEnumAllItems(std::function<bool(obs_sceneitem_t *)> func);
 
 /* ========================================================= */
 
-bool IsCefValueEqual(CefRefPtr<CefValue> a, CefRefPtr<CefValue> b);
-
-/* ========================================================= */
-
 void ObsEnumAllScenes(std::function<bool(obs_source_t *scene)> func);
 
 /* ========================================================= */
@@ -402,7 +367,6 @@ void RemoveObsDirtyShutdownMarker();
 
 void RestartCurrentApplication();
 
-bool IsSafeFileExtension(std::string path);
 
 /* ========================================================= */
 
@@ -425,11 +389,6 @@ void DispatchJSEventGlobal(std::string event, std::string eventArgsJson);
 //
 bool IsShuttingDown();
 void SetShuttingDown();
-
-/* ========================================================= */
-
-bool SecureJoinPaths(std::string base, std::string subpath,
-		     std::string &result);
 
 /* ========================================================= */
 

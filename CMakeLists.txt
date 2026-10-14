@@ -540,6 +540,9 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEApiMessageHandler.cpp
 	streamelements/SEStatePersistence.cpp
 	streamelements/SEUtils/SECryptoUtils.cpp
+	streamelements/SEUtils/SECefValueUtils.cpp
+	streamelements/SEUtils/SEEnvConfigUtils.cpp
+	streamelements/SEUtils/SEPathUtils.cpp
 	streamelements/SEUtils/SEDiagnosticsUtils.cpp
 	streamelements/SEUtils/SEStringUtils.cpp
 	streamelements/SEConfig.cpp
@@ -704,6 +707,9 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEApiServices.hpp
 	streamelements/SEStatePersistence.hpp
 	streamelements/SEUtils/SECryptoUtils.hpp
+	streamelements/SEUtils/SECefValueUtils.hpp
+	streamelements/SEUtils/SEEnvConfigUtils.hpp
+	streamelements/SEUtils/SEPathUtils.hpp
 	streamelements/SEUtils/SEDiagnosticsUtils.hpp
 	streamelements/SEUtils/SEStringUtils.hpp
 	streamelements/SEConfig.hpp
