@@ -36,6 +36,19 @@ SEBrowserDialogManager::~SEBrowserDialogManager()
 		dialogs.swap(m_nonModalDialogs);
 	}
 
+	if (!dialogs.empty()) {
+		//
+		// Logged because it is otherwise unobservable: by the time
+		// this runs the pages are gone, so nothing can report that
+		// the promise was released -- and a dialog whose browser Qt
+		// already tore down (it is parented to the main window) looks
+		// identical in the log to one this destructor handled.
+		//
+		blog(LOG_INFO,
+		     "obs-streamelements-core: SEBrowserDialogManager: closing %d non-modal dialog(s) still open at teardown",
+		     static_cast<int>(dialogs.size()));
+	}
+
 	for (auto &pair : dialogs) {
 		auto &entry = pair.second;
 
