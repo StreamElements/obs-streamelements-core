@@ -111,15 +111,12 @@ public:
 	virtual ~SEGlobalStateManager();
 
 public:
-	static std::shared_ptr<SEGlobalStateManager> GetInstance();
-	static void Destroy();
-
-	// Releases the singleton WITHOUT running any destructor, by parking a
-	// reference that is never freed. Used when OBS asked to close before
-	// initialization completed: the object graph is half-built and running
-	// its destructors corrupts the widget tree (CORE-786).
-	static void Leak();
-	static bool IsInstanceAvailable();
+	//
+	// The only way to build the root. The module entry point holds the
+	// one reference; nothing can reach this object without being handed
+	// it, which is the whole of CORE-757.
+	//
+	static std::shared_ptr<SEGlobalStateManager> Create();
 
 public:
 	void Initialize(QMainWindow *obs_main_window);
@@ -131,17 +128,6 @@ private:
 	// Initialize() once they all exist.
 	//
 	void PublishApiServices();
-
-private:
-	//
-	// Private: asking the root whether it is alive is what a holder does
-	// instead of holding what it uses, and every external caller has been
-	// given the thing it actually wanted. The one caller left is
-	// IsInstanceAvailable(), which answers the same question for the
-	// static reaches that remain -- the SEUtils, composition and
-	// crash-path ones, which later stages inject.
-	//
-	bool IsInitialized() { return m_initialized; }
 
 public:
 
@@ -347,10 +333,6 @@ private:
 		m_auxiliaryControlsBuilder = nullptr;
 	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher = nullptr;
 	std::shared_ptr<SEMessageBus> m_messageBus = nullptr;
-
-private:
-	static std::shared_ptr<
-		SEGlobalStateManager> s_instance;
 
 private:
 	class ThemeChangeListener : public QDockWidget {

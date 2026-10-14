@@ -33,20 +33,15 @@ const char *MSG_BIND_JAVASCRIPT_FUNCTIONS =
 const char *MSG_BIND_JAVASCRIPT_PROPS =
 	"CefRenderProcessHandler::BindJavaScriptProperties";
 
-static bool IsPluginInitialized()
+
+bool SEApiMessageHandler::IsPluginInitialized()
 {
 	if (!obs_initialized())
 		return false;
 
-	//
-	// IsInstanceAvailable() is the whole question: it returns false unless
-	// the instance exists *and* is initialized, so the separate
-	// IsInitialized() reach that used to be here asked it twice.
-	//
-	if (!SEGlobalStateManager::IsInstanceAvailable())
-		return false;
+	auto services = m_services.lock();
 
-	return true;
+	return services && services->ready;
 }
 
 bool SEApiMessageHandler::OnProcessMessageReceived(
@@ -134,7 +129,7 @@ bool SEApiMessageHandler::OnProcessMessageReceived(
 			context->cefClientId = cefClientId;
 			context->source = source;
 			context->complete = [context]() {
-				if (!IsPluginInitialized()) {
+				if (!context->self->IsPluginInitialized()) {
 					blog(LOG_ERROR,
 					     "obs-streamelements-core[%s %s]: API: plugin is no longer initialized while completing call to '%s', callback id %d",
 					     context->target->m_target.c_str(),
@@ -227,8 +222,8 @@ bool SEApiMessageHandler::OnProcessMessageReceived(
 
 			QtPostTask (
 				[context]() -> void {
-					if (!IsPluginInitialized())
-					{
+					if (!context->self
+						     ->IsPluginInitialized()) {
 						blog(LOG_ERROR,
 						     "obs-streamelements-core[%s %s]: API: plugin is no longer initialized while performing call to '%s', callback id %d",
 						     context->target->m_target

@@ -59,8 +59,24 @@ class SEAuxiliaryControlsBuilder;
 // windows stay below it so their widgets go before the docks.
 //
 struct QCef;
+struct QCefCookieManager;
 
 struct SEApiServices {
+	//
+	// False until Initialize() has finished, and false again from the
+	// moment Shutdown() begins. The one non-pointer member, and the
+	// question an API message handler asks before it dispatches: a
+	// browser source can connect to the websocket server while the
+	// plug-in is still starting, and a handler that ran then would reach
+	// into services that are constructed but not yet wired together.
+	//
+	// It replaces SEGlobalStateManager::IsInstanceAvailable(), which
+	// asked exactly this -- "does the root exist and is it initialized?"
+	// -- of global state (CORE-757). The "does it exist" half is the
+	// weak_ptr lock that every holder already does.
+	//
+	bool ready = false;
+
 	//
 	// Borrowed, not owned: SEGlobalStateManager creates the browser panel
 	// and deletes it in Shutdown(). It is in here because it is one of
@@ -68,6 +84,14 @@ struct SEApiServices {
 	// it -- browser widgets -- are handed this bundle and not the panel.
 	//
 	QCef *cef = nullptr;
+
+	//
+	// Borrowed on the same terms, and for the one consumer that needs
+	// it: a browser widget that is not incognito opens on the shared
+	// cookie store. Both are nulled here before Shutdown() deletes
+	// them.
+	//
+	QCefCookieManager *cefCookieManager = nullptr;
 
 	std::shared_ptr<SEBrowserWidgetManager> widgetManager;
 	std::shared_ptr<SEObsSceneManager> obsSceneManager;

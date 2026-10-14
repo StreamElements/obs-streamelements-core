@@ -437,7 +437,12 @@ static void check_obs_close_is_watched()
 
 	// The gate has to actually be consulted on the teardown path, and the
 	// unsafe branch must leak rather than destroy.
-	check(code.find("SEGlobalStateManager::Leak()") !=
+	//
+	// This was SEGlobalStateManager::Leak(), a static that could only
+	// exist while the root was a singleton. The leak is now what it
+	// always was underneath -- a heap-allocated reference nobody frees --
+	// written where its reason is documented (CORE-757).
+	check(code.find("new std::shared_ptr<SEGlobalStateManager>(") !=
 		      std::string::npos,
 	      "CORE-786: the EXIT path must leak rather than tear down when teardown is unsafe");
 
@@ -2193,26 +2198,30 @@ static void check_the_invoke_handler_is_not_immortal()
 }
 
 //
-// --- The singleton ratchet (CORE-757).
+// --- There is no singleton (CORE-757).
 //
-// The migration off SEGlobalStateManager::GetInstance() is monotone by
-// construction: this counts what is left and fails if it grows. 291 reaches
-// at the start of the work, 2 now: one inside SEGlobalStateManager itself
-// and the bootstrap reach in the module entry point.
+// This was a ratchet. It counted SEGlobalStateManager::GetInstance()
+// reaches and failed if the number grew: 291 of them when the work started,
+// then 47, 14, 8, 4, 2, and now none. The root is created by the module
+// entry point, which holds the only reference; everything else is handed
+// what it needs.
 //
-// When you remove reaches, lower kMaxSingletonReaches in the same commit.
-// Never raise it: a new reach is a new consumer that should have been handed
-// what it needs, and this is the check that makes that a build failure rather
-// than a review comment nobody makes.
+// Two halves, and both matter. A GetInstance() needs a static instance to
+// return, and a static instance is what makes adding a GetInstance() back
+// look harmless -- so the absence of the accessor is checked together with
+// the absence of the thing it would hand out.
 //
-static const int kMaxSingletonReaches = 2;
-
-static void check_singleton_reaches_only_go_down()
+// Whitespace-insensitive, which the ratchet was not: clang-format had
+// wrapped one reach in SEBrowserWidget.cpp between the scope operator and
+// GetInstance, so the literal search never saw it. It was real -- the
+// shared cookie manager -- and it survived five rounds of counting.
+//
+static void check_the_root_is_not_a_singleton()
 {
-	const char *const dirs[] = {"/streamelements", "/streamelements/SEUtils"};
+	const char *const dirs[] = {"/streamelements",
+				    "/streamelements/SEUtils"};
 
-	std::vector<std::pair<int, std::string>> perFile;
-	int total = 0;
+	std::vector<std::string> files;
 
 	for (const char *const dir : dirs) {
 		const std::string path = std::string(se_tests::kRepoRoot) + dir;
@@ -2221,103 +2230,96 @@ static void check_singleton_reaches_only_go_down()
 		std::filesystem::directory_iterator it(path, ec);
 
 		check(!ec, (std::string("cannot read ") + dir +
-			    " -- this ratchet would then pass vacuously")
+			    " -- this invariant would then pass vacuously")
 				   .c_str());
 
 		for (std::filesystem::directory_iterator end;
 		     it != end && !ec; it.increment(ec)) {
-			const std::filesystem::path &p = it->path();
-			const std::string ext = p.extension().string();
+			const std::string ext = it->path().extension().string();
 
-			if (ext != ".cpp" && ext != ".hpp" && ext != ".mm")
-				continue;
-
-			std::ifstream in(p.string());
-
-			if (!in)
-				continue;
-
-			std::ostringstream buf;
-			buf << in.rdbuf();
-
-			//
-			// Comments stripped, so the commentary this work left
-			// behind -- which names the reaches it removed -- does
-			// not count as reaches.
-			//
-			const std::string src =
-				strip_line_comments(buf.str());
-
-			int n = 0;
-			const std::string needle =
-				"SEGlobalStateManager::GetInstance()";
-
-			for (std::size_t at = src.find(needle);
-			     at != std::string::npos;
-			     at = src.find(needle, at + needle.size()))
-				++n;
-
-			if (n) {
-				perFile.push_back(
-					{n, p.filename().string()});
-				total += n;
-			}
+			if (ext == ".cpp" || ext == ".hpp" || ext == ".mm")
+				files.push_back(it->path().string());
 		}
 	}
 
 	//
 	// The plug-in entry point lives at the repo root rather than under
-	// streamelements/, and it holds the bootstrap reach.
+	// streamelements/, and it is the one place allowed to create the
+	// root -- through Create(), which is checked for separately below.
 	//
-	{
-		const std::string src = strip_line_comments(
-			slurp("obs-streamelements-core-plugin.cpp"));
+	files.push_back(std::string(se_tests::kRepoRoot) +
+			"/obs-streamelements-core-plugin.cpp");
 
-		int n = 0;
-		const std::string needle =
-			"SEGlobalStateManager::GetInstance()";
+	check(files.size() > 100,
+	      "scanned too few files -- this invariant would then pass "
+	      "vacuously");
 
-		for (std::size_t at = src.find(needle);
-		     at != std::string::npos;
-		     at = src.find(needle, at + needle.size()))
-			++n;
+	//
+	// Flattened, so that a reach wrapped across lines cannot hide. The
+	// member names are spelled with "::" attached because that is what
+	// whitespace removal leaves.
+	//
+	const char *const banned[] = {
+		"SEGlobalStateManager::GetInstance(",
+		"SEGlobalStateManager::IsInstanceAvailable(",
+		"SEGlobalStateManager::Destroy(",
+		"SEGlobalStateManager::Leak(",
+	};
 
-		if (n) {
-			perFile.push_back(
-				{n, "obs-streamelements-core-plugin.cpp"});
-			total += n;
+	int scanned = 0;
+
+	for (const std::string &file : files) {
+		std::ifstream in(file);
+
+		if (!in)
+			continue;
+
+		std::ostringstream buf;
+		buf << in.rdbuf();
+
+		const std::string src = strip_line_comments(buf.str());
+
+		std::string flat;
+		flat.reserve(src.size());
+
+		for (std::size_t i = 0; i < src.size(); ++i) {
+			if (!std::isspace(static_cast<unsigned char>(src[i])))
+				flat += src[i];
+		}
+
+		++scanned;
+
+		for (const char *const needle : banned) {
+			check(flat.find(needle) == std::string::npos,
+			      (file + " reaches " + needle +
+			       ") -- the root is not a singleton any more. Take "
+			       "what you need as a constructor parameter, or "
+			       "ask whoever constructs you to hand it to you.")
+				      .c_str());
 		}
 	}
 
-	check(total > 0,
-	      "no GetInstance() reaches found at all -- either the migration "
-	      "is finished, in which case delete this ratchet, or the scan is "
-	      "broken");
-
-	if (total > kMaxSingletonReaches) {
-		std::sort(perFile.begin(), perFile.end());
-		std::reverse(perFile.begin(), perFile.end());
-
-		std::fprintf(stderr,
-			     "FAIL: %d SEGlobalStateManager::GetInstance() reaches, ratchet allows %d.\n"
-			     "      A new consumer must be handed what it needs, not fetch it. Per file:\n",
-			     total, kMaxSingletonReaches);
-
-		for (const auto &row : perFile)
-			std::fprintf(stderr, "        %3d  %s\n", row.first,
-				     row.second.c_str());
-
-		++failures;
-	}
+	check(scanned > 100,
+	      "read too few files -- this invariant would then pass vacuously");
 
 	//
-	// And downwards: a drop means the number above is stale, so the next
-	// person inherits a loose ratchet instead of a tight one.
+	// And the other half: no static instance to hand out, and the one
+	// sanctioned way to build the root still present. Without the second
+	// check this file would pass on a tree where Create() had been
+	// renamed and a new accessor added beside it.
 	//
-	check(total >= kMaxSingletonReaches,
-	      "fewer GetInstance() reaches than the ratchet allows -- lower "
-	      "kMaxSingletonReaches in tests/test_source_invariants.cpp to the "
-	      "new count, in the commit that removed them");
+	const std::string root = strip_line_comments(
+		slurp("streamelements/SEGlobalStateManager.hpp"));
+
+	check(root.find("s_instance") == std::string::npos,
+	      "SEGlobalStateManager holds a static instance again. That is "
+	      "what a GetInstance() returns, and the 291 reaches this work "
+	      "removed all existed because there was one.");
+
+	check(root.find("static std::shared_ptr<SEGlobalStateManager> "
+			"Create();") != std::string::npos,
+	      "SEGlobalStateManager::Create() is gone -- find out what "
+	      "replaced it before trusting the checks above");
 }
 
 static void check_nothing_but_the_manager_owns_the_services_container()
@@ -3071,7 +3073,8 @@ int main()
 	check_api_handler_takes_its_services_by_injection();
 	check_api_handler_locks_the_services_once_per_dispatch();
 	check_nothing_but_the_manager_owns_the_services_container();
-	check_the_invoke_handler_is_not_immortal();	check_singleton_reaches_only_go_down();
+	check_the_invoke_handler_is_not_immortal();
+	check_the_root_is_not_a_singleton();
 	check_non_modal_dialogs_are_closed_by_their_owner();
 	check_state_persistence_borrows_the_managers_it_serializes();
 	check_widget_manager_does_not_own_state_persistence();

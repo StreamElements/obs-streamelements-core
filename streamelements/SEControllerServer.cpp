@@ -1,6 +1,6 @@
 #include "SEControllerServer.hpp"
 #include "SEMessageBus.hpp"
-#include "SEGlobalStateManager.hpp"
+#include <util/threading.h>
 
 #ifdef _WIN32
 static const char* PIPE_NAME = "\\\\.\\pipe\\StreamElementsObsLiveControllerServer";
@@ -13,7 +13,7 @@ SEControllerServer::SEControllerServer(SEMessageBus* bus) :
 {
 #ifdef _WIN32
 	auto msgReceiver = [this](const char* const buffer, const size_t length) {
-		if (!SEGlobalStateManager::IsInstanceAvailable())
+		if (!os_atomic_load_bool(&m_accepting))
 			return;
 
 		std::string str = "";
@@ -33,6 +33,13 @@ SEControllerServer::SEControllerServer(SEMessageBus* bus) :
 
 SEControllerServer::~SEControllerServer()
 {
+	//
+	// Before Stop(), so that a callback already in flight on a pipe
+	// thread drops its message instead of forwarding it to a bus whose
+	// own destructor body has already run.
+	//
+	os_atomic_set_bool(&m_accepting, false);
+
 #ifdef _WIN32
 	m_server->Stop();
 
@@ -42,7 +49,7 @@ SEControllerServer::~SEControllerServer()
 
 void SEControllerServer::OnMsgReceivedInternal(std::string& msg)
 {
-	if (!SEGlobalStateManager::IsInstanceAvailable())
+	if (!os_atomic_load_bool(&m_accepting))
 		return;
 
 	CefRefPtr<CefValue> root =

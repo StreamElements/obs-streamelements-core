@@ -316,9 +316,7 @@ SEBrowserWidget::SEBrowserWidget(
 				GetInitialPageURLInternal(),
 				m_separateCookieManager
 					? m_separateCookieManager
-					: SEGlobalStateManager::
-						  GetInstance()
-							  ->GetCookieManager());
+					: apiServices->cefCookieManager);
 
 	char portBuffer[8];
 

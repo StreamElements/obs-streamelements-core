@@ -685,14 +685,22 @@ void SENativeOBSControlsManager::StartStreaming()
 
 	m_startStopStreamingButton->setEnabled(false);
 
+	//
+	// QPointer, not the plug-in's availability: the question five seconds
+	// later is whether *this* object is still there to re-enable its own
+	// button, and Qt zeroes a QPointer when the QObject dies (CORE-757).
+	//
+	QPointer<SENativeOBSControlsManager> self(this);
+
 	QtDelayTask(
-		[this]() {
-			if (!SEGlobalStateManager::
-				    IsInstanceAvailable())
+		[self]() {
+			if (!self)
 				return;
 
-			if (!os_atomic_load_bool(&m_isStreamingTransitionState))
-				m_startStopStreamingButton->setEnabled(true);
+			if (!os_atomic_load_bool(
+				    &self->m_isStreamingTransitionState))
+				self->m_startStopStreamingButton->setEnabled(
+					true);
 		},
 		5000);
 

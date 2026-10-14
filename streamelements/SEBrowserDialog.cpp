@@ -221,10 +221,14 @@ void SEBrowserDialog::DestroyBrowser(std::string reason)
 
 	m_browser->DestroyBrowser();
 
-	if (SEGlobalStateManager::IsInstanceAvailable()) {
-		m_browser->deleteLater();
-	} else {
+	if (m_ownerTeardown) {
+		//
+		// No event loop is coming back to run a deferred delete; see
+		// NoteOwnerTeardown().
+		//
 		delete m_browser;
+	} else {
+		m_browser->deleteLater();
 	}
 
 	m_browser = nullptr;

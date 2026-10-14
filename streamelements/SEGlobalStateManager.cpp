@@ -276,11 +276,6 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 
 /* ========================================================================= */
 
-std::shared_ptr<SEGlobalStateManager> SEGlobalStateManager::s_instance =
-	nullptr;
-
-/* ========================================================================= */
-
 SEGlobalStateManager::SEGlobalStateManager(
 	SEGlobalStateManager::Private)
 {
@@ -309,41 +304,10 @@ SEGlobalStateManager::~SEGlobalStateManager()
 	//
 }
 
-std::shared_ptr<SEGlobalStateManager>
-SEGlobalStateManager::GetInstance()
+std::shared_ptr<SEGlobalStateManager> SEGlobalStateManager::Create()
 {
-	if (!s_instance) {
-		s_instance = std::make_shared<
-			SEGlobalStateManager>(
-			SEGlobalStateManager::Private());
-	}
-
-	return s_instance;
-}
-
-void SEGlobalStateManager::Destroy()
-{
-	s_instance = nullptr;
-}
-
-void SEGlobalStateManager::Leak()
-{
-	// Heap-allocated and never freed, so the refcount never reaches zero
-	// and no destructor runs -- not now, and not during static destruction
-	// at process exit either.
-	if (s_instance.get())
-		new std::shared_ptr<SEGlobalStateManager>(
-			s_instance);
-
-	s_instance = nullptr;
-}
-
-bool SEGlobalStateManager::IsInstanceAvailable()
-{
-	if (!s_instance.get())
-		return false;
-
-	return s_instance->IsInitialized();
+	return std::make_shared<SEGlobalStateManager>(
+		SEGlobalStateManager::Private());
 }
 
 #include <QWindow>
@@ -355,6 +319,7 @@ void SEGlobalStateManager::PublishApiServices()
 		return;
 
 	m_apiServices->cef = m_cef;
+	m_apiServices->cefCookieManager = m_cefCookieManager;
 	m_apiServices->widgetManager = m_widgetManager;
 	m_apiServices->obsSceneManager = m_obsSceneManager;
 	m_apiServices->menuManager = m_menuManager;
@@ -524,12 +489,10 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		std::make_shared<SEHostEventDispatcher>(m_websocketApiServer);
 
 	//
-	// The instance GetInstance() owns, not a second one: its remaining
-	// consumers would otherwise register their listeners on a different
-	// bus from the one events are published to.
+	// Owned here and published in the bundle. It was a singleton, which
+	// is why it had to be handed the dispatcher after construction.
 	//
-	m_messageBus = SEMessageBus::GetInstance();
-	m_messageBus->SetHostEventDispatcher(m_hostEventDispatcher);
+	m_messageBus = SEMessageBus::Create(m_hostEventDispatcher);
 
 	//
 	// The config publishes a system-state change when the startup flags
@@ -828,6 +791,14 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_statePersistence->SetEnabled(true);
 	m_initialized = true;
 
+	//
+	// Last, and in the same breath as m_initialized: this is what tells
+	// an API message handler that the bundle is wired up and a dispatch
+	// may run. See SEApiServices::ready.
+	//
+	if (m_apiServices)
+		m_apiServices->ready = true;
+
 	// From here on an OBS close is an ordinary close, and teardown runs
 	// normally (CORE-786).
 	SENoteInitializeCompleted();
@@ -940,6 +911,16 @@ void SEGlobalStateManager::Shutdown()
 
 	m_sessionManager = nullptr;
 
+	//
+	// Both are borrowed by the bundle, which outlives Shutdown() -- it is
+	// a member, destroyed with this object -- so take the pointers away
+	// before deleting what they point at.
+	//
+	if (m_apiServices) {
+		m_apiServices->cefCookieManager = nullptr;
+		m_apiServices->cef = nullptr;
+	}
+
 	if (m_cefCookieManager) {
 		delete m_cefCookieManager;
 		m_cefCookieManager = nullptr;
@@ -950,13 +931,15 @@ void SEGlobalStateManager::Shutdown()
 		m_cef = nullptr;
 	}
 
-	SEMessageBus::Destroy();
 
 	SEConfig::Destroy();
 
 	SEDrainEventQueue();
 
 	m_initialized = false;
+
+	if (m_apiServices)
+		m_apiServices->ready = false;
 }
 
 void SEGlobalStateManager::OnObsExit()

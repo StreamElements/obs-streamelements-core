@@ -3,8 +3,6 @@
 #include "SEConfig.hpp"
 #include "SEGlobalStateManager.hpp"
 
-std::shared_ptr<SEMessageBus> SEMessageBus::s_instance = nullptr;
-
 const SEMessageBus::message_destination_filter_flags_t SEMessageBus::DEST_ALL = 0xFFFFFFFFUL;
 
 const SEMessageBus::message_destination_filter_flags_t SEMessageBus::DEST_ALL_LOCAL = 0x0000FFFFUL;
@@ -32,13 +30,10 @@ SEMessageBus::~SEMessageBus()
 
 }
 
-std::shared_ptr<SEMessageBus> SEMessageBus::GetInstance()
+std::shared_ptr<SEMessageBus> SEMessageBus::Create(
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 {
-	if (!s_instance) {
-		s_instance = std::make_shared<SEMessageBus>(Private());
-	}
-
-	return s_instance;
+	return std::make_shared<SEMessageBus>(Private(), hostEventDispatcher);
 }
 
 void SEMessageBus::NotifyExternalHostEvent(std::string hostEventName,
@@ -53,11 +48,6 @@ void SEMessageBus::NotifyExternalHostEvent(std::string hostEventName,
 		DEST_ALL_EXTERNAL, SOURCE_APPLICATION, "OBS",
 		externalEventName,
 		CefParseJSON(argsJson, JSON_PARSER_ALLOW_TRAILING_COMMAS));
-}
-
-void SEMessageBus::Destroy()
-{
-	s_instance = nullptr;
 }
 
 void SEMessageBus::AddListener(std::string target, message_destination_filter_flags_t type)
