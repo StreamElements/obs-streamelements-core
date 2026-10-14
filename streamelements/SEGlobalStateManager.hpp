@@ -36,6 +36,7 @@ struct QCefCookieManager;
 #include "SEPopupWindowManager.hpp"
 #include "SEBrowserDialogManager.hpp"
 #include "SESessionManager.hpp"
+#include "SEHostEventDispatcher.hpp"
 #include "SEBrowserDialog.hpp"
 #include "SEVideoCompositionManager.hpp"
 #include "SEAudioCompositionManager.hpp"
@@ -324,6 +325,7 @@ private:
 	std::shared_ptr<SEBrowserDialogManager> m_browserDialogManager =
 		nullptr;
 	std::shared_ptr<SESessionManager> m_sessionManager = nullptr;
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher = nullptr;
 
 private:
 	static std::shared_ptr<

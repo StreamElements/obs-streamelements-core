@@ -52,13 +52,19 @@ SENativeOBSControlsManager::SENativeOBSControlsManager(
 	if (m_nativeManageBroadcastButton) {
 		auto manageBroadcastVisibilityCallback =
 			[this](bool isVisible) -> void {
-				if (isVisible) {
-					DispatchJSEventGlobal(
-						"hostNativeManageBroadcastButtonVisible", "null");
-				} else {
-					DispatchJSEventGlobal(
-						"hostNativeManageBroadcastButtonHidden", "null");
-			}};
+				auto services = m_apiServices.lock();
+
+				if (!services ||
+				    !services->hostEventDispatcher)
+					return;
+
+				services->hostEventDispatcher
+					->DispatchJSEventGlobal(
+						isVisible
+							? "hostNativeManageBroadcastButtonVisible"
+							: "hostNativeManageBroadcastButtonHidden",
+						"null");
+			};
 
 		m_nativeManageBroadcastButtonVisibilityChangeTracker =
 			std::make_shared<WidgetVisibilityChangeTracker>(
@@ -665,7 +671,10 @@ void SENativeOBSControlsManager::BeginStartStreaming()
 	case request:
 		SetStreamingRequestedState();
 
-		DispatchJSEventGlobal("hostStreamingStartRequested", "null");
+		if (auto services = m_apiServices.lock()) {
+		services->hostEventDispatcher->DispatchJSEventGlobal(
+			"hostStreamingStartRequested", "null");
+	}
 		break;
 	}
 }

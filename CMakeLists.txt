@@ -543,6 +543,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEPopupWindowManager.cpp
 	streamelements/SEBrowserDialogManager.cpp
 	streamelements/SESessionManager.cpp
+	streamelements/SEHostEventDispatcher.cpp
 	streamelements/SEUtils/SECryptoUtils.cpp
 	streamelements/SEUtils/SECefValueUtils.cpp
 	streamelements/SEUtils/SEHttpUtils.cpp
@@ -725,6 +726,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEPopupWindowManager.hpp
 	streamelements/SEBrowserDialogManager.hpp
 	streamelements/SESessionManager.hpp
+	streamelements/SEHostEventDispatcher.hpp
 	streamelements/SEUtils/SECryptoUtils.hpp
 	streamelements/SEUtils/SECefValueUtils.hpp
 	streamelements/SEUtils/SECancelableTask.hpp

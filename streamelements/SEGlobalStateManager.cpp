@@ -407,6 +407,7 @@ void SEGlobalStateManager::PublishApiServices()
 	m_apiServices->cleanupManager = m_cleanupManager;
 	m_apiServices->previewManager = m_previewManager;
 	m_apiServices->websocketApiServer = m_websocketApiServer;
+	m_apiServices->hostEventDispatcher = m_hostEventDispatcher;
 	m_apiServices->sharedVideoCompositionManager =
 		m_sharedVideoCompositionManager;
 	m_apiServices->videoCompositionManager = m_videoCompositionManager;
@@ -523,6 +524,13 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	//
 	m_websocketApiServer = std::make_shared<SEWebsocketApiServer>();
 
+	//
+	// Right after the server it forwards to, and before everything that
+	// announces a host event, so each of those can be handed it.
+	//
+	m_hostEventDispatcher =
+		std::make_shared<SEHostEventDispatcher>(m_websocketApiServer);
+
 	m_videoCompositionManager = std::make_shared<SEVideoCompositionManager>(
 		m_websocketApiServer);
 	m_audioCompositionManager = std::make_shared<SEAudioCompositionManager>(
@@ -596,7 +604,8 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	//
 	m_statePersistence = std::make_shared<SEStatePersistence>(
 		mainWindow(), m_widgetManager.get(), m_workerManager.get(),
-		m_hotkeyManager.get(), m_nativeObsControlsManager.get());
+		m_hotkeyManager.get(), m_nativeObsControlsManager.get(),
+		m_hostEventDispatcher);
 
 	//
 	// Handed over after construction, and held weakly: the deferred saves
@@ -897,6 +906,7 @@ void SEGlobalStateManager::Shutdown()
 #endif
 	m_cleanupManager = nullptr;
 	m_previewManager = nullptr;
+	m_hostEventDispatcher = nullptr;
 	m_websocketApiServer = nullptr;
 	m_windowStateEventFilter = nullptr;
 	m_statePersistence = nullptr;

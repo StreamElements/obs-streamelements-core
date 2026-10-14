@@ -21,6 +21,7 @@ class SERazerWyvrnManager;
 class SECleanupManager;
 class SEPreviewManager;
 class SEWebsocketApiServer;
+class SEHostEventDispatcher;
 class SESharedVideoCompositionManager;
 class SEVideoCompositionManager;
 class SEAudioCompositionManager;
@@ -88,6 +89,12 @@ struct SEApiServices {
 	std::shared_ptr<SECleanupManager> cleanupManager;
 	std::shared_ptr<SEPreviewManager> previewManager;
 	std::shared_ptr<SEWebsocketApiServer> websocketApiServer;
+
+	//
+	// Host events on their way to pages. Everything that announces a
+	// host* event holds this rather than fetching the server.
+	//
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher;
 	std::shared_ptr<SESharedVideoCompositionManager>
 		sharedVideoCompositionManager;
 	std::shared_ptr<SEVideoCompositionManager> videoCompositionManager;

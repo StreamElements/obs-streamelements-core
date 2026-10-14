@@ -1,6 +1,7 @@
 #include "SEWidgetManager.hpp"
 
 #include "SEStatePersistence.hpp"
+#include "SEHostEventDispatcher.hpp"
 #include "SEMenuManager.hpp"
 #include "SEUtils.hpp"
 #include "SEGlobalStateManager.hpp"
@@ -226,27 +227,43 @@ bool SEWidgetManager::AddDockWidget(
 
 	class TrackedDockWidget : public QDockWidget {
 	public:
-		TrackedDockWidget(const QString &title,
-				  QWidget *parent = Q_NULLPTR,
-				  Qt::WindowFlags flags = Qt::WindowFlags())
-			: QDockWidget(title, parent, flags)
+		TrackedDockWidget(
+			std::shared_ptr<SEHostEventDispatcher> dispatcher,
+			const QString &title, QWidget *parent = Q_NULLPTR,
+			Qt::WindowFlags flags = Qt::WindowFlags())
+			: QDockWidget(title, parent, flags),
+			  m_hostEventDispatcher(dispatcher)
 		{
 			setAttribute(Qt::WA_NativeWindow);
 		}
+
+	private:
+		//
+		// Held, not fetched: a local class has no enclosing object to
+		// reach through, and a dock outlives any particular call. Not
+		// a ring -- nothing the dispatcher holds owns a dock.
+		//
+		std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
 
 	protected:
 		virtual void resizeEvent(QResizeEvent *event) override
 		{
 			QDockWidget::resizeEvent(event);
 
-			AdviseHostUserInterfaceStateChanged();
+			if (m_hostEventDispatcher) {
+				m_hostEventDispatcher
+					->AdviseHostUserInterfaceStateChanged();
+			}
 		}
 
 		virtual void moveEvent(QMoveEvent *event) override
 		{
 			QDockWidget::moveEvent(event);
 
-			AdviseHostUserInterfaceStateChanged();
+			if (m_hostEventDispatcher) {
+				m_hostEventDispatcher
+					->AdviseHostUserInterfaceStateChanged();
+			}
 		}
 
 		virtual void closeEvent(QCloseEvent *event) override
@@ -270,7 +287,11 @@ bool SEWidgetManager::AddDockWidget(
 		}
 	};
 
-	QDockWidget *dock = new TrackedDockWidget(title, m_parent);
+	auto services = ApiServices();
+
+	QDockWidget *dock = new TrackedDockWidget(
+		services ? services->hostEventDispatcher : nullptr, title,
+		m_parent);
 
 	dock->setObjectName(QString(id));
 
