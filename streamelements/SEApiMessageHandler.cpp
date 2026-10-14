@@ -1724,7 +1724,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize() && args->GetType(0) == VTYPE_DICTIONARY) {
 			CefRefPtr<CefValue> message = args->GetValue(0);
 
-			SEMessageBus::GetInstance()
+			apiServices->messageBus
 				->NotifyAllMessageListeners(
 					SEMessageBus::DEST_ALL_LOCAL,
 					SEMessageBus::SOURCE_WEB,
@@ -1747,7 +1747,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				std::string sourceUrl =
 					"urn:streamelements:internal:" + target->m_target;
 
-				SEMessageBus::GetInstance()
+				apiServices->messageBus
 					->NotifyAllLocalEventListeners(
 						SEMessageBus::
 								DEST_ALL_LOCAL &
@@ -1758,7 +1758,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 						sourceUrl, "hostEventReceived",
 						args->GetValue(0));
 
-				SEMessageBus::GetInstance()
+				apiServices->messageBus
 					->NotifyAllExternalEventListeners(
 						SEMessageBus::
 							DEST_ALL_EXTERNAL,
@@ -2482,7 +2482,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("addBrowserScopedHttpServer");
 	{
 		if (args->GetSize()) {
-			SEMessageBus::GetInstance()
+			apiServices->messageBus
 				->DeserializeBrowserHttpServer(
 					target->m_target, args->GetValue(0), result);
 		}
@@ -2491,15 +2491,15 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAllBrowserScopedHttpServers");
 	{
-		SEMessageBus::GetInstance()
-			->SerializeBrowserHttpServers(target->m_target, result);
+		apiServices->messageBus->SerializeBrowserHttpServers(
+			target->m_target, result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("removeBrowserScopedHttpServersByIds");
 	{
 		if (args->GetSize()) {
-			SEMessageBus::GetInstance()
+			apiServices->messageBus
 				->RemoveBrowserHttpServersByIds(
 					target->m_target, args->GetValue(0), result);
 		}
@@ -2509,7 +2509,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("sendHttpRequestResponse");
 	{
 		if (args->GetSize() >= 2) {
-			SEMessageBus::GetInstance()
+			apiServices->messageBus
 				->DeserializeHttpRequestResponse(
 					args->GetValue(0), args->GetValue(1),
 					result);

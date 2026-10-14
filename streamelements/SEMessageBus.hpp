@@ -22,6 +22,8 @@
 //
 // Access singleton instance with SEMessageBus::GetInstance()
 //
+class SEHostEventDispatcher;
+
 class SEMessageBus
 {
 private:
@@ -47,8 +49,38 @@ public:
 	static const char* const SOURCE_EXTERNAL;
 
 public:
-	SEMessageBus(Private);
+	//
+	// Takes the dispatcher rather than calling the free functions that
+	// fetched the websocket server from the singleton. Private tag kept:
+	// GetInstance() still builds the one remaining instance until its
+	// last consumers are converted.
+	//
+	SEMessageBus(Private,
+		     std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher =
+			     nullptr);
 	virtual ~SEMessageBus();
+
+	//
+	// A host* event, announced to external controllers. The translation
+	// -- drop the "host" prefix, lower-case what follows -- lived in five
+	// identical copies of a file-static helper, one per class that
+	// announces anything.
+	//
+	void NotifyExternalHostEvent(std::string hostEventName,
+				     std::string argsJson);
+
+	//
+	// Scaffolding, removed with GetInstance(): while the instance is
+	// still built lazily, Initialize() hands the dispatcher over once it
+	// exists. Events announced before that are dropped, which is what
+	// happened before too -- the free function found no plugin and
+	// returned.
+	//
+	void SetHostEventDispatcher(
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
+	{
+		m_hostEventDispatcher = hostEventDispatcher;
+	}
 
 public:
 	static std::shared_ptr<SEMessageBus> GetInstance();
@@ -194,4 +226,6 @@ private:
 
 private:
 	static std::shared_ptr<SEMessageBus> s_instance;
+
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
 };

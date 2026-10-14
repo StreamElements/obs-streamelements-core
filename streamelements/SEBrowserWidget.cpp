@@ -445,8 +445,10 @@ SEBrowserWidget::SEBrowserWidget(
 
 	m_cefWidget->setStartupScript(script + m_executeJavaScriptCodeOnLoad);
 
-	SEMessageBus::GetInstance()->AddListener(
-		m_clientId, m_messageDestinationFlags);
+	if (apiServices && apiServices->messageBus) {
+		apiServices->messageBus->AddListener(
+			m_clientId, m_messageDestinationFlags);
+	}
 
 	s_widgets[m_clientId] = this;
 

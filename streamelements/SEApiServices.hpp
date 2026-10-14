@@ -22,6 +22,7 @@ class SECleanupManager;
 class SEPreviewManager;
 class SEWebsocketApiServer;
 class SEHostEventDispatcher;
+class SEMessageBus;
 class SESharedVideoCompositionManager;
 class SEVideoCompositionManager;
 class SEAudioCompositionManager;
@@ -95,6 +96,12 @@ struct SEApiServices {
 	// host* event holds this rather than fetching the server.
 	//
 	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher;
+
+	//
+	// Local and external event listeners -- pages, background workers,
+	// browser sources and external controllers.
+	//
+	std::shared_ptr<SEMessageBus> messageBus;
 	std::shared_ptr<SESharedVideoCompositionManager>
 		sharedVideoCompositionManager;
 	std::shared_ptr<SEVideoCompositionManager> videoCompositionManager;

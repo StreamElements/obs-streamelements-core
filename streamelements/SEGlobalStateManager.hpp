@@ -130,6 +130,16 @@ public:
 
 	QCef *GetCef() { return m_cef; }
 
+	//
+	// For handle_obs_frontend_event, which is a file static in the
+	// implementation and is handed this object as its private_data.
+	//
+	std::shared_ptr<SEHostEventDispatcher> GetHostEventDispatcher()
+	{
+		return m_hostEventDispatcher;
+	}
+	std::shared_ptr<SEMessageBus> GetMessageBus() { return m_messageBus; }
+
 	std::shared_ptr<SEBrowserWidgetManager> GetWidgetManager()
 	{
 		return m_widgetManager;
@@ -326,6 +336,7 @@ private:
 		nullptr;
 	std::shared_ptr<SESessionManager> m_sessionManager = nullptr;
 	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher = nullptr;
+	std::shared_ptr<SEMessageBus> m_messageBus = nullptr;
 
 private:
 	static std::shared_ptr<
@@ -334,12 +345,23 @@ private:
 private:
 	class ThemeChangeListener : public QDockWidget {
 	public:
-		ThemeChangeListener();
+		ThemeChangeListener(
+			std::shared_ptr<SEHostEventDispatcher>
+				hostEventDispatcher,
+			std::shared_ptr<SEMessageBus> messageBus);
 
 	protected:
 		virtual void changeEvent(QEvent *event) override;
 
 		std::string m_currentTheme;
+
+		//
+		// A nested QDockWidget: Qt owns it once it is added to the
+		// main window, so it holds what it announces with rather
+		// than reaching for it when the theme changes.
+		//
+		std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+		std::shared_ptr<SEMessageBus> m_messageBus;
 	};
 
 	class ApplicationStateListener : public QObject {

@@ -16,6 +16,21 @@ class SEConfig
 private:
 	const char* CONFIG_FILE_NAME = "obs-streamelements-core.ini";
 
+	//
+	// Weak, and handed over by SEGlobalStateManager::Initialize() rather
+	// than fetched: this class is built before the bus exists, and a
+	// strong handle here would keep the bus alive past the plugin. Only
+	// one setter writes the startup flags, and publishing that change is
+	// the one thing this class needs the bus for.
+	//
+	std::weak_ptr<SEMessageBus> m_messageBus;
+
+public:
+	void SetMessageBus(std::shared_ptr<SEMessageBus> messageBus)
+	{
+		m_messageBus = messageBus;
+	}
+
 public:
 	static const uint64_t STARTUP_FLAGS_ONBOARDING_MODE = 0x0000000000000001ULL;
 	static const uint64_t STARTUP_FLAGS_SIGNED_IN       = 0x0000000000000002ULL;
@@ -178,7 +193,9 @@ public:
 
 		SaveConfig();
 
-		SEMessageBus::GetInstance()->PublishSystemState();
+		if (auto messageBus = m_messageBus.lock()) {
+			messageBus->PublishSystemState();
+		}
 	}
 
 	std::string GetStartupState() { return ReadString("Startup", "State"); }

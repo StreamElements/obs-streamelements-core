@@ -112,8 +112,12 @@ static void SetMainWindowStyle()
 //			dock->setStyleSheet("QDockWidget { margin: 0 -4px -4px -4px; }");
 }
 
-SEGlobalStateManager::ThemeChangeListener::ThemeChangeListener()
-	: QDockWidget()
+SEGlobalStateManager::ThemeChangeListener::ThemeChangeListener(
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+	std::shared_ptr<SEMessageBus> messageBus)
+	: QDockWidget(),
+	  m_hostEventDispatcher(hostEventDispatcher),
+	  m_messageBus(messageBus)
 {
 	setVisible(false);
 	setFloating(true);
@@ -134,37 +138,15 @@ void SEGlobalStateManager::ThemeChangeListener::changeEvent(
 				{"name", newTheme},
 			};
 
-			if (!SEGlobalStateManager::
-				    IsInstanceAvailable())
-				return;
+			if (m_hostEventDispatcher) {
+				m_hostEventDispatcher->DispatchJSEventGlobal(
+					"hostUIThemeChanged", json.dump());
+			}
 
-			auto apiServer =
-				SEGlobalStateManager::GetInstance()
-					->GetWebsocketApiServer();
-
-			if (!apiServer)
-				return;
-
-			apiServer->DispatchJSEvent(
-				"system",
-						  "hostUIThemeChanged",
-						  json.dump());
-
-			auto externalServer =
-				SEMessageBus::GetInstance();
-
-			if (!externalServer)
-				return;
-
-			externalServer->NotifyAllExternalEventListeners(
-					SEMessageBus::
-						DEST_ALL_EXTERNAL,
-					SEMessageBus::
-						SOURCE_APPLICATION,
-					"OBS", "UIThemeChanged",
-					CefParseJSON(
-						json.dump(),
-						JSON_PARSER_ALLOW_TRAILING_COMMAS));
+			if (m_messageBus) {
+				m_messageBus->NotifyExternalHostEvent(
+					"hostUIThemeChanged", json.dump());
+			}
 
 			m_currentTheme = newTheme;
 		}
@@ -276,31 +258,19 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 	}
 
 	if (name.size()) {
-		if (!SEGlobalStateManager::IsInstanceAvailable())
-			return;
+		//
+		// Both audiences, through the two services this object holds.
+		// It is handed to the callback as private_data, so there is
+		// nothing to ask whether the plugin is alive -- if it were
+		// not, self would not be here.
+		//
+		if (auto dispatcher = self->GetHostEventDispatcher()) {
+			dispatcher->DispatchJSEventGlobal(name, args);
+		}
 
-		auto apiServer = self->GetWebsocketApiServer();
-
-		if (!apiServer)
-			return;
-
-		apiServer->DispatchJSEvent("system", name, args);
-
-		std::string externalEventName =
-			name.c_str() + 4; /* remove 'host' prefix */
-		externalEventName[0] = tolower(
-			externalEventName[0]); /* lower case first letter */
-
-		auto msgBus = SEMessageBus::GetInstance();
-
-		if (!msgBus)
-			return;
-
-		msgBus->NotifyAllExternalEventListeners(
-			SEMessageBus::DEST_ALL_EXTERNAL,
-			SEMessageBus::SOURCE_APPLICATION, "OBS",
-			externalEventName,
-			CefParseJSON(args, JSON_PARSER_ALLOW_TRAILING_COMMAS));
+		if (auto msgBus = self->GetMessageBus()) {
+			msgBus->NotifyExternalHostEvent(name, args);
+		}
 	}
 }
 
@@ -408,6 +378,7 @@ void SEGlobalStateManager::PublishApiServices()
 	m_apiServices->previewManager = m_previewManager;
 	m_apiServices->websocketApiServer = m_websocketApiServer;
 	m_apiServices->hostEventDispatcher = m_hostEventDispatcher;
+	m_apiServices->messageBus = m_messageBus;
 	m_apiServices->sharedVideoCompositionManager =
 		m_sharedVideoCompositionManager;
 	m_apiServices->videoCompositionManager = m_videoCompositionManager;
@@ -531,6 +502,20 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_hostEventDispatcher =
 		std::make_shared<SEHostEventDispatcher>(m_websocketApiServer);
 
+	//
+	// The instance GetInstance() owns, not a second one: its remaining
+	// consumers would otherwise register their listeners on a different
+	// bus from the one events are published to.
+	//
+	m_messageBus = SEMessageBus::GetInstance();
+	m_messageBus->SetHostEventDispatcher(m_hostEventDispatcher);
+
+	//
+	// The config publishes a system-state change when the startup flags
+	// are written, which is the only thing it needs the bus for.
+	//
+	SEConfig::GetInstance()->SetMessageBus(m_messageBus);
+
 	m_videoCompositionManager = std::make_shared<SEVideoCompositionManager>(
 		m_websocketApiServer);
 	m_audioCompositionManager = std::make_shared<SEAudioCompositionManager>(
@@ -627,7 +612,8 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	PublishApiServices();
 
 	m_appStateListener = new ApplicationStateListener();
-	m_themeChangeListener = new ThemeChangeListener();
+	m_themeChangeListener = new ThemeChangeListener(m_hostEventDispatcher,
+							m_messageBus);
 
 	// objectName, because QMainWindow::saveState() and restoreState()
 	// identify docks by it and Qt's documentation requires it to be set for
@@ -907,6 +893,7 @@ void SEGlobalStateManager::Shutdown()
 #endif
 	m_cleanupManager = nullptr;
 	m_previewManager = nullptr;
+	m_messageBus = nullptr;
 	m_hostEventDispatcher = nullptr;
 	m_websocketApiServer = nullptr;
 	m_windowStateEventFilter = nullptr;

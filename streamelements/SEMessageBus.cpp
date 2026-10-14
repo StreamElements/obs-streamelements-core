@@ -1,4 +1,5 @@
 #include "SEMessageBus.hpp"
+#include "SEHostEventDispatcher.hpp"
 #include "SEConfig.hpp"
 #include "SEGlobalStateManager.hpp"
 
@@ -18,8 +19,10 @@ const char* const SEMessageBus::SOURCE_APPLICATION = "application";
 const char* const SEMessageBus::SOURCE_WEB = "web";
 const char* const SEMessageBus::SOURCE_EXTERNAL = "external";
 
-SEMessageBus::SEMessageBus(Private) :
-	m_external_controller_server(this)
+SEMessageBus::SEMessageBus(
+	Private, std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
+	: m_external_controller_server(this),
+	  m_hostEventDispatcher(hostEventDispatcher)
 {
 
 }
@@ -36,6 +39,20 @@ std::shared_ptr<SEMessageBus> SEMessageBus::GetInstance()
 	}
 
 	return s_instance;
+}
+
+void SEMessageBus::NotifyExternalHostEvent(std::string hostEventName,
+					   std::string argsJson)
+{
+	std::string externalEventName =
+		hostEventName.c_str() + 4; /* remove 'host' prefix */
+	externalEventName[0] =
+		tolower(externalEventName[0]); /* lower case first letter */
+
+	NotifyAllExternalEventListeners(
+		DEST_ALL_EXTERNAL, SOURCE_APPLICATION, "OBS",
+		externalEventName,
+		CefParseJSON(argsJson, JSON_PARSER_ALLOW_TRAILING_COMMAS));
 }
 
 void SEMessageBus::Destroy()
@@ -280,7 +297,10 @@ void SEMessageBus::NotifyEventListener(std::string target,
 
 	std::string payloadJson = CefWriteJSON(root, JSON_WRITER_DEFAULT);
 
-	DispatchJSEventContainer(target, event, payloadJson);
+	if (m_hostEventDispatcher) {
+		m_hostEventDispatcher->DispatchJSEventContainer(
+			target, event, payloadJson);
+	}
 }
 
 void SEMessageBus::NotifyAllLocalEventListeners(
@@ -312,8 +332,12 @@ void SEMessageBus::NotifyAllLocalEventListeners(
 		auto browser = kv.first;
 
 		if (kv.second->flags & types) {
-			DispatchJSEventContainer(kv.second->target, event,
-					      payloadJson);
+			if (m_hostEventDispatcher) {
+				m_hostEventDispatcher
+					->DispatchJSEventContainer(
+						kv.second->target, event,
+						payloadJson);
+			}
 		}
 	}
 }
