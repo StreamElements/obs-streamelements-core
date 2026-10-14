@@ -3,6 +3,7 @@
 #include "SEApiMessageHandler.hpp"
 #include "SERemoteIconLoader.hpp"
 #include "SEConfig.hpp"
+#include "SEAuxiliaryControlsBuilder.hpp"
 
 #include <obs.h>
 #include <obs.hpp>
@@ -212,8 +213,10 @@ static bool HandleDefaultActionRequest(obs_sceneitem_t *scene_item,
 						scene_item);
 			};
 
-			handled = DeserializeAndInvokeAction(
-				value, defaultAction, defaultContextMenu);
+			handled = monitor->GetAuxiliaryControls()
+					  ->DeserializeAndInvokeAction(
+						  value, defaultAction,
+						  defaultContextMenu);
 		}
 		#endif
 	}
@@ -260,7 +263,9 @@ HandleSceneItemContextMenuRequest(obs_sceneitem_t *scene_item,
 
 			QMenu menu; //(m_mainWindow);
 
-			handled = DeserializeMenu(value, menu, defaultAction,
+			handled = monitor->GetAuxiliaryControls()
+					  ->DeserializeMenu(
+						  value, menu, defaultAction,
 						  defaultContextMenu);
 
 			if (handled) {
@@ -527,8 +532,10 @@ public:
 /* ================================================================= */
 
 SESceneItemsMonitor::SESceneItemsMonitor(
-	QMainWindow *mainWindow)
-	: m_mainWindow(mainWindow)
+	QMainWindow *mainWindow,
+	std::shared_ptr<SEAuxiliaryControlsBuilder> auxiliaryControlsBuilder)
+	: m_mainWindow(mainWindow),
+	  m_auxiliaryControls(auxiliaryControlsBuilder)
 {
 	m_eventFilter = new SceneItemsLocalEventFilter(m_mainWindow, this);
 
@@ -963,7 +970,9 @@ static void deserializeAuxSceneItemsControls(
 	CefRefPtr<CefListValue> list = monitor->GetSceneItemActions(scene_item);
 
 	for (size_t index = 0; index < list->GetSize(); ++index) {
-		QWidget *control = DeserializeAuxiliaryControlWidget(
+		QWidget *control =
+			monitor->GetAuxiliaryControls()
+				->DeserializeAuxiliaryControlWidget(
 			list->GetValue(index),
 			[monitor, scene_item]() {
 				monitor->InvokeCurrentSceneItemDefaultAction(
@@ -1012,8 +1021,9 @@ static void deserializeSceneItemIcon(SESceneItemsMonitor *monitor,
 
 	std::string url = "";
 
-	QWidget *itemIcon = DeserializeRemoteIconWidget(
-		monitor->GetSceneItemIcon(scene_item), defaultPixmap);
+	QWidget *itemIcon =
+		monitor->GetAuxiliaryControls()->DeserializeRemoteIconWidget(
+			monitor->GetSceneItemIcon(scene_item), defaultPixmap);
 
 	itemIcon->setAutoFillBackground(false);
 	itemIcon->setStyleSheet("background: none");
@@ -1420,8 +1430,9 @@ void SESceneItemsMonitor::UpdateSceneItemsToolbar()
 	CefRefPtr<CefListValue> list = m_sceneItemsToolBarActions->GetList();
 
 	for (size_t index = 0; index < list->GetSize(); ++index) {
-		QWidget *control = DeserializeAuxiliaryControlWidget(
-			list->GetValue(index));
+		QWidget *control =
+			m_auxiliaryControls->DeserializeAuxiliaryControlWidget(
+				list->GetValue(index));
 
 		if (!control)
 			continue;

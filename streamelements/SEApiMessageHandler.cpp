@@ -20,8 +20,6 @@
 #include <QDesktopServices>
 #include <QUrl>
 
-std::shared_ptr<SEApiMessageHandler::InvokeHandler>
-	SEApiMessageHandler::InvokeHandler::s_singleton = nullptr;
 
 /* Incoming messages from renderer process */
 const char *MSG_ON_CONTEXT_CREATED =
@@ -3180,7 +3178,9 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize()) {
 			QMenu menu;
-			if (DeserializeMenu(args->GetValue(0), menu)) {
+			if (apiServices->auxiliaryControlsBuilder
+				    ->DeserializeMenu(args->GetValue(0),
+						      menu)) {
 				menu.exec(QCursor::pos());
 
 				result->SetBool(true);

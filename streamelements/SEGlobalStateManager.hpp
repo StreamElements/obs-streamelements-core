@@ -36,6 +36,7 @@ struct QCefCookieManager;
 #include "SEPopupWindowManager.hpp"
 #include "SEBrowserDialogManager.hpp"
 #include "SESessionManager.hpp"
+#include "SEAuxiliaryControlsBuilder.hpp"
 #include "SEHostEventDispatcher.hpp"
 #include "SEBrowserDialog.hpp"
 #include "SEVideoCompositionManager.hpp"
@@ -232,16 +233,6 @@ public:
 		return m_websocketApiServer;
 	}
 
-	//
-	// The bundle the API handlers and browser widgets are given. Handed to
-	// them at construction; this accessor exists for the one caller that
-	// cannot be handed anything -- the lazily created InvokeHandler
-	// singleton in SEUtils -- and goes away with it.
-	//
-	std::shared_ptr<SEApiServices> GetApiServices()
-	{
-		return m_apiServices;
-	}
 	std::shared_ptr <SESharedVideoCompositionManager>
 		GetSharedVideoCompositionManager()
 	{
@@ -335,6 +326,8 @@ private:
 	std::shared_ptr<SEBrowserDialogManager> m_browserDialogManager =
 		nullptr;
 	std::shared_ptr<SESessionManager> m_sessionManager = nullptr;
+	std::shared_ptr<SEAuxiliaryControlsBuilder>
+		m_auxiliaryControlsBuilder = nullptr;
 	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher = nullptr;
 	std::shared_ptr<SEMessageBus> m_messageBus = nullptr;
 

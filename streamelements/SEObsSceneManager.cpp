@@ -1864,14 +1864,21 @@ SEObsSceneManager::GetVideoComposition(CefRefPtr<CefValue> input)
 
 SEObsSceneManager::SEObsSceneManager(
 	QMainWindow *parent,
-	std::shared_ptr<SEVideoCompositionManager> videoCompositionManager)
+	std::shared_ptr<SEVideoCompositionManager> videoCompositionManager,
+	std::shared_ptr<SEAuxiliaryControlsBuilder> auxiliaryControlsBuilder)
 	: m_parent(parent), m_videoCompositionManager(videoCompositionManager)
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
-	m_sceneItemsMonitor = new SESceneItemsMonitor(m_parent);
-	m_scenesWidgetManager =
-		new SEScenesListWidgetManager(m_parent);
+	//
+	// Passed straight through: the two toolbars below are what builds
+	// auxiliary controls from a page's description, and nothing else here
+	// needs it.
+	//
+	m_sceneItemsMonitor = new SESceneItemsMonitor(
+		m_parent, auxiliaryControlsBuilder);
+	m_scenesWidgetManager = new SEScenesListWidgetManager(
+		m_parent, auxiliaryControlsBuilder);
 
 	m_signalHandlerData = new SESignalHandlerData(
 		this, m_videoCompositionManager,

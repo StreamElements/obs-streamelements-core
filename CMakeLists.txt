@@ -541,6 +541,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEStatePersistence.cpp
 	streamelements/SEStatusBarMessageManager.cpp
 	streamelements/SEPopupWindowManager.cpp
+	streamelements/SEAuxiliaryControlsBuilder.cpp
 	streamelements/SEBrowserDialogManager.cpp
 	streamelements/SESessionManager.cpp
 	streamelements/SEHostEventDispatcher.cpp
@@ -724,6 +725,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEStatePersistence.hpp
 	streamelements/SEStatusBarMessageManager.hpp
 	streamelements/SEPopupWindowManager.hpp
+	streamelements/SEAuxiliaryControlsBuilder.hpp
 	streamelements/SEBrowserDialogManager.hpp
 	streamelements/SESessionManager.hpp
 	streamelements/SEHostEventDispatcher.hpp

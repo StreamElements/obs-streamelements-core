@@ -17,6 +17,7 @@
 #include <mutex>
 
 class SESignalHandlerData;
+class SEAuxiliaryControlsBuilder;
 
 class SEObsSceneManager {
 private:
@@ -31,7 +32,9 @@ public:
 	//
 	SEObsSceneManager(
 		QMainWindow *parent,
-		std::shared_ptr<SEVideoCompositionManager> videoCompositionManager);
+		std::shared_ptr<SEVideoCompositionManager> videoCompositionManager,
+		std::shared_ptr<SEAuxiliaryControlsBuilder>
+			auxiliaryControlsBuilder);
 	virtual ~SEObsSceneManager();
 
 private:

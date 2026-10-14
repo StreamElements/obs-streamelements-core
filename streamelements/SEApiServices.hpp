@@ -33,6 +33,7 @@ class SEStatusBarMessageManager;
 class SEPopupWindowManager;
 class SEBrowserDialogManager;
 class SESessionManager;
+class SEAuxiliaryControlsBuilder;
 
 //
 // The objects SEGlobalStateManager::Initialize() creates, in one place, so
@@ -120,4 +121,10 @@ struct SEApiServices {
 	std::shared_ptr<SEPopupWindowManager> popupWindowManager;
 	std::shared_ptr<SEBrowserDialogManager> browserDialogManager;
 	std::shared_ptr<SESessionManager> sessionManager;
+
+	//
+	// Owns no widget and borrows no raw pointer, so unlike the four above
+	// it its position here is not load-bearing.
+	//
+	std::shared_ptr<SEAuxiliaryControlsBuilder> auxiliaryControlsBuilder;
 };

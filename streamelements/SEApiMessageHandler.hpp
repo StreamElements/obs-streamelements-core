@@ -175,36 +175,13 @@ public:
 	~InvokeHandler() {}
 
 	//
-	// Still a singleton, and still built on first use: its only caller is a
-	// free function in SEUtils with nothing to hand it. The services come
-	// from the caller for that reason -- whoever first invokes an auxiliary
-	// action decides which bundle this handler keeps for the rest of the
-	// session, which is the last thing standing between this file and a
-	// second SEGlobalStateManager instance.
+	// Owned by SEAuxiliaryControlsBuilder, which is the only thing that
+	// invokes an auxiliary action. It was a singleton for as long as its
+	// caller was a free function with nothing to hand it: a file-static
+	// shared_ptr, never released, which kept the services bundle's
+	// refcount off zero even with no widget alive.
 	//
-	static std::shared_ptr<SEApiMessageHandler::InvokeHandler>
-	GetInstance(std::shared_ptr<SEApiServices> services)
-	{
-		static std::mutex mutex;
-
-		if (!s_singleton) {
-			std::lock_guard<std::mutex> guard(mutex);
-
-			if (!s_singleton) {
-				s_singleton = std::make_shared<
-					SEApiMessageHandler::InvokeHandler>(
-					"globalInvokeHandler", services);
-			}
-		}
-
-		return s_singleton;
-	}
-
-public:
 	bool
 	InvokeApiCallAsync(std::string invoke, CefRefPtr<CefListValue> args,
 			   std::function<void(CefRefPtr<CefValue>)> callback);
-
-private:
-	static std::shared_ptr<SEApiMessageHandler::InvokeHandler> s_singleton;
 };

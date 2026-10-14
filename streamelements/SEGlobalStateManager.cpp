@@ -390,6 +390,7 @@ void SEGlobalStateManager::PublishApiServices()
 	m_apiServices->popupWindowManager = m_popupWindowManager;
 	m_apiServices->browserDialogManager = m_browserDialogManager;
 	m_apiServices->sessionManager = m_sessionManager;
+	m_apiServices->auxiliaryControlsBuilder = m_auxiliaryControlsBuilder;
 }
 
 void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
@@ -462,6 +463,15 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_apiServices = std::make_shared<SEApiServices>();
 
 	//
+	// Needs nothing but the bundle, and three things below take it: the
+	// menu manager, and the two scene-list monitors the scene manager
+	// builds. It keeps the bundle weakly and locks it per call, so being
+	// built before any of its contents exist is fine.
+	//
+	m_auxiliaryControlsBuilder =
+		std::make_shared<SEAuxiliaryControlsBuilder>(m_apiServices);
+
+	//
 	// Before the menu manager, which takes it: two of its menu items
 	// are the non-API way into a session reset. Nothing else has to
 	// exist yet -- the session manager locks the bundle per call, and
@@ -527,10 +537,11 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	// above, so the ordering is now the compiler's business.
 	//
 	m_obsSceneManager = std::make_shared<SEObsSceneManager>(
-		obs_main_window, m_videoCompositionManager);
+		obs_main_window, m_videoCompositionManager,
+		m_auxiliaryControlsBuilder);
 	m_menuManager = std::make_shared<SEMenuManager>(
-		obs_main_window, m_sessionManager,
-		m_performanceHistoryTracker, m_analyticsEventsManager);
+		obs_main_window, m_sessionManager, m_performanceHistoryTracker,
+		m_analyticsEventsManager, m_auxiliaryControlsBuilder);
 	m_bwTestManager = std::make_shared<SEBandwidthTestManager>(
 		m_hostEventDispatcher);
 	m_outputSettingsManager = std::make_shared<
@@ -879,6 +890,7 @@ void SEGlobalStateManager::Shutdown()
 	m_audioCompositionManager = nullptr;
 
 	m_menuManager = nullptr;
+	m_auxiliaryControlsBuilder = nullptr;
 	m_hotkeyManager = nullptr;
 	m_externalSceneDataProviderManager = nullptr;
 	m_httpClient = nullptr;

@@ -19,6 +19,7 @@ class SEBrowserWidget;
 class SESessionManager;
 class SEPerformanceHistoryTracker;
 class SEAnalyticsEventsManager;
+class SEAuxiliaryControlsBuilder;
 
 class SEMenuManager :
 	public QObject
@@ -41,7 +42,9 @@ public:
 		      std::shared_ptr<SEPerformanceHistoryTracker>
 			      performanceHistoryTracker,
 		      std::shared_ptr<SEAnalyticsEventsManager>
-			      analyticsEventsManager);
+			      analyticsEventsManager,
+		      std::shared_ptr<SEAuxiliaryControlsBuilder>
+			      auxiliaryControlsBuilder);
 	virtual ~SEMenuManager();
 
 public:
@@ -76,6 +79,13 @@ private:
 	std::shared_ptr<SEPerformanceHistoryTracker>
 		m_performanceHistoryTracker;
 	std::shared_ptr<SEAnalyticsEventsManager> m_analyticsEventsManager;
+
+	//
+	// Builds this menu's aux items and its docks submenu from the
+	// description a page sends. Was reached through the singleton from
+	// free functions in SEUtils.
+	//
+	std::shared_ptr<SEAuxiliaryControlsBuilder> m_auxiliaryControls;
 
 private:
 	void ReportIssue();

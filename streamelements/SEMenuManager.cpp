@@ -3,6 +3,7 @@
 #include "SESessionManager.hpp"
 #include "SEPerformanceHistoryTracker.hpp"
 #include "SEAnalyticsEventsManager.hpp"
+#include "SEAuxiliaryControlsBuilder.hpp"
 #include "SEReportIssueDialog.hpp"
 #include "SEGlobalStateManager.hpp"
 #include "SEConfig.hpp"
@@ -20,11 +21,13 @@
 SEMenuManager::SEMenuManager(
 	QMainWindow *parent, std::shared_ptr<SESessionManager> sessionManager,
 	std::shared_ptr<SEPerformanceHistoryTracker> performanceHistoryTracker,
-	std::shared_ptr<SEAnalyticsEventsManager> analyticsEventsManager)
+	std::shared_ptr<SEAnalyticsEventsManager> analyticsEventsManager,
+	std::shared_ptr<SEAuxiliaryControlsBuilder> auxiliaryControlsBuilder)
 	: m_mainWindow(parent),
 	  m_sessionManager(sessionManager),
 	  m_performanceHistoryTracker(performanceHistoryTracker),
-	  m_analyticsEventsManager(analyticsEventsManager)
+	  m_analyticsEventsManager(analyticsEventsManager),
+	  m_auxiliaryControls(auxiliaryControlsBuilder)
 {
 	m_auxMenuItems = CefValue::Create();
 	m_auxMenuItems->SetNull();
@@ -104,7 +107,8 @@ void SEMenuManager::UpdateInternal()
 			QMenu *docksMenu = new QMenu(obs_module_text(
 				"StreamElements.Action.DocksContainer"));
 
-			DeserializeDocksMenu(*docksMenu);
+			m_auxiliaryControls->DeserializeDocksMenu(
+				*docksMenu);
 
 			m_menu->addMenu(docksMenu);
 		}
@@ -121,7 +125,7 @@ void SEMenuManager::UpdateInternal()
 		m_menu->addSeparator();
 	}
 
-	DeserializeMenu(m_auxMenuItems, *m_menu);
+	m_auxiliaryControls->DeserializeMenu(m_auxMenuItems, *m_menu);
 
 	m_menu->addSeparator();
 
@@ -200,7 +204,7 @@ bool SEMenuManager::DeserializeAuxiliaryMenuItems(
 	SYNC_ACCESS();
 
 	QMenu menu;
-	bool result = DeserializeMenu(input, menu);
+	bool result = m_auxiliaryControls->DeserializeMenu(input, menu);
 
 	if (result) {
 		m_auxMenuItems = input->Copy();

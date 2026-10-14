@@ -2126,20 +2126,66 @@ static void check_non_modal_dialogs_are_closed_by_their_owner()
 }
 
 //
+// --- The auxiliary action invoker (CORE-757).
+//
+// SEApiMessageHandler::InvokeHandler used to be a file-static shared_ptr,
+// built on first use and never released, because its only caller was a free
+// function in SEUtils with nothing to hand it. That one pointer meant the
+// services container's refcount could never reach zero -- with no widget,
+// no dock and no dialog alive -- which is why ~SEGlobalStateManager had to
+// empty the container by hand to let shutdown finish.
+//
+// It is a member of SEAuxiliaryControlsBuilder now, which the container
+// owns, so it dies with everything else.
+//
+static void check_the_invoke_handler_is_not_immortal()
+{
+	const std::string handler = strip_line_comments(
+		slurp("streamelements/SEApiMessageHandler.hpp"));
+
+	check(handler.find("s_singleton") == std::string::npos,
+	      "SEApiMessageHandler::InvokeHandler holds a file static again. "
+	      "A never-released shared_ptr to a handler keeps the services "
+	      "container alive for the life of the process, which is the leak "
+	      "that forced a teardown step to empty the container by hand.");
+
+	std::string src = strip_line_comments(
+		slurp("streamelements/SEAuxiliaryControlsBuilder.hpp"));
+
+	std::string flat;
+	flat.reserve(src.size());
+
+	for (std::size_t i = 0; i < src.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(src[i])))
+			flat += src[i];
+	}
+
+	//
+	// Non-vacuity: the handler has to be owned somewhere, and this is the
+	// only place. Without this the check above passes on a tree where the
+	// handler was deleted outright.
+	//
+	check(flat.find("std::shared_ptr<SEApiMessageHandler::InvokeHandler>"
+			"m_invokeHandler") != std::string::npos,
+	      "SEAuxiliaryControlsBuilder no longer owns the InvokeHandler -- "
+	      "find where it went before trusting the check above");
+}
+
+//
 // --- The singleton ratchet (CORE-757).
 //
 // The migration off SEGlobalStateManager::GetInstance() is monotone by
 // construction: this counts what is left and fails if it grows. 291 reaches
-// at the start of the work, 14 now -- the API handler alone went from 211 to
-// one, which is the Razer fetch in a file-local helper that has no object to
-// be injected into.
+// at the start of the work, 8 now: three in SEHostEventUtils, one in
+// SESessionSigningUtils, two on the crash path, one in SEGlobalStateManager
+// itself and the bootstrap reach in the module entry point.
 //
 // When you remove reaches, lower kMaxSingletonReaches in the same commit.
 // Never raise it: a new reach is a new consumer that should have been handed
 // what it needs, and this is the check that makes that a build failure rather
 // than a review comment nobody makes.
 //
-static const int kMaxSingletonReaches = 14;
+static const int kMaxSingletonReaches = 8;
 
 static void check_singleton_reaches_only_go_down()
 {
@@ -3005,7 +3051,7 @@ int main()
 	check_api_handler_takes_its_services_by_injection();
 	check_api_handler_locks_the_services_once_per_dispatch();
 	check_nothing_but_the_manager_owns_the_services_container();
-	check_singleton_reaches_only_go_down();
+	check_the_invoke_handler_is_not_immortal();	check_singleton_reaches_only_go_down();
 	check_non_modal_dialogs_are_closed_by_their_owner();
 	check_state_persistence_borrows_the_managers_it_serializes();
 	check_widget_manager_does_not_own_state_persistence();
