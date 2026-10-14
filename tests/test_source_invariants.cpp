@@ -339,7 +339,7 @@ static void check_event_pumps_are_counted()
 
 	// And the wrapper itself must still contain exactly one real pump.
 	auto utils = strip_line_comments(
-		slurp("streamelements/SEUtils.cpp"));
+		slurp("streamelements/SEUtils/SELifecycleUtils.cpp"));
 
 	std::regex pump(R"(QApplication::sendPostedEvents\(\);)");
 
@@ -381,7 +381,7 @@ static void check_dock_deletion_is_gated()
 	}
 
 	auto utils = strip_line_comments(
-		slurp("streamelements/SEUtils.cpp"));
+		slurp("streamelements/SEUtils/SELifecycleUtils.cpp"));
 
 	check(utils.find("SEIsUiTeardownSafe()") != std::string::npos,
 	      "CORE-786: SEDeleteDockWidgetWhenSafe() must gate on SEIsUiTeardownSafe()");
@@ -620,7 +620,7 @@ static void check_sentry_init_is_diagnosable()
 static void check_queued_tasks_suppressed_during_crash()
 {
 	auto code = strip_line_comments(
-		slurp("streamelements/SEUtils.cpp"));
+		slurp("streamelements/SEUtils/SEAsyncTaskUtils.cpp"));
 
 	// Both queued paths -- QtPostTask's executor and QtDelayTask's timer
 	// lambda -- must skip the task AND release the waiter. Dropping a task
@@ -1579,7 +1579,7 @@ static void check_scene_signal_handler_lifetime()
 static void check_widget_teardown_leaves_the_paint_tree()
 {
 	const std::string utils = strip_line_comments(
-		slurp("streamelements/SEUtils.cpp"));
+		slurp("streamelements/SEUtils/SELifecycleUtils.cpp"));
 
 	const std::string deleteDock =
 		function_body(utils, "void SEDeleteDockWidgetWhenSafe(");
