@@ -493,6 +493,17 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		SEPerformanceHistoryTracker>();
 	m_analyticsEventsManager = std::make_shared<
 		SEAnalyticsEventsManager>();
+
+	//
+	// As soon as both exist. The crash handler was constructed before
+	// either of them, so that a crash during the rest of startup is still
+	// caught; from here on a report carries the CPU and memory histograms
+	// and, on macOS, is tracked as an analytics event.
+	//
+	if (m_crashHandler) {
+		m_crashHandler->SetReportingServices(
+			m_performanceHistoryTracker, m_analyticsEventsManager);
+	}
 	m_widgetManager = std::make_shared<SEBrowserWidgetManager>(
 		obs_main_window, m_apiServices);
 

@@ -1591,6 +1591,14 @@ SESentryCrashHandler::SESentryCrashHandler()
 	     release.c_str());
 }
 
+void SESentryCrashHandler::OnReportingServicesSet()
+{
+	if (s_crashContext) {
+		s_crashContext->SetPerformanceHistoryTracker(
+			m_performanceHistoryTracker);
+	}
+}
+
 void SESentryCrashHandler::StopAsyncHangDetection()
 {
 	// No hang detection yet. sentry-native has its own app-hang tracking
