@@ -292,11 +292,20 @@ bool SENativeOBSControlsManager::DeserializePreviewTitleBar(
 				.ToString();
 	}
 
+	auto apiServices = m_apiServices.lock();
+
+	if (!apiServices) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: SENativeOBSControlsManager: not showing the preview title bar: the services bundle is gone");
+
+		return false;
+	}
+
 	m_previewTitleBrowser = new SEBrowserWidget(
 		nullptr, SEMessageBus::DEST_UI, url.c_str(),
 		executeJavaScriptOnLoad.c_str(), "reload",
 		"obsPreviewAreaTitleBar",
-		CreateGloballyUniqueIdString().c_str(), m_apiServices);
+		CreateGloballyUniqueIdString().c_str(), apiServices);
 
 	m_previewTitleBrowser->setSizePolicy(QSizePolicy(
 		QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding));

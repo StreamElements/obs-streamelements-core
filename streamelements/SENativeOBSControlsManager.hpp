@@ -193,7 +193,14 @@ private:
 
 	bool m_isStreamingTransitionState = false;
 
-	std::shared_ptr<SEApiServices> m_apiServices;
+	//
+	// Weak. Everything this class builds from the bundle -- browser
+	// widgets and API message handlers -- holds a strong reference to it,
+	// and this class destroys them, so a strong reference here closes a
+	// ring the refcount can never unwind. See the comment in
+	// SEApiServices.hpp.
+	//
+	std::weak_ptr<SEApiServices> m_apiServices;
 
 #if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
 	QPointer<QFrame> m_previewFrame = nullptr;
