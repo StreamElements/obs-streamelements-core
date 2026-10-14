@@ -5,6 +5,8 @@
 #include "SEMessageBus.hpp"
 #include "SEWebsocketApiServer.hpp"
 
+class SEVideoCompositionManager;
+
 #include <QWidget>
 #include <QPointer>
 #include <QHideEvent>
@@ -47,12 +49,18 @@ private:
 	std::shared_ptr<SEApiMessageHandler> m_requestedApiMessageHandler;
 
 	//
-	// The services bundle is deliberately not a member. The only use
-	// was handing it to the API message handler this constructor
-	// creates, and that handler keeps its own reference -- so storing
-	// one here only added an edge from every widget back to the
-	// bundle, in a class the bundle's own widget managers destroy.
+	// The services bundle is deliberately not a member: storing it would
+	// put an edge from every widget back to the bundle, in a class the
+	// bundle's own widget managers destroy. What this class needs after
+	// construction is these two, by name.
 	//
+	// The server is held rather than fetched so that a widget can always
+	// unregister its message handler, which is what the availability
+	// check in DestroyBrowser() used to stand in for. Neither is a ring:
+	// no service in here owns a browser widget.
+	//
+	std::shared_ptr<SEWebsocketApiServer> m_apiServer;
+	std::shared_ptr<SEVideoCompositionManager> m_videoCompositionManager;
 	SEMessageBus::message_destination_filter_flags_t
 		m_messageDestinationFlags;
 

@@ -384,6 +384,7 @@ void SEGlobalStateManager::PublishApiServices()
 	if (!m_apiServices)
 		return;
 
+	m_apiServices->cef = m_cef;
 	m_apiServices->widgetManager = m_widgetManager;
 	m_apiServices->obsSceneManager = m_obsSceneManager;
 	m_apiServices->menuManager = m_menuManager;

@@ -55,7 +55,17 @@ class SESessionManager;
 // it must stay below them, and the managers that own dialogs and pop-up
 // windows stay below it so their widgets go before the docks.
 //
+struct QCef;
+
 struct SEApiServices {
+	//
+	// Borrowed, not owned: SEGlobalStateManager creates the browser panel
+	// and deletes it in Shutdown(). It is in here because it is one of
+	// the objects Initialize() creates, and because the things that need
+	// it -- browser widgets -- are handed this bundle and not the panel.
+	//
+	QCef *cef = nullptr;
+
 	std::shared_ptr<SEBrowserWidgetManager> widgetManager;
 	std::shared_ptr<SEObsSceneManager> obsSceneManager;
 	std::shared_ptr<SEMenuManager> menuManager;
