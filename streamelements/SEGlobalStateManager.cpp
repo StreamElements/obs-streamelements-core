@@ -517,9 +517,9 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	SEConfig::GetInstance()->SetMessageBus(m_messageBus);
 
 	m_videoCompositionManager = std::make_shared<SEVideoCompositionManager>(
-		m_websocketApiServer);
+		m_websocketApiServer, m_hostEventDispatcher, m_messageBus);
 	m_audioCompositionManager = std::make_shared<SEAudioCompositionManager>(
-		m_websocketApiServer);
+		m_websocketApiServer, m_hostEventDispatcher, m_messageBus);
 
 	//
 	// The composition manager is injected rather than fetched inside the
@@ -579,10 +579,11 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 	m_sharedVideoCompositionManager =
 		std::make_shared<SESharedVideoCompositionManager>(
-			m_websocketApiServer, m_videoCompositionManager);
+			m_websocketApiServer, m_videoCompositionManager,
+			m_messageBus);
 
 	m_obsActiveSceneTracker = std::make_shared<SEObsActiveSceneTracker>(
-		m_websocketApiServer, m_videoCompositionManager);
+		m_messageBus, m_websocketApiServer, m_videoCompositionManager);
 
 	//
 	// .get(), because the persistence object borrows these four rather

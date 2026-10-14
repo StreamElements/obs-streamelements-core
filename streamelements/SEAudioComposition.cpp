@@ -14,32 +14,28 @@
 #include <strings.h>
 #endif
 
-static void dispatch_external_event(std::string name, std::string args)
+//
+// Both audiences, always. Every announcement in this file went to pages and
+// to external controllers in the same breath, as two calls with identical
+// arguments -- fifteen pairs across the two composition files, which is
+// fifteen chances for them to drift apart. The composition carries what it
+// announces with, so it is what gets passed.
+//
+static void dispatch_event(SEAudioCompositionBase *self, std::string name, std::string args)
 {
-	std::string externalEventName =
-		name.c_str() + 4; /* remove 'host' prefix */
-	externalEventName[0] =
-		tolower(externalEventName[0]); /* lower case first letter */
-
-	SEMessageBus::GetInstance()->NotifyAllExternalEventListeners(
-		SEMessageBus::DEST_ALL_EXTERNAL,
-		SEMessageBus::SOURCE_APPLICATION, "OBS",
-		externalEventName,
-		CefParseJSON(args, JSON_PARSER_ALLOW_TRAILING_COMMAS));
-}
-
-static void dispatch_js_event(std::string name, std::string args)
-{
-	if (!SEGlobalStateManager::IsInstanceAvailable())
+	if (!self)
 		return;
 
-	auto apiServer = SEGlobalStateManager::GetInstance()
-				 ->GetWebsocketApiServer();
+	const auto &services = self->CompositionServices();
 
-	if (!apiServer)
-		return;
+	if (services.hostEventDispatcher) {
+		services.hostEventDispatcher->DispatchJSEventGlobal(name,
+								   args);
+	}
 
-	apiServer->DispatchJSEvent("system", name, args);
+	if (services.messageBus) {
+		services.messageBus->NotifyExternalHostEvent(name, args);
+	}
 }
 
 static void
@@ -166,8 +162,7 @@ void SEAudioCompositionBase::SetName(std::string name)
 
 	auto json = CefWriteJSON(jsonValue, JSON_WRITER_DEFAULT);
 
-	dispatch_js_event("hostAudioCompositionChanged", json);
-	dispatch_external_event("hostAudioCompositionChanged", json);
+	dispatch_event(this, "hostAudioCompositionChanged", json);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -347,8 +342,9 @@ SECustomAudioComposition::SECustomAudioComposition(
 	SECustomAudioComposition::Private, std::string id,
 	std::string name, std::string streamingAudioEncoderId,
 	obs_data_t *streamingAudioEncoderSettings,
-	obs_data_t *streamingAudioEncoderHotkeyData)
-	: SEAudioCompositionBase(id, name)
+	obs_data_t *streamingAudioEncoderHotkeyData,
+	const SECompositionServices &compositionServices)
+	: SEAudioCompositionBase(id, name, compositionServices)
 {
 	m_audio = obs_get_audio();
 
@@ -461,7 +457,8 @@ std::shared_ptr<SECustomAudioComposition>
 SECustomAudioComposition::Create(
 	std::string id, std::string name,
 	CefRefPtr<CefValue> streamingAudioEncoder,
-	CefRefPtr<CefValue> recordingAudioEncoder)
+	CefRefPtr<CefValue> recordingAudioEncoder,
+	const SECompositionServices &compositionServices)
 {
 	if (!streamingAudioEncoder.get() ||
 	    streamingAudioEncoder->GetType() != VTYPE_DICTIONARY)
@@ -502,7 +499,8 @@ SECustomAudioComposition::Create(
 	try {
 		result = Create(id, name, streamingAudioEncoderId,
 				streamingAudioEncoderSettings,
-				streamingAudioEncoderHotkeyData);
+				streamingAudioEncoderHotkeyData,
+				compositionServices);
 	} catch (...) {
 		result = nullptr;
 

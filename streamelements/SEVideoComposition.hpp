@@ -1,5 +1,7 @@
 #pragma once
 
+#include "SECompositionServices.hpp"
+
 #include <obs.h>
 #include <obs.hpp>
 #include <obs-frontend-api.h>
@@ -40,6 +42,17 @@ public:
 private:
 	char m_header[7] = "header";
 	std::string m_internal_type = "";
+
+protected:
+	//
+	// What this composition announces with. Read by the two file statics
+	// in the implementation, which are handed the composition, and by
+	// the custom composition, which needs the manager handle in its own
+	// constructor.
+	//
+	SECompositionServices m_compositionServices;
+
+private:
 
 	static void handle_obs_frontend_event(enum obs_frontend_event event,
 					      void *data);
@@ -221,8 +234,12 @@ private:
 protected:
 	SEVideoCompositionBase(const std::string internal_type,
 					   const std::string id,
-					   const std::string name)
-		: m_internal_type(internal_type), m_id(id), m_name(name)
+					   const std::string name,
+					   const SECompositionServices &compositionServices)
+		: m_internal_type(internal_type),
+		  m_id(id),
+		  m_name(name),
+		  m_compositionServices(compositionServices)
 	{
 		obs_frontend_add_event_callback(
 			SEVideoCompositionBase::
@@ -243,6 +260,11 @@ protected:
 	virtual void HandleObsSceneCollectionCleanupComplete() {}
 
 public:
+	const SECompositionServices &CompositionServices()
+	{
+		return m_compositionServices;
+	}
+
 	std::string GetId() { return m_id; }
 
 	std::string GetName()
@@ -509,7 +531,7 @@ private:
 
 public:
 	// ctor only usable by this class
-	SEObsNativeVideoComposition(Private);
+	SEObsNativeVideoComposition(Private, const SECompositionServices &compositionServices);
 
 	virtual ~SEObsNativeVideoComposition();
 
@@ -524,10 +546,11 @@ public:
 	}
 
 public:
-	static std::shared_ptr<SEVideoCompositionBase> Create()
+	static std::shared_ptr<SEVideoCompositionBase>
+	Create(const SECompositionServices &compositionServices)
 	{
 		return std::make_shared<SEObsNativeVideoComposition>(
-			Private());
+			Private(), compositionServices);
 	}
 
 protected:
@@ -615,7 +638,8 @@ public:
 		Private, std::string id, std::string name, uint32_t baseWidth,
 		uint32_t baseHeight, std::vector<std::string> &streamingVideoEncoderIds,
 		std::vector<OBSDataAutoRelease> &streamingVideoEncoderSettings,
-		std::vector<OBSDataAutoRelease> &streamingVideoEncoderHotkeyData);
+		std::vector<OBSDataAutoRelease> &streamingVideoEncoderHotkeyData,
+		const SECompositionServices &compositionServices);
 
 	virtual ~SECustomVideoComposition();
 
@@ -649,17 +673,22 @@ private:
 	       uint32_t height,
 	       std::vector<std::string> &streamingVideoEncoderIds,
 	       std::vector<OBSDataAutoRelease> &streamingVideoEncoderSettings,
-	       std::vector<OBSDataAutoRelease> &streamingVideoEncoderHotkeyData)
+	       std::vector<OBSDataAutoRelease> &streamingVideoEncoderHotkeyData,
+	       const SECompositionServices &compositionServices)
 	{
 		return std::make_shared<SECustomVideoComposition>(
-			Private(), id, name, width, height, streamingVideoEncoderIds, streamingVideoEncoderSettings, streamingVideoEncoderHotkeyData);
+			Private(), id, name, width, height,
+			streamingVideoEncoderIds,
+			streamingVideoEncoderSettings,
+			streamingVideoEncoderHotkeyData, compositionServices);
 	}
 
 public:
 	static std::shared_ptr<SECustomVideoComposition>
 	Create(std::string id, std::string name, uint32_t width,
 	       uint32_t height, CefRefPtr<CefValue> streamingVideoEncoders,
-	       CefRefPtr<CefValue> recordingVideoEncoders);
+	       CefRefPtr<CefValue> recordingVideoEncoders,
+	       const SECompositionServices &compositionServices);
 
 private:
 	void SetRecordingEncoders(
@@ -744,7 +773,8 @@ private:
 public:
 	// ctor only usable by this class
 	SEObsNativeVideoCompositionWithCustomEncoders(
-		Private, std::string id, std::string name,
+		Private, const SECompositionServices &compositionServices,
+		std::string id, std::string name,
 		std::vector<std::string> &streamingVideoEncoderIds,
 		std::vector<OBSDataAutoRelease> &streamingVideoEncoderSettings,
 		std::vector<OBSDataAutoRelease>
@@ -768,19 +798,22 @@ private:
 	Create(std::string id, std::string name,
 	       std::vector<std::string> &streamingVideoEncoderIds,
 	       std::vector<OBSDataAutoRelease> &streamingVideoEncoderSettings,
-	       std::vector<OBSDataAutoRelease> &streamingVideoEncoderHotkeyData)
+	       std::vector<OBSDataAutoRelease> &streamingVideoEncoderHotkeyData,
+	       const SECompositionServices &compositionServices)
 	{
 		return std::make_shared<
 			SEObsNativeVideoCompositionWithCustomEncoders>(
-			Private(), id, name,
+			Private(), compositionServices, id, name,
 			streamingVideoEncoderIds, streamingVideoEncoderSettings,
 			streamingVideoEncoderHotkeyData);
 	}
 
 public:
 	static std::shared_ptr<SEObsNativeVideoCompositionWithCustomEncoders>
-	Create(std::string id, std::string name, CefRefPtr<CefValue> streamingVideoEncoders,
-	       CefRefPtr<CefValue> recordingVideoEncoders);
+	Create(std::string id, std::string name,
+	       CefRefPtr<CefValue> streamingVideoEncoders,
+	       CefRefPtr<CefValue> recordingVideoEncoders,
+	       const SECompositionServices &compositionServices);
 
 private:
 	void SetRecordingEncoders(

@@ -27,18 +27,17 @@ const auto ASSIGNED_CANVAS_NAME_PREFIX =
 const auto UNASSIGNED_CANVAS_NAME =
 	UNASSIGNED_CANVAS_NAME_PREFIX + "Managed Canvas (Unassigned)";
 
-static void dispatch_external_event(std::string name, std::string args)
+//
+// The last of the five identical copies; the translation lives on
+// SEMessageBus now.
+//
+static void dispatch_external_event(std::shared_ptr<SEMessageBus> messageBus,
+				    std::string name, std::string args)
 {
-	std::string externalEventName =
-		name.c_str() + 4; /* remove 'host' prefix */
-	externalEventName[0] =
-		tolower(externalEventName[0]); /* lower case first letter */
+	if (!messageBus)
+		return;
 
-	SEMessageBus::GetInstance()->NotifyAllExternalEventListeners(
-		SEMessageBus::DEST_ALL_EXTERNAL,
-		SEMessageBus::SOURCE_APPLICATION, "OBS",
-		externalEventName,
-		CefParseJSON(args, JSON_PARSER_ALLOW_TRAILING_COMMAS));
+	messageBus->NotifyExternalHostEvent(name, args);
 }
 
 //
@@ -55,18 +54,26 @@ static void dispatch_js_event(SEWebsocketApiServer *apiServer, std::string name,
 	apiServer->DispatchJSEvent("system", name, args);
 }
 
+//
+// Note: this announces the same event twice, which it has always done --
+// once through the locals above and once with the literal strings below.
+// Left as-is deliberately; deduplicating it would change what pages
+// receive, which is not this refactor's business.
+//
 static void dispatch_shared_video_compositions_list_changed_event(
-	SEWebsocketApiServer *apiServer)
+	SEWebsocketApiServer *apiServer,
+	std::shared_ptr<SEMessageBus> messageBus)
 {
 	std::string name = "hostSharedVideoCompositionListChanged";
 	std::string args = "null";
 
 	dispatch_js_event(apiServer, name, args);
-	dispatch_external_event(name, args);
+	dispatch_external_event(messageBus, name, args);
 
 	dispatch_js_event(apiServer, "hostSharedVideoCompositionListChanged",
 			  "null");
-	dispatch_external_event("hostSharedVideoCompositionListChanged",
+	dispatch_external_event(messageBus,
+				"hostSharedVideoCompositionListChanged",
 				"null");
 }
 
@@ -173,9 +180,11 @@ bool SESharedVideoCompositionManager::SerializeCanvas(
 
 SESharedVideoCompositionManager::SESharedVideoCompositionManager(
 	std::shared_ptr<SEWebsocketApiServer> apiServer,
-	std::shared_ptr<SEVideoCompositionManager> videoCompositionManager)
+	std::shared_ptr<SEVideoCompositionManager> videoCompositionManager,
+	std::shared_ptr<SEMessageBus> messageBus)
 	: m_apiServer(apiServer),
-	  m_videoCompositionManager(videoCompositionManager)
+	  m_videoCompositionManager(videoCompositionManager),
+	  m_messageBus(messageBus)
 {
 	Reset();
 
@@ -429,7 +438,7 @@ void SESharedVideoCompositionManager::
 		output->SetDictionary(result);
 
 		dispatch_shared_video_compositions_list_changed_event(
-			m_apiServer.get());
+			m_apiServer.get(), m_messageBus);
 	});
 }
 
@@ -480,7 +489,7 @@ void SESharedVideoCompositionManager::
 	output->SetBool(true);
 
 	dispatch_shared_video_compositions_list_changed_event(
-		m_apiServer.get());
+		m_apiServer.get(), m_messageBus);
 }
 
 void SESharedVideoCompositionManager::handle_obs_frontend_event(
@@ -498,7 +507,7 @@ void SESharedVideoCompositionManager::handle_obs_frontend_event(
 	case OBS_FRONTEND_EVENT_PROFILE_CHANGED:
 	case OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED:
 		dispatch_shared_video_compositions_list_changed_event(
-			self->m_apiServer.get());
+			self->m_apiServer.get(), self->m_messageBus);
 		break;
 	default:
 		break;

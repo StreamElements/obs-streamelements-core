@@ -727,6 +727,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEBrowserDialogManager.hpp
 	streamelements/SESessionManager.hpp
 	streamelements/SEHostEventDispatcher.hpp
+	streamelements/SECompositionServices.hpp
 	streamelements/SEUtils/SECryptoUtils.hpp
 	streamelements/SEUtils/SECefValueUtils.hpp
 	streamelements/SEUtils/SECancelableTask.hpp

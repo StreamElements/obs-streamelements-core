@@ -9,18 +9,17 @@
 
 #include "SEBrowserDialog.hpp"
 
-static void dispatch_external_event(std::string name, std::string args)
+//
+// One of five identical copies of this translation; it lives on
+// SEMessageBus now, so this takes the bus it is announcing through.
+//
+static void dispatch_external_event(std::shared_ptr<SEMessageBus> messageBus,
+				    std::string name, std::string args)
 {
-	std::string externalEventName =
-		name.c_str() + 4; /* remove 'host' prefix */
-	externalEventName[0] =
-		tolower(externalEventName[0]); /* lower case first letter */
+	if (!messageBus)
+		return;
 
-	SEMessageBus::GetInstance()->NotifyAllExternalEventListeners(
-		SEMessageBus::DEST_ALL_EXTERNAL,
-		SEMessageBus::SOURCE_APPLICATION, "OBS",
-		externalEventName,
-		CefParseJSON(args, JSON_PARSER_ALLOW_TRAILING_COMMAS));
+	messageBus->NotifyExternalHostEvent(name, args);
 }
 
 //
@@ -38,10 +37,20 @@ static void dispatch_js_event(SEWebsocketApiServer *apiServer, std::string name,
 }
 
 SEVideoCompositionManager::SEVideoCompositionManager(
-	std::shared_ptr<SEWebsocketApiServer> apiServer)
-	: m_apiServer(apiServer)
+	std::shared_ptr<SEWebsocketApiServer> apiServer,
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+	std::shared_ptr<SEMessageBus> messageBus)
+	: m_apiServer(apiServer),
+	  m_hostEventDispatcher(hostEventDispatcher),
+	  m_messageBus(messageBus)
 {
-	m_nativeVideoComposition = SEObsNativeVideoComposition::Create();
+	//
+	// Inside this constructor, so the weak self-handle in here is empty:
+	// weak_from_this() has nothing to copy yet. The native composition
+	// does not install the signal callbacks that would need it.
+	//
+	m_nativeVideoComposition =
+		SEObsNativeVideoComposition::Create(CompositionServices());
 
 	m_videoCompositionsMap[m_nativeVideoComposition->GetId()] = m_nativeVideoComposition;
 }
@@ -70,7 +79,7 @@ void SEVideoCompositionManager::Reset()
 
 	dispatch_js_event(m_apiServer.get(), "hostVideoCompositionListChanged",
 			  "null");
-	dispatch_external_event("hostVideoCompositionListChanged", "null");
+	dispatch_external_event(m_messageBus, "hostVideoCompositionListChanged", "null");
 }
 
 void SEVideoCompositionManager::
@@ -156,7 +165,8 @@ void SEVideoCompositionManager::DeserializeComposition(
 			composition =
 				SEObsNativeVideoCompositionWithCustomEncoders::
 					Create(id, name, streamingVideoEncoders,
-					       recordingVideoEncoders);
+					       recordingVideoEncoders,
+					       CompositionServices());
 		} else {
 			if (!root->HasKey("videoFrame") ||
 			    root->GetType("videoFrame") != VTYPE_DICTIONARY)
@@ -177,7 +187,8 @@ void SEVideoCompositionManager::DeserializeComposition(
 					id, name, videoFrame->GetInt("width"),
 					videoFrame->GetInt("height"),
 					streamingVideoEncoders,
-					recordingVideoEncoders);
+					recordingVideoEncoders,
+					CompositionServices());
 		}
 
 		if (!composition)
@@ -189,7 +200,7 @@ void SEVideoCompositionManager::DeserializeComposition(
 
 		dispatch_js_event(m_apiServer.get(),
 				  "hostVideoCompositionListChanged", "null");
-		dispatch_external_event("hostVideoCompositionListChanged",
+		dispatch_external_event(m_messageBus, "hostVideoCompositionListChanged",
 					"null");
 	} catch (...) {
 		// Creation failed
@@ -255,7 +266,7 @@ void SEVideoCompositionManager::RemoveCompositionsByIds(
 
 	dispatch_js_event(m_apiServer.get(), "hostVideoCompositionListChanged",
 			  "null");
-	dispatch_external_event("hostVideoCompositionListChanged", "null");
+	dispatch_external_event(m_messageBus, "hostVideoCompositionListChanged", "null");
 
 	output->SetBool(true);
 }

@@ -14,17 +14,20 @@
 //
 class SEWebsocketApiServer;
 class SEVideoCompositionManager;
+class SEMessageBus;
 
 class SEObsActiveSceneTracker
 {
 public:
-	SEObsActiveSceneTracker(std::shared_ptr<SEWebsocketApiServer> apiServer,
+	SEObsActiveSceneTracker(std::shared_ptr<SEMessageBus> messageBus,
+				std::shared_ptr<SEWebsocketApiServer> apiServer,
 				std::shared_ptr<SEVideoCompositionManager>
 					videoCompositionManager);
 	~SEObsActiveSceneTracker();
 
 private:
 	std::shared_ptr<SEWebsocketApiServer> m_apiServer;
+	std::shared_ptr<SEMessageBus> m_messageBus;
 	std::shared_ptr<SEVideoCompositionManager> m_videoCompositionManager;
 
 	static void handle_obs_frontend_event(enum obs_frontend_event event,
