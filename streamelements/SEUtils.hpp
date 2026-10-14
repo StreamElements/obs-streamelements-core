@@ -17,6 +17,7 @@
 #include "SEUtils/SEReentrancyUtils.hpp"
 #include "SEUtils/SEAsyncTaskUtils.hpp"
 #include "SEUtils/SELifecycleUtils.hpp"
+#include "SEUtils/SESystemInfoUtils.hpp"
 
 #include <cef-headers.hpp>
 #include <obs.h>
@@ -67,27 +68,9 @@ std::string LoadResourceString(std::string path);
 
 /* ========================================================= */
 
-void SerializeSystemTimes(CefRefPtr<CefValue> &output);
-void SerializeSystemMemoryUsage(CefRefPtr<CefValue> &output);
-void SerializeSystemHardwareProperties(CefRefPtr<CefValue> &output);
-
-/* ========================================================= */
-
 std::string GetCurrentThemeName();
 std::string SerializeAppStyleSheet();
 std::string GetAppStyleSheetSelectorContent(std::string selector);
-
-/* ========================================================= */
-
-std::string GetCefVersionString();
-std::string GetCefPlatformApiHash();
-std::string GetCefUniversalApiHash();
-std::string GetSEPluginVersionString();
-std::string GetSEApiVersionString();
-
-/* ========================================================= */
-
-std::string GetComputerSystemUniqueId();
 
 /* ========================================================= */
 
@@ -98,12 +81,6 @@ bool VerifySessionSignedAbsolutePathURL(std::string url, std::string &path);
 
 bool IsAlwaysOnTop(QWidget *window);
 void SetAlwaysOnTop(QWidget *window, bool enable);
-
-/* ========================================================= */
-
-
-
-double GetObsGlobalFramesPerSecond();
 
 /* ========================================================= */
 
