@@ -1183,7 +1183,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize()) {
 			result->SetBool(
-				SEGlobalStateManager::GetInstance()
+				self->m_services->statusBarMessageManager
 					->DeserializeStatusBarTemporaryMessage(
 						args->GetValue(0)));
 		}

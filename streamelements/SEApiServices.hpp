@@ -27,6 +27,7 @@ class SEAudioCompositionManager;
 class SEOutputManager;
 class SEObsActiveSceneTracker;
 class SEStatePersistence;
+class SEStatusBarMessageManager;
 
 //
 // The objects SEGlobalStateManager::Initialize() creates, in one place, so
@@ -70,4 +71,12 @@ struct SEApiServices {
 	std::shared_ptr<SEOutputManager> outputManager;
 	std::shared_ptr<SEObsActiveSceneTracker> obsActiveSceneTracker;
 	std::shared_ptr<SEStatePersistence> statePersistence;
+
+	//
+	// Extracted from SEGlobalStateManager, and declared after
+	// statePersistence on purpose: fields are destroyed in reverse
+	// declaration order, and what these own has to go before the
+	// managers above that serialize it.
+	//
+	std::shared_ptr<SEStatusBarMessageManager> statusBarMessageManager;
 };

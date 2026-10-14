@@ -32,6 +32,7 @@ struct QCefCookieManager;
 #include "SEWebsocketApiServer.hpp"
 #include "SEApiServices.hpp"
 #include "SEStatePersistence.hpp"
+#include "SEStatusBarMessageManager.hpp"
 #include "SEBrowserDialog.hpp"
 #include "SEVideoCompositionManager.hpp"
 #include "SEAudioCompositionManager.hpp"
@@ -253,7 +254,6 @@ public:
 	QMainWindow *mainWindow() { return m_mainWindow; }
 
 public:
-	bool DeserializeStatusBarTemporaryMessage(CefRefPtr<CefValue> input);
 	bool DeserializePopupWindow(CefRefPtr<CefValue> input);
 	bool DeserializeModalDialog(CefRefPtr<CefValue> input,
 				    CefRefPtr<CefValue> &output);
@@ -337,6 +337,8 @@ private:
 		m_obsActiveSceneTracker = nullptr;
 	std::shared_ptr<SEApiServices> m_apiServices = nullptr;
 	std::shared_ptr<SEStatePersistence> m_statePersistence = nullptr;
+	std::shared_ptr<SEStatusBarMessageManager>
+		m_statusBarMessageManager = nullptr;
 
 private:
 	static std::shared_ptr<

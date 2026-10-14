@@ -416,6 +416,7 @@ void SEGlobalStateManager::PublishApiServices()
 	m_apiServices->outputManager = m_outputManager;
 	m_apiServices->obsActiveSceneTracker = m_obsActiveSceneTracker;
 	m_apiServices->statePersistence = m_statePersistence;
+	m_apiServices->statusBarMessageManager = m_statusBarMessageManager;
 }
 
 void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
@@ -573,6 +574,9 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_statePersistence = std::make_shared<SEStatePersistence>(
 		mainWindow(), m_widgetManager, m_workerManager, m_hotkeyManager,
 		m_nativeObsControlsManager);
+
+	m_statusBarMessageManager =
+		std::make_shared<SEStatusBarMessageManager>(mainWindow());
 
 	PublishApiServices();
 
@@ -860,6 +864,7 @@ void SEGlobalStateManager::Shutdown()
 	m_websocketApiServer = nullptr;
 	m_windowStateEventFilter = nullptr;
 	m_statePersistence = nullptr;
+	m_statusBarMessageManager = nullptr;
 
 	if (m_cefCookieManager) {
 		delete m_cefCookieManager;
@@ -1066,28 +1071,6 @@ void SEGlobalStateManager::OnObsExit()
 	m_statePersistence->PersistState(false);
 
 	m_statePersistence->SetEnabled(false);
-}
-
-bool SEGlobalStateManager::DeserializeStatusBarTemporaryMessage(
-	CefRefPtr<CefValue> input)
-{
-	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
-
-	if (d.get() && d->HasKey("text")) {
-		int timeoutMilliseconds = 0;
-		std::string text = d->GetString("text");
-
-		if (d->HasKey("timeoutMilliseconds")) {
-			timeoutMilliseconds = d->GetInt("timeoutMilliseconds");
-		}
-
-		mainWindow()->statusBar()->showMessage(text.c_str(),
-						       timeoutMilliseconds);
-
-		return true;
-	}
-
-	return false;
 }
 
 bool SEGlobalStateManager::DeserializeModalDialog(

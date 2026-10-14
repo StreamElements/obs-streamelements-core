@@ -2059,7 +2059,8 @@ static void check_api_handler_takes_its_services_by_injection()
 					"GetProfilesManager",
 					"GetWorkerManager",
 					"GetAnalyticsEventsManager",
-					"GetHttpClient"};
+					"GetHttpClient",
+					"DeserializeStatusBarTemporaryMessage"};
 
 	for (const char *const service : services) {
 		const std::string reach =
