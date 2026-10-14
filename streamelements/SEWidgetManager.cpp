@@ -1,4 +1,6 @@
 #include "SEWidgetManager.hpp"
+
+#include "SEStatePersistence.hpp"
 #include "SEUtils.hpp"
 #include "SEGlobalStateManager.hpp"
 
@@ -329,20 +331,25 @@ bool SEWidgetManager::AddDockWidget(
 
 			m_dockWidgetAreas[savedId] = area;
 
-			QtPostTask([services = m_apiServices]() -> void {
-				if (!services->statePersistence)
+			QtPostTask([statePersistence =
+					    m_statePersistence]() -> void {
+				auto persistence = statePersistence.lock();
+
+				if (!persistence)
 					return;
 
-				services->statePersistence->PersistState();
+				persistence->PersistState();
 			});
 		});
 
 	QObject::connect(dock, &QDockWidget::visibilityChanged, [this]() {
-		QtPostTask([services = m_apiServices]() -> void {
-			if (!services->statePersistence)
+		QtPostTask([statePersistence = m_statePersistence]() -> void {
+			auto persistence = statePersistence.lock();
+
+			if (!persistence)
 				return;
 
-			services->statePersistence->PersistState();
+			persistence->PersistState();
 		});
 
 		QtDelayTask(

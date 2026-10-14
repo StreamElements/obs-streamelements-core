@@ -21,12 +21,20 @@ class SENativeOBSControlsManager;
 //
 class SEStatePersistence {
 public:
+	//
+	// The managers are borrowed, not owned. The owner is
+	// SEGlobalStateManager, which keeps them alive for longer than this
+	// object: SEApiServices destroys its fields in reverse declaration
+	// order, and statePersistence is declared after all four, so it is
+	// destroyed first. Raw pointers say that, and they keep this out of
+	// the reference graph entirely -- a manager whose destructor deletes
+	// widgets cannot be kept alive by the thing that serializes it.
+	//
 	SEStatePersistence(QMainWindow *mainWindow,
-			   std::shared_ptr<SEBrowserWidgetManager> widgetManager,
-			   std::shared_ptr<SEWorkerManager> workerManager,
-			   std::shared_ptr<SEHotkeyManager> hotkeyManager,
-			   std::shared_ptr<SENativeOBSControlsManager>
-				   nativeObsControlsManager);
+			   SEBrowserWidgetManager *widgetManager,
+			   SEWorkerManager *workerManager,
+			   SEHotkeyManager *hotkeyManager,
+			   SENativeOBSControlsManager *nativeObsControlsManager);
 	~SEStatePersistence();
 
 	//
@@ -45,10 +53,10 @@ public:
 private:
 	QMainWindow *m_mainWindow = nullptr;
 
-	std::shared_ptr<SEBrowserWidgetManager> m_widgetManager;
-	std::shared_ptr<SEWorkerManager> m_workerManager;
-	std::shared_ptr<SEHotkeyManager> m_hotkeyManager;
-	std::shared_ptr<SENativeOBSControlsManager> m_nativeObsControlsManager;
+	SEBrowserWidgetManager *m_widgetManager = nullptr;
+	SEWorkerManager *m_workerManager = nullptr;
+	SEHotkeyManager *m_hotkeyManager = nullptr;
+	SENativeOBSControlsManager *m_nativeObsControlsManager = nullptr;
 
 	bool m_enabled = false;
 };

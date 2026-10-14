@@ -2010,6 +2010,72 @@ static void check_injected_services_are_not_also_fetched_globally()
 	}
 }
 
+static void check_state_persistence_borrows_the_managers_it_serializes()
+{
+	//
+	// SEStatePersistence reads four managers that own widgets, and three
+	// of them are in SEApiServices beside it. Owning them here would put
+	// it inside the reference graph of the things it serializes; borrowing
+	// keeps it out. It is safe because the container destroys its fields
+	// in reverse declaration order and statePersistence is declared after
+	// all four, so it dies first.
+	//
+	const std::string hpp = strip_line_comments(
+		slurp("streamelements/SEStatePersistence.hpp"));
+
+	const char *const borrowed[] = {"SEBrowserWidgetManager",
+					"SEWorkerManager", "SEHotkeyManager",
+					"SENativeOBSControlsManager"};
+
+	for (const char *const manager : borrowed) {
+		const std::string owned = std::string("std::shared_ptr<") +
+					  manager + "> m_";
+
+		const std::string message =
+			std::string("SEStatePersistence owns its ") + manager +
+			" -- it borrows the managers it serializes, so that a "
+			"manager whose destructor deletes widgets cannot be "
+			"kept alive by the object that saves its state";
+
+		check(hpp.find(owned) == std::string::npos, message.c_str());
+
+		const std::string borrow = std::string(manager) + " *m_";
+
+		check(hpp.find(borrow) != std::string::npos,
+		      (std::string("SEStatePersistence no longer references ") +
+		       manager +
+		       " at all -- this invariant would then pass vacuously")
+			      .c_str());
+	}
+}
+
+static void check_widget_manager_does_not_own_state_persistence()
+{
+	//
+	// The other half of the same rule. SEWidgetManager's deferred saves
+	// need the persistence object, but it is destroyed before this
+	// manager -- it borrows raw pointers to it and to three of its
+	// siblings -- so a strong handle here would invert the order and
+	// leave those pointers dangling.
+	//
+	const std::string hpp = strip_line_comments(
+		slurp("streamelements/SEWidgetManager.hpp"));
+
+	check(hpp.find("std::shared_ptr<SEStatePersistence>  m_") ==
+		      std::string::npos &&
+		      hpp.find("std::shared_ptr<SEStatePersistence> m_") ==
+			      std::string::npos,
+	      "SEWidgetManager owns SEStatePersistence -- it must hold it "
+	      "weakly, because the container destroys statePersistence first "
+	      "and that object borrows raw pointers to this manager");
+
+	check(hpp.find("std::weak_ptr<SEStatePersistence>") !=
+		      std::string::npos,
+	      "SEWidgetManager no longer holds SEStatePersistence weakly -- "
+	      "this invariant would then pass vacuously, and the deferred "
+	      "saves would be back to reaching through the services bundle");
+}
+
 static void check_non_modal_dialogs_are_closed_by_their_owner()
 {
 	//
@@ -2628,6 +2694,8 @@ int main()
 	check_injected_services_are_not_also_fetched_globally();
 	check_api_handler_takes_its_services_by_injection();
 	check_non_modal_dialogs_are_closed_by_their_owner();
+	check_state_persistence_borrows_the_managers_it_serializes();
+	check_widget_manager_does_not_own_state_persistence();
 	check_api_services_container_is_emptied_when_manager_dies();
 	check_api_services_is_a_container_and_nothing_else();
 	check_crash_path_filesystem_calls_never_throw();

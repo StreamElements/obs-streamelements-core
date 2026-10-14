@@ -573,9 +573,20 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_obsActiveSceneTracker = std::make_shared<SEObsActiveSceneTracker>(
 		m_websocketApiServer, m_videoCompositionManager);
 
+	//
+	// .get(), because the persistence object borrows these four rather
+	// than owning them -- see the comment on its constructor.
+	//
 	m_statePersistence = std::make_shared<SEStatePersistence>(
-		mainWindow(), m_widgetManager, m_workerManager, m_hotkeyManager,
-		m_nativeObsControlsManager);
+		mainWindow(), m_widgetManager.get(), m_workerManager.get(),
+		m_hotkeyManager.get(), m_nativeObsControlsManager.get());
+
+	//
+	// Handed over after construction, and held weakly: the deferred saves
+	// in SEWidgetManager used to reach it through the services bundle,
+	// which is an edge from a widget-owning manager back to the bundle.
+	//
+	m_widgetManager->SetStatePersistence(m_statePersistence);
 
 	m_statusBarMessageManager =
 		std::make_shared<SEStatusBarMessageManager>(mainWindow());

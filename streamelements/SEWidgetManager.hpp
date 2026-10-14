@@ -15,6 +15,8 @@
 #include "SEObsAppMonitor.hpp"
 #include "SEUtils.hpp"
 
+class SEStatePersistence;
+
 class SEWidgetManager :
 	public SEObsAppMonitor
 {
@@ -57,9 +59,28 @@ public:
 protected:
 	//
 	// Handed to every browser widget and API handler created by a widget
-	// manager, and read by the deferred tasks that save window state.
+	// manager.
 	//
 	std::shared_ptr<SEApiServices> m_apiServices;
+
+	//
+	// Read by the deferred tasks that save window state.
+	//
+	// Weak, and set after construction rather than injected, for the
+	// same destruction-order reason that makes SEStatePersistence borrow
+	// this manager: statePersistence is destroyed first, so a strong
+	// handle here would invert that and leave its four borrowed pointers
+	// dangling. Set-after-construction is also the only option -- the
+	// persistence object is built from this manager.
+	//
+	std::weak_ptr<SEStatePersistence> m_statePersistence;
+
+public:
+	void SetStatePersistence(
+		std::shared_ptr<SEStatePersistence> statePersistence)
+	{
+		m_statePersistence = statePersistence;
+	}
 
 public:
 	~SEWidgetManager();

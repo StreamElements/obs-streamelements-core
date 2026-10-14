@@ -13,11 +13,9 @@
 #include <QScreen>
 
 SEStatePersistence::SEStatePersistence(
-	QMainWindow *mainWindow,
-	std::shared_ptr<SEBrowserWidgetManager> widgetManager,
-	std::shared_ptr<SEWorkerManager> workerManager,
-	std::shared_ptr<SEHotkeyManager> hotkeyManager,
-	std::shared_ptr<SENativeOBSControlsManager> nativeObsControlsManager)
+	QMainWindow *mainWindow, SEBrowserWidgetManager *widgetManager,
+	SEWorkerManager *workerManager, SEHotkeyManager *hotkeyManager,
+	SENativeOBSControlsManager *nativeObsControlsManager)
 	: m_mainWindow(mainWindow),
 	  m_widgetManager(widgetManager),
 	  m_workerManager(workerManager),
