@@ -20,7 +20,12 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-if(NOT CMAKE_PROJECT_NAME)
+# Standalone only. Not `if(NOT CMAKE_PROJECT_NAME)`: project() writes that
+# name into the cache as a STATIC entry, so on the second configure of the
+# same build directory the guard sees it already set, skips project(), and
+# leaves CXX unenabled -- every target then fails with "can not determine
+# linker language" and ctest silently re-runs the previous binaries.
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   project(obs-streamelements-core-tests CXX)
 endif()
 
