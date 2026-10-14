@@ -523,9 +523,13 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_audioCompositionManager = std::make_shared<SEAudioCompositionManager>(
 		m_websocketApiServer);
 
-	m_obsSceneManager =
-		std::make_shared<SEObsSceneManager>(
-			obs_main_window);
+	//
+	// The composition manager is injected rather than fetched inside the
+	// constructor, which is where CORE-735's shape lived: it is built
+	// above, so the ordering is now the compiler's business.
+	//
+	m_obsSceneManager = std::make_shared<SEObsSceneManager>(
+		obs_main_window, m_videoCompositionManager);
 	m_menuManager =
 		std::make_shared<SEMenuManager>(
 			obs_main_window, m_sessionManager);

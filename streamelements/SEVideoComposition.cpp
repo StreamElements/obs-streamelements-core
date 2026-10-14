@@ -1284,7 +1284,11 @@ SECustomVideoComposition::SECustomVideoComposition(
 	m_currentScene = SETRACE_ADDREF(obs_scene_get_ref(currentScene));
 	m_scenes.push_back(currentScene);
 
-	m_signalHandlerData = new SESignalHandlerData(nullptr, this);
+	m_signalHandlerData = new SESignalHandlerData(
+		nullptr,
+		SEGlobalStateManager::GetInstance()
+			->GetVideoCompositionManager(),
+		this);
 
 	add_scene_signals(currentScene, m_signalHandlerData);
 

@@ -1542,11 +1542,21 @@ static void check_scene_signal_handler_lifetime()
 	      "m_obsSceneManager before remove_scene_signals(), which can "
 	      "delete the handler data (CORE-1715)");
 
+	//
+	// Anchored on the tail of the signature, not the head: the parameter
+	// list has changed once already (the composition manager is injected
+	// now), and a head anchor made this check pass vacuously --
+	// function_body() returned nothing, so the guard read as absent
+	// rather than as unfound.
+	//
 	const std::string dispatch = function_body(
-		cpp,
-		"static void dispatch_sceneitem_event(const std::string "
-		"&compositionId,\n\t\t\t\t     obs_sceneitem_t *sceneitem,\n"
-		"\t\t\t\t     std::string eventName,");
+		cpp, "std::string eventName, bool serializeDetails = true)");
+
+	check(!dispatch.empty(),
+	      "scene signals: cannot find the one-event "
+	      "dispatch_sceneitem_event overload -- this invariant needs its "
+	      "anchor updated; it is not reporting a missing guard");
+
 	const auto guard =
 		dispatch.find("if (!videoComposition && !onUiThread)");
 	const auto serialize = dispatch.find("SerializeSourceAndSceneItem(");
@@ -2120,7 +2130,7 @@ static void check_non_modal_dialogs_are_closed_by_their_owner()
 //
 // The migration off SEGlobalStateManager::GetInstance() is monotone by
 // construction: this counts what is left and fails if it grows. 291 reaches
-// at the start of the work, 42 now -- the API handler alone went from 211 to
+// at the start of the work, 29 now -- the API handler alone went from 211 to
 // one, which is the Razer fetch in a file-local helper that has no object to
 // be injected into.
 //
@@ -2129,7 +2139,7 @@ static void check_non_modal_dialogs_are_closed_by_their_owner()
 // what it needs, and this is the check that makes that a build failure rather
 // than a review comment nobody makes.
 //
-static const int kMaxSingletonReaches = 42;
+static const int kMaxSingletonReaches = 29;
 
 static void check_singleton_reaches_only_go_down()
 {
