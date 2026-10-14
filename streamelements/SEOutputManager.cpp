@@ -1,18 +1,23 @@
 #include "SEOutputManager.hpp"
+#include "SEHostEventDispatcher.hpp"
 #include "SEUtils.hpp"
 
 SEOutputManager::SEOutputManager(
 	std::shared_ptr<SEVideoCompositionManager>
 		videoCompositionManager,
 	std::shared_ptr<SEAudioCompositionManager>
-		audioCompositionManager)
-	: m_videoCompositionManager(videoCompositionManager), m_audioCompositionManager(audioCompositionManager)
+		audioCompositionManager,
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
+	: m_videoCompositionManager(videoCompositionManager),
+	  m_audioCompositionManager(audioCompositionManager),
+	  m_hostEventDispatcher(hostEventDispatcher)
 {
 	auto nativeStreamingOutput = std::make_shared<
 		SEObsNativeStreamingOutput>(
 		"default", "OBS Native Streaming",
 		m_videoCompositionManager->GetObsNativeVideoComposition(),
-		m_audioCompositionManager->GetObsNativeAudioComposition());
+		m_audioCompositionManager->GetObsNativeAudioComposition(),
+		m_hostEventDispatcher);
 
 	m_map[StreamingOutput] = std::make_shared<std::map<
 		std::string, std::shared_ptr<SEOutputBase>>>();
@@ -29,7 +34,8 @@ SEOutputManager::SEOutputManager(
 		std::make_shared<SEObsNativeRecordingOutput>(
 			"default", "OBS Native Recording",
 		m_videoCompositionManager->GetObsNativeVideoComposition(),
-		m_audioCompositionManager->GetObsNativeAudioComposition());
+		m_audioCompositionManager->GetObsNativeAudioComposition(),
+		m_hostEventDispatcher);
 
 	(*m_map[RecordingOutput].get())[nativeRecordingOutput->GetId()] = nativeRecordingOutput;
 
@@ -37,7 +43,8 @@ SEOutputManager::SEOutputManager(
 		SEObsNativeReplayBufferOutput>(
 		"default", "OBS Native Replay Buffer",
 		m_videoCompositionManager->GetObsNativeVideoComposition(),
-		m_audioCompositionManager->GetObsNativeAudioComposition());
+		m_audioCompositionManager->GetObsNativeAudioComposition(),
+		m_hostEventDispatcher);
 
 	(*m_map[ReplayBufferOutput].get())[nativeReplayBufferOutput->GetId()] =
 		nativeReplayBufferOutput;
@@ -99,7 +106,8 @@ void SEOutputManager::DeserializeOutput(ObsOutputType outputType,
 	if (outputType == StreamingOutput) {
 		auto customOutput = SECustomStreamingOutput::Create(
 			input, m_videoCompositionManager.get(),
-			m_audioCompositionManager.get());
+			m_audioCompositionManager.get(),
+			m_hostEventDispatcher);
 
 		if (!customOutput.get())
 			return;
@@ -112,7 +120,8 @@ void SEOutputManager::DeserializeOutput(ObsOutputType outputType,
 	else if (outputType == RecordingOutput) {
 		auto customOutput = SECustomRecordingOutput::Create(
 			input, m_videoCompositionManager.get(),
-			m_audioCompositionManager.get());
+			m_audioCompositionManager.get(),
+			m_hostEventDispatcher);
 
 		if (!customOutput.get())
 			return;
@@ -124,7 +133,8 @@ void SEOutputManager::DeserializeOutput(ObsOutputType outputType,
 	} else {
 		auto customOutput = SECustomReplayBufferOutput::Create(
 			input, m_videoCompositionManager.get(),
-			m_audioCompositionManager.get());
+			m_audioCompositionManager.get(),
+			m_hostEventDispatcher);
 
 		if (!customOutput.get())
 			return;

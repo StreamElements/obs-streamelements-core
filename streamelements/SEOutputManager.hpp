@@ -6,6 +6,8 @@
 
 #include <shared_mutex>
 
+class SEHostEventDispatcher;
+
 class SEOutputManager {
 private:
 	std::shared_mutex m_mutex;
@@ -17,12 +19,19 @@ private:
 	std::shared_ptr<SEAudioCompositionManager>
 		m_audioCompositionManager;
 
+	//
+	// Handed to every output this manager creates, because an output
+	// announces its own start, stop, error and list changes.
+	//
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+
 public:
 	SEOutputManager(
 		std::shared_ptr<SEVideoCompositionManager>
 			videoCompositionManager,
 		std::shared_ptr<SEAudioCompositionManager>
-			audioCompositionManager);
+			audioCompositionManager,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher);
 	~SEOutputManager();
 
 public:

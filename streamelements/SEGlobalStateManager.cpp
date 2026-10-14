@@ -589,7 +589,8 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 	m_outputManager =
 		std::make_shared<SEOutputManager>(
-			m_videoCompositionManager, m_audioCompositionManager);
+			m_videoCompositionManager, m_audioCompositionManager,
+			m_hostEventDispatcher);
 
 	m_sharedVideoCompositionManager =
 		std::make_shared<SESharedVideoCompositionManager>(

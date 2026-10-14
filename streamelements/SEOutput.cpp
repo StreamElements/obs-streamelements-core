@@ -4,6 +4,7 @@
 
 #include "SEUtils.hpp"
 #include "SEOutput.hpp"
+#include "SEHostEventDispatcher.hpp"
 #include "SEVideoCompositionManager.hpp"
 #include "SEAudioCompositionManager.hpp"
 
@@ -220,12 +221,20 @@ DeserializeVideoEncoders(CefRefPtr<CefDictionaryValue> rootDict)
 
 static void dispatch_list_change_event(SEOutputBase *output)
 {
+	auto dispatcher = output->HostEventDispatcher();
+
+	if (!dispatcher)
+		return;
+
 	if (output->GetOutputType() == StreamingOutput)
-		DispatchJSEventGlobal("hostStreamingOutputListChanged", "null");
+		dispatcher->DispatchJSEventGlobal(
+			"hostStreamingOutputListChanged", "null");
 	else if (output->GetOutputType() == RecordingOutput)
-		DispatchJSEventGlobal("hostRecordingOutputListChanged", "null");
+		dispatcher->DispatchJSEventGlobal(
+			"hostRecordingOutputListChanged", "null");
 	else
-		DispatchJSEventGlobal("hostReplayBufferOutputListChanged", "null");
+		dispatcher->DispatchJSEventGlobal(
+			"hostReplayBufferOutputListChanged", "null");
 }
 
 static void dispatch_event(
@@ -239,7 +248,9 @@ static void dispatch_event(
 
 	std::string json = CefWriteJSON(value, JSON_WRITER_DEFAULT).ToString();
 
-	DispatchJSEventGlobal(eventName, json);
+	if (auto dispatcher = output->HostEventDispatcher()) {
+		dispatcher->DispatchJSEventGlobal(eventName, json);
+	}
 }
 
 void SEOutputBase::handle_output_start(void *my_data,
@@ -660,13 +671,15 @@ SEOutputBase::SEOutputBase(
 	ObsStateDependencyType obsStateDependency,
 	std::shared_ptr<SEVideoCompositionBase> videoComposition,
 	std::shared_ptr<SEAudioCompositionBase> audioComposition,
-	CefRefPtr<CefDictionaryValue> auxData)
+	CefRefPtr<CefDictionaryValue> auxData,
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 	: m_id(id),
 	  m_name(name),
 	  m_obsOutputType(obsOutputType),
 	  m_obsStateDependency(obsStateDependency),
 	  m_videoComposition(videoComposition),
 	  m_audioComposition(audioComposition),
+	  m_hostEventDispatcher(hostEventDispatcher),
 	  m_enabled(false)
 {
 	m_auxData = auxData.get() ? auxData : CefDictionaryValue::Create();
@@ -1052,7 +1065,8 @@ void SECustomStreamingOutput::SerializeOutputSettings(
 std::shared_ptr<SECustomStreamingOutput> SECustomStreamingOutput::Create(
 	CefRefPtr<CefValue> input,
 	SEVideoCompositionManager *videoCompositionManager,
-	SEAudioCompositionManager *audioCompositionManager)
+	SEAudioCompositionManager *audioCompositionManager,
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 {
 	if (!input.get())
 		return nullptr;
@@ -1164,7 +1178,8 @@ std::shared_ptr<SECustomStreamingOutput> SECustomStreamingOutput::Create(
 
 	auto result = std::make_shared<SECustomStreamingOutput>(
 		id, name, videoComposition, audioComposition, audioTracks,
-		videoEncoders, service, bindToIP, auxData);
+		videoEncoders, service, bindToIP, auxData,
+		hostEventDispatcher);
 
 	result->SetEnabled(isEnabled);
 
@@ -1704,7 +1719,8 @@ void SECustomRecordingOutput::SerializeOutputSettings(
 std::shared_ptr<SECustomRecordingOutput> SECustomRecordingOutput::Create(
 	CefRefPtr<CefValue> input,
 	SEVideoCompositionManager *videoCompositionManager,
-	SEAudioCompositionManager *audioCompositionManager)
+	SEAudioCompositionManager *audioCompositionManager,
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 {
 	if (!input.get())
 		return nullptr;
@@ -1785,7 +1801,7 @@ std::shared_ptr<SECustomRecordingOutput> SECustomRecordingOutput::Create(
 
 	auto result = std::make_shared<SECustomRecordingOutput>(
 		id, name, recordingSettings, videoComposition, audioComposition,
-		audioTracks, videoEncoders, auxData);
+		audioTracks, videoEncoders, auxData, hostEventDispatcher);
 
 	result->SetEnabled(isEnabled);
 
@@ -2191,7 +2207,8 @@ void SECustomReplayBufferOutput::SerializeOutputSettings(
 std::shared_ptr<SECustomReplayBufferOutput> SECustomReplayBufferOutput::Create(
 	CefRefPtr<CefValue> input,
 	SEVideoCompositionManager *videoCompositionManager,
-	SEAudioCompositionManager *audioCompositionManager)
+	SEAudioCompositionManager *audioCompositionManager,
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 {
 	if (!input.get())
 		return nullptr;
@@ -2272,7 +2289,7 @@ std::shared_ptr<SECustomReplayBufferOutput> SECustomReplayBufferOutput::Create(
 
 	auto result = std::make_shared<SECustomReplayBufferOutput>(
 		id, name, recordingSettings, videoComposition, audioComposition,
-		audioTracks, videoEncoders, auxData);
+		audioTracks, videoEncoders, auxData, hostEventDispatcher);
 
 	result->SetEnabled(isEnabled);
 
