@@ -45,7 +45,14 @@ private:
 	std::string m_reloadPolicy;
 	std::string m_pendingLocationArea;
 	std::shared_ptr<SEApiMessageHandler> m_requestedApiMessageHandler;
-	std::shared_ptr<SEApiServices> m_apiServices;
+
+	//
+	// The services bundle is deliberately not a member. The only use
+	// was handing it to the API message handler this constructor
+	// creates, and that handler keeps its own reference -- so storing
+	// one here only added an edge from every widget back to the
+	// bundle, in a class the bundle's own widget managers destroy.
+	//
 	SEMessageBus::message_destination_filter_flags_t
 		m_messageDestinationFlags;
 

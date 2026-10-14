@@ -222,7 +222,6 @@ SEBrowserWidget::SEBrowserWidget(
 	  m_pendingLocationArea(locationArea == nullptr ? "" : locationArea),
 	  m_clientId(id == nullptr ? CreateGloballyUniqueIdString() : id),
 	  m_requestedApiMessageHandler(apiMessageHandler),
-	  m_apiServices(apiServices),
 	  m_isIncognito(isIncognito)
 {
 	std::lock_guard<decltype(s_mutex)> guard(s_mutex);
@@ -251,7 +250,7 @@ SEBrowserWidget::SEBrowserWidget(
 	if (m_requestedApiMessageHandler == nullptr) {
 		m_requestedApiMessageHandler =
 			std::make_shared<SEApiMessageHandler>("unknown",
-							      m_apiServices);
+							      apiServices);
 	}
 
 	m_requestedApiMessageHandler->SetBrowserWidget(this);
