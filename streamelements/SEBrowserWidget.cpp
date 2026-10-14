@@ -258,6 +258,8 @@ SEBrowserWidget::SEBrowserWidget(
 	m_apiServer = apiServices ? apiServices->websocketApiServer : nullptr;
 	m_videoCompositionManager =
 		apiServices ? apiServices->videoCompositionManager : nullptr;
+	m_hostEventDispatcher =
+		apiServices ? apiServices->hostEventDispatcher : nullptr;
 
 	uint16_t port = m_apiServer ? m_apiServer->GetPort() : 0;
 

@@ -60,8 +60,22 @@ private:
 	private:
 		QObject *m_target;
 
+		//
+		// A resize, a move or a window-state change is announced to
+		// every page. This filter is installed on the application, so
+		// it is handed the dispatcher rather than fetching the server
+		// on each of those -- which, for a drag of the main window,
+		// is every frame.
+		//
+		std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+
 	public:
-		WindowStateChangeEventFilter(QObject *target) : m_target(target)
+		WindowStateChangeEventFilter(
+			QObject *target,
+			std::shared_ptr<SEHostEventDispatcher>
+				hostEventDispatcher)
+			: m_target(target),
+			  m_hostEventDispatcher(hostEventDispatcher)
 		{
 			QCoreApplication::instance()->installEventFilter(this);
 		}
@@ -78,7 +92,10 @@ private:
 				case QEvent::Resize:
 				case QEvent::Move:
 				case QEvent::WindowStateChange:
-					AdviseHostUserInterfaceStateChanged();
+					if (m_hostEventDispatcher) {
+						m_hostEventDispatcher
+							->AdviseHostUserInterfaceStateChanged();
+					}
 					break;
 				default:
 					break;

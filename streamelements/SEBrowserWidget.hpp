@@ -4,6 +4,7 @@
 #include "SEBrowserWidget.hpp"
 #include "SEMessageBus.hpp"
 #include "SEWebsocketApiServer.hpp"
+#include "SEHostEventDispatcher.hpp"
 
 class SEVideoCompositionManager;
 
@@ -61,6 +62,12 @@ private:
 	//
 	std::shared_ptr<SEWebsocketApiServer> m_apiServer;
 	std::shared_ptr<SEVideoCompositionManager> m_videoCompositionManager;
+
+	//
+	// Three, now: a widget announces its own visibility to its page and
+	// rebinds window.host.hostContainerHidden when it changes.
+	//
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
 	SEMessageBus::message_destination_filter_flags_t
 		m_messageDestinationFlags;
 
@@ -232,14 +239,20 @@ protected:
 			msg->GetArgumentList()->SetString(0, "host");
 			msg->GetArgumentList()->SetString(1, jsonString);
 
-			DispatchClientMessage(m_clientId, msg);
+			if (m_hostEventDispatcher) {
+				m_hostEventDispatcher->DispatchClientMessage(
+					m_clientId, msg);
+			}
 		}
 
 		// Dispatch hostVisibilityChanged event
 		{
-			DispatchJSEventContainer(m_clientId,
-					      "hostContainerVisibilityChanged",
-					      "null");
+			if (m_hostEventDispatcher) {
+				m_hostEventDispatcher->DispatchJSEventContainer(
+					m_clientId,
+					"hostContainerVisibilityChanged",
+					"null");
+			}
 		}
 	}
 

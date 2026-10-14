@@ -5,12 +5,23 @@
 #include "cef-headers.hpp"
 
 #include <map>
+#include <memory>
 #include <mutex>
+
+class SEHostEventDispatcher;
 
 class SEHotkeyManager
 {
 public:
-	SEHotkeyManager();
+	//
+	// The dispatcher is injected: a hotkey press and a change to the
+	// bindings are both announced to pages, and fetching the server for
+	// it was this class's only use of global state. The one static
+	// callback below is already handed `this`, so it needs no plumbing
+	// of its own.
+	//
+	SEHotkeyManager(
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher);
 	~SEHotkeyManager();
 
 	bool SerializeHotkeyBindings(CefRefPtr<CefValue>& result, bool onlyManagedBindings = false);
@@ -33,6 +44,8 @@ private:
 	std::map<obs_hotkey_id, CefRefPtr<CefValue>> m_registeredHotkeySerializedValues;
 	std::map<obs_hotkey_id, std::string> m_registeredHotkeyDataString;
 
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+
 private:
-	static void hotkey_change_handler(void*, calldata_t*);
+	static void hotkey_change_handler(void *data, calldata_t *);
 };

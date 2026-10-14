@@ -548,7 +548,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		SEOutputSettingsManager>();
 	m_workerManager = std::make_shared<SEWorkerManager>(m_apiServices);
 	m_hotkeyManager =
-		std::make_shared<SEHotkeyManager>();
+		std::make_shared<SEHotkeyManager>(m_hostEventDispatcher);
 	m_externalSceneDataProviderManager = std::make_shared<
 		SEExternalSceneDataProviderManager>();
 	m_nativeObsControlsManager =
@@ -569,7 +569,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 	m_windowStateEventFilter =
 		std::make_shared<WindowStateChangeEventFilter>(
-			mainWindow());
+			mainWindow(), m_hostEventDispatcher);
 
 #ifdef SE_ENABLE_WYVRN
 	// After the websocket API server, because reaching Ok or a failure
