@@ -417,6 +417,7 @@ void SEGlobalStateManager::PublishApiServices()
 	m_apiServices->obsActiveSceneTracker = m_obsActiveSceneTracker;
 	m_apiServices->statePersistence = m_statePersistence;
 	m_apiServices->statusBarMessageManager = m_statusBarMessageManager;
+	m_apiServices->popupWindowManager = m_popupWindowManager;
 }
 
 void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
@@ -577,6 +578,9 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 	m_statusBarMessageManager =
 		std::make_shared<SEStatusBarMessageManager>(mainWindow());
+
+	m_popupWindowManager =
+		std::make_shared<SEPopupWindowManager>(m_apiServices);
 
 	PublishApiServices();
 
@@ -865,6 +869,7 @@ void SEGlobalStateManager::Shutdown()
 	m_windowStateEventFilter = nullptr;
 	m_statePersistence = nullptr;
 	m_statusBarMessageManager = nullptr;
+	m_popupWindowManager = nullptr;
 
 	if (m_cefCookieManager) {
 		delete m_cefCookieManager;
@@ -1391,47 +1396,6 @@ std::shared_ptr<std::promise<CefRefPtr<CefValue>>> SEGlobalStateManager::Deseria
 	}
 
 	return promise;
-}
-
-bool SEGlobalStateManager::DeserializePopupWindow(
-	CefRefPtr<CefValue> input)
-{
-	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
-
-	if (d.get() && d->HasKey("url")) {
-		std::string url = d->GetString("url").ToString();
-		std::string executeJavaScriptOnLoad;
-
-		bool enableHostApi = d->HasKey("enableHostApi") &&
-				     d->GetBool("enableHostApi");
-
-		if (d->HasKey("executeJavaScriptOnLoad")) {
-			executeJavaScriptOnLoad =
-				d->GetString("executeJavaScriptOnLoad");
-		}
-
-		std::shared_ptr<SEApiMessageHandler>
-			apiMessageHandler = nullptr;
-
-		apiMessageHandler = std::make_shared<SEApiMessageHandler>(
-			"popupWindow", m_apiServices);
-
-		QMainWindow *window = new QMainWindow();
-
-		auto browserWidget = new SEBrowserWidget(
-			nullptr, SEMessageBus::DEST_UI, url.c_str(),
-			executeJavaScriptOnLoad.c_str(), "reload",
-			"popupWindow", CreateGloballyUniqueIdString().c_str(),
-			m_apiServices, apiMessageHandler, false);
-
-		window->setCentralWidget(browserWidget);
-
-		window->show();
-
-		return true;
-	}
-
-	return false;
 }
 
 void SEGlobalStateManager::ReportIssue()

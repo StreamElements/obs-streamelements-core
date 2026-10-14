@@ -1314,9 +1314,10 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("openPopupWindow");
 	{
 		if (args->GetSize()) {
-			result->SetBool(SEGlobalStateManager::GetInstance()
-						->DeserializePopupWindow(
-							args->GetValue(0)));
+			result->SetBool(
+				self->m_services->popupWindowManager
+					->DeserializePopupWindow(
+						args->GetValue(0)));
 		}
 	}
 	API_HANDLER_END();

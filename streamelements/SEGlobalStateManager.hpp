@@ -33,6 +33,7 @@ struct QCefCookieManager;
 #include "SEApiServices.hpp"
 #include "SEStatePersistence.hpp"
 #include "SEStatusBarMessageManager.hpp"
+#include "SEPopupWindowManager.hpp"
 #include "SEBrowserDialog.hpp"
 #include "SEVideoCompositionManager.hpp"
 #include "SEAudioCompositionManager.hpp"
@@ -254,7 +255,6 @@ public:
 	QMainWindow *mainWindow() { return m_mainWindow; }
 
 public:
-	bool DeserializePopupWindow(CefRefPtr<CefValue> input);
 	bool DeserializeModalDialog(CefRefPtr<CefValue> input,
 				    CefRefPtr<CefValue> &output);
 
@@ -339,6 +339,8 @@ private:
 	std::shared_ptr<SEStatePersistence> m_statePersistence = nullptr;
 	std::shared_ptr<SEStatusBarMessageManager>
 		m_statusBarMessageManager = nullptr;
+	std::shared_ptr<SEPopupWindowManager> m_popupWindowManager =
+		nullptr;
 
 private:
 	static std::shared_ptr<

@@ -540,6 +540,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEApiMessageHandler.cpp
 	streamelements/SEStatePersistence.cpp
 	streamelements/SEStatusBarMessageManager.cpp
+	streamelements/SEPopupWindowManager.cpp
 	streamelements/SEUtils/SECryptoUtils.cpp
 	streamelements/SEUtils/SECefValueUtils.cpp
 	streamelements/SEUtils/SEHttpUtils.cpp
@@ -719,6 +720,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEApiServices.hpp
 	streamelements/SEStatePersistence.hpp
 	streamelements/SEStatusBarMessageManager.hpp
+	streamelements/SEPopupWindowManager.hpp
 	streamelements/SEUtils/SECryptoUtils.hpp
 	streamelements/SEUtils/SECefValueUtils.hpp
 	streamelements/SEUtils/SECancelableTask.hpp
