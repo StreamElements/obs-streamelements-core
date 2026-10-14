@@ -7,6 +7,8 @@
 
 #include "cef-headers.hpp"
 
+#include <obs-module.h>
+
 /* ========================================================================= */
 
 class SEWorkerManager::SEWorker {
@@ -118,6 +120,15 @@ SEWorkerManager::Add(std::string requestedId,
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
+	auto apiServices = m_apiServices.lock();
+
+	if (!apiServices) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: SEWorkerManager: not adding a background worker: the services bundle is gone");
+
+		return std::string();
+	}
+
 	std::string id = requestedId;
 
 	if (!id.size() || m_items.count(id)) {
@@ -125,7 +136,7 @@ SEWorkerManager::Add(std::string requestedId,
 	}
 
 	m_items[id] = std::make_shared<SEWorker>(
-		id, url, executeJavascriptOnLoad, m_apiServices);
+		id, url, executeJavascriptOnLoad, apiServices);
 
 	return id;
 }
