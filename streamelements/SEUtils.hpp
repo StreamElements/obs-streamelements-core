@@ -18,6 +18,8 @@
 #include "SEUtils/SEAsyncTaskUtils.hpp"
 #include "SEUtils/SELifecycleUtils.hpp"
 #include "SEUtils/SESystemInfoUtils.hpp"
+#include "SEUtils/SEAppEnvUtils.hpp"
+#include "SEUtils/SEWidgetUtils.hpp"
 
 #include <cef-headers.hpp>
 #include <obs.h>
@@ -58,29 +60,8 @@
 
 /* ========================================================= */
 
-bool IsTraceLogLevel();
-
-/* ========================================================= */
-
-std::string DockWidgetAreaToString(const Qt::DockWidgetArea area);
-std::string GetCommandLineOptionValue(const std::string key);
-std::string LoadResourceString(std::string path);
-
-/* ========================================================= */
-
-std::string GetCurrentThemeName();
-std::string SerializeAppStyleSheet();
-std::string GetAppStyleSheetSelectorContent(std::string selector);
-
-/* ========================================================= */
-
 std::string CreateSessionSignedAbsolutePathURL(std::wstring path);
 bool VerifySessionSignedAbsolutePathURL(std::string url, std::string &path);
-
-/* ========================================================= */
-
-bool IsAlwaysOnTop(QWidget *window);
-void SetAlwaysOnTop(QWidget *window, bool enable);
 
 /* ========================================================= */
 
@@ -104,27 +85,6 @@ void SEDecryptCefCookiesStoragePath(const char *path_utf8);
 
 /* ========================================================= */
 
-bool DeserializeAndInvokeAction(CefRefPtr<CefValue> input,
-				std::function<void()> defaultAction,
-				std::function<void()> defaultContextMenu);
-
-bool DeserializeDocksMenu(QMenu &menu);
-
-bool DeserializeMenu(
-	CefRefPtr<CefValue> input, QMenu &menu,
-	std::function<void()> defaultAction = []() {},
-	std::function<void()> defaultContextMenu = []() {});
-
-QWidget *DeserializeAuxiliaryControlWidget(
-	CefRefPtr<CefValue> input,
-	std::function<void()> defaultAction = []() {},
-	std::function<void()> defaultContextMenu = []() {});
-
-QWidget *DeserializeRemoteIconWidget(CefRefPtr<CefValue> input,
-				     QPixmap *defaultPixmap = nullptr);
-
-/* ========================================================= */
-
 void DispatchClientMessage(std::string target,
 			   CefRefPtr<CefProcessMessage> msg);
 
@@ -133,10 +93,5 @@ void DispatchJSEventContainer(std::string target, std::string event,
 
 void DispatchJSEventGlobal(std::string event, std::string eventArgsJson);
 
-
-/* ========================================================= */
-
-void DeserializeRevealFileInGraphicalShell(CefRefPtr<CefValue> input,
-					   CefRefPtr<CefValue> &output);
 
 /* ========================================================= */
