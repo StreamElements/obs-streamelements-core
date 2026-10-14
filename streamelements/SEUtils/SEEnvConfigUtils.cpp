@@ -2,6 +2,23 @@
 
 #include "SEStringUtils.hpp"
 
+//
+// All three are used only by the non-Windows branch below, which is why
+// a Windows build cannot tell they are missing: off Windows this reads
+// and writes an ini under the OBS config directory instead of the
+// registry, tracing the config_t handle like every other refcounted
+// handle in the plug-in.
+//
+#include "../SETrace.hpp"
+
+#include <util/bmem.h>
+
+//
+// streamelements/updater/updater.cpp keeps its own copy of this path; the
+// two have to agree.
+//
+#define GLOBAL_ENV_CONFIG_FILE_NAME "obs-studio/streamelements-env.ini"
+
 #include <util/config-file.h>
 #include <util/platform.h>
 
@@ -9,6 +26,8 @@
 #include <windows.h>
 // PathRemoveFileSpecW, for trimming the module path down to its folder
 #include <shlwapi.h>
+#pragma comment(lib, "Shlwapi.lib")
+#pragma comment(lib, "Advapi32.lib")
 #endif
 
 static const char *ENV_PRODUCT_NAME = "OBS.Live";

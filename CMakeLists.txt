@@ -546,6 +546,9 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEUtils/SEAsyncTaskUtils.cpp
 	streamelements/SEUtils/SESystemInfoUtils.cpp
 	streamelements/SEUtils/SEAppEnvUtils.cpp
+	streamelements/SEUtils/SEHostEventUtils.cpp
+	streamelements/SEUtils/SEOverlayUrlUtils.cpp
+	streamelements/SEUtils/SESessionSigningUtils.cpp
 	streamelements/SEUtils/SEWidgetUtils.cpp
 	streamelements/SEUtils/SELifecycleUtils.cpp
 	streamelements/SEUtils/SEObsEncoderUtils.cpp
@@ -561,7 +564,6 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEOutputSettingsManager.cpp
 	streamelements/SEWorkerManager.cpp
 	streamelements/SEBrowserDialog.cpp
-	streamelements/SEUtils.cpp
 	streamelements/SEHotkeyManager.cpp
 	streamelements/SEReportIssueDialog.cpp
 	streamelements/SESecretRedactor.cpp
@@ -724,6 +726,9 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEUtils/SEAsyncTaskUtils.hpp
 	streamelements/SEUtils/SESystemInfoUtils.hpp
 	streamelements/SEUtils/SEAppEnvUtils.hpp
+	streamelements/SEUtils/SEHostEventUtils.hpp
+	streamelements/SEUtils/SEOverlayUrlUtils.hpp
+	streamelements/SEUtils/SESessionSigningUtils.hpp
 	streamelements/SEUtils/SEWidgetUtils.hpp
 	streamelements/SEUtils/SELifecycleUtils.hpp
 	streamelements/SEUtils/SEReentrancyUtils.hpp

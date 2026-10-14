@@ -1,5 +1,17 @@
 #include "SEHttpUtils.hpp"
 
+#include "SEAppEnvUtils.hpp"
+#include "SEStringUtils.hpp"
+
+#ifdef WIN32
+//
+// WinHttpGetIEProxyConfigForCurrentUser, for the proxy settings, with the
+// link directive that used to sit beside this body in SEUtils.cpp.
+//
+#include <winhttp.h>
+#pragma comment(lib, "Winhttp.lib")
+#endif
+
 // std::transform and std::copy/back_inserter, which the single SEUtils
 // translation unit had been getting transitively.
 #include <algorithm>
@@ -350,4 +362,92 @@ HttpGetAsync(std::string url, async_http_request_callback_t callback)
 
 			HttpGetBuffer(url.c_str(), headers, cb, nullptr);
 		});
+}
+
+//
+// Rejoined this domain once the platform split could be handled explicitly:
+// the Windows body is here, the macOS one is in SEUtils.mm, because the proxy
+// settings come from different places.
+//
+// convert wstring to UTF-8 string
+static std::vector<std::string> tokenizeString(const std::string &str,
+					       const std::string &delimiters)
+{
+	std::vector<std::string> tokens;
+	// Skip delimiters at beginning.
+	std::string::size_type lastPos = str.find_first_not_of(delimiters, 0);
+	// Find first "non-delimiter".
+	std::string::size_type pos = str.find_first_of(delimiters, lastPos);
+
+	while (std::string::npos != pos ||
+	       std::string::npos !=
+		       lastPos) { // Found a token, add it to the vector.
+		tokens.push_back(str.substr(lastPos, pos - lastPos));
+		// Skip delimiters.  Note the "not_of"
+		lastPos = str.find_first_not_of(delimiters, pos);
+		// Find next "non-delimiter"
+		pos = str.find_first_of(delimiters, lastPos);
+	}
+	return tokens;
+}
+void SetGlobalCURLOptions(CURL *curl, const char *url)
+{
+	// TODO: TBD: MacOS: http://mirror.informatimago.com/next/developer.apple.com/qa/qa2001/qa1234.html
+	std::string proxy =
+		GetCommandLineOptionValue("streamelements-http-proxy");
+
+	if (!proxy.size()) {
+		WINHTTP_CURRENT_USER_IE_PROXY_CONFIG config;
+
+		if (WinHttpGetIEProxyConfigForCurrentUser(&config)) {
+			// http=127.0.0.1:8888;https=127.0.0.1:8888
+			if (config.lpszProxy) {
+				proxy = wstring_to_utf8(config.lpszProxy);
+
+				std::map<std::string, std::string> schemes;
+				for (auto kvstr : tokenizeString(proxy, ";")) {
+					std::vector<std::string> kv =
+						tokenizeString(kvstr, "=");
+
+					if (kv.size() == 2) {
+						std::transform(kv[0].begin(),
+							       kv[0].end(),
+							       kv[0].begin(),
+							       tolower);
+						schemes[kv[0]] = kv[1];
+					}
+				}
+
+				std::string scheme =
+					tokenizeString(url, ":")[0];
+				std::transform(scheme.begin(), scheme.end(),
+					       scheme.begin(), tolower);
+
+				if (schemes.count(scheme)) {
+					proxy = schemes[scheme];
+				} else if (schemes.count("http")) {
+					proxy = schemes["http"];
+				} else {
+					proxy = "";
+				}
+			}
+
+			if (config.lpszProxy) {
+				GlobalFree((HGLOBAL)config.lpszProxy);
+			}
+
+			if (config.lpszProxyBypass) {
+				GlobalFree((HGLOBAL)config.lpszProxyBypass);
+			}
+
+			if (config.lpszAutoConfigUrl) {
+				GlobalFree((HGLOBAL)config.lpszAutoConfigUrl);
+			}
+		}
+	}
+
+	if (proxy.size()) {
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+		curl_easy_setopt(curl, CURLOPT_PROXY, proxy.c_str());
+	}
 }

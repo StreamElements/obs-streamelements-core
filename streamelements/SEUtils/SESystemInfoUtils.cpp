@@ -22,6 +22,16 @@
 #ifdef WIN32
 #include <windows.h>
 #include <wbemidl.h>
+
+//
+// The link directives came with these bodies: they used to sit in SEUtils.cpp
+// beside them, and nothing else pulls these libraries in.
+//
+#include <bcrypt.h>
+#pragma comment(lib, "bcrypt.lib")
+#pragma comment(lib, "wbemuuid.lib")
+#pragma comment(lib, "OleAut32.lib")
+#pragma comment(lib, "Advapi32.lib")
 #else
 // The same platform shims the single translation unit carried: these bodies
 // are written against the Windows registry and FILETIME vocabulary, and the

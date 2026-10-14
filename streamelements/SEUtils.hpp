@@ -20,6 +20,9 @@
 #include "SEUtils/SESystemInfoUtils.hpp"
 #include "SEUtils/SEAppEnvUtils.hpp"
 #include "SEUtils/SEWidgetUtils.hpp"
+#include "SEUtils/SEHostEventUtils.hpp"
+#include "SEUtils/SESessionSigningUtils.hpp"
+#include "SEUtils/SEOverlayUrlUtils.hpp"
 
 #include <cef-headers.hpp>
 #include <obs.h>
@@ -49,7 +52,6 @@
 #include <QPointer>
 #include <QWidget>
 
-
 #include <QTimer>
 #include <QApplication>
 #include <QThread>
@@ -57,41 +59,3 @@
 #include <QTextStream>
 #include <QString>
 #include <QWidget>
-
-/* ========================================================= */
-
-std::string CreateSessionSignedAbsolutePathURL(std::wstring path);
-bool VerifySessionSignedAbsolutePathURL(std::string url, std::string &path);
-
-/* ========================================================= */
-
-void AdviseHostUserInterfaceStateChanged();
-void AdviseHostHotkeyBindingsChanged();
-
-/* ========================================================= */
-
-bool ParseStreamElementsOverlayURL(std::string url, std::string &overlayId,
-				   std::string &accountId);
-
-std::string GetStreamElementsOverlayEditorURL(std::string overlayId,
-					      std::string accountId);
-
-/* ========================================================= */
-
-#if ENABLE_DECRYPT_COOKIES
-void SEDecryptCefCookiesFile(const char *path_utf8);
-void SEDecryptCefCookiesStoragePath(const char *path_utf8);
-#endif /* ENABLE_DECRYPT_COOKIES */
-
-/* ========================================================= */
-
-void DispatchClientMessage(std::string target,
-			   CefRefPtr<CefProcessMessage> msg);
-
-void DispatchJSEventContainer(std::string target, std::string event,
-			      std::string eventArgsJson);
-
-void DispatchJSEventGlobal(std::string event, std::string eventArgsJson);
-
-
-/* ========================================================= */
