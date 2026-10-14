@@ -538,7 +538,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	//
 	m_obsSceneManager = std::make_shared<SEObsSceneManager>(
 		obs_main_window, m_videoCompositionManager,
-		m_auxiliaryControlsBuilder);
+		m_auxiliaryControlsBuilder, m_hostEventDispatcher);
 	m_menuManager = std::make_shared<SEMenuManager>(
 		obs_main_window, m_sessionManager, m_performanceHistoryTracker,
 		m_analyticsEventsManager, m_auxiliaryControlsBuilder);

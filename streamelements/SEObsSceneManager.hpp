@@ -4,6 +4,7 @@
 #include "SEScenesListWidgetManager.hpp"
 #include "SEVideoComposition.hpp"
 #include "SEVideoCompositionManager.hpp"
+#include "SEHostEventDispatcher.hpp"
 #include "SEAsyncTaskQueue.hpp"
 
 #include "cef-headers.hpp"
@@ -18,6 +19,7 @@
 
 class SESignalHandlerData;
 class SEAuxiliaryControlsBuilder;
+class SEHostEventDispatcher;
 
 class SEObsSceneManager {
 private:
@@ -34,7 +36,8 @@ public:
 		QMainWindow *parent,
 		std::shared_ptr<SEVideoCompositionManager> videoCompositionManager,
 		std::shared_ptr<SEAuxiliaryControlsBuilder>
-			auxiliaryControlsBuilder);
+			auxiliaryControlsBuilder,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher);
 	virtual ~SEObsSceneManager();
 
 private:
@@ -244,10 +247,12 @@ public:
 		SEObsSceneManager *obsSceneManager,
 		std::weak_ptr<SEVideoCompositionManager>
 			videoCompositionManager,
-		SEVideoCompositionBase *videoCompositionBase)
+		SEVideoCompositionBase *videoCompositionBase,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 		: m_obsSceneManager(obsSceneManager),
 		  m_videoCompositionManager(videoCompositionManager),
-		  m_videoCompositionBase(videoCompositionBase)
+		  m_videoCompositionBase(videoCompositionBase),
+		  m_hostEventDispatcher(hostEventDispatcher)
 	{
 		// Cached now, while the composition is provably alive. Every later
 		// reader wants the id and nothing else, so caching it means the
@@ -298,11 +303,13 @@ private:
 		std::weak_ptr<SEVideoCompositionManager>
 			videoCompositionManager,
 		SEVideoCompositionBase *videoCompositionBase,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
 		obs_scene_t *scene)
 		: m_parent(parent),
 		  m_obsSceneManager(obsSceneManager),
 		  m_videoCompositionManager(videoCompositionManager),
 		  m_videoCompositionBase(videoCompositionBase),
+		  m_hostEventDispatcher(hostEventDispatcher),
 		  m_scene(SETRACE_ADDREF(obs_scene_get_ref(scene)))
 	{
 		// No m_asyncTaskQueue here, since there is a parent to refer to
@@ -455,7 +462,8 @@ private:
 			m_scenes[scene] = new SESignalHandlerData(
 				this, m_obsSceneManager,
 				m_videoCompositionManager,
-				m_videoCompositionBase, scene);
+				m_videoCompositionBase,
+				m_hostEventDispatcher, scene);
 
 			m_scenes_refcount[scene] = 1;
 
@@ -652,6 +660,16 @@ public:
 	std::weak_ptr<SEVideoCompositionManager> m_videoCompositionManager;
 	SEVideoCompositionBase *m_videoCompositionBase = nullptr;
 
+	//
+	// Strong, for the same reason the composition manager is: the
+	// callbacks this object is handed to announce scene and scene-item
+	// changes to pages from the graphics thread and from the task-queue
+	// worker, and holding what they announce with for as long as they can
+	// fire is what replaced asking the singleton whether the plugin is
+	// still alive. No ring -- the dispatcher owns nothing here.
+	//
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+
 public:
 	//
 	// For the file-static helpers that are handed this object as their
@@ -660,6 +678,11 @@ public:
 	std::shared_ptr<SEVideoCompositionManager> VideoCompositionManager()
 	{
 		return m_videoCompositionManager.lock();
+	}
+
+	std::shared_ptr<SEHostEventDispatcher> HostEventDispatcher()
+	{
+		return m_hostEventDispatcher;
 	}
 
 private:

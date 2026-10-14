@@ -796,6 +796,7 @@ static void SerializeObsScene(
 
 static void dispatch_scene_event(
 	std::shared_ptr<SEVideoCompositionManager> videoCompositionManager,
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
 	obs_scene_t *scene, std::string currentSceneEventName,
 	std::string otherSceneEventName)
 {
@@ -811,16 +812,20 @@ static void dispatch_scene_event(
 
 	auto json = CefWriteJSON(item, JSON_WRITER_DEFAULT);
 
+	if (!hostEventDispatcher)
+		return;
+
 	if (is_active_scene(scene)) {
-		DispatchJSEventGlobal(currentSceneEventName, json);
+		hostEventDispatcher->DispatchJSEventGlobal(
+			currentSceneEventName, json);
 	}
 
-	DispatchJSEventGlobal(
-		otherSceneEventName, json);
+	hostEventDispatcher->DispatchJSEventGlobal(otherSceneEventName, json);
 }
 
 static void dispatch_scene_event(
 	std::shared_ptr<SEVideoCompositionManager> videoCompositionManager,
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
 	obs_source_t *source, std::string currentSceneEventName,
 	std::string otherSceneEventName)
 {
@@ -829,8 +834,9 @@ static void dispatch_scene_event(
 
 	obs_scene_t *scene = obs_scene_from_source(source);
 
-	dispatch_scene_event(videoCompositionManager, scene,
-			     currentSceneEventName, otherSceneEventName);
+	dispatch_scene_event(videoCompositionManager, hostEventDispatcher,
+			     scene, currentSceneEventName,
+			     otherSceneEventName);
 }
 
 static void dispatch_scene_event(void *my_data, calldata_t *cd,
@@ -861,8 +867,8 @@ static void dispatch_scene_event(void *my_data, calldata_t *cd,
 		return;
 
 	dispatch_scene_event(signalHandlerData->VideoCompositionManager(),
-			     scene, currentSceneEventName,
-			     otherSceneEventName);
+			     signalHandlerData->HostEventDispatcher(), scene,
+			     currentSceneEventName, otherSceneEventName);
 }
 
 static void dispatch_scene_update(obs_scene_t* scene,
@@ -885,19 +891,22 @@ static void dispatch_scene_update(obs_scene_t* scene,
 	//
 	auto videoCompositionManager =
 		signalHandlerData->VideoCompositionManager();
+	auto hostEventDispatcher = signalHandlerData->HostEventDispatcher();
 
 	if (shouldDelay) {
 		auto sceneRef = SETRACE_ADDREF(obs_scene_get_ref(scene));
 
 		signalHandlerData->EnqueueAsyncTask([=]() {
-			dispatch_scene_event(videoCompositionManager, sceneRef,
+			dispatch_scene_event(videoCompositionManager,
+					     hostEventDispatcher, sceneRef,
 					     "hostActiveSceneItemListChanged",
 					     "hostSceneItemListChanged");
 
 			obs_scene_release(SETRACE_DECREF(sceneRef));
 		});
 	} else {
-		dispatch_scene_event(videoCompositionManager, scene,
+		dispatch_scene_event(videoCompositionManager,
+				     hostEventDispatcher, scene,
 				     "hostActiveSceneItemListChanged",
 				     "hostSceneItemListChanged");
 	}
@@ -949,6 +958,7 @@ static std::string get_composition_id(void *my_data)
 
 static void dispatch_sceneitem_event(
 	std::shared_ptr<SEVideoCompositionManager> videoCompositionManager,
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
 	const std::string &compositionId, obs_sceneitem_t *sceneitem,
 	std::string eventName, bool serializeDetails = true)
 {
@@ -1010,14 +1020,19 @@ static void dispatch_sceneitem_event(
 		std::string json =
 			CefWriteJSON(item, JSON_WRITER_DEFAULT).ToString();
 
-		DispatchJSEventGlobal(eventName, json);
+		if (hostEventDispatcher)
+			hostEventDispatcher->DispatchJSEventGlobal(eventName,
+								  json);
 	} else {
-		DispatchJSEventGlobal(eventName, "null");
+		if (hostEventDispatcher)
+			hostEventDispatcher->DispatchJSEventGlobal(eventName,
+								  "null");
 	}
 }
 
 static void dispatch_sceneitem_event(
 	std::shared_ptr<SEVideoCompositionManager> videoCompositionManager,
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
 	const std::string &compositionId, obs_sceneitem_t *sceneitem,
 	std::string currentSceneEventName, std::string otherSceneEventName,
 	bool serializeDetails = true)
@@ -1029,14 +1044,15 @@ static void dispatch_sceneitem_event(
 		return;
 
 	if (is_active_scene(sceneitem)) {
-		dispatch_sceneitem_event(videoCompositionManager, compositionId,
+		dispatch_sceneitem_event(videoCompositionManager,
+					 hostEventDispatcher, compositionId,
 					 sceneitem, currentSceneEventName,
 					 serializeDetails);
 	}
 
-	dispatch_sceneitem_event(videoCompositionManager, compositionId,
-				 sceneitem, otherSceneEventName,
-				 serializeDetails);
+	dispatch_sceneitem_event(videoCompositionManager, hostEventDispatcher,
+				 compositionId, sceneitem,
+				 otherSceneEventName, serializeDetails);
 }
 
 static void dispatch_sceneitem_event(void *my_data, calldata_t *cd,
@@ -1073,9 +1089,12 @@ static void dispatch_sceneitem_event(void *my_data, calldata_t *cd,
 		//
 		auto videoCompositionManager =
 			signalHandlerData->VideoCompositionManager();
+		auto hostEventDispatcher =
+			signalHandlerData->HostEventDispatcher();
 
 		root->EnqueueAsyncTask([=]() -> void {
 			dispatch_sceneitem_event(videoCompositionManager,
+						 hostEventDispatcher,
 						 compositionId, sceneitem,
 						 currentSceneEventName,
 						 otherSceneEventName,
@@ -1088,8 +1107,9 @@ static void dispatch_sceneitem_event(void *my_data, calldata_t *cd,
 	} else {
 		dispatch_sceneitem_event(
 			signalHandlerData->VideoCompositionManager(),
-			compositionId, sceneitem, currentSceneEventName,
-			otherSceneEventName, serializeDetails);
+			signalHandlerData->HostEventDispatcher(), compositionId,
+			sceneitem, currentSceneEventName, otherSceneEventName,
+			serializeDetails);
 	}
 }
 
@@ -1124,6 +1144,9 @@ static void dispatch_source_event(void *my_data, calldata_t *cd,
 		my_data ? ((SESignalHandlerData *)my_data)
 				  ->VideoCompositionManager()
 			: nullptr;
+	auto hostEventDispatcher =
+		my_data ? ((SESignalHandlerData *)my_data)->HostEventDispatcher()
+			: nullptr;
 
 	ObsSceneEnumAllItems(scene, [&](obs_sceneitem_t *sceneitem) {
 		obs_source_t *sceneitem_source = obs_sceneitem_get_source(
@@ -1131,6 +1154,7 @@ static void dispatch_source_event(void *my_data, calldata_t *cd,
 
 		if (sceneitem_source == source) {
 			dispatch_sceneitem_event(videoCompositionManager,
+						 hostEventDispatcher,
 						 compositionId, sceneitem,
 						 currentSceneEventName,
 						 otherSceneEventName, false);
@@ -1561,6 +1585,7 @@ static void process_scene_item_remove(obs_sceneitem_t *sceneitem,
 
 		dispatch_sceneitem_event(
 			signalHandlerData->VideoCompositionManager(),
+			signalHandlerData->HostEventDispatcher(),
 			signalHandlerData->GetVideoCompositionId(), sceneitem,
 			"hostActiveSceneItemRemoved", "hostSceneItemRemoved",
 			false);
@@ -1865,7 +1890,8 @@ SEObsSceneManager::GetVideoComposition(CefRefPtr<CefValue> input)
 SEObsSceneManager::SEObsSceneManager(
 	QMainWindow *parent,
 	std::shared_ptr<SEVideoCompositionManager> videoCompositionManager,
-	std::shared_ptr<SEAuxiliaryControlsBuilder> auxiliaryControlsBuilder)
+	std::shared_ptr<SEAuxiliaryControlsBuilder> auxiliaryControlsBuilder,
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 	: m_parent(parent), m_videoCompositionManager(videoCompositionManager)
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
@@ -1882,8 +1908,8 @@ SEObsSceneManager::SEObsSceneManager(
 
 	m_signalHandlerData = new SESignalHandlerData(
 		this, m_videoCompositionManager,
-		m_videoCompositionManager->GetObsNativeVideoComposition()
-			.get());
+		m_videoCompositionManager->GetObsNativeVideoComposition().get(),
+		hostEventDispatcher);
 
 	obs_frontend_add_event_callback(handle_obs_frontend_event, this);
 

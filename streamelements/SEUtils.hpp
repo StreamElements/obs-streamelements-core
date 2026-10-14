@@ -20,7 +20,6 @@
 #include "SEUtils/SESystemInfoUtils.hpp"
 #include "SEUtils/SEAppEnvUtils.hpp"
 #include "SEUtils/SEWidgetUtils.hpp"
-#include "SEUtils/SEHostEventUtils.hpp"
 #include "SEUtils/SESessionSigningUtils.hpp"
 #include "SEUtils/SEOverlayUrlUtils.hpp"
 

@@ -295,9 +295,9 @@ void SERazerWyvrnManager::DispatchStatusChanged()
 	// wait forever on the overwhelming majority of machines, which have no
 	// Razer software at all.
 	//
-	// DispatchJSEventGlobal already guards on IsInstanceAvailable() and on a
-	// null API server, which matters because ShuttingDown is reached exactly
-	// when the singleton may be going away.
+	// The null check below is the guard: ShuttingDown is reached exactly
+	// when teardown is under way, and this manager holds the dispatcher
+	// rather than fetching the server per call.
 	auto value = SerializeStatus();
 
 	const std::string json =

@@ -1297,7 +1297,8 @@ SECustomVideoComposition::SECustomVideoComposition(
 	// would be the manager keeping itself alive.
 	//
 	m_signalHandlerData = new SESignalHandlerData(
-		nullptr, m_compositionServices.videoCompositionManager, this);
+		nullptr, m_compositionServices.videoCompositionManager, this,
+		m_compositionServices.hostEventDispatcher);
 
 	add_scene_signals(currentScene, m_signalHandlerData);
 
