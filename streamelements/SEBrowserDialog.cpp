@@ -11,6 +11,7 @@ static std::recursive_mutex s_sync_api_call_mutex;
 #define API_HANDLER_BEGIN(name)                          \
 	RegisterIncomingApiCallHandler(name, []( \
 		std::shared_ptr<SEApiMessageHandler> self, \
+		std::shared_ptr<SEApiServices> apiServices, \
 		CefRefPtr<CefProcessMessage> message, \
 		CefRefPtr<CefListValue> args, \
 		CefRefPtr<CefValue>& result, \
@@ -19,6 +20,7 @@ static std::recursive_mutex s_sync_api_call_mutex;
 		std::function<void()> complete_callback) \
 		{ \
 			(void)self; \
+			(void)apiServices; \
 			(void)message; \
 			(void)args; \
 			(void)result; \

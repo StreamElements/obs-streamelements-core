@@ -2115,6 +2115,177 @@ static void check_non_modal_dialogs_are_closed_by_their_owner()
 	      "promise");
 }
 
+static void check_nothing_but_the_manager_owns_the_services_container()
+{
+	//
+	// Every ring this refactor removed had one shape: something the
+	// container destroys held the container strongly. The structural
+	// guard against them coming back is that exactly one place owns it --
+	// SEGlobalStateManager, the root -- and that every holder whose
+	// lifetime a service in the container controls keeps a weak handle.
+	//
+	// Matching on the member spelling is what makes this safe to run
+	// across the whole directory: constructor parameters in this tree are
+	// named apiServices or services, never m_*, so a parameter cannot
+	// trip it.
+	//
+	// This replaces a hand-maintained list of consumers. A new class that
+	// takes the bundle and stores it strongly fails here without anyone
+	// remembering to add it.
+	//
+	const std::string dir = std::string(se_tests::kRepoRoot) +
+				"/streamelements";
+
+	std::vector<std::string> owners;
+	std::vector<std::string> weakHolders;
+	int scanned = 0;
+
+	std::error_code ec;
+	std::filesystem::directory_iterator it(dir, ec);
+
+	check(!ec, "cannot read streamelements/ -- this invariant would then "
+		   "pass vacuously");
+
+	std::vector<std::filesystem::path> files;
+
+	for (std::filesystem::directory_iterator end;
+	     it != end && !ec; it.increment(ec)) {
+		files.push_back(it->path());
+	}
+
+	for (const std::filesystem::path &path : files) {
+		const std::string ext = path.extension().string();
+
+		if (ext != ".hpp" && ext != ".cpp")
+			continue;
+
+		std::ifstream in(path.string());
+
+		if (!in)
+			continue;
+
+		std::ostringstream buf;
+		buf << in.rdbuf();
+
+		const std::string src = strip_line_comments(buf.str());
+		const std::string name = path.filename().string();
+
+		++scanned;
+
+		if (src.find("std::shared_ptr<SEApiServices> m_") !=
+		    std::string::npos)
+			owners.push_back(name);
+
+		if (src.find("std::weak_ptr<SEApiServices> m_") !=
+		    std::string::npos)
+			weakHolders.push_back(name);
+	}
+
+	check(scanned > 100,
+	      "scanned too few files under streamelements/ -- this invariant "
+	      "would then pass vacuously");
+
+	for (const std::string &owner : owners) {
+		check(owner == "SEGlobalStateManager.hpp",
+		      (owner +
+		       " owns SEApiServices strongly. Only the root may: a "
+		       "class the container's own services destroy must hold "
+		       "it weakly, or shutdown stalls on a ring that runs "
+		       "through a destructor and never unwinds.")
+			      .c_str());
+	}
+
+	check(owners.size() == 1,
+	      "SEApiServices is not owned exactly once -- the root "
+	      "(SEGlobalStateManager.hpp) must own it, and nothing else may");
+
+	//
+	// Non-vacuity, and the other half of the rule: the holders that were
+	// converted have to still be holding it weakly.
+	//
+	const char *const holders[] = {"SEApiMessageHandler.hpp",
+				       "SEBrowserDialog.hpp",
+				       "SEBrowserDialogManager.hpp",
+				       "SENativeOBSControlsManager.hpp",
+				       "SEPopupWindowManager.hpp",
+				       "SEWidgetManager.hpp",
+				       "SEWorkerManager.hpp"};
+
+	for (const char *const holder : holders) {
+		check(std::find(weakHolders.begin(), weakHolders.end(),
+				std::string(holder)) != weakHolders.end(),
+		      (std::string(holder) +
+		       " no longer holds SEApiServices weakly -- either the "
+		       "edge went back to being strong under another name, or "
+		       "the class stopped holding the bundle and this list "
+		       "needs updating")
+			      .c_str());
+	}
+}
+
+static void check_api_handler_locks_the_services_once_per_dispatch()
+{
+	//
+	// The bundle is held weakly, so somebody has to lock it. That
+	// somebody is the dispatcher, once per call, before the handler
+	// lookup -- not each of the two hundred handler bodies, and not an
+	// operator->() that would lock two or three times per call and turn
+	// a dead bundle into a null-field dereference instead of an early
+	// return.
+	//
+	const std::string src =
+		strip_line_comments(slurp("streamelements/SEApiMessageHandler.cpp"));
+
+	//
+	// Flattened, because the reach used to wrap across as many as four
+	// lines and a wrapped one must not slip through.
+	//
+	std::string flat;
+	flat.reserve(src.size());
+
+	for (std::size_t i = 0; i < src.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(src[i])))
+			flat += src[i];
+	}
+
+	//
+	// Reading a service through self is what is banned, not mentioning
+	// the member: the two dispatch sites legitimately lock it, and one of
+	// them does so through context->self.
+	//
+	check(flat.find("self->m_services->") == std::string::npos,
+	      "a handler body in SEApiMessageHandler.cpp reads a service "
+	      "through self->m_services -- handlers take the locked bundle as "
+	      "their apiServices parameter");
+
+	const std::string dispatch =
+		function_body(src, "SEApiMessageHandler::InvokeApiCallHandlerAsync");
+
+	check(!dispatch.empty(),
+	      "InvokeApiCallHandlerAsync not found -- this invariant cannot "
+	      "check where the bundle is locked");
+
+	check(dispatch.find("m_services.lock()") != std::string::npos,
+	      "InvokeApiCallHandlerAsync does not lock the services bundle -- "
+	      "it has to, once, before dispatching, and bail with a null "
+	      "result if it cannot");
+
+	//
+	// And it must answer the caller on that path: returning silently
+	// leaves the page's promise pending for the life of the process.
+	//
+	const std::size_t lock_at = dispatch.find("m_services.lock()");
+	const std::size_t callback_at = dispatch.find("result_callback", lock_at);
+	const std::size_t handler_at = dispatch.find("m_apiCallHandlers", lock_at);
+
+	check(callback_at != std::string::npos &&
+		      (handler_at == std::string::npos ||
+		       callback_at < handler_at),
+	      "InvokeApiCallHandlerAsync does not answer the caller when the "
+	      "bundle cannot be locked -- the page's promise would never "
+	      "settle");
+}
+
 static void check_api_handler_takes_its_services_by_injection()
 {
 	//
@@ -2193,7 +2364,7 @@ static void check_api_handler_takes_its_services_by_injection()
 	// And the bundle has to actually be used, or the check above passes
 	// for the wrong reason.
 	//
-	check(flat.find("m_services->obsSceneManager") != std::string::npos,
+	check(flat.find("apiServices->obsSceneManager") != std::string::npos,
 	      "SEApiMessageHandler.cpp no longer uses the injected services "
 	      "bundle -- this invariant would then pass vacuously");
 }
@@ -2693,6 +2864,8 @@ int main()
 	check_rejected_signature_stops_the_handler();
 	check_injected_services_are_not_also_fetched_globally();
 	check_api_handler_takes_its_services_by_injection();
+	check_api_handler_locks_the_services_once_per_dispatch();
+	check_nothing_but_the_manager_owns_the_services_container();
 	check_non_modal_dialogs_are_closed_by_their_owner();
 	check_state_persistence_borrows_the_managers_it_serializes();
 	check_widget_manager_does_not_own_state_persistence();

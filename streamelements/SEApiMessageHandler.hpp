@@ -37,7 +37,13 @@ protected:
 	// a handler can be built against anything -- including a bundle with
 	// only the two services a test cares about.
 	//
-	std::shared_ptr<SEApiServices> m_services;
+	// Weak, because a handler is owned by a browser widget, which is
+	// owned by a dock or a dialog that one of the bundle's own managers
+	// destroys. Handlers do not read it: the dispatcher locks it once per
+	// call and passes the result in, so the four sites left here are the
+	// ones that are not dispatches.
+	//
+	std::weak_ptr<SEApiServices> m_services;
 
 public:
 	SEApiMessageHandler(std::string containerType,
@@ -90,8 +96,16 @@ public:
 protected:
 	virtual void RegisterIncomingApiCallHandlers();
 
+	//
+	// apiServices is locked by InvokeApiCallHandlerAsync before the
+	// handler is looked up, so a method body can use it without checking
+	// -- a call that arrives with no bundle is answered with null and
+	// never reaches a handler. It is also what makes a handler callable
+	// from a test with a hand-built bundle and no singleton anywhere.
+	//
 	typedef void (*incoming_call_handler_t)(
 		std::shared_ptr<SEApiMessageHandler>,
+		std::shared_ptr<SEApiServices> apiServices,
 		CefRefPtr<CefProcessMessage> message,
 		CefRefPtr<CefListValue> args, CefRefPtr<CefValue> &result,
 		std::shared_ptr<SEWebsocketApiServer::ClientInfo> target, const long cefClientId, std::function<void()> complete_callback);
