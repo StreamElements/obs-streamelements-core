@@ -40,10 +40,12 @@ static bool IsPluginInitialized()
 	if (!obs_initialized())
 		return false;
 
+	//
+	// IsInstanceAvailable() is the whole question: it returns false unless
+	// the instance exists *and* is initialized, so the separate
+	// IsInitialized() reach that used to be here asked it twice.
+	//
 	if (!SEGlobalStateManager::IsInstanceAvailable())
-		return false;
-
-	if (!SEGlobalStateManager::GetInstance()->IsInitialized())
 		return false;
 
 	return true;

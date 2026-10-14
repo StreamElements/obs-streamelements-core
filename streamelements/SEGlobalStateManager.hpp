@@ -113,8 +113,18 @@ private:
 	//
 	void PublishApiServices();
 
-public:
+private:
+	//
+	// Private: asking the root whether it is alive is what a holder does
+	// instead of holding what it uses, and every external caller has been
+	// given the thing it actually wanted. The one caller left is
+	// IsInstanceAvailable(), which answers the same question for the
+	// static reaches that remain -- the SEUtils, composition and
+	// crash-path ones, which later stages inject.
+	//
 	bool IsInitialized() { return m_initialized; }
+
+public:
 
 
 	QCef *GetCef() { return m_cef; }

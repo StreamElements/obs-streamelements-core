@@ -1,6 +1,7 @@
 #include "SEWidgetManager.hpp"
 
 #include "SEStatePersistence.hpp"
+#include "SEMenuManager.hpp"
 #include "SEUtils.hpp"
 #include "SEGlobalStateManager.hpp"
 
@@ -352,26 +353,27 @@ bool SEWidgetManager::AddDockWidget(
 			persistence->PersistState();
 		});
 
+		//
+		// Captured, not fetched. This asked the singleton whether the
+		// plugin was still alive because it had no hold on what it
+		// wanted; now it takes the menu manager itself, weakly, so a
+		// task that lands after teardown finds an expired pointer
+		// instead of interrogating global state.
+		//
+		std::weak_ptr<SEMenuManager> menuManager;
+
+		if (auto apiServices = ApiServices()) {
+			menuManager = apiServices->menuManager;
+		}
+
 		QtDelayTask(
-			[]() -> void {
-				if (!SEGlobalStateManager::
-					    IsInstanceAvailable())
+			[menuManager]() -> void {
+				auto menu = menuManager.lock();
+
+				if (!menu)
 					return;
 
-				if (!SEGlobalStateManager::
-					     GetInstance()
-						     ->IsInitialized())
-					return;
-
-				auto menuManager =
-					SEGlobalStateManager::
-						GetInstance()
-							->GetMenuManager();
-
-				if (!menuManager)
-					return;
-
-				menuManager->Update();
+				menu->Update();
 			},
 			1);
 	});
