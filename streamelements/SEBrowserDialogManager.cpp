@@ -61,6 +61,14 @@ SEBrowserDialogManager::~SEBrowserDialogManager()
 		// dialog's API message handler and its CEF browser down while
 		// the widget tree is still intact.
 		//
+		//
+		// Before reject(), which runs DestroyBrowser(): from here on
+		// the dialog deletes its browser widget outright, because the
+		// event loop that would run a deleteLater() is not coming
+		// back.
+		//
+		entry.dialog->NoteOwnerTeardown();
+
 		entry.dialog->reject();
 
 		//

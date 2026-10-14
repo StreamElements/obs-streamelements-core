@@ -42,7 +42,7 @@
  */
 
 #include "SEBugSplatCrashHandler.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEAnalyticsEventsManager.hpp"
 
 //#include <stdio.h>
 #include <stdlib.h>
@@ -99,6 +99,19 @@ static bool AmIBeingDebugged(void)
 
 static bool initialized = false;
 
+//
+// The analytics manager TrackCrash() reports through. A file static because
+// TrackCrash is reached from the mach exception server and the signal
+// handlers, none of which carry a context pointer; OnReportingServicesSet()
+// below puts it here.
+//
+// Strong, and read without a lock: it is written once during startup and
+// read on a dying process. A crash before that write reports nothing, which
+// is the same outcome the GetInstance() call it replaced produced -- except
+// that this one cannot dereference a null manager during teardown.
+//
+static std::shared_ptr<SEAnalyticsEventsManager> s_analyticsEventsManager;
+
 // Called by one of the crash handlers below to report a crash event to the analytics service
 static void TrackCrash(const char* caller_reference)
 {
@@ -106,10 +119,17 @@ static void TrackCrash(const char* caller_reference)
 
     blog(LOG_ERROR, "obs-streamelements-core: StreamElements: Crash Handler: TrackCrash: %s", caller_reference);
 
+    if (!s_analyticsEventsManager) {
+        blog(LOG_ERROR, "obs-streamelements-core: StreamElements: Crash Handler: TrackCrash: no analytics manager, not reporting");
+
+        initialized = false;
+
+        return;
+    }
+
     // This will also report the platform and a bunch of other props
-    SEGlobalStateManager::GetInstance()
-        ->GetAnalyticsEventsManager()
-        ->trackSynchronousEvent("OBS Studio Crashed", json11::Json::object{
+    s_analyticsEventsManager->trackSynchronousEvent(
+        "OBS Studio Crashed", json11::Json::object{
             { "platformCallerReference", caller_reference }
         });
     
@@ -302,6 +322,16 @@ SEBugSplatCrashHandler::SEBugSplatCrashHandler()
 	    [[BugSplat shared] setBugSplatDatabase:@"OBS_Live"];
 	    [[BugSplat shared] start];
     }
+}
+
+void SEBugSplatCrashHandler::OnReportingServicesSet()
+{
+    //
+    // There is no SECrashContext on this platform yet -- the macOS BugSplat
+    // integration collects nothing beyond the "product" attribute it sets at
+    // startup -- so only the analytics manager has anywhere to go.
+    //
+    s_analyticsEventsManager = m_analyticsEventsManager;
 }
 
 void SEBugSplatCrashHandler::StopAsyncHangDetection()

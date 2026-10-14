@@ -10,11 +10,12 @@
 class SEExternalSceneDataProviderManager
 {
 public:
-	SEExternalSceneDataProviderManager()
+	SEExternalSceneDataProviderManager(
+		std::shared_ptr<SELocalFilesystemHttpServer> httpServer)
 	{
 		m_providers["slobs-client"] =
 			std::make_shared<SEExternalSceneDataProviderSlobsClient>(
-				"slobs-client");
+				"slobs-client", httpServer);
 	}
 
 	void SerializeProviders(CefRefPtr<CefValue> result)

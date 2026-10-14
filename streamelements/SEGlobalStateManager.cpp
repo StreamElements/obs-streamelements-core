@@ -112,8 +112,12 @@ static void SetMainWindowStyle()
 //			dock->setStyleSheet("QDockWidget { margin: 0 -4px -4px -4px; }");
 }
 
-SEGlobalStateManager::ThemeChangeListener::ThemeChangeListener()
-	: QDockWidget()
+SEGlobalStateManager::ThemeChangeListener::ThemeChangeListener(
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+	std::shared_ptr<SEMessageBus> messageBus)
+	: QDockWidget(),
+	  m_hostEventDispatcher(hostEventDispatcher),
+	  m_messageBus(messageBus)
 {
 	setVisible(false);
 	setFloating(true);
@@ -134,37 +138,15 @@ void SEGlobalStateManager::ThemeChangeListener::changeEvent(
 				{"name", newTheme},
 			};
 
-			if (!SEGlobalStateManager::
-				    IsInstanceAvailable())
-				return;
+			if (m_hostEventDispatcher) {
+				m_hostEventDispatcher->DispatchJSEventGlobal(
+					"hostUIThemeChanged", json.dump());
+			}
 
-			auto apiServer =
-				SEGlobalStateManager::GetInstance()
-					->GetWebsocketApiServer();
-
-			if (!apiServer)
-				return;
-
-			apiServer->DispatchJSEvent(
-				"system",
-						  "hostUIThemeChanged",
-						  json.dump());
-
-			auto externalServer =
-				SEMessageBus::GetInstance();
-
-			if (!externalServer)
-				return;
-
-			externalServer->NotifyAllExternalEventListeners(
-					SEMessageBus::
-						DEST_ALL_EXTERNAL,
-					SEMessageBus::
-						SOURCE_APPLICATION,
-					"OBS", "UIThemeChanged",
-					CefParseJSON(
-						json.dump(),
-						JSON_PARSER_ALLOW_TRAILING_COMMAS));
+			if (m_messageBus) {
+				m_messageBus->NotifyExternalHostEvent(
+					"hostUIThemeChanged", json.dump());
+			}
 
 			m_currentTheme = newTheme;
 		}
@@ -262,55 +244,35 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 	case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
 		name = "hostExit";
 		break;
-	/*case OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED:
-		if (SEGlobalStateManager::GetInstance()
-			    ->GetWidgetManager()
-			    ->HasCentralBrowserWidget()) {
-			// Due to the way we are now managing the central widget
-			// (constrained by MacOS support), we must make sure that
-			// the Studio Mode is disabled while the central widget
-			// is visible, otherwise it will take up its space.
-			obs_frontend_set_preview_program_mode(false);
-		}
-		return;
-	*/
+	//
+	// OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED was handled here once, to
+	// force studio mode off while a central browser widget was visible:
+	// the two compete for the same space, and the central widget is how
+	// macOS support constrains us. The handler has been commented out for
+	// a long time -- kept as prose rather than as dead code, because the
+	// conflict it describes is real but the code it contained reached the
+	// singleton for the widget manager.
+	//
 	default:
 		return;
 	}
 
 	if (name.size()) {
-		if (!SEGlobalStateManager::IsInstanceAvailable())
-			return;
+		//
+		// Both audiences, through the two services this object holds.
+		// It is handed to the callback as private_data, so there is
+		// nothing to ask whether the plugin is alive -- if it were
+		// not, self would not be here.
+		//
+		if (auto dispatcher = self->GetHostEventDispatcher()) {
+			dispatcher->DispatchJSEventGlobal(name, args);
+		}
 
-		auto apiServer = self->GetWebsocketApiServer();
-
-		if (!apiServer)
-			return;
-
-		apiServer->DispatchJSEvent("system", name, args);
-
-		std::string externalEventName =
-			name.c_str() + 4; /* remove 'host' prefix */
-		externalEventName[0] = tolower(
-			externalEventName[0]); /* lower case first letter */
-
-		auto msgBus = SEMessageBus::GetInstance();
-
-		if (!msgBus)
-			return;
-
-		msgBus->NotifyAllExternalEventListeners(
-			SEMessageBus::DEST_ALL_EXTERNAL,
-			SEMessageBus::SOURCE_APPLICATION, "OBS",
-			externalEventName,
-			CefParseJSON(args, JSON_PARSER_ALLOW_TRAILING_COMMAS));
+		if (auto msgBus = self->GetMessageBus()) {
+			msgBus->NotifyExternalHostEvent(name, args);
+		}
 	}
 }
-
-/* ========================================================================= */
-
-std::shared_ptr<SEGlobalStateManager> SEGlobalStateManager::s_instance =
-	nullptr;
 
 /* ========================================================================= */
 
@@ -342,41 +304,10 @@ SEGlobalStateManager::~SEGlobalStateManager()
 	//
 }
 
-std::shared_ptr<SEGlobalStateManager>
-SEGlobalStateManager::GetInstance()
+std::shared_ptr<SEGlobalStateManager> SEGlobalStateManager::Create()
 {
-	if (!s_instance) {
-		s_instance = std::make_shared<
-			SEGlobalStateManager>(
-			SEGlobalStateManager::Private());
-	}
-
-	return s_instance;
-}
-
-void SEGlobalStateManager::Destroy()
-{
-	s_instance = nullptr;
-}
-
-void SEGlobalStateManager::Leak()
-{
-	// Heap-allocated and never freed, so the refcount never reaches zero
-	// and no destructor runs -- not now, and not during static destruction
-	// at process exit either.
-	if (s_instance.get())
-		new std::shared_ptr<SEGlobalStateManager>(
-			s_instance);
-
-	s_instance = nullptr;
-}
-
-bool SEGlobalStateManager::IsInstanceAvailable()
-{
-	if (!s_instance.get())
-		return false;
-
-	return s_instance->IsInitialized();
+	return std::make_shared<SEGlobalStateManager>(
+		SEGlobalStateManager::Private());
 }
 
 #include <QWindow>
@@ -387,6 +318,8 @@ void SEGlobalStateManager::PublishApiServices()
 	if (!m_apiServices)
 		return;
 
+	m_apiServices->cef = m_cef;
+	m_apiServices->cefCookieManager = m_cefCookieManager;
 	m_apiServices->widgetManager = m_widgetManager;
 	m_apiServices->obsSceneManager = m_obsSceneManager;
 	m_apiServices->menuManager = m_menuManager;
@@ -409,6 +342,8 @@ void SEGlobalStateManager::PublishApiServices()
 	m_apiServices->cleanupManager = m_cleanupManager;
 	m_apiServices->previewManager = m_previewManager;
 	m_apiServices->websocketApiServer = m_websocketApiServer;
+	m_apiServices->hostEventDispatcher = m_hostEventDispatcher;
+	m_apiServices->messageBus = m_messageBus;
 	m_apiServices->sharedVideoCompositionManager =
 		m_sharedVideoCompositionManager;
 	m_apiServices->videoCompositionManager = m_videoCompositionManager;
@@ -420,6 +355,7 @@ void SEGlobalStateManager::PublishApiServices()
 	m_apiServices->popupWindowManager = m_popupWindowManager;
 	m_apiServices->browserDialogManager = m_browserDialogManager;
 	m_apiServices->sessionManager = m_sessionManager;
+	m_apiServices->auxiliaryControlsBuilder = m_auxiliaryControlsBuilder;
 }
 
 void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
@@ -492,6 +428,15 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_apiServices = std::make_shared<SEApiServices>();
 
 	//
+	// Needs nothing but the bundle, and three things below take it: the
+	// menu manager, and the two scene-list monitors the scene manager
+	// builds. It keeps the bundle weakly and locks it per call, so being
+	// built before any of its contents exist is fine.
+	//
+	m_auxiliaryControlsBuilder =
+		std::make_shared<SEAuxiliaryControlsBuilder>(m_apiServices);
+
+	//
 	// Before the menu manager, which takes it: two of its menu items
 	// are the non-API way into a session reset. Nothing else has to
 	// exist yet -- the session manager locks the bundle per call, and
@@ -504,8 +449,26 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		std::make_shared<SEHttpClient>();
 	m_localFilesystemHttpServer = std::make_shared<
 		SELocalFilesystemHttpServer>();
+	//
+	// Before the menu manager, which takes it: the same rule the cleanup
+	// manager and the backup manager follow two lines down -- a
+	// dependency exists before the thing that holds it.
+	//
+	m_performanceHistoryTracker = std::make_shared<
+		SEPerformanceHistoryTracker>();
 	m_analyticsEventsManager = std::make_shared<
 		SEAnalyticsEventsManager>();
+
+	//
+	// As soon as both exist. The crash handler was constructed before
+	// either of them, so that a crash during the rest of startup is still
+	// caught; from here on a report carries the CPU and memory histograms
+	// and, on macOS, is tracked as an analytics event.
+	//
+	if (m_crashHandler) {
+		m_crashHandler->SetReportingServices(
+			m_performanceHistoryTracker, m_analyticsEventsManager);
+	}
 	m_widgetManager = std::make_shared<SEBrowserWidgetManager>(
 		obs_main_window, m_apiServices);
 
@@ -518,28 +481,51 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	//
 	m_websocketApiServer = std::make_shared<SEWebsocketApiServer>();
 
-	m_videoCompositionManager = std::make_shared<SEVideoCompositionManager>(
-		m_websocketApiServer);
-	m_audioCompositionManager = std::make_shared<SEAudioCompositionManager>(
-		m_websocketApiServer);
+	//
+	// Right after the server it forwards to, and before everything that
+	// announces a host event, so each of those can be handed it.
+	//
+	m_hostEventDispatcher =
+		std::make_shared<SEHostEventDispatcher>(m_websocketApiServer);
 
-	m_obsSceneManager =
-		std::make_shared<SEObsSceneManager>(
-			obs_main_window);
-	m_menuManager =
-		std::make_shared<SEMenuManager>(
-			obs_main_window, m_sessionManager);
-	m_bwTestManager = std::make_shared<
-		SEBandwidthTestManager>();
+	//
+	// Owned here and published in the bundle. It was a singleton, which
+	// is why it had to be handed the dispatcher after construction.
+	//
+	m_messageBus = SEMessageBus::Create(m_hostEventDispatcher);
+
+	//
+	// The config publishes a system-state change when the startup flags
+	// are written, which is the only thing it needs the bus for.
+	//
+	SEConfig::GetInstance()->SetMessageBus(m_messageBus);
+
+	m_videoCompositionManager = std::make_shared<SEVideoCompositionManager>(
+		m_websocketApiServer, m_hostEventDispatcher, m_messageBus);
+	m_audioCompositionManager = std::make_shared<SEAudioCompositionManager>(
+		m_websocketApiServer, m_hostEventDispatcher, m_messageBus);
+
+	//
+	// The composition manager is injected rather than fetched inside the
+	// constructor, which is where CORE-735's shape lived: it is built
+	// above, so the ordering is now the compiler's business.
+	//
+	m_obsSceneManager = std::make_shared<SEObsSceneManager>(
+		obs_main_window, m_videoCompositionManager,
+		m_auxiliaryControlsBuilder, m_hostEventDispatcher);
+	m_menuManager = std::make_shared<SEMenuManager>(
+		obs_main_window, m_sessionManager, m_performanceHistoryTracker,
+		m_analyticsEventsManager, m_auxiliaryControlsBuilder);
+	m_bwTestManager = std::make_shared<SEBandwidthTestManager>(
+		m_hostEventDispatcher);
 	m_outputSettingsManager = std::make_shared<
 		SEOutputSettingsManager>();
 	m_workerManager = std::make_shared<SEWorkerManager>(m_apiServices);
 	m_hotkeyManager =
-		std::make_shared<SEHotkeyManager>();
-	m_performanceHistoryTracker = std::make_shared<
-		SEPerformanceHistoryTracker>();
+		std::make_shared<SEHotkeyManager>(m_hostEventDispatcher);
 	m_externalSceneDataProviderManager = std::make_shared<
-		SEExternalSceneDataProviderManager>();
+		SEExternalSceneDataProviderManager>(
+		m_localFilesystemHttpServer);
 	m_nativeObsControlsManager =
 		SENativeOBSControlsManager::
 			GetInstance();
@@ -550,15 +536,15 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	// dependency has to exist before the thing that holds it.
 	m_cleanupManager =
 		std::make_shared<SECleanupManager>();
-	m_backupManager =
-		std::make_shared<SEBackupManager>(m_cleanupManager);
+	m_backupManager = std::make_shared<SEBackupManager>(
+		m_cleanupManager, m_localFilesystemHttpServer);
 	m_previewManager =
 		std::make_shared<SEPreviewManager>(
-			mainWindow());
+			mainWindow(), m_hostEventDispatcher);
 
 	m_windowStateEventFilter =
 		std::make_shared<WindowStateChangeEventFilter>(
-			mainWindow());
+			mainWindow(), m_hostEventDispatcher);
 
 #ifdef SE_ENABLE_WYVRN
 	// After the websocket API server, because reaching Ok or a failure
@@ -568,20 +554,23 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	// runs on the manager's own SDK thread and OBS start is not delayed;
 	// WYVRN becomes available a few seconds into the session.
 	m_razerWyvrnManager =
-		std::make_shared<SERazerWyvrnManager>();
+		std::make_shared<SERazerWyvrnManager>(
+			m_hostEventDispatcher, m_localFilesystemHttpServer);
 	m_razerWyvrnManager->Start();
 #endif
 
 	m_outputManager =
 		std::make_shared<SEOutputManager>(
-			m_videoCompositionManager, m_audioCompositionManager);
+			m_videoCompositionManager, m_audioCompositionManager,
+			m_hostEventDispatcher);
 
 	m_sharedVideoCompositionManager =
 		std::make_shared<SESharedVideoCompositionManager>(
-			m_websocketApiServer, m_videoCompositionManager);
+			m_websocketApiServer, m_videoCompositionManager,
+			m_messageBus);
 
 	m_obsActiveSceneTracker = std::make_shared<SEObsActiveSceneTracker>(
-		m_websocketApiServer, m_videoCompositionManager);
+		m_messageBus, m_websocketApiServer, m_videoCompositionManager);
 
 	//
 	// .get(), because the persistence object borrows these four rather
@@ -589,7 +578,8 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	//
 	m_statePersistence = std::make_shared<SEStatePersistence>(
 		mainWindow(), m_widgetManager.get(), m_workerManager.get(),
-		m_hotkeyManager.get(), m_nativeObsControlsManager.get());
+		m_hotkeyManager.get(), m_nativeObsControlsManager.get(),
+		m_hostEventDispatcher);
 
 	//
 	// Handed over after construction, and held weakly: the deferred saves
@@ -610,7 +600,8 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	PublishApiServices();
 
 	m_appStateListener = new ApplicationStateListener();
-	m_themeChangeListener = new ThemeChangeListener();
+	m_themeChangeListener = new ThemeChangeListener(m_hostEventDispatcher,
+							m_messageBus);
 
 	// objectName, because QMainWindow::saveState() and restoreState()
 	// identify docks by it and Qt's documentation requires it to be set for
@@ -800,6 +791,14 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_statePersistence->SetEnabled(true);
 	m_initialized = true;
 
+	//
+	// Last, and in the same breath as m_initialized: this is what tells
+	// an API message handler that the bundle is wired up and a dispatch
+	// may run. See SEApiServices::ready.
+	//
+	if (m_apiServices)
+		m_apiServices->ready = true;
+
 	// From here on an OBS close is an ordinary close, and teardown runs
 	// normally (CORE-786).
 	SENoteInitializeCompleted();
@@ -875,6 +874,7 @@ void SEGlobalStateManager::Shutdown()
 	m_audioCompositionManager = nullptr;
 
 	m_menuManager = nullptr;
+	m_auxiliaryControlsBuilder = nullptr;
 	m_hotkeyManager = nullptr;
 	m_externalSceneDataProviderManager = nullptr;
 	m_httpClient = nullptr;
@@ -890,6 +890,8 @@ void SEGlobalStateManager::Shutdown()
 #endif
 	m_cleanupManager = nullptr;
 	m_previewManager = nullptr;
+	m_messageBus = nullptr;
+	m_hostEventDispatcher = nullptr;
 	m_websocketApiServer = nullptr;
 	m_windowStateEventFilter = nullptr;
 	m_statePersistence = nullptr;
@@ -909,6 +911,16 @@ void SEGlobalStateManager::Shutdown()
 
 	m_sessionManager = nullptr;
 
+	//
+	// Both are borrowed by the bundle, which outlives Shutdown() -- it is
+	// a member, destroyed with this object -- so take the pointers away
+	// before deleting what they point at.
+	//
+	if (m_apiServices) {
+		m_apiServices->cefCookieManager = nullptr;
+		m_apiServices->cef = nullptr;
+	}
+
 	if (m_cefCookieManager) {
 		delete m_cefCookieManager;
 		m_cefCookieManager = nullptr;
@@ -919,13 +931,15 @@ void SEGlobalStateManager::Shutdown()
 		m_cef = nullptr;
 	}
 
-	SEMessageBus::Destroy();
 
 	SEConfig::Destroy();
 
 	SEDrainEventQueue();
 
 	m_initialized = false;
+
+	if (m_apiServices)
+		m_apiServices->ready = false;
 }
 
 void SEGlobalStateManager::OnObsExit()
@@ -936,19 +950,6 @@ void SEGlobalStateManager::OnObsExit()
 	m_statePersistence->PersistState(false);
 
 	m_statePersistence->SetEnabled(false);
-}
-
-void SEGlobalStateManager::ReportIssue()
-{
-	obs_frontend_push_ui_translation(obs_module_get_string);
-
-	SEReportIssueDialog dialog(m_performanceHistoryTracker,
-				   m_analyticsEventsManager, mainWindow());
-
-	obs_frontend_pop_ui_translation();
-
-	if (dialog.exec() == QDialog::Accepted) {
-	}
 }
 
 #ifndef WIN32

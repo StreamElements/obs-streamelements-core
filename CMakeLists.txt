@@ -541,8 +541,10 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEStatePersistence.cpp
 	streamelements/SEStatusBarMessageManager.cpp
 	streamelements/SEPopupWindowManager.cpp
+	streamelements/SEAuxiliaryControlsBuilder.cpp
 	streamelements/SEBrowserDialogManager.cpp
 	streamelements/SESessionManager.cpp
+	streamelements/SEHostEventDispatcher.cpp
 	streamelements/SEUtils/SECryptoUtils.cpp
 	streamelements/SEUtils/SECefValueUtils.cpp
 	streamelements/SEUtils/SEHttpUtils.cpp
@@ -550,9 +552,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEUtils/SEAsyncTaskUtils.cpp
 	streamelements/SEUtils/SESystemInfoUtils.cpp
 	streamelements/SEUtils/SEAppEnvUtils.cpp
-	streamelements/SEUtils/SEHostEventUtils.cpp
 	streamelements/SEUtils/SEOverlayUrlUtils.cpp
-	streamelements/SEUtils/SESessionSigningUtils.cpp
 	streamelements/SEUtils/SEWidgetUtils.cpp
 	streamelements/SEUtils/SELifecycleUtils.cpp
 	streamelements/SEUtils/SEObsEncoderUtils.cpp
@@ -723,8 +723,11 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEStatePersistence.hpp
 	streamelements/SEStatusBarMessageManager.hpp
 	streamelements/SEPopupWindowManager.hpp
+	streamelements/SEAuxiliaryControlsBuilder.hpp
 	streamelements/SEBrowserDialogManager.hpp
 	streamelements/SESessionManager.hpp
+	streamelements/SEHostEventDispatcher.hpp
+	streamelements/SECompositionServices.hpp
 	streamelements/SEUtils/SECryptoUtils.hpp
 	streamelements/SEUtils/SECefValueUtils.hpp
 	streamelements/SEUtils/SECancelableTask.hpp
@@ -734,9 +737,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEUtils/SEAsyncTaskUtils.hpp
 	streamelements/SEUtils/SESystemInfoUtils.hpp
 	streamelements/SEUtils/SEAppEnvUtils.hpp
-	streamelements/SEUtils/SEHostEventUtils.hpp
 	streamelements/SEUtils/SEOverlayUrlUtils.hpp
-	streamelements/SEUtils/SESessionSigningUtils.hpp
 	streamelements/SEUtils/SEWidgetUtils.hpp
 	streamelements/SEUtils/SELifecycleUtils.hpp
 	streamelements/SEUtils/SEReentrancyUtils.hpp

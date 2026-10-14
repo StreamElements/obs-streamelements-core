@@ -7,6 +7,7 @@
 #include "SEWorkerManager.hpp"
 #include "SEHotkeyManager.hpp"
 #include "SENativeOBSControlsManager.hpp"
+#include "SEHostEventDispatcher.hpp"
 
 #include <QMainWindow>
 #include <QApplication>
@@ -15,8 +16,10 @@
 SEStatePersistence::SEStatePersistence(
 	QMainWindow *mainWindow, SEBrowserWidgetManager *widgetManager,
 	SEWorkerManager *workerManager, SEHotkeyManager *hotkeyManager,
-	SENativeOBSControlsManager *nativeObsControlsManager)
+	SENativeOBSControlsManager *nativeObsControlsManager,
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 	: m_mainWindow(mainWindow),
+	  m_hostEventDispatcher(hostEventDispatcher),
 	  m_widgetManager(widgetManager),
 	  m_workerManager(workerManager),
 	  m_hotkeyManager(hotkeyManager),
@@ -92,7 +95,9 @@ void SEStatePersistence::PersistState(bool sendEventToGuest)
 	SEConfig::GetInstance()->SetStartupState(base64EncodedJSON);
 
 	if (sendEventToGuest) {
-		AdviseHostUserInterfaceStateChanged();
+		if (m_hostEventDispatcher) {
+		m_hostEventDispatcher->AdviseHostUserInterfaceStateChanged();
+	}
 	}
 }
 

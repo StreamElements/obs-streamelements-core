@@ -489,6 +489,18 @@ SEBugSplatCrashHandler::SEBugSplatCrashHandler()
 #endif
 }
 
+void SEBugSplatCrashHandler::OnReportingServicesSet()
+{
+	//
+	// The tracker is what Collect() histograms; the analytics manager is
+	// unused on this platform, where BugSplat's own SDK reports the crash.
+	//
+	if (s_crashContext) {
+		s_crashContext->SetPerformanceHistoryTracker(
+			m_performanceHistoryTracker);
+	}
+}
+
 void SEBugSplatCrashHandler::StopAsyncHangDetection()
 {
 #if HANG_DETECTION_ENABLED

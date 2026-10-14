@@ -12,9 +12,12 @@
 //
 class SEWebsocketApiServer;
 
+class SEMessageBus;
+
 class SESharedVideoCompositionManager: public SEVideoCompositionEventListener {
 private:
 	std::shared_ptr<SEWebsocketApiServer> m_apiServer;
+	std::shared_ptr<SEMessageBus> m_messageBus;
 
 	std::shared_mutex m_mutex;
 
@@ -37,7 +40,8 @@ public:
 	SESharedVideoCompositionManager(
 		std::shared_ptr<SEWebsocketApiServer> apiServer,
 		std::shared_ptr<SEVideoCompositionManager>
-			videoCompositionManager);
+			videoCompositionManager,
+		std::shared_ptr<SEMessageBus> messageBus);
 
 	~SESharedVideoCompositionManager();
 

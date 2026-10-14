@@ -4,6 +4,9 @@
 #include "SEBrowserWidget.hpp"
 #include "SEMessageBus.hpp"
 #include "SEWebsocketApiServer.hpp"
+#include "SEHostEventDispatcher.hpp"
+
+class SEVideoCompositionManager;
 
 #include <QWidget>
 #include <QPointer>
@@ -47,12 +50,24 @@ private:
 	std::shared_ptr<SEApiMessageHandler> m_requestedApiMessageHandler;
 
 	//
-	// The services bundle is deliberately not a member. The only use
-	// was handing it to the API message handler this constructor
-	// creates, and that handler keeps its own reference -- so storing
-	// one here only added an edge from every widget back to the
-	// bundle, in a class the bundle's own widget managers destroy.
+	// The services bundle is deliberately not a member: storing it would
+	// put an edge from every widget back to the bundle, in a class the
+	// bundle's own widget managers destroy. What this class needs after
+	// construction is these two, by name.
 	//
+	// The server is held rather than fetched so that a widget can always
+	// unregister its message handler, which is what the availability
+	// check in DestroyBrowser() used to stand in for. Neither is a ring:
+	// no service in here owns a browser widget.
+	//
+	std::shared_ptr<SEWebsocketApiServer> m_apiServer;
+	std::shared_ptr<SEVideoCompositionManager> m_videoCompositionManager;
+
+	//
+	// Three, now: a widget announces its own visibility to its page and
+	// rebinds window.host.hostContainerHidden when it changes.
+	//
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
 	SEMessageBus::message_destination_filter_flags_t
 		m_messageDestinationFlags;
 
@@ -224,14 +239,20 @@ protected:
 			msg->GetArgumentList()->SetString(0, "host");
 			msg->GetArgumentList()->SetString(1, jsonString);
 
-			DispatchClientMessage(m_clientId, msg);
+			if (m_hostEventDispatcher) {
+				m_hostEventDispatcher->DispatchClientMessage(
+					m_clientId, msg);
+			}
 		}
 
 		// Dispatch hostVisibilityChanged event
 		{
-			DispatchJSEventContainer(m_clientId,
-					      "hostContainerVisibilityChanged",
-					      "null");
+			if (m_hostEventDispatcher) {
+				m_hostEventDispatcher->DispatchJSEventContainer(
+					m_clientId,
+					"hostContainerVisibilityChanged",
+					"null");
+			}
 		}
 	}
 

@@ -9,9 +9,44 @@
 // implementation is ever linked, so two backends can never contend for the
 // process-wide exception filter.
 //
+#include <memory>
+
+class SEPerformanceHistoryTracker;
+class SEAnalyticsEventsManager;
+
 class SECrashHandler {
 public:
 	virtual ~SECrashHandler() {}
+
+public:
+	//
+	// The two services a report is built from: the performance tracker the
+	// CPU and memory histograms come from, and the analytics manager the
+	// crash event is tracked through.
+	//
+	// Held strongly, and deliberately: this is the one path where asking
+	// whether the plug-in is still available gives the wrong answer. A
+	// crash while OBS is tearing down is exactly the crash worth
+	// reporting, and both of these were fetched from the singleton at
+	// crash time until CORE-757 -- one behind an availability check that
+	// would silently drop the histograms, one behind nothing at all.
+	//
+	// Set after construction rather than injected, because Create() is the
+	// first thing Initialize() does and neither service exists yet. That
+	// ordering is on purpose: a crash during the rest of startup is still
+	// caught, it simply reports without these two.
+	//
+	void SetReportingServices(
+		std::shared_ptr<SEPerformanceHistoryTracker>
+			performanceHistoryTracker,
+		std::shared_ptr<SEAnalyticsEventsManager>
+			analyticsEventsManager)
+	{
+		m_performanceHistoryTracker = performanceHistoryTracker;
+		m_analyticsEventsManager = analyticsEventsManager;
+
+		OnReportingServicesSet();
+	}
 
 public:
 	// Stops the Windows hang-detection worker before OBS tears itself down.
@@ -23,4 +58,17 @@ public:
 	// Constructs the backend selected at build time, or nullptr when crash
 	// reporting is compiled out entirely.
 	static SECrashHandler *Create();
+
+protected:
+	//
+	// Where the backend puts the two above: each one reaches a different
+	// place. The Windows handlers forward the tracker into their
+	// SECrashContext, and the macOS BugSplat handler keeps the analytics
+	// manager where its file-static crash callbacks can find it.
+	//
+	virtual void OnReportingServicesSet() {}
+
+	std::shared_ptr<SEPerformanceHistoryTracker>
+		m_performanceHistoryTracker;
+	std::shared_ptr<SEAnalyticsEventsManager> m_analyticsEventsManager;
 };

@@ -2,6 +2,8 @@
 
 #include "cef-headers.hpp"
 #include "SEGlobalStateManager.hpp"
+#include <obs-frontend-api.h>
+#include <QMainWindow>
 #include "SESecretRedactor.hpp"
 #include "SEUtils.hpp"
 #include "deps/zip/zip.h"
@@ -386,6 +388,16 @@ private:
 
 struct SECrashContext::Impl {
 	MyStackWalker *stackWalker = nullptr;
+
+	//
+	// Guarded, because the setter runs on the UI thread during startup and
+	// the read runs on whichever thread is crashing. The lock is held for
+	// a shared_ptr copy and nothing else -- no allocation, no I/O -- which
+	// is as little as the crash path can be asked to do for a pointer it
+	// cannot otherwise read safely.
+	//
+	std::mutex performanceHistoryTrackerMutex;
+	std::shared_ptr<SEPerformanceHistoryTracker> performanceHistoryTracker;
 };
 
 /* ================================================================= */
@@ -456,6 +468,15 @@ SECrashContext::SECrashContext()
 #else
 	m_impl->stackWalker = new MyStackWalker();
 #endif
+}
+
+void SECrashContext::SetPerformanceHistoryTracker(
+	std::shared_ptr<SEPerformanceHistoryTracker> performanceHistoryTracker)
+{
+	std::lock_guard<std::mutex> guard(
+		m_impl->performanceHistoryTrackerMutex);
+
+	m_impl->performanceHistoryTracker = performanceHistoryTracker;
 }
 
 SECrashContext::~SECrashContext()
@@ -818,10 +839,9 @@ SECrashContext::Result SECrashContext::Collect()
 	// inside the crash handler -- losing the whole report rather than just
 	// the screenshot.
 	//
-	if (SEGlobalStateManager::IsInstanceAvailable()) {
+	{
 		auto mainWindow =
-			SEGlobalStateManager::GetInstance()
-				->mainWindow();
+			(QMainWindow *)obs_frontend_get_main_window();
 
 		if (mainWindow) {
 			addWindowCaptureToZip((HWND)mainWindow->winId(), 24,
@@ -1137,13 +1157,19 @@ SECrashContext::Result SECrashContext::Collect()
 		addCefValueToZip(sysMemoryInfo, L"system\\memory.json");
 	}
 
-	// Same guard as the window capture above: gone during shutdown, and a
-	// null dereference here would cost the entire report.
-	auto performanceTracker =
-		SEGlobalStateManager::IsInstanceAvailable()
-			? SEGlobalStateManager::GetInstance()
-				  ->GetPerformanceHistoryTracker()
-			: nullptr;
+	// Held rather than fetched (CORE-757): the availability check this
+	// replaced answered "no" during shutdown, which is exactly when a
+	// crash is worth reporting. Still null-checked, because a crash
+	// between the handler's construction and SetPerformanceHistoryTracker()
+	// finds nothing set.
+	std::shared_ptr<SEPerformanceHistoryTracker> performanceTracker;
+
+	{
+		std::lock_guard<std::mutex> guard(
+			m_impl->performanceHistoryTrackerMutex);
+
+		performanceTracker = m_impl->performanceHistoryTracker;
+	}
 
 	if (performanceTracker) {
 		// Histogram CPU & memory usage (past hour, 1 minute intervals)

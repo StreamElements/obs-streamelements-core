@@ -31,6 +31,21 @@ public Q_SLOTS:
 	virtual int exec() override;
 
 public:
+	//
+	// Called by SEBrowserDialogManager's destructor before it rejects
+	// what is still open. DestroyBrowser() then deletes the browser
+	// widget outright instead of deferring it: the event loop that would
+	// run a deleteLater() is not coming back, so a deferred delete is a
+	// leak. Everywhere else -- a user closing the dialog, hideEvent --
+	// the deferral is what keeps us from deleting a widget from inside
+	// its own event handler.
+	//
+	// This used to be SEGlobalStateManager::IsInstanceAvailable(), which
+	// happened to answer it: the instance is released before the
+	// container that owns the dialog manager is destroyed (CORE-757).
+	//
+	void NoteOwnerTeardown() { m_ownerTeardown = true; }
+
 	std::string getUrl() { return m_url; }
 	bool getIsIncognito() { return m_isIncognito; }
 	std::string getExecuteJavaScriptOnLoad()
@@ -55,6 +70,7 @@ private:
 	std::string m_executeJavaScriptOnLoad;
 
 	bool m_isIncognito = false;
+	bool m_ownerTeardown = false;
 
 	std::string m_containerType;
 

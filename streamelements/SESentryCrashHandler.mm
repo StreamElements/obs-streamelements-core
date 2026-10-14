@@ -1031,6 +1031,14 @@ SESentryCrashHandler::SESentryCrashHandler()
 	     release.c_str());
 }
 
+void SESentryCrashHandler::OnReportingServicesSet()
+{
+	if (s_crashContext) {
+		s_crashContext->SetPerformanceHistoryTracker(
+			m_performanceHistoryTracker);
+	}
+}
+
 void SESentryCrashHandler::StopAsyncHangDetection()
 {
 	// There is no hang detection on macOS, matching the BugSplat handler.

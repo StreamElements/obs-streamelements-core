@@ -11,42 +11,27 @@
 // whose own reference outlives the call, and this neither owns it nor
 // extends its life.
 //
-static void dispatch_event(SEWebsocketApiServer *apiServer, std::string name,
-			   std::string args)
+static void dispatch_event(SEWebsocketApiServer *apiServer,
+			   std::shared_ptr<SEMessageBus> messageBus,
+			   std::string name, std::string args)
 {
 	if (apiServer)
 		apiServer->DispatchJSEvent("system", name, args);
 
 	//
-	// The message bus below is still reached through its own singleton, so
-	// the global state manager stays here as the "not shutting down" proxy
-	// for that half alone. The dispatch above no longer needs it: the
-	// caller holds a reference to the server, so it outlives the manager.
+	// Both halves are held by the caller now, so the availability check
+	// that stood in for "is the plugin still here" is gone with it.
 	//
-	if (!SEGlobalStateManager::IsInstanceAvailable())
-		return;
-
-	std::string externalEventName =
-		name.c_str() + 4; /* remove 'host' prefix */
-	externalEventName[0] =
-		tolower(externalEventName[0]); /* lower case first letter */
-
-	auto msgBus = SEMessageBus::GetInstance();
-
-	if (!msgBus)
-		return;
-
-	msgBus->NotifyAllExternalEventListeners(
-		SEMessageBus::DEST_ALL_EXTERNAL,
-		SEMessageBus::SOURCE_APPLICATION, "OBS",
-		externalEventName,
-		CefParseJSON(args, JSON_PARSER_ALLOW_TRAILING_COMMAS));
+	if (messageBus)
+		messageBus->NotifyExternalHostEvent(name, args);
 }
 
 SEObsActiveSceneTracker::SEObsActiveSceneTracker(
+	std::shared_ptr<SEMessageBus> messageBus,
 	std::shared_ptr<SEWebsocketApiServer> apiServer,
 	std::shared_ptr<SEVideoCompositionManager> videoCompositionManager)
-	: m_apiServer(apiServer),
+	: m_messageBus(messageBus),
+	  m_apiServer(apiServer),
 	  m_videoCompositionManager(videoCompositionManager)
 {
 	UpdateTransition();
@@ -160,13 +145,13 @@ void SEObsActiveSceneTracker::DispatchTransitionChanged()
 	std::string name = "hostActiveTransitionChanged";
 	std::string args = json.dump();
 
-	dispatch_event(m_apiServer.get(), name, args);
+	dispatch_event(m_apiServer.get(), m_messageBus, name, args);
 
 	CefRefPtr<CefValue> compositionJsonValue = CefValue::Create();
 
 	videoComposition->SerializeComposition(compositionJsonValue);
 
-	dispatch_event(m_apiServer.get(), "hostVideoCompositionChanged",
+	dispatch_event(m_apiServer.get(), m_messageBus, "hostVideoCompositionChanged",
 		       CefWriteJSON(compositionJsonValue, JSON_WRITER_DEFAULT));
 }
 
@@ -220,7 +205,7 @@ void SEObsActiveSceneTracker::handle_transition_start(
 		std::string name = "hostActiveSceneChanging";
 		std::string args = json.dump();
 
-		dispatch_event(self->m_apiServer.get(), name, args);
+		dispatch_event(self->m_apiServer.get(), self->m_messageBus, name, args);
 	}
 }
 

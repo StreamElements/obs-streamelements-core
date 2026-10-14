@@ -36,6 +36,8 @@ struct QCefCookieManager;
 #include "SEPopupWindowManager.hpp"
 #include "SEBrowserDialogManager.hpp"
 #include "SESessionManager.hpp"
+#include "SEAuxiliaryControlsBuilder.hpp"
+#include "SEHostEventDispatcher.hpp"
 #include "SEBrowserDialog.hpp"
 #include "SEVideoCompositionManager.hpp"
 #include "SEAudioCompositionManager.hpp"
@@ -58,8 +60,22 @@ private:
 	private:
 		QObject *m_target;
 
+		//
+		// A resize, a move or a window-state change is announced to
+		// every page. This filter is installed on the application, so
+		// it is handed the dispatcher rather than fetching the server
+		// on each of those -- which, for a drag of the main window,
+		// is every frame.
+		//
+		std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+
 	public:
-		WindowStateChangeEventFilter(QObject *target) : m_target(target)
+		WindowStateChangeEventFilter(
+			QObject *target,
+			std::shared_ptr<SEHostEventDispatcher>
+				hostEventDispatcher)
+			: m_target(target),
+			  m_hostEventDispatcher(hostEventDispatcher)
 		{
 			QCoreApplication::instance()->installEventFilter(this);
 		}
@@ -76,7 +92,10 @@ private:
 				case QEvent::Resize:
 				case QEvent::Move:
 				case QEvent::WindowStateChange:
-					AdviseHostUserInterfaceStateChanged();
+					if (m_hostEventDispatcher) {
+						m_hostEventDispatcher
+							->AdviseHostUserInterfaceStateChanged();
+					}
 					break;
 				default:
 					break;
@@ -92,15 +111,12 @@ public:
 	virtual ~SEGlobalStateManager();
 
 public:
-	static std::shared_ptr<SEGlobalStateManager> GetInstance();
-	static void Destroy();
-
-	// Releases the singleton WITHOUT running any destructor, by parking a
-	// reference that is never freed. Used when OBS asked to close before
-	// initialization completed: the object graph is half-built and running
-	// its destructors corrupts the widget tree (CORE-786).
-	static void Leak();
-	static bool IsInstanceAvailable();
+	//
+	// The only way to build the root. The module entry point holds the
+	// one reference; nothing can reach this object without being handed
+	// it, which is the whole of CORE-757.
+	//
+	static std::shared_ptr<SEGlobalStateManager> Create();
 
 public:
 	void Initialize(QMainWindow *obs_main_window);
@@ -113,21 +129,20 @@ private:
 	//
 	void PublishApiServices();
 
-private:
-	//
-	// Private: asking the root whether it is alive is what a holder does
-	// instead of holding what it uses, and every external caller has been
-	// given the thing it actually wanted. The one caller left is
-	// IsInstanceAvailable(), which answers the same question for the
-	// static reaches that remain -- the SEUtils, composition and
-	// crash-path ones, which later stages inject.
-	//
-	bool IsInitialized() { return m_initialized; }
-
 public:
 
 
 	QCef *GetCef() { return m_cef; }
+
+	//
+	// For handle_obs_frontend_event, which is a file static in the
+	// implementation and is handed this object as its private_data.
+	//
+	std::shared_ptr<SEHostEventDispatcher> GetHostEventDispatcher()
+	{
+		return m_hostEventDispatcher;
+	}
+	std::shared_ptr<SEMessageBus> GetMessageBus() { return m_messageBus; }
 
 	std::shared_ptr<SEBrowserWidgetManager> GetWidgetManager()
 	{
@@ -221,16 +236,6 @@ public:
 		return m_websocketApiServer;
 	}
 
-	//
-	// The bundle the API handlers and browser widgets are given. Handed to
-	// them at construction; this accessor exists for the one caller that
-	// cannot be handed anything -- the lazily created InvokeHandler
-	// singleton in SEUtils -- and goes away with it.
-	//
-	std::shared_ptr<SEApiServices> GetApiServices()
-	{
-		return m_apiServices;
-	}
 	std::shared_ptr <SESharedVideoCompositionManager>
 		GetSharedVideoCompositionManager()
 	{
@@ -258,7 +263,6 @@ public:
 	QMainWindow *mainWindow() { return m_mainWindow; }
 
 public:
-	void ReportIssue();
 	void UninstallPlugin();
 
 
@@ -325,20 +329,31 @@ private:
 	std::shared_ptr<SEBrowserDialogManager> m_browserDialogManager =
 		nullptr;
 	std::shared_ptr<SESessionManager> m_sessionManager = nullptr;
-
-private:
-	static std::shared_ptr<
-		SEGlobalStateManager> s_instance;
+	std::shared_ptr<SEAuxiliaryControlsBuilder>
+		m_auxiliaryControlsBuilder = nullptr;
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher = nullptr;
+	std::shared_ptr<SEMessageBus> m_messageBus = nullptr;
 
 private:
 	class ThemeChangeListener : public QDockWidget {
 	public:
-		ThemeChangeListener();
+		ThemeChangeListener(
+			std::shared_ptr<SEHostEventDispatcher>
+				hostEventDispatcher,
+			std::shared_ptr<SEMessageBus> messageBus);
 
 	protected:
 		virtual void changeEvent(QEvent *event) override;
 
 		std::string m_currentTheme;
+
+		//
+		// A nested QDockWidget: Qt owns it once it is added to the
+		// main window, so it holds what it announces with rather
+		// than reaching for it when the theme changes.
+		//
+		std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+		std::shared_ptr<SEMessageBus> m_messageBus;
 	};
 
 	class ApplicationStateListener : public QObject {

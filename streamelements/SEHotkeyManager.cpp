@@ -1,5 +1,6 @@
 #include "SEHotkeyManager.hpp"
 #include "SEUtils.hpp"
+#include "SEHostEventDispatcher.hpp"
 
 #include <util/dstr.h>
 #include <obs-module.h>
@@ -149,9 +150,18 @@ static void DeserializeAndApplyHotkeyTriggersToHotkeyID(
 		static_cast<void *>(&AtomicUpdate));
 }
 
-void SEHotkeyManager::hotkey_change_handler(void*, calldata_t*)
+void SEHotkeyManager::hotkey_change_handler(void *data, calldata_t *)
 {
-	AdviseHostHotkeyBindingsChanged();
+	//
+	// signal_handler_connect() below is given `this`, so the manager --
+	// and with it the dispatcher -- arrives as the callback's context.
+	//
+	auto self = static_cast<SEHotkeyManager *>(data);
+
+	if (!self || !self->m_hostEventDispatcher)
+		return;
+
+	self->m_hostEventDispatcher->AdviseHostHotkeyBindingsChanged();
 }
 
 static const char* HOTKEY_BINDINGS_CHANGED_SIGNAL_NAMES[] = {
@@ -162,7 +172,9 @@ static const char* HOTKEY_BINDINGS_CHANGED_SIGNAL_NAMES[] = {
 	nullptr
 };
 
-SEHotkeyManager::SEHotkeyManager()
+SEHotkeyManager::SEHotkeyManager(
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
+	: m_hostEventDispatcher(hostEventDispatcher)
 {
 	for (size_t i = 0; HOTKEY_BINDINGS_CHANGED_SIGNAL_NAMES[i]; ++i) {
 		signal_handler_connect(
@@ -424,12 +436,12 @@ void SEHotkeyManager::hotkeyTriggered(obs_hotkey_id id, obs_hotkey_t *hotkey, bo
 	if (m_registeredHotkeyDataString.count(id)) {
 		std::string dataString = m_registeredHotkeyDataString[id];
 
-		if (pressed) {
-			DispatchJSEventGlobal("hostHotkeyPressed", dataString);
-		}
-		else {
-			DispatchJSEventGlobal("hostHotkeyReleased", dataString);
-		}
+		if (!m_hostEventDispatcher)
+			return;
+
+		m_hostEventDispatcher->DispatchJSEventGlobal(
+			pressed ? "hostHotkeyPressed" : "hostHotkeyReleased",
+			dataString);
 	}
 }
 

@@ -9,6 +9,7 @@ class SEBrowserWidgetManager;
 class SEWorkerManager;
 class SEHotkeyManager;
 class SENativeOBSControlsManager;
+class SEHostEventDispatcher;
 
 //
 // Collects what the user arranged -- docks, the notification bar, background
@@ -34,7 +35,9 @@ public:
 			   SEBrowserWidgetManager *widgetManager,
 			   SEWorkerManager *workerManager,
 			   SEHotkeyManager *hotkeyManager,
-			   SENativeOBSControlsManager *nativeObsControlsManager);
+			   SENativeOBSControlsManager *nativeObsControlsManager,
+			   std::shared_ptr<SEHostEventDispatcher>
+				   hostEventDispatcher);
 	~SEStatePersistence();
 
 	//
@@ -57,6 +60,8 @@ private:
 	SEWorkerManager *m_workerManager = nullptr;
 	SEHotkeyManager *m_hotkeyManager = nullptr;
 	SENativeOBSControlsManager *m_nativeObsControlsManager = nullptr;
+
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
 
 	bool m_enabled = false;
 };

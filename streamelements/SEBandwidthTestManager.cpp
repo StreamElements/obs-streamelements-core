@@ -1,7 +1,10 @@
 #include "SEBandwidthTestManager.hpp"
+#include "SEHostEventDispatcher.hpp"
 #include "SEUtils.hpp"
 
-SEBandwidthTestManager::SEBandwidthTestManager()
+SEBandwidthTestManager::SEBandwidthTestManager(
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
+	: m_hostEventDispatcher(hostEventDispatcher)
 {
 	m_isTestInProgress = false;
 	m_client = new SEBandwidthTestClient();
@@ -62,7 +65,7 @@ bool SEBandwidthTestManager::BeginBandwidthTest(CefRefPtr<CefValue> settingsValu
 				m_isTestInProgress = true;
 
 				// Signal test started
-				DispatchJSEventContainer(target, "hostBandwidthTestStarted", "null");
+				m_hostEventDispatcher->DispatchJSEventContainer(target, "hostBandwidthTestStarted", "null");
 
 				struct local_context {
 					SEBandwidthTestManager* self;
@@ -88,7 +91,8 @@ bool SEBandwidthTestManager::BeginBandwidthTest(CefRefPtr<CefValue> settingsValu
 						context->self->m_last_test_results = *results;
 
 						// Signal test progress
-						DispatchJSEventContainer(context->target, "hostBandwidthTestProgress", "null");
+						context->self->m_hostEventDispatcher
+							->DispatchJSEventContainer(context->target, "hostBandwidthTestProgress", "null");
 					},
 					[](std::vector<SEBandwidthTestClient::Result>* results, void* data) {
 						local_context* context = (local_context*)data;
@@ -101,7 +105,8 @@ bool SEBandwidthTestManager::BeginBandwidthTest(CefRefPtr<CefValue> settingsValu
 						context->self->m_isTestInProgress = false;
 
 						// Signal test completed
-						DispatchJSEventContainer(context->target, "hostBandwidthTestCompleted", "null");
+						context->self->m_hostEventDispatcher
+							->DispatchJSEventContainer(context->target, "hostBandwidthTestCompleted", "null");
 
 						delete context;
 					},

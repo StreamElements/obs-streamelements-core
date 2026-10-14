@@ -1,4 +1,5 @@
 #pragma once
+#include "SECompositionServices.hpp"
 
 #include "SEAudioComposition.hpp"
 
@@ -34,9 +35,24 @@ private:
 	std::map<std::string, CefRefPtr<CefDictionaryValue>>
 		m_availableEncoderClassesCache;
 
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+	std::shared_ptr<SEMessageBus> m_messageBus;
+
+	//
+	// Audio compositions announce too; the video manager handle in here
+	// is unused on this side.
+	//
+	SECompositionServices CompositionServices()
+	{
+		return {m_hostEventDispatcher, m_messageBus, {}};
+	}
+
 public:
 	SEAudioCompositionManager(
-		std::shared_ptr<SEWebsocketApiServer> apiServer);
+		std::shared_ptr<SEWebsocketApiServer> apiServer,
+		std::shared_ptr<SEHostEventDispatcher>
+			hostEventDispatcher,
+		std::shared_ptr<SEMessageBus> messageBus);
 	~SEAudioCompositionManager();
 
 public:

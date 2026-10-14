@@ -52,13 +52,19 @@ SENativeOBSControlsManager::SENativeOBSControlsManager(
 	if (m_nativeManageBroadcastButton) {
 		auto manageBroadcastVisibilityCallback =
 			[this](bool isVisible) -> void {
-				if (isVisible) {
-					DispatchJSEventGlobal(
-						"hostNativeManageBroadcastButtonVisible", "null");
-				} else {
-					DispatchJSEventGlobal(
-						"hostNativeManageBroadcastButtonHidden", "null");
-			}};
+				auto services = m_apiServices.lock();
+
+				if (!services ||
+				    !services->hostEventDispatcher)
+					return;
+
+				services->hostEventDispatcher
+					->DispatchJSEventGlobal(
+						isVisible
+							? "hostNativeManageBroadcastButtonVisible"
+							: "hostNativeManageBroadcastButtonHidden",
+						"null");
+			};
 
 		m_nativeManageBroadcastButtonVisibilityChangeTracker =
 			std::make_shared<WidgetVisibilityChangeTracker>(
@@ -665,7 +671,10 @@ void SENativeOBSControlsManager::BeginStartStreaming()
 	case request:
 		SetStreamingRequestedState();
 
-		DispatchJSEventGlobal("hostStreamingStartRequested", "null");
+		if (auto services = m_apiServices.lock()) {
+		services->hostEventDispatcher->DispatchJSEventGlobal(
+			"hostStreamingStartRequested", "null");
+	}
 		break;
 	}
 }
@@ -676,14 +685,22 @@ void SENativeOBSControlsManager::StartStreaming()
 
 	m_startStopStreamingButton->setEnabled(false);
 
+	//
+	// QPointer, not the plug-in's availability: the question five seconds
+	// later is whether *this* object is still there to re-enable its own
+	// button, and Qt zeroes a QPointer when the QObject dies (CORE-757).
+	//
+	QPointer<SENativeOBSControlsManager> self(this);
+
 	QtDelayTask(
-		[this]() {
-			if (!SEGlobalStateManager::
-				    IsInstanceAvailable())
+		[self]() {
+			if (!self)
 				return;
 
-			if (!os_atomic_load_bool(&m_isStreamingTransitionState))
-				m_startStopStreamingButton->setEnabled(true);
+			if (!os_atomic_load_bool(
+				    &self->m_isStreamingTransitionState))
+				self->m_startStopStreamingButton->setEnabled(
+					true);
 		},
 		5000);
 

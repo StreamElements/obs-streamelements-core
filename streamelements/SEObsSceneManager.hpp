@@ -3,6 +3,8 @@
 #include "SESceneItemsMonitor.hpp"
 #include "SEScenesListWidgetManager.hpp"
 #include "SEVideoComposition.hpp"
+#include "SEVideoCompositionManager.hpp"
+#include "SEHostEventDispatcher.hpp"
 #include "SEAsyncTaskQueue.hpp"
 
 #include "cef-headers.hpp"
@@ -16,13 +18,26 @@
 #include <mutex>
 
 class SESignalHandlerData;
+class SEAuxiliaryControlsBuilder;
+class SEHostEventDispatcher;
 
 class SEObsSceneManager {
 private:
 	SESignalHandlerData *m_signalHandlerData = nullptr;
 
 public:
-	SEObsSceneManager(QMainWindow *parent);
+	//
+	// The composition manager is injected. It used to be fetched from the
+	// singleton in this constructor's own body -- the CORE-735 shape:
+	// GetInstance() during construction, correct only because s_instance
+	// happened to be the instance building us.
+	//
+	SEObsSceneManager(
+		QMainWindow *parent,
+		std::shared_ptr<SEVideoCompositionManager> videoCompositionManager,
+		std::shared_ptr<SEAuxiliaryControlsBuilder>
+			auxiliaryControlsBuilder,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher);
 	virtual ~SEObsSceneManager();
 
 private:
@@ -201,6 +216,15 @@ protected:
 
 private:
 	QMainWindow *m_parent;
+	std::shared_ptr<SEVideoCompositionManager> m_videoCompositionManager;
+
+	//
+	// Was a file-static that fetched the manager itself. All nineteen
+	// call sites are members of this class, so it becomes one and reads
+	// the injected handle instead.
+	//
+	std::shared_ptr<SEVideoCompositionBase>
+	GetVideoComposition(CefRefPtr<CefValue> input);
 	SESceneItemsMonitor *m_sceneItemsMonitor = nullptr;
 	SEScenesListWidgetManager *m_scenesWidgetManager = nullptr;
 };
@@ -211,11 +235,24 @@ private:
 		nullptr;
 
 public:
+	//
+	// Holds the composition manager strongly, and that is the point: the
+	// callbacks this object is handed to run on the graphics thread and
+	// on the task-queue worker, where "is the plugin still alive?" used
+	// to be asked of the singleton. Holding the lookup service for as
+	// long as the callbacks can fire answers it by construction. No ring
+	// -- the composition manager does not own the scene manager.
+	//
 	SESignalHandlerData(
 		SEObsSceneManager *obsSceneManager,
-		SEVideoCompositionBase *videoCompositionBase)
+		std::weak_ptr<SEVideoCompositionManager>
+			videoCompositionManager,
+		SEVideoCompositionBase *videoCompositionBase,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 		: m_obsSceneManager(obsSceneManager),
-		  m_videoCompositionBase(videoCompositionBase)
+		  m_videoCompositionManager(videoCompositionManager),
+		  m_videoCompositionBase(videoCompositionBase),
+		  m_hostEventDispatcher(hostEventDispatcher)
 	{
 		// Cached now, while the composition is provably alive. Every later
 		// reader wants the id and nothing else, so caching it means the
@@ -263,11 +300,16 @@ private:
 	SESignalHandlerData(
 		SESignalHandlerData *parent,
 		SEObsSceneManager *obsSceneManager,
+		std::weak_ptr<SEVideoCompositionManager>
+			videoCompositionManager,
 		SEVideoCompositionBase *videoCompositionBase,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
 		obs_scene_t *scene)
 		: m_parent(parent),
 		  m_obsSceneManager(obsSceneManager),
+		  m_videoCompositionManager(videoCompositionManager),
 		  m_videoCompositionBase(videoCompositionBase),
+		  m_hostEventDispatcher(hostEventDispatcher),
 		  m_scene(SETRACE_ADDREF(obs_scene_get_ref(scene)))
 	{
 		// No m_asyncTaskQueue here, since there is a parent to refer to
@@ -418,9 +460,10 @@ private:
 
 		if (!m_scenes.count(scene)) {
 			m_scenes[scene] = new SESignalHandlerData(
-				this,
-				m_obsSceneManager, m_videoCompositionBase,
-				scene);
+				this, m_obsSceneManager,
+				m_videoCompositionManager,
+				m_videoCompositionBase,
+				m_hostEventDispatcher, scene);
 
 			m_scenes_refcount[scene] = 1;
 
@@ -614,7 +657,35 @@ public:
 
 	// char m_header[7] = "header"; // TODO: Remvoe debug marker
 	SEObsSceneManager *m_obsSceneManager = nullptr;
+	std::weak_ptr<SEVideoCompositionManager> m_videoCompositionManager;
 	SEVideoCompositionBase *m_videoCompositionBase = nullptr;
+
+	//
+	// Strong, for the same reason the composition manager is: the
+	// callbacks this object is handed to announce scene and scene-item
+	// changes to pages from the graphics thread and from the task-queue
+	// worker, and holding what they announce with for as long as they can
+	// fire is what replaced asking the singleton whether the plugin is
+	// still alive. No ring -- the dispatcher owns nothing here.
+	//
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+
+public:
+	//
+	// For the file-static helpers that are handed this object as their
+	// callback context and need to look a composition up.
+	//
+	std::shared_ptr<SEVideoCompositionManager> VideoCompositionManager()
+	{
+		return m_videoCompositionManager.lock();
+	}
+
+	std::shared_ptr<SEHostEventDispatcher> HostEventDispatcher()
+	{
+		return m_hostEventDispatcher;
+	}
+
+private:
 	obs_scene_t* m_scene = nullptr;
 	std::string m_videoCompositionId;
 	std::mutex m_videoCompositionMutex;

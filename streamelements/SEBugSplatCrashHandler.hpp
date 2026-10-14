@@ -15,4 +15,7 @@ public:
 
 public:
 	virtual void StopAsyncHangDetection() override;
+
+protected:
+	virtual void OnReportingServicesSet() override;
 };

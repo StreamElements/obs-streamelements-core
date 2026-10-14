@@ -20,8 +20,6 @@
 #include <QDesktopServices>
 #include <QUrl>
 
-std::shared_ptr<SEApiMessageHandler::InvokeHandler>
-	SEApiMessageHandler::InvokeHandler::s_singleton = nullptr;
 
 /* Incoming messages from renderer process */
 const char *MSG_ON_CONTEXT_CREATED =
@@ -35,20 +33,15 @@ const char *MSG_BIND_JAVASCRIPT_FUNCTIONS =
 const char *MSG_BIND_JAVASCRIPT_PROPS =
 	"CefRenderProcessHandler::BindJavaScriptProperties";
 
-static bool IsPluginInitialized()
+
+bool SEApiMessageHandler::IsPluginInitialized()
 {
 	if (!obs_initialized())
 		return false;
 
-	//
-	// IsInstanceAvailable() is the whole question: it returns false unless
-	// the instance exists *and* is initialized, so the separate
-	// IsInitialized() reach that used to be here asked it twice.
-	//
-	if (!SEGlobalStateManager::IsInstanceAvailable())
-		return false;
+	auto services = m_services.lock();
 
-	return true;
+	return services && services->ready;
 }
 
 bool SEApiMessageHandler::OnProcessMessageReceived(
@@ -136,7 +129,7 @@ bool SEApiMessageHandler::OnProcessMessageReceived(
 			context->cefClientId = cefClientId;
 			context->source = source;
 			context->complete = [context]() {
-				if (!IsPluginInitialized()) {
+				if (!context->self->IsPluginInitialized()) {
 					blog(LOG_ERROR,
 					     "obs-streamelements-core[%s %s]: API: plugin is no longer initialized while completing call to '%s', callback id %d",
 					     context->target->m_target.c_str(),
@@ -229,8 +222,8 @@ bool SEApiMessageHandler::OnProcessMessageReceived(
 
 			QtPostTask (
 				[context]() -> void {
-					if (!IsPluginInitialized())
-					{
+					if (!context->self
+						     ->IsPluginInitialized()) {
 						blog(LOG_ERROR,
 						     "obs-streamelements-core[%s %s]: API: plugin is no longer initialized while performing call to '%s', callback id %d",
 						     context->target->m_target
@@ -582,13 +575,10 @@ static std::recursive_mutex s_sync_api_call_mutex;
 // and after Shutdown() has released it -- and Shutdown() is exactly when a page
 // is most likely to still be calling.
 //
-static std::shared_ptr<SERazerWyvrnManager> GetRazerWyvrnManager()
+static std::shared_ptr<SERazerWyvrnManager>
+GetRazerWyvrnManager(std::shared_ptr<SEApiServices> apiServices)
 {
-	if (!SEGlobalStateManager::IsInstanceAvailable())
-		return nullptr;
-
-	return SEGlobalStateManager::GetInstance()
-		->GetRazerWyvrnManager();
+	return apiServices ? apiServices->razerWyvrnManager : nullptr;
 }
 
 //
@@ -596,9 +586,10 @@ static std::shared_ptr<SERazerWyvrnManager> GetRazerWyvrnManager()
 // hostRazerWyvrnStatusChanged event, so a page cannot be told two different
 // things about the same state.
 //
-static CefRefPtr<CefValue> SerializeRazerWyvrnStatus()
+static CefRefPtr<CefValue>
+SerializeRazerWyvrnStatus(std::shared_ptr<SEApiServices> apiServices)
 {
-	auto manager = GetRazerWyvrnManager();
+	auto manager = GetRazerWyvrnManager(apiServices);
 
 	if (manager.get())
 		return manager->SerializeStatus();
@@ -1726,7 +1717,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize() && args->GetType(0) == VTYPE_DICTIONARY) {
 			CefRefPtr<CefValue> message = args->GetValue(0);
 
-			SEMessageBus::GetInstance()
+			apiServices->messageBus
 				->NotifyAllMessageListeners(
 					SEMessageBus::DEST_ALL_LOCAL,
 					SEMessageBus::SOURCE_WEB,
@@ -1749,7 +1740,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				std::string sourceUrl =
 					"urn:streamelements:internal:" + target->m_target;
 
-				SEMessageBus::GetInstance()
+				apiServices->messageBus
 					->NotifyAllLocalEventListeners(
 						SEMessageBus::
 								DEST_ALL_LOCAL &
@@ -1760,7 +1751,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 						sourceUrl, "hostEventReceived",
 						args->GetValue(0));
 
-				SEMessageBus::GetInstance()
+				apiServices->messageBus
 					->NotifyAllExternalEventListeners(
 						SEMessageBus::
 							DEST_ALL_EXTERNAL,
@@ -2484,7 +2475,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("addBrowserScopedHttpServer");
 	{
 		if (args->GetSize()) {
-			SEMessageBus::GetInstance()
+			apiServices->messageBus
 				->DeserializeBrowserHttpServer(
 					target->m_target, args->GetValue(0), result);
 		}
@@ -2493,15 +2484,15 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAllBrowserScopedHttpServers");
 	{
-		SEMessageBus::GetInstance()
-			->SerializeBrowserHttpServers(target->m_target, result);
+		apiServices->messageBus->SerializeBrowserHttpServers(
+			target->m_target, result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("removeBrowserScopedHttpServersByIds");
 	{
 		if (args->GetSize()) {
-			SEMessageBus::GetInstance()
+			apiServices->messageBus
 				->RemoveBrowserHttpServersByIds(
 					target->m_target, args->GetValue(0), result);
 		}
@@ -2511,7 +2502,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("sendHttpRequestResponse");
 	{
 		if (args->GetSize() >= 2) {
-			SEMessageBus::GetInstance()
+			apiServices->messageBus
 				->DeserializeHttpRequestResponse(
 					args->GetValue(0), args->GetValue(1),
 					result);
@@ -3182,7 +3173,9 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize()) {
 			QMenu menu;
-			if (DeserializeMenu(args->GetValue(0), menu)) {
+			if (apiServices->auxiliaryControlsBuilder
+				    ->DeserializeMenu(args->GetValue(0),
+						      menu)) {
 				menu.exec(QCursor::pos());
 
 				result->SetBool(true);
@@ -3234,7 +3227,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 		d->SetString("sceneCollections", "available");
 
-		d->SetValue("razerWyvrn", SerializeRazerWyvrnStatus());
+		d->SetValue("razerWyvrn", SerializeRazerWyvrnStatus(apiServices));
 
 		result->SetDictionary(d);
 	}
@@ -3281,7 +3274,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				components = d->GetBool("components");
 		}
 
-		auto manager = GetRazerWyvrnManager();
+		auto manager = GetRazerWyvrnManager(apiServices);
 
 		if (manager.get()) {
 			result = manager->SerializeEvents(groupFilter, idPrefix,
@@ -3329,7 +3322,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	//
 	API_HANDLER_BEGIN("setRazerWyvrnEvent");
 	{
-		auto manager = GetRazerWyvrnManager();
+		auto manager = GetRazerWyvrnManager(apiServices);
 
 		// Bounded so a pathological structure cannot spin here while the
 		// global API mutex is held.

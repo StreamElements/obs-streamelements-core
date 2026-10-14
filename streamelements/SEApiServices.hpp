@@ -21,6 +21,8 @@ class SERazerWyvrnManager;
 class SECleanupManager;
 class SEPreviewManager;
 class SEWebsocketApiServer;
+class SEHostEventDispatcher;
+class SEMessageBus;
 class SESharedVideoCompositionManager;
 class SEVideoCompositionManager;
 class SEAudioCompositionManager;
@@ -31,6 +33,7 @@ class SEStatusBarMessageManager;
 class SEPopupWindowManager;
 class SEBrowserDialogManager;
 class SESessionManager;
+class SEAuxiliaryControlsBuilder;
 
 //
 // The objects SEGlobalStateManager::Initialize() creates, in one place, so
@@ -55,7 +58,41 @@ class SESessionManager;
 // it must stay below them, and the managers that own dialogs and pop-up
 // windows stay below it so their widgets go before the docks.
 //
+struct QCef;
+struct QCefCookieManager;
+
 struct SEApiServices {
+	//
+	// False until Initialize() has finished, and false again from the
+	// moment Shutdown() begins. The one non-pointer member, and the
+	// question an API message handler asks before it dispatches: a
+	// browser source can connect to the websocket server while the
+	// plug-in is still starting, and a handler that ran then would reach
+	// into services that are constructed but not yet wired together.
+	//
+	// It replaces SEGlobalStateManager::IsInstanceAvailable(), which
+	// asked exactly this -- "does the root exist and is it initialized?"
+	// -- of global state (CORE-757). The "does it exist" half is the
+	// weak_ptr lock that every holder already does.
+	//
+	bool ready = false;
+
+	//
+	// Borrowed, not owned: SEGlobalStateManager creates the browser panel
+	// and deletes it in Shutdown(). It is in here because it is one of
+	// the objects Initialize() creates, and because the things that need
+	// it -- browser widgets -- are handed this bundle and not the panel.
+	//
+	QCef *cef = nullptr;
+
+	//
+	// Borrowed on the same terms, and for the one consumer that needs
+	// it: a browser widget that is not incognito opens on the shared
+	// cookie store. Both are nulled here before Shutdown() deletes
+	// them.
+	//
+	QCefCookieManager *cefCookieManager = nullptr;
+
 	std::shared_ptr<SEBrowserWidgetManager> widgetManager;
 	std::shared_ptr<SEObsSceneManager> obsSceneManager;
 	std::shared_ptr<SEMenuManager> menuManager;
@@ -78,6 +115,18 @@ struct SEApiServices {
 	std::shared_ptr<SECleanupManager> cleanupManager;
 	std::shared_ptr<SEPreviewManager> previewManager;
 	std::shared_ptr<SEWebsocketApiServer> websocketApiServer;
+
+	//
+	// Host events on their way to pages. Everything that announces a
+	// host* event holds this rather than fetching the server.
+	//
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher;
+
+	//
+	// Local and external event listeners -- pages, background workers,
+	// browser sources and external controllers.
+	//
+	std::shared_ptr<SEMessageBus> messageBus;
 	std::shared_ptr<SESharedVideoCompositionManager>
 		sharedVideoCompositionManager;
 	std::shared_ptr<SEVideoCompositionManager> videoCompositionManager;
@@ -96,4 +145,10 @@ struct SEApiServices {
 	std::shared_ptr<SEPopupWindowManager> popupWindowManager;
 	std::shared_ptr<SEBrowserDialogManager> browserDialogManager;
 	std::shared_ptr<SESessionManager> sessionManager;
+
+	//
+	// Owns no widget and borrows no raw pointer, so unlike the four above
+	// it its position here is not load-bearing.
+	//
+	std::shared_ptr<SEAuxiliaryControlsBuilder> auxiliaryControlsBuilder;
 };

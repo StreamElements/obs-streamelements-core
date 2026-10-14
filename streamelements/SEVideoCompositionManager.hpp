@@ -1,4 +1,5 @@
 #pragma once
+#include "SECompositionServices.hpp"
 
 #include "SEVideoComposition.hpp"
 #include <shared_mutex>
@@ -14,7 +15,8 @@
 //
 class SEWebsocketApiServer;
 
-class SEVideoCompositionManager {
+class SEVideoCompositionManager
+	: public std::enable_shared_from_this<SEVideoCompositionManager> {
 private:
 	std::shared_ptr<SEWebsocketApiServer> m_apiServer;
 
@@ -25,9 +27,26 @@ private:
 	std::map<std::string, CefRefPtr<CefDictionaryValue>>
 		m_availableEncoderClassesCache;
 
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+	std::shared_ptr<SEMessageBus> m_messageBus;
+
+	//
+	// What every composition this manager creates is handed. The weak
+	// self-handle is filled in per call site, because it cannot be taken
+	// inside this class's own constructor.
+	//
+	SECompositionServices CompositionServices()
+	{
+		return {m_hostEventDispatcher, m_messageBus,
+			weak_from_this()};
+	}
+
 public:
 	SEVideoCompositionManager(
-		std::shared_ptr<SEWebsocketApiServer> apiServer);
+		std::shared_ptr<SEWebsocketApiServer> apiServer,
+		std::shared_ptr<SEHostEventDispatcher>
+			hostEventDispatcher,
+		std::shared_ptr<SEMessageBus> messageBus);
 	~SEVideoCompositionManager();
 
 public:

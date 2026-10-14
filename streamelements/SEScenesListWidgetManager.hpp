@@ -20,9 +20,13 @@
 	(SE_ENABLE_SCENE_ICONS || SE_ENABLE_SCENE_DEFAULT_ACTION || \
 	 SE_ENABLE_SCENE_CONTEXT_MENU)
 
+class SEAuxiliaryControlsBuilder;
+
 class SEScenesListWidgetManager : public QObject {
 public:
-	SEScenesListWidgetManager(QMainWindow *mainWindow);
+	SEScenesListWidgetManager(QMainWindow *mainWindow,
+				  std::shared_ptr<SEAuxiliaryControlsBuilder>
+					  auxiliaryControlsBuilder);
 	virtual ~SEScenesListWidgetManager();
 
 public:
@@ -104,6 +108,22 @@ private:
 
 private:
 	QPointer<QMainWindow> m_mainWindow = nullptr;
+
+	//
+	// Builds the toolbar's auxiliary controls from the description a page
+	// sends. Public below, because the compiled-out scene UI extensions
+	// reach it from file-static helpers that hold the manager rather than
+	// from members.
+	//
+	std::shared_ptr<SEAuxiliaryControlsBuilder> m_auxiliaryControls;
+
+public:
+	std::shared_ptr<SEAuxiliaryControlsBuilder> GetAuxiliaryControls()
+	{
+		return m_auxiliaryControls;
+	}
+
+private:
 	QPointer<QListWidget> m_nativeWidget = nullptr;
 	bool m_enableSignals = false;
 	SEDeferredExecutive m_updateWidgetsDeferredExecutive;

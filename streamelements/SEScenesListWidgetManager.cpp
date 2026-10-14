@@ -2,6 +2,7 @@
 #include "SEUtils.hpp"
 #include "SERemoteIconLoader.hpp"
 #include "SEConfig.hpp"
+#include "SEAuxiliaryControlsBuilder.hpp"
 
 #include <obs.h>
 #include <obs-frontend-api.h>
@@ -292,9 +293,10 @@ protected:
 					m_manager->InvokeCurrentSceneDefaultContextMenu();
 				};
 
-				handled = DeserializeAndInvokeAction(
-					value, defaultAction,
-					defaultContextMenu);
+				handled = m_manager->GetAuxiliaryControls()
+						  ->DeserializeAndInvokeAction(
+							  value, defaultAction,
+							  defaultContextMenu);
 			}
 			#endif
 
@@ -336,7 +338,9 @@ protected:
 
 				QMenu menu; //(m_mainWindow);
 
-				handled = DeserializeMenu(value, menu,
+				handled = m_manager->GetAuxiliaryControls()
+						  ->DeserializeMenu(
+							  value, menu,
 							  defaultAction,
 							  defaultContextMenu);
 
@@ -366,8 +370,10 @@ protected:
 /* ================================================================= */
 
 SEScenesListWidgetManager::SEScenesListWidgetManager(
-	QMainWindow *mainWindow)
-	: m_mainWindow(mainWindow)
+	QMainWindow *mainWindow,
+	std::shared_ptr<SEAuxiliaryControlsBuilder> auxiliaryControlsBuilder)
+	: m_mainWindow(mainWindow),
+	  m_auxiliaryControls(auxiliaryControlsBuilder)
 {
 	QDockWidget *scenesDock =
 		(QDockWidget *)m_mainWindow->findChild<QDockWidget *>(
@@ -736,8 +742,9 @@ void SEScenesListWidgetManager::UpdateScenesToolbar()
 		m_scenesToolBarActions->GetList();
 
 	for (size_t index = 0; index < list->GetSize(); ++index) {
-		QWidget *control = DeserializeAuxiliaryControlWidget(
-			list->GetValue(index));
+		QWidget *control =
+			m_auxiliaryControls->DeserializeAuxiliaryControlWidget(
+				list->GetValue(index));
 
 		if (!control)
 			continue;
