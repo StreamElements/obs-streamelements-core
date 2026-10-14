@@ -35,6 +35,7 @@ struct QCefCookieManager;
 #include "SEStatusBarMessageManager.hpp"
 #include "SEPopupWindowManager.hpp"
 #include "SEBrowserDialogManager.hpp"
+#include "SESessionManager.hpp"
 #include "SEBrowserDialog.hpp"
 #include "SEVideoCompositionManager.hpp"
 #include "SEAudioCompositionManager.hpp"
@@ -102,8 +103,6 @@ public:
 	static bool IsInstanceAvailable();
 
 public:
-	enum UiModifier { Default = 0, OnBoarding = 1, Import = 2 };
-
 	void Initialize(QMainWindow *obs_main_window);
 	void Shutdown();
 
@@ -116,13 +115,6 @@ private:
 
 public:
 	bool IsInitialized() { return m_initialized; }
-
-	void Reset(bool deleteAllCookies = true,
-		   UiModifier uiModifier = Default);
-	void DeleteCookies();
-	void StartOnBoardingUI(UiModifier uiModifier);
-	void StopOnBoardingUI();
-	void SwitchToOBSStudio();
 
 
 	QCef *GetCef() { return m_cef; }
@@ -322,6 +314,7 @@ private:
 		nullptr;
 	std::shared_ptr<SEBrowserDialogManager> m_browserDialogManager =
 		nullptr;
+	std::shared_ptr<SESessionManager> m_sessionManager = nullptr;
 
 private:
 	static std::shared_ptr<

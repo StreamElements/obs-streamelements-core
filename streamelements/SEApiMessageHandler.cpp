@@ -806,7 +806,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("deleteAllCookies");
 	{
-		SEGlobalStateManager::GetInstance()->DeleteCookies();
+		apiServices->sessionManager->DeleteCookies();
 
 		result->SetBool(true);
 	}
@@ -1194,7 +1194,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("beginOnBoarding");
 	{
-		SEGlobalStateManager::GetInstance()->Reset();
+		apiServices->sessionManager->Reset();
 
 		result->SetBool(true);
 	}

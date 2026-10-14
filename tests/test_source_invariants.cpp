@@ -2343,7 +2343,9 @@ static void check_api_handler_takes_its_services_by_injection()
 					"SerializeAllNonModalDialogs",
 					"DeserializeCloseNonModalDialogsByIds",
 					"DeserializeFocusNonModalDialogById",
-					"DeserializeNonModalDialogDimensionsById"};
+					"DeserializeNonModalDialogDimensionsById",
+					"Reset",
+					"DeleteCookies"};
 
 	for (const char *const service : services) {
 		const std::string reach =

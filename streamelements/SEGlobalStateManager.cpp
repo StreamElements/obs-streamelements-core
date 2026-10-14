@@ -419,6 +419,7 @@ void SEGlobalStateManager::PublishApiServices()
 	m_apiServices->statusBarMessageManager = m_statusBarMessageManager;
 	m_apiServices->popupWindowManager = m_popupWindowManager;
 	m_apiServices->browserDialogManager = m_browserDialogManager;
+	m_apiServices->sessionManager = m_sessionManager;
 }
 
 void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
@@ -490,6 +491,15 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	//
 	m_apiServices = std::make_shared<SEApiServices>();
 
+	//
+	// Before the menu manager, which takes it: two of its menu items
+	// are the non-API way into a session reset. Nothing else has to
+	// exist yet -- the session manager locks the bundle per call, and
+	// by the time a menu item can be clicked it is filled in.
+	//
+	m_sessionManager = std::make_shared<SESessionManager>(
+		mainWindow(), m_cefCookieManager, m_apiServices);
+
 	m_httpClient =
 		std::make_shared<SEHttpClient>();
 	m_localFilesystemHttpServer = std::make_shared<
@@ -518,7 +528,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			obs_main_window);
 	m_menuManager =
 		std::make_shared<SEMenuManager>(
-			obs_main_window);
+			obs_main_window, m_sessionManager);
 	m_bwTestManager = std::make_shared<
 		SEBandwidthTestManager>();
 	m_outputSettingsManager = std::make_shared<
@@ -730,7 +740,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		// On-boarding
 
 		// Reset state but don't erase all cookies
-		Reset(false);
+		m_sessionManager->Reset(false);
 	} else {
 		// Regular
 
@@ -887,6 +897,18 @@ void SEGlobalStateManager::Shutdown()
 	m_popupWindowManager = nullptr;
 	m_browserDialogManager = nullptr;
 
+	//
+	// The session manager borrows this pointer and can outlive
+	// Shutdown() -- the container holds it until this object is
+	// destroyed -- so take the pointer away before deleting what it
+	// points at.
+	//
+	if (m_sessionManager) {
+		m_sessionManager->ForgetCookieManager();
+	}
+
+	m_sessionManager = nullptr;
+
 	if (m_cefCookieManager) {
 		delete m_cefCookieManager;
 		m_cefCookieManager = nullptr;
@@ -904,184 +926,6 @@ void SEGlobalStateManager::Shutdown()
 	SEDrainEventQueue();
 
 	m_initialized = false;
-}
-
-void SEGlobalStateManager::StartOnBoardingUI(UiModifier uiModifier)
-{
-	std::string onBoardingURL =
-		GetCommandLineOptionValue("streamelements-onboarding-url");
-
-	if (!onBoardingURL.size()) {
-		onBoardingURL =
-			SEConfig::GetInstance()->GetUrlOnBoarding();
-	}
-
-	{
-		// Manipulate on-boarding URL query string to reflect forceOnboarding state
-
-		const char *QS_ONBOARDING = "onboarding";
-		const char *QS_IMPORT = "import";
-
-		QUrl url(onBoardingURL.c_str());
-		QUrlQuery query(url);
-
-		if (query.hasQueryItem(QS_ONBOARDING)) {
-			query.removeQueryItem(QS_ONBOARDING);
-		}
-
-		if (query.hasQueryItem(QS_IMPORT)) {
-			query.removeQueryItem(QS_IMPORT);
-		}
-
-		switch (uiModifier) {
-		case OnBoarding:
-			query.addQueryItem(QS_ONBOARDING, "1");
-			break;
-		case Import:
-			query.addQueryItem(QS_IMPORT, "1");
-			break;
-		case Default:
-		default:
-			break;
-		}
-
-		url.setQuery(query.query());
-
-		onBoardingURL = url.toString().toStdString();
-	}
-
-	StopOnBoardingUI();
-
-	GetWidgetManager()->PushCentralBrowserWidget(onBoardingURL.c_str(),
-						     nullptr);
-	GetHotkeyManager()->RemoveAllManagedHotkeyBindings();
-
-	// This also clears SEConfig::STARTUP_FLAGS_SIGNED_IN
-	SEConfig::GetInstance()->SetStartupFlags(
-		SEConfig::STARTUP_FLAGS_ONBOARDING_MODE);
-
-	QtPostTask([this]() -> void {
-		GetObsSceneManager()->Reset();
-		GetOutputManager()->Reset();
-		GetSharedVideoCompositionManager()->Reset();
-		GetVideoCompositionManager()->Reset();
-
-		GetMenuManager()->Update();
-
-		m_statePersistence->PersistState();
-	});
-}
-
-void SEGlobalStateManager::StopOnBoardingUI()
-{
-	GetWorkerManager()->RemoveAll();
-	GetWidgetManager()->HideNotificationBar();
-	GetWidgetManager()->RemoveAllDockWidgets();
-	GetWidgetManager()->DestroyCurrentCentralBrowserWidget();
-
-	GetNativeOBSControlsManager()->Reset();
-}
-
-void SEGlobalStateManager::SwitchToOBSStudio()
-{
-	typedef std::vector<std::string> ids_t;
-
-	ids_t workers;
-	ids_t widgets;
-
-	GetWorkerManager()->GetIdentifiers(workers);
-	GetWidgetManager()->GetDockBrowserWidgetIdentifiers(widgets);
-
-	bool isEnabled = false;
-
-	isEnabled |= (!!workers.size());
-	isEnabled |= (!!widgets.size());
-	isEnabled |= GetWidgetManager()->HasNotificationBar();
-	isEnabled |= GetWidgetManager()->HasCentralBrowserWidget();
-
-	if (isEnabled) {
-		QMessageBox::StandardButton reply;
-		reply = QMessageBox::question(
-			mainWindow(),
-			obs_module_text(
-				"StreamElements.Action.StopOnBoardingUI.Confirmation.Title"),
-			obs_module_text(
-				"StreamElements.Action.StopOnBoardingUI.Confirmation.Text"),
-			QMessageBox::Ok | QMessageBox::Cancel);
-
-		if (reply == QMessageBox::Ok) {
-			StopOnBoardingUI();
-
-			///
-			// Also resets SEConfig::STARTUP_FLAGS_SIGNED_IN
-			//
-			// This is to keep our state consistent and not display "Logout"
-			// when we are in fact already logged out.
-			//
-			SEConfig::GetInstance()->SetStartupFlags(
-				SEConfig::
-					STARTUP_FLAGS_ONBOARDING_MODE);
-
-			GetObsSceneManager()->Reset();
-			GetOutputManager()->Reset();
-			GetSharedVideoCompositionManager()->Reset();
-			GetVideoCompositionManager()->Reset();
-
-			GetMenuManager()->Update();
-		}
-	} else {
-		QMessageBox::question(
-			mainWindow(),
-			obs_module_text(
-				"StreamElements.Action.StopOnBoardingUI.Disabled.Title"),
-			obs_module_text(
-				"StreamElements.Action.StopOnBoardingUI.Disabled.Text"),
-			QMessageBox::Ok);
-	}
-}
-
-void SEGlobalStateManager::DeleteCookies()
-{
-	// TODO: Specify specific cookies to delete, or, work with OBS community to provide a delete filter
-	if (m_cefCookieManager) {
-		m_cefCookieManager->DeleteCookies("", "");
-	}
-}
-
-static void DispatchJSEventAllBrowsers(const char *eventName,
-				       const char *jsonString)
-{
-	if (!SEGlobalStateManager::IsInstanceAvailable())
-		return;
-
-	auto apiServer = SEGlobalStateManager::GetInstance()
-				 ->GetWebsocketApiServer();
-
-	if (!apiServer)
-		return;
-
-	apiServer->DispatchJSEvent("system", eventName, jsonString);
-}
-
-void SEGlobalStateManager::Reset(bool deleteAllCookies,
-					     UiModifier uiModifier)
-{
-	DispatchJSEventAllBrowsers("hostStateReset", "null");
-
-	// Allow short time for event to reach all renderers
-	//
-	// This is an unpleasant hack which allows widgets a
-	// vague opportunity to clean up before they get
-	// destroyed.
-	os_sleep_ms(100);
-
-	if (deleteAllCookies) {
-		DeleteCookies();
-
-		GetMenuManager()->Reset();
-	}
-
-	StartOnBoardingUI(uiModifier);
 }
 
 void SEGlobalStateManager::OnObsExit()
