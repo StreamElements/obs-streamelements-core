@@ -42,7 +42,14 @@ private:
 	SEBrowserWidget* m_browser = nullptr;
 	std::string m_result;
 
-	std::shared_ptr<SEApiServices> m_apiServices;
+	//
+	// Weak. Everything this class builds from the bundle -- browser
+	// widgets and API message handlers -- holds a strong reference to it,
+	// and this class destroys them, so a strong reference here closes a
+	// ring the refcount can never unwind. See the comment in
+	// SEApiServices.hpp.
+	//
+	std::weak_ptr<SEApiServices> m_apiServices;
 
 	std::string m_url;
 	std::string m_executeJavaScriptOnLoad;

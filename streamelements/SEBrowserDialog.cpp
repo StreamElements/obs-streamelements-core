@@ -235,12 +235,21 @@ void SEBrowserDialog::showEvent(QShowEvent* event)
 	if (m_browser)
 		return;
 
+	auto apiServices = m_apiServices.lock();
+
+	if (!apiServices) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: SEBrowserDialog: showing without a browser: the services bundle is gone");
+
+		return;
+	}
+
 	m_browser = new SEBrowserWidget(
 		nullptr, SEMessageBus::DEST_UI, m_url.c_str(),
 		m_executeJavaScriptOnLoad.c_str(), "reload", "dialog",
-		CreateGloballyUniqueIdString().c_str(), m_apiServices,
+		CreateGloballyUniqueIdString().c_str(), apiServices,
 		std::make_shared<SEDialogApiMessageHandler>(
-			this, m_containerType, m_apiServices),
+			this, m_containerType, apiServices),
 		m_isIncognito);
 
 	layout()->addWidget(m_browser);
