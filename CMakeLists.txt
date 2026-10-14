@@ -539,6 +539,8 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEObsAppMonitor.cpp
 	streamelements/SEApiMessageHandler.cpp
 	streamelements/SEStatePersistence.cpp
+	streamelements/SEUtils/SECryptoUtils.cpp
+	streamelements/SEUtils/SEStringUtils.cpp
 	streamelements/SEConfig.cpp
 	streamelements/SEGlobalStateManager.cpp
 	streamelements/SEMenuManager.cpp
@@ -700,6 +702,8 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEApiMessageHandler.hpp
 	streamelements/SEApiServices.hpp
 	streamelements/SEStatePersistence.hpp
+	streamelements/SEUtils/SECryptoUtils.hpp
+	streamelements/SEUtils/SEStringUtils.hpp
 	streamelements/SEConfig.hpp
 	streamelements/SEGlobalStateManager.hpp
 	streamelements/SEMenuManager.hpp

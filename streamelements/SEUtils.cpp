@@ -143,41 +143,6 @@ bool IsTraceLogLevel()
 /* ========================================================= */
 
 // convert wstring to UTF-8 string
-std::string wstring_to_utf8(const std::wstring wstr)
-{
-	std::string utf8line;
-
-	if (wstr.empty())
-		return utf8line;
-
-#ifdef _MSC_VER
-	utf8::utf16to8(wstr.begin(), wstr.end(), std::back_inserter(utf8line));
-#else
-	utf8::utf32to8(wstr.begin(), wstr.end(), std::back_inserter(utf8line));
-#endif
-	return utf8line;
-}
-
-std::wstring utf8_to_wstring(const std::string str)
-{
-	std::wstring wide_line;
-
-	if (str.empty())
-		return wide_line;
-
-#ifdef _MSC_VER
-	utf8::utf8to16(str.begin(), str.end(), std::back_inserter(wide_line));
-#else
-	utf8::utf8to32(str.begin(), str.end(), std::back_inserter(wide_line));
-#endif
-	return wide_line;
-}
-
-std::string clean_guid_string(std::string input)
-{
-	return std::regex_replace(input, std::regex("-"), "");
-}
-
 static std::vector<std::string> tokenizeString(const std::string &str,
 					       const std::string &delimiters)
 {
@@ -2591,72 +2556,6 @@ std::string GetComputerSystemUniqueId()
 }
 #endif
 
-bool ParseQueryString(std::string input,
-		      std::map<std::string, std::string> &result)
-{
-	std::string s = input;
-
-	while (s.size()) {
-		std::string left;
-
-		size_t offset = s.find('&');
-		if (offset != std::string::npos) {
-			left = s.substr(0, offset);
-			s = s.substr(offset + 1);
-		} else {
-			left = s;
-			s = "";
-		}
-
-		std::string right = "";
-		offset = left.find('=');
-
-		if (offset != std::string::npos) {
-			right = left.substr(offset + 1);
-			left = left.substr(0, offset);
-		}
-
-		result[left] = right;
-	}
-
-	return true;
-}
-
-std::string CreateSHA256Digest(std::string &input)
-{
-	std::vector<unsigned char> hash(picosha2::k_digest_size);
-	picosha2::hash256(input.begin(), input.end(), hash.begin(), hash.end());
-
-	return picosha2::bytes_to_hex_string(hash.begin(), hash.end());
-}
-
-static std::mutex s_session_message_signature_mutex;
-static std::string s_session_message_signature_random = "";
-
-std::string CreateSessionMessageSignature(std::string &message)
-{
-	if (!s_session_message_signature_random.size()) {
-		std::lock_guard<std::mutex> guard(
-			s_session_message_signature_mutex);
-		if (!s_session_message_signature_random.size()) {
-			s_session_message_signature_random =
-				CreateCryptoSecureRandomNumberString();
-		}
-	}
-
-	std::string digest_input = message + s_session_message_signature_random;
-
-	return CreateSHA256Digest(digest_input);
-}
-
-bool VerifySessionMessageSignature(std::string &message, std::string &signature)
-{
-	std::string digest_input = message + s_session_message_signature_random;
-
-	std::string digest = CreateSHA256Digest(digest_input);
-
-	return digest == signature;
-}
 
 std::string CreateSessionSignedAbsolutePathURL(std::wstring path)
 {
@@ -2829,26 +2728,6 @@ std::string GetStreamElementsOverlayEditorURL(std::string overlayId,
 {
 	return std::string("https://streamelements.com/overlay/") + overlayId +
 	       std::string("/editor");
-}
-
-std::string GetIdFromPointer(const void *ptr)
-{
-	char buf[32];
-
-	sprintf_s(buf, "ptr(%p)", ptr);
-
-	return buf;
-}
-
-const void *GetPointerFromId(const char *id)
-{
-	void *ptr;
-
-	if (sscanf(id, "ptr(%p)", &ptr) > 0) {
-		return ptr;
-	} else {
-		return nullptr;
-	}
 }
 
 bool GetTemporaryFilePath(std::string prefixString, std::string &result)

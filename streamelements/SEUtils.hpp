@@ -2,6 +2,9 @@
 
 #include "SETrace.hpp"
 
+#include "SEUtils/SEStringUtils.hpp"
+#include "SEUtils/SECryptoUtils.hpp"
+
 #include <cef-headers.hpp>
 #include <obs.h>
 #include <obs.hpp>
@@ -70,30 +73,8 @@ bool IsCrashReportingInProgress();
 
 /* ========================================================= */
 
-std::string wstring_to_utf8(const std::wstring wstr);
-std::wstring utf8_to_wstring(const std::string str);
 
 /* ========================================================= */
-
-template<typename... Args> std::string FormatString(const char *format, ...)
-{
-	int size = 512;
-	char *buffer = 0;
-	buffer = new char[size];
-	va_list vl;
-	va_start(vl, format);
-	int nsize = vsnprintf(buffer, size, format, vl);
-	if (size <= nsize) { //fail delete buffer and try again
-		delete[] buffer;
-		buffer = 0;
-		buffer = new char[nsize + 1]; //+1 for /0
-		nsize = vsnprintf(buffer, size, format, vl);
-	}
-	std::string ret(buffer);
-	va_end(vl);
-	delete[] buffer;
-	return ret;
-}
 
 /* ========================================================= */
 
@@ -426,7 +407,6 @@ bool HttpPostString(const char *url, http_client_headers_t request_headers,
 
 /* ========================================================= */
 
-std::string CreateCryptoSecureRandomNumberString();
 std::string CreateGloballyUniqueIdString();
 std::string GetComputerSystemUniqueId();
 
@@ -454,12 +434,6 @@ bool WriteEnvironmentConfigString(const char *regValueName,
 
 /* ========================================================= */
 
-bool ParseQueryString(std::string input,
-		      std::map<std::string, std::string> &result);
-std::string CreateSHA256Digest(std::string &input);
-std::string CreateSessionMessageSignature(std::string &message);
-bool VerifySessionMessageSignature(std::string &message,
-				   std::string &signature);
 std::string CreateSessionSignedAbsolutePathURL(std::wstring path);
 bool VerifySessionSignedAbsolutePathURL(std::string url, std::string &path);
 
@@ -517,8 +491,6 @@ void SEDecryptCefCookiesStoragePath(const char *path_utf8);
 
 /* ========================================================= */
 
-std::string GetIdFromPointer(const void *ptr);
-const void *GetPointerFromId(const char *id);
 
 /* ========================================================= */
 
