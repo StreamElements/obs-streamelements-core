@@ -1,4 +1,5 @@
 #include "SEAudioCompositionManager.hpp"
+#include "SEWebsocketApiServer.hpp"
 #include "SEGlobalStateManager.hpp"
 
 static void dispatch_external_event(std::string name, std::string args)
@@ -15,21 +16,23 @@ static void dispatch_external_event(std::string name, std::string args)
 		CefParseJSON(args, JSON_PARSER_ALLOW_TRAILING_COMMAS));
 }
 
-static void dispatch_js_event(std::string name, std::string args)
+//
+// Takes the api server as a borrowed raw pointer: the caller is a member
+// whose own reference outlives the call, and this neither owns it nor
+// extends its life.
+//
+static void dispatch_js_event(SEWebsocketApiServer *apiServer, std::string name,
+			      std::string args)
 {
-	if (!SEGlobalStateManager::IsInstanceAvailable())
-		return;
-
-	auto apiServer = SEGlobalStateManager::GetInstance()
-				 ->GetWebsocketApiServer();
-
 	if (!apiServer)
 		return;
 
 	apiServer->DispatchJSEvent("system", name, args);
 }
 
-SEAudioCompositionManager::SEAudioCompositionManager()
+SEAudioCompositionManager::SEAudioCompositionManager(
+	std::shared_ptr<SEWebsocketApiServer> apiServer)
+	: m_apiServer(apiServer)
 {
 	m_nativeAudioComposition =
 		SEObsNativeAudioComposition::Create();
@@ -60,7 +63,8 @@ void SEAudioCompositionManager::Reset()
 		m_audioCompositionsMap.erase(key);
 	}
 
-	dispatch_js_event("hostAudioCompositionListChanged", "null");
+	dispatch_js_event(m_apiServer.get(), "hostAudioCompositionListChanged",
+			  "null");
 	dispatch_external_event("hostAudioCompositionListChanged", "null");
 }
 
@@ -138,7 +142,8 @@ void SEAudioCompositionManager::DeserializeComposition(
 
 		composition->SerializeComposition(output);
 
-		dispatch_js_event("hostAudioCompositionListChanged", "null");
+		dispatch_js_event(m_apiServer.get(),
+				  "hostAudioCompositionListChanged", "null");
 		dispatch_external_event("hostAudioCompositionListChanged",
 					"null");
 	} catch (...) {
@@ -203,7 +208,8 @@ void SEAudioCompositionManager::RemoveCompositionsByIds(
 		m_audioCompositionsMap.erase(kv.first);
 	}
 
-	dispatch_js_event("hostAudioCompositionListChanged", "null");
+	dispatch_js_event(m_apiServer.get(), "hostAudioCompositionListChanged",
+			  "null");
 	dispatch_external_event("hostAudioCompositionListChanged", "null");
 
 	output->SetBool(true);

@@ -20,7 +20,12 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-if(NOT CMAKE_PROJECT_NAME)
+# Standalone only. Not `if(NOT CMAKE_PROJECT_NAME)`: project() writes that
+# name into the cache as a STATIC entry, so on the second configure of the
+# same build directory the guard sees it already set, skips project(), and
+# leaves CXX unenabled -- every target then fails with "can not determine
+# linker language" and ctest silently re-runs the previous binaries.
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   project(obs-streamelements-core-tests CXX)
 endif()
 
@@ -58,6 +63,17 @@ function(se_add_test name)
   endif()
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
+
+# --- Behavioural test: the pure string helpers ------------------------------
+#
+# The production .cpp, compiled beside the test. Possible only since the
+# SEUtils split: this cluster has a header of its own now, where SEUtils.hpp
+# pulls in obs.h, obs-module.h, curl and eight Qt headers and so cannot be
+# included from here at all.
+se_add_test(test_string_utils
+  test_string_utils.cpp
+  "${REPO_ROOT}/streamelements/SEUtils/SEStringUtils.cpp"
+)
 
 # --- Behavioural test: the WYVRN configuration parser -----------------------
 #

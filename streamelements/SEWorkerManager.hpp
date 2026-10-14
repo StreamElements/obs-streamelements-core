@@ -17,7 +17,7 @@ private:
 	class SEWorker;
 
 public:
-	SEWorkerManager();
+	SEWorkerManager(std::shared_ptr<SEApiServices> apiServices);
 	~SEWorkerManager();
 
 public:
@@ -42,4 +42,13 @@ private:
 	std::recursive_mutex m_mutex;
 
 	std::map<std::string, std::shared_ptr<SEWorker>> m_items;
+
+	//
+	// Weak. Everything this class builds from the bundle -- browser
+	// widgets and API message handlers -- holds a strong reference to it,
+	// and this class destroys them, so a strong reference here closes a
+	// ring the refcount can never unwind. See the comment in
+	// SEApiServices.hpp.
+	//
+	std::weak_ptr<SEApiServices> m_apiServices;
 };

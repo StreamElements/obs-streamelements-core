@@ -339,7 +339,7 @@ static void check_event_pumps_are_counted()
 
 	// And the wrapper itself must still contain exactly one real pump.
 	auto utils = strip_line_comments(
-		slurp("streamelements/SEUtils.cpp"));
+		slurp("streamelements/SEUtils/SELifecycleUtils.cpp"));
 
 	std::regex pump(R"(QApplication::sendPostedEvents\(\);)");
 
@@ -381,7 +381,7 @@ static void check_dock_deletion_is_gated()
 	}
 
 	auto utils = strip_line_comments(
-		slurp("streamelements/SEUtils.cpp"));
+		slurp("streamelements/SEUtils/SELifecycleUtils.cpp"));
 
 	check(utils.find("SEIsUiTeardownSafe()") != std::string::npos,
 	      "CORE-786: SEDeleteDockWidgetWhenSafe() must gate on SEIsUiTeardownSafe()");
@@ -620,7 +620,7 @@ static void check_sentry_init_is_diagnosable()
 static void check_queued_tasks_suppressed_during_crash()
 {
 	auto code = strip_line_comments(
-		slurp("streamelements/SEUtils.cpp"));
+		slurp("streamelements/SEUtils/SEAsyncTaskUtils.cpp"));
 
 	// Both queued paths -- QtPostTask's executor and QtDelayTask's timer
 	// lambda -- must skip the task AND release the waiter. Dropping a task
@@ -827,7 +827,7 @@ static void check_consent_prompt_is_bounded()
 static void check_encoder_released_once_per_object()
 {
 	auto code = strip_line_comments(
-		slurp("streamelements/SEUtils.hpp"));
+		slurp("streamelements/SEUtils/SELazyOBSVideoEncoderProvider.hpp"));
 
 	auto remove = code.find("void RemoveConsumer()");
 	check(remove != std::string::npos,
@@ -1579,7 +1579,7 @@ static void check_scene_signal_handler_lifetime()
 static void check_widget_teardown_leaves_the_paint_tree()
 {
 	const std::string utils = strip_line_comments(
-		slurp("streamelements/SEUtils.cpp"));
+		slurp("streamelements/SEUtils/SELifecycleUtils.cpp"));
 
 	const std::string deleteDock =
 		function_body(utils, "void SEDeleteDockWidgetWhenSafe(");
@@ -1946,6 +1946,609 @@ static std::vector<std::size_t> find_all(const std::string &code,
 	     p = code.find(needle, p + 1))
 		hits.push_back(p);
 	return hits;
+}
+
+//
+// Dependency injection, stage 1: the services a consumer was handed must not
+// also be reachable through the global singleton from inside that consumer.
+//
+// The point of the refactor is lifetime -- an injected shared_ptr keeps the
+// service alive exactly as long as its consumer needs it, instead of until
+// SEGlobalStateManager::Shutdown() decides. A single surviving
+// GetInstance()->GetX() defeats that for the whole object, because the
+// shutdown ordering is back in charge on that path.
+//
+// Listed per consumer rather than globally: other reaches (mainWindow(), the
+// config getters) are later stages and must not fail this check early.
+//
+static void check_injected_services_are_not_also_fetched_globally()
+{
+	struct Consumer {
+		const char *file;
+		const char *service;
+	};
+
+	const Consumer consumers[] = {
+		{"streamelements/SEBackupManager.cpp", "GetCleanupManager"},
+		{"streamelements/SEReportIssueDialog.cpp",
+		 "GetPerformanceHistoryTracker"},
+		{"streamelements/SEReportIssueDialog.cpp",
+		 "GetAnalyticsEventsManager"},
+		{"streamelements/SEVideoCompositionManager.cpp",
+		 "GetWebsocketApiServer"},
+		{"streamelements/SEAudioCompositionManager.cpp",
+		 "GetWebsocketApiServer"},
+		{"streamelements/SESharedVideoCompositionManager.cpp",
+		 "GetWebsocketApiServer"},
+		{"streamelements/SEObsActiveSceneTracker.cpp",
+		 "GetWebsocketApiServer"},
+		{"streamelements/SESharedVideoCompositionManager.cpp",
+		 "GetVideoCompositionManager"},
+		{"streamelements/SEObsActiveSceneTracker.cpp",
+		 "GetVideoCompositionManager"},
+		{"streamelements/SEOutput.cpp", "GetVideoCompositionManager"},
+		{"streamelements/SEOutput.cpp", "GetAudioCompositionManager"},
+	};
+
+	for (const auto &consumer : consumers) {
+		const std::string src =
+			strip_line_comments(slurp(consumer.file));
+
+		const bool reaches =
+			src.find(std::string("GetInstance()")) !=
+				std::string::npos &&
+			src.find(consumer.service) != std::string::npos;
+
+		const std::string message =
+			std::string(consumer.file) + " still calls " +
+			consumer.service +
+			"() -- it is injected now, so use the member. "
+			"Reaching through the singleton puts this object's "
+			"lifetime back under Shutdown()";
+
+		check(!reaches, message.c_str());
+	}
+}
+
+static void check_state_persistence_borrows_the_managers_it_serializes()
+{
+	//
+	// SEStatePersistence reads four managers that own widgets, and three
+	// of them are in SEApiServices beside it. Owning them here would put
+	// it inside the reference graph of the things it serializes; borrowing
+	// keeps it out. It is safe because the container destroys its fields
+	// in reverse declaration order and statePersistence is declared after
+	// all four, so it dies first.
+	//
+	const std::string hpp = strip_line_comments(
+		slurp("streamelements/SEStatePersistence.hpp"));
+
+	const char *const borrowed[] = {"SEBrowserWidgetManager",
+					"SEWorkerManager", "SEHotkeyManager",
+					"SENativeOBSControlsManager"};
+
+	for (const char *const manager : borrowed) {
+		const std::string owned = std::string("std::shared_ptr<") +
+					  manager + "> m_";
+
+		const std::string message =
+			std::string("SEStatePersistence owns its ") + manager +
+			" -- it borrows the managers it serializes, so that a "
+			"manager whose destructor deletes widgets cannot be "
+			"kept alive by the object that saves its state";
+
+		check(hpp.find(owned) == std::string::npos, message.c_str());
+
+		const std::string borrow = std::string(manager) + " *m_";
+
+		check(hpp.find(borrow) != std::string::npos,
+		      (std::string("SEStatePersistence no longer references ") +
+		       manager +
+		       " at all -- this invariant would then pass vacuously")
+			      .c_str());
+	}
+}
+
+static void check_widget_manager_does_not_own_state_persistence()
+{
+	//
+	// The other half of the same rule. SEWidgetManager's deferred saves
+	// need the persistence object, but it is destroyed before this
+	// manager -- it borrows raw pointers to it and to three of its
+	// siblings -- so a strong handle here would invert the order and
+	// leave those pointers dangling.
+	//
+	const std::string hpp = strip_line_comments(
+		slurp("streamelements/SEWidgetManager.hpp"));
+
+	check(hpp.find("std::shared_ptr<SEStatePersistence>  m_") ==
+		      std::string::npos &&
+		      hpp.find("std::shared_ptr<SEStatePersistence> m_") ==
+			      std::string::npos,
+	      "SEWidgetManager owns SEStatePersistence -- it must hold it "
+	      "weakly, because the container destroys statePersistence first "
+	      "and that object borrows raw pointers to this manager");
+
+	check(hpp.find("std::weak_ptr<SEStatePersistence>") !=
+		      std::string::npos,
+	      "SEWidgetManager no longer holds SEStatePersistence weakly -- "
+	      "this invariant would then pass vacuously, and the deferred "
+	      "saves would be back to reaching through the services bundle");
+}
+
+static void check_non_modal_dialogs_are_closed_by_their_owner()
+{
+	//
+	// A non-modal dialog destroyed without emitting finished() used to
+	// park the API handler's detached thread on future.wait() for the
+	// life of the process, because the promise lived only in the finished
+	// handler's capture. SEBrowserDialogManager holds it, so its
+	// destructor has to both reject the dialog and satisfy the promise.
+	//
+	const std::string dtor = function_body(
+		strip_line_comments(
+			slurp("streamelements/SEBrowserDialogManager.cpp")),
+		"SEBrowserDialogManager::~SEBrowserDialogManager");
+
+	check(!dtor.empty(),
+	      "SEBrowserDialogManager has no destructor -- the dialogs it owns "
+	      "would ride into Qt teardown with a live CEF browser");
+
+	check(dtor.find("reject()") != std::string::npos,
+	      "~SEBrowserDialogManager does not reject() the dialogs still "
+	      "open: their browsers and API handlers are then torn down from "
+	      "inside ~QWidget");
+
+	check(dtor.find("set_value") != std::string::npos,
+	      "~SEBrowserDialogManager does not satisfy the promises of the "
+	      "dialogs still open -- showNonModalDialog's detached thread "
+	      "stays parked on future.wait() forever");
+
+	//
+	// And the disarm, without which the destructor's own reject() lets a
+	// finished handler run and call set_value on a promise this
+	// destructor has already satisfied -- std::future_error.
+	//
+	check(dtor.find("*m_alive = false") != std::string::npos,
+	      "~SEBrowserDialogManager does not disarm the queued finished "
+	      "handlers before rejecting, so one of them can double-satisfy a "
+	      "promise");
+}
+
+//
+// --- The singleton ratchet (CORE-757).
+//
+// The migration off SEGlobalStateManager::GetInstance() is monotone by
+// construction: this counts what is left and fails if it grows. 291 reaches
+// at the start of the work, 47 now -- the API handler alone went from 211 to
+// one, which is the Razer fetch in a file-local helper that has no object to
+// be injected into.
+//
+// When you remove reaches, lower kMaxSingletonReaches in the same commit.
+// Never raise it: a new reach is a new consumer that should have been handed
+// what it needs, and this is the check that makes that a build failure rather
+// than a review comment nobody makes.
+//
+static const int kMaxSingletonReaches = 47;
+
+static void check_singleton_reaches_only_go_down()
+{
+	const char *const dirs[] = {"/streamelements", "/streamelements/SEUtils"};
+
+	std::vector<std::pair<int, std::string>> perFile;
+	int total = 0;
+
+	for (const char *const dir : dirs) {
+		const std::string path = std::string(se_tests::kRepoRoot) + dir;
+
+		std::error_code ec;
+		std::filesystem::directory_iterator it(path, ec);
+
+		check(!ec, (std::string("cannot read ") + dir +
+			    " -- this ratchet would then pass vacuously")
+				   .c_str());
+
+		for (std::filesystem::directory_iterator end;
+		     it != end && !ec; it.increment(ec)) {
+			const std::filesystem::path &p = it->path();
+			const std::string ext = p.extension().string();
+
+			if (ext != ".cpp" && ext != ".hpp" && ext != ".mm")
+				continue;
+
+			std::ifstream in(p.string());
+
+			if (!in)
+				continue;
+
+			std::ostringstream buf;
+			buf << in.rdbuf();
+
+			//
+			// Comments stripped, so the commentary this work left
+			// behind -- which names the reaches it removed -- does
+			// not count as reaches.
+			//
+			const std::string src =
+				strip_line_comments(buf.str());
+
+			int n = 0;
+			const std::string needle =
+				"SEGlobalStateManager::GetInstance()";
+
+			for (std::size_t at = src.find(needle);
+			     at != std::string::npos;
+			     at = src.find(needle, at + needle.size()))
+				++n;
+
+			if (n) {
+				perFile.push_back(
+					{n, p.filename().string()});
+				total += n;
+			}
+		}
+	}
+
+	//
+	// The plug-in entry point lives at the repo root rather than under
+	// streamelements/, and it holds the bootstrap reach.
+	//
+	{
+		const std::string src = strip_line_comments(
+			slurp("obs-streamelements-core-plugin.cpp"));
+
+		int n = 0;
+		const std::string needle =
+			"SEGlobalStateManager::GetInstance()";
+
+		for (std::size_t at = src.find(needle);
+		     at != std::string::npos;
+		     at = src.find(needle, at + needle.size()))
+			++n;
+
+		if (n) {
+			perFile.push_back(
+				{n, "obs-streamelements-core-plugin.cpp"});
+			total += n;
+		}
+	}
+
+	check(total > 0,
+	      "no GetInstance() reaches found at all -- either the migration "
+	      "is finished, in which case delete this ratchet, or the scan is "
+	      "broken");
+
+	if (total > kMaxSingletonReaches) {
+		std::sort(perFile.begin(), perFile.end());
+		std::reverse(perFile.begin(), perFile.end());
+
+		std::fprintf(stderr,
+			     "FAIL: %d SEGlobalStateManager::GetInstance() reaches, ratchet allows %d.\n"
+			     "      A new consumer must be handed what it needs, not fetch it. Per file:\n",
+			     total, kMaxSingletonReaches);
+
+		for (const auto &row : perFile)
+			std::fprintf(stderr, "        %3d  %s\n", row.first,
+				     row.second.c_str());
+
+		++failures;
+	}
+
+	//
+	// And downwards: a drop means the number above is stale, so the next
+	// person inherits a loose ratchet instead of a tight one.
+	//
+	check(total >= kMaxSingletonReaches,
+	      "fewer GetInstance() reaches than the ratchet allows -- lower "
+	      "kMaxSingletonReaches in tests/test_source_invariants.cpp to the "
+	      "new count, in the commit that removed them");
+}
+
+static void check_nothing_but_the_manager_owns_the_services_container()
+{
+	//
+	// Every ring this refactor removed had one shape: something the
+	// container destroys held the container strongly. The structural
+	// guard against them coming back is that exactly one place owns it --
+	// SEGlobalStateManager, the root -- and that every holder whose
+	// lifetime a service in the container controls keeps a weak handle.
+	//
+	// Matching on the member spelling is what makes this safe to run
+	// across the whole directory: constructor parameters in this tree are
+	// named apiServices or services, never m_*, so a parameter cannot
+	// trip it.
+	//
+	// This replaces a hand-maintained list of consumers. A new class that
+	// takes the bundle and stores it strongly fails here without anyone
+	// remembering to add it.
+	//
+	const std::string dir = std::string(se_tests::kRepoRoot) +
+				"/streamelements";
+
+	std::vector<std::string> owners;
+	std::vector<std::string> weakHolders;
+	int scanned = 0;
+
+	std::error_code ec;
+	std::filesystem::directory_iterator it(dir, ec);
+
+	check(!ec, "cannot read streamelements/ -- this invariant would then "
+		   "pass vacuously");
+
+	std::vector<std::filesystem::path> files;
+
+	for (std::filesystem::directory_iterator end;
+	     it != end && !ec; it.increment(ec)) {
+		files.push_back(it->path());
+	}
+
+	for (const std::filesystem::path &path : files) {
+		const std::string ext = path.extension().string();
+
+		if (ext != ".hpp" && ext != ".cpp")
+			continue;
+
+		std::ifstream in(path.string());
+
+		if (!in)
+			continue;
+
+		std::ostringstream buf;
+		buf << in.rdbuf();
+
+		const std::string src = strip_line_comments(buf.str());
+		const std::string name = path.filename().string();
+
+		++scanned;
+
+		if (src.find("std::shared_ptr<SEApiServices> m_") !=
+		    std::string::npos)
+			owners.push_back(name);
+
+		if (src.find("std::weak_ptr<SEApiServices> m_") !=
+		    std::string::npos)
+			weakHolders.push_back(name);
+	}
+
+	check(scanned > 100,
+	      "scanned too few files under streamelements/ -- this invariant "
+	      "would then pass vacuously");
+
+	for (const std::string &owner : owners) {
+		check(owner == "SEGlobalStateManager.hpp",
+		      (owner +
+		       " owns SEApiServices strongly. Only the root may: a "
+		       "class the container's own services destroy must hold "
+		       "it weakly, or shutdown stalls on a ring that runs "
+		       "through a destructor and never unwinds.")
+			      .c_str());
+	}
+
+	check(owners.size() == 1,
+	      "SEApiServices is not owned exactly once -- the root "
+	      "(SEGlobalStateManager.hpp) must own it, and nothing else may");
+
+	//
+	// Non-vacuity, and the other half of the rule: the holders that were
+	// converted have to still be holding it weakly.
+	//
+	const char *const holders[] = {"SEApiMessageHandler.hpp",
+				       "SEBrowserDialog.hpp",
+				       "SEBrowserDialogManager.hpp",
+				       "SENativeOBSControlsManager.hpp",
+				       "SEPopupWindowManager.hpp",
+				       "SEWidgetManager.hpp",
+				       "SEWorkerManager.hpp"};
+
+	for (const char *const holder : holders) {
+		check(std::find(weakHolders.begin(), weakHolders.end(),
+				std::string(holder)) != weakHolders.end(),
+		      (std::string(holder) +
+		       " no longer holds SEApiServices weakly -- either the "
+		       "edge went back to being strong under another name, or "
+		       "the class stopped holding the bundle and this list "
+		       "needs updating")
+			      .c_str());
+	}
+}
+
+static void check_api_handler_locks_the_services_once_per_dispatch()
+{
+	//
+	// The bundle is held weakly, so somebody has to lock it. That
+	// somebody is the dispatcher, once per call, before the handler
+	// lookup -- not each of the two hundred handler bodies, and not an
+	// operator->() that would lock two or three times per call and turn
+	// a dead bundle into a null-field dereference instead of an early
+	// return.
+	//
+	const std::string src =
+		strip_line_comments(slurp("streamelements/SEApiMessageHandler.cpp"));
+
+	//
+	// Flattened, because the reach used to wrap across as many as four
+	// lines and a wrapped one must not slip through.
+	//
+	std::string flat;
+	flat.reserve(src.size());
+
+	for (std::size_t i = 0; i < src.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(src[i])))
+			flat += src[i];
+	}
+
+	//
+	// Reading a service through self is what is banned, not mentioning
+	// the member: the two dispatch sites legitimately lock it, and one of
+	// them does so through context->self.
+	//
+	check(flat.find("self->m_services->") == std::string::npos,
+	      "a handler body in SEApiMessageHandler.cpp reads a service "
+	      "through self->m_services -- handlers take the locked bundle as "
+	      "their apiServices parameter");
+
+	const std::string dispatch =
+		function_body(src, "SEApiMessageHandler::InvokeApiCallHandlerAsync");
+
+	check(!dispatch.empty(),
+	      "InvokeApiCallHandlerAsync not found -- this invariant cannot "
+	      "check where the bundle is locked");
+
+	check(dispatch.find("m_services.lock()") != std::string::npos,
+	      "InvokeApiCallHandlerAsync does not lock the services bundle -- "
+	      "it has to, once, before dispatching, and bail with a null "
+	      "result if it cannot");
+
+	//
+	// And it must answer the caller on that path: returning silently
+	// leaves the page's promise pending for the life of the process.
+	//
+	const std::size_t lock_at = dispatch.find("m_services.lock()");
+	const std::size_t callback_at = dispatch.find("result_callback", lock_at);
+	const std::size_t handler_at = dispatch.find("m_apiCallHandlers", lock_at);
+
+	check(callback_at != std::string::npos &&
+		      (handler_at == std::string::npos ||
+		       callback_at < handler_at),
+	      "InvokeApiCallHandlerAsync does not answer the caller when the "
+	      "bundle cannot be locked -- the page's promise would never "
+	      "settle");
+}
+
+static void check_api_handler_takes_its_services_by_injection()
+{
+	//
+	// The handler's two hundred methods reach their services through the
+	// injected SEApiServices bundle. The reach they used to make wrapped
+	// across as many as four lines, so flatten the file before looking for
+	// it.
+	//
+	std::string src = strip_line_comments(
+		slurp("streamelements/SEApiMessageHandler.cpp"));
+
+	std::string flat;
+	flat.reserve(src.size());
+
+	for (std::size_t i = 0; i < src.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(src[i])))
+			flat += src[i];
+	}
+
+	//
+	// GetRazerWyvrnManager is deliberately absent: it is fetched by a
+	// file-local helper that has no object to be injected into, and that
+	// helper documents why. Everything else must come from the bundle.
+	//
+	//
+	// Not all of these are services: PersistState and the
+	// user-interface-state pair moved onto SEStatePersistence, which the
+	// handler reaches through the container like any other service.
+	//
+	const char *const services[] = {"PersistState",
+					"SerializeUserInterfaceState",
+					"DeserializeUserInterfaceState",
+					"GetObsSceneManager",
+					"GetMenuManager",
+					"GetWidgetManager",
+					"GetOutputManager",
+					"GetVideoCompositionManager",
+					"GetAudioCompositionManager",
+					"GetSharedVideoCompositionManager",
+					"GetNativeOBSControlsManager",
+					"GetOutputSettingsManager",
+					"GetHotkeyManager",
+					"GetBackupManager",
+					"GetWebsocketApiServer",
+					"GetBandwidthTestManager",
+					"GetExternalSceneDataProviderManager",
+					"GetProfilesManager",
+					"GetWorkerManager",
+					"GetAnalyticsEventsManager",
+					"GetHttpClient",
+					"DeserializeStatusBarTemporaryMessage",
+					"DeserializePopupWindow",
+					"DeserializeModalDialog",
+					"DeserializeNonModalDialog",
+					"SerializeAllNonModalDialogs",
+					"DeserializeCloseNonModalDialogsByIds",
+					"DeserializeFocusNonModalDialogById",
+					"DeserializeNonModalDialogDimensionsById",
+					"Reset",
+					"DeleteCookies"};
+
+	for (const char *const service : services) {
+		const std::string reach =
+			std::string("SEGlobalStateManager::GetInstance()->") +
+			service;
+
+		const std::string message =
+			std::string("SEApiMessageHandler.cpp fetches ") +
+			service +
+			"() from the singleton -- it is in the injected "
+			"SEApiServices bundle, so use m_services (or "
+			"self->m_services inside a handler body)";
+
+		check(flat.find(reach) == std::string::npos, message.c_str());
+	}
+
+	//
+	// And the bundle has to actually be used, or the check above passes
+	// for the wrong reason.
+	//
+	check(flat.find("apiServices->obsSceneManager") != std::string::npos,
+	      "SEApiMessageHandler.cpp no longer uses the injected services "
+	      "bundle -- this invariant would then pass vacuously");
+}
+
+static void check_api_services_container_is_not_emptied_at_teardown()
+{
+	//
+	// The inverse of the invariant that used to live here. While the
+	// rings were real, ~SEGlobalStateManager emptied the container and
+	// that one statement was the only reason shutdown completed. Every
+	// back-edge into the container is weak now, so the statement is gone
+	// and must stay gone: an owner reaching in to end other objects'
+	// lifetimes is exactly what this refactor removed, and putting it
+	// back would hide the next missing weak edge instead of fixing it.
+	//
+	const std::string src = strip_line_comments(
+		slurp("streamelements/SEGlobalStateManager.cpp"));
+
+	const std::string dtor = function_body(
+		src, "SEGlobalStateManager::~SEGlobalStateManager");
+
+	check(!dtor.empty(),
+	      "cannot find SEGlobalStateManager's destructor -- this invariant "
+	      "needs updating");
+
+	check(dtor.find("*m_apiServices = SEApiServices()") ==
+		      std::string::npos,
+	      "SEGlobalStateManager's destructor empties m_apiServices again. "
+	      "If shutdown hangs, a holder that one of the container's "
+	      "services destroys is holding the container strongly -- make "
+	      "that edge weak instead of adding a teardown step");
+}
+
+static void check_api_services_is_a_container_and_nothing_else()
+{
+	//
+	// No methods, no accessors, no policy: a consumer takes the one or two
+	// members it needs, and a container with behaviour on it would grow
+	// into the singleton this refactor is removing.
+	//
+	const std::string src =
+		strip_line_comments(slurp("streamelements/SEApiServices.hpp"));
+
+	const std::string body = function_body(src, "struct SEApiServices");
+
+	check(!body.empty(),
+	      "cannot find struct SEApiServices -- this invariant needs "
+	      "updating");
+
+	check(body.find('(') == std::string::npos,
+	      "SEApiServices has something callable in it -- it is a container "
+	      "of shared_ptr members, and anything else belongs on the service "
+	      "that owns the behaviour");
 }
 
 static void check_crash_path_filesystem_calls_never_throw()
@@ -2388,6 +2991,16 @@ int main()
 	check_wyvrn_sdk_calls_stay_on_the_sdk_thread();
 	check_config_never_hands_libobs_a_null_config();
 	check_rejected_signature_stops_the_handler();
+	check_injected_services_are_not_also_fetched_globally();
+	check_api_handler_takes_its_services_by_injection();
+	check_api_handler_locks_the_services_once_per_dispatch();
+	check_nothing_but_the_manager_owns_the_services_container();
+	check_singleton_reaches_only_go_down();
+	check_non_modal_dialogs_are_closed_by_their_owner();
+	check_state_persistence_borrows_the_managers_it_serializes();
+	check_widget_manager_does_not_own_state_persistence();
+	check_api_services_container_is_not_emptied_at_teardown();
+	check_api_services_is_a_container_and_nothing_else();
 	check_crash_path_filesystem_calls_never_throw();
 
 	if (failures) {

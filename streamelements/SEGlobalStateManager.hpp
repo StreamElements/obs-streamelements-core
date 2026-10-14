@@ -30,6 +30,12 @@ struct QCefCookieManager;
 #include "SECleanupManager.hpp"
 #include "SEPreviewManager.hpp"
 #include "SEWebsocketApiServer.hpp"
+#include "SEApiServices.hpp"
+#include "SEStatePersistence.hpp"
+#include "SEStatusBarMessageManager.hpp"
+#include "SEPopupWindowManager.hpp"
+#include "SEBrowserDialogManager.hpp"
+#include "SESessionManager.hpp"
 #include "SEBrowserDialog.hpp"
 #include "SEVideoCompositionManager.hpp"
 #include "SEAudioCompositionManager.hpp"
@@ -97,22 +103,29 @@ public:
 	static bool IsInstanceAvailable();
 
 public:
-	enum UiModifier { Default = 0, OnBoarding = 1, Import = 2 };
-
 	void Initialize(QMainWindow *obs_main_window);
 	void Shutdown();
 
+private:
+	//
+	// Publishes the constructed services into m_apiServices. Called from
+	// Initialize() once they all exist.
+	//
+	void PublishApiServices();
+
+private:
+	//
+	// Private: asking the root whether it is alive is what a holder does
+	// instead of holding what it uses, and every external caller has been
+	// given the thing it actually wanted. The one caller left is
+	// IsInstanceAvailable(), which answers the same question for the
+	// static reaches that remain -- the SEUtils, composition and
+	// crash-path ones, which later stages inject.
+	//
 	bool IsInitialized() { return m_initialized; }
 
-	void Reset(bool deleteAllCookies = true,
-		   UiModifier uiModifier = Default);
-	void DeleteCookies();
-	void StartOnBoardingUI(UiModifier uiModifier);
-	void StopOnBoardingUI();
-	void SwitchToOBSStudio();
+public:
 
-	void PersistState(bool sendEventToGuest = true);
-	void RestoreState();
 
 	QCef *GetCef() { return m_cef; }
 
@@ -207,6 +220,17 @@ public:
 	{
 		return m_websocketApiServer;
 	}
+
+	//
+	// The bundle the API handlers and browser widgets are given. Handed to
+	// them at construction; this accessor exists for the one caller that
+	// cannot be handed anything -- the lazily created InvokeHandler
+	// singleton in SEUtils -- and goes away with it.
+	//
+	std::shared_ptr<SEApiServices> GetApiServices()
+	{
+		return m_apiServices;
+	}
 	std::shared_ptr <SESharedVideoCompositionManager>
 		GetSharedVideoCompositionManager()
 	{
@@ -234,41 +258,14 @@ public:
 	QMainWindow *mainWindow() { return m_mainWindow; }
 
 public:
-	bool DeserializeStatusBarTemporaryMessage(CefRefPtr<CefValue> input);
-	bool DeserializePopupWindow(CefRefPtr<CefValue> input);
-	bool DeserializeModalDialog(CefRefPtr<CefValue> input,
-				    CefRefPtr<CefValue> &output);
-
 	void ReportIssue();
 	void UninstallPlugin();
 
-	void SerializeUserInterfaceState(CefRefPtr<CefValue> &output);
-	bool DeserializeUserInterfaceState(CefRefPtr<CefValue> input);
-
-public:
-	std::shared_ptr<std::promise<CefRefPtr<CefValue>>>
-	DeserializeNonModalDialog(CefRefPtr<CefValue> input);
-
-	bool HasNonModalDialog(const char *id);
-	std::string GetNonModalDialogUrl(const char *id);
-	void SerializeAllNonModalDialogs(CefRefPtr<CefValue> &output);
-	bool DeserializeCloseNonModalDialogsByIds(CefRefPtr<CefValue> input);
-	bool DeserializeFocusNonModalDialogById(CefRefPtr<CefValue> input);
-	bool DeserializeNonModalDialogDimensionsById(CefRefPtr<CefValue> dialogId, CefRefPtr<CefValue> dimensions);
-
-private:
-	std::map<std::string, SEBrowserDialog*>
-		m_nonModalDialogs;
-
-private:
-	std::recursive_mutex m_mutex;
-	long m_apiTransactionLevel = 0;
 
 protected:
 	virtual void OnObsExit() override;
 
 private:
-	bool m_persistStateEnabled = false;
 	bool m_initialized = false;
 	QPointer<QMainWindow> m_mainWindow = nullptr;
 	QPointer<QWidget> m_nativeCentralWidget = nullptr;
@@ -319,6 +316,15 @@ private:
 	std::shared_ptr<SEOutputManager> m_outputManager = nullptr;
 	std::shared_ptr<SEObsActiveSceneTracker>
 		m_obsActiveSceneTracker = nullptr;
+	std::shared_ptr<SEApiServices> m_apiServices = nullptr;
+	std::shared_ptr<SEStatePersistence> m_statePersistence = nullptr;
+	std::shared_ptr<SEStatusBarMessageManager>
+		m_statusBarMessageManager = nullptr;
+	std::shared_ptr<SEPopupWindowManager> m_popupWindowManager =
+		nullptr;
+	std::shared_ptr<SEBrowserDialogManager> m_browserDialogManager =
+		nullptr;
+	std::shared_ptr<SESessionManager> m_sessionManager = nullptr;
 
 private:
 	static std::shared_ptr<

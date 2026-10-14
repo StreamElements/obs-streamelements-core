@@ -206,12 +206,12 @@ static const char* itoa(int input, char* buf, int radix)
 
 SEBrowserWidget::SEBrowserWidget(
 	QWidget *parent,
-	SEMessageBus::message_destination_filter_flags_t
-		messageDestinationFlags, const char *const url,
-	const char *const executeJavaScriptCodeOnLoad,
+	SEMessageBus::message_destination_filter_flags_t messageDestinationFlags,
+	const char *const url, const char *const executeJavaScriptCodeOnLoad,
 	const char *const reloadPolicy, const char *const locationArea,
-	const char *const id,
-	std::shared_ptr<SEApiMessageHandler> apiMessageHandler, bool isIncognito)
+	const char *const id, std::shared_ptr<SEApiServices> apiServices,
+	std::shared_ptr<SEApiMessageHandler> apiMessageHandler,
+	bool isIncognito)
 	: QWidget(parent),
 	  m_messageDestinationFlags(messageDestinationFlags),
 	  m_url(url),
@@ -220,8 +220,7 @@ SEBrowserWidget::SEBrowserWidget(
 						: executeJavaScriptCodeOnLoad),
 	  m_reloadPolicy(reloadPolicy),
 	  m_pendingLocationArea(locationArea == nullptr ? "" : locationArea),
-	  m_clientId(id == nullptr ? CreateGloballyUniqueIdString()
-				    : id),
+	  m_clientId(id == nullptr ? CreateGloballyUniqueIdString() : id),
 	  m_requestedApiMessageHandler(apiMessageHandler),
 	  m_isIncognito(isIncognito)
 {
@@ -250,7 +249,8 @@ SEBrowserWidget::SEBrowserWidget(
 
 	if (m_requestedApiMessageHandler == nullptr) {
 		m_requestedApiMessageHandler =
-			std::make_shared<SEApiMessageHandler>("unknown");
+			std::make_shared<SEApiMessageHandler>("unknown",
+							      apiServices);
 	}
 
 	m_requestedApiMessageHandler->SetBrowserWidget(this);

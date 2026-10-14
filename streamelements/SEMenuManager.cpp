@@ -1,4 +1,6 @@
 #include "SEMenuManager.hpp"
+
+#include "SESessionManager.hpp"
 #include "SEGlobalStateManager.hpp"
 #include "SEConfig.hpp"
 
@@ -12,8 +14,9 @@
 
 #include <algorithm>
 
-SEMenuManager::SEMenuManager(QMainWindow *parent)
-	: m_mainWindow(parent)
+SEMenuManager::SEMenuManager(
+	QMainWindow *parent, std::shared_ptr<SESessionManager> sessionManager)
+	: m_mainWindow(parent), m_sessionManager(sessionManager)
 {
 	m_auxMenuItems = CefValue::Create();
 	m_auxMenuItems->SetNull();
@@ -78,12 +81,11 @@ void SEMenuManager::UpdateInternal()
 		QAction *onboarding_action = new QAction(obs_module_text(
 			"StreamElements.Action.ForceOnboarding"));
 		setupMenu->addAction(onboarding_action);
-		onboarding_action->connect(onboarding_action, &QAction::triggered, [this] {
-			SEGlobalStateManager::GetInstance()
-				->Reset(false,
-					SEGlobalStateManager::
-						OnBoarding);
-		});
+		onboarding_action->connect(
+			onboarding_action, &QAction::triggered, [this] {
+				m_sessionManager->Reset(
+					false, SESessionManager::OnBoarding);
+			});
 
 		setupMenu->addAction(createURL(
 			obs_module_text("StreamElements.Action.Overlays"),
@@ -102,12 +104,11 @@ void SEMenuManager::UpdateInternal()
 		QAction *import_action = new QAction(
 			obs_module_text("StreamElements.Action.Import"));
 		m_menu->addAction(import_action);
-		import_action->connect(import_action, &QAction::triggered, [this] {
-			SEGlobalStateManager::GetInstance()
-				->Reset(false,
-					SEGlobalStateManager::
-						Import);
-		});
+		import_action->connect(
+			import_action, &QAction::triggered, [this] {
+				m_sessionManager->Reset(
+					false, SESessionManager::Import);
+			});
 
 		m_menu->addSeparator();
 	}
@@ -159,9 +160,7 @@ void SEMenuManager::UpdateInternal()
 			 SEConfig::STARTUP_FLAGS_SIGNED_IN);
 
 		auto reset_action_handler = [this] {
-			SEGlobalStateManager::
-				GetInstance()
-					->Reset();
+			m_sessionManager->Reset();
 		};
 
 		if (isLoggedIn) {

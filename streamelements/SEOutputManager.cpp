@@ -97,8 +97,9 @@ void SEOutputManager::DeserializeOutput(ObsOutputType outputType,
 	input->SetDictionary(d);
 
 	if (outputType == StreamingOutput) {
-		auto customOutput =
-			SECustomStreamingOutput::Create(input);
+		auto customOutput = SECustomStreamingOutput::Create(
+			input, m_videoCompositionManager.get(),
+			m_audioCompositionManager.get());
 
 		if (!customOutput.get())
 			return;
@@ -109,8 +110,9 @@ void SEOutputManager::DeserializeOutput(ObsOutputType outputType,
 		customOutput->SerializeOutput(output);
 	}
 	else if (outputType == RecordingOutput) {
-		auto customOutput =
-			SECustomRecordingOutput::Create(input);
+		auto customOutput = SECustomRecordingOutput::Create(
+			input, m_videoCompositionManager.get(),
+			m_audioCompositionManager.get());
 
 		if (!customOutput.get())
 			return;
@@ -120,8 +122,9 @@ void SEOutputManager::DeserializeOutput(ObsOutputType outputType,
 
 		customOutput->SerializeOutput(output);
 	} else {
-		auto customOutput =
-			SECustomReplayBufferOutput::Create(input);
+		auto customOutput = SECustomReplayBufferOutput::Create(
+			input, m_videoCompositionManager.get(),
+			m_audioCompositionManager.get());
 
 		if (!customOutput.get())
 			return;

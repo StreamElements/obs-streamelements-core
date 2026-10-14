@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "SEWebsocketApiServer.hpp"
+#include "SEApiServices.hpp"
 
 class SEBrowserWidget;
 
@@ -31,9 +32,23 @@ protected:
 	std::string m_containerType;
 	SEBrowserWidget *m_browserWidget = nullptr;
 
+	//
+	// The services this handler's methods are allowed to use. Injected, so
+	// a handler can be built against anything -- including a bundle with
+	// only the two services a test cares about.
+	//
+	// Weak, because a handler is owned by a browser widget, which is
+	// owned by a dock or a dialog that one of the bundle's own managers
+	// destroys. Handlers do not read it: the dispatcher locks it once per
+	// call and passes the result in, so the four sites left here are the
+	// ones that are not dispatches.
+	//
+	std::weak_ptr<SEApiServices> m_services;
+
 public:
-	SEApiMessageHandler(std::string containerType)
-		: m_containerType(containerType)		  
+	SEApiMessageHandler(std::string containerType,
+			    std::shared_ptr<SEApiServices> services)
+		: m_containerType(containerType), m_services(services)
 	{
 		// RegisterIncomingApiCallHandlers();
 	}
@@ -81,8 +96,16 @@ public:
 protected:
 	virtual void RegisterIncomingApiCallHandlers();
 
+	//
+	// apiServices is locked by InvokeApiCallHandlerAsync before the
+	// handler is looked up, so a method body can use it without checking
+	// -- a call that arrives with no bundle is answered with null and
+	// never reaches a handler. It is also what makes a handler callable
+	// from a test with a hand-built bundle and no singleton anywhere.
+	//
 	typedef void (*incoming_call_handler_t)(
 		std::shared_ptr<SEApiMessageHandler>,
+		std::shared_ptr<SEApiServices> apiServices,
 		CefRefPtr<CefProcessMessage> message,
 		CefRefPtr<CefListValue> args, CefRefPtr<CefValue> &result,
 		std::shared_ptr<SEWebsocketApiServer::ClientInfo> target, const long cefClientId, std::function<void()> complete_callback);
@@ -139,8 +162,9 @@ public:
 class SEApiMessageHandler::InvokeHandler
 	: public SEApiMessageHandler {
 public:
-	InvokeHandler(std::string containerType)
-		: SEApiMessageHandler(containerType)
+	InvokeHandler(std::string containerType,
+		      std::shared_ptr<SEApiServices> services)
+		: SEApiMessageHandler(containerType, services)
 	{
 		// We must init this here since Invoke handler does not get "context initialized" event from
 		// the browser script which does not exist here :)
@@ -150,7 +174,16 @@ public:
 public:
 	~InvokeHandler() {}
 
-	static std::shared_ptr<SEApiMessageHandler::InvokeHandler> GetInstance()
+	//
+	// Still a singleton, and still built on first use: its only caller is a
+	// free function in SEUtils with nothing to hand it. The services come
+	// from the caller for that reason -- whoever first invokes an auxiliary
+	// action decides which bundle this handler keeps for the rest of the
+	// session, which is the last thing standing between this file and a
+	// second SEGlobalStateManager instance.
+	//
+	static std::shared_ptr<SEApiMessageHandler::InvokeHandler>
+	GetInstance(std::shared_ptr<SEApiServices> services)
 	{
 		static std::mutex mutex;
 
@@ -159,8 +192,8 @@ public:
 
 			if (!s_singleton) {
 				s_singleton = std::make_shared<
-					SEApiMessageHandler::
-						InvokeHandler>("globalInvokeHandler");
+					SEApiMessageHandler::InvokeHandler>(
+					"globalInvokeHandler", services);
 			}
 		}
 

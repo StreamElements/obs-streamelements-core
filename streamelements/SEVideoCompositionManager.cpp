@@ -1,4 +1,5 @@
 #include "SEVideoCompositionManager.hpp"
+#include "SEWebsocketApiServer.hpp"
 
 #include <QDialog>
 #include <QVBoxLayout>
@@ -22,21 +23,23 @@ static void dispatch_external_event(std::string name, std::string args)
 		CefParseJSON(args, JSON_PARSER_ALLOW_TRAILING_COMMAS));
 }
 
-static void dispatch_js_event(std::string name, std::string args)
+//
+// Takes the api server as a borrowed raw pointer: the caller is a member
+// whose own reference outlives the call, and this neither owns it nor
+// extends its life.
+//
+static void dispatch_js_event(SEWebsocketApiServer *apiServer, std::string name,
+			      std::string args)
 {
-	if (!SEGlobalStateManager::IsInstanceAvailable())
-		return;
-
-	auto apiServer = SEGlobalStateManager::GetInstance()
-				 ->GetWebsocketApiServer();
-
 	if (!apiServer)
 		return;
 
 	apiServer->DispatchJSEvent("system", name, args);
 }
 
-SEVideoCompositionManager::SEVideoCompositionManager()
+SEVideoCompositionManager::SEVideoCompositionManager(
+	std::shared_ptr<SEWebsocketApiServer> apiServer)
+	: m_apiServer(apiServer)
 {
 	m_nativeVideoComposition = SEObsNativeVideoComposition::Create();
 
@@ -65,7 +68,8 @@ void SEVideoCompositionManager::Reset()
 		m_videoCompositionsMap.erase(key);
 	}
 
-	dispatch_js_event("hostVideoCompositionListChanged", "null");
+	dispatch_js_event(m_apiServer.get(), "hostVideoCompositionListChanged",
+			  "null");
 	dispatch_external_event("hostVideoCompositionListChanged", "null");
 }
 
@@ -183,7 +187,8 @@ void SEVideoCompositionManager::DeserializeComposition(
 
 		composition->SerializeComposition(output);
 
-		dispatch_js_event("hostVideoCompositionListChanged", "null");
+		dispatch_js_event(m_apiServer.get(),
+				  "hostVideoCompositionListChanged", "null");
 		dispatch_external_event("hostVideoCompositionListChanged",
 					"null");
 	} catch (...) {
@@ -248,7 +253,8 @@ void SEVideoCompositionManager::RemoveCompositionsByIds(
 		m_videoCompositionsMap.erase(kv.first);
 	}
 
-	dispatch_js_event("hostVideoCompositionListChanged", "null");
+	dispatch_js_event(m_apiServer.get(), "hostVideoCompositionListChanged",
+			  "null");
 	dispatch_external_event("hostVideoCompositionListChanged", "null");
 
 	output->SetBool(true);

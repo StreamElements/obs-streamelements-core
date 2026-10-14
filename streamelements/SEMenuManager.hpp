@@ -11,10 +11,12 @@
 #include <QMenu>
 #include <QPointer>
 
+#include <memory>
 #include <string>
 #include <vector>
 
 class SEBrowserWidget;
+class SESessionManager;
 
 class SEMenuManager :
 	public QObject
@@ -25,7 +27,15 @@ private:
 	enum aux_menu_item_type_t { Command, Separator, Container };
 
 public:
-	SEMenuManager(QMainWindow* parent);
+	//
+	// The session manager is held strongly, and that is not a ring: it
+	// holds the services bundle weakly, and nothing it owns owns this.
+	// It is injected because two menu items are the non-API way into a
+	// session reset, and reaching the singleton for them was the last
+	// reason this class needed it.
+	//
+	SEMenuManager(QMainWindow *parent,
+		      std::shared_ptr<SESessionManager> sessionManager);
 	virtual ~SEMenuManager();
 
 public:
@@ -50,6 +60,7 @@ private:
 
 private:
 	QMainWindow* m_mainWindow;
+	std::shared_ptr<SESessionManager> m_sessionManager;
 
 	//
 	// QPointer, not QMenu*, because we do not own this.

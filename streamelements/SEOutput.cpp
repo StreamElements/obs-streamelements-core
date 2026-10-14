@@ -1,9 +1,11 @@
 #include <obs.hpp>
 #include <obs-frontend-api.h>
+#include <util/config-file.h>
 
 #include "SEUtils.hpp"
 #include "SEOutput.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEVideoCompositionManager.hpp"
+#include "SEAudioCompositionManager.hpp"
 
 #include <ctime>
 
@@ -1047,7 +1049,10 @@ void SECustomStreamingOutput::SerializeOutputSettings(
 	output->SetDictionary(d);
 }
 
-std::shared_ptr <SECustomStreamingOutput> SECustomStreamingOutput::Create(CefRefPtr<CefValue> input)
+std::shared_ptr<SECustomStreamingOutput> SECustomStreamingOutput::Create(
+	CefRefPtr<CefValue> input,
+	SEVideoCompositionManager *videoCompositionManager,
+	SEAudioCompositionManager *audioCompositionManager)
 {
 	if (!input.get())
 		return nullptr;
@@ -1107,27 +1112,21 @@ std::shared_ptr <SECustomStreamingOutput> SECustomStreamingOutput::Create(CefRef
 					   : "";
 
 	auto videoComposition =
-		SEGlobalStateManager::GetInstance()
-			->GetVideoCompositionManager()
-			->GetVideoCompositionById(videoCompositionId);
+		videoCompositionManager->GetVideoCompositionById(
+			videoCompositionId);
 
 	auto audioComposition =
-		SEGlobalStateManager::GetInstance()
-			->GetAudioCompositionManager()
-			->GetAudioCompositionById(audioCompositionId);
+		audioCompositionManager->GetAudioCompositionById(
+			audioCompositionId);
 
 	if (!videoComposition.get() && !videoCompositionId.size()) {
 		videoComposition =
-			SEGlobalStateManager::GetInstance()
-				->GetVideoCompositionManager()
-				->GetObsNativeVideoComposition();
+			videoCompositionManager->GetObsNativeVideoComposition();
 	}
 
 	if (!audioComposition.get() && !audioCompositionId.size()) {
 		audioComposition =
-			SEGlobalStateManager::GetInstance()
-				->GetAudioCompositionManager()
-				->GetObsNativeAudioComposition();
+			audioCompositionManager->GetObsNativeAudioComposition();
 	}
 
 	if (!videoComposition) {
@@ -1702,8 +1701,10 @@ void SECustomRecordingOutput::SerializeOutputSettings(
 	output->SetDictionary(m_recordingSettings);
 }
 
-std::shared_ptr<SECustomRecordingOutput>
-SECustomRecordingOutput::Create(CefRefPtr<CefValue> input)
+std::shared_ptr<SECustomRecordingOutput> SECustomRecordingOutput::Create(
+	CefRefPtr<CefValue> input,
+	SEVideoCompositionManager *videoCompositionManager,
+	SEAudioCompositionManager *audioCompositionManager)
 {
 	if (!input.get())
 		return nullptr;
@@ -1746,14 +1747,12 @@ SECustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 				 : true;
 
 	auto videoComposition =
-		SEGlobalStateManager::GetInstance()
-			->GetVideoCompositionManager()
-			->GetVideoCompositionById(videoCompositionId);
+		videoCompositionManager->GetVideoCompositionById(
+			videoCompositionId);
 
 	auto audioComposition =
-		SEGlobalStateManager::GetInstance()
-			->GetAudioCompositionManager()
-			->GetAudioCompositionById(audioCompositionId);
+		audioCompositionManager->GetAudioCompositionById(
+			audioCompositionId);
 
 	auto recordingSettings = CefDictionaryValue::Create();
 
@@ -1765,16 +1764,12 @@ SECustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 
 	if (!videoComposition.get() && !videoCompositionId.size()) {
 		videoComposition =
-			SEGlobalStateManager::GetInstance()
-				->GetVideoCompositionManager()
-				->GetObsNativeVideoComposition();
+			videoCompositionManager->GetObsNativeVideoComposition();
 	}
 
 	if (!audioComposition.get() && !audioCompositionId.size()) {
 		audioComposition =
-			SEGlobalStateManager::GetInstance()
-				->GetAudioCompositionManager()
-				->GetObsNativeAudioComposition();
+			audioCompositionManager->GetObsNativeAudioComposition();
 	}
 
 	if (!videoComposition.get()) {
@@ -2193,8 +2188,10 @@ void SECustomReplayBufferOutput::SerializeOutputSettings(
 	output->SetDictionary(m_recordingSettings);
 }
 
-std::shared_ptr<SECustomReplayBufferOutput>
-SECustomReplayBufferOutput::Create(CefRefPtr<CefValue> input)
+std::shared_ptr<SECustomReplayBufferOutput> SECustomReplayBufferOutput::Create(
+	CefRefPtr<CefValue> input,
+	SEVideoCompositionManager *videoCompositionManager,
+	SEAudioCompositionManager *audioCompositionManager)
 {
 	if (!input.get())
 		return nullptr;
@@ -2237,14 +2234,12 @@ SECustomReplayBufferOutput::Create(CefRefPtr<CefValue> input)
 				 : true;
 
 	auto videoComposition =
-		SEGlobalStateManager::GetInstance()
-			->GetVideoCompositionManager()
-			->GetVideoCompositionById(videoCompositionId);
+		videoCompositionManager->GetVideoCompositionById(
+			videoCompositionId);
 
 	auto audioComposition =
-		SEGlobalStateManager::GetInstance()
-			->GetAudioCompositionManager()
-			->GetAudioCompositionById(audioCompositionId);
+		audioCompositionManager->GetAudioCompositionById(
+			audioCompositionId);
 
 	auto recordingSettings = CefDictionaryValue::Create();
 
@@ -2256,16 +2251,12 @@ SECustomReplayBufferOutput::Create(CefRefPtr<CefValue> input)
 
 	if (!videoComposition.get() && !videoCompositionId.size()) {
 		videoComposition =
-			SEGlobalStateManager::GetInstance()
-				->GetVideoCompositionManager()
-				->GetObsNativeVideoComposition();
+			videoCompositionManager->GetObsNativeVideoComposition();
 	}
 
 	if (!audioComposition.get() && !audioCompositionId.size()) {
 		audioComposition =
-			SEGlobalStateManager::GetInstance()
-				->GetAudioCompositionManager()
-				->GetObsNativeAudioComposition();
+			audioCompositionManager->GetObsNativeAudioComposition();
 	}
 
 	if (!videoComposition.get()) {

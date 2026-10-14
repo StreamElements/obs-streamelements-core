@@ -175,6 +175,14 @@ void SEGlobalStateManager::ThemeChangeListener::changeEvent(
 
 static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 {
+	//
+	// Registered with the manager as its callback data, so this does not
+	// have to look one up. Valid for as long as callbacks can arrive:
+	// Shutdown() removes this one before the manager is destroyed, and the
+	// Leak() path never destroys it at all.
+	//
+	auto self = static_cast<SEGlobalStateManager *>(data);
+
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
 	UNUSED_PARAMETER(data);
@@ -216,11 +224,9 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 
 			if (sourceName) {
 				json11::Json json = json11::Json::object{
-					{"sceneId",
-					 GetIdFromPointer(source)},
+					{"sceneId", GetIdFromPointer(source)},
 					{"videoCompositionId",
-					 SEGlobalStateManager::GetInstance()
-						 ->GetVideoCompositionManager()
+					 self->GetVideoCompositionManager()
 						 ->GetObsNativeVideoComposition()
 						 ->GetId()},
 					{"name", sourceName},
@@ -276,8 +282,7 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 		if (!SEGlobalStateManager::IsInstanceAvailable())
 			return;
 
-		auto apiServer = SEGlobalStateManager::GetInstance()
-					 ->GetWebsocketApiServer();
+		auto apiServer = self->GetWebsocketApiServer();
 
 		if (!apiServer)
 			return;
@@ -317,6 +322,24 @@ SEGlobalStateManager::SEGlobalStateManager(
 SEGlobalStateManager::~SEGlobalStateManager()
 {
 	Shutdown();
+
+	//
+	// The container is not emptied here. It used to be, because the
+	// references formed a ring -- a service owning widgets, each widget
+	// owning an API handler, each handler holding the container -- that
+	// refcounting could not unwind, and a teardown step was the only
+	// thing breaking it. Every one of those back-edges is a weak_ptr now,
+	// so the container goes when this object goes and each service goes
+	// when its last real user does.
+	//
+	// If a shutdown hang comes back, the fix is the weak edge that went
+	// missing, not a line here: an owner deciding other objects'
+	// lifetimes is what this refactor exists to remove.
+	// check_nothing_but_the_manager_owns_the_services_container is the
+	// structural guard, and
+	// check_api_services_container_is_not_emptied_at_teardown is the
+	// guard on this comment.
+	//
 }
 
 std::shared_ptr<SEGlobalStateManager>
@@ -358,6 +381,46 @@ bool SEGlobalStateManager::IsInstanceAvailable()
 
 #include <QWindow>
 #include <QObjectList>
+
+void SEGlobalStateManager::PublishApiServices()
+{
+	if (!m_apiServices)
+		return;
+
+	m_apiServices->widgetManager = m_widgetManager;
+	m_apiServices->obsSceneManager = m_obsSceneManager;
+	m_apiServices->menuManager = m_menuManager;
+	m_apiServices->bandwidthTestManager = m_bwTestManager;
+	m_apiServices->outputSettingsManager = m_outputSettingsManager;
+	m_apiServices->workerManager = m_workerManager;
+	m_apiServices->hotkeyManager = m_hotkeyManager;
+	m_apiServices->performanceHistoryTracker = m_performanceHistoryTracker;
+	m_apiServices->analyticsEventsManager = m_analyticsEventsManager;
+	m_apiServices->externalSceneDataProviderManager =
+		m_externalSceneDataProviderManager;
+	m_apiServices->httpClient = m_httpClient;
+	m_apiServices->localFilesystemHttpServer = m_localFilesystemHttpServer;
+	m_apiServices->nativeObsControlsManager = m_nativeObsControlsManager;
+	m_apiServices->profilesManager = m_profilesManager;
+	m_apiServices->backupManager = m_backupManager;
+#ifdef SE_ENABLE_WYVRN
+	m_apiServices->razerWyvrnManager = m_razerWyvrnManager;
+#endif
+	m_apiServices->cleanupManager = m_cleanupManager;
+	m_apiServices->previewManager = m_previewManager;
+	m_apiServices->websocketApiServer = m_websocketApiServer;
+	m_apiServices->sharedVideoCompositionManager =
+		m_sharedVideoCompositionManager;
+	m_apiServices->videoCompositionManager = m_videoCompositionManager;
+	m_apiServices->audioCompositionManager = m_audioCompositionManager;
+	m_apiServices->outputManager = m_outputManager;
+	m_apiServices->obsActiveSceneTracker = m_obsActiveSceneTracker;
+	m_apiServices->statePersistence = m_statePersistence;
+	m_apiServices->statusBarMessageManager = m_statusBarMessageManager;
+	m_apiServices->popupWindowManager = m_popupWindowManager;
+	m_apiServices->browserDialogManager = m_browserDialogManager;
+	m_apiServices->sessionManager = m_sessionManager;
+}
 
 void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 {
@@ -420,33 +483,57 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 	m_cefCookieManager = m_cef->create_cookie_manager(storagePath, true);
 
+	//
+	// Created before any service, and filled in by PublishApiServices()
+	// once they all exist: the widget manager and the worker manager are
+	// constructed here and hand the bundle on to every API handler they
+	// create, which happens later, when a page loads.
+	//
+	m_apiServices = std::make_shared<SEApiServices>();
+
+	//
+	// Before the menu manager, which takes it: two of its menu items
+	// are the non-API way into a session reset. Nothing else has to
+	// exist yet -- the session manager locks the bundle per call, and
+	// by the time a menu item can be clicked it is filled in.
+	//
+	m_sessionManager = std::make_shared<SESessionManager>(
+		mainWindow(), m_cefCookieManager, m_apiServices);
+
 	m_httpClient =
 		std::make_shared<SEHttpClient>();
 	m_localFilesystemHttpServer = std::make_shared<
 		SELocalFilesystemHttpServer>();
 	m_analyticsEventsManager = std::make_shared<
 		SEAnalyticsEventsManager>();
-	m_widgetManager = std::make_shared<
-		SEBrowserWidgetManager>(
-		obs_main_window);
+	m_widgetManager = std::make_shared<SEBrowserWidgetManager>(
+		obs_main_window, m_apiServices);
 
-	m_videoCompositionManager = std::make_shared<
-		SEVideoCompositionManager>();
-	m_audioCompositionManager = std::make_shared<
-		SEAudioCompositionManager>();
+	//
+	// Constructed ahead of everything that takes it. Its constructor binds
+	// port 27952 and starts accepting, so this opens the socket a few
+	// microseconds earlier in startup than it used to -- the managers
+	// between here and its old position are synchronous and immediate, and
+	// the panels that connect to it take seconds to come up.
+	//
+	m_websocketApiServer = std::make_shared<SEWebsocketApiServer>();
+
+	m_videoCompositionManager = std::make_shared<SEVideoCompositionManager>(
+		m_websocketApiServer);
+	m_audioCompositionManager = std::make_shared<SEAudioCompositionManager>(
+		m_websocketApiServer);
 
 	m_obsSceneManager =
 		std::make_shared<SEObsSceneManager>(
 			obs_main_window);
 	m_menuManager =
 		std::make_shared<SEMenuManager>(
-			obs_main_window);
+			obs_main_window, m_sessionManager);
 	m_bwTestManager = std::make_shared<
 		SEBandwidthTestManager>();
 	m_outputSettingsManager = std::make_shared<
 		SEOutputSettingsManager>();
-	m_workerManager =
-		std::make_shared<SEWorkerManager>();
+	m_workerManager = std::make_shared<SEWorkerManager>(m_apiServices);
 	m_hotkeyManager =
 		std::make_shared<SEHotkeyManager>();
 	m_performanceHistoryTracker = std::make_shared<
@@ -456,18 +543,19 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_nativeObsControlsManager =
 		SENativeOBSControlsManager::
 			GetInstance();
+	m_nativeObsControlsManager->SetApiServices(m_apiServices);
 	m_profilesManager =
 		std::make_shared<SEProfilesManager>();
-	m_backupManager =
-		std::make_shared<SEBackupManager>();
+	// Constructed before the backup manager, which now takes it: a
+	// dependency has to exist before the thing that holds it.
 	m_cleanupManager =
 		std::make_shared<SECleanupManager>();
+	m_backupManager =
+		std::make_shared<SEBackupManager>(m_cleanupManager);
 	m_previewManager =
 		std::make_shared<SEPreviewManager>(
 			mainWindow());
 
-	m_websocketApiServer = std::make_shared<
-		SEWebsocketApiServer>();
 	m_windowStateEventFilter =
 		std::make_shared<WindowStateChangeEventFilter>(
 			mainWindow());
@@ -490,10 +578,36 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 	m_sharedVideoCompositionManager =
 		std::make_shared<SESharedVideoCompositionManager>(
-			m_videoCompositionManager);
+			m_websocketApiServer, m_videoCompositionManager);
 
-	m_obsActiveSceneTracker =
-		std::make_shared<SEObsActiveSceneTracker>();
+	m_obsActiveSceneTracker = std::make_shared<SEObsActiveSceneTracker>(
+		m_websocketApiServer, m_videoCompositionManager);
+
+	//
+	// .get(), because the persistence object borrows these four rather
+	// than owning them -- see the comment on its constructor.
+	//
+	m_statePersistence = std::make_shared<SEStatePersistence>(
+		mainWindow(), m_widgetManager.get(), m_workerManager.get(),
+		m_hotkeyManager.get(), m_nativeObsControlsManager.get());
+
+	//
+	// Handed over after construction, and held weakly: the deferred saves
+	// in SEWidgetManager used to reach it through the services bundle,
+	// which is an edge from a widget-owning manager back to the bundle.
+	//
+	m_widgetManager->SetStatePersistence(m_statePersistence);
+
+	m_statusBarMessageManager =
+		std::make_shared<SEStatusBarMessageManager>(mainWindow());
+
+	m_popupWindowManager =
+		std::make_shared<SEPopupWindowManager>(m_apiServices);
+
+	m_browserDialogManager = std::make_shared<SEBrowserDialogManager>(
+		mainWindow(), m_apiServices);
+
+	PublishApiServices();
 
 	m_appStateListener = new ApplicationStateListener();
 	m_themeChangeListener = new ThemeChangeListener();
@@ -539,16 +653,13 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 		QObject::connect(
 			liveSupport, &QPushButton::clicked,
-			[]() {
-				SEGlobalStateManager::GetInstance()
-					->GetAnalyticsEventsManager()
-					->trackEvent(
-						"live_support_click",
-						json11::Json::object{
-							{"type",
-								"button_click"},
-							{"placement",
-								"live_support_button"}});
+			[analytics = m_analyticsEventsManager]() {
+				analytics->trackEvent(
+					"live_support_click",
+					json11::Json::object{
+						{"type", "button_click"},
+						{"placement",
+						 "live_support_button"}});
 
 				QUrl navigate_url = QUrl(
 					obs_module_text(
@@ -629,11 +740,11 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		// On-boarding
 
 		// Reset state but don't erase all cookies
-		Reset(false);
+		m_sessionManager->Reset(false);
 	} else {
 		// Regular
 
-		RestoreState();
+		m_statePersistence->RestoreState();
 	}
 
 	// Draining the posted-event queue runs arbitrary code while this
@@ -686,14 +797,14 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 	streamelements_updater_init();
 
-	m_persistStateEnabled = true;
+	m_statePersistence->SetEnabled(true);
 	m_initialized = true;
 
 	// From here on an OBS close is an ordinary close, and teardown runs
 	// normally (CORE-786).
 	SENoteInitializeCompleted();
 
-	obs_frontend_add_event_callback(handle_obs_frontend_event, nullptr);
+	obs_frontend_add_event_callback(handle_obs_frontend_event, this);
 }
 
 void SEGlobalStateManager::Shutdown()
@@ -709,11 +820,11 @@ void SEGlobalStateManager::Shutdown()
 	// must be released rather than left to deadlock us (CORE-1131).
 	SetShuttingDown();
 
-	obs_frontend_remove_event_callback(handle_obs_frontend_event, nullptr);
+	obs_frontend_remove_event_callback(handle_obs_frontend_event, this);
 
-	PersistState(false);
+	m_statePersistence->PersistState(false);
 
-	m_persistStateEnabled = false;
+	m_statePersistence->SetEnabled(false);
 
 	streamelements_updater_shutdown();
 
@@ -781,6 +892,22 @@ void SEGlobalStateManager::Shutdown()
 	m_previewManager = nullptr;
 	m_websocketApiServer = nullptr;
 	m_windowStateEventFilter = nullptr;
+	m_statePersistence = nullptr;
+	m_statusBarMessageManager = nullptr;
+	m_popupWindowManager = nullptr;
+	m_browserDialogManager = nullptr;
+
+	//
+	// The session manager borrows this pointer and can outlive
+	// Shutdown() -- the container holds it until this object is
+	// destroyed -- so take the pointer away before deleting what it
+	// points at.
+	//
+	if (m_sessionManager) {
+		m_sessionManager->ForgetCookieManager();
+	}
+
+	m_sessionManager = nullptr;
 
 	if (m_cefCookieManager) {
 		delete m_cefCookieManager;
@@ -801,905 +928,22 @@ void SEGlobalStateManager::Shutdown()
 	m_initialized = false;
 }
 
-void SEGlobalStateManager::StartOnBoardingUI(UiModifier uiModifier)
-{
-	std::string onBoardingURL =
-		GetCommandLineOptionValue("streamelements-onboarding-url");
-
-	if (!onBoardingURL.size()) {
-		onBoardingURL =
-			SEConfig::GetInstance()->GetUrlOnBoarding();
-	}
-
-	{
-		// Manipulate on-boarding URL query string to reflect forceOnboarding state
-
-		const char *QS_ONBOARDING = "onboarding";
-		const char *QS_IMPORT = "import";
-
-		QUrl url(onBoardingURL.c_str());
-		QUrlQuery query(url);
-
-		if (query.hasQueryItem(QS_ONBOARDING)) {
-			query.removeQueryItem(QS_ONBOARDING);
-		}
-
-		if (query.hasQueryItem(QS_IMPORT)) {
-			query.removeQueryItem(QS_IMPORT);
-		}
-
-		switch (uiModifier) {
-		case OnBoarding:
-			query.addQueryItem(QS_ONBOARDING, "1");
-			break;
-		case Import:
-			query.addQueryItem(QS_IMPORT, "1");
-			break;
-		case Default:
-		default:
-			break;
-		}
-
-		url.setQuery(query.query());
-
-		onBoardingURL = url.toString().toStdString();
-	}
-
-	StopOnBoardingUI();
-
-	GetWidgetManager()->PushCentralBrowserWidget(onBoardingURL.c_str(),
-						     nullptr);
-	GetHotkeyManager()->RemoveAllManagedHotkeyBindings();
-
-	// This also clears SEConfig::STARTUP_FLAGS_SIGNED_IN
-	SEConfig::GetInstance()->SetStartupFlags(
-		SEConfig::STARTUP_FLAGS_ONBOARDING_MODE);
-
-	QtPostTask([this]() -> void {
-		GetObsSceneManager()->Reset();
-		GetOutputManager()->Reset();
-		GetSharedVideoCompositionManager()->Reset();
-		GetVideoCompositionManager()->Reset();
-
-		GetMenuManager()->Update();
-
-		PersistState();
-	});
-}
-
-void SEGlobalStateManager::StopOnBoardingUI()
-{
-	GetWorkerManager()->RemoveAll();
-	GetWidgetManager()->HideNotificationBar();
-	GetWidgetManager()->RemoveAllDockWidgets();
-	GetWidgetManager()->DestroyCurrentCentralBrowserWidget();
-
-	GetNativeOBSControlsManager()->Reset();
-}
-
-void SEGlobalStateManager::SwitchToOBSStudio()
-{
-	typedef std::vector<std::string> ids_t;
-
-	ids_t workers;
-	ids_t widgets;
-
-	GetWorkerManager()->GetIdentifiers(workers);
-	GetWidgetManager()->GetDockBrowserWidgetIdentifiers(widgets);
-
-	bool isEnabled = false;
-
-	isEnabled |= (!!workers.size());
-	isEnabled |= (!!widgets.size());
-	isEnabled |= GetWidgetManager()->HasNotificationBar();
-	isEnabled |= GetWidgetManager()->HasCentralBrowserWidget();
-
-	if (isEnabled) {
-		QMessageBox::StandardButton reply;
-		reply = QMessageBox::question(
-			mainWindow(),
-			obs_module_text(
-				"StreamElements.Action.StopOnBoardingUI.Confirmation.Title"),
-			obs_module_text(
-				"StreamElements.Action.StopOnBoardingUI.Confirmation.Text"),
-			QMessageBox::Ok | QMessageBox::Cancel);
-
-		if (reply == QMessageBox::Ok) {
-			SEGlobalStateManager::GetInstance()
-				->StopOnBoardingUI();
-
-			///
-			// Also resets SEConfig::STARTUP_FLAGS_SIGNED_IN
-			//
-			// This is to keep our state consistent and not display "Logout"
-			// when we are in fact already logged out.
-			//
-			SEConfig::GetInstance()->SetStartupFlags(
-				SEConfig::
-					STARTUP_FLAGS_ONBOARDING_MODE);
-
-			GetObsSceneManager()->Reset();
-			GetOutputManager()->Reset();
-			GetSharedVideoCompositionManager()->Reset();
-			GetVideoCompositionManager()->Reset();
-
-			GetMenuManager()->Update();
-		}
-	} else {
-		QMessageBox::question(
-			mainWindow(),
-			obs_module_text(
-				"StreamElements.Action.StopOnBoardingUI.Disabled.Title"),
-			obs_module_text(
-				"StreamElements.Action.StopOnBoardingUI.Disabled.Text"),
-			QMessageBox::Ok);
-	}
-}
-
-void SEGlobalStateManager::DeleteCookies()
-{
-	// TODO: Specify specific cookies to delete, or, work with OBS community to provide a delete filter
-	if (m_cefCookieManager) {
-		m_cefCookieManager->DeleteCookies("", "");
-	}
-}
-
-static void DispatchJSEventAllBrowsers(const char *eventName,
-				       const char *jsonString)
-{
-	if (!SEGlobalStateManager::IsInstanceAvailable())
-		return;
-
-	auto apiServer = SEGlobalStateManager::GetInstance()
-				 ->GetWebsocketApiServer();
-
-	if (!apiServer)
-		return;
-
-	apiServer->DispatchJSEvent("system", eventName, jsonString);
-}
-
-void SEGlobalStateManager::Reset(bool deleteAllCookies,
-					     UiModifier uiModifier)
-{
-	DispatchJSEventAllBrowsers("hostStateReset", "null");
-
-	// Allow short time for event to reach all renderers
-	//
-	// This is an unpleasant hack which allows widgets a
-	// vague opportunity to clean up before they get
-	// destroyed.
-	os_sleep_ms(100);
-
-	if (deleteAllCookies) {
-		DeleteCookies();
-
-		GetMenuManager()->Reset();
-	}
-
-	StartOnBoardingUI(uiModifier);
-}
-
-void SEGlobalStateManager::SerializeUserInterfaceState(
-	CefRefPtr<CefValue> &output)
-{
-	CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
-
-	QByteArray geometry = mainWindow()->saveGeometry();
-	QByteArray windowState = mainWindow()->saveState();
-
-	d->SetString("geometry",
-		     base64_encode(geometry.begin(), geometry.size()));
-	d->SetString("windowState",
-		     base64_encode(windowState.begin(), windowState.size()));
-
-	output->SetDictionary(d);
-}
-
-bool SEGlobalStateManager::DeserializeUserInterfaceState(
-	CefRefPtr<CefValue> input)
-{
-	if (input->GetType() != VTYPE_DICTIONARY)
-		return false;
-
-	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
-
-	bool result = false;
-
-	if (d->HasKey("geometry") && d->GetType("geometry") == VTYPE_STRING) {
-		auto geometry = d->GetValue("geometry");
-
-		if (geometry.get() && geometry->GetType() == VTYPE_STRING) {
-			if (IsTraceLogLevel()) {
-				blog(LOG_INFO,
-				     "obs-streamelements-core: state: restoring geometry: %s",
-				     geometry->GetString().ToString().c_str());
-			}
-
-			if (mainWindow()->restoreGeometry(
-				    QByteArray::fromStdString(base64_decode(
-					    geometry->GetString().ToString())))) {
-				// https://bugreports.qt.io/browse/QTBUG-46620
-				if (mainWindow()->isMaximized()) {
-					mainWindow()->setGeometry(
-#if QT_VERSION_MAJOR >= 6
-						QApplication::primaryScreen()
-#else
-						QApplication::desktop()
-#endif
-							->availableGeometry(
-#if QT_VERSION_MAJOR < 6
-								mainWindow()
-#endif
-							)
-					);
-				}
-
-				result = true;
-			} else {
-				blog(LOG_ERROR,
-				     "obs-streamelements-core: state: failed restoring geometry: %s",
-				     geometry->GetString().ToString().c_str());
-			}
-		}
-	}
-
-	if (d->HasKey("windowState") &&
-	    d->GetType("windowState") == VTYPE_STRING) {
-		auto windowState = d->GetValue("windowState");
-
-		if (windowState.get() &&
-		    windowState->GetType() == VTYPE_STRING) {
-			if (IsTraceLogLevel()) {
-				blog(LOG_INFO,
-				     "obs-streamelements-core: state: restoring windowState: %s",
-				     windowState->GetString()
-					     .ToString()
-					     .c_str());
-			}
-
-			if (mainWindow()->restoreState(QByteArray::fromStdString(
-				    base64_decode(windowState->GetString()
-							  .ToString())))) {
-				result = true;
-			} else {
-				blog(LOG_ERROR,
-				     "obs-streamelements-core: state: failed restoring windowState: %s",
-				     windowState->GetString()
-					     .ToString()
-					     .c_str());
-			}
-		}
-	}
-
-	auto screenGeometry = mainWindow()->screen()->availableSize();
-
-	if (mainWindow()->frameGeometry().height() > screenGeometry.height()) {
-		auto minHeight = mainWindow()->minimumHeight();
-
-		// https://doc.qt.io/qt-6/application-windows.html#window-geometry
-		auto titleBarHeight = mainWindow()->frameGeometry().height() -
-				      mainWindow()->height();
-
-		mainWindow()->setFixedHeight(screenGeometry.height() - titleBarHeight);
-		mainWindow()->move(mainWindow()->x(), 0);
-
-		QtPostTask([minHeight, this]() {
-			mainWindow()->setMinimumHeight(minHeight);
-
-			mainWindow()->setMaximumHeight(
-				16777215); // default according to Qt docs
-		});
-	}
-
-	return result;
-}
-
-void SEGlobalStateManager::PersistState(bool sendEventToGuest)
-{
-	PREVENT_RECURSIVE_REENTRY();
-
-	if (!m_persistStateEnabled) {
-		return;
-	}
-
-	CefRefPtr<CefValue> root = CefValue::Create();
-	CefRefPtr<CefDictionaryValue> rootDictionary =
-		CefDictionaryValue::Create();
-
-	CefRefPtr<CefValue> dockingWidgetsState = CefValue::Create();
-	CefRefPtr<CefValue> notificationBarState = CefValue::Create();
-	CefRefPtr<CefValue> workersState = CefValue::Create();
-	CefRefPtr<CefValue> hotkeysState = CefValue::Create();
-	CefRefPtr<CefValue> userInterfaceState = CefValue::Create();
-
-	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
-	CefRefPtr<CefValue> outputPreviewTitleBarState = CefValue::Create();
-	CefRefPtr<CefValue> outputPreviewFrameState = CefValue::Create();
-	#endif
-
-	auto widgetManager = GetWidgetManager();
-	if (widgetManager) {
-		widgetManager->SerializeDockingWidgets(dockingWidgetsState);
-		widgetManager->SerializeNotificationBar(notificationBarState);
-	}
-
-	auto workerManager = GetWorkerManager();
-	if (workerManager) {
-		workerManager->Serialize(workersState);
-	}
-
-	auto hotkeyManager = GetHotkeyManager();
-	if (hotkeyManager) {
-		hotkeyManager->SerializeHotkeyBindings(hotkeysState, true);
-	}
-	SerializeUserInterfaceState(userInterfaceState);
-
-	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
-	GetNativeOBSControlsManager()->SerializePreviewTitleBar(
-		outputPreviewTitleBarState);
-	GetNativeOBSControlsManager()->SerializePreviewFrame(
-		outputPreviewFrameState);
-	#endif
-
-	rootDictionary->SetValue("dockingBrowserWidgets", dockingWidgetsState);
-	rootDictionary->SetValue("notificationBar", notificationBarState);
-	rootDictionary->SetValue("workers", workersState);
-	rootDictionary->SetValue("hotkeyBindings", hotkeysState);
-	rootDictionary->SetValue("userInterfaceState", userInterfaceState);
-
-	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
-	rootDictionary->SetValue("outputPreviewTitleBarState",
-				 outputPreviewTitleBarState);
-	rootDictionary->SetValue("outputPreviewFrameState",
-				 outputPreviewFrameState);
-	#endif
-
-	root->SetDictionary(rootDictionary);
-
-	CefString json = CefWriteJSON(root, JSON_WRITER_DEFAULT);
-
-	std::string base64EncodedJSON = base64_encode(json.ToString());
-
-	SEConfig::GetInstance()->SetStartupState(base64EncodedJSON);
-
-	if (sendEventToGuest) {
-		AdviseHostUserInterfaceStateChanged();
-	}
-}
-
-void SEGlobalStateManager::RestoreState()
-{
-	std::string base64EncodedJSON =
-		SEConfig::GetInstance()->GetStartupState();
-
-	if (!base64EncodedJSON.size()) {
-		return;
-	}
-
-	if (IsTraceLogLevel()) {
-		blog(LOG_INFO,
-		     "obs-streamelements-core: state: restoring state from base64: %s",
-		     base64EncodedJSON.c_str());
-	}
-
-	CefString json = base64_decode(base64EncodedJSON);
-
-	if (!json.size()) {
-		return;
-	}
-
-	if (IsTraceLogLevel()) {
-		blog(LOG_INFO,
-		     "obs-streamelements-core: state: restoring state from json: %s",
-		     json.ToString().c_str());
-	}
-
-	CefRefPtr<CefValue> root =
-		CefParseJSON(json, JSON_PARSER_ALLOW_TRAILING_COMMAS);
-
-	// CefParseJSON returns null for anything it cannot parse, and CefRefPtr
-	// is std::shared_ptr here, so calling through it is a hard dereference of
-	// null. The check below used to be the only one, and it tests the wrong
-	// value one line too late.
-	//
-	// The state we are parsing is persisted, so this is not a one-off crash:
-	// every subsequent launch reads the same bad blob back and dies in the
-	// same place, before anything else runs (CORE-1601). Returning here
-	// leaves the user with default state, which is recoverable; crashing
-	// leaves them with an application that cannot start.
-	if (!root.get()) {
-		blog(LOG_WARNING,
-		     "obs-streamelements-core: state: discarding unparsable startup state");
-
-		return;
-	}
-
-	CefRefPtr<CefDictionaryValue> rootDictionary = root->GetDictionary();
-
-	if (!rootDictionary.get()) {
-		return;
-	}
-
-	auto dockingWidgetsState =
-		rootDictionary->GetValue("dockingBrowserWidgets");
-	auto notificationBarState = rootDictionary->GetValue("notificationBar");
-	auto workersState = rootDictionary->GetValue("workers");
-	auto hotkeysState = rootDictionary->GetValue("hotkeyBindings");
-	auto userInterfaceState =
-		rootDictionary->GetValue("userInterfaceState");
-
-	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
-	auto outputPreviewTitleBarState =
-		rootDictionary->GetValue("outputPreviewTitleBarState");
-	auto outputPreviewFrameState =
-		rootDictionary->GetValue("outputPreviewFrameState");
-	#endif
-
-
-	if (workersState.get()) {
-		if (IsTraceLogLevel()) {
-			blog(LOG_INFO,
-			     "obs-streamelements-core: state: restoring workers: %s",
-			     CefWriteJSON(workersState, JSON_WRITER_DEFAULT)
-				     .ToString()
-				     .c_str());
-		}
-
-		GetWorkerManager()->Deserialize(workersState);
-	}
-
-	if (dockingWidgetsState.get()) {
-		if (IsTraceLogLevel()) {
-			blog(LOG_INFO,
-			     "obs-streamelements-core: state: restoring docking widgets: %s",
-			     CefWriteJSON(dockingWidgetsState,
-					  JSON_WRITER_DEFAULT)
-				     .ToString()
-				     .c_str());
-		}
-
-		GetWidgetManager()->DeserializeDockingWidgets(
-			dockingWidgetsState);
-	}
-
-	if (notificationBarState.get()) {
-		if (IsTraceLogLevel()) {
-			blog(LOG_INFO,
-			     "obs-streamelements-core: state: restoring notification bar: %s",
-			     CefWriteJSON(notificationBarState,
-					  JSON_WRITER_DEFAULT)
-				     .ToString()
-				     .c_str());
-		}
-
-		GetWidgetManager()->DeserializeNotificationBar(
-			notificationBarState);
-	}
-
-	if (hotkeysState.get()) {
-		if (IsTraceLogLevel()) {
-			blog(LOG_INFO,
-			     "obs-streamelements-core: state: restoring hotkey bindings: %s",
-			     CefWriteJSON(hotkeysState, JSON_WRITER_DEFAULT)
-				     .ToString()
-				     .c_str());
-		}
-
-		GetHotkeyManager()->DeserializeHotkeyBindings(hotkeysState);
-	}
-
-	if (userInterfaceState.get()) {
-		DeserializeUserInterfaceState(userInterfaceState);
-	}
-
-	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
-	if (outputPreviewTitleBarState.get()) {
-		GetNativeOBSControlsManager()->DeserializePreviewTitleBar(
-			outputPreviewTitleBarState);
-	}
-
-	if (outputPreviewFrameState.get()) {
-		GetNativeOBSControlsManager()->DeserializePreviewFrame(
-			outputPreviewFrameState);
-	}
-	#endif
-}
-
 void SEGlobalStateManager::OnObsExit()
 {
-	PersistState(false);
+	if (!m_statePersistence)
+		return;
 
-	m_persistStateEnabled = false;
-}
+	m_statePersistence->PersistState(false);
 
-bool SEGlobalStateManager::DeserializeStatusBarTemporaryMessage(
-	CefRefPtr<CefValue> input)
-{
-	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
-
-	if (d.get() && d->HasKey("text")) {
-		int timeoutMilliseconds = 0;
-		std::string text = d->GetString("text");
-
-		if (d->HasKey("timeoutMilliseconds")) {
-			timeoutMilliseconds = d->GetInt("timeoutMilliseconds");
-		}
-
-		mainWindow()->statusBar()->showMessage(text.c_str(),
-						       timeoutMilliseconds);
-
-		return true;
-	}
-
-	return false;
-}
-
-bool SEGlobalStateManager::DeserializeModalDialog(
-	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
-{
-	bool result = false;
-
-	output->SetNull();
-
-	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
-
-	if (d.get() && d->HasKey("url")) {
-		std::string url = d->GetString("url").ToString();
-		std::string executeJavaScriptOnLoad;
-
-		if (d->HasKey("executeJavaScriptOnLoad")) {
-			executeJavaScriptOnLoad =
-				d->GetString("executeJavaScriptOnLoad");
-		}
-
-		int width = 800;
-		int height = 600;
-		bool isIncognito = false;
-
-		if (d->HasKey("width")) {
-			width = d->GetInt("width");
-		}
-
-		if (d->HasKey("height")) {
-			height = d->GetInt("height");
-		}
-
-		if (d->HasKey("incognitoMode") && d->GetBool("incognitoMode")) {
-			isIncognito = true;
-		}
-
-		auto dialog = new SEBrowserDialog(
-			mainWindow(), url, executeJavaScriptOnLoad, isIncognito,
-			"modalDialog");
-
-		if (d->HasKey("title")) {
-			dialog->setWindowTitle(QString(
-				d->GetString("title").ToString().c_str()));
-		}
-
-		if (d->HasKey("isResizable") &&
-		    d->GetType("isResizable") == VTYPE_BOOL &&
-		    d->GetBool("isResizable")) {
-			auto savedMaxSize = dialog->maximumSize();
-
-			dialog->setFixedSize(width, height);
-
-			SEDrainEventQueue();
-
-			dialog->setMinimumSize(width, height);
-			dialog->setMaximumSize(savedMaxSize);
-		} else {
-			dialog->setFixedSize(width, height);
-		}
-
-		if (dialog->exec() == QDialog::Accepted) {
-			output =
-				CefParseJSON(dialog->result(),
-					     JSON_PARSER_ALLOW_TRAILING_COMMAS);
-
-			result = true;
-		}
-
-		dialog->deleteLater();
-	}
-
-	return result;
-}
-
-bool SEGlobalStateManager::HasNonModalDialog(const char* id) {
-	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
-
-	return m_nonModalDialogs.count(id) > 0;
-}
-
-std::string SEGlobalStateManager::GetNonModalDialogUrl(const char *id)
-{
-	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
-
-	if (m_nonModalDialogs.count(id) > 0) {
-		m_nonModalDialogs[id]->getUrl();
-	}
-
-	return "";
-}
-
-void SEGlobalStateManager::SerializeAllNonModalDialogs(
-	CefRefPtr<CefValue> &output)
-{
-	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
-
-	CefRefPtr<CefDictionaryValue> result = CefDictionaryValue::Create();
-
-	for (auto pair : m_nonModalDialogs) {
-		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
-
-		d->SetString("id", pair.first);
-		d->SetString("url", pair.second->getUrl());
-		d->SetString(
-			"executeJavaScriptOnLoad",
-			pair.second->getExecuteJavaScriptOnLoad());
-		d->SetBool(
-			"isIncognito",
-			pair.second->getIsIncognito());
-		d->SetString(
-			"title",
-			pair.second->windowTitle().toStdString());
-		d->SetInt("width", pair.second->width());
-		d->SetInt("height", pair.second->height());
-
-		result->SetDictionary(pair.first, d);
-	}
-
-	output->SetDictionary(result);
-}
-
-bool SEGlobalStateManager::DeserializeCloseNonModalDialogsByIds(
-	CefRefPtr<CefValue> input)
-{
-	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
-
-	if (input->GetType() != VTYPE_LIST)
-		return false;
-
-	auto list = input->GetList();
-
-	for (size_t i = 0; i < list->GetSize(); ++i) {
-		if (list->GetType(i) != VTYPE_STRING)
-			return false;
-	}
-
-	for (size_t i = 0; i < list->GetSize(); ++i) {
-		std::string id = list->GetString(i);
-
-		if (!m_nonModalDialogs.count(id))
-			continue;
-
-		auto dialog = m_nonModalDialogs[id];
-
-		// Schedule dialog reject
-		QMetaObject::invokeMethod(dialog, &QDialog::reject,
-					  Qt::QueuedConnection);
-	}
-
-	return true;
-}
-
-bool SEGlobalStateManager::DeserializeFocusNonModalDialogById(
-	CefRefPtr<CefValue> input)
-{
-	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
-
-	if (input->GetType() != VTYPE_STRING)
-		return false;
-
-	std::string id = input->GetString();
-
-	if (!m_nonModalDialogs.count(id))
-		return false;
-
-	auto dialog = m_nonModalDialogs[id];
-
-	dialog->activateWindow();
-
-	return true;
-}
-
-bool SEGlobalStateManager::DeserializeNonModalDialogDimensionsById(
-	CefRefPtr<CefValue> dialogId, CefRefPtr<CefValue> dimensions)
-{
-	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
-
-	if (dialogId->GetType() != VTYPE_STRING)
-		return false;
-
-	if (dimensions->GetType() != VTYPE_DICTIONARY)
-		return false;
-
-	auto d = dimensions->GetDictionary();
-
-	if (!d->HasKey("width") || d->GetType("width") != VTYPE_INT)
-		return false;
-
-	if (!d->HasKey("height") || d->GetType("height") != VTYPE_INT)
-		return false;
-
-	std::string id = dialogId->GetString();
-
-	if (!m_nonModalDialogs.count(id))
-		return false;
-
-	int width = d->GetInt("width");
-	int height = d->GetInt("height");
-
-	if (width < 1)
-		return false;
-
-	if (height < 1)
-		return false;
-
-	auto dialog = m_nonModalDialogs[id];
-
-	int centerX = dialog->x() + (dialog->width() / 2);
-	int centerY = dialog->y() + (dialog->height() / 2);
-
-	dialog->setFixedWidth(width);
-	dialog->setFixedHeight(height);
-	dialog->move(centerX - (width / 2), centerY - (height / 2));
-
-	return true;
-}
-
-std::shared_ptr<std::promise<CefRefPtr<CefValue>>> SEGlobalStateManager::DeserializeNonModalDialog(CefRefPtr<CefValue> input)
-{
-	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
-
-	auto promise = std::make_shared<std::promise<CefRefPtr<CefValue>>>();
-
-	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
-
-	if (d.get() && d->HasKey("url")) {
-		std::string url = d->GetString("url").ToString();
-		std::string executeJavaScriptOnLoad;
-		std::string id;
-
-		if (d->HasKey("id") && d->GetType("id") == VTYPE_STRING) {
-			id = d->GetString("id");
-		}
-
-		while (!id.size() || m_nonModalDialogs.count(id)) {
-			id = CreateGloballyUniqueIdString();
-		}
-
-		if (d->HasKey("executeJavaScriptOnLoad")) {
-			executeJavaScriptOnLoad =
-				d->GetString("executeJavaScriptOnLoad");
-		}
-
-		int width = 800;
-		int height = 600;
-		bool isIncognito = false;
-
-		if (d->HasKey("width")) {
-			width = d->GetInt("width");
-		}
-
-		if (d->HasKey("height")) {
-			height = d->GetInt("height");
-		}
-
-		if (d->HasKey("incognitoMode") && d->GetBool("incognitoMode")) {
-			isIncognito = true;
-		}
-
-		auto dialog = new SEBrowserDialog(
-			mainWindow(), url, executeJavaScriptOnLoad, isIncognito,
-			"nonModalDialog");
-
-		if (d->HasKey("title")) {
-			dialog->setWindowTitle(QString(
-				d->GetString("title").ToString().c_str()));
-		}
-
-		if (d->HasKey("isResizable") &&
-		    d->GetType("isResizable") == VTYPE_BOOL &&
-		    d->GetBool("isResizable")) {
-			auto savedMaxSize = dialog->maximumSize();
-
-			dialog->setFixedSize(width, height);
-
-			SEDrainEventQueue();
-
-			dialog->setMinimumSize(width, height);
-			dialog->setMaximumSize(savedMaxSize);
-		} else {
-			dialog->setFixedSize(width, height);
-		}
-
-		m_nonModalDialogs[id] = dialog;
-
-		dialog->connect(dialog, &QDialog::finished,
-				[this, dialog, promise, id](int result) {
-					std::lock_guard<decltype(m_mutex)> guard(
-						m_mutex);
-
-					m_nonModalDialogs.erase(id);
-
-					CefRefPtr<CefValue> output =
-						CefValue::Create();
-
-					output->SetNull();
-
-					if (result == QDialog::Accepted) {
-						output = CefParseJSON(
-							dialog->result(),
-							JSON_PARSER_ALLOW_TRAILING_COMMAS);
-					}
-
-					dialog->deleteLater();
-
-					promise->set_value(output);
-				});
-
-		dialog->setModal(false);
-		dialog->show();
-	} else {
-		auto nullResult = CefValue::Create();
-		nullResult->SetNull();
-
-		promise->set_value(nullResult);
-	}
-
-	return promise;
-}
-
-bool SEGlobalStateManager::DeserializePopupWindow(
-	CefRefPtr<CefValue> input)
-{
-	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
-
-	if (d.get() && d->HasKey("url")) {
-		std::string url = d->GetString("url").ToString();
-		std::string executeJavaScriptOnLoad;
-
-		bool enableHostApi = d->HasKey("enableHostApi") &&
-				     d->GetBool("enableHostApi");
-
-		if (d->HasKey("executeJavaScriptOnLoad")) {
-			executeJavaScriptOnLoad =
-				d->GetString("executeJavaScriptOnLoad");
-		}
-
-		std::shared_ptr<SEApiMessageHandler>
-			apiMessageHandler = nullptr;
-
-		apiMessageHandler =
-			std::make_shared<SEApiMessageHandler>("popupWindow");
-
-		QMainWindow *window = new QMainWindow();
-
-		auto browserWidget = new SEBrowserWidget(
-			nullptr, SEMessageBus::DEST_UI, url.c_str(),
-			executeJavaScriptOnLoad.c_str(),
-			"reload", "popupWindow",
-			CreateGloballyUniqueIdString().c_str(),
-			apiMessageHandler, false);
-
-		window->setCentralWidget(browserWidget);
-
-		window->show();
-
-		return true;
-	}
-
-	return false;
+	m_statePersistence->SetEnabled(false);
 }
 
 void SEGlobalStateManager::ReportIssue()
 {
 	obs_frontend_push_ui_translation(obs_module_get_string);
 
-	SEReportIssueDialog dialog(mainWindow());
+	SEReportIssueDialog dialog(m_performanceHistoryTracker,
+				   m_analyticsEventsManager, mainWindow());
 
 	obs_frontend_pop_ui_translation();
 

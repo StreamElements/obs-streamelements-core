@@ -1,4 +1,7 @@
 #include "SEWidgetManager.hpp"
+
+#include "SEStatePersistence.hpp"
+#include "SEMenuManager.hpp"
 #include "SEUtils.hpp"
 #include "SEGlobalStateManager.hpp"
 
@@ -7,8 +10,11 @@
 
 #include <QApplication>
 
-SEWidgetManager::SEWidgetManager(QMainWindow *parent)
-	: m_parent(parent), m_nativeCentralWidget(nullptr)
+SEWidgetManager::SEWidgetManager(QMainWindow *parent,
+				 std::shared_ptr<SEApiServices> apiServices)
+	: m_parent(parent),
+	  m_nativeCentralWidget(nullptr),
+	  m_apiServices(apiServices)
 {
 	assert(parent);
 }
@@ -326,46 +332,48 @@ bool SEWidgetManager::AddDockWidget(
 
 			m_dockWidgetAreas[savedId] = area;
 
-			QtPostTask([]() -> void {
-				if (!SEGlobalStateManager::
-					    IsInstanceAvailable())
+			QtPostTask([statePersistence =
+					    m_statePersistence]() -> void {
+				auto persistence = statePersistence.lock();
+
+				if (!persistence)
 					return;
 
-				SEGlobalStateManager::GetInstance()
-					->PersistState();
+				persistence->PersistState();
 			});
 		});
 
 	QObject::connect(dock, &QDockWidget::visibilityChanged, [this]() {
-		QtPostTask([]() -> void {
-			if (!SEGlobalStateManager::
-				    IsInstanceAvailable())
+		QtPostTask([statePersistence = m_statePersistence]() -> void {
+			auto persistence = statePersistence.lock();
+
+			if (!persistence)
 				return;
 
-			SEGlobalStateManager::GetInstance()
-				->PersistState();
+			persistence->PersistState();
 		});
 
+		//
+		// Captured, not fetched. This asked the singleton whether the
+		// plugin was still alive because it had no hold on what it
+		// wanted; now it takes the menu manager itself, weakly, so a
+		// task that lands after teardown finds an expired pointer
+		// instead of interrogating global state.
+		//
+		std::weak_ptr<SEMenuManager> menuManager;
+
+		if (auto apiServices = ApiServices()) {
+			menuManager = apiServices->menuManager;
+		}
+
 		QtDelayTask(
-			[]() -> void {
-				if (!SEGlobalStateManager::
-					    IsInstanceAvailable())
+			[menuManager]() -> void {
+				auto menu = menuManager.lock();
+
+				if (!menu)
 					return;
 
-				if (!SEGlobalStateManager::
-					     GetInstance()
-						     ->IsInitialized())
-					return;
-
-				auto menuManager =
-					SEGlobalStateManager::
-						GetInstance()
-							->GetMenuManager();
-
-				if (!menuManager)
-					return;
-
-				menuManager->Update();
+				menu->Update();
 			},
 			1);
 	});
