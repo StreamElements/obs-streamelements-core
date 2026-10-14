@@ -64,6 +64,17 @@ function(se_add_test name)
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
+# --- Behavioural test: the pure string helpers ------------------------------
+#
+# The production .cpp, compiled beside the test. Possible only since the
+# SEUtils split: this cluster has a header of its own now, where SEUtils.hpp
+# pulls in obs.h, obs-module.h, curl and eight Qt headers and so cannot be
+# included from here at all.
+se_add_test(test_string_utils
+  test_string_utils.cpp
+  "${REPO_ROOT}/streamelements/SEUtils/SEStringUtils.cpp"
+)
+
 # --- Behavioural test: the WYVRN configuration parser -----------------------
 #
 # Compiles the real production parser, not a mirror of it. That is possible

@@ -48,9 +48,9 @@ bool ParseQueryString(std::string input,
 		      std::map<std::string, std::string> &result);
 
 //
-// Declared here, still defined in SEUtils.cpp: it picks between CoCreateGuid
-// and libuuid, so moving that body is a platform question rather than a
-// mechanical one.
+// Declared here, defined in SESystemInfoUtils.cpp beside its platform pair:
+// it picks between CoCreateGuid and libuuid, and that file is where the
+// Windows and macOS halves of the system-identity helpers live.
 //
 std::string CreateGloballyUniqueIdString();
 
