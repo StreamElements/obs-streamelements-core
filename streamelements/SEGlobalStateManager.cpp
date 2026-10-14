@@ -262,18 +262,15 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 	case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
 		name = "hostExit";
 		break;
-	/*case OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED:
-		if (SEGlobalStateManager::GetInstance()
-			    ->GetWidgetManager()
-			    ->HasCentralBrowserWidget()) {
-			// Due to the way we are now managing the central widget
-			// (constrained by MacOS support), we must make sure that
-			// the Studio Mode is disabled while the central widget
-			// is visible, otherwise it will take up its space.
-			obs_frontend_set_preview_program_mode(false);
-		}
-		return;
-	*/
+	//
+	// OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED was handled here once, to
+	// force studio mode off while a central browser widget was visible:
+	// the two compete for the same space, and the central widget is how
+	// macOS support constrains us. The handler has been commented out for
+	// a long time -- kept as prose rather than as dead code, because the
+	// conflict it describes is real but the code it contained reached the
+	// singleton for the widget manager.
+	//
 	default:
 		return;
 	}
@@ -504,6 +501,13 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		std::make_shared<SEHttpClient>();
 	m_localFilesystemHttpServer = std::make_shared<
 		SELocalFilesystemHttpServer>();
+	//
+	// Before the menu manager, which takes it: the same rule the cleanup
+	// manager and the backup manager follow two lines down -- a
+	// dependency exists before the thing that holds it.
+	//
+	m_performanceHistoryTracker = std::make_shared<
+		SEPerformanceHistoryTracker>();
 	m_analyticsEventsManager = std::make_shared<
 		SEAnalyticsEventsManager>();
 	m_widgetManager = std::make_shared<SEBrowserWidgetManager>(
@@ -530,9 +534,9 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	//
 	m_obsSceneManager = std::make_shared<SEObsSceneManager>(
 		obs_main_window, m_videoCompositionManager);
-	m_menuManager =
-		std::make_shared<SEMenuManager>(
-			obs_main_window, m_sessionManager);
+	m_menuManager = std::make_shared<SEMenuManager>(
+		obs_main_window, m_sessionManager,
+		m_performanceHistoryTracker, m_analyticsEventsManager);
 	m_bwTestManager = std::make_shared<
 		SEBandwidthTestManager>();
 	m_outputSettingsManager = std::make_shared<
@@ -540,8 +544,6 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_workerManager = std::make_shared<SEWorkerManager>(m_apiServices);
 	m_hotkeyManager =
 		std::make_shared<SEHotkeyManager>();
-	m_performanceHistoryTracker = std::make_shared<
-		SEPerformanceHistoryTracker>();
 	m_externalSceneDataProviderManager = std::make_shared<
 		SEExternalSceneDataProviderManager>();
 	m_nativeObsControlsManager =
@@ -940,19 +942,6 @@ void SEGlobalStateManager::OnObsExit()
 	m_statePersistence->PersistState(false);
 
 	m_statePersistence->SetEnabled(false);
-}
-
-void SEGlobalStateManager::ReportIssue()
-{
-	obs_frontend_push_ui_translation(obs_module_get_string);
-
-	SEReportIssueDialog dialog(m_performanceHistoryTracker,
-				   m_analyticsEventsManager, mainWindow());
-
-	obs_frontend_pop_ui_translation();
-
-	if (dialog.exec() == QDialog::Accepted) {
-	}
 }
 
 #ifndef WIN32

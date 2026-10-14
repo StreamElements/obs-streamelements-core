@@ -258,7 +258,6 @@ public:
 	QMainWindow *mainWindow() { return m_mainWindow; }
 
 public:
-	void ReportIssue();
 	void UninstallPlugin();
 
 

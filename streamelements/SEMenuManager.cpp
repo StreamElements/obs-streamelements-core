@@ -1,6 +1,9 @@
 #include "SEMenuManager.hpp"
 
 #include "SESessionManager.hpp"
+#include "SEPerformanceHistoryTracker.hpp"
+#include "SEAnalyticsEventsManager.hpp"
+#include "SEReportIssueDialog.hpp"
 #include "SEGlobalStateManager.hpp"
 #include "SEConfig.hpp"
 
@@ -15,8 +18,13 @@
 #include <algorithm>
 
 SEMenuManager::SEMenuManager(
-	QMainWindow *parent, std::shared_ptr<SESessionManager> sessionManager)
-	: m_mainWindow(parent), m_sessionManager(sessionManager)
+	QMainWindow *parent, std::shared_ptr<SESessionManager> sessionManager,
+	std::shared_ptr<SEPerformanceHistoryTracker> performanceHistoryTracker,
+	std::shared_ptr<SEAnalyticsEventsManager> analyticsEventsManager)
+	: m_mainWindow(parent),
+	  m_sessionManager(sessionManager),
+	  m_performanceHistoryTracker(performanceHistoryTracker),
+	  m_analyticsEventsManager(analyticsEventsManager)
 {
 	m_auxMenuItems = CefValue::Create();
 	m_auxMenuItems->SetNull();
@@ -143,9 +151,8 @@ void SEMenuManager::UpdateInternal()
 	QAction *report_issue = new QAction(
 		obs_module_text("StreamElements.Action.ReportIssue"));
 	helpMenu->addAction(report_issue);
-	report_issue->connect(report_issue, &QAction::triggered, [this] {
-		SEGlobalStateManager::GetInstance()->ReportIssue();
-	});
+	report_issue->connect(report_issue, &QAction::triggered,
+			      [this] { ReportIssue(); });
 
 	helpMenu->addAction(createURL(
 		obs_module_text("StreamElements.Action.LiveSupport.MenuItem"),
@@ -262,4 +269,17 @@ void SEMenuManager::SetShowBuiltInMenuItems(bool show)
 bool SEMenuManager::GetShowBuiltInMenuItems()
 {
 	return m_showBuiltInMenuItems;
+}
+
+void SEMenuManager::ReportIssue()
+{
+	obs_frontend_push_ui_translation(obs_module_get_string);
+
+	SEReportIssueDialog dialog(m_performanceHistoryTracker,
+				   m_analyticsEventsManager, mainWindow());
+
+	obs_frontend_pop_ui_translation();
+
+	if (dialog.exec() == QDialog::Accepted) {
+	}
 }

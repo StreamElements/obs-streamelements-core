@@ -582,13 +582,10 @@ static std::recursive_mutex s_sync_api_call_mutex;
 // and after Shutdown() has released it -- and Shutdown() is exactly when a page
 // is most likely to still be calling.
 //
-static std::shared_ptr<SERazerWyvrnManager> GetRazerWyvrnManager()
+static std::shared_ptr<SERazerWyvrnManager>
+GetRazerWyvrnManager(std::shared_ptr<SEApiServices> apiServices)
 {
-	if (!SEGlobalStateManager::IsInstanceAvailable())
-		return nullptr;
-
-	return SEGlobalStateManager::GetInstance()
-		->GetRazerWyvrnManager();
+	return apiServices ? apiServices->razerWyvrnManager : nullptr;
 }
 
 //
@@ -596,9 +593,10 @@ static std::shared_ptr<SERazerWyvrnManager> GetRazerWyvrnManager()
 // hostRazerWyvrnStatusChanged event, so a page cannot be told two different
 // things about the same state.
 //
-static CefRefPtr<CefValue> SerializeRazerWyvrnStatus()
+static CefRefPtr<CefValue>
+SerializeRazerWyvrnStatus(std::shared_ptr<SEApiServices> apiServices)
 {
-	auto manager = GetRazerWyvrnManager();
+	auto manager = GetRazerWyvrnManager(apiServices);
 
 	if (manager.get())
 		return manager->SerializeStatus();
@@ -3234,7 +3232,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 		d->SetString("sceneCollections", "available");
 
-		d->SetValue("razerWyvrn", SerializeRazerWyvrnStatus());
+		d->SetValue("razerWyvrn", SerializeRazerWyvrnStatus(apiServices));
 
 		result->SetDictionary(d);
 	}
@@ -3281,7 +3279,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				components = d->GetBool("components");
 		}
 
-		auto manager = GetRazerWyvrnManager();
+		auto manager = GetRazerWyvrnManager(apiServices);
 
 		if (manager.get()) {
 			result = manager->SerializeEvents(groupFilter, idPrefix,
@@ -3329,7 +3327,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	//
 	API_HANDLER_BEGIN("setRazerWyvrnEvent");
 	{
-		auto manager = GetRazerWyvrnManager();
+		auto manager = GetRazerWyvrnManager(apiServices);
 
 		// Bounded so a pathological structure cannot spin here while the
 		// global API mutex is held.

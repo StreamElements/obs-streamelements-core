@@ -17,6 +17,8 @@
 
 class SEBrowserWidget;
 class SESessionManager;
+class SEPerformanceHistoryTracker;
+class SEAnalyticsEventsManager;
 
 class SEMenuManager :
 	public QObject
@@ -35,7 +37,11 @@ public:
 	// reason this class needed it.
 	//
 	SEMenuManager(QMainWindow *parent,
-		      std::shared_ptr<SESessionManager> sessionManager);
+		      std::shared_ptr<SESessionManager> sessionManager,
+		      std::shared_ptr<SEPerformanceHistoryTracker>
+			      performanceHistoryTracker,
+		      std::shared_ptr<SEAnalyticsEventsManager>
+			      analyticsEventsManager);
 	virtual ~SEMenuManager();
 
 public:
@@ -61,6 +67,18 @@ private:
 private:
 	QMainWindow* m_mainWindow;
 	std::shared_ptr<SESessionManager> m_sessionManager;
+
+	//
+	// For the Report Issue dialog, which this menu is the only trigger
+	// for. It was a method on SEGlobalStateManager, which is why opening
+	// it meant reaching for the singleton.
+	//
+	std::shared_ptr<SEPerformanceHistoryTracker>
+		m_performanceHistoryTracker;
+	std::shared_ptr<SEAnalyticsEventsManager> m_analyticsEventsManager;
+
+private:
+	void ReportIssue();
 
 	//
 	// QPointer, not QMenu*, because we do not own this.

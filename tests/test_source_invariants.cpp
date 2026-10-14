@@ -2130,7 +2130,7 @@ static void check_non_modal_dialogs_are_closed_by_their_owner()
 //
 // The migration off SEGlobalStateManager::GetInstance() is monotone by
 // construction: this counts what is left and fails if it grows. 291 reaches
-// at the start of the work, 29 now -- the API handler alone went from 211 to
+// at the start of the work, 26 now -- the API handler alone went from 211 to
 // one, which is the Razer fetch in a file-local helper that has no object to
 // be injected into.
 //
@@ -2139,7 +2139,7 @@ static void check_non_modal_dialogs_are_closed_by_their_owner()
 // what it needs, and this is the check that makes that a build failure rather
 // than a review comment nobody makes.
 //
-static const int kMaxSingletonReaches = 29;
+static const int kMaxSingletonReaches = 26;
 
 static void check_singleton_reaches_only_go_down()
 {
