@@ -2,6 +2,8 @@
 
 #include "cef-headers.hpp"
 #include "SEGlobalStateManager.hpp"
+#include <obs-frontend-api.h>
+#include <QMainWindow>
 #include "SESecretRedactor.hpp"
 #include "SEUtils.hpp"
 #include "deps/zip/zip.h"
@@ -818,10 +820,9 @@ SECrashContext::Result SECrashContext::Collect()
 	// inside the crash handler -- losing the whole report rather than just
 	// the screenshot.
 	//
-	if (SEGlobalStateManager::IsInstanceAvailable()) {
+	{
 		auto mainWindow =
-			SEGlobalStateManager::GetInstance()
-				->mainWindow();
+			(QMainWindow *)obs_frontend_get_main_window();
 
 		if (mainWindow) {
 			addWindowCaptureToZip((HWND)mainWindow->winId(), 24,

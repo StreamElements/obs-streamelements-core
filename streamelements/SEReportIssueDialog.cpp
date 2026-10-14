@@ -349,8 +349,8 @@ void SEReportIssueDialog::accept()
 		{
 #ifdef WIN32
 			QMainWindow *mainWindow =
-				SEGlobalStateManager::GetInstance()
-					->mainWindow();
+				(QMainWindow *)
+					obs_frontend_get_main_window();
 
 			QScreen *screen = QGuiApplication::primaryScreen();
 			if (const QWindow *window =
@@ -751,7 +751,8 @@ void SEReportIssueDialog::accept()
 			obs_frontend_push_ui_translation(obs_module_get_string);
 
 			SENetworkDialog netDialog(
-				SEGlobalStateManager::GetInstance()->mainWindow());
+				(QMainWindow *)
+					obs_frontend_get_main_window());
 
 			obs_frontend_pop_ui_translation();
 

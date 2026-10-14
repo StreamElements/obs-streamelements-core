@@ -6,6 +6,7 @@
 
 #include <obs.h>
 #include <obs-frontend-api.h>
+#include <QMainWindow>
 #include <util/config-file.h>
 
 #include "deps/zip/zip.h"
@@ -110,8 +111,7 @@ static bool GetLocalPathFromURL(std::string url, std::string &path,
 		obs_frontend_push_ui_translation(obs_module_get_string);
 
 		SENetworkDialog netDialog(
-			SEGlobalStateManager::GetInstance()
-				->mainWindow());
+			(QMainWindow *)obs_frontend_get_main_window());
 
 		obs_frontend_pop_ui_translation();
 

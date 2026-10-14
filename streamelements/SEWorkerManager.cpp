@@ -6,6 +6,8 @@
 #include <QWidget>
 
 #include "cef-headers.hpp"
+#include <obs-frontend-api.h>
+#include <QMainWindow>
 
 #include <obs-module.h>
 
@@ -27,8 +29,7 @@ public:
 			false);
 
 		auto mainWindow =
-			SEGlobalStateManager::GetInstance()
-				->mainWindow();
+			(QMainWindow *)obs_frontend_get_main_window();
 
 		//
 		// HACK: QCefWidget will only create the browser if visible
