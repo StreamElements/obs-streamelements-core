@@ -1174,7 +1174,7 @@ std::string SEGlobalStateManager::GetNonModalDialogUrl(const char *id)
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
 	if (m_nonModalDialogs.count(id) > 0) {
-		m_nonModalDialogs[id]->getUrl();
+		return m_nonModalDialogs[id]->getUrl();
 	}
 
 	return "";
