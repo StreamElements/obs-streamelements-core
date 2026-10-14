@@ -541,6 +541,8 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEStatePersistence.cpp
 	streamelements/SEUtils/SECryptoUtils.cpp
 	streamelements/SEUtils/SECefValueUtils.cpp
+	streamelements/SEUtils/SEHttpUtils.cpp
+	streamelements/SEUtils/SEObsSceneUtils.cpp
 	streamelements/SEUtils/SEEnvConfigUtils.cpp
 	streamelements/SEUtils/SEPathUtils.cpp
 	streamelements/SEUtils/SEDiagnosticsUtils.cpp
@@ -708,6 +710,9 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEStatePersistence.hpp
 	streamelements/SEUtils/SECryptoUtils.hpp
 	streamelements/SEUtils/SECefValueUtils.hpp
+	streamelements/SEUtils/SECancelableTask.hpp
+	streamelements/SEUtils/SEHttpUtils.hpp
+	streamelements/SEUtils/SEObsSceneUtils.hpp
 	streamelements/SEUtils/SEEnvConfigUtils.hpp
 	streamelements/SEUtils/SEPathUtils.hpp
 	streamelements/SEUtils/SEDiagnosticsUtils.hpp
