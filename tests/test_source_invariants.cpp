@@ -2369,19 +2369,16 @@ static void check_api_handler_takes_its_services_by_injection()
 	      "bundle -- this invariant would then pass vacuously");
 }
 
-static void check_api_services_container_is_emptied_when_manager_dies()
+static void check_api_services_container_is_not_emptied_at_teardown()
 {
 	//
-	// Three of the services in SEApiServices own widgets, every widget
-	// owns an API handler and every handler holds a reference to the
-	// container, so the references form a ring that refcounting never
-	// unwinds. The manager's destructor empties the container, which is
-	// the one thing that breaks it.
-	//
-	// Worth a test because deleting those two lines looks harmless and the
-	// consequence does not read as a leak: the widgets outlive OBS's own
-	// teardown and the Qt event loop never returns, which looks like a
-	// hang in SEGlobalStateManager::Shutdown().
+	// The inverse of the invariant that used to live here. While the
+	// rings were real, ~SEGlobalStateManager emptied the container and
+	// that one statement was the only reason shutdown completed. Every
+	// back-edge into the container is weak now, so the statement is gone
+	// and must stay gone: an owner reaching in to end other objects'
+	// lifetimes is exactly what this refactor removed, and putting it
+	// back would hide the next missing weak edge instead of fixing it.
 	//
 	const std::string src = strip_line_comments(
 		slurp("streamelements/SEGlobalStateManager.cpp"));
@@ -2393,11 +2390,12 @@ static void check_api_services_container_is_emptied_when_manager_dies()
 	      "cannot find SEGlobalStateManager's destructor -- this invariant "
 	      "needs updating");
 
-	check(dtor.find("*m_apiServices = SEApiServices()") !=
+	check(dtor.find("*m_apiServices = SEApiServices()") ==
 		      std::string::npos,
-	      "SEGlobalStateManager's destructor no longer empties "
-	      "m_apiServices -- the API handlers and the widget managers then "
-	      "keep each other alive and the Qt event loop never returns");
+	      "SEGlobalStateManager's destructor empties m_apiServices again. "
+	      "If shutdown hangs, a holder that one of the container's "
+	      "services destroys is holding the container strongly -- make "
+	      "that edge weak instead of adding a teardown step");
 }
 
 static void check_api_services_is_a_container_and_nothing_else()
@@ -2869,7 +2867,7 @@ int main()
 	check_non_modal_dialogs_are_closed_by_their_owner();
 	check_state_persistence_borrows_the_managers_it_serializes();
 	check_widget_manager_does_not_own_state_persistence();
-	check_api_services_container_is_emptied_when_manager_dies();
+	check_api_services_container_is_not_emptied_at_teardown();
 	check_api_services_is_a_container_and_nothing_else();
 	check_crash_path_filesystem_calls_never_throw();
 

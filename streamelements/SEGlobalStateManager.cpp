@@ -324,22 +324,22 @@ SEGlobalStateManager::~SEGlobalStateManager()
 	Shutdown();
 
 	//
-	// Emptied here, not in Shutdown(): while this object exists its
-	// services are still legitimately reachable through the container, and
-	// deciding their lifetime any earlier is what this refactor is getting
-	// rid of.
+	// The container is not emptied here. It used to be, because the
+	// references formed a ring -- a service owning widgets, each widget
+	// owning an API handler, each handler holding the container -- that
+	// refcounting could not unwind, and a teardown step was the only
+	// thing breaking it. Every one of those back-edges is a weak_ptr now,
+	// so the container goes when this object goes and each service goes
+	// when its last real user does.
 	//
-	// It has to happen, though. Three of the services in there own widgets,
-	// every widget owns an API handler and every handler holds a reference
-	// to the container, so the references form a ring that refcounting
-	// never unwinds. Left alone it does not read as a leak: the widgets
-	// outlive OBS's own teardown and the Qt event loop never returns.
+	// If a shutdown hang comes back, the fix is the weak edge that went
+	// missing, not a line here: an owner deciding other objects'
+	// lifetimes is what this refactor exists to remove.
+	// check_nothing_but_the_manager_owns_the_services_container is the
+	// structural guard, and
+	// check_api_services_container_is_not_emptied_at_teardown is the
+	// guard on this comment.
 	//
-	if (m_apiServices) {
-		*m_apiServices = SEApiServices();
-
-		m_apiServices = nullptr;
-	}
 }
 
 std::shared_ptr<SEGlobalStateManager>

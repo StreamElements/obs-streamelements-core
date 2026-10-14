@@ -38,10 +38,21 @@ class SEBrowserDialogManager;
 // data members, no methods, no accessors, no policy. Expect it to be broken
 // into smaller pieces as consumers turn out to need only a part of it.
 //
-// A member is null until Initialize() has got that far, and null again once
-// the manager's destructor has emptied the container -- which it does
-// because the widget managers in here own widgets that hold a reference
-// back to this, and refcounting alone never unwinds that.
+// A member is null until Initialize() has got that far. After that it stays
+// set for as long as the container lives: the container's lifetime is the
+// root manager's, and nothing empties it at teardown.
+//
+// Anything in here whose own lifetime is controlled by a service in here --
+// the browser widgets a widget manager destroys, the dialogs a dialog
+// manager destroys, and the API handlers they own -- holds this container
+// through a weak_ptr. That rule is what keeps the graph acyclic, and it is
+// enforced by
+// check_nothing_but_the_manager_owns_the_services_container.
+//
+// Field order matters: fields are destroyed in reverse declaration order.
+// statePersistence borrows raw pointers to four of the managers above it, so
+// it must stay below them, and the managers that own dialogs and pop-up
+// windows stay below it so their widgets go before the docks.
 //
 struct SEApiServices {
 	std::shared_ptr<SEBrowserWidgetManager> widgetManager;
