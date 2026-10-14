@@ -2115,6 +2115,135 @@ static void check_non_modal_dialogs_are_closed_by_their_owner()
 	      "promise");
 }
 
+//
+// --- The singleton ratchet (CORE-757).
+//
+// The migration off SEGlobalStateManager::GetInstance() is monotone by
+// construction: this counts what is left and fails if it grows. 291 reaches
+// at the start of the work, 47 now -- the API handler alone went from 211 to
+// one, which is the Razer fetch in a file-local helper that has no object to
+// be injected into.
+//
+// When you remove reaches, lower kMaxSingletonReaches in the same commit.
+// Never raise it: a new reach is a new consumer that should have been handed
+// what it needs, and this is the check that makes that a build failure rather
+// than a review comment nobody makes.
+//
+static const int kMaxSingletonReaches = 47;
+
+static void check_singleton_reaches_only_go_down()
+{
+	const char *const dirs[] = {"/streamelements", "/streamelements/SEUtils"};
+
+	std::vector<std::pair<int, std::string>> perFile;
+	int total = 0;
+
+	for (const char *const dir : dirs) {
+		const std::string path = std::string(se_tests::kRepoRoot) + dir;
+
+		std::error_code ec;
+		std::filesystem::directory_iterator it(path, ec);
+
+		check(!ec, (std::string("cannot read ") + dir +
+			    " -- this ratchet would then pass vacuously")
+				   .c_str());
+
+		for (std::filesystem::directory_iterator end;
+		     it != end && !ec; it.increment(ec)) {
+			const std::filesystem::path &p = it->path();
+			const std::string ext = p.extension().string();
+
+			if (ext != ".cpp" && ext != ".hpp" && ext != ".mm")
+				continue;
+
+			std::ifstream in(p.string());
+
+			if (!in)
+				continue;
+
+			std::ostringstream buf;
+			buf << in.rdbuf();
+
+			//
+			// Comments stripped, so the commentary this work left
+			// behind -- which names the reaches it removed -- does
+			// not count as reaches.
+			//
+			const std::string src =
+				strip_line_comments(buf.str());
+
+			int n = 0;
+			const std::string needle =
+				"SEGlobalStateManager::GetInstance()";
+
+			for (std::size_t at = src.find(needle);
+			     at != std::string::npos;
+			     at = src.find(needle, at + needle.size()))
+				++n;
+
+			if (n) {
+				perFile.push_back(
+					{n, p.filename().string()});
+				total += n;
+			}
+		}
+	}
+
+	//
+	// The plug-in entry point lives at the repo root rather than under
+	// streamelements/, and it holds the bootstrap reach.
+	//
+	{
+		const std::string src = strip_line_comments(
+			slurp("obs-streamelements-core-plugin.cpp"));
+
+		int n = 0;
+		const std::string needle =
+			"SEGlobalStateManager::GetInstance()";
+
+		for (std::size_t at = src.find(needle);
+		     at != std::string::npos;
+		     at = src.find(needle, at + needle.size()))
+			++n;
+
+		if (n) {
+			perFile.push_back(
+				{n, "obs-streamelements-core-plugin.cpp"});
+			total += n;
+		}
+	}
+
+	check(total > 0,
+	      "no GetInstance() reaches found at all -- either the migration "
+	      "is finished, in which case delete this ratchet, or the scan is "
+	      "broken");
+
+	if (total > kMaxSingletonReaches) {
+		std::sort(perFile.begin(), perFile.end());
+		std::reverse(perFile.begin(), perFile.end());
+
+		std::fprintf(stderr,
+			     "FAIL: %d SEGlobalStateManager::GetInstance() reaches, ratchet allows %d.\n"
+			     "      A new consumer must be handed what it needs, not fetch it. Per file:\n",
+			     total, kMaxSingletonReaches);
+
+		for (const auto &row : perFile)
+			std::fprintf(stderr, "        %3d  %s\n", row.first,
+				     row.second.c_str());
+
+		++failures;
+	}
+
+	//
+	// And downwards: a drop means the number above is stale, so the next
+	// person inherits a loose ratchet instead of a tight one.
+	//
+	check(total >= kMaxSingletonReaches,
+	      "fewer GetInstance() reaches than the ratchet allows -- lower "
+	      "kMaxSingletonReaches in tests/test_source_invariants.cpp to the "
+	      "new count, in the commit that removed them");
+}
+
 static void check_nothing_but_the_manager_owns_the_services_container()
 {
 	//
@@ -2866,6 +2995,7 @@ int main()
 	check_api_handler_takes_its_services_by_injection();
 	check_api_handler_locks_the_services_once_per_dispatch();
 	check_nothing_but_the_manager_owns_the_services_container();
+	check_singleton_reaches_only_go_down();
 	check_non_modal_dialogs_are_closed_by_their_owner();
 	check_state_persistence_borrows_the_managers_it_serializes();
 	check_widget_manager_does_not_own_state_persistence();
