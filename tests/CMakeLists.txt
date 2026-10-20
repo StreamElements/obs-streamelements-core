@@ -75,6 +75,28 @@ se_add_test(test_string_utils
   "${REPO_ROOT}/streamelements/SEUtils/SEStringUtils.cpp"
 )
 
+# --- Behavioural test: the session message signature scheme ---------------
+#
+# The digest SELocalFilesystemHttpServer checks before it opens and serves a
+# file, so it is the whole of that server's access control rather than a
+# checksum. The production .cpp is compiled here;
+# CreateCryptoSecureRandomNumberString() is not -- its two bodies need the
+# Windows SDK or Objective-C -- so each test below links its own, which is
+# also what makes the salt deterministic enough to assert against.
+se_add_test(test_session_signature
+  test_session_signature.cpp
+  "${REPO_ROOT}/streamelements/SEUtils/SECryptoUtils.cpp"
+)
+
+# The same production .cpp against a random source that returns nothing. A
+# second executable rather than a second test case, because the salt is a
+# function-local static: one process gets one salt, so the no-entropy world
+# has to be a process of its own.
+se_add_test(test_session_signature_no_entropy
+  test_session_signature_no_entropy.cpp
+  "${REPO_ROOT}/streamelements/SEUtils/SECryptoUtils.cpp"
+)
+
 # --- Behavioural test: the WYVRN configuration parser -----------------------
 #
 # Compiles the real production parser, not a mirror of it. That is possible

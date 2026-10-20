@@ -622,8 +622,6 @@ std::string CreateCryptoSecureRandomNumberString()
 			sprintf_s(buf, sizeof(buf), "%llX", buffer);
 
 			result = buf;
-
-			std::cout << buffer << std::endl;
 		}
 
 		BCryptCloseAlgorithmProvider(hAlgo, 0);
