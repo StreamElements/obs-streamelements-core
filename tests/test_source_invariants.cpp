@@ -3330,35 +3330,62 @@ static void check_every_published_service_is_watched_at_teardown()
 		if (field.empty())
 			continue;
 
+		++found;
+
 		//
-		// Deliberately unwatched: the crash handler holds the config
-		// and is never deleted, so it outlives teardown on every
-		// clean run. Watching it would print a warning every time and
-		// teach the next reader to ignore the whole audit.
+		// The three the crash handler holds. It is never deleted, so
+		// these are alive after teardown on every clean run and have
+		// to be classified as expected rather than warned about --
+		// an audit that cries wolf every shutdown is one nobody
+		// reads. They are still watched, because "held by the crash
+		// handler and nothing else" is the thing worth confirming.
 		//
-		if (field == "config") {
+		const bool keptByCrashHandler =
+			field == "config" ||
+			field == "performanceHistoryTracker" ||
+			field == "analyticsEventsManager";
+
+		if (field == "config")
 			sawConfig = true;
 
-			check(body.find("SE_WATCH(config)") ==
-				      std::string::npos,
-			      "the config is being watched at teardown, and it "
-			      "outlives teardown by design -- the crash "
-			      "handler holds it and is never deleted, so this "
-			      "would warn on every clean shutdown");
+		const std::string plain = "SE_WATCH(" + field + ")";
+		const std::string kept = "SE_WATCH_KEPT(" + field + ")";
+
+		if (keptByCrashHandler) {
+			const std::string msg =
+				std::string("the crash handler holds ") +
+				field +
+				" and is never deleted, so it must be "
+				"SE_WATCH_KEPT and not SE_WATCH -- otherwise "
+				"every clean shutdown logs a warning";
+
+			check(body.find(kept) != std::string::npos,
+			      msg.c_str());
+
+			check(body.find(plain) == std::string::npos,
+			      msg.c_str());
 
 			continue;
 		}
-
-		++found;
-
-		const std::string expected = "SE_WATCH(" + field + ")";
 
 		const std::string msg =
 			std::string("SEApiServices publishes ") + field +
 			" but WatchServicesForTeardownAudit() does not watch "
 			"it, so nothing would report it outliving shutdown";
 
-		check(body.find(expected) != std::string::npos, msg.c_str());
+		check(body.find(plain) != std::string::npos, msg.c_str());
+
+		//
+		// And it must not be quietly reclassified as expected.
+		//
+		const std::string msg2 =
+			std::string("SEApiServices publishes ") + field +
+			" and it is marked SE_WATCH_KEPT, which means a leak "
+			"of it would be logged as expected rather than as a "
+			"warning. Only what the crash handler holds belongs "
+			"in that list";
+
+		check(body.find(kept) == std::string::npos, msg2.c_str());
 	}
 
 	//
@@ -3449,6 +3476,68 @@ static void check_signal_handler_data_holds_the_composition_per_path()
 	      "second member buys nothing");
 }
 
+//
+// --- The data-driven scans do not call os_file_exists (CORE-757).
+//
+// os_file_exists("") leaks one allocation per call, inside libobs:
+// os_utf8_to_wcs_ptr() always bmalloc()s its output and then returns the
+// LENGTH of the conversion, which is zero for an empty string, so
+// os_file_exists() reads that as failure and returns before its own bfree().
+//
+// Measured, not deduced: one queryUserEnvironmentBackupReferencedFiles call
+// leaked exactly 37 allocations, five runs in a row, and bisecting it gave
+// os_file_exists over the collection's real strings at 600 per 200 passes
+// against 0 for the same traversal without the call and 0 for the idle
+// control. Three empty strings in each of fourteen collections.
+//
+// So the two files that ask this question about strings out of a scene
+// collection or a WYVRN config go through FileExists(), which answers the
+// empty case itself. Paths built in code are not the problem, but they use
+// it too, so that there is no "why not this one" to wonder about.
+//
+static void check_data_driven_scans_do_not_call_os_file_exists()
+{
+	const char *files[] = {
+		"streamelements/SEBackupManager.cpp",
+		"streamelements/SERazerWyvrnManager.cpp",
+	};
+
+	for (const char *relpath : files) {
+		const std::string src =
+			strip_line_comments(slurp(relpath));
+
+		const std::string msg =
+			std::string(relpath) +
+			" calls os_file_exists directly. It walks strings that "
+			"come from a scene collection or a WYVRN config, and "
+			"os_file_exists leaks one allocation for every empty "
+			"one -- use FileExists() from SEPathUtils instead";
+
+		check(src.find("os_file_exists(") == std::string::npos,
+		      msg.c_str());
+	}
+
+	//
+	// And the helper still has to be the thing that handles it.
+	//
+	const std::string impl = function_body(
+		strip_line_comments(
+			slurp("streamelements/SEUtils/SEPathUtils.cpp")),
+		"bool FileExists");
+
+	check(!impl.empty(),
+	      "cannot find FileExists in SEPathUtils.cpp -- this invariant "
+	      "needs updating");
+
+	check(impl.find("path.empty()") != std::string::npos,
+	      "FileExists no longer short-circuits an empty path, which is "
+	      "the entire reason it exists");
+
+	check(impl.find("os_file_exists(") != std::string::npos,
+	      "FileExists no longer calls os_file_exists, so it is answering "
+	      "the question some other way than intended");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -3505,6 +3594,7 @@ int main()
 	check_crash_path_filesystem_calls_never_throw();
 	check_every_published_service_is_watched_at_teardown();
 	check_signal_handler_data_holds_the_composition_per_path();
+	check_data_driven_scans_do_not_call_os_file_exists();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

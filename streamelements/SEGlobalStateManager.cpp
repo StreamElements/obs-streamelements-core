@@ -830,15 +830,26 @@ namespace {
 struct WatchedService {
 	const char *name;
 	std::weak_ptr<void> handle;
+
+	//
+	// True for the handful the crash handler holds. That handler is
+	// deliberately never deleted, so these outlive teardown on every
+	// clean run; they are reported as a fact rather than a warning,
+	// because an audit that cries wolf on every shutdown is one nobody
+	// reads.
+	//
+	bool keptByCrashHandler;
 };
 } // namespace
 
 static std::vector<WatchedService> s_watchedServices;
 
-static void WatchService(const char *name, std::shared_ptr<void> service)
+static void WatchService(const char *name, std::shared_ptr<void> service,
+			 bool keptByCrashHandler)
 {
 	if (service)
-		s_watchedServices.push_back({name, service});
+		s_watchedServices.push_back(
+			{name, service, keptByCrashHandler});
 }
 
 void SEGlobalStateManager::WatchServicesForTeardownAudit()
@@ -854,7 +865,8 @@ void SEGlobalStateManager::WatchServicesForTeardownAudit()
 	// check_every_published_service_is_watched_at_teardown holds the two
 	// lists together.
 	//
-#define SE_WATCH(field) WatchService(#field, m_apiServices->field)
+#define SE_WATCH(field) WatchService(#field, m_apiServices->field, false)
+#define SE_WATCH_KEPT(field) WatchService(#field, m_apiServices->field, true)
 
 	SE_WATCH(widgetManager);
 	SE_WATCH(obsSceneManager);
@@ -863,8 +875,6 @@ void SEGlobalStateManager::WatchServicesForTeardownAudit()
 	SE_WATCH(outputSettingsManager);
 	SE_WATCH(workerManager);
 	SE_WATCH(hotkeyManager);
-	SE_WATCH(performanceHistoryTracker);
-	SE_WATCH(analyticsEventsManager);
 	SE_WATCH(externalSceneDataProviderManager);
 	SE_WATCH(httpClient);
 	SE_WATCH(localFilesystemHttpServer);
@@ -894,34 +904,59 @@ void SEGlobalStateManager::WatchServicesForTeardownAudit()
 	SE_WATCH(obsApiTransactionManager);
 
 	//
-	// config is deliberately not watched. SECrashHandler holds it so that
-	// a fault during or after teardown can still read the reporter's
-	// contact details, and that handler is never deleted -- so the config
-	// outlives teardown on every clean run and would report every time.
-	// Shutdown() closes the ini explicitly for exactly that reason.
+	// The three SECrashHandler holds, so that a fault during or after
+	// teardown can still be reported with the reporter's contact details,
+	// the performance history leading up to it, and an analytics event.
+	// That handler is never deleted -- Shutdown() leaves the delete
+	// commented out on purpose -- so these three are still alive when the
+	// plug-in is gone, every clean run.
 	//
+	// Watched anyway rather than skipped, because "held by the crash
+	// handler and nothing else" is worth seeing: the first live run of
+	// this audit reported performanceHistoryTracker with two handles and
+	// analyticsEventsManager with one, and reading those lines is how
+	// anyone confirms the arrangement is still what it was meant to be.
+	// They just are not warnings.
+	//
+	SE_WATCH_KEPT(config);
+	SE_WATCH_KEPT(performanceHistoryTracker);
+	SE_WATCH_KEPT(analyticsEventsManager);
+
 #undef SE_WATCH
+#undef SE_WATCH_KEPT
 }
 
 void SEReportServicesOutlivingTeardown()
 {
-	size_t outliving = 0;
+	size_t leaked = 0;
+	size_t kept = 0;
 
 	for (const WatchedService &watched : s_watchedServices) {
 		if (watched.handle.expired())
 			continue;
 
-		++outliving;
+		if (watched.keptByCrashHandler) {
+			++kept;
+
+			blog(LOG_INFO,
+			     "[obs-streamelements-core]: %s is still held after teardown, as expected: the crash handler keeps it and is never deleted (%ld handle(s))",
+			     watched.name, watched.handle.use_count());
+
+			continue;
+		}
+
+		++leaked;
 
 		blog(LOG_WARNING,
-		     "[obs-streamelements-core]: %s outlived teardown: %ld handle(s) still held after the plug-in was destroyed",
+		     "[obs-streamelements-core]: %s outlived teardown: %ld handle(s) still held after the plug-in was destroyed. Something is holding it that nobody wrote down -- a queued task, a detached thread, or a reference ring",
 		     watched.name, watched.handle.use_count());
 	}
 
-	if (s_watchedServices.size() && !outliving) {
+	if (s_watchedServices.size() && !leaked) {
 		blog(LOG_INFO,
-		     "[obs-streamelements-core]: all %zu services released cleanly",
-		     s_watchedServices.size());
+		     "[obs-streamelements-core]: %zu of %zu services released cleanly, %zu held by the crash handler",
+		     s_watchedServices.size() - kept,
+		     s_watchedServices.size(), kept);
 	}
 
 	s_watchedServices.clear();
