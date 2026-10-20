@@ -10,7 +10,7 @@ std::shared_ptr<SEConfig> SEConfig::Create()
 	return std::make_shared<SEConfig>(SEConfig::Private());
 }
 
-void SEConfig::SaveAndClose()
+void SEConfig::CloseAndPreventFurtherReopens()
 {
 	if (m_closed)
 		return;
@@ -28,18 +28,19 @@ void SEConfig::SaveAndClose()
 
 SEConfig::~SEConfig()
 {
-	// Idempotent: SaveAndClose() has normally run already, from
-	// Shutdown(). This is the path for an instance that never got that
-	// far -- a test, or a start-up that failed before Shutdown().
-	SaveAndClose();
+	// Idempotent: CloseAndPreventFurtherReopens() has normally run
+	// already, from Shutdown(). This is the path for an instance that
+	// never got that far -- a test, or a start-up that failed before
+	// Shutdown().
+	CloseAndPreventFurtherReopens();
 }
 
 
 config_t* SEConfig::GetConfig()
 {
-	// Closed for good; see SaveAndClose(). Re-opening here would create a
-	// second file handle after the final save, and nothing would ever
-	// close it.
+	// Closed for good; see CloseAndPreventFurtherReopens(). Re-opening
+	// here would create a second file handle after the final save, and
+	// nothing would ever close it.
 	if (m_closed)
 		return nullptr;
 

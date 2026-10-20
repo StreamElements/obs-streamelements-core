@@ -2208,10 +2208,13 @@ static void check_the_invoke_handler_is_not_immortal()
 // from SEWidgetManager's deferred saves, which drain in SEDrainEventQueue()
 // on the line after Destroy() used to run.
 //
-// Owned now, and published in SEApiServices. The close is still explicit,
-// because it has to happen while the filesystem and libobs are both known
-// good -- but it leaves the object alive and reading as defaults, so a late
-// write is a no-op rather than a null dereference.
+// Owned now, and published in SEApiServices. Destroy() is gone, but both
+// halves of what it did survive under a name that says so:
+// CloseAndPreventFurtherReopens() flushes and closes while the filesystem
+// and libobs are both known good, and latches so GetConfig() cannot
+// re-open the file afterwards. Unlike Destroy() it leaves the object alive
+// and reading as defaults, so a late write is a no-op rather than a null
+// dereference.
 //
 static void check_the_config_is_owned_and_closed_explicitly()
 {
@@ -2223,15 +2226,16 @@ static void check_the_config_is_owned_and_closed_explicitly()
 	      "SEConfig is a singleton again -- it is owned by "
 	      "SEGlobalStateManager and published in SEApiServices");
 
-	check(hdr.find("SaveAndClose") != std::string::npos,
-	      "SEConfig::SaveAndClose() is gone. Without it the ini is "
-	      "flushed whenever the container happens to be destroyed, which "
-	      "is later than the save wants to be");
+	check(hdr.find("CloseAndPreventFurtherReopens") != std::string::npos,
+	      "SEConfig::CloseAndPreventFurtherReopens() is gone. Without "
+	      "it the ini is flushed whenever the container happens to be "
+	      "destroyed, which is later than the save wants to be");
 
 	const std::string root = strip_line_comments(
 		slurp("streamelements/SEGlobalStateManager.cpp"));
 
-	check(root.find("m_config->SaveAndClose()") != std::string::npos,
+	check(root.find("m_config->CloseAndPreventFurtherReopens()") !=
+		      std::string::npos,
 	      "Shutdown() no longer closes the config explicitly");
 
 	//
@@ -2249,8 +2253,8 @@ static void check_the_config_is_owned_and_closed_explicitly()
 
 	check(getConfig.find("m_closed") != std::string::npos,
 	      "SEConfig::GetConfig() no longer checks m_closed, so a read "
-	      "after SaveAndClose() re-opens the ini and nothing ever closes "
-	      "it again");
+	      "after CloseAndPreventFurtherReopens() re-opens the ini and "
+	      "nothing ever closes it again");
 }
 
 //

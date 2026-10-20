@@ -912,11 +912,11 @@ void SEGlobalStateManager::Shutdown()
 
 	//
 	// m_config is deliberately NOT released here. The explicit
-	// SaveAndClose() below is further down this function, and it needs
-	// the handle; releasing it early would not even destroy the object,
-	// because the crash handler holds it and the crash handler is
-	// deliberately never deleted -- so the ini would go unflushed and
-	// its config_t unclosed for the life of the process.
+	// CloseAndPreventFurtherReopens() below needs the handle, and
+	// releasing it early would not even destroy the object, because the
+	// crash handler holds it and the crash handler is deliberately never
+	// deleted -- so the ini would go unflushed and its config_t unclosed
+	// for the life of the process.
 	//
 	m_websocketApiServer = nullptr;
 	m_windowStateEventFilter = nullptr;
@@ -963,18 +963,19 @@ void SEGlobalStateManager::Shutdown()
 	// it with the rest of the container: this is the last point at which
 	// the filesystem and libobs are both known good. SEDrainEventQueue()
 	// on the next line can still run a deferred PersistState(), which is
-	// why SaveAndClose() leaves the config readable-but-defaulted instead
-	// of destroying it.
+	// why CloseAndPreventFurtherReopens() leaves the config
+	// readable-but-defaulted instead of destroying it.
 	//
 	if (m_config)
-		m_config->SaveAndClose();
+		m_config->CloseAndPreventFurtherReopens();
 
 	//
 	// Released after the close, not before. The object itself outlives
 	// this: SECrashHandler holds it so that a crash during or after
 	// teardown can still read the reporter's contact details, and that
-	// handler is never deleted. SaveAndClose() is what makes that safe --
-	// it leaves an inert config that reads as defaults.
+	// handler is never deleted. CloseAndPreventFurtherReopens() is what
+	// makes that safe -- it leaves an inert config that reads as
+	// defaults.
 	//
 	m_config = nullptr;
 

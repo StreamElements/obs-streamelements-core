@@ -157,8 +157,9 @@ struct SEApiServices {
 
 	//
 	// The plug-in's own ini. First to be constructed and last to be
-	// written: Shutdown() calls SaveAndClose() on it near the end, after
-	// which it reads as a config full of defaults rather than a crash.
+	// written: Shutdown() calls CloseAndPreventFurtherReopens() on it
+	// near the end, after which it reads as a config full of defaults
+	// rather than a crash.
 	//
 	std::shared_ptr<SEConfig> config;
 

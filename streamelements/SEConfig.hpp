@@ -59,15 +59,15 @@ public:
 	// destructor does the same work, but it runs with the rest of the
 	// container, which is later than the save wants to be.
 	//
-	// After this the config is closed for good. GetConfig() returns null
-	// rather than re-opening the file -- which is what the s_destroyed
-	// latch used to prevent -- and every accessor below already treats a
-	// null config as "use the default", so a write that arrives late is a
-	// no-op rather than a crash. Something does arrive late: SEDrainEventQueue()
-	// runs on the next line of Shutdown() and SEWidgetManager's deferred
+	// The second half of the name is the job the s_destroyed latch used
+	// to do: GetConfig() returns null afterwards rather than re-opening
+	// the file. Every accessor below already treats a null config as
+	// "use the default", so a write that arrives late is a no-op rather
+	// than a crash -- and one does arrive late: SEDrainEventQueue() runs
+	// on the next line of Shutdown() and SEWidgetManager's deferred
 	// saves land there.
 	//
-	void SaveAndClose();
+	void CloseAndPreventFurtherReopens();
 
 public:
 	config_t* GetConfig();
@@ -334,7 +334,7 @@ private:
 	// True when m_config is the in-memory fallback, which has no file.
 	bool m_configIsMemoryOnly = false;
 
-	// Set by SaveAndClose(); see the comment there.
+	// Set by CloseAndPreventFurtherReopens(); see the comment there.
 	bool m_closed = false;
 };
 
