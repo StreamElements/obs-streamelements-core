@@ -97,6 +97,16 @@ se_add_test(test_session_signature_no_entropy
   "${REPO_ROOT}/streamelements/SEUtils/SECryptoUtils.cpp"
 )
 
+# --- Behavioural test: the StreamElements overlay URL scheme --------------
+#
+# One regex and one concatenation, so nothing but the production .cpp is
+# linked. Neither helper has a caller yet; the tests record what the
+# pattern actually accepts, which is looser than it reads.
+se_add_test(test_overlay_url_utils
+  test_overlay_url_utils.cpp
+  "${REPO_ROOT}/streamelements/SEUtils/SEOverlayUrlUtils.cpp"
+)
+
 # --- Behavioural test: the WYVRN configuration parser -----------------------
 #
 # Compiles the real production parser, not a mirror of it. That is possible
