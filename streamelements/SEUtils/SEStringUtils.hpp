@@ -12,6 +12,7 @@
 
 #include <string>
 #include <map>
+#include <vector>
 #include <cstdarg>
 #include <cstdio>
 
@@ -24,24 +25,52 @@ std::wstring utf8_to_wstring(const std::string str);
 //
 std::string clean_guid_string(std::string input);
 
+//
+// The template parameter pack is not used and is not a mistake worth
+// correcting: it is what makes this definition a template, and therefore
+// legal in a header included by 50-odd translation units. Call sites never
+// name it.
+//
+// The grow-and-retry path used to be undefined behaviour. vsnprintf consumes
+// the va_list it walks, and the retry handed the same one to a second call --
+// which also still passed the original 512 rather than the size it had just
+// been told it needed. So an output of 512 bytes or more read a consumed list
+// and then truncated to 512 anyway. Every call in the plug-in happens to be
+// shorter than that, which is why it never showed; SEVideoComposition builds
+// encoder names through it and a long enough composition id would have got
+// there.
+//
+// Now the list is copied before the first call, so the retry has an
+// untouched one, and the buffer is sized from what vsnprintf asked for. A
+// negative return -- an encoding error -- gives an empty string rather than
+// reading whatever is in the buffer.
+//
 template<typename... Args> std::string FormatString(const char *format, ...)
 {
-	int size = 512;
-	char *buffer = 0;
-	buffer = new char[size];
 	va_list vl;
 	va_start(vl, format);
-	int nsize = vsnprintf(buffer, size, format, vl);
-	if (size <= nsize) { //fail delete buffer and try again
-		delete[] buffer;
-		buffer = 0;
-		buffer = new char[nsize + 1]; //+1 for /0
-		nsize = vsnprintf(buffer, size, format, vl);
-	}
-	std::string ret(buffer);
+
+	va_list retry;
+	va_copy(retry, vl);
+
+	std::vector<char> buffer(512);
+
+	int nsize = vsnprintf(buffer.data(), buffer.size(), format, vl);
+
 	va_end(vl);
-	delete[] buffer;
-	return ret;
+
+	if (nsize >= (int)buffer.size()) {
+		buffer.resize((size_t)nsize + 1); // +1 for the terminator
+
+		nsize = vsnprintf(buffer.data(), buffer.size(), format, retry);
+	}
+
+	va_end(retry);
+
+	if (nsize < 0)
+		return std::string();
+
+	return std::string(buffer.data(), (size_t)nsize);
 }
 
 bool ParseQueryString(std::string input,

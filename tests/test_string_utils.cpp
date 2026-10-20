@@ -184,18 +184,47 @@ static void test_format_string()
 	check(FormatString("no args") == "no args",
 	      "FormatString must pass a plain string through");
 
-	//
-	// Deliberately not exercised: an output of 512 bytes or more. The
-	// grow-and-retry path re-uses a va_list that the first vsnprintf has
-	// already consumed, and passes the OLD size to the second call -- so
-	// it is undefined behaviour and truncates on top. Every call in the
-	// plug-in is well under the limit; this comment is here so the next
-	// person to write a long format string knows what they are walking
-	// into.
-	//
-	const std::string long_ish = FormatString("%s", std::string(400, 'x').c_str());
+	const std::string long_ish =
+		FormatString("%s", std::string(400, 'x').c_str());
 	check(long_ish.size() == 400,
 	      "FormatString must handle output up to its 512-byte buffer");
+
+	//
+	// The grow-and-retry path, which used to be undefined behaviour: the
+	// retry re-read a va_list the first vsnprintf had consumed, and asked
+	// for the original 512 bytes rather than the size it had just been
+	// told it needed. So anything from 512 bytes up both read a dead list
+	// and truncated.
+	//
+	// 511, 512 and 513 bracket the boundary, because the condition that
+	// decides whether to grow is the one that was wrong.
+	//
+	for (size_t len : {(size_t)511, (size_t)512, (size_t)513,
+			   (size_t)5000}) {
+		const std::string padding(len, 'y');
+		const std::string out =
+			FormatString("%s", padding.c_str());
+
+		char msg[128];
+		std::snprintf(msg, sizeof(msg),
+			      "FormatString truncated or corrupted an output "
+			      "of %zu bytes",
+			      len);
+
+		check(out == padding, msg);
+	}
+
+	//
+	// Arguments after the long one, so a retry that re-walked a consumed
+	// list would produce something other than this rather than merely
+	// truncating.
+	//
+	const std::string tail = FormatString(
+		"%s|%d|%s", std::string(600, 'z').c_str(), 42, "end");
+
+	check(tail == std::string(600, 'z') + "|42|end",
+	      "FormatString lost or mangled the arguments after a 600-byte "
+	      "one, so the retry is not reading an untouched va_list");
 }
 
 int main()
