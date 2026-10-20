@@ -246,6 +246,21 @@ public:
 	// long as the callbacks can fire answers it by construction. No ring
 	// -- the composition manager does not own the scene manager.
 	//
+	// It was weak on every path while this comment said otherwise, and it
+	// mattered in exactly the window the comment is about: this object is
+	// refcounted, a callback can hold a reference past
+	// ~SEObsSceneManager -- the destructor does Wait() then Release(), so
+	// anything still in flight keeps it alive -- and the scene manager is
+	// the only other holder. During that window the lock failed and the
+	// event went nowhere.
+	//
+	// Strong only on this path, though, which is why there are two
+	// members. SEVideoComposition builds one of these too and passes null
+	// for obsSceneManager; there a strong handle closes a ring, because
+	// the composition manager owns the composition which owns this. So
+	// that is the discriminator below, and the weak handle is what the
+	// composition path gets.
+	//
 	SESignalHandlerData(
 		SEObsSceneManager *obsSceneManager,
 		std::weak_ptr<SEVideoCompositionManager>
@@ -254,6 +269,9 @@ public:
 		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 		: m_obsSceneManager(obsSceneManager),
 		  m_videoCompositionManager(videoCompositionManager),
+		  m_videoCompositionManagerStrong(
+			  obsSceneManager ? videoCompositionManager.lock()
+					  : nullptr),
 		  m_videoCompositionBase(videoCompositionBase),
 		  m_hostEventDispatcher(hostEventDispatcher)
 	{
@@ -311,6 +329,14 @@ private:
 		: m_parent(parent),
 		  m_obsSceneManager(obsSceneManager),
 		  m_videoCompositionManager(videoCompositionManager),
+		  //
+		  // Same rule as the public constructor: a child of a
+		  // scene-manager root inherits the strong handle, a child of
+		  // a composition root does not.
+		  //
+		  m_videoCompositionManagerStrong(
+			  obsSceneManager ? videoCompositionManager.lock()
+					  : nullptr),
 		  m_videoCompositionBase(videoCompositionBase),
 		  m_hostEventDispatcher(hostEventDispatcher),
 		  m_scene(SETRACE_ADDREF(obs_scene_get_ref(scene)))
@@ -660,7 +686,18 @@ public:
 
 	// char m_header[7] = "header"; // TODO: Remvoe debug marker
 	SEObsSceneManager *m_obsSceneManager = nullptr;
+
+	//
+	// Two handles on one object, because the strength that is safe
+	// depends on who created this one. See the public constructor: the
+	// scene-manager path takes the strong one and the composition path
+	// cannot, since the composition manager owns the composition that
+	// owns this. VideoCompositionManager() prefers the strong handle and
+	// falls back to locking the weak one.
+	//
 	std::weak_ptr<SEVideoCompositionManager> m_videoCompositionManager;
+	std::shared_ptr<SEVideoCompositionManager>
+		m_videoCompositionManagerStrong;
 	SEVideoCompositionBase *m_videoCompositionBase = nullptr;
 
 	//
@@ -680,6 +717,9 @@ public:
 	//
 	std::shared_ptr<SEVideoCompositionManager> VideoCompositionManager()
 	{
+		if (m_videoCompositionManagerStrong)
+			return m_videoCompositionManagerStrong;
+
 		return m_videoCompositionManager.lock();
 	}
 

@@ -3374,6 +3374,81 @@ static void check_every_published_service_is_watched_at_teardown()
 	      "above is stale");
 }
 
+//
+// --- SESignalHandlerData's composition handle is per-path (CORE-757).
+//
+// It holds the composition manager strongly when SEObsSceneManager created
+// it and weakly when SEVideoComposition did, and the difference is not a
+// style choice either way:
+//
+//   - strong on the scene-manager path, because this object is refcounted
+//     and a callback can hold a reference past ~SEObsSceneManager. The
+//     scene manager is the only other holder, so a weak handle made that
+//     window a failed lock and an event that went nowhere.
+//
+//   - weak on the composition path, because the composition manager owns
+//     the composition which owns this. Strong there is a ring, and the
+//     whole composition manager would leak.
+//
+// Both halves have been wrong in this file before: the comment claimed
+// strong while every path was weak. Making it unconditionally strong is the
+// obvious "fix" and is the ring, so the discriminator is what gets pinned.
+//
+static void check_signal_handler_data_holds_the_composition_per_path()
+{
+	const std::string hdr = strip_line_comments(
+		slurp("streamelements/SEObsSceneManager.hpp"));
+
+	std::string flat;
+	flat.reserve(hdr.size());
+
+	for (std::size_t i = 0; i < hdr.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(hdr[i])))
+			flat += hdr[i];
+	}
+
+	check(flat.find("std::weak_ptr<SEVideoCompositionManager>"
+			"m_videoCompositionManager;") != std::string::npos,
+	      "SESignalHandlerData no longer keeps a weak handle on the "
+	      "composition manager. SEVideoComposition creates one of these "
+	      "and the manager owns the composition, so that path has to stay "
+	      "weak or the manager leaks");
+
+	check(flat.find("std::shared_ptr<SEVideoCompositionManager>"
+			"m_videoCompositionManagerStrong;") !=
+		      std::string::npos,
+	      "SESignalHandlerData no longer keeps a strong handle for the "
+	      "scene-manager path, so a callback outliving "
+	      "~SEObsSceneManager is back to a failed lock");
+
+	//
+	// Once per constructor, and the condition is the point: the strong
+	// handle is taken only when a scene manager created this.
+	//
+	const std::string guarded =
+		"m_videoCompositionManagerStrong(obsSceneManager?"
+		"videoCompositionManager.lock():nullptr)";
+
+	std::size_t guards = 0;
+
+	for (std::size_t at = flat.find(guarded); at != std::string::npos;
+	     at = flat.find(guarded, at + guarded.size()))
+		++guards;
+
+	check(guards == 2,
+	      "the strong composition handle is no longer guarded on "
+	      "obsSceneManager in both constructors. Unconditionally strong "
+	      "is a ring: the composition manager owns the composition that "
+	      "owns this object");
+
+	check(flat.find("if(m_videoCompositionManagerStrong)"
+			"returnm_videoCompositionManagerStrong;") !=
+		      std::string::npos,
+	      "VideoCompositionManager() no longer prefers the strong handle, "
+	      "so the scene-manager path gets the weak one anyway and the "
+	      "second member buys nothing");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -3429,6 +3504,7 @@ int main()
 	check_api_services_is_a_container_and_nothing_else();
 	check_crash_path_filesystem_calls_never_throw();
 	check_every_published_service_is_watched_at_teardown();
+	check_signal_handler_data_holds_the_composition_per_path();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",
