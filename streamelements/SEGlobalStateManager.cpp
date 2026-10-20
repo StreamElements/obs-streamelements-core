@@ -909,7 +909,15 @@ void SEGlobalStateManager::Shutdown()
 	m_hostEventDispatcher = nullptr;
 	m_obsApiTransactionManager = nullptr;
 	m_pleaseWaitWindow = nullptr;
-	m_config = nullptr;
+
+	//
+	// m_config is deliberately NOT released here. The explicit
+	// SaveAndClose() below is further down this function, and it needs
+	// the handle; releasing it early would not even destroy the object,
+	// because the crash handler holds it and the crash handler is
+	// deliberately never deleted -- so the ini would go unflushed and
+	// its config_t unclosed for the life of the process.
+	//
 	m_websocketApiServer = nullptr;
 	m_windowStateEventFilter = nullptr;
 	m_statePersistence = nullptr;
@@ -960,6 +968,15 @@ void SEGlobalStateManager::Shutdown()
 	//
 	if (m_config)
 		m_config->SaveAndClose();
+
+	//
+	// Released after the close, not before. The object itself outlives
+	// this: SECrashHandler holds it so that a crash during or after
+	// teardown can still read the reporter's contact details, and that
+	// handler is never deleted. SaveAndClose() is what makes that safe --
+	// it leaves an inert config that reads as defaults.
+	//
+	m_config = nullptr;
 
 	SEDrainEventQueue();
 
