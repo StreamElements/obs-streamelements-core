@@ -35,6 +35,8 @@ class SEBrowserDialogManager;
 class SESessionManager;
 class SEAuxiliaryControlsBuilder;
 class SEConfig;
+class SEPleaseWaitWindow;
+class SEObsApiTransactionManager;
 
 //
 // The objects SEGlobalStateManager::Initialize() creates, in one place, so
@@ -159,4 +161,12 @@ struct SEApiServices {
 	// which it reads as a config full of defaults rather than a crash.
 	//
 	std::shared_ptr<SEConfig> config;
+
+	//
+	// The modal "please wait" dialog, and the open-transaction registry
+	// that raises it. Both were singletons reached from a file-static
+	// map in SEUtils (CORE-757).
+	//
+	std::shared_ptr<SEPleaseWaitWindow> pleaseWaitWindow;
+	std::shared_ptr<SEObsApiTransactionManager> obsApiTransactionManager;
 };

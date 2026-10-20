@@ -37,6 +37,8 @@ struct QCefCookieManager;
 #include "SEBrowserDialogManager.hpp"
 #include "SESessionManager.hpp"
 #include "SEAuxiliaryControlsBuilder.hpp"
+#include "SEPleaseWaitWindow.hpp"
+#include "SEObsApiTransactionManager.hpp"
 #include "SEHostEventDispatcher.hpp"
 #include "SEBrowserDialog.hpp"
 #include "SEVideoCompositionManager.hpp"
@@ -334,6 +336,9 @@ private:
 	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher = nullptr;
 	std::shared_ptr<SEMessageBus> m_messageBus = nullptr;
 	std::shared_ptr<SEConfig> m_config = nullptr;
+	std::shared_ptr<SEPleaseWaitWindow> m_pleaseWaitWindow = nullptr;
+	std::shared_ptr<SEObsApiTransactionManager>
+		m_obsApiTransactionManager = nullptr;
 
 private:
 	class ThemeChangeListener : public QDockWidget {

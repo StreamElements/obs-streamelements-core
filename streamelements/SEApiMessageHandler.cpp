@@ -2456,14 +2456,16 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("beginDeferSaveTransaction");
 	{
-		result->SetString(CreateTimedObsApiTransaction());
+		result->SetString(
+			apiServices->obsApiTransactionManager->Create());
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("completeDeferSaveTransaction");
 	{
 		if (args->GetSize() && args->GetType(0) == VTYPE_STRING) {
-			CompleteTimedObsApiTransaction(args->GetString(0));
+			apiServices->obsApiTransactionManager->Complete(
+				args->GetString(0));
 
 			result->SetBool(true);
 		}

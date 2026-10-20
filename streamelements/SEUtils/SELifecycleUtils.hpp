@@ -41,9 +41,6 @@ void SEDrainEventQueue();
 void SEDeleteDockWidgetWhenSafe(QPointer<QDockWidget> dock, const char *id,
 				bool useDeleteLater);
 
-std::string CreateTimedObsApiTransaction(int timeoutMilliseconds = 60000);
-void CompleteTimedObsApiTransaction(std::string id);
-
 void RemoveObsDirtyShutdownMarker();
 
 void RestartCurrentApplication();

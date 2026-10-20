@@ -11,31 +11,11 @@
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 
-static std::shared_ptr<SENativeOBSControlsManager> s_instance =
-	nullptr;
-static std::mutex s_mutex;
-
-void SENativeOBSControlsManager::Destroy()
+std::shared_ptr<SENativeOBSControlsManager>
+SENativeOBSControlsManager::Create(QMainWindow *mainWindow)
 {
-	std::lock_guard<std::mutex> guard(s_mutex);
-
-	if (s_instance) {
-		s_instance = nullptr;
-	}
-}
-
-std::shared_ptr<SENativeOBSControlsManager> SENativeOBSControlsManager::GetInstance()
-{
-	if (s_instance == nullptr) {
-		std::lock_guard<std::mutex> guard(s_mutex);
-
-		s_instance =
-			std::make_shared<SENativeOBSControlsManager>(
-				SENativeOBSControlsManager::Private(),
-				(QMainWindow *)obs_frontend_get_main_window());
-	}
-
-	return s_instance;
+	return std::make_shared<SENativeOBSControlsManager>(
+		SENativeOBSControlsManager::Private(), mainWindow);
 }
 
 SENativeOBSControlsManager::SENativeOBSControlsManager(

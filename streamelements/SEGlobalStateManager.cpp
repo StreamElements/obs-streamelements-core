@@ -357,6 +357,8 @@ void SEGlobalStateManager::PublishApiServices()
 	m_apiServices->sessionManager = m_sessionManager;
 	m_apiServices->auxiliaryControlsBuilder = m_auxiliaryControlsBuilder;
 	m_apiServices->config = m_config;
+	m_apiServices->pleaseWaitWindow = m_pleaseWaitWindow;
+	m_apiServices->obsApiTransactionManager = m_obsApiTransactionManager;
 }
 
 void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
@@ -444,6 +446,15 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	//
 	m_auxiliaryControlsBuilder =
 		std::make_shared<SEAuxiliaryControlsBuilder>(m_apiServices);
+
+	//
+	// The dialog, and the registry that raises it when a long-running
+	// API call opens a transaction.
+	//
+	m_pleaseWaitWindow = SEPleaseWaitWindow::Create(mainWindow());
+	m_obsApiTransactionManager =
+		std::make_shared<SEObsApiTransactionManager>(
+			m_pleaseWaitWindow);
 
 	//
 	// Before the menu manager, which takes it: two of its menu items
@@ -536,8 +547,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		SEExternalSceneDataProviderManager>(
 		m_localFilesystemHttpServer);
 	m_nativeObsControlsManager =
-		SENativeOBSControlsManager::
-			GetInstance();
+		SENativeOBSControlsManager::Create(obs_main_window);
 	m_nativeObsControlsManager->SetApiServices(m_apiServices);
 	m_profilesManager =
 		std::make_shared<SEProfilesManager>();
@@ -886,8 +896,7 @@ void SEGlobalStateManager::Shutdown()
 	m_httpClient = nullptr;
 	m_localFilesystemHttpServer = nullptr;
 
-	m_nativeObsControlsManager = nullptr; // Singleton
-	SENativeOBSControlsManager::Destroy();
+	m_nativeObsControlsManager = nullptr;
 
 	m_profilesManager = nullptr;
 	m_backupManager = nullptr;
@@ -898,6 +907,8 @@ void SEGlobalStateManager::Shutdown()
 	m_previewManager = nullptr;
 	m_messageBus = nullptr;
 	m_hostEventDispatcher = nullptr;
+	m_obsApiTransactionManager = nullptr;
+	m_pleaseWaitWindow = nullptr;
 	m_config = nullptr;
 	m_websocketApiServer = nullptr;
 	m_windowStateEventFilter = nullptr;
