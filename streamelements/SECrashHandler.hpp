@@ -13,9 +13,19 @@
 
 class SEPerformanceHistoryTracker;
 class SEAnalyticsEventsManager;
+class SEConfig;
 
 class SECrashHandler {
 public:
+	//
+	// The config is taken at construction, not through
+	// SetReportingServices() below, because a backend reads the contact
+	// details a previous report left behind in its own constructor -- see
+	// SESentryCrashHandler. It is stored by the base so that the derived
+	// constructor body can already see it.
+	//
+	SECrashHandler(std::shared_ptr<SEConfig> config) : m_config(config) {}
+
 	virtual ~SECrashHandler() {}
 
 public:
@@ -57,7 +67,7 @@ public:
 public:
 	// Constructs the backend selected at build time, or nullptr when crash
 	// reporting is compiled out entirely.
-	static SECrashHandler *Create();
+	static SECrashHandler *Create(std::shared_ptr<SEConfig> config);
 
 protected:
 	//
@@ -71,4 +81,5 @@ protected:
 	std::shared_ptr<SEPerformanceHistoryTracker>
 		m_performanceHistoryTracker;
 	std::shared_ptr<SEAnalyticsEventsManager> m_analyticsEventsManager;
+	std::shared_ptr<SEConfig> m_config;
 };

@@ -75,6 +75,13 @@ static volatile LONG s_sawOutOfMemory = 0L;  // the allocation door (CORE-863)
 // Contact details from the last report the user filled in. Read once at
 // startup, so the crash path never has to touch the config to prefill the
 // prompt.
+//
+// The config PersistContactDetails() writes through. A file static because
+// that function is reached from the consent dialog's callbacks, which carry
+// no context; the constructor puts it here.
+//
+static std::shared_ptr<SEConfig> s_config;
+
 static std::string s_userName;
 static std::string s_userEmail;
 static std::string s_userDiscord;
@@ -730,7 +737,7 @@ static void PersistContactDetails(const std::string &name,
 				  const std::string &email,
 				  const std::string &discord)
 {
-	auto config = SEConfig::GetInstance();
+	auto config = s_config;
 
 	if (!config)
 		return;
@@ -1359,7 +1366,8 @@ static void __cdecl SentryPurecallHandler(void)
 
 /* ================================================================= */
 
-SESentryCrashHandler::SESentryCrashHandler()
+SESentryCrashHandler::SESentryCrashHandler(std::shared_ptr<SEConfig> config)
+	: SECrashHandler(config)
 {
 	if (s_initialized)
 		return;
@@ -1523,7 +1531,7 @@ SESentryCrashHandler::SESentryCrashHandler()
 	// Read here rather than on the crash path, both to prefill the prompt
 	// and so that a crash which never reaches the prompt -- a fast-fail
 	// caught by WER, say -- still says who it came from.
-	auto config = SEConfig::GetInstance();
+	s_config = config;
 
 	if (config) {
 		s_userName = config->GetCrashReportUserName();

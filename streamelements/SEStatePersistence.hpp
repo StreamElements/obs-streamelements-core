@@ -10,6 +10,7 @@ class SEWorkerManager;
 class SEHotkeyManager;
 class SENativeOBSControlsManager;
 class SEHostEventDispatcher;
+class SEConfig;
 
 //
 // Collects what the user arranged -- docks, the notification bar, background
@@ -37,7 +38,8 @@ public:
 			   SEHotkeyManager *hotkeyManager,
 			   SENativeOBSControlsManager *nativeObsControlsManager,
 			   std::shared_ptr<SEHostEventDispatcher>
-				   hostEventDispatcher);
+				   hostEventDispatcher,
+			   std::shared_ptr<SEConfig> config);
 	~SEStatePersistence();
 
 	//
@@ -62,6 +64,12 @@ private:
 	SENativeOBSControlsManager *m_nativeObsControlsManager = nullptr;
 
 	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+
+	//
+	// The whole of the persisted UI state is one base64 blob in the
+	// plug-in's ini, so this is both the reader and the writer.
+	//
+	std::shared_ptr<SEConfig> m_config;
 
 	bool m_enabled = false;
 };

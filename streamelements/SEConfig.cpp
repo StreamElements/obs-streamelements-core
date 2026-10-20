@@ -3,17 +3,18 @@
 #include <obs-frontend-api.h>
 #include <obs.h>
 
-SEConfig* SEConfig::s_instance = nullptr;
-bool SEConfig::s_destroyed = false;
-std::shared_mutex SEConfig::s_mutex;
+SEConfig::SEConfig(SEConfig::Private) : m_config(nullptr) {}
 
-SEConfig::SEConfig()
-	: m_config(nullptr), m_obsUserConfig(obs_frontend_get_user_config())
+std::shared_ptr<SEConfig> SEConfig::Create()
 {
+	return std::make_shared<SEConfig>(SEConfig::Private());
 }
 
-SEConfig::~SEConfig()
+void SEConfig::SaveAndClose()
 {
+	if (m_closed)
+		return;
+
 	SaveConfig();
 
 	if (m_config) {
@@ -22,14 +23,26 @@ SEConfig::~SEConfig()
 		m_config = nullptr;
 	}
 
-	if (m_obsUserConfig) {
-		m_obsUserConfig = nullptr;
-	}
+	m_closed = true;
+}
+
+SEConfig::~SEConfig()
+{
+	// Idempotent: SaveAndClose() has normally run already, from
+	// Shutdown(). This is the path for an instance that never got that
+	// far -- a test, or a start-up that failed before Shutdown().
+	SaveAndClose();
 }
 
 
 config_t* SEConfig::GetConfig()
 {
+	// Closed for good; see SaveAndClose(). Re-opening here would create a
+	// second file handle after the final save, and nothing would ever
+	// close it.
+	if (m_closed)
+		return nullptr;
+
 	if (m_config)
 		return m_config;
 

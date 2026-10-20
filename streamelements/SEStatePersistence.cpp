@@ -17,9 +17,11 @@ SEStatePersistence::SEStatePersistence(
 	QMainWindow *mainWindow, SEBrowserWidgetManager *widgetManager,
 	SEWorkerManager *workerManager, SEHotkeyManager *hotkeyManager,
 	SENativeOBSControlsManager *nativeObsControlsManager,
-	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+	std::shared_ptr<SEConfig> config)
 	: m_mainWindow(mainWindow),
 	  m_hostEventDispatcher(hostEventDispatcher),
+	  m_config(config),
 	  m_widgetManager(widgetManager),
 	  m_workerManager(workerManager),
 	  m_hotkeyManager(hotkeyManager),
@@ -92,7 +94,7 @@ void SEStatePersistence::PersistState(bool sendEventToGuest)
 
 	std::string base64EncodedJSON = base64_encode(json.ToString());
 
-	SEConfig::GetInstance()->SetStartupState(base64EncodedJSON);
+	m_config->SetStartupState(base64EncodedJSON);
 
 	if (sendEventToGuest) {
 		if (m_hostEventDispatcher) {
@@ -104,7 +106,7 @@ void SEStatePersistence::PersistState(bool sendEventToGuest)
 void SEStatePersistence::RestoreState()
 {
 	std::string base64EncodedJSON =
-		SEConfig::GetInstance()->GetStartupState();
+		m_config->GetStartupState();
 
 	if (!base64EncodedJSON.size()) {
 		return;

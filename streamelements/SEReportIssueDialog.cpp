@@ -128,10 +128,11 @@ static double GetCpuCoreBenchmark(const uint64_t CPU_BENCH_TOTAL, uint64_t& cpu_
 SEReportIssueDialog::SEReportIssueDialog(
 	std::shared_ptr<SEPerformanceHistoryTracker> performanceHistoryTracker,
 	std::shared_ptr<SEAnalyticsEventsManager> analyticsEventsManager,
-	QWidget *parent) :
+	std::shared_ptr<SEConfig> config, QWidget *parent) :
     QDialog(parent),
     m_performanceHistoryTracker(performanceHistoryTracker),
     m_analyticsEventsManager(analyticsEventsManager),
+    m_config(config),
     ui(new Ui::SEReportIssueDialog)
 {
     ui->setupUi(this);
@@ -758,7 +759,7 @@ void SEReportIssueDialog::accept()
 
 			bool success = netDialog.UploadFile(
 				tempBufPath.c_str(),
-				SEConfig::GetInstance()->GetUrlReportIssue().c_str(),
+				m_config->GetUrlReportIssue().c_str(),
 				"package",
 				obs_module_text("StreamElements.ReportIssue.Upload.Message"));
 

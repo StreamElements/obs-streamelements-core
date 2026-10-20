@@ -19,10 +19,17 @@
 
 static config_t *obs_fe_user_config()
 {
-	auto config = SEConfig::GetInstance();
+	//
+	// Straight from libobs. This used to go through SEConfig, which cached
+	// the same call in its constructor and handed the cache back -- a
+	// dependency on the plug-in's own config object for something that was
+	// never ours (CORE-757).
+	//
+	{
+		config_t *config = obs_frontend_get_user_config();
 
-	if (config) {
-		return config->GetObsUserConfig();
+		if (config)
+			return config;
 	}
 
 	return nullptr;

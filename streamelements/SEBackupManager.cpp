@@ -1,5 +1,6 @@
 #include "SEBackupManager.hpp"
 #include "SECleanupManager.hpp"
+#include "SEConfig.hpp"
 #include "SELocalFilesystemHttpServer.hpp"
 #include "SEUtils.hpp"
 #include "SENetworkDialog.hpp"
@@ -656,10 +657,17 @@ static bool AddProfileToZip(zip_t *zip, std::string basePath,
 	return true;
 }
 
-static bool AddScopedStorageToZip(zip_t *zip, std::string timestamp)
+//
+// Borrowed raw pointer, like GetLocalPathFromURL above: the caller is a
+// member whose own reference outlives the call.
+//
+static bool AddScopedStorageToZip(zip_t *zip, std::string timestamp,
+				  SEConfig *config)
 {
-	std::string basePath = SEConfig::GetInstance()
-				       ->GetScopedConfigStorageRootPath();
+	if (!config)
+		return false;
+
+	std::string basePath = config->GetScopedConfigStorageRootPath();
 
 	std::map<std::string, std::string> relToAbsMap;
 
@@ -763,8 +771,11 @@ static void ReadListOfIdsFromCefValue(CefRefPtr<CefValue> input,
 
 SEBackupManager::SEBackupManager(
 	std::shared_ptr<SECleanupManager> cleanupManager,
-	std::shared_ptr<SELocalFilesystemHttpServer> httpServer)
-	: m_cleanupManager(cleanupManager), m_httpServer(httpServer)
+	std::shared_ptr<SELocalFilesystemHttpServer> httpServer,
+	std::shared_ptr<SEConfig> config)
+	: m_cleanupManager(cleanupManager),
+	  m_httpServer(httpServer),
+	  m_config(config)
 {
 }
 
@@ -935,7 +946,7 @@ void SEBackupManager::CreateLocalBackupPackage(
 		addedCollections->SetDictionary(addedCollections->GetSize(), d);
 	}
 
-	if (!AddScopedStorageToZip(zip, timestamp)) {
+	if (!AddScopedStorageToZip(zip, timestamp, m_config.get())) {
 		// NOP
 	}
 

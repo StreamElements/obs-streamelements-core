@@ -333,6 +333,7 @@ private:
 		m_auxiliaryControlsBuilder = nullptr;
 	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher = nullptr;
 	std::shared_ptr<SEMessageBus> m_messageBus = nullptr;
+	std::shared_ptr<SEConfig> m_config = nullptr;
 
 private:
 	class ThemeChangeListener : public QDockWidget {

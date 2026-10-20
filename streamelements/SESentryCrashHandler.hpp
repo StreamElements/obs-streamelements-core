@@ -55,7 +55,7 @@
 //
 class SESentryCrashHandler : public SECrashHandler {
 public:
-	SESentryCrashHandler();
+	SESentryCrashHandler(std::shared_ptr<SEConfig> config);
 	virtual ~SESentryCrashHandler();
 
 public:

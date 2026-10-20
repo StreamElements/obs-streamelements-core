@@ -13,6 +13,7 @@
 //
 class SECleanupManager;
 class SELocalFilesystemHttpServer;
+class SEConfig;
 
 class SEBackupManager
 {
@@ -28,7 +29,8 @@ public:
 	//
 	SEBackupManager(
 		std::shared_ptr<SECleanupManager> cleanupManager,
-		std::shared_ptr<SELocalFilesystemHttpServer> httpServer);
+		std::shared_ptr<SELocalFilesystemHttpServer> httpServer,
+		std::shared_ptr<SEConfig> config);
 	~SEBackupManager();
 
 public:
@@ -48,6 +50,7 @@ public:
 private:
 	std::shared_ptr<SECleanupManager> m_cleanupManager;
 	std::shared_ptr<SELocalFilesystemHttpServer> m_httpServer;
+	std::shared_ptr<SEConfig> m_config;
 
 	std::recursive_mutex m_mutex;
 };

@@ -302,7 +302,8 @@ extern "C" {
 
 @end
 
-SEBugSplatCrashHandler::SEBugSplatCrashHandler()
+SEBugSplatCrashHandler::SEBugSplatCrashHandler(std::shared_ptr<SEConfig> config)
+	: SECrashHandler(config)
 {
     static std::mutex mutex;
 

@@ -10,6 +10,7 @@
 // ahead of winsock2.h on this translation unit's include path.
 class SEPerformanceHistoryTracker;
 class SEAnalyticsEventsManager;
+class SEConfig;
 
 namespace Ui {
 class SEReportIssueDialog;
@@ -28,7 +29,7 @@ public:
     SEReportIssueDialog(
 	    std::shared_ptr<SEPerformanceHistoryTracker> performanceHistoryTracker,
 	    std::shared_ptr<SEAnalyticsEventsManager> analyticsEventsManager,
-	    QWidget *parent = 0);
+	    std::shared_ptr<SEConfig> config, QWidget *parent = 0);
     ~SEReportIssueDialog();
 
 public slots:
@@ -38,6 +39,7 @@ public slots:
 private:
     std::shared_ptr<SEPerformanceHistoryTracker> m_performanceHistoryTracker;
     std::shared_ptr<SEAnalyticsEventsManager> m_analyticsEventsManager;
+    std::shared_ptr<SEConfig> m_config;
 
     Ui::SEReportIssueDialog *ui;
 };

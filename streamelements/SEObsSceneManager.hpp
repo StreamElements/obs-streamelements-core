@@ -20,6 +20,7 @@
 class SESignalHandlerData;
 class SEAuxiliaryControlsBuilder;
 class SEHostEventDispatcher;
+class SEConfig;
 
 class SEObsSceneManager {
 private:
@@ -37,7 +38,8 @@ public:
 		std::shared_ptr<SEVideoCompositionManager> videoCompositionManager,
 		std::shared_ptr<SEAuxiliaryControlsBuilder>
 			auxiliaryControlsBuilder,
-		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher);
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+		std::shared_ptr<SEConfig> config);
 	virtual ~SEObsSceneManager();
 
 private:
@@ -217,6 +219,7 @@ protected:
 private:
 	QMainWindow *m_parent;
 	std::shared_ptr<SEVideoCompositionManager> m_videoCompositionManager;
+	std::shared_ptr<SEConfig> m_config;
 
 	//
 	// Was a file-static that fetched the manager itself. All nineteen

@@ -11,10 +11,19 @@
 
 #include <QDockWidget>
 
+class SEConfig;
+
 class SEAnalyticsEventsManager
 {
 public:
-	SEAnalyticsEventsManager(size_t numWorkers = 4);
+	//
+	// The config is read once, here, for the analytics app id. Taken
+	// rather than fetched: this constructor runs early in Initialize(),
+	// which is exactly when a lazily built singleton would have been
+	// created as a side effect of reading it.
+	//
+	SEAnalyticsEventsManager(std::shared_ptr<SEConfig> config,
+				 size_t numWorkers = 4);
 	~SEAnalyticsEventsManager();
 
 	void trackSynchronousEvent(

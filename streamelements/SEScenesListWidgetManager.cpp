@@ -371,9 +371,11 @@ protected:
 
 SEScenesListWidgetManager::SEScenesListWidgetManager(
 	QMainWindow *mainWindow,
-	std::shared_ptr<SEAuxiliaryControlsBuilder> auxiliaryControlsBuilder)
+	std::shared_ptr<SEAuxiliaryControlsBuilder> auxiliaryControlsBuilder,
+	std::shared_ptr<SEConfig> config)
 	: m_mainWindow(mainWindow),
-	  m_auxiliaryControls(auxiliaryControlsBuilder)
+	  m_auxiliaryControls(auxiliaryControlsBuilder),
+	  m_config(config)
 {
 	QDockWidget *scenesDock =
 		(QDockWidget *)m_mainWindow->findChild<QDockWidget *>(
@@ -799,7 +801,7 @@ void SEScenesListWidgetManager::UpdateWidgets()
 		return;
 
 	bool isSignedIn =
-		!SEConfig::GetInstance()->IsOnBoardingMode();
+		!m_config->IsOnBoardingMode();
 
 	SourceDataManager::instance()->removeDataNotInList(sources);
 

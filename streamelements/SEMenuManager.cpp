@@ -22,12 +22,14 @@ SEMenuManager::SEMenuManager(
 	QMainWindow *parent, std::shared_ptr<SESessionManager> sessionManager,
 	std::shared_ptr<SEPerformanceHistoryTracker> performanceHistoryTracker,
 	std::shared_ptr<SEAnalyticsEventsManager> analyticsEventsManager,
-	std::shared_ptr<SEAuxiliaryControlsBuilder> auxiliaryControlsBuilder)
+	std::shared_ptr<SEAuxiliaryControlsBuilder> auxiliaryControlsBuilder,
+	std::shared_ptr<SEConfig> config)
 	: m_mainWindow(parent),
 	  m_sessionManager(sessionManager),
 	  m_performanceHistoryTracker(performanceHistoryTracker),
 	  m_analyticsEventsManager(analyticsEventsManager),
-	  m_auxiliaryControls(auxiliaryControlsBuilder)
+	  m_auxiliaryControls(auxiliaryControlsBuilder),
+	  m_config(config)
 {
 	m_auxMenuItems = CefValue::Create();
 	m_auxMenuItems->SetNull();
@@ -167,7 +169,7 @@ void SEMenuManager::UpdateInternal()
 	{
 		bool isLoggedIn =
 			SEConfig::STARTUP_FLAGS_SIGNED_IN ==
-			(SEConfig::GetInstance()->GetStartupFlags() &
+			(m_config->GetStartupFlags() &
 			 SEConfig::STARTUP_FLAGS_SIGNED_IN);
 
 		auto reset_action_handler = [this] {
@@ -239,10 +241,10 @@ void SEMenuManager::SaveConfig()
 {
 	SYNC_ACCESS();
 
-	SEConfig::GetInstance()->SetAuxMenuItemsConfig(
+	m_config->SetAuxMenuItemsConfig(
 		CefWriteJSON(m_auxMenuItems, JSON_WRITER_DEFAULT).ToString());
 
-	SEConfig::GetInstance()->SetShowBuiltInMenuItems(
+	m_config->SetShowBuiltInMenuItems(
 		m_showBuiltInMenuItems);
 }
 
@@ -251,10 +253,10 @@ void SEMenuManager::LoadConfig()
 	SYNC_ACCESS();
 
 	m_showBuiltInMenuItems =
-		SEConfig::GetInstance()->GetShowBuiltInMenuItems();
+		m_config->GetShowBuiltInMenuItems();
 
 	CefRefPtr<CefValue> val = CefParseJSON(
-		SEConfig::GetInstance()->GetAuxMenuItemsConfig(),
+		m_config->GetAuxMenuItemsConfig(),
 		JSON_PARSER_ALLOW_TRAILING_COMMAS);
 
 	if (!val.get() || val->GetType() != VTYPE_LIST)
@@ -280,7 +282,8 @@ void SEMenuManager::ReportIssue()
 	obs_frontend_push_ui_translation(obs_module_get_string);
 
 	SEReportIssueDialog dialog(m_performanceHistoryTracker,
-				   m_analyticsEventsManager, mainWindow());
+				   m_analyticsEventsManager, m_config,
+				   mainWindow());
 
 	obs_frontend_pop_ui_translation();
 

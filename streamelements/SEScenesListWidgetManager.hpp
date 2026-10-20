@@ -21,12 +21,14 @@
 	 SE_ENABLE_SCENE_CONTEXT_MENU)
 
 class SEAuxiliaryControlsBuilder;
+class SEConfig;
 
 class SEScenesListWidgetManager : public QObject {
 public:
 	SEScenesListWidgetManager(QMainWindow *mainWindow,
 				  std::shared_ptr<SEAuxiliaryControlsBuilder>
-					  auxiliaryControlsBuilder);
+					  auxiliaryControlsBuilder,
+				  std::shared_ptr<SEConfig> config);
 	virtual ~SEScenesListWidgetManager();
 
 public:
@@ -116,6 +118,7 @@ private:
 	// from members.
 	//
 	std::shared_ptr<SEAuxiliaryControlsBuilder> m_auxiliaryControls;
+	std::shared_ptr<SEConfig> m_config;
 
 public:
 	std::shared_ptr<SEAuxiliaryControlsBuilder> GetAuxiliaryControls()

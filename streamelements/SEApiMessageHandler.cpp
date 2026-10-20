@@ -782,14 +782,14 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getStartupFlags");
 	{
 		result->SetInt(
-			SEConfig::GetInstance()->GetStartupFlags());
+			apiServices->config->GetStartupFlags());
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("setStartupFlags");
 	{
 		if (args->GetSize()) {
-			SEConfig::GetInstance()->SetStartupFlags(
+			apiServices->config->SetStartupFlags(
 				args->GetValue(0)->GetInt());
 
 			result->SetBool(true);
@@ -1199,8 +1199,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 			       ->DestroyCurrentCentralBrowserWidget()) {
 		}
 
-		SEConfig::GetInstance()->SetStartupFlags(
-			SEConfig::GetInstance()->GetStartupFlags() &
+		apiServices->config->SetStartupFlags(
+			apiServices->config->GetStartupFlags() &
 			~SEConfig::STARTUP_FLAGS_ONBOARDING_MODE);
 
 		//
@@ -1211,8 +1211,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		//
 		// For those cases, we provide the adviseSignedIn() API call.
 		//
-		SEConfig::GetInstance()->SetStartupFlags(
-			SEConfig::GetInstance()->GetStartupFlags() |
+		apiServices->config->SetStartupFlags(
+			apiServices->config->GetStartupFlags() |
 			SEConfig::STARTUP_FLAGS_SIGNED_IN);
 
 		apiServices->menuManager->Update();
@@ -1682,8 +1682,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("adviseSignedIn");
 	{
-		SEConfig *config =
-			SEConfig::GetInstance();
+		auto config = apiServices->config;
 
 		config->SetStartupFlags(
 			config->GetStartupFlags() |
@@ -1698,8 +1697,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("adviseSignedOut");
 	{
-		SEConfig *config =
-			SEConfig::GetInstance();
+		auto config = apiServices->config;
 
 		config->SetStartupFlags(
 			config->GetStartupFlags() &
@@ -2745,7 +2743,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("readScopedStorageJsonItem");
 	{
 		if (args->GetSize()) {
-			SEConfig::GetInstance()->ReadScopedJsonFile(
+			apiServices->config->ReadScopedJsonFile(
 				args->GetValue(0), result);
 		}
 	}
@@ -2754,7 +2752,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("writeScopedStorageJsonItem");
 	{
 		if (args->GetSize()) {
-			SEConfig::GetInstance()->WriteScopedJsonFile(
+			apiServices->config->WriteScopedJsonFile(
 				args->GetValue(0), result);
 		}
 	}
@@ -2763,7 +2761,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("removeScopedStorageJsonItem");
 	{
 		if (args->GetSize()) {
-			SEConfig::GetInstance()->RemoveScopedJsonFile(
+			apiServices->config->RemoveScopedJsonFile(
 				args->GetValue(0), result);
 		}
 	}
@@ -2772,9 +2770,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getAllScopedStorageJsonItems");
 	{
 		if (args->GetSize()) {
-			SEConfig::GetInstance()
-				->ReadScopedJsonFilesList(args->GetValue(0),
-							  result);
+			apiServices->config->ReadScopedJsonFilesList(
+				args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();

@@ -3,6 +3,7 @@
 #include <obs-module.h>
 #include <util/config-file.h>
 
+#include <memory>
 #include <string>
 #include <mutex>
 #include <shared_mutex>
@@ -36,48 +37,41 @@ public:
 	static const uint64_t STARTUP_FLAGS_SIGNED_IN       = 0x0000000000000002ULL;
 
 private:
-	SEConfig();
-	~SEConfig();
+	struct Private {
+		explicit Private() = default;
+	};
 
 public:
-	static SEConfig* GetInstance() {
-		if (s_destroyed)
-			return nullptr;
+	SEConfig(Private);
+	~SEConfig();
 
-		{
-			std::shared_lock<decltype(s_mutex)> lock(s_mutex);
+	//
+	// The only way to build one. SEGlobalStateManager owns the instance
+	// and publishes it in SEApiServices; a second one would be a second
+	// handle on the same ini file, with two sets of unflushed writes.
+	//
+	static std::shared_ptr<SEConfig> Create();
 
-			if (s_instance) {
-				return s_instance;
-			}
-		}
-
-		std::unique_lock<decltype(s_mutex)> lock(s_mutex);
-
-		if (!s_instance) {
-			s_instance = new SEConfig();
-		}
-
-		return s_instance;
-	}
-
-	static void Destroy()
-	{
-		std::unique_lock<decltype(s_mutex)> lock(s_mutex);
-
-		if (s_instance) {
-			delete s_instance;
-			s_instance = nullptr;
-		}
-
-		s_destroyed = true;
-	}
+	//
+	// Flush and close, at the point in Shutdown() where it is still safe
+	// to touch the filesystem and libobs. This was Destroy(), and it is
+	// still needed as an operation even though the singleton is not: the
+	// destructor does the same work, but it runs with the rest of the
+	// container, which is later than the save wants to be.
+	//
+	// After this the config is closed for good. GetConfig() returns null
+	// rather than re-opening the file -- which is what the s_destroyed
+	// latch used to prevent -- and every accessor below already treats a
+	// null config as "use the default", so a write that arrives late is a
+	// no-op rather than a crash. Something does arrive late: SEDrainEventQueue()
+	// runs on the next line of Shutdown() and SEWidgetManager's deferred
+	// saves land there.
+	//
+	void SaveAndClose();
 
 public:
 	config_t* GetConfig();
 	void SaveConfig();
-
-	config_t* GetObsUserConfig() { return m_obsUserConfig; }
 
 private:
 	//
@@ -339,11 +333,8 @@ private:
 	config_t* m_config = nullptr;
 	// True when m_config is the in-memory fallback, which has no file.
 	bool m_configIsMemoryOnly = false;
-	config_t *m_obsUserConfig = nullptr;
 
-private:
-	static SEConfig* s_instance;
-	static bool s_destroyed;
-	static std::shared_mutex s_mutex;
+	// Set by SaveAndClose(); see the comment there.
+	bool m_closed = false;
 };
 

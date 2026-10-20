@@ -438,7 +438,8 @@ static LONG CALLBACK CustomExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
 
 /* ================================================================= */
 
-SEBugSplatCrashHandler::SEBugSplatCrashHandler()
+SEBugSplatCrashHandler::SEBugSplatCrashHandler(std::shared_ptr<SEConfig> config)
+	: SECrashHandler(config)
 {
 	if (IsDebuggerPresent()) {
 		return;

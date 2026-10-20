@@ -1891,8 +1891,11 @@ SEObsSceneManager::SEObsSceneManager(
 	QMainWindow *parent,
 	std::shared_ptr<SEVideoCompositionManager> videoCompositionManager,
 	std::shared_ptr<SEAuxiliaryControlsBuilder> auxiliaryControlsBuilder,
-	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
-	: m_parent(parent), m_videoCompositionManager(videoCompositionManager)
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+	std::shared_ptr<SEConfig> config)
+	: m_parent(parent),
+	  m_videoCompositionManager(videoCompositionManager),
+	  m_config(config)
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
@@ -1902,9 +1905,9 @@ SEObsSceneManager::SEObsSceneManager(
 	// needs it.
 	//
 	m_sceneItemsMonitor = new SESceneItemsMonitor(
-		m_parent, auxiliaryControlsBuilder);
+		m_parent, auxiliaryControlsBuilder, config);
 	m_scenesWidgetManager = new SEScenesListWidgetManager(
-		m_parent, auxiliaryControlsBuilder);
+		m_parent, auxiliaryControlsBuilder, config);
 
 	m_signalHandlerData = new SESignalHandlerData(
 		this, m_videoCompositionManager,
@@ -1936,15 +1939,13 @@ SEObsSceneManager::SEObsSceneManager(
 
 	CefRefPtr<CefValue> dummy1 = CefValue::Create();
 	DeserializeSceneItemsAuxiliaryActions(
-		CefParseJSON(SEConfig::GetInstance()
-				     ->GetSceneItemsAuxActionsConfig(),
+		CefParseJSON(m_config->GetSceneItemsAuxActionsConfig(),
 			     JSON_PARSER_ALLOW_TRAILING_COMMAS),
 		dummy1);
 
 	CefRefPtr<CefValue> dummy2 = CefValue::Create();
 	DeserializeScenesAuxiliaryActions(
-		CefParseJSON(SEConfig::GetInstance()
-				     ->GetScenesAuxActionsConfig(),
+		CefParseJSON(m_config->GetScenesAuxActionsConfig(),
 			     JSON_PARSER_ALLOW_TRAILING_COMMAS),
 		dummy2);
 }
@@ -3733,10 +3734,10 @@ void SEObsSceneManager::DeserializeSceneItemsAuxiliaryActions(
 	CefRefPtr<CefValue> m_actions = CefValue::Create();
 	m_sceneItemsMonitor->SerializeSceneItemsAuxiliaryActions(m_actions);
 
-	SEConfig::GetInstance()->SetSceneItemsAuxActionsConfig(
+	m_config->SetSceneItemsAuxActionsConfig(
 		CefWriteJSON(m_actions, JSON_WRITER_DEFAULT));
 
-	SEConfig::GetInstance()->SaveConfig();
+	m_config->SaveConfig();
 }
 
 void SEObsSceneManager::SerializeSceneItemsAuxiliaryActions(
@@ -3761,10 +3762,10 @@ void SEObsSceneManager::DeserializeScenesAuxiliaryActions(
 	CefRefPtr<CefValue> m_actions = CefValue::Create();
 	m_scenesWidgetManager->SerializeScenesAuxiliaryActions(m_actions);
 
-	SEConfig::GetInstance()->SetScenesAuxActionsConfig(
+	m_config->SetScenesAuxActionsConfig(
 		CefWriteJSON(m_actions, JSON_WRITER_DEFAULT));
 
-	SEConfig::GetInstance()->SaveConfig();
+	m_config->SaveConfig();
 }
 
 void SEObsSceneManager::SerializeScenesAuxiliaryActions(

@@ -4,7 +4,7 @@
 
 #include <string>
 
-#include "SEConfig.hpp"
+#include <obs-frontend-api.h>
 
 class ConfigAccessibilityColor {
 	std::string m_name;
@@ -19,12 +19,12 @@ public:
 	~ConfigAccessibilityColor() {}
 
 	QColor get() {
-		auto config = SEConfig::GetInstance();
-
-		if (!config)
-			return m_defaultValue;
-
-		auto fe_config = config->GetObsUserConfig();
+		//
+		// Straight from libobs: this only ever wanted OBS's own user
+		// config, which SEConfig was caching and handing back
+		// (CORE-757).
+		//
+		auto fe_config = obs_frontend_get_user_config();
 
 		if (!fe_config)
 			return m_defaultValue;

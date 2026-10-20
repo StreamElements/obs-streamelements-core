@@ -20,6 +20,7 @@ class SESessionManager;
 class SEPerformanceHistoryTracker;
 class SEAnalyticsEventsManager;
 class SEAuxiliaryControlsBuilder;
+class SEConfig;
 
 class SEMenuManager :
 	public QObject
@@ -44,7 +45,8 @@ public:
 		      std::shared_ptr<SEAnalyticsEventsManager>
 			      analyticsEventsManager,
 		      std::shared_ptr<SEAuxiliaryControlsBuilder>
-			      auxiliaryControlsBuilder);
+			      auxiliaryControlsBuilder,
+		      std::shared_ptr<SEConfig> config);
 	virtual ~SEMenuManager();
 
 public:
@@ -86,6 +88,13 @@ private:
 	// free functions in SEUtils.
 	//
 	std::shared_ptr<SEAuxiliaryControlsBuilder> m_auxiliaryControls;
+
+	//
+	// The aux menu items and the built-in-items flag are read from and
+	// written to the plug-in's ini, and the onboarding flag decides
+	// whether the menu is built at all.
+	//
+	std::shared_ptr<SEConfig> m_config;
 
 private:
 	void ReportIssue();

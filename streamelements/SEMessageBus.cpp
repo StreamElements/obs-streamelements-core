@@ -18,9 +18,11 @@ const char* const SEMessageBus::SOURCE_WEB = "web";
 const char* const SEMessageBus::SOURCE_EXTERNAL = "external";
 
 SEMessageBus::SEMessageBus(
-	Private, std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
+	Private, std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+	std::shared_ptr<SEConfig> config)
 	: m_external_controller_server(this),
-	  m_hostEventDispatcher(hostEventDispatcher)
+	  m_hostEventDispatcher(hostEventDispatcher),
+	  m_config(config)
 {
 
 }
@@ -31,9 +33,11 @@ SEMessageBus::~SEMessageBus()
 }
 
 std::shared_ptr<SEMessageBus> SEMessageBus::Create(
-	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+	std::shared_ptr<SEConfig> config)
 {
-	return std::make_shared<SEMessageBus>(Private(), hostEventDispatcher);
+	return std::make_shared<SEMessageBus>(Private(), hostEventDispatcher,
+					      config);
 }
 
 void SEMessageBus::NotifyExternalHostEvent(std::string hostEventName,
@@ -396,7 +400,7 @@ void SEMessageBus::PublishSystemState()
 	CefRefPtr<CefDictionaryValue> payload = CefDictionaryValue::Create();
 
 	bool isLoggedIn =
-		SEConfig::STARTUP_FLAGS_SIGNED_IN == (SEConfig::GetInstance()->GetStartupFlags() & SEConfig::STARTUP_FLAGS_SIGNED_IN);
+		SEConfig::STARTUP_FLAGS_SIGNED_IN == (m_config->GetStartupFlags() & SEConfig::STARTUP_FLAGS_SIGNED_IN);
 
 	payload->SetBool("isSignedIn", isLoggedIn);
 

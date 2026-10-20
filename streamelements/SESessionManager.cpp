@@ -96,7 +96,7 @@ void SESessionManager::StartOnBoardingUI(UiModifier uiModifier)
 		GetCommandLineOptionValue("streamelements-onboarding-url");
 
 	if (!onBoardingURL.size()) {
-		onBoardingURL = SEConfig::GetInstance()->GetUrlOnBoarding();
+		onBoardingURL = apiServices->config->GetUrlOnBoarding();
 	}
 
 	{
@@ -140,7 +140,7 @@ void SESessionManager::StartOnBoardingUI(UiModifier uiModifier)
 	apiServices->hotkeyManager->RemoveAllManagedHotkeyBindings();
 
 	// This also clears SEConfig::STARTUP_FLAGS_SIGNED_IN
-	SEConfig::GetInstance()->SetStartupFlags(
+	apiServices->config->SetStartupFlags(
 		SEConfig::STARTUP_FLAGS_ONBOARDING_MODE);
 
 	//
@@ -224,7 +224,7 @@ void SESessionManager::SwitchToOBSStudio()
 			// This is to keep our state consistent and not display "Logout"
 			// when we are in fact already logged out.
 			//
-			SEConfig::GetInstance()->SetStartupFlags(
+			apiServices->config->SetStartupFlags(
 				SEConfig::STARTUP_FLAGS_ONBOARDING_MODE);
 
 			apiServices->obsSceneManager->Reset();

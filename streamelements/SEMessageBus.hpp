@@ -21,6 +21,7 @@
 // * Browser Sources
 //
 class SEHostEventDispatcher;
+class SEConfig;
 
 class SEMessageBus
 {
@@ -55,7 +56,8 @@ public:
 	// never hear events published on the other.
 	//
 	SEMessageBus(Private,
-		     std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher);
+		     std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+		     std::shared_ptr<SEConfig> config);
 	virtual ~SEMessageBus();
 
 	//
@@ -74,7 +76,8 @@ public:
 	// more.
 	//
 	static std::shared_ptr<SEMessageBus>
-	Create(std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher);
+	Create(std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+	       std::shared_ptr<SEConfig> config);
 
 public:
 	void AddListener(std::string target, message_destination_filter_flags_t type);
@@ -217,4 +220,5 @@ private:
 private:
 
 	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+	std::shared_ptr<SEConfig> m_config;
 };

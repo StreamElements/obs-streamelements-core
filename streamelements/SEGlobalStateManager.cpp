@@ -356,18 +356,27 @@ void SEGlobalStateManager::PublishApiServices()
 	m_apiServices->browserDialogManager = m_browserDialogManager;
 	m_apiServices->sessionManager = m_sessionManager;
 	m_apiServices->auxiliaryControlsBuilder = m_auxiliaryControlsBuilder;
+	m_apiServices->config = m_config;
 }
 
 void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 {
 	m_mainWindow = obs_main_window;
 
+	//
+	// First, before the crash handler: that reads the contact details a
+	// previous crash report left behind, in its own constructor, so that
+	// a crash which never reaches the prompt still says who it came
+	// from.
+	//
+	m_config = SEConfig::Create();
+
 	// Initialize on the main thread.
 	//
 	// Which backend this is -- BugSplat, Sentry, or none at all -- is decided
 	// at build time by the STREAMELEMENTS_CRASH_HANDLER CMake variable. Create()
 	// returns nullptr when crash reporting is compiled out.
-	m_crashHandler = SECrashHandler::Create();
+	m_crashHandler = SECrashHandler::Create(m_config);
 
 	/*
 	struct local_context {
@@ -456,8 +465,8 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	//
 	m_performanceHistoryTracker = std::make_shared<
 		SEPerformanceHistoryTracker>();
-	m_analyticsEventsManager = std::make_shared<
-		SEAnalyticsEventsManager>();
+	m_analyticsEventsManager =
+		std::make_shared<SEAnalyticsEventsManager>(m_config);
 
 	//
 	// As soon as both exist. The crash handler was constructed before
@@ -492,13 +501,13 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	// Owned here and published in the bundle. It was a singleton, which
 	// is why it had to be handed the dispatcher after construction.
 	//
-	m_messageBus = SEMessageBus::Create(m_hostEventDispatcher);
+	m_messageBus = SEMessageBus::Create(m_hostEventDispatcher, m_config);
 
 	//
 	// The config publishes a system-state change when the startup flags
 	// are written, which is the only thing it needs the bus for.
 	//
-	SEConfig::GetInstance()->SetMessageBus(m_messageBus);
+	m_config->SetMessageBus(m_messageBus);
 
 	m_videoCompositionManager = std::make_shared<SEVideoCompositionManager>(
 		m_websocketApiServer, m_hostEventDispatcher, m_messageBus);
@@ -512,10 +521,10 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	//
 	m_obsSceneManager = std::make_shared<SEObsSceneManager>(
 		obs_main_window, m_videoCompositionManager,
-		m_auxiliaryControlsBuilder, m_hostEventDispatcher);
+		m_auxiliaryControlsBuilder, m_hostEventDispatcher, m_config);
 	m_menuManager = std::make_shared<SEMenuManager>(
 		obs_main_window, m_sessionManager, m_performanceHistoryTracker,
-		m_analyticsEventsManager, m_auxiliaryControlsBuilder);
+		m_analyticsEventsManager, m_auxiliaryControlsBuilder, m_config);
 	m_bwTestManager = std::make_shared<SEBandwidthTestManager>(
 		m_hostEventDispatcher);
 	m_outputSettingsManager = std::make_shared<
@@ -537,7 +546,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_cleanupManager =
 		std::make_shared<SECleanupManager>();
 	m_backupManager = std::make_shared<SEBackupManager>(
-		m_cleanupManager, m_localFilesystemHttpServer);
+		m_cleanupManager, m_localFilesystemHttpServer, m_config);
 	m_previewManager =
 		std::make_shared<SEPreviewManager>(
 			mainWindow(), m_hostEventDispatcher);
@@ -579,7 +588,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_statePersistence = std::make_shared<SEStatePersistence>(
 		mainWindow(), m_widgetManager.get(), m_workerManager.get(),
 		m_hotkeyManager.get(), m_nativeObsControlsManager.get(),
-		m_hostEventDispatcher);
+		m_hostEventDispatcher, m_config);
 
 	//
 	// Handed over after construction, and held weakly: the deferred saves
@@ -706,19 +715,16 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 		isOnBoarding = true;
 		onBoardingReason = "New cookie storage folder";
-	} else if (SEConfig::GetInstance()
-				->GetSEPluginVersion() !=
-			STREAMELEMENTS_PLUGIN_VERSION) {
+	} else if (m_config->GetSEPluginVersion() !=
+		   STREAMELEMENTS_PLUGIN_VERSION) {
 		blog(LOG_INFO,
 			"obs-streamelements-core: init: set on-boarding mode due to configuration version mismatch");
 
 		isOnBoarding = true;
 		onBoardingReason =
 			"State saved by other version of the plug-in";
-	} else if (SEConfig::GetInstance()
-				->GetStartupFlags() &
-			SEConfig::
-				STARTUP_FLAGS_ONBOARDING_MODE) {
+	} else if (m_config->GetStartupFlags() &
+		   SEConfig::STARTUP_FLAGS_ONBOARDING_MODE) {
 		blog(LOG_INFO,
 			"obs-streamelements-core: init: set on-boarding mode due to start-up flags");
 
@@ -892,6 +898,7 @@ void SEGlobalStateManager::Shutdown()
 	m_previewManager = nullptr;
 	m_messageBus = nullptr;
 	m_hostEventDispatcher = nullptr;
+	m_config = nullptr;
 	m_websocketApiServer = nullptr;
 	m_windowStateEventFilter = nullptr;
 	m_statePersistence = nullptr;
@@ -932,7 +939,16 @@ void SEGlobalStateManager::Shutdown()
 	}
 
 
-	SEConfig::Destroy();
+	//
+	// Flush and close the ini here rather than letting the destructor do
+	// it with the rest of the container: this is the last point at which
+	// the filesystem and libobs are both known good. SEDrainEventQueue()
+	// on the next line can still run a deferred PersistState(), which is
+	// why SaveAndClose() leaves the config readable-but-defaulted instead
+	// of destroying it.
+	//
+	if (m_config)
+		m_config->SaveAndClose();
 
 	SEDrainEventQueue();
 

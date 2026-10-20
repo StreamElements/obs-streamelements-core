@@ -2198,6 +2198,62 @@ static void check_the_invoke_handler_is_not_immortal()
 }
 
 //
+// --- The config is owned, and closed on purpose (CORE-757).
+//
+// SEConfig was a `new`d raw pointer behind GetInstance(), with a Destroy()
+// that deleted it and an s_destroyed latch so a later GetInstance() could
+// not resurrect it. 47 call sites reached it; 32 of them dereferenced the
+// result without a null check, which is a crash on any path that runs after
+// Destroy() -- and one does: SEStatePersistence::PersistState() is reached
+// from SEWidgetManager's deferred saves, which drain in SEDrainEventQueue()
+// on the line after Destroy() used to run.
+//
+// Owned now, and published in SEApiServices. The close is still explicit,
+// because it has to happen while the filesystem and libobs are both known
+// good -- but it leaves the object alive and reading as defaults, so a late
+// write is a no-op rather than a null dereference.
+//
+static void check_the_config_is_owned_and_closed_explicitly()
+{
+	const std::string hdr =
+		strip_line_comments(slurp("streamelements/SEConfig.hpp"));
+
+	check(hdr.find("s_instance") == std::string::npos &&
+		      hdr.find("GetInstance") == std::string::npos,
+	      "SEConfig is a singleton again -- it is owned by "
+	      "SEGlobalStateManager and published in SEApiServices");
+
+	check(hdr.find("SaveAndClose") != std::string::npos,
+	      "SEConfig::SaveAndClose() is gone. Without it the ini is "
+	      "flushed whenever the container happens to be destroyed, which "
+	      "is later than the save wants to be");
+
+	const std::string root = strip_line_comments(
+		slurp("streamelements/SEGlobalStateManager.cpp"));
+
+	check(root.find("m_config->SaveAndClose()") != std::string::npos,
+	      "Shutdown() no longer closes the config explicitly");
+
+	//
+	// The flag is what stops GetConfig() re-opening the file after the
+	// final save -- the job s_destroyed used to do, now per instance.
+	//
+	const std::string src =
+		strip_line_comments(slurp("streamelements/SEConfig.cpp"));
+
+	const std::string getConfig = function_body(src, "SEConfig::GetConfig");
+
+	check(!getConfig.empty(),
+	      "cannot find SEConfig::GetConfig -- this invariant needs "
+	      "updating");
+
+	check(getConfig.find("m_closed") != std::string::npos,
+	      "SEConfig::GetConfig() no longer checks m_closed, so a read "
+	      "after SaveAndClose() re-opens the ini and nothing ever closes "
+	      "it again");
+}
+
+//
 // --- There is no singleton (CORE-757).
 //
 // This was a ratchet. It counted SEGlobalStateManager::GetInstance()
@@ -3074,6 +3130,7 @@ int main()
 	check_api_handler_locks_the_services_once_per_dispatch();
 	check_nothing_but_the_manager_owns_the_services_container();
 	check_the_invoke_handler_is_not_immortal();
+	check_the_config_is_owned_and_closed_explicitly();
 	check_the_root_is_not_a_singleton();
 	check_non_modal_dialogs_are_closed_by_their_owner();
 	check_state_persistence_borrows_the_managers_it_serializes();

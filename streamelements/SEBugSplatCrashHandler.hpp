@@ -10,7 +10,7 @@
 //
 class SEBugSplatCrashHandler : public SECrashHandler {
 public:
-	SEBugSplatCrashHandler();
+	SEBugSplatCrashHandler(std::shared_ptr<SEConfig> config);
 	virtual ~SEBugSplatCrashHandler();
 
 public:
