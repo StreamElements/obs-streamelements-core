@@ -281,10 +281,6 @@ public:
 		
 	QMainWindow *mainWindow() { return m_mainWindow; }
 
-public:
-	void UninstallPlugin();
-
-
 protected:
 	virtual void OnObsExit() override;
 
