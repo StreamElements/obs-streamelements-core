@@ -2258,6 +2258,111 @@ static void check_the_config_is_owned_and_closed_explicitly()
 }
 
 //
+// --- Only the destructor starts teardown (CORE-757).
+//
+// Shutdown() does what member destruction cannot: it orders the teardown.
+// That makes it necessary, and it also makes it something no caller should
+// be able to invoke -- a plug-in whose services have been released but
+// whose root object is still standing is a state nothing else in the tree
+// is written to survive. It was public with exactly one caller, its own
+// destructor, which is the same looseness IsInitialized() had before it
+// was removed.
+//
+static void check_only_the_destructor_starts_teardown()
+{
+	const std::string hdr = strip_line_comments(
+		slurp("streamelements/SEGlobalStateManager.hpp"));
+
+	const std::size_t decl = hdr.find("void Shutdown();");
+
+	check(decl != std::string::npos,
+	      "SEGlobalStateManager::Shutdown() is gone -- this invariant "
+	      "needs updating");
+
+	//
+	// The nearest access specifier above the declaration is the one it
+	// sits under.
+	//
+	const std::size_t pub = hdr.rfind("public:", decl);
+	const std::size_t prot = hdr.rfind("protected:", decl);
+	const std::size_t priv = hdr.rfind("private:", decl);
+
+	check(priv != std::string::npos &&
+		      (pub == std::string::npos || priv > pub) &&
+		      (prot == std::string::npos || priv > prot),
+	      "SEGlobalStateManager::Shutdown() is reachable from outside the "
+	      "class again. Teardown is the destructor's job; nothing else "
+	      "should be able to release the services and leave the root "
+	      "standing");
+
+	const std::string cpp = strip_line_comments(
+		slurp("streamelements/SEGlobalStateManager.cpp"));
+
+	const std::string dtor = function_body(
+		cpp, "SEGlobalStateManager::~SEGlobalStateManager");
+
+	check(dtor.find("Shutdown();") != std::string::npos,
+	      "the root's destructor no longer calls Shutdown(), so the "
+	      "ordered teardown never runs at all");
+}
+
+//
+// --- The ini is closed before the event queue is drained (CORE-757).
+//
+// Both orders look harmless and one of them loses the user's layout. The
+// drain removes the browser widget docks, and SEWidgetManager's deferred
+// saves land on that same queue -- so a PersistState() running after the
+// docks are gone writes the UI state back as "no docks", and the next
+// start comes up without them. Closing the config first leaves it
+// readable-but-defaulted, which turns those late writes into no-ops.
+//
+// The second half of this is the close that is NOT gated on
+// m_initialized: m_config and the crash handler that opens the ini
+// through it are built before Initialize()'s obs_browser_init_panel()
+// bail, so Shutdown() can return early having left the file open, and the
+// crash handler being deliberately leaked means no destructor closes it.
+//
+static void check_the_config_is_closed_before_the_queue_is_drained()
+{
+	const std::string cpp = strip_line_comments(
+		slurp("streamelements/SEGlobalStateManager.cpp"));
+
+	const std::string shutdown =
+		function_body(cpp, "void SEGlobalStateManager::Shutdown");
+
+	check(!shutdown.empty(),
+	      "cannot find SEGlobalStateManager::Shutdown -- this invariant "
+	      "needs updating");
+
+	const std::size_t close_at =
+		shutdown.find("CloseAndPreventFurtherReopens()");
+	const std::size_t drain_at = shutdown.find("SEDrainEventQueue()");
+
+	check(close_at != std::string::npos,
+	      "Shutdown() no longer closes the config");
+
+	check(drain_at != std::string::npos,
+	      "Shutdown() no longer drains the event queue -- this invariant "
+	      "needs updating");
+
+	check(close_at < drain_at,
+	      "the config must be closed BEFORE the event queue is drained: "
+	      "the drain removes the docks and runs SEWidgetManager's "
+	      "deferred saves, so draining first persists a UI state with no "
+	      "docks in it and the next start comes up empty");
+
+	const std::string dtor = function_body(
+		cpp, "SEGlobalStateManager::~SEGlobalStateManager");
+
+	check(dtor.find("CloseAndPreventFurtherReopens()") !=
+		      std::string::npos,
+	      "the destructor must close the config too, ungated: Shutdown() "
+	      "returns at its !m_initialized early-out on the "
+	      "obs_browser_init_panel() bail, by which point the crash "
+	      "handler has already opened the ini through it");
+}
+
+//
 // --- No singletons, not just no root singleton (CORE-757).
 //
 // The root was the big one, but it was not the only one: SEConfig,
@@ -3206,6 +3311,8 @@ int main()
 	check_nothing_but_the_manager_owns_the_services_container();
 	check_the_invoke_handler_is_not_immortal();
 	check_the_config_is_owned_and_closed_explicitly();
+	check_only_the_destructor_starts_teardown();
+	check_the_config_is_closed_before_the_queue_is_drained();
 	check_the_root_is_not_a_singleton();
 	check_no_singletons_remain();
 	check_non_modal_dialogs_are_closed_by_their_owner();

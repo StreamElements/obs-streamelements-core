@@ -286,6 +286,23 @@ SEGlobalStateManager::~SEGlobalStateManager()
 	Shutdown();
 
 	//
+	// Ungated, unlike the close inside Shutdown(). m_config and the
+	// crash handler that reads the reporter's contact details through
+	// it -- which is what opens the ini -- are both built before
+	// Initialize()'s first bail, the obs_browser_init_panel()
+	// failure. Shutdown() can therefore return at its !m_initialized
+	// early-out having left the file open, and nothing else would
+	// ever close it: the crash handler holds the config and is
+	// deliberately never deleted, so the object's own destructor does
+	// not run either.
+	//
+	// A no-op on every path that got as far as Initialize() finishing,
+	// where Shutdown() has already closed it and released the handle.
+	//
+	if (m_config)
+		m_config->CloseAndPreventFurtherReopens();
+
+	//
 	// The container is not emptied here. It used to be, because the
 	// references formed a ring -- a service owning widgets, each widget
 	// owning an API handler, each handler holding the container -- that
@@ -961,10 +978,20 @@ void SEGlobalStateManager::Shutdown()
 	//
 	// Flush and close the ini here rather than letting the destructor do
 	// it with the rest of the container: this is the last point at which
-	// the filesystem and libobs are both known good. SEDrainEventQueue()
-	// on the next line can still run a deferred PersistState(), which is
-	// why CloseAndPreventFurtherReopens() leaves the config
-	// readable-but-defaulted instead of destroying it.
+	// the filesystem and libobs are both known good.
+	//
+	// Before SEDrainEventQueue() on purpose, and that order is
+	// load-bearing. The drain removes the browser widget docks, and
+	// SEWidgetManager's deferred saves land on the same queue -- so a
+	// PersistState() running there would snapshot a UI teardown has
+	// already dismantled and write it back as "no docks", and the next
+	// start would come up without them. Closing first leaves the config
+	// readable-but-defaulted, so those late writes are no-ops rather
+	// than a persisted empty layout -- which is also why the close
+	// leaves the object alive instead of destroying it.
+	//
+	// check_the_config_is_closed_before_the_queue_is_drained pins the
+	// order.
 	//
 	if (m_config)
 		m_config->CloseAndPreventFurtherReopens();

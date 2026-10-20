@@ -122,6 +122,23 @@ public:
 
 public:
 	void Initialize(QMainWindow *obs_main_window);
+
+private:
+	//
+	// Teardown, in an order member destruction cannot express: the
+	// shutting-down flag before anything blocks, the frontend callback
+	// off before the services it reaches are released, the state
+	// saved while the managers it borrows raw pointers to are still
+	// alive, and the borrowed pointers taken back before what they
+	// point at is deleted.
+	//
+	// Private, and called only by the destructor: tearing the plug-in
+	// down and leaving the object standing is not a thing a caller
+	// should be able to ask for. It was public with no caller outside
+	// this class, the same looseness IsInitialized() had before it
+	// went (CORE-757). check_only_the_destructor_starts_teardown is
+	// the guard.
+	//
 	void Shutdown();
 
 private:
