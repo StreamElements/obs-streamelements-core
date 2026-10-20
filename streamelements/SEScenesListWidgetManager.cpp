@@ -142,10 +142,9 @@ class SourceDataManager : public QObject {
 private:
 	std::map<obs_source_t *, ItemData *> m_itemData;
 
-protected:
+public:
 	SourceDataManager() {}
 
-public:
 	void clear()
 	{
 		for (auto kv : m_itemData) {
@@ -201,13 +200,7 @@ public:
 		return nullptr;
 	}
 
-	static SourceDataManager *instance() { return &s_instance; }
-
-private:
-	static SourceDataManager s_instance;
 };
-
-SourceDataManager SourceDataManager::s_instance;
 
 /* ================================================================= */
 /* ================================================================= */
@@ -375,7 +368,8 @@ SEScenesListWidgetManager::SEScenesListWidgetManager(
 	std::shared_ptr<SEConfig> config)
 	: m_mainWindow(mainWindow),
 	  m_auxiliaryControls(auxiliaryControlsBuilder),
-	  m_config(config)
+	  m_config(config),
+	  m_sourceData(std::make_unique<SourceDataManager>())
 {
 	QDockWidget *scenesDock =
 		(QDockWidget *)m_mainWindow->findChild<QDockWidget *>(
@@ -636,7 +630,7 @@ SEScenesListWidgetManager::GetSceneIcon(obs_source_t *scene)
 void SEScenesListWidgetManager::SetSceneIcon(
 	obs_source_t *scene, CefRefPtr<CefValue> icon)
 {
-	auto data = SourceDataManager::instance()->data(scene);
+	auto data = m_sourceData->data(scene);
 	if (data) {
 		data->DeserializeIcon(icon);
 	}
@@ -662,7 +656,7 @@ SEScenesListWidgetManager::GetSceneDefaultAction(obs_source_t *scene)
 void SEScenesListWidgetManager::SetSceneDefaultAction(
 	obs_source_t *scene, CefRefPtr<CefValue> defaultAction)
 {
-	auto data = SourceDataManager::instance()->data(scene);
+	auto data = m_sourceData->data(scene);
 	if (data) {
 		data->DeserializeDefaultAction(defaultAction);
 	}
@@ -689,7 +683,7 @@ SEScenesListWidgetManager::GetSceneContextMenu(obs_source_t *scene)
 void SEScenesListWidgetManager::SetSceneContextMenu(
 	obs_source_t *scene, CefRefPtr<CefValue> contextMenu)
 {
-	auto data = SourceDataManager::instance()->data(scene);
+	auto data = m_sourceData->data(scene);
 	if (data) {
 		data->DeserializeContextMenu(contextMenu);
 	}
@@ -803,7 +797,7 @@ void SEScenesListWidgetManager::UpdateWidgets()
 	bool isSignedIn =
 		!m_config->IsOnBoardingMode();
 
-	SourceDataManager::instance()->removeDataNotInList(sources);
+	m_sourceData->removeDataNotInList(sources);
 
 	for (int rowIndex = 0; rowIndex < m_nativeWidget->count() &&
 				rowIndex < sources.sources.num;
@@ -820,13 +814,13 @@ void SEScenesListWidgetManager::UpdateWidgets()
 		obs_source_t *scene = sources.sources.array[rowIndex];
 
 		ItemData *data =
-			SourceDataManager::instance()->data(scene);
+			m_sourceData->data(scene);
 
 		if (!data) {
 			data = new ItemData(
 				[this]() { ScheduleUpdateWidgets(); });
 
-			SourceDataManager::instance()->setData(scene,
+			m_sourceData->setData(scene,
 								data);
 
 			#if SE_ENABLE_SCENE_ICONS

@@ -2254,6 +2254,77 @@ static void check_the_config_is_owned_and_closed_explicitly()
 }
 
 //
+// --- No singletons, not just no root singleton (CORE-757).
+//
+// The root was the big one, but it was not the only one: SEConfig,
+// SEPleaseWaitWindow, SENativeOBSControlsManager and a file-local
+// SourceDataManager were all static-instance-plus-accessor, and each one
+// was reached from wherever it was wanted. They are owned and injected now.
+//
+// This is the check that keeps it that way, and it is deliberately blunt:
+// no GetInstance anywhere under streamelements/, and no `s_instance`. A
+// service is constructed by whoever owns it and handed to whoever needs it.
+//
+static void check_no_singletons_remain()
+{
+	const char *const dirs[] = {"/streamelements",
+				    "/streamelements/SEUtils"};
+
+	int scanned = 0;
+
+	for (const char *const dir : dirs) {
+		const std::string path = std::string(se_tests::kRepoRoot) + dir;
+
+		std::error_code ec;
+		std::filesystem::directory_iterator it(path, ec);
+
+		check(!ec, (std::string("cannot read ") + dir +
+			    " -- this invariant would then pass vacuously")
+				   .c_str());
+
+		for (std::filesystem::directory_iterator end;
+		     it != end && !ec; it.increment(ec)) {
+			const std::filesystem::path &p = it->path();
+			const std::string ext = p.extension().string();
+
+			if (ext != ".cpp" && ext != ".hpp" && ext != ".mm")
+				continue;
+
+			std::ifstream in(p.string());
+
+			if (!in)
+				continue;
+
+			std::ostringstream buf;
+			buf << in.rdbuf();
+
+			const std::string src =
+				strip_line_comments(buf.str());
+			const std::string name = p.filename().string();
+
+			++scanned;
+
+			check(src.find("GetInstance") == std::string::npos,
+			      (name + " has a GetInstance(). Construct it "
+				      "where it belongs and hand it to the "
+				      "things that need it -- SEApiServices "
+				      "is how a host API consumer gets one.")
+				     .c_str());
+
+			check(src.find("s_instance") == std::string::npos,
+			      (name + " has a static instance. That is the "
+				      "half of a singleton that makes the "
+				      "accessor look harmless to add back.")
+				     .c_str());
+		}
+	}
+
+	check(scanned > 100,
+	      "scanned too few files -- this invariant would then pass "
+	      "vacuously");
+}
+
+//
 // --- There is no singleton (CORE-757).
 //
 // This was a ratchet. It counted SEGlobalStateManager::GetInstance()
@@ -3132,6 +3203,7 @@ int main()
 	check_the_invoke_handler_is_not_immortal();
 	check_the_config_is_owned_and_closed_explicitly();
 	check_the_root_is_not_a_singleton();
+	check_no_singletons_remain();
 	check_non_modal_dialogs_are_closed_by_their_owner();
 	check_state_persistence_borrows_the_managers_it_serializes();
 	check_widget_manager_does_not_own_state_persistence();

@@ -2,6 +2,7 @@
 
 #include "SEDeferredExecutive.hpp"
 #include "SEUtils.hpp"
+#include <memory>
 
 #include <obs.h>
 
@@ -22,6 +23,16 @@
 
 class SEAuxiliaryControlsBuilder;
 class SEConfig;
+
+//
+// The per-scene row widgets, keyed by source. Defined in the .cpp: it is
+// this class's own bookkeeping and nothing outside needs the type.
+//
+// It was a file-static instance with a static instance() accessor -- a
+// singleton holding QObjects, whose destructor would have run at process
+// exit, after Qt was gone (CORE-757).
+//
+class SourceDataManager;
 
 class SEScenesListWidgetManager : public QObject {
 public:
@@ -119,6 +130,7 @@ private:
 	//
 	std::shared_ptr<SEAuxiliaryControlsBuilder> m_auxiliaryControls;
 	std::shared_ptr<SEConfig> m_config;
+	std::unique_ptr<SourceDataManager> m_sourceData;
 
 public:
 	std::shared_ptr<SEAuxiliaryControlsBuilder> GetAuxiliaryControls()
