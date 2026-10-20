@@ -252,3 +252,16 @@ bool SecureJoinPaths(std::string base, std::string subpath, std::string &result)
 
 	return true;
 }
+
+bool FileExists(std::string path)
+{
+	//
+	// See the comment on the declaration: os_file_exists("") leaks one
+	// allocation per call inside libobs. An empty path is not a file, so
+	// this answers it without asking.
+	//
+	if (path.empty())
+		return false;
+
+	return os_file_exists(path.c_str());
+}

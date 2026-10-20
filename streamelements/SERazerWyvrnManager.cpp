@@ -692,7 +692,7 @@ SERazerWyvrnManager::FindChromaAsset(const Snapshot &snapshot,
 		// because the config already carries the suffix.
 		const std::string path = kv.second + "/" + effect + ".chroma";
 
-		if (os_file_exists(path.c_str()))
+		if (FileExists(path))
 			return {ChromaDeviceFromEffectName(effect), path};
 
 		break;
@@ -712,7 +712,7 @@ SERazerWyvrnManager::FindHapticAsset(const Snapshot &snapshot,
 
 		const std::string path = kv.second + "/" + effect + ".haps";
 
-		if (os_file_exists(path.c_str()))
+		if (FileExists(path))
 			return path;
 
 		break;
@@ -850,7 +850,7 @@ SERazerWyvrnManager::SerializeEvents(const std::string &groupFilter,
 {
 	// One snapshot for the whole list. Everything below is lock-free, which
 	// matters because serializing ~4,000 events means thousands of
-	// os_file_exists probes and URL signings; holding the mutex across that
+	// FileExists probes and URL signings; holding the mutex across that
 	// would stall every other caller for the duration.
 	const Snapshot snapshot = TakeSnapshot(false);
 

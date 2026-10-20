@@ -223,7 +223,7 @@ static bool ScanForFileReferencesMonikersToRestore(CefRefPtr<CefValue> &node,
 
 			std::string srcPath = srcBasePath + "/" + relPath;
 
-			if (os_file_exists(srcPath.c_str())) {
+			if (FileExists(srcPath)) {
 				std::string destPath =
 					destBasePath + "/" + relPath;
 
@@ -419,7 +419,7 @@ ScanForFileReferences(CefRefPtr<CefValue> &node,
 		std::string path = node->GetString().ToString();
 
 		if (!filesMap.count(path)) {
-			if (os_file_exists(path.c_str()) && httpServer) {
+			if (FileExists(path) && httpServer) {
 				filesMap[path] =
 					httpServer->CreateSessionSignedAbsolutePathURL(
 						utf8_to_wstring(path));
@@ -466,7 +466,7 @@ ScanForFileReferencesToBackup(zip_t *zip, CefRefPtr<CefValue> &node,
 	if (node->GetType() == VTYPE_STRING) {
 		std::string path = node->GetString().ToString();
 
-		if (os_file_exists(path.c_str())) {
+		if (FileExists(path)) {
 			int64_t fileSize = os_get_file_size(path.c_str());
 
 			if (fileSize > MAX_BACKUP_FILE_SIZE) {
@@ -562,7 +562,7 @@ static CefRefPtr<CefValue> ReadCollectionById(std::string basePath,
 	std::string relPath = "basic/scenes/" + collection + ".json";
 	std::string absPath = basePath + "/" + relPath;
 
-	if (os_file_exists(absPath.c_str())) {
+	if (FileExists(absPath)) {
 		char *buffer = os_quick_read_utf8_file(absPath.c_str());
 		CefRefPtr<CefValue> content = CefParseJSON(
 			CefString(buffer), JSON_PARSER_ALLOW_TRAILING_COMMAS);
@@ -583,7 +583,7 @@ static bool AddCollectionToZip(zip_t *zip, std::string basePath,
 	std::string relPath = "basic/scenes/" + collection + ".json";
 	std::string absPath = basePath + "/" + relPath;
 
-	if (!os_file_exists(absPath.c_str()))
+	if (!FileExists(absPath))
 		return false;
 
 	if (!includeReferencedFiles) {
@@ -617,7 +617,7 @@ static bool AddProfileToZip(zip_t *zip, std::string basePath,
 			      std::regex_replace(profile, std::regex(" "), "_");
 	std::string absPath = basePath + "/" + relPath;
 
-	if (!os_file_exists(absPath.c_str()))
+	if (!FileExists(absPath))
 		return false;
 
 	if (!AddFileToZip(zip, absPath + "/basic.ini", relPath + "/basic.ini"))
