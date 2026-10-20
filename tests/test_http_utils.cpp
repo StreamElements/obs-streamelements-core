@@ -392,6 +392,109 @@ static void test_the_async_get()
 		task->Cancel();
 }
 
+/* -------------------------------------------------- the proxy bypass list */
+
+//
+// Pure string work, so these need no server and no proxy. They are the only
+// coverage the fix gets: whether curl then honours CURLOPT_NOPROXY is curl's
+// business, and whether the platform hands over the right list can only be
+// seen on a machine that has one configured.
+//
+static void test_the_loopback_is_always_bypassed()
+{
+	const std::string expected = "localhost,127.0.0.1,::1";
+
+	check(ProxyBypassListToCurlNoProxy({}) == expected,
+	      "an empty bypass list must still take the loopback out of the "
+	      "proxy: the plug-in serves its own assets over one");
+
+	//
+	// And the entries Windows puts in the list by default do not produce
+	// a duplicate.
+	//
+	check(ProxyBypassListToCurlNoProxy({"localhost", "127.*"}) ==
+		      "localhost,127.0.0.0/8,127.0.0.1,::1",
+	      "the default Windows loopback entries were not deduplicated "
+	      "against the ones appended unconditionally");
+}
+
+static void test_wildcards_become_curl_spellings()
+{
+	check(ProxyBypassListToCurlNoProxy({"*.example.com"}) ==
+		      ".example.com,localhost,127.0.0.1,::1",
+	      "*.host must become curl's .host suffix form");
+
+	//
+	// Address prefixes become CIDR, which is the only prefix match curl
+	// understands. The mask comes from how many octets were given.
+	//
+	check(ProxyBypassListToCurlNoProxy({"10.*"}) ==
+		      "10.0.0.0/8,localhost,127.0.0.1,::1",
+	      "10.* must become 10.0.0.0/8");
+
+	check(ProxyBypassListToCurlNoProxy({"172.16.*"}) ==
+		      "172.16.0.0/16,localhost,127.0.0.1,::1",
+	      "172.16.* must become 172.16.0.0/16");
+
+	check(ProxyBypassListToCurlNoProxy({"192.168.1.*"}) ==
+		      "192.168.1.0/24,localhost,127.0.0.1,::1",
+	      "192.168.1.* must become 192.168.1.0/24");
+
+	check(ProxyBypassListToCurlNoProxy({"*"}) ==
+		      "*,localhost,127.0.0.1,::1",
+	      "a bare * means no proxy for anything, which curl spells the "
+	      "same way");
+}
+
+static void test_what_cannot_be_translated_is_dropped()
+{
+	const std::string loopbackOnly = "localhost,127.0.0.1,::1";
+
+	//
+	// <local> is "every host whose name has no dot". curl has no
+	// spelling for it, and the hosts it protects in practice are the
+	// loopback ones that are appended anyway.
+	//
+	check(ProxyBypassListToCurlNoProxy({"<local>"}) == loopbackOnly,
+	      "<local> must be dropped rather than passed through as a host "
+	      "name");
+
+	//
+	// Dropped, not mangled: a wildcard in the middle, more than three
+	// octets, and an octet that is not a byte are all shapes with no
+	// curl equivalent. They keep going through the proxy, which is what
+	// they did before any of this existed.
+	//
+	const char *untranslatable[] = {
+		"foo*bar.com",
+		"1.2.3.4.*",
+		"999.*",
+		"example.*.com",
+	};
+
+	for (const char *entry : untranslatable) {
+		char msg[160];
+		std::snprintf(msg, sizeof(msg),
+			      "'%s' has no curl spelling and must be dropped, "
+			      "not emitted",
+			      entry);
+
+		check(ProxyBypassListToCurlNoProxy({entry}) == loopbackOnly,
+		      msg);
+	}
+
+	//
+	// Blank and whitespace-only entries come from trailing or doubled
+	// separators in the platform string.
+	//
+	check(ProxyBypassListToCurlNoProxy({"", "   ", "\t"}) == loopbackOnly,
+	      "blank entries must not reach the result");
+
+	check(ProxyBypassListToCurlNoProxy({"  example.com  "}) ==
+		      "example.com,localhost,127.0.0.1,::1",
+	      "an entry must be trimmed before it is emitted");
+}
+
 /* ------------------------------------------------------------------- main */
 
 #ifdef _WIN32
@@ -421,25 +524,22 @@ int main()
 {
 #ifdef _WIN32
 	//
-	// A note, not a skip, and not an assertion either.
+	// A note, and on this kind of machine the requests below are also an
+	// end-to-end check of the bypass.
 	//
-	// SetGlobalCURLOptions reads the user's proxy configuration and never
-	// looks at lpszProxyBypass, so when a proxy is set these loopback
-	// requests are sent to it even if the bypass list names localhost --
-	// as it does by default on Windows. Nothing below can assert that,
-	// because a proxy that forwards to the loopback makes the behaviour
-	// identical: the machine this was written on had exactly that, and
-	// every check passed through it.
+	// SetGlobalCURLOptions reads the user's proxy and now also reads the
+	// list of hosts they took out of it, so the loopback requests below
+	// go direct. Before that they were sent to the proxy, and the only
+	// reason it was not visible is that a proxy which forwards to the
+	// loopback behaves identically -- the machine this was written on had
+	// exactly that.
 	//
-	// The line is here so that an unexplained failure in this file is
-	// read correctly. A proxy that refuses loopback destinations fails
-	// every request, and the cause is the ignored bypass list rather than
-	// anything in the wrappers.
+	// So treat a wholesale failure here on a proxied machine as the
+	// bypass having broken, not the wrappers.
 	//
 	if (a_system_proxy_is_configured()) {
-		std::printf("note: a system proxy is configured, and the "
-			    "bypass list is ignored, so these loopback "
-			    "requests go through it\n");
+		std::printf("note: a system proxy is configured, so these "
+			    "loopback requests also exercise the bypass\n");
 	}
 #endif
 
@@ -475,6 +575,13 @@ int main()
 	// request issued before this thread gets going simply queues.
 	//
 	std::thread serving([&server]() { server.listen_after_bind(); });
+
+	//
+	// These need neither the server nor a proxy.
+	//
+	test_the_loopback_is_always_bypassed();
+	test_wildcards_become_curl_spellings();
+	test_what_cannot_be_translated_is_dropped();
 
 	test_a_200_gives_the_body_and_the_status();
 	test_request_headers_are_sent();

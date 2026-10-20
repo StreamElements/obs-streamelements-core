@@ -21,8 +21,21 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
 
 void SetGlobalCURLOptions(CURL *curl, const char *url);
+
+//
+// The host entries the user excluded from their proxy, in the form
+// CURLOPT_NOPROXY takes. Each platform body of SetGlobalCURLOptions reads its
+// own list -- lpszProxyBypass on Windows, kSCPropNetProxiesExceptionsList on
+// macOS -- and hands the raw entries here, so the translation exists once and
+// can be tested without a proxy or a socket.
+//
+// The loopback is always in the result, list or no list.
+//
+std::string
+ProxyBypassListToCurlNoProxy(const std::vector<std::string> &entries);
 
 typedef std::function<bool(void *data, size_t datalen, void *userdata,
 			   char *error_msg, int http_code)>

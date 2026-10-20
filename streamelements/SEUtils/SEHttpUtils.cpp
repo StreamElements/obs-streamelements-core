@@ -369,6 +369,176 @@ HttpGetAsync(std::string url, async_http_request_callback_t callback)
 		});
 }
 
+//
+// --- The proxy bypass list ------------------------------------------------
+//
+// Both platform bodies of SetGlobalCURLOptions read the system proxy and
+// neither used to read the list of hosts the user excluded from it -- the
+// Windows one ignored lpszProxyBypass, the macOS one
+// kSCPropNetProxiesExceptionsList. Windows puts localhost and 127.* in that
+// list by default, so the plug-in was sending requests to its own loopback
+// servers out through someone's proxy, which is the one destination that can
+// never want one.
+//
+// The translation is pure string work, so it lives here rather than twice
+// over in platform code, and test_http_utils asserts against it directly.
+//
+static std::string TrimAscii(const std::string &value)
+{
+	const char *ws = " \t\r\n";
+
+	const size_t first = value.find_first_not_of(ws);
+
+	if (first == std::string::npos)
+		return std::string();
+
+	return value.substr(first, value.find_last_not_of(ws) - first + 1);
+}
+
+//
+// "172.16.*" -> "172.16.0.0/16", which is the only wildcard shape curl can
+// be told about: CURLOPT_NOPROXY matches host names by suffix and addresses
+// by CIDR, and has no notion of a prefix glob. Empty if the entry is not an
+// address prefix.
+//
+static std::string IPv4PrefixToCidr(const std::string &entry)
+{
+	if (entry.size() < 3 || entry.compare(entry.size() - 2, 2, ".*") != 0)
+		return std::string();
+
+	const std::string prefix = entry.substr(0, entry.size() - 2);
+
+	std::vector<std::string> octets;
+
+	for (size_t start = 0;;) {
+		const size_t dot = prefix.find('.', start);
+
+		octets.push_back(prefix.substr(start, dot == std::string::npos
+							     ? dot
+							     : dot - start));
+
+		if (dot == std::string::npos)
+			break;
+
+		start = dot + 1;
+	}
+
+	if (octets.empty() || octets.size() > 3)
+		return std::string();
+
+	for (const std::string &octet : octets) {
+		if (octet.empty() || octet.size() > 3 ||
+		    octet.find_first_not_of("0123456789") != std::string::npos)
+			return std::string();
+
+		if (std::stoi(octet) > 255)
+			return std::string();
+	}
+
+	std::string result;
+
+	for (const std::string &octet : octets)
+		result += octet + ".";
+
+	for (size_t i = octets.size(); i < 4; ++i)
+		result += "0.";
+
+	result.erase(result.size() - 1);
+
+	return result + "/" + std::to_string(octets.size() * 8);
+}
+
+std::string
+ProxyBypassListToCurlNoProxy(const std::vector<std::string> &entries)
+{
+	std::string result;
+	std::vector<std::string> seen;
+
+	//
+	// Duplicates are harmless to curl but make the result impossible to
+	// assert against, and the loopback entries below collide with the
+	// ones Windows puts in the list by default.
+	//
+	auto append = [&result, &seen](const std::string &value) {
+		if (value.empty())
+			return;
+
+		for (const std::string &already : seen)
+			if (already == value)
+				return;
+
+		seen.push_back(value);
+
+		if (result.size())
+			result += ",";
+
+		result += value;
+	};
+
+	for (const std::string &raw : entries) {
+		const std::string entry = TrimAscii(raw);
+
+		if (entry.empty())
+			continue;
+
+		//
+		// Windows for "every host whose name has no dot in it", macOS
+		// for the same idea under a different key. curl has no
+		// spelling for it, and the hosts it is actually protecting are
+		// the loopback ones appended below.
+		//
+		if (entry == "<local>")
+			continue;
+
+		//
+		// The whole proxy switched off. curl spells it the same way.
+		//
+		if (entry == "*") {
+			append("*");
+			continue;
+		}
+
+		if (entry.find('*') == std::string::npos) {
+			append(entry);
+			continue;
+		}
+
+		//
+		// "*.example.com" -> ".example.com", curl's suffix form.
+		//
+		if (entry.compare(0, 2, "*.") == 0) {
+			append(entry.substr(1));
+			continue;
+		}
+
+		const std::string cidr = IPv4PrefixToCidr(entry);
+
+		if (cidr.size()) {
+			append(cidr);
+			continue;
+		}
+
+		//
+		// Any other wildcard has no curl equivalent. Dropping it
+		// leaves that host going through the proxy, which is what it
+		// did before any of this existed.
+		//
+	}
+
+	//
+	// Appended whatever the list said, including when the proxy came from
+	// --streamelements-http-proxy and there was no list at all. The
+	// plug-in serves its own assets over a loopback HTTP server and
+	// speaks to its own websocket server on another loopback port;
+	// sending either through a proxy is never what anyone wanted.
+	//
+	append("localhost");
+	append("127.0.0.1");
+	append("::1");
+
+	return result;
+}
+
 #ifdef WIN32
 //
 // Windows-only body; the macOS half is in SEUtils.mm. The guard came
@@ -406,10 +576,24 @@ void SetGlobalCURLOptions(CURL *curl, const char *url)
 	std::string proxy =
 		GetCommandLineOptionValue("streamelements-http-proxy");
 
+	std::vector<std::string> bypass;
+
 	if (!proxy.size()) {
 		WINHTTP_CURRENT_USER_IE_PROXY_CONFIG config;
 
 		if (WinHttpGetIEProxyConfigForCurrentUser(&config)) {
+			//
+			// The hosts the user took out of the proxy, read
+			// before the GlobalFree calls at the foot of this
+			// block. Only used if the scheme resolution below
+			// settles on a proxy at all.
+			//
+			if (config.lpszProxyBypass) {
+				bypass = tokenizeString(
+					wstring_to_utf8(config.lpszProxyBypass),
+					";");
+			}
+
 			// http=127.0.0.1:8888;https=127.0.0.1:8888
 			if (config.lpszProxy) {
 				proxy = wstring_to_utf8(config.lpszProxy);
@@ -459,6 +643,11 @@ void SetGlobalCURLOptions(CURL *curl, const char *url)
 	if (proxy.size()) {
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
 		curl_easy_setopt(curl, CURLOPT_PROXY, proxy.c_str());
+
+		const std::string noproxy =
+			ProxyBypassListToCurlNoProxy(bypass);
+
+		curl_easy_setopt(curl, CURLOPT_NOPROXY, noproxy.c_str());
 	}
 }
 #endif /* WIN32 */
