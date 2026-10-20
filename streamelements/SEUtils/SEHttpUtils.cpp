@@ -1,6 +1,11 @@
 #include "SEHttpUtils.hpp"
 
-#include "SEAppEnvUtils.hpp"
+//
+// For GetCommandLineOptionValue, the --streamelements-http-proxy
+// override read in SetGlobalCURLOptions. Nothing here needs Qt, which is
+// what lets the tests compile this file.
+//
+#include "SEEnvConfigUtils.hpp"
 #include "SEStringUtils.hpp"
 
 #ifdef WIN32

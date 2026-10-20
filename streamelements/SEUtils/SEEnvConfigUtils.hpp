@@ -36,3 +36,19 @@ bool WriteEnvironmentConfigString(const char *regValueName,
 //
 std::string ReadEnvironmentConfigString(const char *regValueName,
 					const char *productName);
+
+//
+// A --key=value override from the process command line, which is where
+// the product's configuration is read from before the registry: SEConfig
+// reaches for both, one after the other.
+//
+// Declared here rather than beside its body in SEAppEnvUtils, which has
+// to include <QWidget> for the window-stacking helpers. Reading argv is
+// not a Qt concern -- QCoreApplication is just where the list happens to
+// live -- and SEHttpUtils calls this for the proxy override, so that
+// include was the one thing keeping the whole HTTP cluster from
+// compiling without Qt. Same arrangement as
+// CreateCryptoSecureRandomNumberString: the declaration sits with the
+// domain that uses it, the body stays where the platform code is.
+//
+std::string GetCommandLineOptionValue(const std::string key);

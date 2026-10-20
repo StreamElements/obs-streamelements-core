@@ -14,7 +14,6 @@
 bool IsTraceLogLevel();
 
 std::string DockWidgetAreaToString(const Qt::DockWidgetArea area);
-std::string GetCommandLineOptionValue(const std::string key);
 std::string LoadResourceString(std::string path);
 
 std::string GetCurrentThemeName();

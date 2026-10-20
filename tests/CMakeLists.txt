@@ -107,6 +107,93 @@ se_add_test(test_overlay_url_utils
   "${REPO_ROOT}/streamelements/SEUtils/SEOverlayUrlUtils.cpp"
 )
 
+# --- Behavioural test: the libcurl wrappers --------------------------------
+#
+# The one test here that is not self-contained: it links libcurl and runs a
+# cpp-httplib server on a loopback port. Registered only when curl is found,
+# so the rest of the suite keeps the property that it builds anywhere with
+# nothing but a compiler -- a missing curl skips this one test rather than
+# failing the configure.
+#
+# Compiling SEHttpUtils.cpp here at all is new: it used to include
+# SEAppEnvUtils.hpp for the one --streamelements-http-proxy lookup, and that
+# header pulls in <QWidget>. The declaration moved to SEEnvConfigUtils.hpp,
+# which is why nothing below needs Qt.
+find_package(CURL QUIET)
+
+if(NOT CURL_FOUND)
+  # The obs-studio dependency bundle, if this checkout is sitting inside
+  # one: plugins/obs-streamelements-core, so the tree root two levels up
+  # is where .deps lives.
+  #
+  # The architecture has to be part of the pattern. The bundles for both
+  # sit side by side, and an x86 import library would be found first by
+  # date and then fail to link against an x64 test.
+  if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(_se_dep_arch "x64")
+  else()
+    set(_se_dep_arch "x86")
+  endif()
+
+  file(GLOB _se_obs_deps
+    "${REPO_ROOT}/../../.deps/obs-deps-*-${_se_dep_arch}")
+
+  # Newest bundle first, since the names carry their date.
+  list(SORT _se_obs_deps)
+  list(REVERSE _se_obs_deps)
+
+  foreach(_se_dep IN LISTS _se_obs_deps)
+    if(EXISTS "${_se_dep}/include/curl/curl.h")
+      file(GLOB _se_curl_lib "${_se_dep}/lib/libcurl_imp.lib"
+                             "${_se_dep}/lib/libcurl.lib"
+                             "${_se_dep}/lib/libcurl.a"
+                             "${_se_dep}/lib/libcurl.dylib")
+
+      if(_se_curl_lib)
+        set(CURL_FOUND TRUE)
+        set(CURL_INCLUDE_DIRS "${_se_dep}/include")
+        set(CURL_LIBRARIES "${_se_curl_lib}")
+
+        # An import library needs its DLL beside the executable, or the
+        # test fails to start rather than failing an assertion.
+        file(GLOB _se_curl_runtime "${_se_dep}/bin/libcurl.dll")
+
+        break()
+      endif()
+    endif()
+  endforeach()
+endif()
+
+if(CURL_FOUND)
+  se_add_test(test_http_utils
+    test_http_utils.cpp
+    "${REPO_ROOT}/streamelements/SEUtils/SEHttpUtils.cpp"
+    "${REPO_ROOT}/streamelements/SEUtils/SEStringUtils.cpp"
+  )
+
+  target_include_directories(test_http_utils PRIVATE "${CURL_INCLUDE_DIRS}")
+  target_link_libraries(test_http_utils PRIVATE "${CURL_LIBRARIES}")
+
+  if(WIN32)
+    # Winhttp for the proxy lookup SetGlobalCURLOptions does, ws2_32 for the
+    # server's sockets. SEHttpUtils.cpp carries its own #pragma comment for
+    # Winhttp, but naming it here keeps the dependency visible.
+    target_link_libraries(test_http_utils PRIVATE winhttp ws2_32)
+  endif()
+
+  if(_se_curl_runtime)
+    add_custom_command(TARGET test_http_utils POST_BUILD
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+              "${_se_curl_runtime}"
+              "$<TARGET_FILE_DIR:test_http_utils>"
+      COMMENT "Copying libcurl beside test_http_utils")
+  endif()
+else()
+  message(STATUS
+    "curl not found: skipping test_http_utils. The rest of the suite does "
+    "not need it.")
+endif()
+
 # --- Behavioural test: the WYVRN configuration parser -----------------------
 #
 # Compiles the real production parser, not a mirror of it. That is possible

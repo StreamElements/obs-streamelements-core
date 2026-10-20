@@ -4,9 +4,13 @@
 // The libcurl wrappers: synchronous GET and POST in buffer and string
 // flavours, plus one cancelable asynchronous GET.
 //
-// SetGlobalCURLOptions is declared here but still defined per platform where
-// it always was -- the Windows half in SEUtils.cpp, the macOS half in
-// SEUtils.mm, because the proxy settings come from different places.
+// SetGlobalCURLOptions is declared here and defined per platform, because the
+// proxy settings come from different places: the Windows body is at the foot
+// of SEHttpUtils.cpp and the macOS one is in SEUtils.mm.
+//
+// Nothing in this cluster needs Qt or libobs, so the tests compile the .cpp
+// directly. The two platform bodies are the exception, which is why
+// test_http_utils supplies its own SetGlobalCURLOptions off Windows.
 //
 
 #include "SECancelableTask.hpp"

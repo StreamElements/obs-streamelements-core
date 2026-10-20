@@ -70,7 +70,8 @@ static void test_the_shapes_that_must_not_parse()
 	for (const char *url : rejected) {
 		char msg[256];
 		std::snprintf(msg, sizeof(msg),
-			      "this parsed as an overlay URL and must not: '%s'",
+			      "this parsed as an overlay URL and must "
+			      "not: '%s'",
 			      url);
 
 		check(!parses(url, overlayId, accountId), msg);
@@ -129,7 +130,8 @@ static void test_the_segments_swallow_a_query_string()
 	// off. A caller handing one of these straight to an API would be
 	// sending the query along with it.
 	//
-	check(parses("https://streamelements.com/overlay/5f3a/acct-9?theme=dark",
+	check(parses("https://streamelements.com/overlay/5f3a/"
+		     "acct-9?theme=dark",
 		     overlayId, accountId),
 	      "a URL with a query string did not parse");
 

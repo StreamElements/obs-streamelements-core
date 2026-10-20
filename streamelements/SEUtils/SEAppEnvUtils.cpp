@@ -1,5 +1,10 @@
 #include "SEAppEnvUtils.hpp"
 
+//
+// GetCommandLineOptionValue is declared there; its body is below,
+// because reading the list needs QCoreApplication.
+//
+#include "SEEnvConfigUtils.hpp"
 #include "SEStringUtils.hpp"
 
 #include "../SEConfig.hpp"
