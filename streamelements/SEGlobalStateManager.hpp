@@ -148,6 +148,14 @@ private:
 	//
 	void PublishApiServices();
 
+	//
+	// Takes a weak handle on every published service, so that
+	// SEReportServicesOutlivingTeardown() can say afterwards which ones
+	// are still standing. Called at the top of Shutdown(), while they
+	// all still exist.
+	//
+	void WatchServicesForTeardownAudit();
+
 public:
 
 
@@ -390,3 +398,19 @@ private:
 	QPointer<QDockWidget> m_themeChangeListener = nullptr;
 	ApplicationStateListener *m_appStateListener = nullptr;
 };
+
+//
+// Says which services are still alive after the plug-in has been torn down.
+//
+// Shutdown() releases the root's handle on each one, and the container in
+// m_apiServices releases its own when the root is destroyed. After that
+// everything should be gone, so call this once the root shared_ptr has been
+// reset -- which in practice means obs_module_unload, beside SETRACE_DUMP().
+//
+// A service that is still standing there is held by something nobody wrote
+// down: a lambda parked in a timer, a detached thread, a ring refcounting
+// cannot unwind. The symptom used to be a shutdown that hung or a destructor
+// that ran after libobs had gone, with nothing in the log to say which
+// object caused it (CORE-757).
+//
+void SEReportServicesOutlivingTeardown();

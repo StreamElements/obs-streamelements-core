@@ -3267,6 +3267,113 @@ static void check_cefparsejson_results_are_guarded_everywhere()
 	}
 }
 
+//
+// --- Every published service is watched at teardown (CORE-757).
+//
+// WatchServicesForTeardownAudit() takes a weak handle on each service so
+// that SEReportServicesOutlivingTeardown() can name the ones still alive
+// once the plug-in is gone. The value of that depends entirely on the list
+// being complete: a service nobody watches is exactly the one that goes
+// missing quietly, which is the failure the audit exists to catch.
+//
+// So the list is checked against SEApiServices rather than maintained by
+// hand. Adding a service to the container and forgetting the audit fails
+// here.
+//
+static void check_every_published_service_is_watched_at_teardown()
+{
+	std::string hdr = strip_line_comments(
+		slurp("streamelements/SEApiServices.hpp"));
+
+	//
+	// A declaration can wrap, so flatten first: the long ones read
+	// "std::shared_ptr<SEExternalSceneDataProviderManager>" on one line
+	// and the field name on the next.
+	//
+	std::string flat;
+	flat.reserve(hdr.size());
+
+	for (std::size_t i = 0; i < hdr.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(hdr[i])))
+			flat += hdr[i];
+	}
+
+	const std::string body = function_body(
+		strip_line_comments(
+			slurp("streamelements/SEGlobalStateManager.cpp")),
+		"void SEGlobalStateManager::WatchServicesForTeardownAudit");
+
+	check(!body.empty(),
+	      "cannot find WatchServicesForTeardownAudit -- this invariant "
+	      "needs updating");
+
+	const std::string decl = "std::shared_ptr<";
+
+	std::size_t found = 0;
+	bool sawConfig = false;
+
+	for (std::size_t at = flat.find(decl); at != std::string::npos;
+	     at = flat.find(decl, at + 1)) {
+		const std::size_t close = flat.find('>', at + decl.size());
+
+		if (close == std::string::npos)
+			break;
+
+		const std::size_t semi = flat.find(';', close);
+
+		if (semi == std::string::npos)
+			break;
+
+		const std::string field =
+			flat.substr(close + 1, semi - close - 1);
+
+		if (field.empty())
+			continue;
+
+		//
+		// Deliberately unwatched: the crash handler holds the config
+		// and is never deleted, so it outlives teardown on every
+		// clean run. Watching it would print a warning every time and
+		// teach the next reader to ignore the whole audit.
+		//
+		if (field == "config") {
+			sawConfig = true;
+
+			check(body.find("SE_WATCH(config)") ==
+				      std::string::npos,
+			      "the config is being watched at teardown, and it "
+			      "outlives teardown by design -- the crash "
+			      "handler holds it and is never deleted, so this "
+			      "would warn on every clean shutdown");
+
+			continue;
+		}
+
+		++found;
+
+		const std::string expected = "SE_WATCH(" + field + ")";
+
+		const std::string msg =
+			std::string("SEApiServices publishes ") + field +
+			" but WatchServicesForTeardownAudit() does not watch "
+			"it, so nothing would report it outliving shutdown";
+
+		check(body.find(expected) != std::string::npos, msg.c_str());
+	}
+
+	//
+	// Non-vacuity: the scan has to have found the fields at all.
+	//
+	check(found >= 30,
+	      "found fewer than 30 published services in SEApiServices.hpp, "
+	      "so the declaration scan has stopped matching and every check "
+	      "above passed for free");
+
+	check(sawConfig,
+	      "the config field is gone from SEApiServices, so the exemption "
+	      "above is stale");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -3321,6 +3428,7 @@ int main()
 	check_api_services_container_is_not_emptied_at_teardown();
 	check_api_services_is_a_container_and_nothing_else();
 	check_crash_path_filesystem_calls_never_throw();
+	check_every_published_service_is_watched_at_teardown();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

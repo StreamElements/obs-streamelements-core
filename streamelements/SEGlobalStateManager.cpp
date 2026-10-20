@@ -816,6 +816,117 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	obs_frontend_add_event_callback(handle_obs_frontend_event, this);
 }
 
+//
+// --- Loud when a service outlives teardown (CORE-757) --------------------
+//
+// weak handles, taken while everything is still alive and inspected once the
+// root is gone. expired() is the whole question, which is why this is not a
+// use_count() comparison: services legitimately hold each other -- fifteen
+// managers hold the host event dispatcher -- so there is no fixed expected
+// count to compare against, and the only number that means anything is
+// whether the object survived its owners.
+//
+namespace {
+struct WatchedService {
+	const char *name;
+	std::weak_ptr<void> handle;
+};
+} // namespace
+
+static std::vector<WatchedService> s_watchedServices;
+
+static void WatchService(const char *name, std::shared_ptr<void> service)
+{
+	if (service)
+		s_watchedServices.push_back({name, service});
+}
+
+void SEGlobalStateManager::WatchServicesForTeardownAudit()
+{
+	if (!m_apiServices)
+		return;
+
+	s_watchedServices.clear();
+
+	//
+	// The container's own fields rather than this object's members,
+	// because the container is the published surface and
+	// check_every_published_service_is_watched_at_teardown holds the two
+	// lists together.
+	//
+#define SE_WATCH(field) WatchService(#field, m_apiServices->field)
+
+	SE_WATCH(widgetManager);
+	SE_WATCH(obsSceneManager);
+	SE_WATCH(menuManager);
+	SE_WATCH(bandwidthTestManager);
+	SE_WATCH(outputSettingsManager);
+	SE_WATCH(workerManager);
+	SE_WATCH(hotkeyManager);
+	SE_WATCH(performanceHistoryTracker);
+	SE_WATCH(analyticsEventsManager);
+	SE_WATCH(externalSceneDataProviderManager);
+	SE_WATCH(httpClient);
+	SE_WATCH(localFilesystemHttpServer);
+	SE_WATCH(nativeObsControlsManager);
+	SE_WATCH(profilesManager);
+	SE_WATCH(backupManager);
+#ifdef SE_ENABLE_WYVRN
+	SE_WATCH(razerWyvrnManager);
+#endif
+	SE_WATCH(cleanupManager);
+	SE_WATCH(previewManager);
+	SE_WATCH(websocketApiServer);
+	SE_WATCH(hostEventDispatcher);
+	SE_WATCH(messageBus);
+	SE_WATCH(sharedVideoCompositionManager);
+	SE_WATCH(videoCompositionManager);
+	SE_WATCH(audioCompositionManager);
+	SE_WATCH(outputManager);
+	SE_WATCH(obsActiveSceneTracker);
+	SE_WATCH(statePersistence);
+	SE_WATCH(statusBarMessageManager);
+	SE_WATCH(popupWindowManager);
+	SE_WATCH(browserDialogManager);
+	SE_WATCH(sessionManager);
+	SE_WATCH(auxiliaryControlsBuilder);
+	SE_WATCH(pleaseWaitWindow);
+	SE_WATCH(obsApiTransactionManager);
+
+	//
+	// config is deliberately not watched. SECrashHandler holds it so that
+	// a fault during or after teardown can still read the reporter's
+	// contact details, and that handler is never deleted -- so the config
+	// outlives teardown on every clean run and would report every time.
+	// Shutdown() closes the ini explicitly for exactly that reason.
+	//
+#undef SE_WATCH
+}
+
+void SEReportServicesOutlivingTeardown()
+{
+	size_t outliving = 0;
+
+	for (const WatchedService &watched : s_watchedServices) {
+		if (watched.handle.expired())
+			continue;
+
+		++outliving;
+
+		blog(LOG_WARNING,
+		     "[obs-streamelements-core]: %s outlived teardown: %ld handle(s) still held after the plug-in was destroyed",
+		     watched.name, watched.handle.use_count());
+	}
+
+	if (s_watchedServices.size() && !outliving) {
+		blog(LOG_INFO,
+		     "[obs-streamelements-core]: all %zu services released cleanly",
+		     s_watchedServices.size());
+	}
+
+	s_watchedServices.clear();
+}
+
 void SEGlobalStateManager::Shutdown()
 {
 	PREVENT_RECURSIVE_REENTRY();
@@ -823,6 +934,12 @@ void SEGlobalStateManager::Shutdown()
 	if (!m_initialized) {
 		return;
 	}
+
+	//
+	// While they are all still alive. Reported from obs_module_unload,
+	// after this object and the container it holds are both gone.
+	//
+	WatchServicesForTeardownAudit();
 
 	// Before anything below blocks. From here the Qt main thread is ours and
 	// will not return to its event loop, so a worker waiting on QtExecSync
