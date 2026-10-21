@@ -691,6 +691,15 @@ public:
 	       const SECompositionServices &compositionServices);
 
 private:
+	//
+	// Builds m_signalHandlerData and arms the scene signals. Create()
+	// calls it once this object has a shared_ptr, because the data holds
+	// the composition as a weak_ptr and weak_from_this() is empty until
+	// make_shared has returned. The signals are armed here too, so the
+	// handle is in place before anything can fire.
+	//
+	void AttachObsSignals();
+
 	void SetRecordingEncoders(
 		std::vector<std::string> &recordingVideoEncoderId,
 		std::vector<OBSDataAutoRelease> &recordingVideoEncoderSettings,

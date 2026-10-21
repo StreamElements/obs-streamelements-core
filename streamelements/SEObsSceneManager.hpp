@@ -42,6 +42,23 @@ public:
 		std::shared_ptr<SEConfig> config);
 	virtual ~SEObsSceneManager();
 
+	//
+	// The OBS hookup, and deliberately not part of the constructor.
+	//
+	// SESignalHandlerData holds this object as a weak_ptr, and a weak_ptr
+	// cannot be made from an object whose shared_ptr does not exist yet:
+	// inside the constructor make_shared has not returned, so there is
+	// nothing to be weak about and every callback would find no manager
+	// at all. The container therefore calls this on the line after it
+	// builds us.
+	//
+	// The signals are connected here rather than in the constructor for
+	// the same reason stated the other way round: the handle is in place
+	// before anything can fire, instead of there being a window in which
+	// a signal arrives and finds it empty.
+	//
+	void AttachObsSignals(std::weak_ptr<SEObsSceneManager> self);
+
 private:
 	void CleanObsSceneSignals();
 
@@ -221,6 +238,10 @@ private:
 	std::shared_ptr<SEVideoCompositionManager> m_videoCompositionManager;
 	std::shared_ptr<SEConfig> m_config;
 
+	// Held only to hand to SESignalHandlerData in AttachObsSignals(),
+	// which runs after the constructor.
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+
 	//
 	// Was a file-static that fetched the manager itself. All nineteen
 	// call sites are members of this class, so it becomes one and reads
@@ -255,33 +276,35 @@ public:
 	// event went nowhere.
 	//
 	// Strong only on this path, though, which is why there are two
-	// members. SEVideoComposition builds one of these too and passes null
-	// for obsSceneManager; there a strong handle closes a ring, because
-	// the composition manager owns the composition which owns this. So
+	// members. SEVideoComposition builds one of these too and passes an
+	// empty handle for obsSceneManager; there a strong handle closes a
+	// ring, because the composition manager owns the composition which
+	// owns this. So
 	// that is the discriminator below, and the weak handle is what the
 	// composition path gets.
 	//
 	SESignalHandlerData(
-		SEObsSceneManager *obsSceneManager,
+		std::weak_ptr<SEObsSceneManager> obsSceneManager,
 		std::weak_ptr<SEVideoCompositionManager>
 			videoCompositionManager,
-		SEVideoCompositionBase *videoCompositionBase,
+		std::weak_ptr<SEVideoCompositionBase> videoComposition,
 		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 		: m_obsSceneManager(obsSceneManager),
 		  m_videoCompositionManager(videoCompositionManager),
 		  m_videoCompositionManagerStrong(
-			  obsSceneManager ? videoCompositionManager.lock()
-					  : nullptr),
-		  m_videoCompositionBase(videoCompositionBase),
+			  obsSceneManager.expired()
+				  ? nullptr
+				  : videoCompositionManager.lock()),
+		  m_videoComposition(videoComposition),
 		  m_hostEventDispatcher(hostEventDispatcher)
 	{
-		// Cached now, while the composition is provably alive. Every later
-		// reader wants the id and nothing else, so caching it means the
-		// composition pointer never has to be dereferenced again -- which
-		// is what makes it safe for the composition to die first.
-		m_videoCompositionId = videoCompositionBase
-					       ? videoCompositionBase->GetId()
-					       : std::string();
+		// Cached now, while the composition is provably alive. Every
+		// later reader wants the id and nothing else, so caching it is
+		// what makes it safe for the composition to die first.
+		auto composition = videoComposition.lock();
+
+		m_videoCompositionId = composition ? composition->GetId()
+						   : std::string();
 
 		m_asyncTaskQueue = std::make_shared<SEAsyncTaskQueue>(
 			(std::string(
@@ -320,10 +343,10 @@ public:
 private:
 	SESignalHandlerData(
 		SESignalHandlerData *parent,
-		SEObsSceneManager *obsSceneManager,
+		std::weak_ptr<SEObsSceneManager> obsSceneManager,
 		std::weak_ptr<SEVideoCompositionManager>
 			videoCompositionManager,
-		SEVideoCompositionBase *videoCompositionBase,
+		std::weak_ptr<SEVideoCompositionBase> videoComposition,
 		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
 		obs_scene_t *scene)
 		: m_parent(parent),
@@ -335,9 +358,10 @@ private:
 		  // a composition root does not.
 		  //
 		  m_videoCompositionManagerStrong(
-			  obsSceneManager ? videoCompositionManager.lock()
-					  : nullptr),
-		  m_videoCompositionBase(videoCompositionBase),
+			  obsSceneManager.expired()
+				  ? nullptr
+				  : videoCompositionManager.lock()),
+		  m_videoComposition(videoComposition),
 		  m_hostEventDispatcher(hostEventDispatcher),
 		  m_scene(SETRACE_ADDREF(obs_scene_get_ref(scene)))
 	{
@@ -356,10 +380,10 @@ private:
 			std::lock_guard<std::mutex> lock(
 				m_videoCompositionMutex);
 
-			m_videoCompositionBase = nullptr;
+			m_videoComposition.reset();
 		}
 
-		m_obsSceneManager = nullptr;
+		m_obsSceneManager.reset();
 
 		for (auto kv : m_scenes) {
 			delete kv.second;
@@ -405,7 +429,7 @@ public:
 		}
 		
 		if (shouldDelete) {
-			// The cached id, not m_videoCompositionBase->GetId():
+			// The cached id, not the composition itself:
 			// this runs on the teardown path, which is exactly when
 			// the composition is most likely to be gone already.
 			blog(LOG_INFO,
@@ -490,8 +514,7 @@ private:
 		if (!m_scenes.count(scene)) {
 			m_scenes[scene] = new SESignalHandlerData(
 				this, m_obsSceneManager,
-				m_videoCompositionManager,
-				m_videoCompositionBase,
+				m_videoCompositionManager, m_videoComposition,
 				m_hostEventDispatcher, scene);
 
 			m_scenes_refcount[scene] = 1;
@@ -661,8 +684,8 @@ public:
 
 		std::lock_guard<std::mutex> lock(m_videoCompositionMutex);
 
-		return m_videoCompositionBase ? m_videoCompositionId
-					      : std::string();
+		return m_videoComposition.expired() ? std::string()
+						    : m_videoCompositionId;
 	}
 
 	//
@@ -670,8 +693,13 @@ public:
 	//
 	// Release() alone is not enough: it only reaches ~SESignalHandlerData,
 	// and therefore Clear(), when the refcount happens to drop to zero. If
-	// anything else still holds a reference, the back-pointer survives the
-	// composition and the next signal dereferences freed memory.
+	// anything else still holds a reference, the handle survives the
+	// composition.
+	//
+	// Surviving it is no longer dangerous: the handle is a weak_ptr, so a
+	// reader that locks it after the composition is gone is told as much,
+	// where the raw pointer this used to be handed it freed memory. The
+	// drain below is what still earns this method its keep.
 	//
 	void DetachVideoComposition()
 	{
@@ -681,11 +709,24 @@ public:
 
 		std::lock_guard<std::mutex> lock(m_videoCompositionMutex);
 
-		m_videoCompositionBase = nullptr;
+		m_videoComposition.reset();
 	}
 
 	// char m_header[7] = "header"; // TODO: Remvoe debug marker
-	SEObsSceneManager *m_obsSceneManager = nullptr;
+
+	//
+	// Weak, which is the only strength that is correct here: the scene
+	// manager owns this object -- it news it, and Release()s it in its
+	// own destructor -- so anything stronger is a two-node ring that
+	// refcounting cannot unwind.
+	//
+	// It was a raw back-pointer, which is worse than either: five
+	// file-static signal callbacks dereference it to call Update(), and
+	// nothing but the ordering inside ~SEObsSceneManager said the object
+	// was still there. CORE-757 lists it as the one hidden edge that
+	// mattered. Reach it through ObsSceneManager(), which locks.
+	//
+	std::weak_ptr<SEObsSceneManager> m_obsSceneManager;
 
 	//
 	// Two handles on one object, because the strength that is safe
@@ -698,7 +739,15 @@ public:
 	std::weak_ptr<SEVideoCompositionManager> m_videoCompositionManager;
 	std::shared_ptr<SEVideoCompositionManager>
 		m_videoCompositionManagerStrong;
-	SEVideoCompositionBase *m_videoCompositionBase = nullptr;
+	//
+	// Weak for the same reason from the other direction: the composition
+	// manager owns the composition, and the composition owns this. Only
+	// ever asked whether the composition is still there -- the id it
+	// would otherwise be asked for is cached in the constructor -- so
+	// expired() is the whole of its job, and it can answer that
+	// truthfully where a raw pointer could not.
+	//
+	std::weak_ptr<SEVideoCompositionBase> m_videoComposition;
 
 	//
 	// Strong, for the same reason the composition manager is: the
@@ -726,6 +775,18 @@ public:
 	std::shared_ptr<SEHostEventDispatcher> HostEventDispatcher()
 	{
 		return m_hostEventDispatcher;
+	}
+
+	//
+	// The scene manager that owns this, or null once it is gone. Locked
+	// per call rather than held, because it is the owner: see
+	// m_obsSceneManager. Gone is an ordinary answer on the teardown path
+	// rather than an error -- the callbacks that ask simply skip their
+	// Update().
+	//
+	std::shared_ptr<SEObsSceneManager> ObsSceneManager()
+	{
+		return m_obsSceneManager.lock();
 	}
 
 private:

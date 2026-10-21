@@ -527,6 +527,16 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_obsSceneManager = std::make_shared<SEObsSceneManager>(
 		obs_main_window, m_videoCompositionManager,
 		m_auxiliaryControlsBuilder, m_hostEventDispatcher, m_config);
+
+	//
+	// Immediately, and not optional: the manager has no OBS signals
+	// connected until this runs. It takes the handle the line above has
+	// just created, because what it builds holds the manager weakly and
+	// a constructor cannot hand out a weak handle to itself.
+	// check_the_scene_manager_is_attached_where_it_is_built pins the
+	// pair.
+	//
+	m_obsSceneManager->AttachObsSignals(m_obsSceneManager);
 	m_menuManager = std::make_shared<SEMenuManager>(
 		obs_main_window, m_sessionManager, m_performanceHistoryTracker,
 		m_analyticsEventsManager, m_auxiliaryControlsBuilder, m_config);

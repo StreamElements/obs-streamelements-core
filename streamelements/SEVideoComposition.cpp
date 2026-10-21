@@ -1292,15 +1292,10 @@ SECustomVideoComposition::SECustomVideoComposition(
 	m_scenes.push_back(currentScene);
 
 	//
-	// The weak handle this composition was handed, rather than the
-	// singleton: the manager owns this object, so a strong edge back
-	// would be the manager keeping itself alive.
+	// The signal data is built by AttachObsSignals(), which Create()
+	// calls once there is a shared_ptr to this object -- see its comment
+	// in the header.
 	//
-	m_signalHandlerData = new SESignalHandlerData(
-		nullptr, m_compositionServices.videoCompositionManager, this,
-		m_compositionServices.hostEventDispatcher);
-
-	add_scene_signals(currentScene, m_signalHandlerData);
 
 	transition_set_defaults(m_transition, m_baseWidth, m_baseHeight);
 
@@ -1557,6 +1552,28 @@ void SECustomVideoComposition::SerializeComposition(
 	output->SetDictionary(root);
 }
 
+void SECustomVideoComposition::AttachObsSignals()
+{
+	//
+	// An empty handle for the scene manager, which is the discriminator
+	// SESignalHandlerData reads: this path must not take a strong handle
+	// on the composition manager, because that manager owns this
+	// composition, which owns the signal data.
+	//
+	// weak_from_this() rather than this. The raw back-pointer it used to
+	// be outlived the composition whenever anything still held a
+	// reference to the data, which is the hazard
+	// DetachVideoComposition() exists to narrow; a weak handle answers
+	// it instead of depending on being detached in time.
+	//
+	m_signalHandlerData = new SESignalHandlerData(
+		std::weak_ptr<SEObsSceneManager>(),
+		m_compositionServices.videoCompositionManager,
+		weak_from_this(), m_compositionServices.hostEventDispatcher);
+
+	add_scene_signals(m_currentScene, m_signalHandlerData);
+}
+
 std::shared_ptr<SECustomVideoComposition>
 SECustomVideoComposition::Create(
 	std::string id, std::string name, uint32_t width, uint32_t height,
@@ -1628,6 +1645,13 @@ SECustomVideoComposition::Create(
 
 	if (exception)
 		std::rethrow_exception(exception);
+
+	//
+	// Now, and not inside the constructor: this is the first point at
+	// which there is a shared_ptr for the callback data to be weak about.
+	//
+	if (result)
+		result->AttachObsSignals();
 
 	return result;
 }

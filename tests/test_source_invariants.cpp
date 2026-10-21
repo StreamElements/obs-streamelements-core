@@ -1538,7 +1538,7 @@ static void check_scene_signal_handler_lifetime()
 
 	const std::string itemRemove =
 		function_body(cpp, "static void process_scene_item_remove(");
-	const auto read = itemRemove.find("->m_obsSceneManager");
+	const auto read = itemRemove.find("->ObsSceneManager()");
 	const auto removeGroup =
 		itemRemove.find("remove_scene_signals(group_scene");
 	check(read != std::string::npos && removeGroup != std::string::npos &&
@@ -3453,8 +3453,8 @@ static void check_signal_handler_data_holds_the_composition_per_path()
 	// handle is taken only when a scene manager created this.
 	//
 	const std::string guarded =
-		"m_videoCompositionManagerStrong(obsSceneManager?"
-		"videoCompositionManager.lock():nullptr)";
+		"m_videoCompositionManagerStrong(obsSceneManager.expired()?"
+		"nullptr:videoCompositionManager.lock())";
 
 	std::size_t guards = 0;
 
@@ -3466,7 +3466,8 @@ static void check_signal_handler_data_holds_the_composition_per_path()
 	      "the strong composition handle is no longer guarded on "
 	      "obsSceneManager in both constructors. Unconditionally strong "
 	      "is a ring: the composition manager owns the composition that "
-	      "owns this object");
+	      "owns this object. An empty weak_ptr reads as expired, which is "
+	      "what makes expired() the test for which path built this");
 
 	check(flat.find("if(m_videoCompositionManagerStrong)"
 			"returnm_videoCompositionManagerStrong;") !=
@@ -3641,6 +3642,149 @@ static void check_the_scene_manager_drains_outside_its_mutex()
 	      "tear the members down (CORE-757)");
 }
 
+//
+// --- SESignalHandlerData holds its owners weakly (CORE-757) -------------
+//
+// Two raw back-pointers used to live here, and the issue calls the first of
+// them the one hidden edge that mattered: SEObsSceneManager *, dereferenced
+// by five file-static signal callbacks to call Update(), and
+// SEVideoCompositionBase *, whose owner the composition manager can replace
+// or drop at any time. Both of their owners own this object, so neither can
+// become a shared_ptr -- that is a ring refcounting cannot unwind -- which
+// leaves weak_ptr as the only handle that is both safe to hold and honest
+// about whether the target is still there.
+//
+// Raw is what nothing enforces. A weak handle makes "it has gone" a value
+// the compiler forces every reader to deal with.
+//
+static void check_signal_handler_data_holds_its_owners_weakly()
+{
+	const std::string hdr = strip_line_comments(
+		slurp("streamelements/SEObsSceneManager.hpp"));
+
+	std::string flat;
+	flat.reserve(hdr.size());
+
+	for (std::size_t i = 0; i < hdr.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(hdr[i])))
+			flat += hdr[i];
+	}
+
+	check(flat.find("std::weak_ptr<SEObsSceneManager>m_obsSceneManager;") !=
+		      std::string::npos,
+	      "SESignalHandlerData no longer holds the scene manager as a "
+	      "weak_ptr. It cannot be raw -- five signal callbacks "
+	      "dereference it on OBS threads and only teardown ordering said "
+	      "it was alive -- and it cannot be shared, because the scene "
+	      "manager owns this object (CORE-757)");
+
+	check(flat.find("std::weak_ptr<SEVideoCompositionBase>"
+			"m_videoComposition;") != std::string::npos,
+	      "SESignalHandlerData no longer holds the video composition as a "
+	      "weak_ptr. The composition manager owns the composition and the "
+	      "composition owns this, so strong is a ring and raw outlives "
+	      "the composition whenever anything still holds this object "
+	      "(CORE-757)");
+
+	//
+	// The shapes that came before, named so the failure explains itself
+	// rather than leaving someone to rediscover why they were wrong.
+	//
+	check(flat.find("SEObsSceneManager*m_obsSceneManager") ==
+		      std::string::npos,
+	      "SESignalHandlerData is back to a raw pointer to the scene "
+	      "manager that owns it (CORE-757)");
+
+	check(flat.find("SEVideoCompositionBase*m_videoCompositionBase") ==
+		      std::string::npos,
+	      "SESignalHandlerData is back to a raw pointer to the video "
+	      "composition that owns it (CORE-757)");
+
+	//
+	// And the accessor, because a weak member that every caller locks
+	// inline is the boilerplate this refactor rejected.
+	//
+	check(flat.find("std::shared_ptr<SEObsSceneManager>ObsSceneManager()"
+			"{returnm_obsSceneManager.lock();}") !=
+		      std::string::npos,
+	      "SESignalHandlerData::ObsSceneManager() is gone, so the "
+	      "callbacks are locking the weak handle themselves (CORE-757)");
+}
+
+//
+// --- The scene manager is attached where it is built (CORE-757) ---------
+//
+// AttachObsSignals() exists because a constructor cannot hand out a weak
+// handle to itself: inside SEObsSceneManager(), make_shared has not
+// returned, so weak_from_this() would be empty and every signal callback
+// would find no manager at all. It therefore takes the handle from the
+// container, and it is also where the OBS signals are connected -- so that
+// the handle is in place before anything can fire rather than there being a
+// window in which a signal arrives and finds it empty.
+//
+// Which makes the call a correctness requirement, not a convention: without
+// it the manager has no signals connected at all and the whole scene-event
+// surface is silent. Hence pinning the pair.
+//
+static void check_the_scene_manager_is_attached_where_it_is_built()
+{
+	const std::string gsm = strip_line_comments(
+		slurp("streamelements/SEGlobalStateManager.cpp"));
+
+	const auto built = gsm.find("m_obsSceneManager = std::make_shared<");
+	const auto attached =
+		gsm.find("m_obsSceneManager->AttachObsSignals(m_obsSceneManager)");
+
+	check(built != std::string::npos,
+	      "the scene manager is no longer built in Initialize() -- this "
+	      "invariant needs updating (CORE-757)");
+
+	check(attached != std::string::npos,
+	      "nothing calls SEObsSceneManager::AttachObsSignals(), so the "
+	      "manager is built with no OBS signals connected and no weak "
+	      "handle in its callback data (CORE-757)");
+
+	check(built < attached,
+	      "AttachObsSignals() is called before the scene manager is "
+	      "built (CORE-757)");
+
+	//
+	// The constructor must not build the callback data itself, which is
+	// the shape that makes the weak handle empty.
+	//
+	const std::string ctor = function_body(
+		strip_line_comments(
+			slurp("streamelements/SEObsSceneManager.cpp")),
+		"SEObsSceneManager::SEObsSceneManager(");
+
+	check(!ctor.empty(),
+	      "SEObsSceneManager constructor not found -- this invariant "
+	      "needs updating (CORE-757)");
+
+	check(ctor.find("new SESignalHandlerData") == std::string::npos,
+	      "SEObsSceneManager builds its SESignalHandlerData in its own "
+	      "constructor again. weak_from_this() is empty there, so the "
+	      "data would hold a handle that never locks -- that is what "
+	      "AttachObsSignals() is for (CORE-757)");
+
+	//
+	// Same for the composition path, which has the same problem and the
+	// same answer.
+	//
+	const std::string composition = strip_line_comments(
+		slurp("streamelements/SEVideoComposition.cpp"));
+
+	check(composition.find("result->AttachObsSignals()") !=
+		      std::string::npos,
+	      "SECustomVideoComposition::Create() no longer attaches the "
+	      "signal data, so the composition is built with no scene "
+	      "signals armed (CORE-757)");
+
+	check(composition.find("weak_from_this()") != std::string::npos,
+	      "SECustomVideoComposition no longer passes weak_from_this() to "
+	      "its signal data (CORE-757)");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -3699,6 +3843,8 @@ int main()
 	check_signal_handler_data_holds_the_composition_per_path();
 	check_data_driven_scans_do_not_call_os_file_exists();
 	check_the_scene_manager_drains_outside_its_mutex();
+	check_signal_handler_data_holds_its_owners_weakly();
+	check_the_scene_manager_is_attached_where_it_is_built();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

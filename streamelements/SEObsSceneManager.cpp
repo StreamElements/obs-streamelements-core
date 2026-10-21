@@ -1214,7 +1214,7 @@ static void handle_scene_item_select(void *my_data, calldata_t *cd)
 
 	if (my_data) {
 		auto sceneManager =
-			((SESignalHandlerData *)my_data)->m_obsSceneManager;
+			((SESignalHandlerData *)my_data)->ObsSceneManager();
 
 		if (sceneManager)
 			sceneManager->Update();
@@ -1231,7 +1231,7 @@ static void handle_scene_item_deselect(void *my_data, calldata_t *cd)
 
 	if (my_data) {
 		auto sceneManager =
-			((SESignalHandlerData *)my_data)->m_obsSceneManager;
+			((SESignalHandlerData *)my_data)->ObsSceneManager();
 
 		if (sceneManager)
 			sceneManager->Update();
@@ -1249,7 +1249,7 @@ static void handle_scene_item_reorder(void *my_data, calldata_t *cd)
 
 	if (my_data) {
 		auto sceneManager =
-			((SESignalHandlerData *)my_data)->m_obsSceneManager;
+			((SESignalHandlerData *)my_data)->ObsSceneManager();
 
 		if (sceneManager)
 			sceneManager->Update();
@@ -1554,7 +1554,8 @@ static void handle_scene_item_add(void *my_data, calldata_t *cd)
 
 	if (my_data) {
 		auto sceneManager =
-			static_cast<SESignalHandlerData *>(my_data)->m_obsSceneManager;
+			static_cast<SESignalHandlerData *>(my_data)
+				->ObsSceneManager();
 
 		if (sceneManager)
 			sceneManager->Update();
@@ -1599,7 +1600,7 @@ static void process_scene_item_remove(obs_sceneitem_t *sceneitem,
 
 	// Read before remove_scene_signals(): when the group held the last
 	// count on its parent scene, that call deletes signalHandlerData.
-	auto sceneManager = signalHandlerData->m_obsSceneManager;
+	auto sceneManager = signalHandlerData->ObsSceneManager();
 
 	remove_scene_signals(group_scene, signalHandlerData);
 
@@ -1895,7 +1896,8 @@ SEObsSceneManager::SEObsSceneManager(
 	std::shared_ptr<SEConfig> config)
 	: m_parent(parent),
 	  m_videoCompositionManager(videoCompositionManager),
-	  m_config(config)
+	  m_config(config),
+	  m_hostEventDispatcher(hostEventDispatcher)
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
@@ -1909,10 +1911,48 @@ SEObsSceneManager::SEObsSceneManager(
 	m_scenesWidgetManager = new SEScenesListWidgetManager(
 		m_parent, auxiliaryControlsBuilder, config);
 
+	//
+	// The signal data and the OBS hookup are in AttachObsSignals(), which
+	// the container calls on the line after this returns. See its comment
+	// in the header: the data holds this object weakly, and there is no
+	// weak handle to be had until make_shared has finished.
+	//
+
+	CefRefPtr<CefValue> dummy1 = CefValue::Create();
+	DeserializeSceneItemsAuxiliaryActions(
+		CefParseJSON(m_config->GetSceneItemsAuxActionsConfig(),
+			     JSON_PARSER_ALLOW_TRAILING_COMMAS),
+		dummy1);
+
+	CefRefPtr<CefValue> dummy2 = CefValue::Create();
+	DeserializeScenesAuxiliaryActions(
+		CefParseJSON(m_config->GetScenesAuxActionsConfig(),
+			     JSON_PARSER_ALLOW_TRAILING_COMMAS),
+		dummy2);
+}
+
+void SEObsSceneManager::AttachObsSignals(
+	std::weak_ptr<SEObsSceneManager> self)
+{
+	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
+	if (m_signalHandlerData) {
+		blog(LOG_WARNING,
+		     "[obs-streamelements-core]: SEObsSceneManager::AttachObsSignals called twice; ignoring the second call");
+
+		return;
+	}
+
+	//
+	// self rather than this, so the callback data holds a weak_ptr it can
+	// lock. The native composition is handed over as a shared_ptr and
+	// kept as a weak one: the composition manager owns it, and this
+	// object only ever asks whether it is still there.
+	//
 	m_signalHandlerData = new SESignalHandlerData(
-		this, m_videoCompositionManager,
-		m_videoCompositionManager->GetObsNativeVideoComposition().get(),
-		hostEventDispatcher);
+		self, m_videoCompositionManager,
+		m_videoCompositionManager->GetObsNativeVideoComposition(),
+		m_hostEventDispatcher);
 
 	obs_frontend_add_event_callback(handle_obs_frontend_event, this);
 
@@ -1936,18 +1976,6 @@ SEObsSceneManager::SEObsSceneManager(
 			return true;
 		},
 		m_signalHandlerData);
-
-	CefRefPtr<CefValue> dummy1 = CefValue::Create();
-	DeserializeSceneItemsAuxiliaryActions(
-		CefParseJSON(m_config->GetSceneItemsAuxActionsConfig(),
-			     JSON_PARSER_ALLOW_TRAILING_COMMAS),
-		dummy1);
-
-	CefRefPtr<CefValue> dummy2 = CefValue::Create();
-	DeserializeScenesAuxiliaryActions(
-		CefParseJSON(m_config->GetScenesAuxActionsConfig(),
-			     JSON_PARSER_ALLOW_TRAILING_COMMAS),
-		dummy2);
 }
 
 void SEObsSceneManager::CleanObsSceneSignals()
