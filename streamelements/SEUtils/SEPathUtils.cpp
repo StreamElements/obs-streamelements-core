@@ -260,6 +260,10 @@ bool FileExists(std::string path)
 	// allocation per call inside libobs. An empty path is not a file, so
 	// this answers it without asking.
 	//
+	// Not guarded by platform although the leak is Windows-only: each
+	// libobs body already answers false for an empty path, so this is the
+	// same answer everywhere, not a Windows-only behaviour.
+	//
 	if (path.empty())
 		return false;
 

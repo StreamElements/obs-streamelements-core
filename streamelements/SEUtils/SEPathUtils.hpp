@@ -40,4 +40,13 @@ bool SecureJoinPaths(std::string base, std::string subpath,
 // strings in each of fourteen collections. An empty path is not a file, so
 // answering it here is both correct and one syscall cheaper.
 //
+// The leak is Windows-only -- only that platform converts to UTF-16 first,
+// and platform-nix.c is a bare access(path, F_OK) -- but the empty-path
+// check is deliberately not guarded by platform. Both libobs bodies
+// already answer false for an empty path (access("", F_OK) fails with
+// ENOENT), so answering it here returns exactly what os_file_exists()
+// returned, on every platform. A guard would buy nothing, and would leave
+// the same question answered two different ways depending on where it
+// compiled.
+//
 bool FileExists(std::string path);
