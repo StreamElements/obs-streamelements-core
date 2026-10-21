@@ -115,13 +115,13 @@ void SEGlobalStateManager::ThemeChangeListener::changeEvent(
 				{"name", newTheme},
 			};
 
-			if (m_hostEventDispatcher) {
-				m_hostEventDispatcher->DispatchJSEventGlobal(
+			if (auto dispatcher = m_hostEventDispatcher.lock()) {
+				dispatcher->DispatchJSEventGlobal(
 					"hostUIThemeChanged", json.dump());
 			}
 
-			if (m_messageBus) {
-				m_messageBus->NotifyExternalHostEvent(
+			if (auto messageBus = m_messageBus.lock()) {
+				messageBus->NotifyExternalHostEvent(
 					"hostUIThemeChanged", json.dump());
 			}
 
@@ -285,8 +285,14 @@ SEGlobalStateManager::~SEGlobalStateManager()
 	// owning an API handler, each handler holding the container -- that
 	// refcounting could not unwind, and a teardown step was the only
 	// thing breaking it. Every one of those back-edges is a weak_ptr now,
-	// so the container goes when this object goes and each service goes
-	// when its last real user does.
+	// so each service goes when its last real user does.
+	//
+	// Shutdown() releases the container as its last act, which is a
+	// different statement in every way that matters: this object letting
+	// go of its own handle, at a point where nothing else holds one, as
+	// against reaching inside to drop handles other objects were still
+	// using. The audit at the end of Shutdown() is what proves the
+	// difference on every run.
 	//
 	// If a shutdown hang comes back, the fix is the weak edge that went
 	// missing, not a line here: an owner deciding other objects'
@@ -829,12 +835,13 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 //
 // --- Loud when a service outlives teardown (CORE-757) --------------------
 //
-// weak handles, taken while everything is still alive and inspected once the
-// root is gone. expired() is the whole question, which is why this is not a
-// use_count() comparison: services legitimately hold each other -- fifteen
-// managers hold the host event dispatcher -- so there is no fixed expected
-// count to compare against, and the only number that means anything is
-// whether the object survived its owners.
+// weak handles, taken while everything is still alive and inspected at the
+// end of Shutdown(), after the last strong handle has gone. expired() is the
+// whole question, which is why this is not a use_count() comparison:
+// services legitimately hold each other -- fifteen managers hold the host
+// event dispatcher -- so there is no fixed expected count to compare
+// against, and the only number that means anything is whether the object
+// survived its owners.
 //
 namespace {
 struct WatchedService {
@@ -958,7 +965,7 @@ void SEReportServicesOutlivingTeardown()
 		++leaked;
 
 		blog(LOG_WARNING,
-		     "[obs-streamelements-core]: %s outlived teardown: %ld handle(s) still held after the plug-in was destroyed. Something is holding it that nobody wrote down -- a queued task, a detached thread, or a reference ring",
+		     "[obs-streamelements-core]: %s outlived teardown: %ld handle(s) still held after Shutdown() released the services. Something is holding it that nobody wrote down -- a queued task, a detached thread, or a reference ring",
 		     watched.name, watched.handle.use_count());
 	}
 
@@ -981,8 +988,9 @@ void SEGlobalStateManager::Shutdown()
 	}
 
 	//
-	// While they are all still alive. Reported from obs_module_unload,
-	// after this object and the container it holds are both gone.
+	// While they are all still alive. Reported at the bottom of this
+	// function, once the container has been released and every one of
+	// them should be gone.
 	//
 	WatchServicesForTeardownAudit();
 
@@ -1151,6 +1159,40 @@ void SEGlobalStateManager::Shutdown()
 
 	if (m_apiServices)
 		m_apiServices->ready = false;
+
+	//
+	// The root's own handle on the container, and the last one in the
+	// process. Every service handle above is already released, nothing
+	// else holds the container strongly --
+	// check_nothing_but_the_manager_owns_the_services_container is the
+	// guard on that -- and the Qt queue that could still have been
+	// carrying a lambda with a captured copy has just been drained. So
+	// this line is what destroys the services.
+	//
+	// Not the same thing as the teardown step this refactor removed. That
+	// one reached into the container and dropped handles other objects
+	// were still using, to break a ring; this drops only the handle this
+	// object owns, exactly as the thirty-odd lines above it do. The rings
+	// are gone, which is what makes dropping it sufficient rather than a
+	// workaround -- and
+	// check_api_services_container_is_not_emptied_at_teardown still
+	// forbids the other thing, here as well as in the destructor.
+	//
+	// Here rather than left to member destruction so that "the plug-in
+	// has shut down" and "its services are gone" are the same moment.
+	// Without it the audit below could only run from obs_module_unload,
+	// which answers a weaker question: it cannot distinguish a service
+	// that was released on time from one that happened to be released
+	// while the root was being destroyed.
+	//
+	m_apiServices = nullptr;
+
+	//
+	// Which makes this the check that everything the plug-in built is
+	// gone, with the three the crash handler deliberately keeps named as
+	// such. A clean run ends in "N of N services released cleanly".
+	//
+	SEReportServicesOutlivingTeardown();
 }
 
 void SEGlobalStateManager::OnObsExit()

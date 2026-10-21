@@ -398,12 +398,11 @@ MODULE_EXPORT void obs_module_unload(void)
 	log_remaining_objects();
 
 	//
-	// Here rather than inside Shutdown(): the root shared_ptr has been
-	// reset by now, so the services container is gone too and a service
-	// that is still alive is genuinely held by something else.
+	// The services audit used to run here. It reports from the end of
+	// Shutdown() now, where the container is released: same question,
+	// asked at a point that can tell a service released on time from one
+	// released while the root was being destroyed.
 	//
-	SEReportServicesOutlivingTeardown();
-
 	blog(LOG_INFO, "[obs-streamelements-core]: shutdown complete");
 
 	SETRACE_DUMP();

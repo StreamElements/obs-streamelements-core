@@ -2841,6 +2841,116 @@ static void check_api_services_container_is_not_emptied_at_teardown()
 	      "If shutdown hangs, a holder that one of the container's "
 	      "services destroys is holding the container strongly -- make "
 	      "that edge weak instead of adding a teardown step");
+
+	//
+	// And in Shutdown(), which is where the container is released now.
+	// Releasing this object's own handle is not the same statement --
+	// see the comment there -- but the forbidden one would be just as
+	// wrong a function earlier, so check both rather than leave it
+	// somewhere to move to.
+	//
+	const std::string shutdown =
+		function_body(src, "void SEGlobalStateManager::Shutdown()");
+
+	check(!shutdown.empty(),
+	      "cannot find SEGlobalStateManager::Shutdown() -- this invariant "
+	      "needs updating");
+
+	check(shutdown.find("*m_apiServices = SEApiServices()") ==
+		      std::string::npos,
+	      "Shutdown() empties the services container. Releasing the "
+	      "root's own handle is fine and is what the last line does; "
+	      "reaching in to drop handles other objects still hold is the "
+	      "teardown step this refactor removed -- if shutdown hangs, find "
+	      "the strong back-edge instead");
+}
+
+//
+// --- The services are released at the end of Shutdown() (CORE-757) ------
+//
+// Shutdown() releases the root handle on every service and then, as its
+// final statement, the container that holds the second handle on each. Only
+// after that is "has this service outlived the plug-in?" a question with a
+// true answer, which is why the audit is the line after it.
+//
+// Left to member destruction instead, the services would outlive Shutdown()
+// by an unknowable amount -- the audit could then only run from
+// obs_module_unload, where it cannot tell a service released on time from
+// one released while the root was being destroyed.
+//
+// The order is the whole invariant: watch, release, report.
+//
+static void check_the_services_are_released_at_the_end_of_shutdown()
+{
+	const std::string src = strip_line_comments(
+		slurp("streamelements/SEGlobalStateManager.cpp"));
+
+	const std::string shutdown =
+		function_body(src, "void SEGlobalStateManager::Shutdown()");
+
+	check(!shutdown.empty(),
+	      "cannot find SEGlobalStateManager::Shutdown() -- this invariant "
+	      "needs updating (CORE-757)");
+
+	const auto watch = shutdown.find("WatchServicesForTeardownAudit()");
+	const auto release = shutdown.find("m_apiServices = nullptr");
+	const auto report =
+		shutdown.find("SEReportServicesOutlivingTeardown()");
+
+	check(watch != std::string::npos,
+	      "Shutdown() no longer takes the weak handles, so the audit has "
+	      "nothing to report on (CORE-757)");
+
+	check(release != std::string::npos,
+	      "Shutdown() no longer releases the services container, so the "
+	      "services outlive it by however long the root happens to live "
+	      "and the audit below cannot mean what it says (CORE-757)");
+
+	check(report != std::string::npos,
+	      "nothing reports which services outlived teardown. The weak "
+	      "handles are taken and never looked at (CORE-757)");
+
+	check(watch < release && release < report,
+	      "Shutdown() must watch, then release the container, then "
+	      "report. Reporting before the release names every service as a "
+	      "survivor; releasing before the watch leaves nothing to watch "
+	      "(CORE-757)");
+
+	//
+	// The report has to be the end of it. A step added afterwards that
+	// released anything else would be outside what the audit can see.
+	//
+	const std::string tail = shutdown.substr(report);
+
+	check(tail.find(";") != std::string::npos,
+	      "unexpected shape at the end of Shutdown() -- this invariant "
+	      "needs updating (CORE-757)");
+
+	const std::string after = tail.substr(tail.find(";") + 1);
+
+	std::string rest;
+	for (std::size_t i = 0; i < after.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(after[i])))
+			rest += after[i];
+	}
+
+	check(rest == "}",
+	      "SEReportServicesOutlivingTeardown() is no longer the last "
+	      "statement of Shutdown(). Anything after it is teardown the "
+	      "audit cannot see (CORE-757)");
+
+	//
+	// And obs_module_unload must not report as well: two reports of the
+	// same thing is how the second one stops being read.
+	//
+	const std::string plugin =
+		strip_line_comments(slurp("obs-streamelements-core-plugin.cpp"));
+
+	check(plugin.find("SEReportServicesOutlivingTeardown()") ==
+		      std::string::npos,
+	      "obs_module_unload reports the teardown audit again. Shutdown() "
+	      "already did, from a point that can tell a service released on "
+	      "time from one released during destruction (CORE-757)");
 }
 
 static void check_api_services_is_a_container_and_nothing_else()
@@ -3785,6 +3895,100 @@ static void check_the_scene_manager_is_attached_where_it_is_built()
 	      "its signal data (CORE-757)");
 }
 
+//
+// --- A deferred delete holds its services weakly (CORE-757) -------------
+//
+// Two objects in this plug-in are destroyed by Qt rather than by us, at a
+// time nobody here chooses: SEBrowserWidget, whose owners hand the dock to
+// SEDeleteDockWidgetWhenSafe() (CORE-777 and CORE-1922 are what make a
+// synchronous delete unsafe), and ThemeChangeListener, which Shutdown()
+// releases with deleteLater() and which therefore waits for an event-loop
+// pass the plug-in no longer gets.
+//
+// Both routinely outlive Shutdown(). Holding a service strongly from there
+// is not a ring and does not hang anything -- it quietly extends that
+// service past the end of teardown, and everything the service owns with
+// it. Measured, with the audit at the end of Shutdown(): one surviving
+// background-worker widget held the composition manager, which held three
+// custom compositions and their signal data, for a total of four services
+// still standing; the theme listener held the message bus and, through it,
+// the host event dispatcher and the websocket API server, for three more.
+// Every one of them went away when these handles became weak.
+//
+// A failed lock in either place means the plug-in has shut down, which is
+// exactly when there is no registry to unregister from, no composition to
+// look up and no page to dispatch to.
+//
+static void check_deferred_deletes_hold_services_weakly()
+{
+	const std::string widget = strip_line_comments(
+		slurp("streamelements/SEBrowserWidget.hpp"));
+
+	struct Handle {
+		const char *service;
+		const char *member;
+	};
+
+	const Handle widgetHandles[] = {
+		{"SEWebsocketApiServer", "m_apiServer"},
+		{"SEVideoCompositionManager", "m_videoCompositionManager"},
+		{"SEHostEventDispatcher", "m_hostEventDispatcher"},
+	};
+
+	for (const Handle &h : widgetHandles) {
+		const std::string weak = std::string("std::weak_ptr<") +
+					 h.service + "> " + h.member + ";";
+		const std::string strong = std::string("std::shared_ptr<") +
+					   h.service + "> " + h.member + ";";
+
+		const std::string why =
+			std::string("SEBrowserWidget::") + h.member +
+			" is not a weak_ptr. Its owners defer the delete, so a "
+			"widget outlives Shutdown() and a strong handle keeps "
+			"that service -- and whatever it owns -- alive with it "
+			"(CORE-757)";
+
+		check(widget.find(weak) != std::string::npos, why.c_str());
+		check(widget.find(strong) == std::string::npos, why.c_str());
+	}
+
+	//
+	// The listener is a nested class, and the root declares a message bus
+	// of its own in the same header, so this has to read the class body
+	// rather than the file.
+	//
+	const std::string listener = function_body(
+		strip_line_comments(
+			slurp("streamelements/SEGlobalStateManager.hpp")),
+		"class ThemeChangeListener");
+
+	check(!listener.empty(),
+	      "cannot find ThemeChangeListener -- this invariant needs "
+	      "updating (CORE-757)");
+
+	const Handle listenerHandles[] = {
+		{"SEHostEventDispatcher", "m_hostEventDispatcher"},
+		{"SEMessageBus", "m_messageBus"},
+	};
+
+	for (const Handle &h : listenerHandles) {
+		const std::string weak = std::string("std::weak_ptr<") +
+					 h.service + "> " + h.member + ";";
+		const std::string strong = std::string("std::shared_ptr<") +
+					   h.service + "> " + h.member + ";";
+
+		const std::string why =
+			std::string("ThemeChangeListener::") + h.member +
+			" is not a weak_ptr. Shutdown() releases this widget "
+			"with deleteLater(), so it outlives teardown and a "
+			"strong handle makes that service outlive it too "
+			"(CORE-757)";
+
+		check(listener.find(weak) != std::string::npos, why.c_str());
+		check(listener.find(strong) == std::string::npos, why.c_str());
+	}
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -3845,6 +4049,8 @@ int main()
 	check_the_scene_manager_drains_outside_its_mutex();
 	check_signal_handler_data_holds_its_owners_weakly();
 	check_the_scene_manager_is_attached_where_it_is_built();
+	check_the_services_are_released_at_the_end_of_shutdown();
+	check_deferred_deletes_hold_services_weakly();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

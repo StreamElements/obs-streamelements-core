@@ -55,19 +55,36 @@ private:
 	// bundle's own widget managers destroy. What this class needs after
 	// construction is these two, by name.
 	//
-	// The server is held rather than fetched so that a widget can always
-	// unregister its message handler, which is what the availability
-	// check in DestroyBrowser() used to stand in for. Neither is a ring:
-	// no service in here owns a browser widget.
+	// Weak, all three, because of the one thing this class cannot
+	// promise: when it dies. Its owners defer deletion on purpose -- a
+	// background worker's dock goes through SEDeleteDockWidgetWhenSafe()
+	// and a dock widget can ride into Qt's own teardown -- so a browser
+	// widget routinely outlives Shutdown().
 	//
-	std::shared_ptr<SEWebsocketApiServer> m_apiServer;
-	std::shared_ptr<SEVideoCompositionManager> m_videoCompositionManager;
+	// Held strongly, such a widget kept these three services alive with
+	// it, and through the composition manager the custom compositions
+	// and their signal data too. Measured: four services still standing
+	// at the end of Shutdown() on a clean run, all of them collapsing
+	// the instant one surviving worker widget was deleted. Weak is what
+	// makes "the plug-in has shut down" and "its services are gone" the
+	// same moment, which is what the audit at the end of Shutdown()
+	// checks.
+	//
+	// None of the three is a ring -- no service in here owns a browser
+	// widget -- so this was lifetime extension rather than a leak. A
+	// failed lock means the plug-in is gone, which is exactly when none
+	// of the calls below has anything left to do: there is no registry
+	// to unregister from, no composition to look up, and no page to
+	// dispatch to.
+	//
+	std::weak_ptr<SEWebsocketApiServer> m_apiServer;
+	std::weak_ptr<SEVideoCompositionManager> m_videoCompositionManager;
 
 	//
 	// Three, now: a widget announces its own visibility to its page and
 	// rebinds window.host.hostContainerHidden when it changes.
 	//
-	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+	std::weak_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
 	SEMessageBus::message_destination_filter_flags_t
 		m_messageDestinationFlags;
 
@@ -239,16 +256,16 @@ protected:
 			msg->GetArgumentList()->SetString(0, "host");
 			msg->GetArgumentList()->SetString(1, jsonString);
 
-			if (m_hostEventDispatcher) {
-				m_hostEventDispatcher->DispatchClientMessage(
-					m_clientId, msg);
+			if (auto dispatcher = m_hostEventDispatcher.lock()) {
+				dispatcher->DispatchClientMessage(m_clientId,
+								 msg);
 			}
 		}
 
 		// Dispatch hostVisibilityChanged event
 		{
-			if (m_hostEventDispatcher) {
-				m_hostEventDispatcher->DispatchJSEventContainer(
+			if (auto dispatcher = m_hostEventDispatcher.lock()) {
+				dispatcher->DispatchJSEventContainer(
 					m_clientId,
 					"hostContainerVisibilityChanged",
 					"null");

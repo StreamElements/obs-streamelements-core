@@ -255,13 +255,21 @@ SEBrowserWidget::SEBrowserWidget(
 
 	m_requestedApiMessageHandler->SetBrowserWidget(this);
 
-	m_apiServer = apiServices ? apiServices->websocketApiServer : nullptr;
+	//
+	// Kept locally for the rest of the constructor, because the members
+	// are weak: everything below runs while the bundle is provably
+	// alive, so there is nothing to be gained by locking it twice.
+	//
+	auto apiServer = apiServices ? apiServices->websocketApiServer
+				     : nullptr;
+
+	m_apiServer = apiServer;
 	m_videoCompositionManager =
 		apiServices ? apiServices->videoCompositionManager : nullptr;
 	m_hostEventDispatcher =
 		apiServices ? apiServices->hostEventDispatcher : nullptr;
 
-	uint16_t port = m_apiServer ? m_apiServer->GetPort() : 0;
+	uint16_t port = apiServer ? apiServer->GetPort() : 0;
 
 	m_msgHandler = [this](std::shared_ptr<SEWebsocketApiServer::ClientInfo> source,
 			      CefRefPtr<CefProcessMessage> msg) {
@@ -277,8 +285,8 @@ SEBrowserWidget::SEBrowserWidget(
 								       msg, 0);
 	};
 
-	if (m_apiServer) {
-		m_apiServer->RegisterMessageHandler(m_clientId, m_msgHandler);
+	if (apiServer) {
+		apiServer->RegisterMessageHandler(m_clientId, m_msgHandler);
 	}
 
 	if (m_isIncognito) {
@@ -521,7 +529,7 @@ void SEBrowserWidget::DestroyBrowser()
 	RemoveVideoCompositionView();
 
 	{
-		auto apiServer = m_apiServer;
+		auto apiServer = m_apiServer.lock();
 
 		if (apiServer) {
 			apiServer->UnregisterMessageHandler(m_clientId,
@@ -750,11 +758,13 @@ void SEBrowserWidget::DeserializeVideoCompositionView(
 
 	std::string videoCompositionId = root->GetString("videoCompositionId");
 
-	if (!m_videoCompositionManager)
+	auto videoCompositionManager = m_videoCompositionManager.lock();
+
+	if (!videoCompositionManager)
 		return;
 
 	auto videoComposition =
-		m_videoCompositionManager->GetVideoCompositionById(
+		videoCompositionManager->GetVideoCompositionById(
 			videoCompositionId);
 
 	if (!videoComposition.get())

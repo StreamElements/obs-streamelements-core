@@ -152,7 +152,8 @@ private:
 	// Takes a weak handle on every published service, so that
 	// SEReportServicesOutlivingTeardown() can say afterwards which ones
 	// are still standing. Called at the top of Shutdown(), while they
-	// all still exist.
+	// all still exist; reported at the bottom of it, once the container
+	// has been released.
 	//
 	void WatchServicesForTeardownAudit();
 
@@ -375,12 +376,24 @@ private:
 		std::string m_currentTheme;
 
 		//
-		// A nested QDockWidget: Qt owns it once it is added to the
-		// main window, so it holds what it announces with rather
-		// than reaching for it when the theme changes.
+		// A nested QDockWidget, so it holds what it announces with
+		// rather than reaching for it when the theme changes -- and
+		// it holds it weakly, because Qt owns the widget and
+		// Shutdown() lets go of it with deleteLater(). That delete
+		// is processed by an event-loop pass this plug-in no longer
+		// gets, so the listener outlives Shutdown() on every run.
 		//
-		std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
-		std::shared_ptr<SEMessageBus> m_messageBus;
+		// Held strongly, it was the last holder of the message bus
+		// and, through the bus, of the host event dispatcher and the
+		// websocket API server: three services still standing in the
+		// audit at the end of Shutdown(), at one, two and one
+		// handle, which is this object and nothing else. Same
+		// reasoning as SEBrowserWidget -- an object whose deletion
+		// is deferred cannot be trusted with a strong handle on
+		// anything the plug-in is trying to shut down.
+		//
+		std::weak_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+		std::weak_ptr<SEMessageBus> m_messageBus;
 	};
 
 	class ApplicationStateListener : public QObject {
@@ -402,10 +415,12 @@ private:
 //
 // Says which services are still alive after the plug-in has been torn down.
 //
-// Shutdown() releases the root's handle on each one, and the container in
-// m_apiServices releases its own when the root is destroyed. After that
-// everything should be gone, so call this once the root shared_ptr has been
-// reset -- which in practice means obs_module_unload, beside SETRACE_DUMP().
+// Shutdown() releases the root's handle on each one and then the container
+// itself, which releases the last handle on every service. After that
+// everything should be gone, so this is called as the final statement of
+// Shutdown() -- late enough to be the truth, and early enough that "the
+// plug-in has shut down" and "its services are gone" are one moment rather
+// than two.
 //
 // A service that is still standing there is held by something nobody wrote
 // down: a lambda parked in a timer, a detached thread, a ring refcounting
