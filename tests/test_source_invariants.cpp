@@ -3538,6 +3538,109 @@ static void check_data_driven_scans_do_not_call_os_file_exists()
 	      "the question some other way than intended");
 }
 
+//
+// --- The scene manager drains outside its own mutex (CORE-757) ----------
+//
+// ~SEObsSceneManager used to take m_mutex as its first statement and still
+// hold it through CleanObsSceneSignals() and Wait(), which drain
+// SESignalHandlerData's task queue -- on that queue's own thread. Waiting
+// for a queue to drain while holding a lock its tasks might take is a
+// deadlock, and CORE-757 carries a three-variant demonstration of this
+// exact shape. It did not hang only because both EnqueueAsyncTask() sites
+// enqueue lambdas that call file-static dispatch functions which happen not
+// to touch m_mutex.
+//
+// Brace-depth tracking rather than positions, which is the difference
+// between checking the fix and checking its shape: a guard declared in a
+// narrower scope is fine once that scope has closed, and a guard anywhere
+// still open when a drain runs is the bug -- including one sitting a few
+// lines above the drain inside the same block, which a "locks come last"
+// rule reports as clean.
+//
+static void check_the_scene_manager_drains_outside_its_mutex()
+{
+	const std::string body = function_body(
+		strip_line_comments(
+			slurp("streamelements/SEObsSceneManager.cpp")),
+		"SEObsSceneManager::~SEObsSceneManager");
+
+	check(!body.empty(),
+	      "scene manager teardown: ~SEObsSceneManager not found -- this "
+	      "invariant needs updating (CORE-757)");
+
+	// Depths at which a lock still in scope was declared.
+	std::vector<int> openLocks;
+
+	int depth = 0;
+	bool sawLock = false;
+	bool sawDrain = false;
+	bool drainUnderLock = false;
+
+	for (std::size_t i = 0; i < body.size();) {
+		if (body[i] == '{') {
+			++depth;
+			++i;
+			continue;
+		}
+
+		if (body[i] == '}') {
+			--depth;
+
+			// Everything declared deeper than this has just gone
+			// out of scope, which is what releases it.
+			while (openLocks.size() && openLocks.back() > depth)
+				openLocks.pop_back();
+
+			++i;
+			continue;
+		}
+
+		const char *lock = "lock_guard";
+		const char *alt = "unique_lock";
+
+		if (!body.compare(i, std::strlen(lock), lock) ||
+		    !body.compare(i, std::strlen(alt), alt)) {
+			openLocks.push_back(depth);
+			sawLock = true;
+			i += std::strlen(lock);
+			continue;
+		}
+
+		const char *clean = "CleanObsSceneSignals()";
+		const char *wait = "->Wait()";
+
+		if (!body.compare(i, std::strlen(clean), clean) ||
+		    !body.compare(i, std::strlen(wait), wait)) {
+			sawDrain = true;
+
+			if (openLocks.size())
+				drainUnderLock = true;
+
+			i += std::strlen(wait);
+			continue;
+		}
+
+		++i;
+	}
+
+	check(sawLock,
+	      "scene manager teardown: no lock found in ~SEObsSceneManager -- "
+	      "this invariant needs updating (CORE-757)");
+
+	check(sawDrain,
+	      "scene manager teardown: no drain found in "
+	      "~SEObsSceneManager -- this invariant needs updating "
+	      "(CORE-757)");
+
+	check(!drainUnderLock,
+	      "~SEObsSceneManager drains SESignalHandlerData's task queue "
+	      "while holding m_mutex. That queue drains on its own thread, so "
+	      "a task reaching any of this class's locking methods would "
+	      "deadlock teardown -- variant A of the demonstration in "
+	      "CORE-757. Disconnect, drain, and only then take the lock to "
+	      "tear the members down (CORE-757)");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -3595,6 +3698,7 @@ int main()
 	check_every_published_service_is_watched_at_teardown();
 	check_signal_handler_data_holds_the_composition_per_path();
 	check_data_driven_scans_do_not_call_os_file_exists();
+	check_the_scene_manager_drains_outside_its_mutex();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

@@ -1966,16 +1966,44 @@ void SEObsSceneManager::CleanObsSceneSignals()
 
 SEObsSceneManager::~SEObsSceneManager()
 {
-	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+	//
+	// Three phases, and the order between them is the point: delete what
+	// this object owns, then stop the callbacks and drain the queue,
+	// then release the callback data. m_mutex is held for the first and
+	// the last, and deliberately not for the middle one.
+	//
+	// It used to be one lock_guard over the whole body, which is a
+	// deadlock shape: the queue drains on its own thread, so Wait()ing
+	// for it while holding a lock its tasks might take is variant A of
+	// the demonstration in CORE-757. signal_handler_disconnect() has the
+	// same problem from the other side -- libobs holds its signal-handler
+	// lock while a callback runs, and that callback wants m_mutex.
+	//
+	// Nothing deadlocks today: both EnqueueAsyncTask() sites enqueue
+	// lambdas that call file-static dispatch functions with the service
+	// handles already captured, and none of those take m_mutex. That is a
+	// property of two lambdas rather than of the design, and an
+	// ordinary-looking edit would lose it with no local signal that it is
+	// fatal. check_the_scene_manager_drains_outside_its_mutex keeps the
+	// phases apart.
+	//
+	// Letting go of the lock in between is safe because every path a
+	// signal callback can take null-checks both members -- Update() and
+	// handle_obs_frontend_event() -- so a callback that interleaves here
+	// reads the nulls this block has just written.
+	//
+	{
+		std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
-	if (m_scenesWidgetManager) {
-		delete m_scenesWidgetManager;
-		m_scenesWidgetManager = nullptr;
-	}
+		if (m_scenesWidgetManager) {
+			delete m_scenesWidgetManager;
+			m_scenesWidgetManager = nullptr;
+		}
 
-	if (m_sceneItemsMonitor) {
-		delete m_sceneItemsMonitor;
-		m_sceneItemsMonitor = nullptr;
+		if (m_sceneItemsMonitor) {
+			delete m_sceneItemsMonitor;
+			m_sceneItemsMonitor = nullptr;
+		}
 	}
 
 	obs_frontend_remove_event_callback(handle_obs_frontend_event, this);
@@ -1995,6 +2023,12 @@ SEObsSceneManager::~SEObsSceneManager()
 		CleanObsSceneSignals();
 
 		m_signalHandlerData->Wait();
+
+		//
+		// Only now, with the queue dry and the callbacks gone.
+		//
+		std::lock_guard<decltype(m_mutex)> guard(m_mutex);
+
 		m_signalHandlerData->Release();
 		m_signalHandlerData = nullptr;
 	}
