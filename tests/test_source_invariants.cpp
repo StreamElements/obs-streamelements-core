@@ -3989,6 +3989,108 @@ static void check_deferred_deletes_hold_services_weakly()
 	}
 }
 
+//
+// --- The handler file is on its way out of libobs and Qt (CORE-757) ------
+//
+// A ratchet, in the idiom of the one above: the number is a ceiling and a
+// floor at once, so it moves only in the commit that moves it.
+//
+// It counts every token in SEApiMessageHandler.cpp that cannot be compiled
+// without a libobs or Qt header -- 95 of them today, and the target is
+// zero. At zero the translation unit that holds all 208 API_HANDLER_BEGIN
+// blocks compiles in this suite, and every host API method becomes testable
+// at once, in one file, with no obs-studio tree. Today it fails on its
+// second include: SEConfig.hpp(3): cannot open include file 'obs-module.h'.
+//
+// The handlers stay in one file. Being able to read what the host exposes
+// and what it does not is worth more than per-domain translation units, so
+// the file stops talking to libobs and Qt instead: each family below moves
+// to the service or SEUtils domain that owns that concern, and the handler
+// body becomes a call.
+//
+// What this does not count, deliberately: calls to free helpers declared in
+// SEUtils. A function whose declaration is clean compiles without libobs,
+// and the test links its own definition -- test_session_signature already
+// does exactly that for CreateCryptoSecureRandomNumberString(). Those are
+// measured by what their headers drag in, which is a different number.
+//
+// Two hand counts of this came out at 53, then 87, before it was measured
+// properly. Both searched obs_[a-z] and Q[A-Z], which miss every OBS_*
+// constant -- 34 of the 95, more than a third -- along with blog, the LOG_*
+// levels, calldata_*, os_event_* and signal_handler_*. The families are
+// spelled out one per row so the vocabulary is inherited rather than
+// guessed at again.
+//
+static void check_api_handler_obs_qt_tokens_only_go_down()
+{
+	const std::string src = strip_line_comments(
+		slurp("streamelements/SEApiMessageHandler.cpp"));
+
+	struct Family {
+		const char *what;
+		const char *pattern;
+		int expected;
+	};
+
+	//
+	// Per family, so a failure says which concern moved rather than only
+	// that the total did. b*alloc sits at zero: nothing in this file
+	// allocates through libobs today, and nothing should start.
+	//
+	const Family families[] = {
+		{"libobs functions and types", R"(\bobs_[a-z]\w*)", 10},
+		{"libobs constants", R"(\bOBS_[A-Z]\w*)", 34},
+		{"blog", R"(\bblog\b)", 13},
+		{"libobs log levels", R"(\bLOG_[A-Z]\w*)", 13},
+		{"calldata", R"(\bcalldata_\w*)", 6},
+		{"os_* from libobs/util", R"(\bos_[a-z]\w*)", 8},
+		{"libobs signal handlers", R"(\bsignal_handler_\w*)", 1},
+		{"libobs allocation",
+		 R"(\b(?:bfree|bzalloc|bmalloc|bstrdup)\b)", 0},
+		{"Qt types", R"(\bQ[A-Z]\w*)", 9},
+		{"Qt task macros", R"(\bQt(?:PostTask|ExecSync|DelayTask)\b)",
+		 1},
+	};
+
+	int expected_total = 0;
+
+	for (const Family &f : families) {
+		expected_total += f.expected;
+
+		const int n = static_cast<int>(
+			count_matches(src, std::regex(f.pattern)));
+
+		if (n == f.expected)
+			continue;
+
+		std::ostringstream msg;
+
+		msg << "SEApiMessageHandler.cpp: " << f.what << " -- " << n
+		    << " occurrence(s), expected " << f.expected << ". ";
+
+		if (n > f.expected)
+			msg << "Nothing new may reach libobs or Qt from this "
+			       "file: put the implementation on the service "
+			       "or SEUtils domain that owns the concern, and "
+			       "call that from the handler (CORE-757).";
+		else
+			msg << "If you removed some, lower the number here in "
+			       "the same commit -- this count is a floor as "
+			       "well as a ceiling, so progress is recorded "
+			       "rather than assumed (CORE-757).";
+
+		check(false, msg.str().c_str());
+	}
+
+	//
+	// Keeps the headline in the comment above honest: the rows and the
+	// total are edited together or not at all.
+	//
+	check(expected_total == 95,
+	      "the per-family counts no longer sum to 95 -- update the total "
+	      "in the comment above in the same commit (CORE-757)");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -4051,6 +4153,7 @@ int main()
 	check_the_scene_manager_is_attached_where_it_is_built();
 	check_the_services_are_released_at_the_end_of_shutdown();
 	check_deferred_deletes_hold_services_weakly();
+	check_api_handler_obs_qt_tokens_only_go_down();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",
