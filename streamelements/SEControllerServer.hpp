@@ -34,6 +34,15 @@ class SEMessageBus;
 // The primary purpose of this class is to support integration with
 // external controllers, such as Elgato Streamdeck.
 //
+//
+// The accepting flag below replaced
+// SEGlobalStateManager::IsInstanceAvailable() (CORE-757). The question the
+// pipe callback has to answer is not "is the plug-in available" but "is this
+// server still willing to forward" -- and that is strictly narrower: the bus
+// that owns this object by value runs its own destructor body before this
+// one's, so there was a window in which the singleton still looked available
+// while the bus was already coming apart.
+//
 class SEControllerServer
 {
 public:
@@ -84,6 +93,12 @@ private:
 
 private:
 	SEMessageBus* m_bus = nullptr;
+
+	//
+	// Cleared by the destructor before the pipe server is stopped; see
+	// the comment above the class.
+	//
+	bool m_accepting = true;
 #ifdef _WIN32
 	NamedPipesServer *m_server = nullptr;
 #endif

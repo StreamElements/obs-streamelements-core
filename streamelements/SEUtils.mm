@@ -232,6 +232,8 @@ void SetGlobalCURLOptions(CURL *curl, const char *url)
     std::string proxy =
         GetCommandLineOptionValue("streamelements-http-proxy");
 
+    std::vector<std::string> bypass;
+
     if (!proxy.size()) {
         char host[512];
 
@@ -244,9 +246,44 @@ void SetGlobalCURLOptions(CURL *curl, const char *url)
         int                 portInt;
 
         // Get the dictionary.
-        
+
         proxyDict = SCDynamicStoreCopyProxies(NULL);
         result = (proxyDict != NULL);
+
+        //
+        // The hosts the user excluded from the proxy. Read regardless of
+        // whether the proxy itself turns out to be enabled, and before the
+        // CFRelease at the foot of this block, because every path below can
+        // fail the `result` chain and skip ahead.
+        //
+        // This was not read at all before, so a request to the plug-in's own
+        // loopback HTTP server went out through the proxy even when the
+        // exceptions list named it (CORE-757).
+        //
+        if (proxyDict != NULL) {
+            CFArrayRef exceptions = (CFArrayRef) CFDictionaryGetValue(
+                    proxyDict, kSCPropNetProxiesExceptionsList);
+
+            if (exceptions != NULL
+                    && CFGetTypeID(exceptions) == CFArrayGetTypeID()) {
+                const CFIndex count = CFArrayGetCount(exceptions);
+
+                for (CFIndex i = 0; i < count; ++i) {
+                    CFStringRef entry = (CFStringRef)
+                            CFArrayGetValueAtIndex(exceptions, i);
+
+                    if (entry == NULL
+                            || CFGetTypeID(entry) != CFStringGetTypeID())
+                        continue;
+
+                    char buf[512];
+
+                    if (CFStringGetCString(entry, buf, (CFIndex) sizeof(buf),
+                                           kCFStringEncodingUTF8))
+                        bypass.push_back(buf);
+                }
+            }
+        }
 
         // Get the enable flag.  This isn't a CFBoolean, but a CFNumber.
         
@@ -308,6 +345,10 @@ void SetGlobalCURLOptions(CURL *curl, const char *url)
     if (proxy.size()) {
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
         curl_easy_setopt(curl, CURLOPT_PROXY, proxy.c_str());
+
+        const std::string noproxy = ProxyBypassListToCurlNoProxy(bypass);
+
+        curl_easy_setopt(curl, CURLOPT_NOPROXY, noproxy.c_str());
     }
 }
 

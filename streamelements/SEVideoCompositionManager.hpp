@@ -1,4 +1,5 @@
 #pragma once
+#include "SECompositionServices.hpp"
 
 #include "SEVideoComposition.hpp"
 #include <shared_mutex>
@@ -6,8 +7,19 @@
 #include <map>
 #include "cef-headers.hpp"
 
-class SEVideoCompositionManager {
+#include <memory>
+
+//
+// Forward declaration rather than an include: the real header drags windows.h
+// in ahead of winsock2.h on these translation units.
+//
+class SEWebsocketApiServer;
+
+class SEVideoCompositionManager
+	: public std::enable_shared_from_this<SEVideoCompositionManager> {
 private:
+	std::shared_ptr<SEWebsocketApiServer> m_apiServer;
+
 	std::shared_mutex m_mutex;
 	std::map<std::string, std::shared_ptr<SEVideoCompositionBase>> m_videoCompositionsMap;
 	std::shared_ptr<SEVideoCompositionBase> m_nativeVideoComposition;
@@ -15,8 +27,26 @@ private:
 	std::map<std::string, CefRefPtr<CefDictionaryValue>>
 		m_availableEncoderClassesCache;
 
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+	std::shared_ptr<SEMessageBus> m_messageBus;
+
+	//
+	// What every composition this manager creates is handed. The weak
+	// self-handle is filled in per call site, because it cannot be taken
+	// inside this class's own constructor.
+	//
+	SECompositionServices CompositionServices()
+	{
+		return {m_hostEventDispatcher, m_messageBus,
+			weak_from_this()};
+	}
+
 public:
-	SEVideoCompositionManager();
+	SEVideoCompositionManager(
+		std::shared_ptr<SEWebsocketApiServer> apiServer,
+		std::shared_ptr<SEHostEventDispatcher>
+			hostEventDispatcher,
+		std::shared_ptr<SEMessageBus> messageBus);
 	~SEVideoCompositionManager();
 
 public:

@@ -2,6 +2,7 @@
 
 #include "SEDeferredExecutive.hpp"
 #include "SEUtils.hpp"
+#include <memory>
 
 #include <obs.h>
 
@@ -20,9 +21,25 @@
 	(SE_ENABLE_SCENE_ICONS || SE_ENABLE_SCENE_DEFAULT_ACTION || \
 	 SE_ENABLE_SCENE_CONTEXT_MENU)
 
+class SEAuxiliaryControlsBuilder;
+class SEConfig;
+
+//
+// The per-scene row widgets, keyed by source. Defined in the .cpp: it is
+// this class's own bookkeeping and nothing outside needs the type.
+//
+// It was a file-static instance with a static instance() accessor -- a
+// singleton holding QObjects, whose destructor would have run at process
+// exit, after Qt was gone (CORE-757).
+//
+class SourceDataManager;
+
 class SEScenesListWidgetManager : public QObject {
 public:
-	SEScenesListWidgetManager(QMainWindow *mainWindow);
+	SEScenesListWidgetManager(QMainWindow *mainWindow,
+				  std::shared_ptr<SEAuxiliaryControlsBuilder>
+					  auxiliaryControlsBuilder,
+				  std::shared_ptr<SEConfig> config);
 	virtual ~SEScenesListWidgetManager();
 
 public:
@@ -104,6 +121,24 @@ private:
 
 private:
 	QPointer<QMainWindow> m_mainWindow = nullptr;
+
+	//
+	// Builds the toolbar's auxiliary controls from the description a page
+	// sends. Public below, because the compiled-out scene UI extensions
+	// reach it from file-static helpers that hold the manager rather than
+	// from members.
+	//
+	std::shared_ptr<SEAuxiliaryControlsBuilder> m_auxiliaryControls;
+	std::shared_ptr<SEConfig> m_config;
+	std::unique_ptr<SourceDataManager> m_sourceData;
+
+public:
+	std::shared_ptr<SEAuxiliaryControlsBuilder> GetAuxiliaryControls()
+	{
+		return m_auxiliaryControls;
+	}
+
+private:
 	QPointer<QListWidget> m_nativeWidget = nullptr;
 	bool m_enableSignals = false;
 	SEDeferredExecutive m_updateWidgetsDeferredExecutive;

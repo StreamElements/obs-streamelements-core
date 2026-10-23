@@ -6,28 +6,30 @@
 #include <QWidget>
 
 #include "cef-headers.hpp"
+#include <obs-frontend-api.h>
+#include <QMainWindow>
+
+#include <obs-module.h>
 
 /* ========================================================================= */
 
 class SEWorkerManager::SEWorker {
 public:
-	SEWorker(std::string id,
-			     std::string url,
-			     std::string executeJavascriptOnLoad)
-		: m_url(url),
-		  m_executeJavascriptOnLoad(executeJavascriptOnLoad)
+	SEWorker(std::string id, std::string url,
+		 std::string executeJavascriptOnLoad,
+		 std::shared_ptr<SEApiServices> apiServices)
+		: m_url(url), m_executeJavascriptOnLoad(executeJavascriptOnLoad)
 	{
 		auto browserWidget = new SEBrowserWidget(
-			nullptr, SEMessageBus::DEST_WORKER,
-			m_url.c_str(), m_executeJavascriptOnLoad.c_str(),
-			"default", "popup",
-			CreateGloballyUniqueIdString().c_str(),
-			std::make_shared<SEApiMessageHandler>("backgroundWorker"),
+			nullptr, SEMessageBus::DEST_WORKER, m_url.c_str(),
+			m_executeJavascriptOnLoad.c_str(), "default", "popup",
+			CreateGloballyUniqueIdString().c_str(), apiServices,
+			std::make_shared<SEApiMessageHandler>(
+				"backgroundWorker", apiServices),
 			false);
 
 		auto mainWindow =
-			SEGlobalStateManager::GetInstance()
-				->mainWindow();
+			(QMainWindow *)obs_frontend_get_main_window();
 
 		//
 		// HACK: QCefWidget will only create the browser if visible
@@ -94,7 +96,10 @@ private:
 	QDockWidget *m_dockWidget = nullptr;
 };
 
-SEWorkerManager::SEWorkerManager() {}
+SEWorkerManager::SEWorkerManager(std::shared_ptr<SEApiServices> apiServices)
+	: m_apiServices(apiServices)
+{
+}
 
 SEWorkerManager::~SEWorkerManager() {
 	RemoveAll();
@@ -116,14 +121,23 @@ SEWorkerManager::Add(std::string requestedId,
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
+	auto apiServices = m_apiServices.lock();
+
+	if (!apiServices) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: SEWorkerManager: not adding a background worker: the services bundle is gone");
+
+		return std::string();
+	}
+
 	std::string id = requestedId;
 
 	if (!id.size() || m_items.count(id)) {
 		id = QUuid::createUuid().toString().toStdString();
 	}
 
-	m_items[id] = std::make_shared<SEWorker>(id, url,
-					       executeJavascriptOnLoad);
+	m_items[id] = std::make_shared<SEWorker>(
+		id, url, executeJavascriptOnLoad, apiServices);
 
 	return id;
 }

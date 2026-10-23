@@ -206,12 +206,12 @@ static const char* itoa(int input, char* buf, int radix)
 
 SEBrowserWidget::SEBrowserWidget(
 	QWidget *parent,
-	SEMessageBus::message_destination_filter_flags_t
-		messageDestinationFlags, const char *const url,
-	const char *const executeJavaScriptCodeOnLoad,
+	SEMessageBus::message_destination_filter_flags_t messageDestinationFlags,
+	const char *const url, const char *const executeJavaScriptCodeOnLoad,
 	const char *const reloadPolicy, const char *const locationArea,
-	const char *const id,
-	std::shared_ptr<SEApiMessageHandler> apiMessageHandler, bool isIncognito)
+	const char *const id, std::shared_ptr<SEApiServices> apiServices,
+	std::shared_ptr<SEApiMessageHandler> apiMessageHandler,
+	bool isIncognito)
 	: QWidget(parent),
 	  m_messageDestinationFlags(messageDestinationFlags),
 	  m_url(url),
@@ -220,8 +220,7 @@ SEBrowserWidget::SEBrowserWidget(
 						: executeJavaScriptCodeOnLoad),
 	  m_reloadPolicy(reloadPolicy),
 	  m_pendingLocationArea(locationArea == nullptr ? "" : locationArea),
-	  m_clientId(id == nullptr ? CreateGloballyUniqueIdString()
-				    : id),
+	  m_clientId(id == nullptr ? CreateGloballyUniqueIdString() : id),
 	  m_requestedApiMessageHandler(apiMessageHandler),
 	  m_isIncognito(isIncognito)
 {
@@ -250,14 +249,27 @@ SEBrowserWidget::SEBrowserWidget(
 
 	if (m_requestedApiMessageHandler == nullptr) {
 		m_requestedApiMessageHandler =
-			std::make_shared<SEApiMessageHandler>("unknown");
+			std::make_shared<SEApiMessageHandler>("unknown",
+							      apiServices);
 	}
 
 	m_requestedApiMessageHandler->SetBrowserWidget(this);
 
-	uint16_t port = SEGlobalStateManager::GetInstance()
-				->GetWebsocketApiServer()
-				->GetPort();
+	//
+	// Kept locally for the rest of the constructor, because the members
+	// are weak: everything below runs while the bundle is provably
+	// alive, so there is nothing to be gained by locking it twice.
+	//
+	auto apiServer = apiServices ? apiServices->websocketApiServer
+				     : nullptr;
+
+	m_apiServer = apiServer;
+	m_videoCompositionManager =
+		apiServices ? apiServices->videoCompositionManager : nullptr;
+	m_hostEventDispatcher =
+		apiServices ? apiServices->hostEventDispatcher : nullptr;
+
+	uint16_t port = apiServer ? apiServer->GetPort() : 0;
 
 	m_msgHandler = [this](std::shared_ptr<SEWebsocketApiServer::ClientInfo> source,
 			      CefRefPtr<CefProcessMessage> msg) {
@@ -273,10 +285,9 @@ SEBrowserWidget::SEBrowserWidget(
 								       msg, 0);
 	};
 
-	SEGlobalStateManager::GetInstance()
-		->GetWebsocketApiServer()
-		->RegisterMessageHandler(
-			m_clientId, m_msgHandler);
+	if (apiServer) {
+		apiServer->RegisterMessageHandler(m_clientId, m_msgHandler);
+	}
 
 	if (m_isIncognito) {
 		char cookie_store_name[128];
@@ -289,16 +300,17 @@ SEBrowserWidget::SEBrowserWidget(
 
 		const char *path = obs_module_config_path(cookie_store_name);
 
-		SEGlobalStateManager::GetInstance()
-			->GetCleanupManager()
-			->AddPath(path);
+		if (apiServices && apiServices->cleanupManager) {
+			apiServices->cleanupManager->AddPath(path);
+		}
 
 		bfree((void*)path);
 
 		m_separateCookieManager =
-			SEGlobalStateManager::GetInstance()
-				->GetCef()
-				->create_cookie_manager(cookie_store_name, false);
+			apiServices && apiServices->cef
+				? apiServices->cef->create_cookie_manager(
+					  cookie_store_name, false)
+				: nullptr;
 
 		m_separateCookieManager->DeleteCookies("", "");
 	}
@@ -307,16 +319,12 @@ SEBrowserWidget::SEBrowserWidget(
 	m_cefWidgetContainer->setAttribute(Qt::WA_NativeWindow);
 
 	m_cefWidget =
-		SEGlobalStateManager::GetInstance()
-			->GetCef()
-			->create_widget(
+		apiServices->cef->create_widget(
 				m_cefWidgetContainer,
 				GetInitialPageURLInternal(),
 				m_separateCookieManager
 					? m_separateCookieManager
-					: SEGlobalStateManager::
-						  GetInstance()
-							  ->GetCookieManager());
+					: apiServices->cefCookieManager);
 
 	char portBuffer[8];
 
@@ -445,8 +453,10 @@ SEBrowserWidget::SEBrowserWidget(
 
 	m_cefWidget->setStartupScript(script + m_executeJavaScriptCodeOnLoad);
 
-	SEMessageBus::GetInstance()->AddListener(
-		m_clientId, m_messageDestinationFlags);
+	if (apiServices && apiServices->messageBus) {
+		apiServices->messageBus->AddListener(
+			m_clientId, m_messageDestinationFlags);
+	}
 
 	s_widgets[m_clientId] = this;
 
@@ -518,9 +528,8 @@ void SEBrowserWidget::DestroyBrowser()
 
 	RemoveVideoCompositionView();
 
-	if (SEGlobalStateManager::IsInstanceAvailable()) {
-		auto apiServer = SEGlobalStateManager::GetInstance()
-					 ->GetWebsocketApiServer();
+	{
+		auto apiServer = m_apiServer.lock();
 
 		if (apiServer) {
 			apiServer->UnregisterMessageHandler(m_clientId,
@@ -749,9 +758,14 @@ void SEBrowserWidget::DeserializeVideoCompositionView(
 
 	std::string videoCompositionId = root->GetString("videoCompositionId");
 
-	auto videoComposition = SEGlobalStateManager::GetInstance()
-		->GetVideoCompositionManager()
-		->GetVideoCompositionById(videoCompositionId);
+	auto videoCompositionManager = m_videoCompositionManager.lock();
+
+	if (!videoCompositionManager)
+		return;
+
+	auto videoComposition =
+		videoCompositionManager->GetVideoCompositionById(
+			videoCompositionId);
 
 	if (!videoComposition.get())
 		return;

@@ -438,7 +438,8 @@ static LONG CALLBACK CustomExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo)
 
 /* ================================================================= */
 
-SEBugSplatCrashHandler::SEBugSplatCrashHandler()
+SEBugSplatCrashHandler::SEBugSplatCrashHandler(std::shared_ptr<SEConfig> config)
+	: SECrashHandler(config)
 {
 	if (IsDebuggerPresent()) {
 		return;
@@ -487,6 +488,18 @@ SEBugSplatCrashHandler::SEBugSplatCrashHandler()
 #if HANG_DETECTION_ENABLED
 	StartHangDetection();
 #endif
+}
+
+void SEBugSplatCrashHandler::OnReportingServicesSet()
+{
+	//
+	// The tracker is what Collect() histograms; the analytics manager is
+	// unused on this platform, where BugSplat's own SDK reports the crash.
+	//
+	if (s_crashContext) {
+		s_crashContext->SetPerformanceHistoryTracker(
+			m_performanceHistoryTracker);
+	}
 }
 
 void SEBugSplatCrashHandler::StopAsyncHangDetection()

@@ -14,8 +14,9 @@
 #include <obs-module.h>
 
 SEBrowserWidgetManager::SEBrowserWidgetManager(
-	QMainWindow *parent)
-	: SEWidgetManager(parent), m_notificationBarToolBar(nullptr)
+	QMainWindow *parent, std::shared_ptr<SEApiServices> apiServices)
+	: SEWidgetManager(parent, apiServices),
+	  m_notificationBarToolBar(nullptr)
 {
 }
 
@@ -84,11 +85,21 @@ void SEBrowserWidgetManager::PushCentralBrowserWidget(
 
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
+	auto apiServices = ApiServices();
+
+	if (!apiServices) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: central widget: not loading: the services bundle is gone");
+
+		return;
+	}
+
 	SEBrowserWidget *widget = new SEBrowserWidget(
 		nullptr, SEMessageBus::DEST_UI, url,
 		executeJavaScriptCodeOnLoad, "reload", "center",
-		CreateGloballyUniqueIdString().c_str(),
-		std::make_shared<SEApiMessageHandler>("centralWidget"));
+		CreateGloballyUniqueIdString().c_str(), apiServices,
+		std::make_shared<SEApiMessageHandler>("centralWidget",
+						      apiServices));
 
 	PushCentralWidget(widget);
 }
@@ -305,10 +316,22 @@ bool SEBrowserWidgetManager::AddDockBrowserWidget(
 
 	std::string my_url = url;
 
+	auto apiServices = ApiServices();
+
+	if (!apiServices) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: docking widget '%s': not adding: the services bundle is gone",
+		     id);
+
+		return false;
+	}
+
 	SEBrowserWidget *widget = new SEBrowserWidget(
-		nullptr, SEMessageBus::DEST_UI, my_url.c_str(), executeJavaScriptCodeOnLoad, reloadPolicy,
-		DockWidgetAreaToString(area).c_str(), id,
-		std::make_shared<SEApiMessageHandler>("dockingWidget"));
+		nullptr, SEMessageBus::DEST_UI, my_url.c_str(),
+		executeJavaScriptCodeOnLoad, reloadPolicy,
+		DockWidgetAreaToString(area).c_str(), id, apiServices,
+		std::make_shared<SEApiMessageHandler>("dockingWidget",
+						      apiServices));
 
 	//main->setCentralWidget(widget);
 
@@ -1013,11 +1036,21 @@ void SEBrowserWidgetManager::ShowNotificationBar(
 
 	HideNotificationBar();
 
+	auto apiServices = ApiServices();
+
+	if (!apiServices) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: notification bar: not showing: the services bundle is gone");
+
+		return;
+	}
+
 	m_notificationBarBrowserWidget = new SEBrowserWidget(
-		nullptr, SEMessageBus::DEST_UI, url, executeJavaScriptCodeOnLoad, "reload", "notification",
-		CreateGloballyUniqueIdString().c_str(),
-		std::make_shared<SEApiMessageHandler>(
-			"notificationBar"));
+		nullptr, SEMessageBus::DEST_UI, url,
+		executeJavaScriptCodeOnLoad, "reload", "notification",
+		CreateGloballyUniqueIdString().c_str(), apiServices,
+		std::make_shared<SEApiMessageHandler>("notificationBar",
+						      apiServices));
 
 	const Qt::ToolBarArea NOTIFICATION_BAR_AREA = Qt::TopToolBarArea;
 

@@ -14,8 +14,11 @@ class SEExternalSceneDataProviderSlobsClient :
 	public SEExternalSceneDataProvider
 {
 public:
-	SEExternalSceneDataProviderSlobsClient(std::string providerId) :
-		SEExternalSceneDataProvider(providerId, "Streamlabs OBS")
+	SEExternalSceneDataProviderSlobsClient(
+		std::string providerId,
+		std::shared_ptr<SELocalFilesystemHttpServer> httpServer) :
+		SEExternalSceneDataProvider(providerId, "Streamlabs OBS",
+					    httpServer)
 	{
 		char* path = new char[MAX_PATH];
 

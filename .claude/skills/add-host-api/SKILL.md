@@ -45,7 +45,7 @@ Note the recursive mutex: a handler that synchronously invokes another handler o
 ## 3. Touching OBS or Qt state
 
 - UI/Qt work must go through `QtPostTask` / `QtExecSync` / `QtDelayTask` from `StreamElementsUtils.hpp`. They are macros that capture `__FILE__`/`__LINE__` for the crash handler — don't replace them with `QMetaObject::invokeMethod`.
-- Reaching a subsystem goes through the singleton: `StreamElementsGlobalStateManager::GetInstance()->GetFooManager()`. Check `StreamElementsGlobalStateManager::IsInstanceAvailable()` first when the handler can run during shutdown.
+- Reaching a subsystem goes through the injected bundle: `apiServices->fooManager`. `apiServices` is a parameter the macro puts in scope — the dispatcher locks it once per call and bails if it is gone, so a handler body needs no availability check of its own. There is no `SEGlobalStateManager::GetInstance()` (CORE-757); if the service you need is not in `SEApiServices`, add it there and publish it in `PublishApiServices()`.
 
 ## 4. Serialization helpers
 

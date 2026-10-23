@@ -1,38 +1,48 @@
 #include "SEAudioCompositionManager.hpp"
+#include "SEWebsocketApiServer.hpp"
 #include "SEGlobalStateManager.hpp"
 
-static void dispatch_external_event(std::string name, std::string args)
+//
+// One of five identical copies of this translation; it lives on
+// SEMessageBus now, so this takes the bus it is announcing through.
+//
+static void dispatch_external_event(std::shared_ptr<SEMessageBus> messageBus,
+				    std::string name, std::string args)
 {
-	std::string externalEventName =
-		name.c_str() + 4; /* remove 'host' prefix */
-	externalEventName[0] =
-		tolower(externalEventName[0]); /* lower case first letter */
-
-	SEMessageBus::GetInstance()->NotifyAllExternalEventListeners(
-		SEMessageBus::DEST_ALL_EXTERNAL,
-		SEMessageBus::SOURCE_APPLICATION, "OBS",
-		externalEventName,
-		CefParseJSON(args, JSON_PARSER_ALLOW_TRAILING_COMMAS));
-}
-
-static void dispatch_js_event(std::string name, std::string args)
-{
-	if (!SEGlobalStateManager::IsInstanceAvailable())
+	if (!messageBus)
 		return;
 
-	auto apiServer = SEGlobalStateManager::GetInstance()
-				 ->GetWebsocketApiServer();
+	messageBus->NotifyExternalHostEvent(name, args);
+}
 
+//
+// Takes the api server as a borrowed raw pointer: the caller is a member
+// whose own reference outlives the call, and this neither owns it nor
+// extends its life.
+//
+static void dispatch_js_event(SEWebsocketApiServer *apiServer, std::string name,
+			      std::string args)
+{
 	if (!apiServer)
 		return;
 
 	apiServer->DispatchJSEvent("system", name, args);
 }
 
-SEAudioCompositionManager::SEAudioCompositionManager()
+SEAudioCompositionManager::SEAudioCompositionManager(
+	std::shared_ptr<SEWebsocketApiServer> apiServer,
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+	std::shared_ptr<SEMessageBus> messageBus)
+	: m_apiServer(apiServer),
+	  m_hostEventDispatcher(hostEventDispatcher),
+	  m_messageBus(messageBus)
 {
+	//
+	// Inside this constructor, so the weak self-handle in the services is
+	// empty -- as on the video side, and for the same reason.
+	//
 	m_nativeAudioComposition =
-		SEObsNativeAudioComposition::Create();
+		SEObsNativeAudioComposition::Create(CompositionServices());
 
 	m_audioCompositionsMap[m_nativeAudioComposition->GetId()] =
 		m_nativeAudioComposition;
@@ -60,8 +70,9 @@ void SEAudioCompositionManager::Reset()
 		m_audioCompositionsMap.erase(key);
 	}
 
-	dispatch_js_event("hostAudioCompositionListChanged", "null");
-	dispatch_external_event("hostAudioCompositionListChanged", "null");
+	dispatch_js_event(m_apiServer.get(), "hostAudioCompositionListChanged",
+			  "null");
+	dispatch_external_event(m_messageBus, "hostAudioCompositionListChanged", "null");
 }
 
 void SEAudioCompositionManager::
@@ -129,7 +140,7 @@ void SEAudioCompositionManager::DeserializeComposition(
 		auto composition = SECustomAudioComposition::Create(
 			id, root->GetString("name"),
 			root->GetValue("streamingAudioEncoder"),
-			recordingAudioEncoders);
+			recordingAudioEncoders, CompositionServices());
 
 		if (!composition)
 			return;
@@ -138,8 +149,9 @@ void SEAudioCompositionManager::DeserializeComposition(
 
 		composition->SerializeComposition(output);
 
-		dispatch_js_event("hostAudioCompositionListChanged", "null");
-		dispatch_external_event("hostAudioCompositionListChanged",
+		dispatch_js_event(m_apiServer.get(),
+				  "hostAudioCompositionListChanged", "null");
+		dispatch_external_event(m_messageBus, "hostAudioCompositionListChanged",
 					"null");
 	} catch (...) {
 		// Creation failed
@@ -203,8 +215,9 @@ void SEAudioCompositionManager::RemoveCompositionsByIds(
 		m_audioCompositionsMap.erase(kv.first);
 	}
 
-	dispatch_js_event("hostAudioCompositionListChanged", "null");
-	dispatch_external_event("hostAudioCompositionListChanged", "null");
+	dispatch_js_event(m_apiServer.get(), "hostAudioCompositionListChanged",
+			  "null");
+	dispatch_external_event(m_messageBus, "hostAudioCompositionListChanged", "null");
 
 	output->SetBool(true);
 }

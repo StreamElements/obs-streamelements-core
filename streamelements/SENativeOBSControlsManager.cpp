@@ -11,31 +11,11 @@
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 
-static std::shared_ptr<SENativeOBSControlsManager> s_instance =
-	nullptr;
-static std::mutex s_mutex;
-
-void SENativeOBSControlsManager::Destroy()
+std::shared_ptr<SENativeOBSControlsManager>
+SENativeOBSControlsManager::Create(QMainWindow *mainWindow)
 {
-	std::lock_guard<std::mutex> guard(s_mutex);
-
-	if (s_instance) {
-		s_instance = nullptr;
-	}
-}
-
-std::shared_ptr<SENativeOBSControlsManager> SENativeOBSControlsManager::GetInstance()
-{
-	if (s_instance == nullptr) {
-		std::lock_guard<std::mutex> guard(s_mutex);
-
-		s_instance =
-			std::make_shared<SENativeOBSControlsManager>(
-				SENativeOBSControlsManager::Private(),
-				(QMainWindow *)obs_frontend_get_main_window());
-	}
-
-	return s_instance;
+	return std::make_shared<SENativeOBSControlsManager>(
+		SENativeOBSControlsManager::Private(), mainWindow);
 }
 
 SENativeOBSControlsManager::SENativeOBSControlsManager(
@@ -52,13 +32,19 @@ SENativeOBSControlsManager::SENativeOBSControlsManager(
 	if (m_nativeManageBroadcastButton) {
 		auto manageBroadcastVisibilityCallback =
 			[this](bool isVisible) -> void {
-				if (isVisible) {
-					DispatchJSEventGlobal(
-						"hostNativeManageBroadcastButtonVisible", "null");
-				} else {
-					DispatchJSEventGlobal(
-						"hostNativeManageBroadcastButtonHidden", "null");
-			}};
+				auto services = m_apiServices.lock();
+
+				if (!services ||
+				    !services->hostEventDispatcher)
+					return;
+
+				services->hostEventDispatcher
+					->DispatchJSEventGlobal(
+						isVisible
+							? "hostNativeManageBroadcastButtonVisible"
+							: "hostNativeManageBroadcastButtonHidden",
+						"null");
+			};
 
 		m_nativeManageBroadcastButtonVisibilityChangeTracker =
 			std::make_shared<WidgetVisibilityChangeTracker>(
@@ -292,11 +278,20 @@ bool SENativeOBSControlsManager::DeserializePreviewTitleBar(
 				.ToString();
 	}
 
+	auto apiServices = m_apiServices.lock();
+
+	if (!apiServices) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: SENativeOBSControlsManager: not showing the preview title bar: the services bundle is gone");
+
+		return false;
+	}
+
 	m_previewTitleBrowser = new SEBrowserWidget(
 		nullptr, SEMessageBus::DEST_UI, url.c_str(),
 		executeJavaScriptOnLoad.c_str(), "reload",
 		"obsPreviewAreaTitleBar",
-		CreateGloballyUniqueIdString().c_str());
+		CreateGloballyUniqueIdString().c_str(), apiServices);
 
 	m_previewTitleBrowser->setSizePolicy(QSizePolicy(
 		QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding));
@@ -656,7 +651,10 @@ void SENativeOBSControlsManager::BeginStartStreaming()
 	case request:
 		SetStreamingRequestedState();
 
-		DispatchJSEventGlobal("hostStreamingStartRequested", "null");
+		if (auto services = m_apiServices.lock()) {
+		services->hostEventDispatcher->DispatchJSEventGlobal(
+			"hostStreamingStartRequested", "null");
+	}
 		break;
 	}
 }
@@ -667,14 +665,22 @@ void SENativeOBSControlsManager::StartStreaming()
 
 	m_startStopStreamingButton->setEnabled(false);
 
+	//
+	// QPointer, not the plug-in's availability: the question five seconds
+	// later is whether *this* object is still there to re-enable its own
+	// button, and Qt zeroes a QPointer when the QObject dies (CORE-757).
+	//
+	QPointer<SENativeOBSControlsManager> self(this);
+
 	QtDelayTask(
-		[this]() {
-			if (!SEGlobalStateManager::
-				    IsInstanceAvailable())
+		[self]() {
+			if (!self)
 				return;
 
-			if (!os_atomic_load_bool(&m_isStreamingTransitionState))
-				m_startStopStreamingButton->setEnabled(true);
+			if (!os_atomic_load_bool(
+				    &self->m_isStreamingTransitionState))
+				self->m_startStopStreamingButton->setEnabled(
+					true);
 		},
 		5000);
 

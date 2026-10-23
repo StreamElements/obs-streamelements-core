@@ -4,6 +4,9 @@
 #include "SEBrowserWidget.hpp"
 #include "SEMessageBus.hpp"
 #include "SEWebsocketApiServer.hpp"
+#include "SEHostEventDispatcher.hpp"
+
+class SEVideoCompositionManager;
 
 #include <QWidget>
 #include <QPointer>
@@ -45,6 +48,43 @@ private:
 	std::string m_reloadPolicy;
 	std::string m_pendingLocationArea;
 	std::shared_ptr<SEApiMessageHandler> m_requestedApiMessageHandler;
+
+	//
+	// The services bundle is deliberately not a member: storing it would
+	// put an edge from every widget back to the bundle, in a class the
+	// bundle's own widget managers destroy. What this class needs after
+	// construction is these two, by name.
+	//
+	// Weak, all three, because of the one thing this class cannot
+	// promise: when it dies. Its owners defer deletion on purpose -- a
+	// background worker's dock goes through SEDeleteDockWidgetWhenSafe()
+	// and a dock widget can ride into Qt's own teardown -- so a browser
+	// widget routinely outlives Shutdown().
+	//
+	// Held strongly, such a widget kept these three services alive with
+	// it, and through the composition manager the custom compositions
+	// and their signal data too. Measured: four services still standing
+	// at the end of Shutdown() on a clean run, all of them collapsing
+	// the instant one surviving worker widget was deleted. Weak is what
+	// makes "the plug-in has shut down" and "its services are gone" the
+	// same moment, which is what the audit at the end of Shutdown()
+	// checks.
+	//
+	// None of the three is a ring -- no service in here owns a browser
+	// widget -- so this was lifetime extension rather than a leak. A
+	// failed lock means the plug-in is gone, which is exactly when none
+	// of the calls below has anything left to do: there is no registry
+	// to unregister from, no composition to look up, and no page to
+	// dispatch to.
+	//
+	std::weak_ptr<SEWebsocketApiServer> m_apiServer;
+	std::weak_ptr<SEVideoCompositionManager> m_videoCompositionManager;
+
+	//
+	// Three, now: a widget announces its own visibility to its page and
+	// rebinds window.host.hostContainerHidden when it changes.
+	//
+	std::weak_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
 	SEMessageBus::message_destination_filter_flags_t
 		m_messageDestinationFlags;
 
@@ -60,17 +100,17 @@ private:
 	bool m_isDestroyed = false;
 
 public:
-	SEBrowserWidget(
-		QWidget* parent,
-		SEMessageBus::
-			message_destination_filter_flags_t messageDestinationFlags,
-		const char* const url,
-		const char* const executeJavaScriptCodeOnLoad,
-		const char* const reloadPolicy,
-		const char* const locationArea,
-		const char* const id,
-		std::shared_ptr<SEApiMessageHandler> apiMessageHandler = nullptr,
-		bool isIncognito = false);
+	SEBrowserWidget(QWidget *parent,
+			SEMessageBus::message_destination_filter_flags_t
+				messageDestinationFlags,
+			const char *const url,
+			const char *const executeJavaScriptCodeOnLoad,
+			const char *const reloadPolicy,
+			const char *const locationArea, const char *const id,
+			std::shared_ptr<SEApiServices> apiServices,
+			std::shared_ptr<SEApiMessageHandler> apiMessageHandler =
+				nullptr,
+			bool isIncognito = false);
 
 	~SEBrowserWidget();
 
@@ -216,14 +256,20 @@ protected:
 			msg->GetArgumentList()->SetString(0, "host");
 			msg->GetArgumentList()->SetString(1, jsonString);
 
-			DispatchClientMessage(m_clientId, msg);
+			if (auto dispatcher = m_hostEventDispatcher.lock()) {
+				dispatcher->DispatchClientMessage(m_clientId,
+								 msg);
+			}
 		}
 
 		// Dispatch hostVisibilityChanged event
 		{
-			DispatchJSEventContainer(m_clientId,
-					      "hostContainerVisibilityChanged",
-					      "null");
+			if (auto dispatcher = m_hostEventDispatcher.lock()) {
+				dispatcher->DispatchJSEventContainer(
+					m_clientId,
+					"hostContainerVisibilityChanged",
+					"null");
+			}
 		}
 	}
 

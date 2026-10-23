@@ -1,8 +1,7 @@
 #include "SEMessageBus.hpp"
+#include "SEHostEventDispatcher.hpp"
 #include "SEConfig.hpp"
 #include "SEGlobalStateManager.hpp"
-
-std::shared_ptr<SEMessageBus> SEMessageBus::s_instance = nullptr;
 
 const SEMessageBus::message_destination_filter_flags_t SEMessageBus::DEST_ALL = 0xFFFFFFFFUL;
 
@@ -18,8 +17,12 @@ const char* const SEMessageBus::SOURCE_APPLICATION = "application";
 const char* const SEMessageBus::SOURCE_WEB = "web";
 const char* const SEMessageBus::SOURCE_EXTERNAL = "external";
 
-SEMessageBus::SEMessageBus(Private) :
-	m_external_controller_server(this)
+SEMessageBus::SEMessageBus(
+	Private, std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+	std::shared_ptr<SEConfig> config)
+	: m_external_controller_server(this),
+	  m_hostEventDispatcher(hostEventDispatcher),
+	  m_config(config)
 {
 
 }
@@ -29,18 +32,26 @@ SEMessageBus::~SEMessageBus()
 
 }
 
-std::shared_ptr<SEMessageBus> SEMessageBus::GetInstance()
+std::shared_ptr<SEMessageBus> SEMessageBus::Create(
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+	std::shared_ptr<SEConfig> config)
 {
-	if (!s_instance) {
-		s_instance = std::make_shared<SEMessageBus>(Private());
-	}
-
-	return s_instance;
+	return std::make_shared<SEMessageBus>(Private(), hostEventDispatcher,
+					      config);
 }
 
-void SEMessageBus::Destroy()
+void SEMessageBus::NotifyExternalHostEvent(std::string hostEventName,
+					   std::string argsJson)
 {
-	s_instance = nullptr;
+	std::string externalEventName =
+		hostEventName.c_str() + 4; /* remove 'host' prefix */
+	externalEventName[0] =
+		tolower(externalEventName[0]); /* lower case first letter */
+
+	NotifyAllExternalEventListeners(
+		DEST_ALL_EXTERNAL, SOURCE_APPLICATION, "OBS",
+		externalEventName,
+		CefParseJSON(argsJson, JSON_PARSER_ALLOW_TRAILING_COMMAS));
 }
 
 void SEMessageBus::AddListener(std::string target, message_destination_filter_flags_t type)
@@ -280,7 +291,10 @@ void SEMessageBus::NotifyEventListener(std::string target,
 
 	std::string payloadJson = CefWriteJSON(root, JSON_WRITER_DEFAULT);
 
-	DispatchJSEventContainer(target, event, payloadJson);
+	if (m_hostEventDispatcher) {
+		m_hostEventDispatcher->DispatchJSEventContainer(
+			target, event, payloadJson);
+	}
 }
 
 void SEMessageBus::NotifyAllLocalEventListeners(
@@ -312,8 +326,12 @@ void SEMessageBus::NotifyAllLocalEventListeners(
 		auto browser = kv.first;
 
 		if (kv.second->flags & types) {
-			DispatchJSEventContainer(kv.second->target, event,
-					      payloadJson);
+			if (m_hostEventDispatcher) {
+				m_hostEventDispatcher
+					->DispatchJSEventContainer(
+						kv.second->target, event,
+						payloadJson);
+			}
 		}
 	}
 }
@@ -382,7 +400,7 @@ void SEMessageBus::PublishSystemState()
 	CefRefPtr<CefDictionaryValue> payload = CefDictionaryValue::Create();
 
 	bool isLoggedIn =
-		SEConfig::STARTUP_FLAGS_SIGNED_IN == (SEConfig::GetInstance()->GetStartupFlags() & SEConfig::STARTUP_FLAGS_SIGNED_IN);
+		SEConfig::STARTUP_FLAGS_SIGNED_IN == (m_config->GetStartupFlags() & SEConfig::STARTUP_FLAGS_SIGNED_IN);
 
 	payload->SetBool("isSignedIn", isLoggedIn);
 

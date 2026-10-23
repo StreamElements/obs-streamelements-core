@@ -20,8 +20,9 @@
 // * CEF Docking Widgets
 // * Browser Sources
 //
-// Access singleton instance with SEMessageBus::GetInstance()
-//
+class SEHostEventDispatcher;
+class SEConfig;
+
 class SEMessageBus
 {
 private:
@@ -47,12 +48,36 @@ public:
 	static const char* const SOURCE_EXTERNAL;
 
 public:
-	SEMessageBus(Private);
+	//
+	// Takes the dispatcher rather than calling the free functions that
+	// fetched the websocket server from the singleton. The Private tag
+	// keeps construction behind Create(), so that nothing can build a
+	// second bus by accident -- listeners registered on one bus would
+	// never hear events published on the other.
+	//
+	SEMessageBus(Private,
+		     std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+		     std::shared_ptr<SEConfig> config);
 	virtual ~SEMessageBus();
 
+	//
+	// A host* event, announced to external controllers. The translation
+	// -- drop the "host" prefix, lower-case what follows -- lived in five
+	// identical copies of a file-static helper, one per class that
+	// announces anything.
+	//
+	void NotifyExternalHostEvent(std::string hostEventName,
+				     std::string argsJson);
+
 public:
-	static std::shared_ptr<SEMessageBus> GetInstance();
-	static void Destroy();
+	//
+	// The only way to build one. SEGlobalStateManager owns the instance
+	// and publishes it in SEApiServices; there is no static instance any
+	// more.
+	//
+	static std::shared_ptr<SEMessageBus>
+	Create(std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+	       std::shared_ptr<SEConfig> config);
 
 public:
 	void AddListener(std::string target, message_destination_filter_flags_t type);
@@ -193,5 +218,7 @@ private:
 	SEControllerServer m_external_controller_server;
 
 private:
-	static std::shared_ptr<SEMessageBus> s_instance;
+
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+	std::shared_ptr<SEConfig> m_config;
 };

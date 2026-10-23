@@ -39,8 +39,18 @@ public:
 	};
 
 public:
-	SEBrowserWidgetManager(QMainWindow* parent);
+	SEBrowserWidgetManager(QMainWindow *parent,
+			       std::shared_ptr<SEApiServices> apiServices);
 	virtual ~SEBrowserWidgetManager();
+
+	//
+	// The inheritance here is protected, so the base class's public
+	// members are not public through this one. SEGlobalStateManager hands
+	// the persistence object over after construction -- it is built from
+	// this manager, so it cannot be a constructor argument -- and this is
+	// what lets it.
+	//
+	using SEWidgetManager::SetStatePersistence;
 
 	/********************/
 	/* Central widget   */
@@ -164,5 +174,6 @@ private:
 		m_browserWidgets;
 
 	QPointer<QToolBar> m_notificationBarToolBar = nullptr;
+
 	QPointer<SEBrowserWidget> m_notificationBarBrowserWidget = nullptr;
 };

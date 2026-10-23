@@ -30,6 +30,16 @@ struct QCefCookieManager;
 #include "SECleanupManager.hpp"
 #include "SEPreviewManager.hpp"
 #include "SEWebsocketApiServer.hpp"
+#include "SEApiServices.hpp"
+#include "SEStatePersistence.hpp"
+#include "SEStatusBarMessageManager.hpp"
+#include "SEPopupWindowManager.hpp"
+#include "SEBrowserDialogManager.hpp"
+#include "SESessionManager.hpp"
+#include "SEAuxiliaryControlsBuilder.hpp"
+#include "SEPleaseWaitWindow.hpp"
+#include "SEObsApiTransactionManager.hpp"
+#include "SEHostEventDispatcher.hpp"
 #include "SEBrowserDialog.hpp"
 #include "SEVideoCompositionManager.hpp"
 #include "SEAudioCompositionManager.hpp"
@@ -52,8 +62,22 @@ private:
 	private:
 		QObject *m_target;
 
+		//
+		// A resize, a move or a window-state change is announced to
+		// every page. This filter is installed on the application, so
+		// it is handed the dispatcher rather than fetching the server
+		// on each of those -- which, for a drag of the main window,
+		// is every frame.
+		//
+		std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+
 	public:
-		WindowStateChangeEventFilter(QObject *target) : m_target(target)
+		WindowStateChangeEventFilter(
+			QObject *target,
+			std::shared_ptr<SEHostEventDispatcher>
+				hostEventDispatcher)
+			: m_target(target),
+			  m_hostEventDispatcher(hostEventDispatcher)
 		{
 			QCoreApplication::instance()->installEventFilter(this);
 		}
@@ -70,7 +94,10 @@ private:
 				case QEvent::Resize:
 				case QEvent::Move:
 				case QEvent::WindowStateChange:
-					AdviseHostUserInterfaceStateChanged();
+					if (m_hostEventDispatcher) {
+						m_hostEventDispatcher
+							->AdviseHostUserInterfaceStateChanged();
+					}
 					break;
 				default:
 					break;
@@ -86,35 +113,64 @@ public:
 	virtual ~SEGlobalStateManager();
 
 public:
-	static std::shared_ptr<SEGlobalStateManager> GetInstance();
-	static void Destroy();
-
-	// Releases the singleton WITHOUT running any destructor, by parking a
-	// reference that is never freed. Used when OBS asked to close before
-	// initialization completed: the object graph is half-built and running
-	// its destructors corrupts the widget tree (CORE-786).
-	static void Leak();
-	static bool IsInstanceAvailable();
+	//
+	// The only way to build the root. The module entry point holds the
+	// one reference; nothing can reach this object without being handed
+	// it, which is the whole of CORE-757.
+	//
+	static std::shared_ptr<SEGlobalStateManager> Create();
 
 public:
-	enum UiModifier { Default = 0, OnBoarding = 1, Import = 2 };
-
 	void Initialize(QMainWindow *obs_main_window);
+
+private:
+	//
+	// Teardown, in an order member destruction cannot express: the
+	// shutting-down flag before anything blocks, the frontend callback
+	// off before the services it reaches are released, the state
+	// saved while the managers it borrows raw pointers to are still
+	// alive, and the borrowed pointers taken back before what they
+	// point at is deleted.
+	//
+	// Private, and called only by the destructor: tearing the plug-in
+	// down and leaving the object standing is not a thing a caller
+	// should be able to ask for. It was public with no caller outside
+	// this class, the same looseness IsInitialized() had before it
+	// went (CORE-757). check_only_the_destructor_starts_teardown is
+	// the guard.
+	//
 	void Shutdown();
 
-	bool IsInitialized() { return m_initialized; }
+private:
+	//
+	// Publishes the constructed services into m_apiServices. Called from
+	// Initialize() once they all exist.
+	//
+	void PublishApiServices();
 
-	void Reset(bool deleteAllCookies = true,
-		   UiModifier uiModifier = Default);
-	void DeleteCookies();
-	void StartOnBoardingUI(UiModifier uiModifier);
-	void StopOnBoardingUI();
-	void SwitchToOBSStudio();
+	//
+	// Takes a weak handle on every published service, so that
+	// SEReportServicesOutlivingTeardown() can say afterwards which ones
+	// are still standing. Called at the top of Shutdown(), while they
+	// all still exist; reported at the bottom of it, once the container
+	// has been released.
+	//
+	void WatchServicesForTeardownAudit();
 
-	void PersistState(bool sendEventToGuest = true);
-	void RestoreState();
+public:
+
 
 	QCef *GetCef() { return m_cef; }
+
+	//
+	// For handle_obs_frontend_event, which is a file static in the
+	// implementation and is handed this object as its private_data.
+	//
+	std::shared_ptr<SEHostEventDispatcher> GetHostEventDispatcher()
+	{
+		return m_hostEventDispatcher;
+	}
+	std::shared_ptr<SEMessageBus> GetMessageBus() { return m_messageBus; }
 
 	std::shared_ptr<SEBrowserWidgetManager> GetWidgetManager()
 	{
@@ -207,6 +263,7 @@ public:
 	{
 		return m_websocketApiServer;
 	}
+
 	std::shared_ptr <SESharedVideoCompositionManager>
 		GetSharedVideoCompositionManager()
 	{
@@ -233,42 +290,10 @@ public:
 		
 	QMainWindow *mainWindow() { return m_mainWindow; }
 
-public:
-	bool DeserializeStatusBarTemporaryMessage(CefRefPtr<CefValue> input);
-	bool DeserializePopupWindow(CefRefPtr<CefValue> input);
-	bool DeserializeModalDialog(CefRefPtr<CefValue> input,
-				    CefRefPtr<CefValue> &output);
-
-	void ReportIssue();
-	void UninstallPlugin();
-
-	void SerializeUserInterfaceState(CefRefPtr<CefValue> &output);
-	bool DeserializeUserInterfaceState(CefRefPtr<CefValue> input);
-
-public:
-	std::shared_ptr<std::promise<CefRefPtr<CefValue>>>
-	DeserializeNonModalDialog(CefRefPtr<CefValue> input);
-
-	bool HasNonModalDialog(const char *id);
-	std::string GetNonModalDialogUrl(const char *id);
-	void SerializeAllNonModalDialogs(CefRefPtr<CefValue> &output);
-	bool DeserializeCloseNonModalDialogsByIds(CefRefPtr<CefValue> input);
-	bool DeserializeFocusNonModalDialogById(CefRefPtr<CefValue> input);
-	bool DeserializeNonModalDialogDimensionsById(CefRefPtr<CefValue> dialogId, CefRefPtr<CefValue> dimensions);
-
-private:
-	std::map<std::string, SEBrowserDialog*>
-		m_nonModalDialogs;
-
-private:
-	std::recursive_mutex m_mutex;
-	long m_apiTransactionLevel = 0;
-
 protected:
 	virtual void OnObsExit() override;
 
 private:
-	bool m_persistStateEnabled = false;
 	bool m_initialized = false;
 	QPointer<QMainWindow> m_mainWindow = nullptr;
 	QPointer<QWidget> m_nativeCentralWidget = nullptr;
@@ -319,20 +344,56 @@ private:
 	std::shared_ptr<SEOutputManager> m_outputManager = nullptr;
 	std::shared_ptr<SEObsActiveSceneTracker>
 		m_obsActiveSceneTracker = nullptr;
-
-private:
-	static std::shared_ptr<
-		SEGlobalStateManager> s_instance;
+	std::shared_ptr<SEApiServices> m_apiServices = nullptr;
+	std::shared_ptr<SEStatePersistence> m_statePersistence = nullptr;
+	std::shared_ptr<SEStatusBarMessageManager>
+		m_statusBarMessageManager = nullptr;
+	std::shared_ptr<SEPopupWindowManager> m_popupWindowManager =
+		nullptr;
+	std::shared_ptr<SEBrowserDialogManager> m_browserDialogManager =
+		nullptr;
+	std::shared_ptr<SESessionManager> m_sessionManager = nullptr;
+	std::shared_ptr<SEAuxiliaryControlsBuilder>
+		m_auxiliaryControlsBuilder = nullptr;
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher = nullptr;
+	std::shared_ptr<SEMessageBus> m_messageBus = nullptr;
+	std::shared_ptr<SEConfig> m_config = nullptr;
+	std::shared_ptr<SEPleaseWaitWindow> m_pleaseWaitWindow = nullptr;
+	std::shared_ptr<SEObsApiTransactionManager>
+		m_obsApiTransactionManager = nullptr;
 
 private:
 	class ThemeChangeListener : public QDockWidget {
 	public:
-		ThemeChangeListener();
+		ThemeChangeListener(
+			std::shared_ptr<SEHostEventDispatcher>
+				hostEventDispatcher,
+			std::shared_ptr<SEMessageBus> messageBus);
 
 	protected:
 		virtual void changeEvent(QEvent *event) override;
 
 		std::string m_currentTheme;
+
+		//
+		// A nested QDockWidget, so it holds what it announces with
+		// rather than reaching for it when the theme changes -- and
+		// it holds it weakly, because Qt owns the widget and
+		// Shutdown() lets go of it with deleteLater(). That delete
+		// is processed by an event-loop pass this plug-in no longer
+		// gets, so the listener outlives Shutdown() on every run.
+		//
+		// Held strongly, it was the last holder of the message bus
+		// and, through the bus, of the host event dispatcher and the
+		// websocket API server: three services still standing in the
+		// audit at the end of Shutdown(), at one, two and one
+		// handle, which is this object and nothing else. Same
+		// reasoning as SEBrowserWidget -- an object whose deletion
+		// is deferred cannot be trusted with a strong handle on
+		// anything the plug-in is trying to shut down.
+		//
+		std::weak_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+		std::weak_ptr<SEMessageBus> m_messageBus;
 	};
 
 	class ApplicationStateListener : public QObject {
@@ -350,3 +411,21 @@ private:
 	QPointer<QDockWidget> m_themeChangeListener = nullptr;
 	ApplicationStateListener *m_appStateListener = nullptr;
 };
+
+//
+// Says which services are still alive after the plug-in has been torn down.
+//
+// Shutdown() releases the root's handle on each one and then the container
+// itself, which releases the last handle on every service. After that
+// everything should be gone, so this is called as the final statement of
+// Shutdown() -- late enough to be the truth, and early enough that "the
+// plug-in has shut down" and "its services are gone" are one moment rather
+// than two.
+//
+// A service that is still standing there is held by something nobody wrote
+// down: a lambda parked in a timer, a detached thread, a ring refcounting
+// cannot unwind. The symptom used to be a shutdown that hung or a destructor
+// that ran after libobs had gone, with nothing in the log to say which
+// object caused it (CORE-757).
+//
+void SEReportServicesOutlivingTeardown();
