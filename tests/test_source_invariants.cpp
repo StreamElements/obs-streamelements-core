@@ -3996,7 +3996,7 @@ static void check_deferred_deletes_hold_services_weakly()
 // floor at once, so it moves only in the commit that moves it.
 //
 // It counts every token in SEApiMessageHandler.cpp that cannot be compiled
-// without a libobs or Qt header -- 95 of them today, and the target is
+// without a libobs or Qt header -- 68 of them today, and the target is
 // zero. At zero the translation unit that holds all 208 API_HANDLER_BEGIN
 // blocks compiles in this suite, and every host API method becomes testable
 // at once, in one file, with no obs-studio tree. Today it fails on its
@@ -4016,10 +4016,14 @@ static void check_deferred_deletes_hold_services_weakly()
 //
 // Two hand counts of this came out at 53, then 87, before it was measured
 // properly. Both searched obs_[a-z] and Q[A-Z], which miss every OBS_*
-// constant -- 34 of the 95, more than a third -- along with blog, the LOG_*
-// levels, calldata_*, os_event_* and signal_handler_*. The families are
-// spelled out one per row so the vocabulary is inherited rather than
-// guessed at again.
+// constant -- 34 of the original 95, more than a third -- along with
+// blog, the LOG_* levels, calldata_*, os_event_* and signal_handler_*.
+// The families are spelled out one per row so the vocabulary is
+// inherited rather than guessed at again.
+//
+// Moved out so far: the 27 OBS_SOURCE_* constants that were written at
+// eleven call sites, now behind the nine wrappers in
+// SEUtils/SEObsSourceCatalogUtils -- 95 to 68.
 //
 static void check_api_handler_obs_qt_tokens_only_go_down()
 {
@@ -4039,7 +4043,7 @@ static void check_api_handler_obs_qt_tokens_only_go_down()
 	//
 	const Family families[] = {
 		{"libobs functions and types", R"(\bobs_[a-z]\w*)", 10},
-		{"libobs constants", R"(\bOBS_[A-Z]\w*)", 34},
+		{"libobs constants", R"(\bOBS_[A-Z]\w*)", 7},
 		{"blog", R"(\bblog\b)", 13},
 		{"libobs log levels", R"(\bLOG_[A-Z]\w*)", 13},
 		{"calldata", R"(\bcalldata_\w*)", 6},
@@ -4086,8 +4090,8 @@ static void check_api_handler_obs_qt_tokens_only_go_down()
 	// Keeps the headline in the comment above honest: the rows and the
 	// total are edited together or not at all.
 	//
-	check(expected_total == 95,
-	      "the per-family counts no longer sum to 95 -- update the total "
+	check(expected_total == 68,
+	      "the per-family counts no longer sum to 68 -- update the total "
 	      "in the comment above in the same commit (CORE-757)");
 }
 

@@ -21,18 +21,6 @@ bool DeserializeObsSourceFilters(obs_source_t *source,
 void SerializeObsSource(obs_source_t *source, CefRefPtr<CefDictionaryValue> dic,
 			bool isExistingSource, bool serializeProperties);
 
-void SerializeObsSourceProperties(CefRefPtr<CefValue> input,
-				  CefRefPtr<CefValue> &output);
-
-void SerializeAvailableInputSourceTypes(
-	CefRefPtr<CefValue> &output, uint32_t requireAnyOfOutputFlagsMask,
-	std::vector<obs_source_type> requiredSourceTypes,
-	bool serializeProperties);
-void SerializeExistingInputSources(
-	CefRefPtr<CefValue> &output, uint32_t requireAnyOfOutputFlagsMask,
-	uint32_t requireOutputFlagsMask,
-	std::vector<obs_source_type> requireSourceTypes,
-	bool serializeProperties);
 bool SerializeObsProperty(obs_property_t *prop, CefRefPtr<CefValue> &output);
 bool SerializeObsProperties(obs_properties_t *props,
 			    CefRefPtr<CefValue> &output);
@@ -41,4 +29,3 @@ CefRefPtr<CefValue> SerializeObsData(obs_data_t *data);
 bool DeserializeObsData(CefRefPtr<CefValue> input, obs_data_t *data);
 uint32_t GetInt32FromAlignmentId(std::string alignment);
 std::string GetAlignmentIdFromInt32(uint32_t a);
-void SerializeLoadedObsModules(CefRefPtr<CefValue> &output);

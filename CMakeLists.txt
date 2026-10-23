@@ -549,6 +549,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEUtils/SECryptoUtils.cpp
 	streamelements/SEUtils/SEHttpUtils.cpp
 	streamelements/SEUtils/SEObsDataUtils.cpp
+	streamelements/SEUtils/SEObsSourceCatalogUtils.cpp
 	streamelements/SEUtils/SEAsyncTaskUtils.cpp
 	streamelements/SEUtils/SESystemInfoUtils.cpp
 	streamelements/SEUtils/SEAppEnvUtils.cpp
@@ -734,6 +735,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEUtils/SEHttpUtils.hpp
 	streamelements/SEUtils/SELazyOBSVideoEncoderProvider.hpp
 	streamelements/SEUtils/SEObsDataUtils.hpp
+	streamelements/SEUtils/SEObsSourceCatalogUtils.hpp
 	streamelements/SEUtils/SEAsyncTaskUtils.hpp
 	streamelements/SEUtils/SESystemInfoUtils.hpp
 	streamelements/SEUtils/SEAppEnvUtils.hpp

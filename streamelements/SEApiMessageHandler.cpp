@@ -1501,25 +1501,19 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAvailableFilterSourceTypes");
 	{
-		SerializeAvailableInputSourceTypes(
-			result, OBS_SOURCE_VIDEO | OBS_SOURCE_AUDIO,
-			{OBS_SOURCE_TYPE_FILTER}, false);
+		SerializeAvailableFilterSourceTypes(result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAvailableAudioFilterSourceTypes");
 	{
-		SerializeAvailableInputSourceTypes(
-			result, OBS_SOURCE_AUDIO,
-			{OBS_SOURCE_TYPE_FILTER}, false);
+		SerializeAvailableAudioFilterSourceTypes(result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAvailableVideoFilterSourceTypes");
 	{
-		SerializeAvailableInputSourceTypes(
-			result, OBS_SOURCE_VIDEO,
-			{OBS_SOURCE_TYPE_FILTER}, false);
+		SerializeAvailableVideoFilterSourceTypes(result);
 	}
 	API_HANDLER_END();
 
@@ -1541,49 +1535,37 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAvailableInputSourceTypes");
 	{
-		SerializeAvailableInputSourceTypes(
-			result, OBS_SOURCE_VIDEO | OBS_SOURCE_AUDIO,
-			{OBS_SOURCE_TYPE_INPUT, OBS_SOURCE_TYPE_SCENE}, false);
+		SerializeAvailableInputSourceTypes(result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAvailableVideoInputSourceTypes");
 	{
-		SerializeAvailableInputSourceTypes(result, OBS_SOURCE_VIDEO,
-						   {OBS_SOURCE_TYPE_INPUT,
-						    OBS_SOURCE_TYPE_SCENE}, false);
+		SerializeAvailableVideoInputSourceTypes(result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAvailableAudioInputSourceTypes");
 	{
-		SerializeAvailableInputSourceTypes(result, OBS_SOURCE_AUDIO,
-						   {OBS_SOURCE_TYPE_INPUT,
-						    OBS_SOURCE_TYPE_SCENE}, false);
+		SerializeAvailableAudioInputSourceTypes(result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAllExistingVideoInputSources");
 	{
-		SerializeExistingInputSources(result, OBS_SOURCE_VIDEO, 0L,
-					      {OBS_SOURCE_TYPE_INPUT,
-					       OBS_SOURCE_TYPE_SCENE}, false);
+		SerializeExistingVideoInputSources(result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAllExistingAudioInputSources");
 	{
-		SerializeExistingInputSources(result, OBS_SOURCE_AUDIO, 0L,
-					      {OBS_SOURCE_TYPE_INPUT,
-					       OBS_SOURCE_TYPE_SCENE}, false);
+		SerializeExistingAudioInputSources(result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAllExistingInputSources");
 	{
-		SerializeExistingInputSources(
-			result, OBS_SOURCE_VIDEO | OBS_SOURCE_AUDIO, 0L,
-			{OBS_SOURCE_TYPE_INPUT, OBS_SOURCE_TYPE_SCENE}, false);
+		SerializeExistingInputSources(result);
 	}
 	API_HANDLER_END();
 

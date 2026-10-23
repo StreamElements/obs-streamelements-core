@@ -11,6 +11,7 @@
 #include "SEUtils/SEHttpUtils.hpp"
 #include "SEUtils/SEObsSceneUtils.hpp"
 #include "SEUtils/SEObsDataUtils.hpp"
+#include "SEUtils/SEObsSourceCatalogUtils.hpp"
 #include "SEUtils/SEObsEncoderUtils.hpp"
 #include "SEUtils/SELazyOBSVideoEncoderProvider.hpp"
 #include "SEUtils/SEReentrancyUtils.hpp"
