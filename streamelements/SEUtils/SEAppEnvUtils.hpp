@@ -11,8 +11,6 @@
 
 #include <string>
 
-bool IsTraceLogLevel();
-
 std::string DockWidgetAreaToString(const Qt::DockWidgetArea area);
 std::string LoadResourceString(std::string path);
 

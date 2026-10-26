@@ -9,6 +9,16 @@
 #include <string>
 #include <vector>
 
+//
+// Whether --setrace was on the command line. Declared here rather than beside
+// its definition in SEAppEnvUtils: that header pulls in <QWidget>, and this
+// is asked on the API dispatch path by translation units that have no other
+// reason to see Qt. The definition stays where it is, because reading the
+// command line goes through QCoreApplication -- so for a test this is a link
+// seam, same as the rest of this domain.
+//
+bool IsTraceLogLevel();
+
 struct streamelements_env_update_request {
 public:
 	std::string product;
