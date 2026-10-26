@@ -4,6 +4,7 @@
 
 #include "Version.hpp"
 #include "SEUtils.hpp"
+#include "SEUtils/SELogUtils.hpp"
 #include "SEWebsocketApiServer.hpp"
 
 /* Incoming messages from renderer process */
@@ -113,13 +114,13 @@ bool SEApiMessageHandlerBase::OnProcessMessageReceived(
 			context->source = source;
 			context->complete = [context]() {
 				if (!context->self->IsPluginInitialized()) {
-					blog(LOG_ERROR,
-					     "obs-streamelements-core[%s %s]: API: plugin is no longer initialized while completing call to '%s', callback id %d",
-					     context->target->m_target.c_str(),
-					     context->target->m_unique_id
-						     .c_str(),
-					     context->id.c_str(),
-					     context->cef_app_callback_id);
+					SELog(SE_LOG_ERROR,
+					      "obs-streamelements-core[%s %s]: API: plugin is no longer initialized while completing call to '%s', callback id %d",
+					      context->target->m_target.c_str(),
+					      context->target->m_unique_id
+						      .c_str(),
+					      context->id.c_str(),
+					      context->cef_app_callback_id);
 
 					RemoveApiContext(
 						context->apiContextHandle);
@@ -130,13 +131,13 @@ bool SEApiMessageHandlerBase::OnProcessMessageReceived(
 				}
 
 				if (IsTraceLogLevel()) {
-					blog(LOG_INFO,
-					     "obs-streamelements-core[%s %s]: API: completed call to '%s', callback id %d",
-					     context->target->m_target.c_str(),
-					     context->target->m_unique_id
-						     .c_str(),
-					     context->id.c_str(),
-					     context->cef_app_callback_id);
+					SELog(SE_LOG_INFO,
+					      "obs-streamelements-core[%s %s]: API: completed call to '%s', callback id %d",
+					      context->target->m_target.c_str(),
+					      context->target->m_unique_id
+						      .c_str(),
+					      context->id.c_str(),
+					      context->cef_app_callback_id);
 				}
 
 				if (context->cef_app_callback_id != -1) {
@@ -190,42 +191,42 @@ bool SEApiMessageHandlerBase::OnProcessMessageReceived(
 					CefValue::Create();
 				callArgsValue->SetList(context->callArgs);
 				if (IsTraceLogLevel()) {
-					blog(LOG_INFO,
-					     "obs-streamelements-core[%s %s]: API: posting call to '%s', callback id %d, args: %s",
-					     context->target->m_target.c_str(),
-					     context->target->m_unique_id
-						     .c_str(),
-					     context->id.c_str(),
-					     context->cef_app_callback_id,
-					     CefWriteJSON(callArgsValue,
-							  JSON_WRITER_DEFAULT)
-						     .ToString()
-						     .c_str());
+					SELog(SE_LOG_INFO,
+					      "obs-streamelements-core[%s %s]: API: posting call to '%s', callback id %d, args: %s",
+					      context->target->m_target.c_str(),
+					      context->target->m_unique_id
+						      .c_str(),
+					      context->id.c_str(),
+					      context->cef_app_callback_id,
+					      CefWriteJSON(callArgsValue,
+							   JSON_WRITER_DEFAULT)
+						      .ToString()
+						      .c_str());
 				}
 			}
 
 			QtPostTask([context]() -> void {
 				if (!context->self->IsPluginInitialized()) {
-					blog(LOG_ERROR,
-					     "obs-streamelements-core[%s %s]: API: plugin is no longer initialized while performing call to '%s', callback id %d",
-					     context->target->m_target.c_str(),
-					     context->target->m_unique_id
-						     .c_str(),
-					     context->id.c_str(),
-					     context->cef_app_callback_id);
+					SELog(SE_LOG_ERROR,
+					      "obs-streamelements-core[%s %s]: API: plugin is no longer initialized while performing call to '%s', callback id %d",
+					      context->target->m_target.c_str(),
+					      context->target->m_unique_id
+						      .c_str(),
+					      context->id.c_str(),
+					      context->cef_app_callback_id);
 
 					context->complete();
 					return;
 				}
 
 				if (!context->self->m_runtimeStatus->m_running) {
-					blog(LOG_ERROR,
-					     "obs-streamelements-core[%s %s]: API: message handler no longer initialized while performing call to '%s', callback id %d",
-					     context->target->m_target.c_str(),
-					     context->target->m_unique_id
-						     .c_str(),
-					     context->id.c_str(),
-					     context->cef_app_callback_id);
+					SELog(SE_LOG_ERROR,
+					      "obs-streamelements-core[%s %s]: API: message handler no longer initialized while performing call to '%s', callback id %d",
+					      context->target->m_target.c_str(),
+					      context->target->m_unique_id
+						      .c_str(),
+					      context->id.c_str(),
+					      context->cef_app_callback_id);
 
 					context->complete();
 					return;
@@ -238,26 +239,26 @@ bool SEApiMessageHandlerBase::OnProcessMessageReceived(
 				// on the thread that crashed. See
 				// IsCrashReportingInProgress().
 				if (IsCrashReportingInProgress()) {
-					blog(LOG_ERROR,
-					     "obs-streamelements-core[%s %s]: API: a crash is being reported; refusing call to '%s', callback id %d",
-					     context->target->m_target.c_str(),
-					     context->target->m_unique_id
-						     .c_str(),
-					     context->id.c_str(),
-					     context->cef_app_callback_id);
+					SELog(SE_LOG_ERROR,
+					      "obs-streamelements-core[%s %s]: API: a crash is being reported; refusing call to '%s', callback id %d",
+					      context->target->m_target.c_str(),
+					      context->target->m_unique_id
+						      .c_str(),
+					      context->id.c_str(),
+					      context->cef_app_callback_id);
 
 					context->complete();
 					return;
 				}
 
 				if (IsTraceLogLevel()) {
-					blog(LOG_INFO,
-					     "obs-streamelements-core[%s %s]: API: performing call to '%s', callback id %d",
-					     context->target->m_target.c_str(),
-					     context->target->m_unique_id
-						     .c_str(),
-					     context->id.c_str(),
-					     context->cef_app_callback_id);
+					SELog(SE_LOG_INFO,
+					      "obs-streamelements-core[%s %s]: API: performing call to '%s', callback id %d",
+					      context->target->m_target.c_str(),
+					      context->target->m_unique_id
+						      .c_str(),
+					      context->id.c_str(),
+					      context->cef_app_callback_id);
 				}
 
 				//
@@ -332,10 +333,10 @@ void SEApiMessageHandlerBase::InvokeApiCallHandlerAsync(
 	result->SetNull();
 
 	if (!m_apiCallHandlers.count(invokeId)) {
-		blog(LOG_ERROR,
-		     "obs-streamelements-core[%s %s]: API: invalid API call to '%s'",
-		     target->m_target.c_str(), target->m_unique_id.c_str(),
-		     invokeId.c_str());
+		SELog(SE_LOG_ERROR,
+		      "obs-streamelements-core[%s %s]: API: invalid API call to '%s'",
+		      target->m_target.c_str(), target->m_unique_id.c_str(),
+		      invokeId.c_str());
 
 		result_callback(result);
 
@@ -343,10 +344,10 @@ void SEApiMessageHandlerBase::InvokeApiCallHandlerAsync(
 	}
 
 	if (enable_logging) {
-		blog(LOG_INFO,
-		     "obs-streamelements-core[%s %s]: API: performing call to '%s'",
-		     target->m_target.c_str(), target->m_unique_id.c_str(),
-		     invokeId.c_str());
+		SELog(SE_LOG_INFO,
+		      "obs-streamelements-core[%s %s]: API: performing call to '%s'",
+		      target->m_target.c_str(), target->m_unique_id.c_str(),
+		      invokeId.c_str());
 	}
 
 	auto handler = m_apiCallHandlers[invokeId];
@@ -354,11 +355,11 @@ void SEApiMessageHandlerBase::InvokeApiCallHandlerAsync(
 	handler(this->Clone(), apiServices, message, invokeArgs, result, target,
 		cefClientId, [=]() {
 			if (enable_logging) {
-				blog(LOG_INFO,
-				     "obs-streamelements-core[%s %s]: API: completed call to '%s'",
-				     target->m_target.c_str(),
-				     target->m_unique_id.c_str(),
-				     invokeId.c_str());
+				SELog(SE_LOG_INFO,
+				      "obs-streamelements-core[%s %s]: API: completed call to '%s'",
+				      target->m_target.c_str(),
+				      target->m_unique_id.c_str(),
+				      invokeId.c_str());
 			}
 
 			if (runtimeStatus->m_running) {

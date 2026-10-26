@@ -49,6 +49,7 @@
 #include "SERazerWyvrnManager.hpp"
 #endif
 #include "SEUtils.hpp"
+#include "SEUtils/SELogUtils.hpp"
 #include "SEMessageBus.hpp"
 #include "SEWebsocketApiServer.hpp"
 
@@ -2854,9 +2855,9 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 			// caller's own, and let the SDK be the judge. Logged
 			// because a name that renders nothing is worth seeing
 			// when someone asks why an event did not fire.
-			blog(LOG_INFO,
-			     "obs-streamelements-core: WYVRN: no scanned configuration declares any of '%s'; sending '%s' as given",
-			     tried.c_str(), firstId.c_str());
+			SELog(SE_LOG_INFO,
+			      "obs-streamelements-core: WYVRN: no scanned configuration declares any of '%s'; sending '%s' as given",
+			      tried.c_str(), firstId.c_str());
 
 			result->SetBool(manager->SetEventName(firstId));
 		}
@@ -2931,9 +2932,9 @@ bool SEApiMessageHandler::InvokeHandler::InvokeApiCallAsync(
 		return false;
 
 	if (IsTraceLogLevel()) {
-		blog(LOG_INFO,
-		     "obs-streamelements-core: SEApiMessageHandler::InvokeHandler::InvokeApiCallAsync: '%s', [%d]",
-		     invoke.c_str(), int(args->GetSize()));
+		SELog(SE_LOG_INFO,
+		      "obs-streamelements-core: SEApiMessageHandler::InvokeHandler::InvokeApiCallAsync: '%s', [%d]",
+		      invoke.c_str(), int(args->GetSize()));
 	}
 
 	incoming_call_handler_t handler = m_apiCallHandlers[invoke];
@@ -2957,9 +2958,9 @@ bool SEApiMessageHandler::InvokeHandler::InvokeApiCallAsync(
 	auto apiServices = m_services.lock();
 
 	if (!apiServices) {
-		blog(LOG_WARNING,
-		     "obs-streamelements-core: SEApiMessageHandler::InvokeHandler::InvokeApiCallAsync: not invoking '%s': the services bundle is gone",
-		     invoke.c_str());
+		SELog(SE_LOG_WARNING,
+		      "obs-streamelements-core: SEApiMessageHandler::InvokeHandler::InvokeApiCallAsync: not invoking '%s': the services bundle is gone",
+		      invoke.c_str());
 
 		delete context;
 

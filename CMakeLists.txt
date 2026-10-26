@@ -562,6 +562,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEUtils/SEEnvConfigUtils.cpp
 	streamelements/SEUtils/SEPathUtils.cpp
 	streamelements/SEUtils/SEDiagnosticsUtils.cpp
+	streamelements/SEUtils/SELogUtils.cpp
 	streamelements/SEUtils/SEStringUtils.cpp
 	streamelements/SEConfig.cpp
 	streamelements/SEGlobalStateManager.cpp
@@ -750,6 +751,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEUtils/SEEnvConfigUtils.hpp
 	streamelements/SEUtils/SEPathUtils.hpp
 	streamelements/SEUtils/SEDiagnosticsUtils.hpp
+	streamelements/SEUtils/SELogUtils.hpp
 	streamelements/SEUtils/SEStringUtils.hpp
 	streamelements/SEConfig.hpp
 	streamelements/SEGlobalStateManager.hpp

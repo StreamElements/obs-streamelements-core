@@ -4074,14 +4074,17 @@ static void check_api_handler_obs_qt_tokens_only_go_down()
 
 	//
 	// Per family, so a failure says which concern moved rather than only
-	// that the total did. b*alloc sits at zero: nothing in this file
-	// allocates through libobs today, and nothing should start.
+	// that the total did. Three families sit at zero and are floors now:
+	// b*alloc, because nothing here allocates through libobs and nothing
+	// should start; and blog with the LOG_* levels, because these files
+	// log through SELog, whose declaration needs no libobs. A blog call
+	// reappearing would put that include back.
 	//
 	const Family families[] = {
 		{"libobs functions and types", R"(\bobs_[a-z]\w*)", 10},
 		{"libobs constants", R"(\bOBS_[A-Z]\w*)", 7},
-		{"blog", R"(\bblog\b)", 13},
-		{"libobs log levels", R"(\bLOG_[A-Z]\w*)", 13},
+		{"blog", R"(\bblog\b)", 0},
+		{"libobs log levels", R"(\bLOG_[A-Z]\w*)", 0},
 		{"calldata", R"(\bcalldata_\w*)", 6},
 		{"os_* from libobs/util", R"(\bos_[a-z]\w*)", 8},
 		{"libobs signal handlers", R"(\bsignal_handler_\w*)", 1},
@@ -4127,7 +4130,7 @@ static void check_api_handler_obs_qt_tokens_only_go_down()
 	// Keeps the headline in the comment above honest: the rows and the
 	// total are edited together or not at all.
 	//
-	check(expected_total == 68,
+	check(expected_total == 42,
 	      "the per-family counts no longer sum to 68 -- update the total "
 	      "in the comment above in the same commit (CORE-757)");
 }

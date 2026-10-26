@@ -2,6 +2,7 @@
 
 #include "SETrace.hpp"
 
+#include "SEUtils/SELogUtils.hpp"
 #include "SEUtils/SEStringUtils.hpp"
 #include "SEUtils/SECryptoUtils.hpp"
 #include "SEUtils/SEDiagnosticsUtils.hpp"
