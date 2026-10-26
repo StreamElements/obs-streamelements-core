@@ -14,7 +14,6 @@
 #include "SEGlobalStateManager.hpp"
 #include "SEUtils.hpp"
 #include "SEMessageBus.hpp"
-#include "SEPleaseWaitWindow.hpp"
 #include "SEWebsocketApiServer.hpp"
 
 #include <QDesktopServices>
@@ -567,6 +566,12 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandler(
 	m_apiCallHandlers[id] = handler;
 }
 
+//
+// The API call lock for this translation unit. API_HANDLER_BEGIN takes it, and
+// the handler header explains at length why it is per-TU rather than shared --
+// in short, showModalDialog holds this one while a nested exec() runs, and the
+// handlers that close that dialog therefore have to lock something else.
+//
 static std::recursive_mutex s_sync_api_call_mutex;
 
 #ifdef SE_ENABLE_WYVRN
@@ -609,33 +614,6 @@ SerializeRazerWyvrnStatus(std::shared_ptr<SEApiServices> apiServices)
 	return result;
 }
 #endif
-
-#define API_HANDLER_BEGIN(name) \
-	RegisterIncomingApiCallHandler(name, []( \
-		std::shared_ptr<SEApiMessageHandler> self, \
-		std::shared_ptr<SEApiServices> apiServices, \
-		CefRefPtr<CefProcessMessage> message, \
-		CefRefPtr<CefListValue> args, \
-		CefRefPtr<CefValue>& result, \
-		std::shared_ptr<SEWebsocketApiServer::ClientInfo> target, \
-		const long cefClientId, \
-		std::function<void()> complete_callback) \
-		{ \
-			(void)self; \
-			(void)apiServices; \
-			(void)message; \
-			(void)args; \
-			(void)result; \
-			(void)target; \
-			(void)cefClientId; \
-			(void)complete_callback; \
-			std::lock_guard<std::recursive_mutex> _api_sync_guard(s_sync_api_call_mutex);
-#define API_HANDLER_END() \
-	complete_callback(); \
-	});
-
-#define API_HANDLER_END_ASYNC() \
-	});
 
 void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 {

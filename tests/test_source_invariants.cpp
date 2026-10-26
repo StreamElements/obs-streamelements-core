@@ -4095,6 +4095,130 @@ static void check_api_handler_obs_qt_tokens_only_go_down()
 	      "in the comment above in the same commit (CORE-757)");
 }
 
+//
+// --- The API call lock is per translation unit, on purpose (CORE-757) ----
+//
+// API_HANDLER_BEGIN has one definition, in SEApiMessageHandler.hpp. The lock
+// it takes does not: the macro names `s_sync_api_call_mutex` unqualified, and
+// each expanding translation unit defines its own. That reads like an
+// oversight and is the opposite.
+//
+// showModalDialog's body calls SEBrowserDialogManager::DeserializeModalDialog,
+// which calls dialog->exec() synchronously. So it holds the lock of the TU it
+// was compiled in for the entire lifetime of the modal dialog -- and the only
+// way that dialog ever closes is its own endModalDialog / endDialog handler,
+// compiled in SEBrowserDialog.cpp. Share one mutex between them and the exit
+// path blocks on the lock its own opener is holding, for good. The mutex is
+// recursive, which does not help: the two run on different threads.
+//
+// Before the macro moved into the header there were two copies of it, one per
+// TU, and the two lock domains were a side effect of that duplication rather
+// than anything anybody had written down. This is what writes it down.
+//
+static void check_the_api_call_lock_stays_per_translation_unit()
+{
+	const std::string header =
+		slurp("streamelements/SEApiMessageHandler.hpp");
+
+	//
+	// One definition of the shape.
+	//
+	std::size_t defs = 0;
+
+	for (std::size_t i = header.find("#define API_HANDLER_BEGIN");
+	     i != std::string::npos;
+	     i = header.find("#define API_HANDLER_BEGIN", i + 1))
+		++defs;
+
+	check(defs == 1,
+	      "SEApiMessageHandler.hpp must define API_HANDLER_BEGIN exactly "
+	      "once -- it is the single definition every registering "
+	      "translation unit expands (CORE-757)");
+
+	//
+	// And the lock it takes has to be the unqualified name, so that it
+	// binds to the definition in whichever TU expands it.
+	//
+	const std::size_t begin_at = header.find("#define API_HANDLER_BEGIN");
+	const std::size_t end_at =
+		header.find("#define API_HANDLER_END", begin_at);
+
+	check(end_at != std::string::npos,
+	      "API_HANDLER_END not found after API_HANDLER_BEGIN -- this "
+	      "invariant cannot locate the macro body (CORE-757)");
+
+	const std::string macro = header.substr(begin_at, end_at - begin_at);
+
+	check(macro.find("s_sync_api_call_mutex") != std::string::npos,
+	      "API_HANDLER_BEGIN no longer locks s_sync_api_call_mutex. If the "
+	      "lock moved onto the handler object or into the dispatcher, "
+	      "every API call shares one domain and a modal dialog can no "
+	      "longer be closed -- see the comment on this check (CORE-757)");
+
+	check(macro.find("::s_sync_api_call_mutex") == std::string::npos,
+	      "API_HANDLER_BEGIN qualifies s_sync_api_call_mutex, which binds "
+	      "every expansion to one mutex. It must stay unqualified so each "
+	      "translation unit supplies its own (CORE-757)");
+
+	//
+	// Two expanding TUs, two definitions, neither carrying its own copy
+	// of the macro any more.
+	//
+	struct Expander {
+		const char *path;
+		const char *what;
+	};
+
+	const Expander expanders[] = {
+		{"streamelements/SEApiMessageHandler.cpp",
+		 "the host API handlers"},
+		{"streamelements/SEBrowserDialog.cpp",
+		 "the dialog handlers that close a modal dialog"},
+	};
+
+	for (const Expander &e : expanders) {
+		const std::string src = slurp(e.path);
+
+		check(src.find("API_HANDLER_BEGIN(") != std::string::npos,
+		      "this invariant expects this file to register handlers, "
+		      "and it no longer does -- it needs updating (CORE-757)");
+
+		check(src.find("#define API_HANDLER_") == std::string::npos,
+		      "a second copy of the API handler macros has appeared. "
+		      "There is one definition, in SEApiMessageHandler.hpp "
+		      "(CORE-757)");
+
+		check(strip_line_comments(src).find(
+			      "static std::recursive_mutex "
+			      "s_sync_api_call_mutex;") != std::string::npos,
+		      "this file expands API_HANDLER_BEGIN but does not define "
+		      "its own s_sync_api_call_mutex. It must: sharing one "
+		      "with the other expander deadlocks every modal dialog "
+		      "(CORE-757)");
+	}
+
+	//
+	// The reason above rests on the modal dialog still being opened with a
+	// blocking exec() from inside a handler body. If that ever stops being
+	// true, the two domains may be able to merge -- but it should be a
+	// decision, not a surprise.
+	//
+	const std::string modal = function_body(
+		strip_line_comments(
+			slurp("streamelements/SEBrowserDialogManager.cpp")),
+		"SEBrowserDialogManager::DeserializeModalDialog");
+
+	check(!modal.empty(),
+	      "DeserializeModalDialog not found -- the premise of this "
+	      "invariant can no longer be checked (CORE-757)");
+
+	check(modal.find("exec()") != std::string::npos,
+	      "DeserializeModalDialog no longer blocks in exec(). That is the "
+	      "whole reason the API call lock is per translation unit, so "
+	      "revisit this check and the comment on API_HANDLER_BEGIN rather "
+	      "than deleting either (CORE-757)");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -4158,6 +4282,7 @@ int main()
 	check_the_services_are_released_at_the_end_of_shutdown();
 	check_deferred_deletes_hold_services_weakly();
 	check_api_handler_obs_qt_tokens_only_go_down();
+	check_the_api_call_lock_stays_per_translation_unit();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

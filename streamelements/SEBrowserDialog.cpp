@@ -6,31 +6,13 @@
 
 #include "cef-headers.hpp"
 
+//
+// The API call lock for the dialog handlers, and it must not be the one in
+// SEApiMessageHandler.cpp: showModalDialog holds that one for as long as the
+// modal dialog is up, and these three handlers are the only way the dialog
+// ever closes. See the comment on API_HANDLER_BEGIN in the handler header.
+//
 static std::recursive_mutex s_sync_api_call_mutex;
-
-#define API_HANDLER_BEGIN(name)                          \
-	RegisterIncomingApiCallHandler(name, []( \
-		std::shared_ptr<SEApiMessageHandler> self, \
-		std::shared_ptr<SEApiServices> apiServices, \
-		CefRefPtr<CefProcessMessage> message, \
-		CefRefPtr<CefListValue> args, \
-		CefRefPtr<CefValue>& result, \
-		std::shared_ptr<SEWebsocketApiServer::ClientInfo> target, \
-		const long cefClientId, \
-		std::function<void()> complete_callback) \
-		{ \
-			(void)self; \
-			(void)apiServices; \
-			(void)message; \
-			(void)args; \
-			(void)result; \
-			(void)target; \
-			(void)cefClientId; \
-			(void)complete_callback; \
-			std::lock_guard<std::recursive_mutex> _api_sync_guard(s_sync_api_call_mutex);
-#define API_HANDLER_END()    \
-	complete_callback(); \
-	});
 
 class SEDialogApiMessageHandler : public SEApiMessageHandler
 {

@@ -194,3 +194,62 @@ public:
 	InvokeApiCallAsync(std::string invoke, CefRefPtr<CefListValue> args,
 			   std::function<void(CefRefPtr<CefValue>)> callback);
 };
+
+//
+// The API handler macros: one definition, expanded in every translation unit
+// that registers host API methods.
+//
+// API_HANDLER_BEGIN opens a registration and names the variables a body may
+// use -- self, apiServices, message, args, result, target, cefClientId and
+// complete_callback -- then takes the API call lock. API_HANDLER_END closes
+// the body and calls complete_callback for you; API_HANDLER_END_ASYNC closes
+// it without calling anything, for a body that hands the work off and must
+// call complete_callback itself on every path, error paths included.
+//
+// *** The lock is deliberately per-translation-unit, and must stay that way. ***
+//
+// Each expanding TU defines its own `static std::recursive_mutex
+// s_sync_api_call_mutex`, and this macro picks up whichever one is in scope.
+// That looks like an accident and is not: the handlers that end a dialog have
+// to be in a different lock domain from the handler that opened it.
+//
+// showModalDialog's body calls SEBrowserDialogManager::DeserializeModalDialog,
+// which calls dialog->exec() synchronously, so it holds the lock of the TU it
+// was compiled in for the entire lifetime of the modal dialog. The only way
+// that dialog ever closes is its own endModalDialog / endDialog handler. Put
+// both in one domain and the exit path blocks on the lock its own opener is
+// holding, forever -- the mutex being recursive does not help, because the
+// two run on different threads.
+//
+// So a TU that expands these macros must define s_sync_api_call_mutex itself.
+// Forgetting to is a compile error, which is the intended outcome;
+// check_the_api_call_lock_stays_per_translation_unit is what stops the two
+// definitions being "simplified" into one.
+//
+#define API_HANDLER_BEGIN(name)                                               \
+	RegisterIncomingApiCallHandler(                                        \
+		name,                                                          \
+		[](std::shared_ptr<SEApiMessageHandler> self,                  \
+		   std::shared_ptr<SEApiServices> apiServices,                 \
+		   CefRefPtr<CefProcessMessage> message,                       \
+		   CefRefPtr<CefListValue> args, CefRefPtr<CefValue> &result,  \
+		   std::shared_ptr<SEWebsocketApiServer::ClientInfo> target,   \
+		   const long cefClientId,                                     \
+		   std::function<void()> complete_callback) {                  \
+			(void)self;                                            \
+			(void)apiServices;                                     \
+			(void)message;                                         \
+			(void)args;                                            \
+			(void)result;                                          \
+			(void)target;                                          \
+			(void)cefClientId;                                     \
+			(void)complete_callback;                               \
+			std::lock_guard<std::recursive_mutex> _api_sync_guard( \
+				s_sync_api_call_mutex);
+
+#define API_HANDLER_END()    \
+	complete_callback(); \
+	});
+
+#define API_HANDLER_END_ASYNC() \
+	});
