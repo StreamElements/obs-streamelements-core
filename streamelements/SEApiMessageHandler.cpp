@@ -11,7 +11,44 @@
 
 #include "Version.hpp"
 #include "SEConfig.hpp"
-#include "SEGlobalStateManager.hpp"
+//
+// The services the handler bodies reach through apiServices->, one include
+// each. They used to arrive transitively through SEGlobalStateManager.hpp:
+// that header's own symbol was never referenced here, but it was pulling in
+// roughly four hundred of this translation unit's four hundred and fifty
+// local headers, and every service header among them. Naming them is what
+// lets the unused include go, and it is also the list part 2 has to replace
+// with interfaces -- so it should be visible rather than implied.
+//
+// SEConfig.hpp and SEMessageBus.hpp are the two already included above.
+//
+#include "SEAnalyticsEventsManager.hpp"
+#include "SEAudioCompositionManager.hpp"
+#include "SEAuxiliaryControlsBuilder.hpp"
+#include "SEBackupManager.hpp"
+#include "SEBandwidthTestManager.hpp"
+#include "SEBrowserDialogManager.hpp"
+#include "SEBrowserWidgetManager.hpp"
+#include "SEExternalSceneDataProviderManager.hpp"
+#include "SEHotkeyManager.hpp"
+#include "SEHttpClient.hpp"
+#include "SEMenuManager.hpp"
+#include "SENativeOBSControlsManager.hpp"
+#include "SEObsApiTransactionManager.hpp"
+#include "SEObsSceneManager.hpp"
+#include "SEOutputManager.hpp"
+#include "SEOutputSettingsManager.hpp"
+#include "SEPopupWindowManager.hpp"
+#include "SEProfilesManager.hpp"
+#include "SESessionManager.hpp"
+#include "SESharedVideoCompositionManager.hpp"
+#include "SEStatePersistence.hpp"
+#include "SEStatusBarMessageManager.hpp"
+#include "SEVideoCompositionManager.hpp"
+#include "SEWorkerManager.hpp"
+#ifdef SE_ENABLE_WYVRN
+#include "SERazerWyvrnManager.hpp"
+#endif
 #include "SEUtils.hpp"
 #include "SEMessageBus.hpp"
 #include "SEWebsocketApiServer.hpp"
