@@ -3,3 +3,7 @@
 # a syntax error or a variable with a trailing \r. This repo is developed on Windows with
 # core.autocrlf=true, so pin these to LF rather than relying on that staying true.
 /.github/actions/se-release/*.sh text eol=lf
+
+# Same reasoning for the git hooks: `#!/bin/sh` followed by a CR is not a
+# shebang, so a CRLF checkout makes the hook fail to run at all.
+/.githooks/* text eol=lf
