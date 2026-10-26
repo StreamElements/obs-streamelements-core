@@ -537,6 +537,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEObsBandwidthTestClient.cpp
 	streamelements/SEWidgetManager.cpp
 	streamelements/SEObsAppMonitor.cpp
+	streamelements/SEApiMessageHandlerBase.cpp
 	streamelements/SEApiMessageHandler.cpp
 	streamelements/SEStatePersistence.cpp
 	streamelements/SEStatusBarMessageManager.cpp
@@ -719,6 +720,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEObsBandwidthTestClient.hpp
 	streamelements/SEWidgetManager.hpp
 	streamelements/SEObsAppMonitor.hpp
+	streamelements/SEApiMessageHandlerBase.hpp
 	streamelements/SEApiMessageHandler.hpp
 	streamelements/SEApiServices.hpp
 	streamelements/SEStatePersistence.hpp

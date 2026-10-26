@@ -79,13 +79,24 @@ static void check_c2_video_encoder_template_match()
 // to CEF clients as a callback id.
 static void check_c4_no_self_assign_cefclientid()
 {
-	auto src = slurp("streamelements/SEApiMessageHandler.cpp");
+	//
+	// Both halves of the split handler: the async-call context is built by
+	// the base and read by InvokeHandler in the derived file, so checking
+	// one of them would pass for the wrong reason.
+	//
+	const char *const files[] = {
+		"streamelements/SEApiMessageHandlerBase.cpp",
+		"streamelements/SEApiMessageHandler.cpp",
+	};
 
 	std::regex bad(
 		R"(context\s*->\s*cefClientId\s*=\s*context\s*->\s*cefClientId)");
-	check(count_matches(src, bad) == 0,
-	      "C4: SEApiMessageHandler.cpp must not contain "
-	      "`context->cefClientId = context->cefClientId` (self-assign)");
+
+	for (const char *const file : files)
+		check(count_matches(slurp(file), bad) == 0,
+		      "C4: the API handler sources must not contain "
+		      "`context->cefClientId = context->cefClientId` "
+		      "(self-assign)");
 }
 
 // --- C5: CefParseJSON returns null on malformed input. The result must
@@ -93,7 +104,10 @@ static void check_c4_no_self_assign_cefclientid()
 // check, because that dereferences a null CefRefPtr.
 static void check_c5_cefparsejson_null_guarded()
 {
-	auto src = slurp("streamelements/SEApiMessageHandler.cpp");
+	//
+	// The parse happens in the dispatcher, which is the base half.
+	//
+	auto src = slurp("streamelements/SEApiMessageHandlerBase.cpp");
 
 	// The fix guards parsedValue against null before SetValue.
 	// We assert one of two acceptable patterns:
@@ -2646,13 +2660,11 @@ static void check_nothing_but_the_manager_owns_the_services_container()
 	// Non-vacuity, and the other half of the rule: the holders that were
 	// converted have to still be holding it weakly.
 	//
-	const char *const holders[] = {"SEApiMessageHandler.hpp",
-				       "SEBrowserDialog.hpp",
-				       "SEBrowserDialogManager.hpp",
-				       "SENativeOBSControlsManager.hpp",
-				       "SEPopupWindowManager.hpp",
-				       "SEWidgetManager.hpp",
-				       "SEWorkerManager.hpp"};
+	const char *const holders[] = {
+		"SEApiMessageHandlerBase.hpp", "SEBrowserDialog.hpp",
+		"SEBrowserDialogManager.hpp",  "SENativeOBSControlsManager.hpp",
+		"SEPopupWindowManager.hpp",    "SEWidgetManager.hpp",
+		"SEWorkerManager.hpp"};
 
 	for (const char *const holder : holders) {
 		check(std::find(weakHolders.begin(), weakHolders.end(),
@@ -2676,19 +2688,33 @@ static void check_api_handler_locks_the_services_once_per_dispatch()
 	// a dead bundle into a null-field dereference instead of an early
 	// return.
 	//
-	const std::string src =
-		strip_line_comments(slurp("streamelements/SEApiMessageHandler.cpp"));
+	//
+	// The dispatcher is the base half; the handler bodies that must not
+	// reach around it are the derived half. Both are read below.
+	//
+	const std::string src = strip_line_comments(
+		slurp("streamelements/SEApiMessageHandlerBase.cpp"));
+
+	const std::string bodies = strip_line_comments(
+		slurp("streamelements/SEApiMessageHandler.cpp"));
 
 	//
 	// Flattened, because the reach used to wrap across as many as four
-	// lines and a wrapped one must not slip through.
+	// lines and a wrapped one must not slip through. Both halves of the
+	// split handler go into the same flattened buffer: the ban is on the
+	// shape, wherever it appears.
 	//
 	std::string flat;
-	flat.reserve(src.size());
+	flat.reserve(src.size() + bodies.size());
 
 	for (std::size_t i = 0; i < src.size(); ++i) {
 		if (!std::isspace(static_cast<unsigned char>(src[i])))
 			flat += src[i];
+	}
+
+	for (std::size_t i = 0; i < bodies.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(bodies[i])))
+			flat += bodies[i];
 	}
 
 	//
@@ -2697,12 +2723,12 @@ static void check_api_handler_locks_the_services_once_per_dispatch()
 	// them does so through context->self.
 	//
 	check(flat.find("self->m_services->") == std::string::npos,
-	      "a handler body in SEApiMessageHandler.cpp reads a service "
+	      "a handler body in the API handler sources reads a service "
 	      "through self->m_services -- handlers take the locked bundle as "
 	      "their apiServices parameter");
 
-	const std::string dispatch =
-		function_body(src, "SEApiMessageHandler::InvokeApiCallHandlerAsync");
+	const std::string dispatch = function_body(
+		src, "SEApiMessageHandlerBase::InvokeApiCallHandlerAsync");
 
 	check(!dispatch.empty(),
 	      "InvokeApiCallHandlerAsync not found -- this invariant cannot "
@@ -4027,8 +4053,18 @@ static void check_deferred_deletes_hold_services_weakly()
 //
 static void check_api_handler_obs_qt_tokens_only_go_down()
 {
-	const std::string src = strip_line_comments(
-		slurp("streamelements/SEApiMessageHandler.cpp"));
+	//
+	// Both halves of the split handler, summed. The infrastructure moved
+	// into SEApiMessageHandlerBase.cpp and took 22 of these tokens with
+	// it; counting one file would have read as progress that had not
+	// happened. The ratchet is on the handler surface as a whole.
+	//
+	const std::string src =
+		strip_line_comments(
+			slurp("streamelements/SEApiMessageHandlerBase.cpp")) +
+		"\n" +
+		strip_line_comments(
+			slurp("streamelements/SEApiMessageHandler.cpp"));
 
 	struct Family {
 		const char *what;
@@ -4069,12 +4105,13 @@ static void check_api_handler_obs_qt_tokens_only_go_down()
 
 		std::ostringstream msg;
 
-		msg << "SEApiMessageHandler.cpp: " << f.what << " -- " << n
+		msg << "the API handler sources: " << f.what << " -- " << n
 		    << " occurrence(s), expected " << f.expected << ". ";
 
 		if (n > f.expected)
-			msg << "Nothing new may reach libobs or Qt from this "
-			       "file: put the implementation on the service "
+			msg << "Nothing new may reach libobs or Qt from "
+			       "these files: put the implementation on the "
+			       "service "
 			       "or SEUtils domain that owns the concern, and "
 			       "call that from the handler (CORE-757).";
 		else
@@ -4118,7 +4155,7 @@ static void check_api_handler_obs_qt_tokens_only_go_down()
 static void check_the_api_call_lock_stays_per_translation_unit()
 {
 	const std::string header =
-		slurp("streamelements/SEApiMessageHandler.hpp");
+		slurp("streamelements/SEApiMessageHandlerBase.hpp");
 
 	//
 	// One definition of the shape.
@@ -4131,8 +4168,9 @@ static void check_the_api_call_lock_stays_per_translation_unit()
 		++defs;
 
 	check(defs == 1,
-	      "SEApiMessageHandler.hpp must define API_HANDLER_BEGIN exactly "
-	      "once -- it is the single definition every registering "
+	      "SEApiMessageHandlerBase.hpp must define API_HANDLER_BEGIN "
+	      "exactly once -- it is the single definition every "
+	      "registering "
 	      "translation unit expands (CORE-757)");
 
 	//
