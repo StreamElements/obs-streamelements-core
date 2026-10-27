@@ -1,15 +1,29 @@
 #pragma once
 
 //
-// Startup and teardown gating: whether it is safe to destroy UI, the one
-// sanctioned way to delete a dock, the event-queue choke point, and the
-// please-wait transaction that defers OBS scene-collection saves.
+// Startup and teardown gating: whether libobs is up, whether it is safe to
+// destroy UI, and the event-queue choke point.
+//
+// Nothing here names an obs or a Qt type, deliberately. These are the
+// questions a translation unit asks before it does anything at all, and the
+// ones that most want asking from code that has no business linking either
+// library -- so the vocabulary stays on the .cpp side and the declarations
+// are bools. SEDeleteDockWidgetWhenSafe, which used to sit here and was the
+// only Qt in the file, is in SEDockUtils.hpp.
 //
 
-#include <QDockWidget>
-#include <QPointer>
-
 #include <string>
+
+//
+// Whether libobs has finished initializing: obs_initialized(), behind a
+// declaration that does not need obs.h.
+//
+// It is the one obs call the API handler infrastructure makes, and a link
+// seam for a test, which defines it and decides the answer -- which is what
+// makes "a page's context was created before the plug-in was ready" an
+// ordinary assertion rather than a startup race nobody can reproduce.
+//
+bool IsObsInitialized();
 
 //
 // UI teardown gate (CORE-786). Defined in obs-streamelements-core-plugin.cpp,
@@ -33,13 +47,6 @@ bool SEIsEventPumpAllowed();
 // Use instead of QApplication::sendPostedEvents() everywhere: one choke point
 // for every event pump the plug-in runs.
 void SEDrainEventQueue();
-
-// The only sanctioned way to destroy a QDockWidget. Deletes it when the gate
-// above is open; otherwise detaches it from OBS's widget tree and leaks it,
-// loudly. Destroying a dock while OBSInit() is still on the stack corrupts
-// the tree, and by then obs_frontend_get_main_window() may already be null.
-void SEDeleteDockWidgetWhenSafe(QPointer<QDockWidget> dock, const char *id,
-				bool useDeleteLater);
 
 void RemoveObsDirtyShutdownMarker();
 

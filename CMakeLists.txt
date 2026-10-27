@@ -557,6 +557,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEUtils/SEOverlayUrlUtils.cpp
 	streamelements/SEUtils/SEWidgetUtils.cpp
 	streamelements/SEUtils/SELifecycleUtils.cpp
+	streamelements/SEUtils/SEDockUtils.cpp
 	streamelements/SEUtils/SEObsEncoderUtils.cpp
 	streamelements/SEUtils/SEObsSceneUtils.cpp
 	streamelements/SEUtils/SEEnvConfigUtils.cpp
@@ -745,6 +746,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEUtils/SEOverlayUrlUtils.hpp
 	streamelements/SEUtils/SEWidgetUtils.hpp
 	streamelements/SEUtils/SELifecycleUtils.hpp
+	streamelements/SEUtils/SEDockUtils.hpp
 	streamelements/SEUtils/SEReentrancyUtils.hpp
 	streamelements/SEUtils/SEObsEncoderUtils.hpp
 	streamelements/SEUtils/SEObsSceneUtils.hpp

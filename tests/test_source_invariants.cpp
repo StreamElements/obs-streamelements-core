@@ -394,8 +394,14 @@ static void check_dock_deletion_is_gated()
 		}
 	}
 
+	//
+	// The deleter has its own domain now: naming QPointer<QDockWidget> in
+	// a declaration put Qt into every includer of SELifecycleUtils.hpp,
+	// which is the one header a translation unit reads to ask whether the
+	// world is up yet.
+	//
 	auto utils = strip_line_comments(
-		slurp("streamelements/SEUtils/SELifecycleUtils.cpp"));
+		slurp("streamelements/SEUtils/SEDockUtils.cpp"));
 
 	check(utils.find("SEIsUiTeardownSafe()") != std::string::npos,
 	      "CORE-786: SEDeleteDockWidgetWhenSafe() must gate on SEIsUiTeardownSafe()");
@@ -1608,7 +1614,7 @@ static void check_scene_signal_handler_lifetime()
 static void check_widget_teardown_leaves_the_paint_tree()
 {
 	const std::string utils = strip_line_comments(
-		slurp("streamelements/SEUtils/SELifecycleUtils.cpp"));
+		slurp("streamelements/SEUtils/SEDockUtils.cpp"));
 
 	const std::string deleteDock =
 		function_body(utils, "void SEDeleteDockWidgetWhenSafe(");
@@ -4081,7 +4087,7 @@ static void check_api_handler_obs_qt_tokens_only_go_down()
 	// reappearing would put that include back.
 	//
 	const Family families[] = {
-		{"libobs functions and types", R"(\bobs_[a-z]\w*)", 10},
+		{"libobs functions and types", R"(\bobs_[a-z]\w*)", 9},
 		{"libobs constants", R"(\bOBS_[A-Z]\w*)", 7},
 		{"blog", R"(\bblog\b)", 0},
 		{"libobs log levels", R"(\bLOG_[A-Z]\w*)", 0},
@@ -4130,7 +4136,7 @@ static void check_api_handler_obs_qt_tokens_only_go_down()
 	// Keeps the headline in the comment above honest: the rows and the
 	// total are edited together or not at all.
 	//
-	check(expected_total == 42,
+	check(expected_total == 41,
 	      "the per-family counts no longer sum to 68 -- update the total "
 	      "in the comment above in the same commit (CORE-757)");
 }
@@ -4326,6 +4332,177 @@ static void check_the_trace_log_level_memo_is_computed_once()
 	      "(CORE-757)");
 }
 
+//
+// Part 2's ratchet: the obs and Qt headers in a translation unit's include
+// closure, which is what decides whether it can be compiled in this suite.
+//
+// The infrastructure half is at zero and is pinned there absolutely. It got
+// there by naming the five SEUtils domains it uses instead of the SEUtils.hpp
+// umbrella, and the umbrella is the way back: re-adding that one line puts
+// five obs headers and eleven Qt ones into the closure for two tokens of use,
+// and nothing about the build would complain. The token ratchet would not
+// notice either -- it counts what the source says, not what it includes --
+// so this is the check that holds that commit in place.
+//
+// The handler half is a moving number and a ceiling, lowered by the commit
+// that lowers it. Unlike the token ratchet it falls only when the LAST path
+// to a header is cut -- obs.h alone has fifteen independent introducers --
+// so it sits flat and then collapses. That is understood and accepted: it is
+// the final assertion that the handlers can join the suite, not a progress
+// meter. Use the token ratchet to watch progress.
+//
+static bool try_slurp(const std::string &relpath, std::string &out)
+{
+	std::ifstream in(std::string(se_tests::kRepoRoot) + "/" + relpath);
+
+	if (!in)
+		return false;
+
+	std::stringstream ss;
+	ss << in.rdbuf();
+	out = ss.str();
+	return true;
+}
+
+static void include_closure(const std::string &root,
+			    std::vector<std::string> &obs,
+			    std::vector<std::string> &qt)
+{
+	//
+	// The include directories the plug-in builds with, in the order the
+	// compiler searches them. A header that resolves inside the repo is
+	// followed; one that does not is external, and external is what is
+	// being counted.
+	//
+	static const char *const kSearchPath[] = {
+		"streamelements", "streamelements/SEUtils", "",
+		"deps/cef-stub",  "streamelements/deps",
+	};
+
+	const std::regex inc(R"(#[ \t]*include[ \t]*[<"]([^">]+)[">])");
+	const std::regex is_obs(
+		R"(obs[\w.-]*\.hp?p?|(?:util|graphics|media-io|callback)/.*)");
+	const std::regex is_qt(R"(Q[A-Z]\w*|Qt\w*(?:/.*)?)");
+
+	std::vector<std::string> queue{root};
+	std::vector<std::string> seen;
+	std::vector<std::string> external;
+
+	while (!queue.empty()) {
+		const std::string file = queue.back();
+		queue.pop_back();
+
+		if (std::find(seen.begin(), seen.end(), file) != seen.end())
+			continue;
+
+		seen.push_back(file);
+
+		std::string raw;
+
+		if (!try_slurp(file, raw))
+			continue;
+
+		const std::string body = strip_line_comments(raw);
+		const auto slash = file.find_last_of('/');
+		const std::string dir = slash == std::string::npos
+						? std::string()
+						: file.substr(0, slash);
+
+		for (auto it = std::sregex_iterator(body.begin(), body.end(),
+						    inc);
+		     it != std::sregex_iterator(); ++it) {
+			const std::string header = (*it)[1].str();
+
+			std::vector<std::string> candidates;
+
+			if (!dir.empty())
+				candidates.push_back(dir + "/" + header);
+
+			for (const char *const d : kSearchPath) {
+				candidates.push_back(*d ? std::string(d) + "/" +
+								     header
+							: header);
+			}
+
+			std::string resolved;
+
+			for (const std::string &c : candidates) {
+				if (std::filesystem::exists(
+					    std::string(se_tests::kRepoRoot) +
+					    "/" + c)) {
+					resolved = c;
+					break;
+				}
+			}
+
+			if (resolved.empty())
+				external.push_back(header);
+			else
+				queue.push_back(resolved);
+		}
+	}
+
+	std::sort(external.begin(), external.end());
+	external.erase(std::unique(external.begin(), external.end()),
+		       external.end());
+
+	for (const std::string &h : external) {
+		if (std::regex_match(h, is_obs))
+			obs.push_back(h);
+		else if (std::regex_match(h, is_qt))
+			qt.push_back(h);
+	}
+}
+
+static void report_closure(const char *root, const char *what,
+			   std::size_t expected_obs, std::size_t expected_qt)
+{
+	std::vector<std::string> obs, qt;
+
+	include_closure(root, obs, qt);
+
+	char msg[1024];
+
+	if (obs.size() != expected_obs || qt.size() != expected_qt) {
+		std::string found;
+
+		for (const std::string &h : obs)
+			found += " " + h;
+
+		for (const std::string &h : qt)
+			found += " " + h;
+
+		std::snprintf(
+			msg, sizeof(msg),
+			"%s: %zu obs and %zu Qt header(s) in the include "
+			"closure, expected %zu and %zu. Found:%s. This count "
+			"is a floor as well as a ceiling -- if you removed "
+			"some, lower it here in the same commit (CORE-757)",
+			what, obs.size(), qt.size(), expected_obs, expected_qt,
+			found.c_str());
+
+		check(false, msg);
+	}
+}
+
+static void check_handler_include_closure_only_goes_down()
+{
+	//
+	// Zero, absolutely. The five domain headers this file names in place
+	// of SEUtils.hpp are what hold it there.
+	//
+	report_closure("streamelements/SEApiMessageHandlerBase.cpp",
+		       "the API handler infrastructure", 0, 0);
+
+	//
+	// The 208 handler bodies, which dereference 27 concrete services and
+	// so drag in whatever those services' headers need. Zero is the end
+	// state; part 2 of the plan is the route.
+	//
+	report_closure("streamelements/SEApiMessageHandler.cpp",
+		       "the API handler bodies", 8, 33);
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -4391,6 +4568,7 @@ int main()
 	check_api_handler_obs_qt_tokens_only_go_down();
 	check_the_api_call_lock_stays_per_translation_unit();
 	check_the_trace_log_level_memo_is_computed_once();
+	check_handler_include_closure_only_goes_down();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

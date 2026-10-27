@@ -3,8 +3,27 @@
 #include "cef-headers.hpp"
 
 #include "Version.hpp"
-#include "SEUtils.hpp"
+
+//
+// The domains this file uses, named one by one rather than through the
+// SEUtils.hpp umbrella.
+//
+// The umbrella is 24 headers, and it was the only thing left in this
+// translation unit that reached libobs or Qt: five obs headers and eleven Qt
+// ones arrived through it, for two tokens of actual use. Naming the four
+// domains instead takes the infrastructure to nothing external at all, which
+// is what lets it be compiled in tests/ where there is no obs tree.
+//
+// Keep it this way. #include "SEUtils.hpp" here would undo it silently --
+// nothing would fail to build, and the ratchet in test_source_invariants is
+// what would notice.
+//
 #include "SEUtils/SELogUtils.hpp"
+#include "SEUtils/SELifecycleUtils.hpp"
+#include "SEUtils/SEDiagnosticsUtils.hpp"
+#include "SEUtils/SEAsyncTaskUtils.hpp"
+#include "SEUtils/SEEnvConfigUtils.hpp"
+
 #include "SEWebsocketApiServer.hpp"
 
 /* Incoming messages from renderer process */
@@ -20,7 +39,7 @@ const char *MSG_BIND_JAVASCRIPT_PROPS =
 
 bool SEApiMessageHandlerBase::IsPluginInitialized()
 {
-	if (!obs_initialized())
+	if (!IsObsInitialized())
 		return false;
 
 	auto services = m_services.lock();

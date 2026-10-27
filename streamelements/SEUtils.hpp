@@ -18,6 +18,7 @@
 #include "SEUtils/SEReentrancyUtils.hpp"
 #include "SEUtils/SEAsyncTaskUtils.hpp"
 #include "SEUtils/SELifecycleUtils.hpp"
+#include "SEUtils/SEDockUtils.hpp"
 #include "SEUtils/SESystemInfoUtils.hpp"
 #include "SEUtils/SEAppEnvUtils.hpp"
 #include "SEUtils/SEWidgetUtils.hpp"
