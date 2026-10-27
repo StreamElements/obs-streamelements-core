@@ -9,7 +9,6 @@
 #include "SEControllerServer.hpp"
 #include "SEHttpServerManager.hpp"
 
-#include <util/threading.h>
 
 #include <future>
 

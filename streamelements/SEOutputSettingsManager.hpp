@@ -1,6 +1,5 @@
 #pragma once
 
-#include <obs.h>
 #include "../cef-headers.hpp"
 
 class SEOutputSettingsManager
@@ -31,8 +30,5 @@ public:
 				  CefRefPtr<CefValue> &output);
 
 private:
-	void GetAvailableEncodersOfType(CefRefPtr<CefValue> &result,
-					obs_encoder_type *encoder_type);
-
 	void StopAllOutputs();
 };

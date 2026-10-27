@@ -65,9 +65,17 @@ void SEOutputSettingsManager::GetEncoderProperties(
 	obs_encoder_release(SETRACE_DECREF(encoder));
 }
 
+//
+// File-static rather than a private member, so that the one obs type left in
+// this class's surface stays on this side of the header. Its three callers
+// are below.
+//
+static void get_available_encoders_of_type(CefRefPtr<CefValue> &result,
+					   obs_encoder_type *encoder_type);
+
 void SEOutputSettingsManager::GetAvailableEncoders(CefRefPtr<CefValue> &result)
 {
-	GetAvailableEncodersOfType(result, nullptr);
+	get_available_encoders_of_type(result, nullptr);
 }
 
 void SEOutputSettingsManager::GetAvailableVideoEncoders(
@@ -75,7 +83,7 @@ void SEOutputSettingsManager::GetAvailableVideoEncoders(
 {
 	obs_encoder_type type = OBS_ENCODER_VIDEO;
 
-	GetAvailableEncodersOfType(result, &type);
+	get_available_encoders_of_type(result, &type);
 }
 
 void SEOutputSettingsManager::GetAvailableAudioEncoders(
@@ -83,11 +91,11 @@ void SEOutputSettingsManager::GetAvailableAudioEncoders(
 {
 	obs_encoder_type type = OBS_ENCODER_AUDIO;
 
-	GetAvailableEncodersOfType(result, &type);
+	get_available_encoders_of_type(result, &type);
 }
 
-void SEOutputSettingsManager::GetAvailableEncodersOfType(
-	CefRefPtr<CefValue> &result, obs_encoder_type *encoder_type)
+static void get_available_encoders_of_type(CefRefPtr<CefValue> &result,
+					   obs_encoder_type *encoder_type)
 {
 	SYNC_ACCESS();
 
