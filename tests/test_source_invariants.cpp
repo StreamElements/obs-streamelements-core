@@ -4111,7 +4111,7 @@ static void check_api_handler_obs_qt_tokens_only_go_down()
 		{"libobs signal handlers", R"(\bsignal_handler_\w*)", 1},
 		{"libobs allocation",
 		 R"(\b(?:bfree|bzalloc|bmalloc|bstrdup)\b)", 0},
-		{"Qt types", R"(\bQ[A-Z]\w*)", 6},
+		{"Qt types", R"(\bQ[A-Z]\w*)", 0},
 		{"Qt task macros", R"(\bQt(?:PostTask|ExecSync|DelayTask)\b)",
 		 1},
 	};
@@ -4151,7 +4151,7 @@ static void check_api_handler_obs_qt_tokens_only_go_down()
 	// Keeps the headline in the comment above honest: the rows and the
 	// total are edited together or not at all.
 	//
-	check(expected_total == 20,
+	check(expected_total == 14,
 	      "the per-family counts no longer sum to 68 -- update the total "
 	      "in the comment above in the same commit (CORE-757)");
 }
@@ -4516,7 +4516,7 @@ static void check_handler_include_closure_only_goes_down()
 	// state; part 2 of the plan is the route.
 	//
 	report_closure("streamelements/SEApiMessageHandler.cpp",
-		       "the API handler bodies", 8, 33);
+		       "the API handler bodies", 8, 31);
 }
 
 int main()

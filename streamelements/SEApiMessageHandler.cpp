@@ -43,6 +43,7 @@
 #include "SEPopupWindowManager.hpp"
 #include "SEProfilesManager.hpp"
 #include "SESessionManager.hpp"
+#include "SEShellServices.hpp"
 #include "SESharedVideoCompositionManager.hpp"
 #include "SEStatePersistence.hpp"
 #include "SEStatusBarMessageManager.hpp"
@@ -55,9 +56,6 @@
 #include "SEUtils/SELogUtils.hpp"
 #include "SEMessageBus.hpp"
 #include "SEWebsocketApiServer.hpp"
-
-#include <QDesktopServices>
-#include <QUrl>
 
 //
 // The API call lock for this translation unit. API_HANDLER_BEGIN takes it, and
@@ -277,14 +275,10 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("openDefaultBrowser");
 	{
-		if (args->GetSize()) {
-			CefString url = args->GetValue(0)->GetString();
-
-			QUrl navigate_url = QUrl(url.ToString().c_str(),
-						 QUrl::TolerantMode);
-			QDesktopServices::openUrl(navigate_url);
-
-			result->SetBool(true);
+		if (args->GetSize() && args->GetType(0) == VTYPE_STRING) {
+			result->SetBool(
+				apiServices->shellServices->OpenDefaultBrowser(
+					args->GetString(0)));
 		}
 	}
 	API_HANDLER_END();
@@ -2637,8 +2631,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("openFileLocationInHostFileManager");
 	{
 		if (args->GetSize() > 0) {
-			DeserializeRevealFileInGraphicalShell(args->GetValue(0),
-							      result);
+			apiServices->shellServices->RevealFileInGraphicalShell(
+				args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();

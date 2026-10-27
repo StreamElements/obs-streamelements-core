@@ -21,7 +21,6 @@
 #include "SEUtils/SEDockUtils.hpp"
 #include "SEUtils/SESystemInfoUtils.hpp"
 #include "SEUtils/SEAppEnvUtils.hpp"
-#include "SEUtils/SEWidgetUtils.hpp"
 #include "SEUtils/SEOverlayUrlUtils.hpp"
 
 #include <cef-headers.hpp>

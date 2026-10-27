@@ -32,6 +32,7 @@ struct QCefCookieManager;
 #include "SEWebsocketApiServer.hpp"
 #include "SEApiServices.hpp"
 #include "SEStatePersistence.hpp"
+#include "SEShellServices.hpp"
 #include "SEStatusBarMessageManager.hpp"
 #include "SEPopupWindowManager.hpp"
 #include "SEBrowserDialogManager.hpp"
@@ -348,6 +349,7 @@ private:
 	std::shared_ptr<SEStatePersistence> m_statePersistence = nullptr;
 	std::shared_ptr<SEStatusBarMessageManager>
 		m_statusBarMessageManager = nullptr;
+	std::shared_ptr<SEShellServices> m_shellServices = nullptr;
 	std::shared_ptr<SEPopupWindowManager> m_popupWindowManager =
 		nullptr;
 	std::shared_ptr<SEBrowserDialogManager> m_browserDialogManager =

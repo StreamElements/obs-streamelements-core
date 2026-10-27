@@ -352,6 +352,7 @@ void SEGlobalStateManager::PublishApiServices()
 	m_apiServices->obsActiveSceneTracker = m_obsActiveSceneTracker;
 	m_apiServices->statePersistence = m_statePersistence;
 	m_apiServices->statusBarMessageManager = m_statusBarMessageManager;
+	m_apiServices->shellServices = m_shellServices;
 	m_apiServices->popupWindowManager = m_popupWindowManager;
 	m_apiServices->browserDialogManager = m_browserDialogManager;
 	m_apiServices->sessionManager = m_sessionManager;
@@ -619,6 +620,12 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 	m_statusBarMessageManager =
 		std::make_shared<SEStatusBarMessageManager>(mainWindow());
+
+	//
+	// Depends on nothing, so it could be constructed anywhere; here,
+	// beside the other small services, so the order reads as one list.
+	//
+	m_shellServices = std::make_shared<SEShellServices>();
 
 	m_popupWindowManager =
 		std::make_shared<SEPopupWindowManager>(m_apiServices);
@@ -913,6 +920,7 @@ void SEGlobalStateManager::WatchServicesForTeardownAudit()
 	SE_WATCH(obsActiveSceneTracker);
 	SE_WATCH(statePersistence);
 	SE_WATCH(statusBarMessageManager);
+	SE_WATCH(shellServices);
 	SE_WATCH(popupWindowManager);
 	SE_WATCH(browserDialogManager);
 	SE_WATCH(sessionManager);
@@ -1086,6 +1094,7 @@ void SEGlobalStateManager::Shutdown()
 	m_windowStateEventFilter = nullptr;
 	m_statePersistence = nullptr;
 	m_statusBarMessageManager = nullptr;
+	m_shellServices = nullptr;
 	m_popupWindowManager = nullptr;
 	m_browserDialogManager = nullptr;
 

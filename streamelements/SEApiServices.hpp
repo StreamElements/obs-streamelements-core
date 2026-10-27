@@ -37,6 +37,7 @@ class SEAuxiliaryControlsBuilder;
 class SEConfig;
 class SEPleaseWaitWindow;
 class SEObsApiTransactionManager;
+class SEShellServices;
 
 //
 // The objects SEGlobalStateManager::Initialize() creates, in one place, so
@@ -151,6 +152,12 @@ struct SEApiServices {
 	// managers above that serialize it.
 	//
 	std::shared_ptr<SEStatusBarMessageManager> statusBarMessageManager;
+
+	//
+	// Opening something outside our own process: a URL in the default
+	// browser, a path in the file manager.
+	//
+	std::shared_ptr<SEShellServices> shellServices;
 	std::shared_ptr<SEPopupWindowManager> popupWindowManager;
 	std::shared_ptr<SEBrowserDialogManager> browserDialogManager;
 	std::shared_ptr<SESessionManager> sessionManager;

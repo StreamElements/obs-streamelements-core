@@ -540,6 +540,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEApiMessageHandlerBase.cpp
 	streamelements/SEApiMessageHandler.cpp
 	streamelements/SEStatePersistence.cpp
+	streamelements/SEShellServices.cpp
 	streamelements/SEStatusBarMessageManager.cpp
 	streamelements/SEPopupWindowManager.cpp
 	streamelements/SEAuxiliaryControlsBuilder.cpp
@@ -555,7 +556,6 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEUtils/SESystemInfoUtils.cpp
 	streamelements/SEUtils/SEAppEnvUtils.cpp
 	streamelements/SEUtils/SEOverlayUrlUtils.cpp
-	streamelements/SEUtils/SEWidgetUtils.cpp
 	streamelements/SEUtils/SELifecycleUtils.cpp
 	streamelements/SEUtils/SEDockUtils.cpp
 	streamelements/SEUtils/SEObsEncoderUtils.cpp
@@ -730,6 +730,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEApiMessageSink.hpp
 	streamelements/SEApiServices.hpp
 	streamelements/SEStatePersistence.hpp
+	streamelements/SEShellServices.hpp
 	streamelements/SEStatusBarMessageManager.hpp
 	streamelements/SEPopupWindowManager.hpp
 	streamelements/SEAuxiliaryControlsBuilder.hpp
@@ -748,7 +749,6 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEUtils/SESystemInfoUtils.hpp
 	streamelements/SEUtils/SEAppEnvUtils.hpp
 	streamelements/SEUtils/SEOverlayUrlUtils.hpp
-	streamelements/SEUtils/SEWidgetUtils.hpp
 	streamelements/SEUtils/SELifecycleUtils.hpp
 	streamelements/SEUtils/SEDockUtils.hpp
 	streamelements/SEUtils/SEReentrancyUtils.hpp
