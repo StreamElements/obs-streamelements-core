@@ -4099,7 +4099,15 @@ static void check_api_handler_obs_qt_tokens_only_go_down()
 		{"blog", R"(\bblog\b)", 0},
 		{"libobs log levels", R"(\bLOG_[A-Z]\w*)", 0},
 		{"calldata", R"(\bcalldata_\w*)", 6},
-		{"os_* from libobs/util", R"(\bos_[a-z]\w*)", 8},
+		{"os_* from libobs/util", R"(\bos_[a-z]\w*)", 0},
+		//
+		// OS_* was missed by every family above: OBS_[A-Z] does not
+		// match it, and os_[a-z] is case-sensitive. The one
+		// occurrence was OS_EVENT_TYPE_AUTO, which has gone with the
+		// os_event family -- so the gap is closed at zero rather than
+		// discovered later at some other number.
+		//
+		{"libobs OS_ constants", R"(\bOS_[A-Z]\w*)", 0},
 		{"libobs signal handlers", R"(\bsignal_handler_\w*)", 1},
 		{"libobs allocation",
 		 R"(\b(?:bfree|bzalloc|bmalloc|bstrdup)\b)", 0},
@@ -4143,7 +4151,7 @@ static void check_api_handler_obs_qt_tokens_only_go_down()
 	// Keeps the headline in the comment above honest: the rows and the
 	// total are edited together or not at all.
 	//
-	check(expected_total == 28,
+	check(expected_total == 20,
 	      "the per-family counts no longer sum to 68 -- update the total "
 	      "in the comment above in the same commit (CORE-757)");
 }

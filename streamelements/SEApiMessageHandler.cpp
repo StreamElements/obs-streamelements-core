@@ -5,6 +5,9 @@
 // header exists on macOS.
 #ifdef WIN32
 #include <intrin.h>
+
+#include <condition_variable>
+#include <mutex>
 #endif
 
 #include "cef-headers.hpp"
@@ -2900,17 +2903,25 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("deadlockProgram");
 	{
-		// Deadlock
-		os_event_t *event = nullptr;
-		os_event_init(&event, OS_EVENT_TYPE_AUTO);
+		//
+		// Hangs the calling thread on purpose, to exercise the
+		// deadlock detector. It waited five times on a libobs
+		// auto-reset event that nothing ever signals; a condition
+		// variable nothing notifies is the same hang with no libobs
+		// and no platform code, and the predicate makes it immune to
+		// a spurious wakeup -- wait() re-checks and goes back to
+		// sleep, where os_event_wait() would have returned and fallen
+		// through to the next of the five.
+		//
+		// The five calls were belt and braces for exactly that. One
+		// is enough when the wait cannot be woken.
+		//
+		std::mutex deadlockMutex;
+		std::condition_variable never;
 
-		os_event_wait(event);
-		os_event_wait(event);
-		os_event_wait(event);
-		os_event_wait(event);
-		os_event_wait(event);
+		std::unique_lock<std::mutex> deadlockLock(deadlockMutex);
 
-		os_event_destroy(event);
+		never.wait(deadlockLock, []() { return false; });
 
 		UNUSED_PARAMETER(result);
 	}
