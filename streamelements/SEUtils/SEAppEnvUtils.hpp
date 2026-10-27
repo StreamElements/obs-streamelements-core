@@ -14,7 +14,6 @@
 std::string DockWidgetAreaToString(const Qt::DockWidgetArea area);
 std::string LoadResourceString(std::string path);
 
-std::string GetCurrentThemeName();
 std::string SerializeAppStyleSheet();
 std::string GetAppStyleSheetSelectorContent(std::string selector);
 

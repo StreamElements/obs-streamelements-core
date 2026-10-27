@@ -55,8 +55,18 @@
 #ifdef SE_ENABLE_WYVRN
 #include "SERazerWyvrnManager.hpp"
 #endif
-#include "SEUtils.hpp"
+//
+// The domains these bodies use, named rather than taken through the
+// SEUtils.hpp umbrella -- four symbols out of twenty-one domains, which is
+// what the umbrella was costing.
+//
+// What is left in this file's include closure is the 27 service headers
+// below, which is part 2 of the plan: the bodies dereference concrete
+// service types, and a complete type is what drags in obs.h and Qt.
+//
 #include "SEUtils/SELogUtils.hpp"
+#include "SEUtils/SEEnvConfigUtils.hpp"
+#include "SEUtils/SEObsSourceCatalogUtils.hpp"
 #include "SEMessageBus.hpp"
 #include "SEWebsocketApiServer.hpp"
 
@@ -2804,8 +2814,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		// Crash
 		*(static_cast<volatile int*>(nullptr)) = 12345; // exception
 		// *((int *)nullptr) = 12345; // exception
-        
-		UNUSED_PARAMETER(result);
+
+		(void)result;
 	}
 	API_HANDLER_END();
 
@@ -2861,7 +2871,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 		never.wait(deadlockLock, []() { return false; });
 
-		UNUSED_PARAMETER(result);
+		(void)result;
 	}
 	API_HANDLER_END();
 }

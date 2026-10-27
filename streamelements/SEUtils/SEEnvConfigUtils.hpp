@@ -19,6 +19,18 @@
 //
 bool IsTraceLogLevel();
 
+//
+// OBS's current theme name, from its frontend user config -- so the name a
+// page is told matches the one OBS is using, not one of ours.
+//
+// Declared here rather than beside its definition in SEAppEnvUtils.cpp for
+// the same reason IsTraceLogLevel is: that header includes <QWidget> and
+// <Qt> for the two functions that genuinely need them, and one declaration
+// in it put Qt into every includer. Nothing about reading a config string
+// needs Qt.
+//
+std::string GetCurrentThemeName();
+
 struct streamelements_env_update_request {
 public:
 	std::string product;
