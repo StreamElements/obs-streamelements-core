@@ -41,25 +41,41 @@ static config_t *obs_fe_user_config()
 }
 bool IsTraceLogLevel()
 {
-	static bool has_result = false;
-	static bool result = false;
+	//
+	// The answer is argv, which cannot change, so it is computed once.
+	//
+	// It has to be computed once *safely*: this is called from every
+	// thread that logs -- the API dispatcher reads it three times per
+	// call -- and the pair of plain bools this replaced did an unsynchro-
+	// nised read-then-write of both of them, which is a data race whatever
+	// the values happen to settle on. A function-local static with a
+	// dynamic initializer is initialized exactly once, with every other
+	// thread blocking until it is, and the compiler emits the guard.
+	//
+	// The flag it replaced also appeared in the loop condition
+	// (`i < args.size() && !has_result`), where it could never be true,
+	// because it was assigned below the loop rather than inside it. The
+	// loop ended on its own `break`, so the memo was correct and argv was
+	// walked once -- but the function read as though it were not, which is
+	// its own reason to write it the short way.
+	//
+	// Nothing reaches this before OBS has built its QCoreApplication: the
+	// plug-in is loaded by it. The null check is for a future caller that
+	// does, and it deliberately answers without caching -- a `false`
+	// memoized before argv was reachable would be wrong for the rest of
+	// the process, which is a worse failure than asking twice.
+	//
+	if (!QCoreApplication::instance())
+		return false;
 
-	if (!has_result) {
-		std::string search = "--setrace";
-
-		QStringList args = QCoreApplication::instance()->arguments();
-
-		for (int i = 0; i < args.size() && !has_result; ++i) {
-			std::string arg = args.at(i).toStdString();
-
-			if (arg.substr(0, search.size()) == search) {
-				result = true;
-				break;
-			}
+	static const bool result = []() -> bool {
+		for (const QString &arg : QCoreApplication::arguments()) {
+			if (arg.startsWith(QStringLiteral("--setrace")))
+				return true;
 		}
-	}
 
-	has_result = true;
+		return false;
+	}();
 
 	return result;
 }

@@ -4260,6 +4260,72 @@ static void check_the_api_call_lock_stays_per_translation_unit()
 	      "than deleting either (CORE-757)");
 }
 
+//
+// The trace-log-level memo is read from every thread that logs, so it has to
+// be a once-guaranteed static rather than a hand-rolled flag.
+//
+// The shape this bans: `static bool has_result` plus a `static bool result`,
+// read and written with no synchronisation. It computed the right answer --
+// the flag was assigned, below the loop, so argv was walked once -- but it was
+// a data race, and the flag's appearance in the loop condition, where it could
+// never be true, is what made it read as a broken memo. The replacement is a
+// function-local `static const bool` initialised from a lambda, which the
+// compiler guards.
+//
+// Pinned by a source invariant because there is no other way to reach it: the
+// body needs QCoreApplication::arguments(), so SEAppEnvUtils.cpp cannot be
+// compiled in this suite, and the race is not observable from a test even
+// where it can.
+//
+static void check_the_trace_log_level_memo_is_computed_once()
+{
+	const std::string src = strip_line_comments(
+		slurp("streamelements/SEUtils/SEAppEnvUtils.cpp"));
+
+	const std::string body = function_body(src, "bool IsTraceLogLevel()");
+
+	check(!body.empty(),
+	      "IsTraceLogLevel() not found in SEAppEnvUtils.cpp -- has it "
+	      "moved? (CORE-757)");
+
+	if (body.empty())
+		return;
+
+	//
+	// Positive: the answer is a const static initialised in place, which is
+	// the form the standard initialises exactly once.
+	//
+	check(body.find("static const bool") != std::string::npos,
+	      "IsTraceLogLevel() must memoize into a function-local "
+	      "`static const bool` initialised from a lambda -- that form is "
+	      "initialised exactly once even when several threads arrive "
+	      "together, which a plain flag is not (CORE-757)");
+
+	//
+	// Negative: no mutable static left to race on. `static const` is
+	// excluded so the positive check above does not trip this one.
+	//
+	std::string mutable_statics = body;
+
+	for (const std::string &token :
+	     {std::string("static const"), std::string("static constexpr")}) {
+		for (;;) {
+			const auto at = mutable_statics.find(token);
+
+			if (at == std::string::npos)
+				break;
+
+			mutable_statics.erase(at, token.size());
+		}
+	}
+
+	check(mutable_statics.find("static") == std::string::npos,
+	      "IsTraceLogLevel() has a mutable static again. A flag written "
+	      "after it is read is a data race on every thread that logs; "
+	      "memoize with `static const bool x = []{...}();` instead "
+	      "(CORE-757)");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -4324,6 +4390,7 @@ int main()
 	check_deferred_deletes_hold_services_weakly();
 	check_api_handler_obs_qt_tokens_only_go_down();
 	check_the_api_call_lock_stays_per_translation_unit();
+	check_the_trace_log_level_memo_is_computed_once();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",
