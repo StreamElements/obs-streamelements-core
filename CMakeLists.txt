@@ -589,7 +589,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEObsSceneManager.cpp
 	streamelements/SEExternalSceneDataProviderSlobsClient.cpp
 	streamelements/SEHttpClient.cpp
-	streamelements/SENativeOBSControlsManager.cpp
+	streamelements/SENativeObsUIControlsManager.cpp
 	streamelements/SEProfilesManager.cpp
 	streamelements/SEBackupManager.cpp
 	streamelements/SECleanupManager.cpp
@@ -794,7 +794,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEExternalSceneDataProviderSlobsClient.hpp
 	streamelements/SEExternalSceneDataProvider.hpp
 	streamelements/SEHttpClient.hpp
-	streamelements/SENativeOBSControlsManager.hpp
+	streamelements/SENativeObsUIControlsManager.hpp
 	streamelements/SEProfilesManager.hpp
 	streamelements/SEBackupManager.hpp
 	streamelements/SECleanupManager.hpp

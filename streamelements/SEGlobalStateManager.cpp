@@ -333,7 +333,8 @@ void SEGlobalStateManager::PublishApiServices()
 		m_externalSceneDataProviderManager;
 	m_apiServices->httpClient = m_httpClient;
 	m_apiServices->localFilesystemHttpServer = m_localFilesystemHttpServer;
-	m_apiServices->nativeObsControlsManager = m_nativeObsControlsManager;
+	m_apiServices->nativeObsUIControlsManager =
+		m_nativeObsUIControlsManager;
 	m_apiServices->profilesManager = m_profilesManager;
 	m_apiServices->backupManager = m_backupManager;
 #ifdef SE_ENABLE_WYVRN
@@ -566,9 +567,9 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_externalSceneDataProviderManager = std::make_shared<
 		SEExternalSceneDataProviderManager>(
 		m_localFilesystemHttpServer);
-	m_nativeObsControlsManager = SENativeOBSControlsManager::Create(
+	m_nativeObsUIControlsManager = SENativeObsUIControlsManager::Create(
 		obs_main_window, m_hostStreamingManager);
-	m_nativeObsControlsManager->SetApiServices(m_apiServices);
+	m_nativeObsUIControlsManager->SetApiServices(m_apiServices);
 	m_profilesManager =
 		std::make_shared<SEProfilesManager>();
 	// Constructed before the backup manager, which now takes it: a
@@ -617,7 +618,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	//
 	m_statePersistence = std::make_shared<SEStatePersistence>(
 		mainWindow(), m_widgetManager.get(), m_workerManager.get(),
-		m_hotkeyManager.get(), m_nativeObsControlsManager.get(),
+		m_hotkeyManager.get(), m_nativeObsUIControlsManager.get(),
 		m_hostEventDispatcher, m_config);
 
 	//
@@ -911,7 +912,7 @@ void SEGlobalStateManager::WatchServicesForTeardownAudit()
 	SE_WATCH(externalSceneDataProviderManager);
 	SE_WATCH(httpClient);
 	SE_WATCH(localFilesystemHttpServer);
-	SE_WATCH(nativeObsControlsManager);
+	SE_WATCH(nativeObsUIControlsManager);
 	SE_WATCH(profilesManager);
 	SE_WATCH(backupManager);
 #ifdef SE_ENABLE_WYVRN
@@ -1080,7 +1081,7 @@ void SEGlobalStateManager::Shutdown()
 	m_httpClient = nullptr;
 	m_localFilesystemHttpServer = nullptr;
 
-	m_nativeObsControlsManager = nullptr;
+	m_nativeObsUIControlsManager = nullptr;
 
 	m_profilesManager = nullptr;
 	m_backupManager = nullptr;

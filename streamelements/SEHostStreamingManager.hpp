@@ -13,7 +13,7 @@
 //
 // It exists so that exactly one class in the plug-in calls
 // obs_frontend_streaming_*. Two handler bodies read and stopped it directly,
-// and SENativeOBSControlsManager -- a Qt class about a button -- called the
+// and SENativeObsUIControlsManager -- a Qt class about a button -- called the
 // same three functions from five places.
 //
 // The dependency runs UI controls -> streaming, not the other way round: a
@@ -43,7 +43,7 @@ public:
 
 public:
 	//
-	// For SENativeOBSControlsManager, which tracks the native button's
+	// For SENativeObsUIControlsManager, which tracks the native button's
 	// six states and drives the start-streaming handover. Not on the host
 	// API surface: no handler calls either of these.
 	//

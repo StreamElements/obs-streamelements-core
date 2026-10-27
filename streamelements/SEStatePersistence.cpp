@@ -6,7 +6,7 @@
 #include "SEBrowserWidgetManager.hpp"
 #include "SEWorkerManager.hpp"
 #include "SEHotkeyManager.hpp"
-#include "SENativeOBSControlsManager.hpp"
+#include "SENativeObsUIControlsManager.hpp"
 #include "SEHostEventDispatcher.hpp"
 
 #include <QMainWindow>
@@ -16,7 +16,7 @@
 SEStatePersistence::SEStatePersistence(
 	QMainWindow *mainWindow, SEBrowserWidgetManager *widgetManager,
 	SEWorkerManager *workerManager, SEHotkeyManager *hotkeyManager,
-	SENativeOBSControlsManager *nativeObsControlsManager,
+	SENativeObsUIControlsManager *nativeObsUIControlsManager,
 	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
 	std::shared_ptr<SEConfig> config)
 	: m_mainWindow(mainWindow),
@@ -25,7 +25,7 @@ SEStatePersistence::SEStatePersistence(
 	  m_widgetManager(widgetManager),
 	  m_workerManager(workerManager),
 	  m_hotkeyManager(hotkeyManager),
-	  m_nativeObsControlsManager(nativeObsControlsManager)
+	  m_nativeObsUIControlsManager(nativeObsUIControlsManager)
 {
 }
 
@@ -69,9 +69,9 @@ void SEStatePersistence::PersistState(bool sendEventToGuest)
 	SerializeUserInterfaceState(userInterfaceState);
 
 #if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
-	m_nativeObsControlsManager->SerializePreviewTitleBar(
+	m_nativeObsUIControlsManager->SerializePreviewTitleBar(
 		outputPreviewTitleBarState);
-	m_nativeObsControlsManager->SerializePreviewFrame(
+	m_nativeObsUIControlsManager->SerializePreviewFrame(
 		outputPreviewFrameState);
 #endif
 
@@ -228,12 +228,12 @@ void SEStatePersistence::RestoreState()
 
 #if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
 	if (outputPreviewTitleBarState.get()) {
-		m_nativeObsControlsManager->DeserializePreviewTitleBar(
+		m_nativeObsUIControlsManager->DeserializePreviewTitleBar(
 			outputPreviewTitleBarState);
 	}
 
 	if (outputPreviewFrameState.get()) {
-		m_nativeObsControlsManager->DeserializePreviewFrame(
+		m_nativeObsUIControlsManager->DeserializePreviewFrame(
 			outputPreviewFrameState);
 	}
 #endif

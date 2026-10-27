@@ -35,7 +35,7 @@
 #include "SEHotkeyManager.hpp"
 #include "SEHttpClient.hpp"
 #include "SEMenuManager.hpp"
-#include "SENativeOBSControlsManager.hpp"
+#include "SENativeObsUIControlsManager.hpp"
 #include "SEObsApiTransactionManager.hpp"
 #include "SEObsSceneManager.hpp"
 #include "SEOutputManager.hpp"
@@ -1606,7 +1606,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("requestStreamingStart");
 	{
-		apiServices->nativeObsControlsManager->StartStreaming();
+		apiServices->nativeObsUIControlsManager->StartStreaming();
 
 		result->SetBool(true);
 	}
@@ -1624,7 +1624,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		if (args->GetSize()) {
 			result->SetBool(
-				apiServices->nativeObsControlsManager
+				apiServices->nativeObsUIControlsManager
 					->DeserializeStartStreamingUIHandlerProperties(
 						args->GetValue(0)));
 		}
@@ -1633,7 +1633,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("adviseStreamingStartUIRequestAccepted");
 	{
-		apiServices->nativeObsControlsManager
+		apiServices->nativeObsUIControlsManager
 			->AdviseRequestStartStreamingAccepted();
 
 		result->SetBool(true);
@@ -1642,7 +1642,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("adviseStreamingStartUIRequestRejected");
 	{
-		apiServices->nativeObsControlsManager
+		apiServices->nativeObsUIControlsManager
 			->AdviseRequestStartStreamingRejected();
 
 		result->SetBool(true);
@@ -1924,10 +1924,9 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("showOutputPreviewTitleBar");
 	{
 		if (args->GetSize()) {
-			result->SetBool(
-				apiServices->nativeObsControlsManager
-					->DeserializePreviewTitleBar(
-						args->GetValue(0)));
+			result->SetBool(apiServices->nativeObsUIControlsManager
+						->DeserializePreviewTitleBar(
+							args->GetValue(0)));
 
 			apiServices->statePersistence->PersistState();
 		}
@@ -1936,8 +1935,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("hideOutputPreviewTitleBar");
 	{
-		apiServices->nativeObsControlsManager
-			->HidePreviewTitleBar();
+		apiServices->nativeObsUIControlsManager->HidePreviewTitleBar();
 
 		result->SetBool(true);
 
@@ -1948,10 +1946,9 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("showOutputPreviewFrame");
 	{
 		if (args->GetSize()) {
-			result->SetBool(
-				apiServices->nativeObsControlsManager
-					->DeserializePreviewFrame(
-						args->GetValue(0)));
+			result->SetBool(apiServices->nativeObsUIControlsManager
+						->DeserializePreviewFrame(
+							args->GetValue(0)));
 
 			apiServices->statePersistence->PersistState();
 		}
@@ -1960,7 +1957,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("hideOutputPreviewFrame");
 	{
-		apiServices->nativeObsControlsManager->HidePreviewFrame();
+		apiServices->nativeObsUIControlsManager->HidePreviewFrame();
 
 		result->SetBool(true);
 
@@ -1972,7 +1969,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getNativeStreamingServiceIntegrationStatus");
 	{
 		bool manageBroadcastButtonVisible =
-			apiServices->nativeObsControlsManager
+			apiServices->nativeObsUIControlsManager
 				->GetNativeManageBroadcastButtonVisibility();
 
 		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();

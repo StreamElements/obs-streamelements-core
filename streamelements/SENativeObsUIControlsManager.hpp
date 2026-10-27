@@ -27,7 +27,7 @@
 
 class SEHostStreamingManager;
 
-class SENativeOBSControlsManager : public QObject
+class SENativeObsUIControlsManager : public QObject
 {
 	Q_OBJECT
 
@@ -97,14 +97,14 @@ public:
 	// was a singleton with a file-static instance, which is why the root
 	// had to call Destroy() on it by name at teardown (CORE-757).
 	//
-	static std::shared_ptr<SENativeOBSControlsManager>
+	static std::shared_ptr<SENativeObsUIControlsManager>
 	Create(QMainWindow *mainWindow,
 	       std::shared_ptr<SEHostStreamingManager> hostStreamingManager);
 
-	SENativeOBSControlsManager(
+	SENativeObsUIControlsManager(
 		Private, QMainWindow *mainWindow,
 		std::shared_ptr<SEHostStreamingManager> hostStreamingManager);
-	virtual ~SENativeOBSControlsManager();
+	virtual ~SENativeObsUIControlsManager();
 
 public:
 	QMainWindow* mainWindow() { return m_mainWindow; }

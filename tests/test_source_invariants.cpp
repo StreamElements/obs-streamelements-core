@@ -333,7 +333,7 @@ static void check_event_pumps_are_counted()
 	static const char *const kSources[] = {
 		"streamelements/SEBrowserWidgetManager.cpp",
 		"streamelements/SEGlobalStateManager.cpp",
-		"streamelements/SENativeOBSControlsManager.cpp",
+		"streamelements/SENativeObsUIControlsManager.cpp",
 		"streamelements/SEWidgetManager.cpp",
 		"streamelements/SEWorkerManager.cpp",
 		"streamelements/SEReportIssueDialog.cpp",
@@ -2081,7 +2081,7 @@ static void check_state_persistence_borrows_the_managers_it_serializes()
 
 	const char *const borrowed[] = {"SEBrowserWidgetManager",
 					"SEWorkerManager", "SEHotkeyManager",
-					"SENativeOBSControlsManager"};
+					"SENativeObsUIControlsManager"};
 
 	for (const char *const manager : borrowed) {
 		const std::string owned = std::string("std::shared_ptr<") +
@@ -2386,7 +2386,7 @@ static void check_the_config_is_closed_before_the_queue_is_drained()
 // --- No singletons, not just no root singleton (CORE-757).
 //
 // The root was the big one, but it was not the only one: SEConfig,
-// SEPleaseWaitWindow, SENativeOBSControlsManager and a file-local
+// SEPleaseWaitWindow, SENativeObsUIControlsManager and a file-local
 // SourceDataManager were all static-instance-plus-accessor, and each one
 // was reached from wherever it was wanted. They are owned and injected now.
 //
@@ -2666,11 +2666,13 @@ static void check_nothing_but_the_manager_owns_the_services_container()
 	// Non-vacuity, and the other half of the rule: the holders that were
 	// converted have to still be holding it weakly.
 	//
-	const char *const holders[] = {
-		"SEApiMessageHandlerBase.hpp", "SEBrowserDialog.hpp",
-		"SEBrowserDialogManager.hpp",  "SENativeOBSControlsManager.hpp",
-		"SEPopupWindowManager.hpp",    "SEWidgetManager.hpp",
-		"SEWorkerManager.hpp"};
+	const char *const holders[] = {"SEApiMessageHandlerBase.hpp",
+				       "SEBrowserDialog.hpp",
+				       "SEBrowserDialogManager.hpp",
+				       "SENativeObsUIControlsManager.hpp",
+				       "SEPopupWindowManager.hpp",
+				       "SEWidgetManager.hpp",
+				       "SEWorkerManager.hpp"};
 
 	for (const char *const holder : holders) {
 		check(std::find(weakHolders.begin(), weakHolders.end(),

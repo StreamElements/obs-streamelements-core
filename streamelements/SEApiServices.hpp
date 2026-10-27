@@ -14,7 +14,7 @@ class SEAnalyticsEventsManager;
 class SEExternalSceneDataProviderManager;
 class SEHttpClient;
 class SELocalFilesystemHttpServer;
-class SENativeOBSControlsManager;
+class SENativeObsUIControlsManager;
 class SEProfilesManager;
 class SEBackupManager;
 class SERazerWyvrnManager;
@@ -113,7 +113,7 @@ struct SEApiServices {
 		externalSceneDataProviderManager;
 	std::shared_ptr<SEHttpClient> httpClient;
 	std::shared_ptr<SELocalFilesystemHttpServer> localFilesystemHttpServer;
-	std::shared_ptr<SENativeOBSControlsManager> nativeObsControlsManager;
+	std::shared_ptr<SENativeObsUIControlsManager> nativeObsUIControlsManager;
 	std::shared_ptr<SEProfilesManager> profilesManager;
 	std::shared_ptr<SEBackupManager> backupManager;
 #ifdef SE_ENABLE_WYVRN

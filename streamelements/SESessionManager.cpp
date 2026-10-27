@@ -7,7 +7,7 @@
 #include "SEBrowserWidgetManager.hpp"
 #include "SEHotkeyManager.hpp"
 #include "SEMenuManager.hpp"
-#include "SENativeOBSControlsManager.hpp"
+#include "SENativeObsUIControlsManager.hpp"
 #include "SEObsSceneManager.hpp"
 #include "SEOutputManager.hpp"
 #include "SESharedVideoCompositionManager.hpp"
@@ -176,7 +176,7 @@ void SESessionManager::StopOnBoardingUI()
 	apiServices->widgetManager->RemoveAllDockWidgets();
 	apiServices->widgetManager->DestroyCurrentCentralBrowserWidget();
 
-	apiServices->nativeObsControlsManager->Reset();
+	apiServices->nativeObsUIControlsManager->Reset();
 }
 
 void SESessionManager::SwitchToOBSStudio()

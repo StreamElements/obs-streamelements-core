@@ -21,7 +21,7 @@ struct QCefCookieManager;
 #include "SEObsSceneManager.hpp"
 #include "SEExternalSceneDataProviderManager.hpp"
 #include "SEHttpClient.hpp"
-#include "SENativeOBSControlsManager.hpp"
+#include "SENativeObsUIControlsManager.hpp"
 #include "SEProfilesManager.hpp"
 #include "SEBackupManager.hpp"
 #ifdef SE_ENABLE_WYVRN
@@ -231,10 +231,10 @@ public:
 		return m_localFilesystemHttpServer;
 	}
 
-	std::shared_ptr<SENativeOBSControlsManager>
+	std::shared_ptr<SENativeObsUIControlsManager>
 	GetNativeOBSControlsManager()
 	{
-		return m_nativeObsControlsManager;
+		return m_nativeObsUIControlsManager;
 	}
 	QCefCookieManager *GetCookieManager()
 	{
@@ -322,8 +322,8 @@ private:
 	std::shared_ptr<SEHttpClient> m_httpClient = nullptr;
 	std::shared_ptr<SELocalFilesystemHttpServer>
 		m_localFilesystemHttpServer;
-	std::shared_ptr<SENativeOBSControlsManager>
-		m_nativeObsControlsManager = nullptr;
+	std::shared_ptr<SENativeObsUIControlsManager>
+		m_nativeObsUIControlsManager = nullptr;
 	std::shared_ptr<SEProfilesManager> m_profilesManager =
 		nullptr;
 	std::shared_ptr<SEBackupManager> m_backupManager = nullptr;

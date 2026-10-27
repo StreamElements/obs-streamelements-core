@@ -8,7 +8,7 @@ class QMainWindow;
 class SEBrowserWidgetManager;
 class SEWorkerManager;
 class SEHotkeyManager;
-class SENativeOBSControlsManager;
+class SENativeObsUIControlsManager;
 class SEHostEventDispatcher;
 class SEConfig;
 
@@ -32,14 +32,12 @@ public:
 	// the reference graph entirely -- a manager whose destructor deletes
 	// widgets cannot be kept alive by the thing that serializes it.
 	//
-	SEStatePersistence(QMainWindow *mainWindow,
-			   SEBrowserWidgetManager *widgetManager,
-			   SEWorkerManager *workerManager,
-			   SEHotkeyManager *hotkeyManager,
-			   SENativeOBSControlsManager *nativeObsControlsManager,
-			   std::shared_ptr<SEHostEventDispatcher>
-				   hostEventDispatcher,
-			   std::shared_ptr<SEConfig> config);
+	SEStatePersistence(
+		QMainWindow *mainWindow, SEBrowserWidgetManager *widgetManager,
+		SEWorkerManager *workerManager, SEHotkeyManager *hotkeyManager,
+		SENativeObsUIControlsManager *nativeObsUIControlsManager,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+		std::shared_ptr<SEConfig> config);
 	~SEStatePersistence();
 
 	//
@@ -61,7 +59,7 @@ private:
 	SEBrowserWidgetManager *m_widgetManager = nullptr;
 	SEWorkerManager *m_workerManager = nullptr;
 	SEHotkeyManager *m_hotkeyManager = nullptr;
-	SENativeOBSControlsManager *m_nativeObsControlsManager = nullptr;
+	SENativeObsUIControlsManager *m_nativeObsUIControlsManager = nullptr;
 
 	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
 
