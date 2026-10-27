@@ -8,13 +8,15 @@
 
 #include "SEUtils.hpp"
 #include "SEBrowserWidget.hpp"
+#include "SEDialogApiCall.hpp"
 
-class SEDialogApiMessageHandler;
-
-class SEBrowserDialog: public QDialog
-{
-	friend SEDialogApiMessageHandler;
-
+//
+// ISEDialogHost is how the dialog's own three host API methods reach it --
+// SetResultJson and Accept, and nothing else. It replaces a friendship with
+// SEDialogApiMessageHandler, which let those three bodies write m_result
+// directly from a class defined in this file's .cpp.
+//
+class SEBrowserDialog : public QDialog, public ISEDialogHost {
 public:
 	SEBrowserDialog(QWidget *parent, std::string url,
 			std::string executeJavaScriptOnLoad, bool isIncognito,
@@ -23,6 +25,9 @@ public:
 	~SEBrowserDialog();
 
 	std::string result() { return m_result; }
+
+	virtual void SetResultJson(std::string json) override;
+	virtual void Accept() override;
 
 	virtual void showEvent(QShowEvent *event) override;
 	virtual void hideEvent(QHideEvent *event) override;

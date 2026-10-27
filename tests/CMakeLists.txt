@@ -250,6 +250,26 @@ se_add_test(test_api_handler_crash_gate
   ${SE_API_HANDLER_SOURCES}
 )
 
+# --- Behavioural test: the three host API methods that close a dialog ------
+#
+# endModalDialog / endNonModalDialog / endDialog were three copies of one body
+# inside SEBrowserDialog.cpp, a QDialog translation unit neither ratchet reads
+# and nothing here could compile. The body is EndDialogFromApiCall now, which
+# names no Qt type, so the dialog under it is a recording stand-in.
+#
+# They are the only way a modal SE.Live dialog ever closes, which is what
+# makes an untested one worth this much attention.
+se_add_test(test_dialog_api_call
+  test_dialog_api_call.cpp
+  "${REPO_ROOT}/streamelements/SEDialogApiCall.cpp"
+  "${REPO_ROOT}/deps/cef-stub/cef_string.cpp"
+  "${REPO_ROOT}/deps/cef-stub/cef_value.cpp"
+  "${REPO_ROOT}/deps/cef-stub/cef_value_binary.cpp"
+  "${REPO_ROOT}/deps/cef-stub/cef_value_dictionary.cpp"
+  "${REPO_ROOT}/deps/cef-stub/cef_value_json.cpp"
+  "${REPO_ROOT}/deps/cef-stub/cef_value_list.cpp"
+)
+
 # --- Behavioural test: C2 (VideoEncoderTemplate::IsMatchingIndex = vs ==) ---
 se_add_test(test_video_encoder_template_demo
   test_video_encoder_template_demo.cpp)

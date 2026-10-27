@@ -4160,7 +4160,8 @@ static void check_api_handler_obs_qt_tokens_only_go_down()
 // which calls dialog->exec() synchronously. So it holds the lock of the TU it
 // was compiled in for the entire lifetime of the modal dialog -- and the only
 // way that dialog ever closes is its own endModalDialog / endDialog handler,
-// compiled in SEBrowserDialog.cpp. Share one mutex between them and the exit
+// compiled in SEDialogApiMessageHandler.cpp. Share one mutex between them and
+// the exit
 // path blocks on the lock its own opener is holding, for good. The mutex is
 // recursive, which does not help: the two run on different threads.
 //
@@ -4226,7 +4227,7 @@ static void check_the_api_call_lock_stays_per_translation_unit()
 	const Expander expanders[] = {
 		{"streamelements/SEApiMessageHandler.cpp",
 		 "the host API handlers"},
-		{"streamelements/SEBrowserDialog.cpp",
+		{"streamelements/SEDialogApiMessageHandler.cpp",
 		 "the dialog handlers that close a modal dialog"},
 	};
 
@@ -4239,8 +4240,8 @@ static void check_the_api_call_lock_stays_per_translation_unit()
 
 		check(src.find("#define API_HANDLER_") == std::string::npos,
 		      "a second copy of the API handler macros has appeared. "
-		      "There is one definition, in SEApiMessageHandler.hpp "
-		      "(CORE-757)");
+		      "There is one definition, in "
+		      "SEApiMessageHandlerBase.hpp (CORE-757)");
 
 		check(strip_line_comments(src).find(
 			      "static std::recursive_mutex "

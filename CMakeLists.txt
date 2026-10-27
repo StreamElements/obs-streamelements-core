@@ -571,6 +571,8 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEBandwidthTestManager.cpp
 	streamelements/SEOutputSettingsManager.cpp
 	streamelements/SEWorkerManager.cpp
+	streamelements/SEDialogApiCall.cpp
+	streamelements/SEDialogApiMessageHandler.cpp
 	streamelements/SEBrowserDialog.cpp
 	streamelements/SEHotkeyManager.cpp
 	streamelements/SEReportIssueDialog.cpp
@@ -763,6 +765,8 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEBandwidthTestManager.hpp
 	streamelements/SEOutputSettingsManager.hpp
 	streamelements/SEWorkerManager.cpp
+	streamelements/SEDialogApiCall.hpp
+	streamelements/SEDialogApiMessageHandler.hpp
 	streamelements/SEBrowserDialog.hpp
 	streamelements/SEHotkeyManager.hpp
 	streamelements/SEReportIssueDialog.hpp

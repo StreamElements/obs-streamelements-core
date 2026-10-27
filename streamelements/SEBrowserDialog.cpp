@@ -1,154 +1,11 @@
 #include "SEBrowserDialog.hpp"
-#include "SEApiMessageHandler.hpp"
+#include "SEDialogApiMessageHandler.hpp"
 #include "SEGlobalStateManager.hpp"
 
 #include <QVBoxLayout>
 
 #include "cef-headers.hpp"
 
-//
-// The API call lock for the dialog handlers, and it must not be the one in
-// SEApiMessageHandler.cpp: showModalDialog holds that one for as long as the
-// modal dialog is up, and these three handlers are the only way the dialog
-// ever closes. See the comment on API_HANDLER_BEGIN in the handler header.
-//
-static std::recursive_mutex s_sync_api_call_mutex;
-
-class SEDialogApiMessageHandler : public SEApiMessageHandler
-{
-public:
-	SEDialogApiMessageHandler(SEBrowserDialog *dialog,
-				  std::string containerType,
-				  std::shared_ptr<SEApiServices> services)
-		: SEApiMessageHandler(containerType, services), m_dialog(dialog)
-	{
-		// RegisterIncomingApiCallHandlers();
-	}
-
-	/*
-	virtual std::shared_ptr<SEApiMessageHandler> Clone() override
-	{
-		return std::make_shared<SEDialogApiMessageHandler>(
-			m_dialog, m_containerType, m_services);
-	}
-	*/
-
-private:
-	SEBrowserDialog* m_dialog;
-
-protected:
-	SEBrowserDialog* dialog() { return m_dialog; }
-
-	virtual void RegisterIncomingApiCallHandlers() override
-	{
-		SEApiMessageHandler::
-			RegisterIncomingApiCallHandlers();
-
-		API_HANDLER_BEGIN("endModalDialog");
-		{
-			result->SetBool(false);
-
-			if (args->GetSize()) {
-				std::shared_ptr<SEDialogApiMessageHandler> msgHandler =
-					std::static_pointer_cast<SEDialogApiMessageHandler>(self);
-
-				CefRefPtr<CefValue> arg = args->GetValue(0);
-
-				msgHandler
-					->Shutdown(); // Stop processing any queued messages
-
-				msgHandler->dialog()->m_result = "null";
-
-				if (arg->GetType() != VTYPE_NULL) {
-					CefString json = CefWriteJSON(arg, JSON_WRITER_DEFAULT);
-
-					if (json.size() && json.ToString().c_str()) {
-						msgHandler->dialog()->m_result = json.ToString().c_str();
-					}
-				}
-
-				QMetaObject::invokeMethod(
-					msgHandler->dialog(),
-							  "accept",
-							  Qt::QueuedConnection);
-			}
-		}
-		API_HANDLER_END();
-
-		API_HANDLER_BEGIN("endNonModalDialog");
-		{
-			result->SetBool(false);
-
-			if (args->GetSize()) {
-				std::shared_ptr<
-					SEDialogApiMessageHandler>
-					msgHandler = std::static_pointer_cast<
-						SEDialogApiMessageHandler>(
-						self);
-
-				CefRefPtr<CefValue> arg = args->GetValue(0);
-
-				msgHandler
-					->Shutdown(); // Stop processing any queued messages
-
-				msgHandler->dialog()->m_result = "null";
-
-				if (arg->GetType() != VTYPE_NULL) {
-					CefString json = CefWriteJSON(
-						arg, JSON_WRITER_DEFAULT);
-
-					if (json.size() &&
-					    json.ToString().c_str()) {
-						msgHandler->dialog()->m_result =
-							json.ToString().c_str();
-					}
-				}
-
-				QMetaObject::invokeMethod(msgHandler->dialog(),
-							  "accept",
-							  Qt::QueuedConnection);
-			}
-		}
-		API_HANDLER_END();
-
-		API_HANDLER_BEGIN("endDialog");
-		{
-			result->SetBool(false);
-
-			if (args->GetSize()) {
-				std::shared_ptr<
-					SEDialogApiMessageHandler>
-					msgHandler = std::static_pointer_cast<
-						SEDialogApiMessageHandler>(
-						self);
-
-				CefRefPtr<CefValue> arg = args->GetValue(0);
-
-				msgHandler->dialog()->m_result = "null";
-
-				msgHandler
-					->Shutdown(); // Stop processing any queued messages
-
-				if (arg->GetType() != VTYPE_NULL) {
-					CefString json = CefWriteJSON(
-						arg, JSON_WRITER_DEFAULT);
-
-					if (json.size() &&
-					    json.ToString().c_str()) {
-						msgHandler->dialog()->m_result =
-							json.ToString().c_str();
-					}
-				}
-
-				QMetaObject::invokeMethod(msgHandler->dialog(),
-							  "accept",
-							  Qt::QueuedConnection);
-			}
-		}
-		API_HANDLER_END();
-
-	}
-};
 
 SEBrowserDialog::SEBrowserDialog(QWidget *parent, std::string url,
 				 std::string executeJavaScriptOnLoad,
@@ -181,6 +38,22 @@ SEBrowserDialog::SEBrowserDialog(QWidget *parent, std::string url,
 
 SEBrowserDialog::~SEBrowserDialog()
 {
+}
+
+void SEBrowserDialog::SetResultJson(std::string json)
+{
+	m_result = json;
+}
+
+void SEBrowserDialog::Accept()
+{
+	//
+	// Queued, not direct. The API call arrives on a thread that is not
+	// Qt's, and accept() runs the finished/accepted handlers that destroy
+	// the browser widget -- which is the widget whose page is still
+	// inside the handler making this call.
+	//
+	QMetaObject::invokeMethod(this, "accept", Qt::QueuedConnection);
 }
 
 void SEBrowserDialog::closeEvent(QCloseEvent* e)
