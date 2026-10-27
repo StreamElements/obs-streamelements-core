@@ -445,18 +445,19 @@ void SEHotkeyManager::hotkeyTriggered(obs_hotkey_id id, obs_hotkey_t *hotkey, bo
 	}
 }
 
-obs_hotkey_id SEHotkeyManager::DeserializeSingleHotkeyBinding(CefRefPtr<CefValue> input)
+int64_t
+SEHotkeyManager::DeserializeSingleHotkeyBinding(CefRefPtr<CefValue> input)
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
 	if (input->GetType() != VTYPE_DICTIONARY) {
-		return OBS_INVALID_HOTKEY_ID;
+		return -1;
 	}
 
 	CefRefPtr<CefDictionaryValue> root = input->GetDictionary();
 
 	if (!root->HasKey("name") || !root->HasKey("description")) {
-		return OBS_INVALID_HOTKEY_ID;
+		return -1;
 	}
 
 	std::string name = root->GetString("name");
@@ -472,7 +473,7 @@ obs_hotkey_id SEHotkeyManager::DeserializeSingleHotkeyBinding(CefRefPtr<CefValue
 	}
 
 	if (!name.size() || !description.size()) {
-		return false;
+		return -1;
 	}
 
 	auto hotkeyFunc = [](void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed) {
@@ -485,7 +486,7 @@ obs_hotkey_id SEHotkeyManager::DeserializeSingleHotkeyBinding(CefRefPtr<CefValue
 
 	if (m_registeredHotkeyNamesToHotkeyIds.count(name)) {
 		// Existing hotkey binding
-		return OBS_INVALID_HOTKEY_ID;
+		return -1;
 	}
 	else {
 		// New hotkey
@@ -516,7 +517,7 @@ obs_hotkey_id SEHotkeyManager::DeserializeSingleHotkeyBinding(CefRefPtr<CefValue
 
 		if (context.id != OBS_INVALID_HOTKEY_ID) {
 			// We already have the same hotkey name registered
-			return OBS_INVALID_HOTKEY_ID;
+			return -1;
 		}
 
 		// Register new hotkey
@@ -548,10 +549,17 @@ obs_hotkey_id SEHotkeyManager::DeserializeSingleHotkeyBinding(CefRefPtr<CefValue
 		DeserializeAndApplyHotkeyTriggersToHotkeyID(id, CefListValue::Create());
 	}
 
-	return id;
+	return static_cast<int64_t>(id);
 }
 
-bool SEHotkeyManager::RemoveHotkeyBindingById(obs_hotkey_id id)
+bool SEHotkeyManager::RemoveHotkeyBindingById(uint64_t id_)
+{
+	const obs_hotkey_id id = static_cast<obs_hotkey_id>(id_);
+
+	return RemoveHotkeyBindingByObsId(id);
+}
+
+bool SEHotkeyManager::RemoveHotkeyBindingByObsId(obs_hotkey_id id)
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 

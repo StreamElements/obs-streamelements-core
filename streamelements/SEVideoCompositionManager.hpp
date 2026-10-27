@@ -59,6 +59,19 @@ public:
 	void RemoveCompositionsByIds(
 		CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output);
 
+	//
+	// Split by kind rather than parameterized by one, so the two handler
+	// bodies that call them stop naming OBS_ENCODER_VIDEO and
+	// OBS_ENCODER_AUDIO. The obs-typed pair below does the work.
+	//
+	void SerializeAvailableVideoEncoderClasses(CefRefPtr<CefValue> &output);
+	void SerializeAvailableAudioEncoderClasses(CefRefPtr<CefValue> &output);
+
+	void SerializeAvailableVideoEncoderClassProperties(
+		CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output);
+	void SerializeAvailableAudioEncoderClassProperties(
+		CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output);
+
 	void SerializeAvailableEncoderClasses(obs_encoder_type type,
 					CefRefPtr<CefValue> &output);
 

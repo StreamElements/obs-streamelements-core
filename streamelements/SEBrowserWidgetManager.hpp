@@ -121,6 +121,13 @@ public:
 		return SEWidgetManager::GetDockWidget(id);
 	}
 
+	bool HasDockWidget(const char *const id)
+	{
+		std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
+		return SEWidgetManager::HasDockWidget(id);
+	}
+
 	virtual void SerializeDockingWidgets(CefRefPtr<CefValue>& output) override;
 	virtual void DeserializeDockingWidgets(CefRefPtr<CefValue>& input) override;
 

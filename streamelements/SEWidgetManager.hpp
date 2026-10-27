@@ -136,6 +136,14 @@ public:
 
 	QDockWidget* GetDockWidget(const char* const id);
 
+	//
+	// Whether there is one, without handing out the widget. The host API
+	// asks only this -- addDockingWidget took the QDockWidget* purely as
+	// a success check and never used it -- and asking it this way keeps
+	// Qt out of the one signature a handler body reaches.
+	//
+	bool HasDockWidget(const char *const id);
+
 	DockWidgetInfo* GetDockWidgetInfo(const char* const id);
 
 	virtual void SerializeDockingWidgets(CefRefPtr<CefValue>& output) = 0;

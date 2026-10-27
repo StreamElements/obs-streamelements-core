@@ -311,6 +311,32 @@ SerializeAvailableEncoderClassPropertiesForSettings(
 	}
 }
 
+void SEVideoCompositionManager::SerializeAvailableVideoEncoderClasses(
+	CefRefPtr<CefValue> &output)
+{
+	SerializeAvailableEncoderClasses(OBS_ENCODER_VIDEO, output);
+}
+
+void SEVideoCompositionManager::SerializeAvailableAudioEncoderClasses(
+	CefRefPtr<CefValue> &output)
+{
+	SerializeAvailableEncoderClasses(OBS_ENCODER_AUDIO, output);
+}
+
+void SEVideoCompositionManager::SerializeAvailableVideoEncoderClassProperties(
+	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
+{
+	SerializeAvailableEncoderClassPropertiesForSettings(input, output,
+							    OBS_ENCODER_VIDEO);
+}
+
+void SEVideoCompositionManager::SerializeAvailableAudioEncoderClassProperties(
+	CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output)
+{
+	SerializeAvailableEncoderClassPropertiesForSettings(input, output,
+							    OBS_ENCODER_AUDIO);
+}
+
 void SEVideoCompositionManager::SerializeAvailableEncoderClasses(
 	obs_encoder_type type,
 	CefRefPtr<CefValue>& output)

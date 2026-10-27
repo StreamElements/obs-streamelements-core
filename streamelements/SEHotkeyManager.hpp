@@ -28,9 +28,20 @@ public:
 	bool DeserializeHotkeyBindings(CefRefPtr<CefValue> input);
 	bool DeserializeHotkeyTriggers(CefRefPtr<CefValue> input);
 
-	obs_hotkey_id DeserializeSingleHotkeyBinding(CefRefPtr<CefValue> input);
+	//
+	// The new binding's id, or -1. It returned obs_hotkey_id, whose
+	// invalid value is OBS_INVALID_HOTKEY_ID -- so the handler body held
+	// a libobs type and compared against a libobs constant to decide
+	// whether to answer the page with a number or with null.
+	//
+	int64_t DeserializeSingleHotkeyBinding(CefRefPtr<CefValue> input);
 
-	bool RemoveHotkeyBindingById(obs_hotkey_id id);
+	bool RemoveHotkeyBindingById(uint64_t id);
+
+private:
+	bool RemoveHotkeyBindingByObsId(obs_hotkey_id id);
+
+public:
 	void RemoveAllManagedHotkeyBindings();
 
 protected:

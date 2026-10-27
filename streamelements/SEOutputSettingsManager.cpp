@@ -65,7 +65,29 @@ void SEOutputSettingsManager::GetEncoderProperties(
 	obs_encoder_release(SETRACE_DECREF(encoder));
 }
 
-void SEOutputSettingsManager::GetAvailableEncoders(CefRefPtr<CefValue>& result, obs_encoder_type* encoder_type)
+void SEOutputSettingsManager::GetAvailableEncoders(CefRefPtr<CefValue> &result)
+{
+	GetAvailableEncodersOfType(result, nullptr);
+}
+
+void SEOutputSettingsManager::GetAvailableVideoEncoders(
+	CefRefPtr<CefValue> &result)
+{
+	obs_encoder_type type = OBS_ENCODER_VIDEO;
+
+	GetAvailableEncodersOfType(result, &type);
+}
+
+void SEOutputSettingsManager::GetAvailableAudioEncoders(
+	CefRefPtr<CefValue> &result)
+{
+	obs_encoder_type type = OBS_ENCODER_AUDIO;
+
+	GetAvailableEncodersOfType(result, &type);
+}
+
+void SEOutputSettingsManager::GetAvailableEncodersOfType(
+	CefRefPtr<CefValue> &result, obs_encoder_type *encoder_type)
 {
 	SYNC_ACCESS();
 

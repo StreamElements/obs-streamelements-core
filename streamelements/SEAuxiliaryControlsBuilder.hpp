@@ -59,6 +59,14 @@ public:
 		std::function<void()> defaultAction = []() {},
 		std::function<void()> defaultContextMenu = []() {});
 
+	//
+	// Builds the menu and runs it modally at the mouse pointer. The
+	// handler body used to construct a stack QMenu and call
+	// exec(QCursor::pos()) itself, which is the only reason the host API
+	// surface named a Qt type at all.
+	//
+	bool ShowMenuAtMousePointerPosition(CefRefPtr<CefValue> input);
+
 	QWidget *DeserializeAuxiliaryControlWidget(
 		CefRefPtr<CefValue> input,
 		std::function<void()> defaultAction = []() {},

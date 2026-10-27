@@ -375,11 +375,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				apiServices->widgetManager
 					->AddDockBrowserWidget(widgetInfo);
 
-			QDockWidget *dock =
-				apiServices->widgetManager->GetDockWidget(
-					id.c_str());
-
-			if (dock) {
+			if (apiServices->widgetManager->HasDockWidget(
+				    id.c_str())) {
 				apiServices->menuManager->Update();
 				apiServices->statePersistence
 					->PersistState();
@@ -744,25 +741,21 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getAvailableEncoders");
 	{
 		apiServices->outputSettingsManager->GetAvailableEncoders(
-			result, nullptr);
+			result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAvailableVideoEncoders");
 	{
-		obs_encoder_type type = OBS_ENCODER_VIDEO;
-
-		apiServices->outputSettingsManager->GetAvailableEncoders(
-			result, &type);
+		apiServices->outputSettingsManager->GetAvailableVideoEncoders(
+			result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAvailableAudioEncoders");
 	{
-		obs_encoder_type type = OBS_ENCODER_AUDIO;
-
-		apiServices->outputSettingsManager->GetAvailableEncoders(
-			result, &type);
+		apiServices->outputSettingsManager->GetAvailableAudioEncoders(
+			result);
 	}
 	API_HANDLER_END();
 
@@ -1053,12 +1046,12 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("addHotkeyBinding");
 	{
 		if (args->GetSize()) {
-			obs_hotkey_id id =
+			const int64_t id =
 				apiServices->hotkeyManager
 					->DeserializeSingleHotkeyBinding(
 						args->GetValue(0));
 
-			if (id != OBS_INVALID_HOTKEY_ID) {
+			if (id >= 0) {
 				result->SetInt((int)id);
 			} else {
 				result->SetNull();
@@ -2230,32 +2223,30 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("getAllAvailableVideoEncoderClasses");
 	{
 		apiServices->videoCompositionManager
-			->SerializeAvailableEncoderClasses(OBS_ENCODER_VIDEO,
-							   result);
+			->SerializeAvailableVideoEncoderClasses(result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAllAvailableAudioEncoderClasses");
 	{
 		apiServices->videoCompositionManager
-			->SerializeAvailableEncoderClasses(OBS_ENCODER_AUDIO,
-							   result);
+			->SerializeAvailableAudioEncoderClasses(result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAvailableAudioEncoderClassProperties");
 	{
 		apiServices->videoCompositionManager
-			->SerializeAvailableEncoderClassPropertiesForSettings(
-				args->GetValue(0), result, OBS_ENCODER_AUDIO);
+			->SerializeAvailableAudioEncoderClassProperties(
+				args->GetValue(0), result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAvailableVideoEncoderClassProperties");
 	{
 		apiServices->videoCompositionManager
-			->SerializeAvailableEncoderClassPropertiesForSettings(
-				args->GetValue(0), result, OBS_ENCODER_VIDEO);
+			->SerializeAvailableVideoEncoderClassProperties(
+				args->GetValue(0), result);
 	}
 	API_HANDLER_END();
 
@@ -2620,12 +2611,14 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	API_HANDLER_BEGIN("showPopupMenuAtMousePointerPosition");
 	{
 		if (args->GetSize()) {
-			QMenu menu;
+			//
+			// result is left alone when the menu does not
+			// deserialize, exactly as before: a page gets false
+			// on the renderer path and null on the direct one.
+			//
 			if (apiServices->auxiliaryControlsBuilder
-				    ->DeserializeMenu(args->GetValue(0),
-						      menu)) {
-				menu.exec(QCursor::pos());
-
+				    ->ShowMenuAtMousePointerPosition(
+					    args->GetValue(0))) {
 				result->SetBool(true);
 			}
 		}

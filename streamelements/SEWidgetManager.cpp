@@ -630,6 +630,15 @@ void SEWidgetManager::GetDockWidgetIdentifiers(
 	}
 }
 
+bool SEWidgetManager::HasDockWidget(const char *const id)
+{
+	assert(id);
+
+	std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
+	return m_dockWidgets.count(id) > 0;
+}
+
 QDockWidget *SEWidgetManager::GetDockWidget(const char *const id)
 {
 	assert(id);

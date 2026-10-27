@@ -285,6 +285,19 @@ bool SEAuxiliaryControlsBuilder::DeserializeDocksMenu(QMenu &menu)
 	return true;
 }
 
+bool SEAuxiliaryControlsBuilder::ShowMenuAtMousePointerPosition(
+	CefRefPtr<CefValue> input)
+{
+	QMenu menu;
+
+	if (!DeserializeMenu(input, menu))
+		return false;
+
+	menu.exec(QCursor::pos());
+
+	return true;
+}
+
 bool SEAuxiliaryControlsBuilder::DeserializeMenu(
 	CefRefPtr<CefValue> input, QMenu &menu,
 	std::function<void()> defaultAction,
