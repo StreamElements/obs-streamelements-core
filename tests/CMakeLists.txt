@@ -211,6 +211,45 @@ se_add_test(test_razer_wyvrn_config
   "${REPO_ROOT}/deps/cef-stub/cef_value_list.cpp"
 )
 
+# --- Behavioural test: the API handler infrastructure ---------------------
+#
+# The registry, the dispatcher, the API context stack and the renderer
+# handshake that builds window.host -- the first coverage any of it has had.
+#
+# Possible because SEApiMessageHandlerBase.cpp's include closure is 18 local
+# headers and nothing external but the standard library: the 208 host API
+# methods are in SEApiMessageHandler.cpp, which still pulls in obs.h and 33
+# Qt headers through the services its bodies dereference.
+#
+# Four seams are linked here rather than compiled: IsObsInitialized,
+# IsTraceLogLevel, SELog/SELogVa and __QtPostTask_Impl, each of whose real
+# body needs libobs or Qt. SEDiagnosticsUtils.cpp is compiled as it ships, so
+# the API-context stack under test is the one the crash handler reads.
+set(SE_API_HANDLER_SOURCES
+  api_handler_harness.cpp
+  "${REPO_ROOT}/streamelements/SEApiMessageHandlerBase.cpp"
+  "${REPO_ROOT}/streamelements/SEUtils/SEDiagnosticsUtils.cpp"
+  "${REPO_ROOT}/deps/cef-stub/cef_string.cpp"
+  "${REPO_ROOT}/deps/cef-stub/cef_process_message.cpp"
+  "${REPO_ROOT}/deps/cef-stub/cef_value.cpp"
+  "${REPO_ROOT}/deps/cef-stub/cef_value_binary.cpp"
+  "${REPO_ROOT}/deps/cef-stub/cef_value_dictionary.cpp"
+  "${REPO_ROOT}/deps/cef-stub/cef_value_json.cpp"
+  "${REPO_ROOT}/deps/cef-stub/cef_value_list.cpp"
+)
+
+se_add_test(test_api_handler_infrastructure
+  test_api_handler_infrastructure.cpp
+  ${SE_API_HANDLER_SOURCES}
+)
+
+# The crash gate needs a process of its own: SetCrashReportingInProgress() is
+# one-way by design, so one process gets one answer.
+se_add_test(test_api_handler_crash_gate
+  test_api_handler_crash_gate.cpp
+  ${SE_API_HANDLER_SOURCES}
+)
+
 # --- Behavioural test: C2 (VideoEncoderTemplate::IsMatchingIndex = vs ==) ---
 se_add_test(test_video_encoder_template_demo
   test_video_encoder_template_demo.cpp)

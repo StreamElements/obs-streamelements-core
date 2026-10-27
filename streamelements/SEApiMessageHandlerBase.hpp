@@ -26,7 +26,7 @@
 #include <functional>
 #include <memory>
 
-#include "SEWebsocketApiServer.hpp"
+#include "SEApiMessageSink.hpp"
 #include "SEApiServices.hpp"
 
 class SEBrowserWidget;
@@ -97,9 +97,10 @@ public:
 	const std::string &ContainerType() const { return m_containerType; }
 
 public:
-	virtual bool OnProcessMessageReceived(
-		std::shared_ptr<SEWebsocketApiServer::ClientInfo> source,
-		CefRefPtr<CefProcessMessage> message, const long cefClientId);
+	virtual bool
+	OnProcessMessageReceived(std::shared_ptr<SEApiClientInfo> source,
+				 CefRefPtr<CefProcessMessage> message,
+				 const long cefClientId);
 
 	void setInitialHiddenState(bool isHidden)
 	{
@@ -140,8 +141,7 @@ protected:
 		std::shared_ptr<SEApiServices> apiServices,
 		CefRefPtr<CefProcessMessage> message,
 		CefRefPtr<CefListValue> args, CefRefPtr<CefValue> &result,
-		std::shared_ptr<SEWebsocketApiServer::ClientInfo> target,
-		const long cefClientId,
+		std::shared_ptr<SEApiClientInfo> target, const long cefClientId,
 		std::function<void()> complete_callback);
 
 	void RegisterIncomingApiCallHandler(std::string id,
@@ -150,8 +150,8 @@ protected:
 public:
 	void InvokeApiCallHandlerAsync(
 		CefRefPtr<CefProcessMessage> message,
-		std::shared_ptr<SEWebsocketApiServer::ClientInfo> target,
-		std::string invokeId, CefRefPtr<CefListValue> invokeArgs,
+		std::shared_ptr<SEApiClientInfo> target, std::string invokeId,
+		CefRefPtr<CefListValue> invokeArgs,
 		std::function<void(CefRefPtr<CefValue>)> result_callback,
 		const long cefClientId, const bool enable_logging = false);
 
@@ -180,14 +180,13 @@ private:
 	CefRefPtr<CefDictionaryValue> CreateApiPropsDictionaryInternal();
 
 	void RegisterIncomingApiCallHandlersInternal(
-		std::shared_ptr<SEWebsocketApiServer::ClientInfo> target);
-	void RegisterApiPropsInternal(
-		std::shared_ptr<SEWebsocketApiServer::ClientInfo> target);
-	void DispatchHostReadyEventInternal(
-		std::shared_ptr<SEWebsocketApiServer::ClientInfo> target);
-	void DispatchEventInternal(
-		std::shared_ptr<SEWebsocketApiServer::ClientInfo> target,
-		std::string event, std::string eventArgsJson);
+		std::shared_ptr<SEApiClientInfo> target);
+	void RegisterApiPropsInternal(std::shared_ptr<SEApiClientInfo> target);
+	void
+	DispatchHostReadyEventInternal(std::shared_ptr<SEApiClientInfo> target);
+	void DispatchEventInternal(std::shared_ptr<SEApiClientInfo> target,
+				   std::string event,
+				   std::string eventArgsJson);
 };
 
 //
@@ -228,7 +227,7 @@ private:
 		   std::shared_ptr<SEApiServices> apiServices,                 \
 		   CefRefPtr<CefProcessMessage> message,                       \
 		   CefRefPtr<CefListValue> args, CefRefPtr<CefValue> &result,  \
-		   std::shared_ptr<SEWebsocketApiServer::ClientInfo> target,   \
+		   std::shared_ptr<SEApiClientInfo> target,   \
 		   const long cefClientId,                                     \
 		   std::function<void()> complete_callback) {                  \
 			(void)self;                                            \

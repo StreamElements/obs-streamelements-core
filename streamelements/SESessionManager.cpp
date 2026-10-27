@@ -60,8 +60,8 @@ void SESessionManager::Reset(bool deleteAllCookies, UiModifier uiModifier)
 		return;
 	}
 
-	if (apiServices->websocketApiServer) {
-		apiServices->websocketApiServer->DispatchJSEvent(
+	if (apiServices->apiMessageSink) {
+		apiServices->apiMessageSink->DispatchJSEvent(
 			"system", "hostStateReset", "null");
 	}
 

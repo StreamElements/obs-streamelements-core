@@ -724,6 +724,8 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEObsAppMonitor.hpp
 	streamelements/SEApiMessageHandlerBase.hpp
 	streamelements/SEApiMessageHandler.hpp
+	streamelements/SEApiClientInfo.hpp
+	streamelements/SEApiMessageSink.hpp
 	streamelements/SEApiServices.hpp
 	streamelements/SEStatePersistence.hpp
 	streamelements/SEStatusBarMessageManager.hpp

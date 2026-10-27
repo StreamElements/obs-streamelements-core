@@ -341,7 +341,7 @@ void SEGlobalStateManager::PublishApiServices()
 #endif
 	m_apiServices->cleanupManager = m_cleanupManager;
 	m_apiServices->previewManager = m_previewManager;
-	m_apiServices->websocketApiServer = m_websocketApiServer;
+	m_apiServices->apiMessageSink = m_websocketApiServer;
 	m_apiServices->hostEventDispatcher = m_hostEventDispatcher;
 	m_apiServices->messageBus = m_messageBus;
 	m_apiServices->sharedVideoCompositionManager =
@@ -903,7 +903,7 @@ void SEGlobalStateManager::WatchServicesForTeardownAudit()
 #endif
 	SE_WATCH(cleanupManager);
 	SE_WATCH(previewManager);
-	SE_WATCH(websocketApiServer);
+	SE_WATCH(apiMessageSink);
 	SE_WATCH(hostEventDispatcher);
 	SE_WATCH(messageBus);
 	SE_WATCH(sharedVideoCompositionManager);

@@ -3,7 +3,7 @@
 #include "SEUtils.hpp"
 #include "SEBrowserWidget.hpp"
 #include "SEMessageBus.hpp"
-#include "SEWebsocketApiServer.hpp"
+#include "SEApiMessageSink.hpp"
 #include "SEHostEventDispatcher.hpp"
 
 class SEVideoCompositionManager;
@@ -77,7 +77,7 @@ private:
 	// to unregister from, no composition to look up, and no page to
 	// dispatch to.
 	//
-	std::weak_ptr<SEWebsocketApiServer> m_apiServer;
+	std::weak_ptr<ISEApiMessageSink> m_apiServer;
 	std::weak_ptr<SEVideoCompositionManager> m_videoCompositionManager;
 
 	//
@@ -286,8 +286,7 @@ private:
 	static std::recursive_mutex s_mutex;
 	static std::map<std::string, SEBrowserWidget *> s_widgets;
 
-	SEWebsocketApiServer::message_handler_t m_msgHandler =
-		nullptr;
+	ISEApiMessageSink::message_handler_t m_msgHandler = nullptr;
 
 public:
 	static SEBrowserWidget *

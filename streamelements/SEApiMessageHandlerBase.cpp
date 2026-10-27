@@ -24,7 +24,7 @@
 #include "SEUtils/SEAsyncTaskUtils.hpp"
 #include "SEUtils/SEEnvConfigUtils.hpp"
 
-#include "SEWebsocketApiServer.hpp"
+#include "SEApiMessageSink.hpp"
 
 /* Incoming messages from renderer process */
 const char *MSG_ON_CONTEXT_CREATED =
@@ -48,7 +48,7 @@ bool SEApiMessageHandlerBase::IsPluginInitialized()
 }
 
 bool SEApiMessageHandlerBase::OnProcessMessageReceived(
-	std::shared_ptr<SEWebsocketApiServer::ClientInfo> source,
+	std::shared_ptr<SEApiClientInfo> source,
 	CefRefPtr<CefProcessMessage> message, const long cefClientId)
 {
 	if (!IsPluginInitialized())
@@ -102,16 +102,14 @@ bool SEApiMessageHandlerBase::OnProcessMessageReceived(
 			struct local_context {
 				std::shared_ptr<SEApiMessageHandlerBase> self;
 				std::string id;
-				std::shared_ptr<SEWebsocketApiServer::ClientInfo>
-					target;
+				std::shared_ptr<SEApiClientInfo> target;
 				CefRefPtr<CefProcessMessage> message;
 				CefRefPtr<CefListValue> callArgs;
 				CefRefPtr<CefValue> result;
 				std::function<void()> complete;
 				int cef_app_callback_id;
 				long cefClientId;
-				std::shared_ptr<SEWebsocketApiServer::ClientInfo>
-					source;
+				std::shared_ptr<SEApiClientInfo> source;
 
 				std::shared_ptr<SEApiContextItem>
 					apiContextHandle;
@@ -190,7 +188,7 @@ bool SEApiMessageHandlerBase::OnProcessMessageReceived(
 
 					auto apiServer =
 						services
-							? services->websocketApiServer
+							? services->apiMessageSink
 							: nullptr;
 
 					if (apiServer) {
@@ -315,8 +313,8 @@ bool SEApiMessageHandlerBase::OnProcessMessageReceived(
 
 void SEApiMessageHandlerBase::InvokeApiCallHandlerAsync(
 	CefRefPtr<CefProcessMessage> message,
-	std::shared_ptr<SEWebsocketApiServer::ClientInfo> target,
-	std::string invokeId, CefRefPtr<CefListValue> invokeArgs,
+	std::shared_ptr<SEApiClientInfo> target, std::string invokeId,
+	CefRefPtr<CefListValue> invokeArgs,
 	std::function<void(CefRefPtr<CefValue>)> result_callback,
 	const long cefClientId, const bool enable_logging)
 {
@@ -447,7 +445,7 @@ SEApiMessageHandlerBase::CreateApiCallHandlersDictionaryInternal()
 }
 
 void SEApiMessageHandlerBase::RegisterIncomingApiCallHandlersInternal(
-	std::shared_ptr<SEWebsocketApiServer::ClientInfo> target)
+	std::shared_ptr<SEApiClientInfo> target)
 {
 	// Context created, request creation of window.host object
 	// with API methods
@@ -471,7 +469,7 @@ void SEApiMessageHandlerBase::RegisterIncomingApiCallHandlersInternal(
 	// is the same thing it registers.
 	//
 	auto services = m_services.lock();
-	auto apiServer = services ? services->websocketApiServer : nullptr;
+	auto apiServer = services ? services->apiMessageSink : nullptr;
 
 	if (!apiServer)
 		return;
@@ -494,7 +492,7 @@ SEApiMessageHandlerBase::CreateApiPropsDictionaryInternal()
 }
 
 void SEApiMessageHandlerBase::RegisterApiPropsInternal(
-	std::shared_ptr<SEWebsocketApiServer::ClientInfo> target)
+	std::shared_ptr<SEApiClientInfo> target)
 {
 	// Context created, request creation of window.host object
 	// with API methods
@@ -518,7 +516,7 @@ void SEApiMessageHandlerBase::RegisterApiPropsInternal(
 	// is the same thing it registers.
 	//
 	auto services = m_services.lock();
-	auto apiServer = services ? services->websocketApiServer : nullptr;
+	auto apiServer = services ? services->apiMessageSink : nullptr;
 
 	if (!apiServer)
 		return;
@@ -527,14 +525,14 @@ void SEApiMessageHandlerBase::RegisterApiPropsInternal(
 }
 
 void SEApiMessageHandlerBase::DispatchHostReadyEventInternal(
-	std::shared_ptr<SEWebsocketApiServer::ClientInfo> target)
+	std::shared_ptr<SEApiClientInfo> target)
 {
 	DispatchEventInternal(target, "hostReady", "null");
 }
 
 void SEApiMessageHandlerBase::DispatchEventInternal(
-	std::shared_ptr<SEWebsocketApiServer::ClientInfo> target,
-	std::string event, std::string eventArgsJson)
+	std::shared_ptr<SEApiClientInfo> target, std::string event,
+	std::string eventArgsJson)
 {
 	//
 	// No availability check: this holds its own reference to the server,
@@ -543,7 +541,7 @@ void SEApiMessageHandlerBase::DispatchEventInternal(
 	// is the same thing it registers.
 	//
 	auto services = m_services.lock();
-	auto apiServer = services ? services->websocketApiServer : nullptr;
+	auto apiServer = services ? services->apiMessageSink : nullptr;
 
 	if (!apiServer)
 		return;

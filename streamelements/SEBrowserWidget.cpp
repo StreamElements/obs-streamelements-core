@@ -260,8 +260,7 @@ SEBrowserWidget::SEBrowserWidget(
 	// are weak: everything below runs while the bundle is provably
 	// alive, so there is nothing to be gained by locking it twice.
 	//
-	auto apiServer = apiServices ? apiServices->websocketApiServer
-				     : nullptr;
+	auto apiServer = apiServices ? apiServices->apiMessageSink : nullptr;
 
 	m_apiServer = apiServer;
 	m_videoCompositionManager =

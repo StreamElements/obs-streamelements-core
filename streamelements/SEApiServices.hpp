@@ -20,7 +20,7 @@ class SEBackupManager;
 class SERazerWyvrnManager;
 class SECleanupManager;
 class SEPreviewManager;
-class SEWebsocketApiServer;
+class ISEApiMessageSink;
 class SEHostEventDispatcher;
 class SEMessageBus;
 class SESharedVideoCompositionManager;
@@ -117,7 +117,13 @@ struct SEApiServices {
 #endif
 	std::shared_ptr<SECleanupManager> cleanupManager;
 	std::shared_ptr<SEPreviewManager> previewManager;
-	std::shared_ptr<SEWebsocketApiServer> websocketApiServer;
+	//
+	// The transport, as an interface. The root holds the concrete
+	// SEWebsocketApiServer and hands that to the host event dispatcher,
+	// which needs methods that are not on here; a consumer that only
+	// answers a page gets this.
+	//
+	std::shared_ptr<ISEApiMessageSink> apiMessageSink;
 
 	//
 	// Host events on their way to pages. Everything that announces a

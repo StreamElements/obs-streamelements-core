@@ -16,42 +16,19 @@
 #include <shared_mutex>
 
 #include "cef-headers.hpp"
+#include "SEApiMessageSink.hpp"
 
-class SEWebsocketApiServer {
+class SEWebsocketApiServer : public ISEApiMessageSink {
 public:
-	class ClientInfo {
-	public:
-		std::string m_target;
-		std::string m_unique_id;
-		websocketpp::connection_hdl m_con_hdl;
+	//
+	// Was a nested class; it is SEApiClientInfo now, in a header that
+	// needs none of websocketpp. The alias keeps the other files that
+	// spell SEWebsocketApiServer::ClientInfo compiling, and reads
+	// correctly besides -- a client of this server is what it is.
+	//
+	typedef SEApiClientInfo ClientInfo;
 
-		ClientInfo(std::string target, std::string unique_id,
-			websocketpp::connection_hdl con_hdl =
-				SEWebsocketApiServer::connection_hdl_t(
-					std::shared_ptr<void>(nullptr)))
-			: m_target(target),
-			  m_unique_id(unique_id),
-			  m_con_hdl(con_hdl)
-		{
-		}
-
-		ClientInfo(ClientInfo &other)
-			: m_target(other.m_target),
-			  m_unique_id(other.m_unique_id)
-		{
-		}
-
-		bool operator==(const ClientInfo& b) {
-			return m_target == b.m_target &&
-					  m_unique_id == b.m_unique_id;
-		}
-
-		bool operator!=(const ClientInfo &b)
-		{
-			return m_target != b.m_target ||
-			       m_unique_id != b.m_unique_id;
-		}
-	};
+	typedef ISEApiMessageSink::message_handler_t message_handler_t;
 
 public:
 	typedef websocketpp::server<websocketpp::config::asio>
@@ -61,26 +38,22 @@ public:
 
 	typedef websocketpp::connection_hdl connection_hdl_t;
 
-	typedef std::function<void(std::shared_ptr<ClientInfo> clientInfo,
-				   CefRefPtr<CefProcessMessage> msg)>
-		message_handler_t;
-
 public:
 	SEWebsocketApiServer();
 	~SEWebsocketApiServer();
 
-	uint16_t GetPort() const { return m_port; }
+	uint16_t GetPort() const override { return m_port; }
 
 	bool DispatchJSEvent(std::string source,
 			     std::shared_ptr<ClientInfo> clientInfo,
-			     std::string event, std::string json);
+			     std::string event, std::string json) override;
 	bool DispatchJSEvent(std::string source, std::string event,
-			     std::string json);
+			     std::string json) override;
 	bool DispatchTargetJSEvent(std::string source, std::string target,
 				   std::string event, std::string json);
 	bool DispatchClientMessage(std::string source,
 				   std::shared_ptr<ClientInfo> clientInfo,
-			     CefRefPtr<CefProcessMessage> msg);
+				   CefRefPtr<CefProcessMessage> msg) override;
 	bool DispatchClientMessage(std::string source,
 				   std::shared_ptr<ClientInfo> clientInfo,
 			     std::string type, CefRefPtr<CefValue> payload);
@@ -88,9 +61,9 @@ public:
 					 CefRefPtr<CefProcessMessage> msg);
 
 	bool RegisterMessageHandler(std::string target,
-				    message_handler_t handler);
+				    message_handler_t handler) override;
 	bool UnregisterMessageHandler(std::string target,
-				    message_handler_t handler);
+				      message_handler_t handler) override;
 
 private:
 	void ParseIncomingMessage(connection_hdl_t con_hdl, std::string payload);
