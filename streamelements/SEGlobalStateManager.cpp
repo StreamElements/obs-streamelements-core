@@ -353,6 +353,9 @@ void SEGlobalStateManager::PublishApiServices()
 	m_apiServices->statePersistence = m_statePersistence;
 	m_apiServices->statusBarMessageManager = m_statusBarMessageManager;
 	m_apiServices->shellServices = m_shellServices;
+	m_apiServices->hostStreamingManager = m_hostStreamingManager;
+	m_apiServices->hostUpdateManager = m_hostUpdateManager;
+	m_apiServices->hostInfoProvider = m_hostInfoProvider;
 	m_apiServices->popupWindowManager = m_popupWindowManager;
 	m_apiServices->browserDialogManager = m_browserDialogManager;
 	m_apiServices->sessionManager = m_sessionManager;
@@ -544,9 +547,15 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	// pair.
 	//
 	m_obsSceneManager->AttachObsSignals(m_obsSceneManager);
+	m_hostStreamingManager = std::make_shared<SEHostStreamingManager>();
+	m_hostUpdateManager = std::make_shared<SEHostUpdateManager>();
+	m_hostInfoProvider =
+		std::make_shared<SEHostInfoProvider>(m_analyticsEventsManager);
+
 	m_menuManager = std::make_shared<SEMenuManager>(
 		obs_main_window, m_sessionManager, m_performanceHistoryTracker,
-		m_analyticsEventsManager, m_auxiliaryControlsBuilder, m_config);
+		m_analyticsEventsManager, m_auxiliaryControlsBuilder, m_config,
+		m_hostUpdateManager);
 	m_bwTestManager = std::make_shared<SEBandwidthTestManager>(
 		m_hostEventDispatcher);
 	m_outputSettingsManager = std::make_shared<
@@ -557,8 +566,8 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_externalSceneDataProviderManager = std::make_shared<
 		SEExternalSceneDataProviderManager>(
 		m_localFilesystemHttpServer);
-	m_nativeObsControlsManager =
-		SENativeOBSControlsManager::Create(obs_main_window);
+	m_nativeObsControlsManager = SENativeOBSControlsManager::Create(
+		obs_main_window, m_hostStreamingManager);
 	m_nativeObsControlsManager->SetApiServices(m_apiServices);
 	m_profilesManager =
 		std::make_shared<SEProfilesManager>();
@@ -921,6 +930,9 @@ void SEGlobalStateManager::WatchServicesForTeardownAudit()
 	SE_WATCH(statePersistence);
 	SE_WATCH(statusBarMessageManager);
 	SE_WATCH(shellServices);
+	SE_WATCH(hostStreamingManager);
+	SE_WATCH(hostUpdateManager);
+	SE_WATCH(hostInfoProvider);
 	SE_WATCH(popupWindowManager);
 	SE_WATCH(browserDialogManager);
 	SE_WATCH(sessionManager);
@@ -1095,6 +1107,9 @@ void SEGlobalStateManager::Shutdown()
 	m_statePersistence = nullptr;
 	m_statusBarMessageManager = nullptr;
 	m_shellServices = nullptr;
+	m_hostStreamingManager = nullptr;
+	m_hostUpdateManager = nullptr;
+	m_hostInfoProvider = nullptr;
 	m_popupWindowManager = nullptr;
 	m_browserDialogManager = nullptr;
 

@@ -43,6 +43,9 @@
 #include "SEPopupWindowManager.hpp"
 #include "SEProfilesManager.hpp"
 #include "SESessionManager.hpp"
+#include "SEHostInfoProvider.hpp"
+#include "SEHostStreamingManager.hpp"
+#include "SEHostUpdateManager.hpp"
 #include "SEShellServices.hpp"
 #include "SESharedVideoCompositionManager.hpp"
 #include "SEStatePersistence.hpp"
@@ -164,6 +167,17 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				std::shared_ptr<SEWebsocketApiServer::ClientInfo> target;
 				long cefClientId;
 				std::function<void()> complete_callback;
+
+				//
+				// The autosave deferral this batch opens is
+				// closed by done(), which captures [context]
+				// only -- so the service travels here. The
+				// manager rather than the whole bundle: a
+				// heap-allocated context has no business in
+				// the container's refcount.
+				//
+				std::shared_ptr<SEObsApiTransactionManager>
+					transactions;
 			};
 
 			local_context *context = new local_context();
@@ -175,11 +189,13 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 			context->target = target;
 			context->cefClientId = cefClientId;
 			context->complete_callback = complete_callback;
+			context->transactions =
+				apiServices->obsApiTransactionManager;
 
 			context->queueIndex->SetInt(0);
 			context->queue = args->GetList(0);
 			context->done = [context]() {
-				obs_frontend_defer_save_end();
+				context->transactions->EndDeferSave();
 
 				context->result->SetList(context->results);
 				context->complete_callback();
@@ -242,7 +258,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 					IsTraceLogLevel() /* enable_logging */);
 			};
 
-			obs_frontend_defer_save_begin();
+			apiServices->obsApiTransactionManager->BeginDeferSave();
 
 			context->process();
 		});
@@ -940,19 +956,22 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getSystemCPUUsageTimes");
 	{
-		SerializeSystemTimes(result);
+		apiServices->hostInfoProvider->SerializeSystemCPUUsageTimes(
+			result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getSystemMemoryUsage");
 	{
-		SerializeSystemMemoryUsage(result);
+		apiServices->hostInfoProvider->SerializeSystemMemoryUsage(
+			result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getSystemHardwareProperties");
 	{
-		SerializeSystemHardwareProperties(result);
+		apiServices->hostInfoProvider->SerializeSystemHardwareProperties(
+			result);
 	}
 	API_HANDLER_END();
 
@@ -1084,38 +1103,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getHostProperties");
 	{
-		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
-
-		d->SetString("obsVersionString", obs_get_version_string());
-		d->SetString("cefVersionString", GetCefVersionString());
-		d->SetString("cefPlatformApiHash", GetCefPlatformApiHash());
-		d->SetString("cefUniversalApiHash", GetCefUniversalApiHash());
-		d->SetString("hostPluginVersionString",
-			     GetSEPluginVersionString());
-		d->SetString("hostApiVersionString",
-			     GetSEApiVersionString());
-		d->SetString(
-			"hostMachineUniqueId",
-			apiServices->analyticsEventsManager->identity());
-		d->SetString(
-			"hostSessionUniqueId",
-			apiServices->analyticsEventsManager->sessionId());
-
-#ifdef WIN32
-		d->SetString("platform", "windows");
-#elif defined(__APPLE__)
-		d->SetString("platform", "macos");
-#elif defined(__linux__)
-		d->SetString("platform", "linux");
-#endif
-
-		if (sizeof(void*) == 8) {
-			d->SetString("platformArch", "64bit");
-		} else {
-			d->SetString("platformArch", "32bit");
-		}
-
-		result->SetDictionary(d);
+		apiServices->hostInfoProvider->SerializeHostProperties(result);
 	}
 	API_HANDLER_END();
 
@@ -1508,48 +1496,17 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getHostReleaseGroupProperties");
 	{
-		std::string quality =
-			ReadProductEnvironmentConfigurationString("Quality");
-		std::string manifestUrl =
-			ReadProductEnvironmentConfigurationString(
-				"ManifestUrl");
-
-		if (quality.size() && manifestUrl.size()) {
-			CefRefPtr<CefDictionaryValue> d =
-				CefDictionaryValue::Create();
-
-			d->SetString("quality", quality.c_str());
-			d->SetString("manifestUrl", manifestUrl.c_str());
-
-			result->SetDictionary(d);
-		} else {
-			result->SetNull();
-		}
+		apiServices->hostUpdateManager->SerializeReleaseGroupProperties(
+			result);
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("setHostReleaseGroupProperties");
 	{
-		if (args->GetSize() && args->GetType(0) == VTYPE_DICTIONARY) {
-			CefRefPtr<CefDictionaryValue> d =
-				args->GetDictionary(0);
-
-			if (d->HasKey("quality") &&
-			    d->GetType("quality") == VTYPE_STRING &&
-			    d->HasKey("manifestUrl") &&
-			    d->GetType("manifestUrl") == VTYPE_STRING) {
-				std::string quality = d->GetString("quality");
-				std::string manifestUrl =
-					d->GetString("manifestUrl");
-
-				bool writeResult =
-					WriteProductEnvironmentConfigurationStrings(
-						{{"", "Quality", quality},
-						 {"", "ManifestUrl",
-						  manifestUrl}});
-
-				result->SetBool(writeResult);
-			}
+		if (args->GetSize()) {
+			apiServices->hostUpdateManager
+				->DeserializeReleaseGroupProperties(
+					args->GetValue(0), result);
 		}
 	}
 	API_HANDLER_END();
@@ -1587,18 +1544,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 			}
 		}
 
-		calldata_t *cd = SETRACE_ADDREF(calldata_create());
-		calldata_set_bool(cd, "allow_downgrade", allowDowngrade);
-		calldata_set_bool(cd, "force_install", forceInstall);
-		calldata_set_bool(cd, "allow_use_last_response",
-				  allowUseLastResponse);
-
-		signal_handler_signal(
-			obs_get_signal_handler(),
-			"streamelements_request_check_for_updates_silent",
-			cd);
-
-		calldata_destroy(SETRACE_DECREF(cd));
+		apiServices->hostUpdateManager->RequestCheckForUpdates(
+			allowDowngrade, forceInstall, allowUseLastResponse);
 
 		result->SetBool(true);
 	}
@@ -1642,12 +1589,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getStreamingStatus");
 	{
-		CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
-
-		d->SetBool("isStreamingActive",
-			   obs_frontend_streaming_active());
-
-		result->SetDictionary(d);
+		apiServices->hostStreamingManager->SerializeStreamingStatus(
+			result);
 	}
 	API_HANDLER_END();
 
@@ -1661,7 +1604,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("requestStreamingStop");
 	{
-		obs_frontend_streaming_stop();
+		apiServices->hostStreamingManager->RequestStop();
 
 		result->SetBool(true);
 	}
@@ -2624,7 +2567,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("getAllLoadedHostModules");
 	{
-		SerializeLoadedObsModules(result);
+		apiServices->hostInfoProvider->SerializeLoadedHostModules(
+			result);
 	}
 	API_HANDLER_END();
 

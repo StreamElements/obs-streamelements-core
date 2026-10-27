@@ -1,4 +1,5 @@
 #include "SEMenuManager.hpp"
+#include "SEHostUpdateManager.hpp"
 
 #include "SESessionManager.hpp"
 #include "SEPerformanceHistoryTracker.hpp"
@@ -23,13 +24,15 @@ SEMenuManager::SEMenuManager(
 	std::shared_ptr<SEPerformanceHistoryTracker> performanceHistoryTracker,
 	std::shared_ptr<SEAnalyticsEventsManager> analyticsEventsManager,
 	std::shared_ptr<SEAuxiliaryControlsBuilder> auxiliaryControlsBuilder,
-	std::shared_ptr<SEConfig> config)
+	std::shared_ptr<SEConfig> config,
+	std::shared_ptr<SEHostUpdateManager> hostUpdateManager)
 	: m_mainWindow(parent),
 	  m_sessionManager(sessionManager),
 	  m_performanceHistoryTracker(performanceHistoryTracker),
 	  m_analyticsEventsManager(analyticsEventsManager),
 	  m_auxiliaryControls(auxiliaryControlsBuilder),
-	  m_config(config)
+	  m_config(config),
+	  m_hostUpdateManager(hostUpdateManager)
 {
 	m_auxMenuItems = CefValue::Create();
 	m_auxMenuItems->SetNull();
@@ -136,17 +139,15 @@ void SEMenuManager::UpdateInternal()
 	m_menu->addAction(check_for_updates_action);
 	check_for_updates_action->connect(
 		check_for_updates_action, &QAction::triggered, [this] {
-			calldata_t *cd = SETRACE_ADDREF(calldata_create());
-			calldata_set_bool(cd, "allow_downgrade", false);
-			calldata_set_bool(cd, "force_install", false);
-			calldata_set_bool(cd, "allow_use_last_response", false);
-
-			signal_handler_signal(
-				obs_get_signal_handler(),
-				"streamelements_request_check_for_updates",
-				cd);
-
-			calldata_destroy(SETRACE_DECREF(cd));
+			//
+			// The interactive check. This used to build its own
+			// calldata and fire the obs signal here, which made
+			// this file the second place that knew the update
+			// signal names (CORE-757).
+			//
+			if (m_hostUpdateManager)
+				m_hostUpdateManager
+					->RequestCheckForUpdatesInteractive();
 		});
 
 	QMenu *helpMenu = new QMenu(

@@ -21,6 +21,7 @@ class SEPerformanceHistoryTracker;
 class SEAnalyticsEventsManager;
 class SEAuxiliaryControlsBuilder;
 class SEConfig;
+class SEHostUpdateManager;
 
 class SEMenuManager :
 	public QObject
@@ -46,7 +47,8 @@ public:
 			      analyticsEventsManager,
 		      std::shared_ptr<SEAuxiliaryControlsBuilder>
 			      auxiliaryControlsBuilder,
-		      std::shared_ptr<SEConfig> config);
+		      std::shared_ptr<SEConfig> config,
+		      std::shared_ptr<SEHostUpdateManager> hostUpdateManager);
 	virtual ~SEMenuManager();
 
 public:
@@ -95,6 +97,7 @@ private:
 	// whether the menu is built at all.
 	//
 	std::shared_ptr<SEConfig> m_config;
+	std::shared_ptr<SEHostUpdateManager> m_hostUpdateManager;
 
 private:
 	void ReportIssue();

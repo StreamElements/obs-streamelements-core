@@ -38,6 +38,9 @@ class SEConfig;
 class SEPleaseWaitWindow;
 class SEObsApiTransactionManager;
 class SEShellServices;
+class SEHostStreamingManager;
+class SEHostUpdateManager;
+class SEHostInfoProvider;
 
 //
 // The objects SEGlobalStateManager::Initialize() creates, in one place, so
@@ -158,6 +161,16 @@ struct SEApiServices {
 	// browser, a path in the file manager.
 	//
 	std::shared_ptr<SEShellServices> shellServices;
+
+	//
+	// Three host-level concerns that had no owner at all: OBS's own
+	// single stream, the release channel and the updater, and a
+	// read-only description of the host and machine. Each was libobs
+	// called straight from a handler body.
+	//
+	std::shared_ptr<SEHostStreamingManager> hostStreamingManager;
+	std::shared_ptr<SEHostUpdateManager> hostUpdateManager;
+	std::shared_ptr<SEHostInfoProvider> hostInfoProvider;
 	std::shared_ptr<SEPopupWindowManager> popupWindowManager;
 	std::shared_ptr<SEBrowserDialogManager> browserDialogManager;
 	std::shared_ptr<SESessionManager> sessionManager;

@@ -110,6 +110,16 @@ std::string SEObsApiTransactionManager::Create(int timeoutMilliseconds)
 	return id;
 }
 
+void SEObsApiTransactionManager::BeginDeferSave()
+{
+	obs_frontend_defer_save_begin();
+}
+
+void SEObsApiTransactionManager::EndDeferSave()
+{
+	obs_frontend_defer_save_end();
+}
+
 void SEObsApiTransactionManager::Complete(std::string id)
 {
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);

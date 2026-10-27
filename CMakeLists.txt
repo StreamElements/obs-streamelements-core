@@ -540,6 +540,9 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEApiMessageHandlerBase.cpp
 	streamelements/SEApiMessageHandler.cpp
 	streamelements/SEStatePersistence.cpp
+	streamelements/SEHostInfoProvider.cpp
+	streamelements/SEHostStreamingManager.cpp
+	streamelements/SEHostUpdateManager.cpp
 	streamelements/SEShellServices.cpp
 	streamelements/SEStatusBarMessageManager.cpp
 	streamelements/SEPopupWindowManager.cpp
@@ -730,6 +733,9 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEApiMessageSink.hpp
 	streamelements/SEApiServices.hpp
 	streamelements/SEStatePersistence.hpp
+	streamelements/SEHostInfoProvider.hpp
+	streamelements/SEHostStreamingManager.hpp
+	streamelements/SEHostUpdateManager.hpp
 	streamelements/SEShellServices.hpp
 	streamelements/SEStatusBarMessageManager.hpp
 	streamelements/SEPopupWindowManager.hpp

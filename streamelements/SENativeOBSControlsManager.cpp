@@ -1,4 +1,5 @@
 #include "SENativeOBSControlsManager.hpp"
+#include "SEHostStreamingManager.hpp"
 #include "SEGlobalStateManager.hpp"
 #include "SEUtils.hpp"
 #include <QDockWidget>
@@ -11,17 +12,19 @@
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 
-std::shared_ptr<SENativeOBSControlsManager>
-SENativeOBSControlsManager::Create(QMainWindow *mainWindow)
+std::shared_ptr<SENativeOBSControlsManager> SENativeOBSControlsManager::Create(
+	QMainWindow *mainWindow,
+	std::shared_ptr<SEHostStreamingManager> hostStreamingManager)
 {
 	return std::make_shared<SENativeOBSControlsManager>(
-		SENativeOBSControlsManager::Private(), mainWindow);
+		SENativeOBSControlsManager::Private(), mainWindow,
+		hostStreamingManager);
 }
 
 SENativeOBSControlsManager::SENativeOBSControlsManager(
-	SENativeOBSControlsManager::Private, QMainWindow *mainWindow)
-	:
-	m_mainWindow(mainWindow)
+	SENativeOBSControlsManager::Private, QMainWindow *mainWindow,
+	std::shared_ptr<SEHostStreamingManager> hostStreamingManager)
+	: m_hostStreamingManager(hostStreamingManager), m_mainWindow(mainWindow)
 {
 	QDockWidget* controlsDock = (QDockWidget*)m_mainWindow->findChild<QDockWidget*>("controlsDock");
 
@@ -376,10 +379,9 @@ void SENativeOBSControlsManager::SetStreamingInitialState()
 {
 	if (!m_startStopStreamingButton) return;
 
-	if (obs_frontend_streaming_active()) {
+	if (m_hostStreamingManager->IsStreaming()) {
 		SetStreamingActiveState();
-	}
-	else {
+	} else {
 		SetStreamingStoppedState();
 	}
 }
@@ -424,10 +426,9 @@ void SENativeOBSControlsManager::SetStreamingTransitionState()
 
 	os_atomic_set_bool(&m_isStreamingTransitionState, true);
 
-	if (obs_frontend_streaming_active()) {
+	if (m_hostStreamingManager->IsStreaming()) {
 		SetStreamingTransitionStoppingState();
-	}
-	else {
+	} else {
 		SetStreamingTransitionStartingState();
 	}
 }
@@ -487,13 +488,12 @@ void SENativeOBSControlsManager::SetStreamingTransitionStoppingState()
 
 void SENativeOBSControlsManager::OnStartStopStreamingButtonClicked()
 {
-	if (obs_frontend_streaming_active()) {
+	if (m_hostStreamingManager->IsStreaming()) {
 		blog(LOG_INFO, "obs-streamelements-core: streaming stop requested by UI control");
 
 		// obs_frontend_streaming_stop();
 		ClickNativeStartStopStreamingButton();
-	}
-	else {
+	} else {
 		blog(LOG_INFO, "obs-streamelements-core: streaming start requested by UI control");
 
 		BeginStartStreaming();
@@ -585,10 +585,9 @@ void SENativeOBSControlsManager::hotkey_routing_func(void* data, obs_hotkey_id i
 	SENativeOBSControlsManager* self = (SENativeOBSControlsManager*)data;
 
 	if (id == self->m_startStopStreamingHotkeyId) {
-		if (pressed &&
-			!obs_frontend_streaming_active() &&
-			self->m_startStopStreamingButton &&
-			self->m_startStopStreamingButton->isEnabled()) {
+		if (pressed && !self->m_hostStreamingManager->IsStreaming() &&
+		    self->m_startStopStreamingButton &&
+		    self->m_startStopStreamingButton->isEnabled()) {
 			blog(LOG_INFO, "obs-streamelements-core: streaming start requested by hotkey");
 
 			self->BeginStartStreaming();
@@ -684,7 +683,7 @@ void SENativeOBSControlsManager::StartStreaming()
 		},
 		5000);
 
-	obs_frontend_streaming_start();
+	m_hostStreamingManager->RequestStart();
 
 	if (!m_startStopStreamingButton)
 		return;

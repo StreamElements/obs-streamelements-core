@@ -25,6 +25,8 @@
 
 #define SE_ENABLE_CENTRAL_WIDGET_DECORATIONS 0
 
+class SEHostStreamingManager;
+
 class SENativeOBSControlsManager : public QObject
 {
 	Q_OBJECT
@@ -96,15 +98,28 @@ public:
 	// had to call Destroy() on it by name at teardown (CORE-757).
 	//
 	static std::shared_ptr<SENativeOBSControlsManager>
-	Create(QMainWindow *mainWindow);
+	Create(QMainWindow *mainWindow,
+	       std::shared_ptr<SEHostStreamingManager> hostStreamingManager);
 
-	SENativeOBSControlsManager(Private,
-					       QMainWindow *mainWindow);
+	SENativeOBSControlsManager(
+		Private, QMainWindow *mainWindow,
+		std::shared_ptr<SEHostStreamingManager> hostStreamingManager);
 	virtual ~SENativeOBSControlsManager();
 
 public:
 	QMainWindow* mainWindow() { return m_mainWindow; }
 
+private:
+	//
+	// OBS's own single stream, as a service rather than as four direct
+	// calls to obs_frontend_streaming_*. The dependency runs this way
+	// round -- a UI class asking a service for the host's state --
+	// because the reverse, a service reaching into a Qt class to start a
+	// stream, is what this replaces (CORE-757).
+	//
+	std::shared_ptr<SEHostStreamingManager> m_hostStreamingManager;
+
+public:
 	//
 	// A setter rather than a constructor argument because this class hands
 	// out its own instance through GetInstance(), so Initialize() cannot

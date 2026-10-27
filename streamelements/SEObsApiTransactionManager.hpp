@@ -40,6 +40,20 @@ public:
 	// timeout and an explicit completion safe to race.
 	void Complete(std::string id);
 
+	//
+	// The autosave deferral on its own, with no dialog and no timeout.
+	//
+	// batchInvokeSeries wraps a list of API calls in one deferral so that
+	// OBS does not write its scene collection between them. It is not a
+	// long operation anybody should be asked to wait for, which is why it
+	// called obs_frontend_defer_save_begin/end straight from the handler
+	// rather than opening a transaction -- so the one class that owns the
+	// deferral did not own that use of it. libobs counts the deferrals,
+	// so this nests with Create()/Complete() safely.
+	//
+	void BeginDeferSave();
+	void EndDeferSave();
+
 private:
 	class Handle;
 
