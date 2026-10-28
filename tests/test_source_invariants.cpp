@@ -4062,9 +4062,13 @@ static void check_deferred_deletes_hold_services_weakly()
 // The families are spelled out one per row so the vocabulary is
 // inherited rather than guessed at again.
 //
-// Moved out so far: the 27 OBS_SOURCE_* constants that were written at
-// eleven call sites, now behind the nine wrappers in
-// SEUtils/SEObsSourceCatalogUtils -- 95 to 68.
+// 95 to 1, and 1 is the floor: the dispatcher's QtPostTask in
+// SEApiMessageHandlerBase::OnProcessMessageReceived. API calls run on
+// the Qt thread by design, it is the macro CLAUDE.md mandates over a
+// raw QMetaObject::invokeMethod, and it is already a link seam -- its
+// impl is declared in a header whose closure is obs-free and Qt-free,
+// so test_api_handler_infrastructure links its own definition. Every
+// other family below is pinned at zero.
 //
 static void check_api_handler_obs_qt_tokens_only_go_down()
 {
@@ -4154,7 +4158,7 @@ static void check_api_handler_obs_qt_tokens_only_go_down()
 	// total are edited together or not at all.
 	//
 	check(expected_total == 1,
-	      "the per-family counts no longer sum to 68 -- update the total "
+	      "the per-family counts no longer sum to 1 -- update the total "
 	      "in the comment above in the same commit (CORE-757)");
 }
 
