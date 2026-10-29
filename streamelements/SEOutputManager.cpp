@@ -1,4 +1,12 @@
 #include "SEOutputManager.hpp"
+
+//
+// The complete types SEOutputManager.hpp forward-declares.
+//
+#include "SEOutput.hpp"
+#include "SEVideoCompositionManager.hpp"
+#include "SEAudioCompositionManager.hpp"
+
 #include "SEHostEventDispatcher.hpp"
 #include "SEUtils.hpp"
 

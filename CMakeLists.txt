@@ -741,6 +741,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEPopupWindowManager.hpp
 	streamelements/SEAuxiliaryControlsBuilder.hpp
 	streamelements/SEObsApiTransactionManager.hpp
+	streamelements/SEObsOutputType.hpp
 	streamelements/SEBrowserDialogManager.hpp
 	streamelements/SESessionManager.hpp
 	streamelements/SEHostEventDispatcher.hpp

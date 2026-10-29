@@ -1,6 +1,7 @@
 #pragma once
 
 #include <obs-frontend-api.h>
+#include "SEObsOutputType.hpp"
 #include "SEVideoComposition.hpp"
 #include "SEAudioComposition.hpp"
 
@@ -14,8 +15,6 @@
 class SEVideoCompositionManager;
 class SEAudioCompositionManager;
 class SEHostEventDispatcher;
-
-enum ObsOutputType { StreamingOutput, RecordingOutput, ReplayBufferOutput };
 
 class SEOutputBase
 	: public SEVideoCompositionEventListener,
