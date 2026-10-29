@@ -24,7 +24,6 @@
 //
 // SEConfig.hpp and SEMessageBus.hpp are the two already included above.
 //
-#include "SEAnalyticsEventsManager.hpp"
 #include "SEAudioCompositionManager.hpp"
 #include "SEAuxiliaryControlsBuilder.hpp"
 #include "SEBackupManager.hpp"
@@ -68,7 +67,7 @@
 #include "SEUtils/SEEnvConfigUtils.hpp"
 #include "SEUtils/SEObsSourceCatalogUtils.hpp"
 #include "SEMessageBus.hpp"
-#include "SEWebsocketApiServer.hpp"
+#include "SEApiClientInfo.hpp"
 
 //
 // The API call lock for this translation unit. API_HANDLER_BEGIN takes it, and
@@ -140,7 +139,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		   std::shared_ptr<SEApiServices> apiServices,
 		   CefRefPtr<CefProcessMessage> message,
 		   CefRefPtr<CefListValue> args, CefRefPtr<CefValue> &result,
-		   std::shared_ptr<SEWebsocketApiServer::ClientInfo> target,
+		   std::shared_ptr<SEApiClientInfo> target,
 		   const long cefClientId,
 		   std::function<void()> complete_callback) {
 			result->SetNull();
@@ -174,7 +173,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				CefRefPtr<CefProcessMessage> message;
 				CefRefPtr<CefListValue> args;
 				CefRefPtr<CefValue> result;
-				std::shared_ptr<SEWebsocketApiServer::ClientInfo> target;
+				std::shared_ptr<SEApiClientInfo> target;
 				long cefClientId;
 				std::function<void()> complete_callback;
 
@@ -2899,10 +2898,7 @@ bool SEApiMessageHandler::InvokeHandler::InvokeApiCallAsync(
 	context->result->SetBool(false);
 	context->callback = callback;
 
-	
-	static auto nullTarget =
-		std::make_shared<SEWebsocketApiServer::ClientInfo>(
-			"", "");
+	static auto nullTarget = std::make_shared<SEApiClientInfo>("", "");
 
 	auto apiServices = m_services.lock();
 
