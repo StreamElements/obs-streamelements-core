@@ -27,11 +27,11 @@
 #include "SEAudioCompositionManager.hpp"
 #include "SEAuxiliaryControlsBuilder.hpp"
 #include "SEBackupManager.hpp"
-#include "SEBandwidthTestManager.hpp"
+#include "ISEBandwidthTestManager.hpp"
 #include "SEBrowserDialogManager.hpp"
 #include "SEBrowserWidgetManager.hpp"
-#include "SEExternalSceneDataProviderManager.hpp"
-#include "SEHotkeyManager.hpp"
+#include "ISEExternalSceneDataProviderManager.hpp"
+#include "ISEHotkeyManager.hpp"
 #include "SEHttpClient.hpp"
 #include "SEMenuManager.hpp"
 #include "SENativeObsUIControlsManager.hpp"
@@ -50,7 +50,7 @@
 #include "SEStatePersistence.hpp"
 #include "SEStatusBarMessageManager.hpp"
 #include "SEVideoCompositionManager.hpp"
-#include "SEWorkerManager.hpp"
+#include "ISEWorkerManager.hpp"
 #ifdef SE_ENABLE_WYVRN
 #include "SERazerWyvrnManager.hpp"
 #endif

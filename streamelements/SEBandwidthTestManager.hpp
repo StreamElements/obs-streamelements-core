@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ISEBandwidthTestManager.hpp"
 #include "SEBandwidthTestClient.hpp"
 
 #include "../cef-headers.hpp"
@@ -9,16 +10,18 @@
 
 class SEHostEventDispatcher;
 
-class SEBandwidthTestManager
-{
+class SEBandwidthTestManager : public ISEBandwidthTestManager {
 public:
 	SEBandwidthTestManager(
 		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher);
 	virtual ~SEBandwidthTestManager();
 
-	bool BeginBandwidthTest(CefRefPtr<CefValue> settingsValue, CefRefPtr<CefValue> serversValue, std::string target);
-	CefRefPtr<CefDictionaryValue> EndBandwidthTest(CefRefPtr<CefValue> options);
-	CefRefPtr<CefDictionaryValue> GetBandwidthTestStatus();
+	bool BeginBandwidthTest(CefRefPtr<CefValue> settingsValue,
+				CefRefPtr<CefValue> serversValue,
+				std::string target) override;
+	CefRefPtr<CefDictionaryValue>
+	EndBandwidthTest(CefRefPtr<CefValue> options) override;
+	CefRefPtr<CefDictionaryValue> GetBandwidthTestStatus() override;
 
 private:
 	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;

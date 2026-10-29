@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ISEHotkeyManager.hpp"
+
 #include "obs.h"
 #include "obs-hotkey.h"
 #include "cef-headers.hpp"
@@ -10,8 +12,7 @@
 
 class SEHostEventDispatcher;
 
-class SEHotkeyManager
-{
+class SEHotkeyManager : public ISEHotkeyManager {
 public:
 	//
 	// The dispatcher is injected: a hotkey press and a change to the
@@ -24,9 +25,10 @@ public:
 		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher);
 	~SEHotkeyManager();
 
-	bool SerializeHotkeyBindings(CefRefPtr<CefValue>& result, bool onlyManagedBindings = false);
+	bool SerializeHotkeyBindings(CefRefPtr<CefValue> &result,
+				     bool onlyManagedBindings) override;
 	bool DeserializeHotkeyBindings(CefRefPtr<CefValue> input);
-	bool DeserializeHotkeyTriggers(CefRefPtr<CefValue> input);
+	bool DeserializeHotkeyTriggers(CefRefPtr<CefValue> input) override;
 
 	//
 	// The new binding's id, or -1. It returned obs_hotkey_id, whose
@@ -34,15 +36,16 @@ public:
 	// a libobs type and compared against a libobs constant to decide
 	// whether to answer the page with a number or with null.
 	//
-	int64_t DeserializeSingleHotkeyBinding(CefRefPtr<CefValue> input);
+	int64_t
+	DeserializeSingleHotkeyBinding(CefRefPtr<CefValue> input) override;
 
-	bool RemoveHotkeyBindingById(uint64_t id);
+	bool RemoveHotkeyBindingById(uint64_t id) override;
 
 private:
 	bool RemoveHotkeyBindingByObsId(obs_hotkey_id id);
 
 public:
-	void RemoveAllManagedHotkeyBindings();
+	void RemoveAllManagedHotkeyBindings() override;
 
 protected:
 	virtual void hotkeyTriggered(obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed);

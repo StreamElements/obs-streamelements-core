@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ISEExternalSceneDataProviderManager.hpp"
 #include "SEExternalSceneDataProvider.hpp"
 #include "SEExternalSceneDataProviderSlobsClient.hpp"
 
@@ -8,7 +9,7 @@
 #include "cef-headers.hpp"
 
 class SEExternalSceneDataProviderManager
-{
+	: public ISEExternalSceneDataProviderManager {
 public:
 	SEExternalSceneDataProviderManager(
 		std::shared_ptr<SELocalFilesystemHttpServer> httpServer)
@@ -18,7 +19,7 @@ public:
 				"slobs-client", httpServer);
 	}
 
-	void SerializeProviders(CefRefPtr<CefValue> result)
+	void SerializeProviders(CefRefPtr<CefValue> result) override
 	{
 		CefRefPtr<CefListValue> list = CefListValue::Create();
 
@@ -34,9 +35,9 @@ public:
 		result->SetList(list);
 	}
 
-	bool SerializeProviderSceneCollections(
-		CefRefPtr<CefValue> input,
-		CefRefPtr<CefValue> result)
+	bool
+	SerializeProviderSceneCollections(CefRefPtr<CefValue> input,
+					  CefRefPtr<CefValue> result) override
 	{
 		if (input->GetType() != VTYPE_DICTIONARY) {
 			return false;
@@ -60,9 +61,9 @@ public:
 		}
 	}
 
-	bool SerializeProviderSceneColletion(
-		CefRefPtr<CefValue> input,
-		CefRefPtr<CefValue> result)
+	bool
+	SerializeProviderSceneColletion(CefRefPtr<CefValue> input,
+					CefRefPtr<CefValue> result) override
 	{
 		if (input->GetType() != VTYPE_DICTIONARY) {
 			return false;

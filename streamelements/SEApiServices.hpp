@@ -5,13 +5,13 @@
 class SEBrowserWidgetManager;
 class SEObsSceneManager;
 class SEMenuManager;
-class SEBandwidthTestManager;
+class ISEBandwidthTestManager;
 class SEOutputSettingsManager;
-class SEWorkerManager;
-class SEHotkeyManager;
+class ISEWorkerManager;
+class ISEHotkeyManager;
 class SEPerformanceHistoryTracker;
 class SEAnalyticsEventsManager;
-class SEExternalSceneDataProviderManager;
+class ISEExternalSceneDataProviderManager;
 class SEHttpClient;
 class SELocalFilesystemHttpServer;
 class SENativeObsUIControlsManager;
@@ -103,13 +103,13 @@ struct SEApiServices {
 	std::shared_ptr<SEBrowserWidgetManager> widgetManager;
 	std::shared_ptr<SEObsSceneManager> obsSceneManager;
 	std::shared_ptr<SEMenuManager> menuManager;
-	std::shared_ptr<SEBandwidthTestManager> bandwidthTestManager;
+	std::shared_ptr<ISEBandwidthTestManager> bandwidthTestManager;
 	std::shared_ptr<SEOutputSettingsManager> outputSettingsManager;
-	std::shared_ptr<SEWorkerManager> workerManager;
-	std::shared_ptr<SEHotkeyManager> hotkeyManager;
+	std::shared_ptr<ISEWorkerManager> workerManager;
+	std::shared_ptr<ISEHotkeyManager> hotkeyManager;
 	std::shared_ptr<SEPerformanceHistoryTracker> performanceHistoryTracker;
 	std::shared_ptr<SEAnalyticsEventsManager> analyticsEventsManager;
-	std::shared_ptr<SEExternalSceneDataProviderManager>
+	std::shared_ptr<ISEExternalSceneDataProviderManager>
 		externalSceneDataProviderManager;
 	std::shared_ptr<SEHttpClient> httpClient;
 	std::shared_ptr<SELocalFilesystemHttpServer> localFilesystemHttpServer;

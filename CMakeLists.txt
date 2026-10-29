@@ -770,12 +770,15 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEConfig.hpp
 	streamelements/SEGlobalStateManager.hpp
 	streamelements/SEMenuManager.hpp
+	streamelements/ISEBandwidthTestManager.hpp
 	streamelements/SEBandwidthTestManager.hpp
 	streamelements/SEOutputSettingsManager.hpp
-	streamelements/SEWorkerManager.cpp
+	streamelements/ISEWorkerManager.hpp
+	streamelements/SEWorkerManager.hpp
 	streamelements/SEDialogApiCall.hpp
 	streamelements/SEDialogApiMessageHandler.hpp
 	streamelements/SEBrowserDialog.hpp
+	streamelements/ISEHotkeyManager.hpp
 	streamelements/SEHotkeyManager.hpp
 	streamelements/SEReportIssueDialog.hpp
 	streamelements/SESecretRedactor.hpp
@@ -792,6 +795,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEMessageBus.hpp
 	streamelements/SEControllerServer.hpp
 	streamelements/SEObsSceneManager.hpp
+	streamelements/ISEExternalSceneDataProviderManager.hpp
 	streamelements/SEExternalSceneDataProviderManager.hpp
 	streamelements/SEExternalSceneDataProviderSlobsClient.hpp
 	streamelements/SEExternalSceneDataProvider.hpp
