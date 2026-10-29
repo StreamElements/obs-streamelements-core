@@ -30,7 +30,7 @@ class SEOutputManager;
 class SEObsActiveSceneTracker;
 class SEStatePersistence;
 class SEStatusBarMessageManager;
-class SEPopupWindowManager;
+class ISEPopupWindowManager;
 class SEBrowserDialogManager;
 class SESessionManager;
 class SEAuxiliaryControlsBuilder;
@@ -171,7 +171,7 @@ struct SEApiServices {
 	std::shared_ptr<SEHostStreamingManager> hostStreamingManager;
 	std::shared_ptr<SEHostUpdateManager> hostUpdateManager;
 	std::shared_ptr<SEHostInfoProvider> hostInfoProvider;
-	std::shared_ptr<SEPopupWindowManager> popupWindowManager;
+	std::shared_ptr<ISEPopupWindowManager> popupWindowManager;
 	std::shared_ptr<SEBrowserDialogManager> browserDialogManager;
 	std::shared_ptr<SESessionManager> sessionManager;
 

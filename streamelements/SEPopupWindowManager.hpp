@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ISEPopupWindowManager.hpp"
+
 #include "cef-headers.hpp"
 
 #include <QPointer>
@@ -21,7 +23,7 @@ struct SEApiServices;
 // ~SEBrowserWidgetManager for why that is the dangerous order --
 // which is what the destructor here fixes.
 //
-class SEPopupWindowManager {
+class SEPopupWindowManager : public ISEPopupWindowManager {
 public:
 	//
 	// Takes the bundle, keeps it weakly. Everything it creates -- the API
@@ -33,7 +35,7 @@ public:
 	SEPopupWindowManager(std::shared_ptr<SEApiServices> apiServices);
 	~SEPopupWindowManager();
 
-	bool DeserializePopupWindow(CefRefPtr<CefValue> input);
+	bool DeserializePopupWindow(CefRefPtr<CefValue> input) override;
 
 private:
 	std::weak_ptr<SEApiServices> m_apiServices;

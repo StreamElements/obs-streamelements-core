@@ -40,7 +40,7 @@
 #include "SEObsSceneManager.hpp"
 #include "SEOutputManager.hpp"
 #include "SEOutputSettingsManager.hpp"
-#include "SEPopupWindowManager.hpp"
+#include "ISEPopupWindowManager.hpp"
 #include "SEProfilesManager.hpp"
 #include "SESessionManager.hpp"
 #include "SEHostInfoProvider.hpp"

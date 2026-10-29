@@ -738,6 +738,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEHostUpdateManager.hpp
 	streamelements/SEShellServices.hpp
 	streamelements/SEStatusBarMessageManager.hpp
+	streamelements/ISEPopupWindowManager.hpp
 	streamelements/SEPopupWindowManager.hpp
 	streamelements/SEAuxiliaryControlsBuilder.hpp
 	streamelements/SEObsApiTransactionManager.hpp
