@@ -4525,6 +4525,92 @@ static void check_handler_include_closure_only_goes_down()
 		       "the API handler bodies", 8, 31);
 }
 
+//
+// --- Every source file ends with a newline.
+//
+// clang promotes -Wnewline-eof to an error under -Werror, so a file whose
+// last line has no terminator fails the macOS build outright. MSVC does
+// not warn at all, and that asymmetry is the whole point of putting this
+// here: SEApiMessageHandlerBase.cpp was committed without one, built
+// clean on Windows eleven times across this series, and then broke the
+// first macOS build of stage 3 on a byte no editor shows.
+//
+// It belongs in the suite rather than only in CI, because the suite is
+// what a Windows-only change can run before pushing, and it costs
+// milliseconds.
+//
+static void check_every_source_file_ends_with_a_newline()
+{
+	const char *const dirs[] = {"/streamelements",
+				    "/streamelements/SEUtils",
+				    "/streamelements/updater",
+				    "/streamelements/restore-script-host",
+				    "/tests"};
+
+	int scanned = 0;
+
+	for (const char *const dir : dirs) {
+		const std::string path = std::string(se_tests::kRepoRoot) + dir;
+
+		std::error_code ec;
+		std::filesystem::directory_iterator it(path, ec);
+
+		check(!ec, (std::string("cannot read ") + dir +
+			    " -- this invariant would then pass vacuously")
+				   .c_str());
+
+		for (std::filesystem::directory_iterator end; it != end && !ec;
+		     it.increment(ec)) {
+			const std::filesystem::path &p = it->path();
+			const std::string ext = p.extension().string();
+
+			if (ext != ".cpp" && ext != ".hpp" && ext != ".mm" &&
+			    ext != ".c" && ext != ".h")
+				continue;
+
+			//
+			// Binary, so the byte read is the file's own and
+			// not something the text layer translated.
+			//
+			std::ifstream in(p.string(), std::ios::binary);
+
+			if (!in)
+				continue;
+
+			in.seekg(0, std::ios::end);
+
+			if (static_cast<std::streamoff>(in.tellg()) <= 0)
+				continue;
+
+			in.seekg(-1, std::ios::end);
+
+			char last = 0;
+			in.read(&last, 1);
+
+			++scanned;
+
+			if (last == '\n')
+				continue;
+
+			check(false,
+			      (p.filename().string() +
+			       " has no trailing newline -- clang makes "
+			       "that an error under -Werror "
+			       "(-Wnewline-eof), so the macOS build fails "
+			       "on it while MSVC says nothing (CORE-757)")
+				      .c_str());
+		}
+	}
+
+	//
+	// 237 files as of stage 3. A floor well under that catches a scan
+	// that silently stopped finding anything.
+	//
+	check(scanned > 150,
+	      "the trailing-newline scan found almost no files -- it would "
+	      "then pass vacuously");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -4591,6 +4677,7 @@ int main()
 	check_the_api_call_lock_stays_per_translation_unit();
 	check_the_trace_log_level_memo_is_computed_once();
 	check_handler_include_closure_only_goes_down();
+	check_every_source_file_ends_with_a_newline();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",
