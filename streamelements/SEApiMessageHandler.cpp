@@ -51,7 +51,7 @@
 #include "ISESharedVideoCompositionManager.hpp"
 #include "SEStatePersistence.hpp"
 #include "SEStatusBarMessageManager.hpp"
-#include "SEVideoCompositionManager.hpp"
+#include "ISEVideoCompositionManager.hpp"
 #include "ISEWorkerManager.hpp"
 #ifdef SE_ENABLE_WYVRN
 #include "SERazerWyvrnManager.hpp"
@@ -2467,21 +2467,20 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 					apiServices
 						->videoCompositionManager;
 
-				std::shared_ptr<
-					SEVideoCompositionBase>
+				std::shared_ptr<ISEVideoComposition>
 					videoComposition = nullptr;
 
 				if (d->HasKey("videoCompositionId") &&
 				    d->GetType("videoCompositionId") ==
 					    VTYPE_STRING) {
 					videoComposition =
-						videoCompositionManager->GetVideoCompositionById(
-							d->GetString(
+						videoCompositionManager
+							->GetVideoComposition(d->GetString(
 								"videoCompositionId"));
 				} else {
 					videoComposition =
 						videoCompositionManager
-							->GetObsNativeVideoComposition();
+							->GetNativeVideoComposition();
 				}
 
 				if (videoComposition.get()) {
@@ -2506,14 +2505,14 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			auto videoComposition =
 				apiServices->videoCompositionManager
-					->GetVideoCompositionById(
+					->GetVideoComposition(
 						args->GetValue(0));
 
 			if (videoComposition.get())
 				videoComposition->SerializeTransition(result);
 		} else {
 			apiServices->videoCompositionManager
-				->GetObsNativeVideoComposition()
+				->GetNativeVideoComposition()
 				->SerializeTransition(result);
 		}
 	}
@@ -2524,7 +2523,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			auto videoComposition =
 				apiServices->videoCompositionManager
-					->GetVideoCompositionById(
+					->GetVideoComposition(
 						args->GetValue(0));
 
 			if (videoComposition.get())
@@ -2538,7 +2537,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize()) {
 			auto videoComposition =
 				apiServices->videoCompositionManager
-					->GetVideoCompositionById(
+					->GetVideoComposition(
 						args->GetValue(0));
 
 			if (videoComposition.get()) {

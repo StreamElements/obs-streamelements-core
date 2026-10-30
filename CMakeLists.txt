@@ -817,7 +817,9 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEHttpServerManager.hpp
 	streamelements/SEWebsocketApiServer.hpp
 	streamelements/SELocalFilesystemHttpServer.hpp
+	streamelements/ISEVideoComposition.hpp
 	streamelements/SEVideoComposition.hpp
+	streamelements/ISEVideoCompositionManager.hpp
 	streamelements/SEVideoCompositionManager.hpp
 	streamelements/SEVideoCompositionViewWidget.hpp
 	streamelements/SEAudioComposition.hpp

@@ -762,9 +762,26 @@ void SEBrowserWidget::DeserializeVideoCompositionView(
 	if (!videoCompositionManager)
 		return;
 
+	//
+	// Down from the interface to the implementation, which is the one
+	// place in the plug-in that does this and wants explaining.
+	//
+	// SEVideoCompositionViewWidget renders the composition, so it needs
+	// the obs-level SEVideoCompositionBase rather than the four methods
+	// on ISEVideoComposition. The alternative is a constructor
+	// parameter threaded through all five classes that build a browser
+	// widget -- a dialog manager, a widget manager, a pop-up manager, a
+	// worker manager and the native UI controls -- none of which holds
+	// a video composition manager or has any reason to.
+	//
+	// dynamic_pointer_cast rather than static_: every
+	// ISEVideoComposition in this program is a SEVideoCompositionBase,
+	// and if that ever stops being true this fails closed.
+	//
 	auto videoComposition =
-		videoCompositionManager->GetVideoCompositionById(
-			videoCompositionId);
+		std::dynamic_pointer_cast<SEVideoCompositionBase>(
+			videoCompositionManager->GetVideoComposition(
+				videoCompositionId));
 
 	if (!videoComposition.get())
 		return;

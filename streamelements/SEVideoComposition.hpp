@@ -6,6 +6,7 @@
 #include <obs.hpp>
 #include <obs-frontend-api.h>
 #include "cef-headers.hpp"
+#include "ISEVideoComposition.hpp"
 
 #include "SEUtils.hpp"
 #include "SEScenesListWidgetManager.hpp"
@@ -25,7 +26,7 @@ public:
 	//virtual void StopOutputRequested();
 };
 
-class SEVideoCompositionBase {
+class SEVideoCompositionBase : public ISEVideoComposition {
 public:
 	class scenes_t : public std::vector<obs_scene_t*> {
 	public:
@@ -461,7 +462,7 @@ public:
 	virtual obs_scene_t *AddScene(std::string requestName) = 0;
 	virtual bool SetCurrentScene(obs_scene_t *scene) = 0;
 
-	virtual void TakeScreenshot() = 0;
+	virtual void TakeScreenshot() override = 0;
 
 	bool SafeRemoveScene(obs_scene_t *sceneToRemove);
 	obs_sceneitem_t *GetSceneItemById(std::string id, bool addRef = false);
@@ -473,9 +474,9 @@ public:
 	obs_sceneitem_t *GetSceneItemByName(std::string name,
 					    bool addRef = false);
 
-	void SerializeTransition(CefRefPtr<CefValue> &output);
+	void SerializeTransition(CefRefPtr<CefValue> &output) override;
 	void DeserializeTransition(CefRefPtr<CefValue> input,
-				   CefRefPtr<CefValue> &output);
+				   CefRefPtr<CefValue> &output) override;
 
 	void GetAllScenes(scenes_t &scenes)
 	{
@@ -485,7 +486,8 @@ public:
 	}
 
 public:
-	bool ShowTransitionPropertiesDialog() {
+	bool ShowTransitionPropertiesDialog() override
+	{
 		OBSSourceAutoRelease transition = GetTransitionRef();
 		SETRACE_DECREF(transition.Get());
 

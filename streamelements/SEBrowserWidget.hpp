@@ -6,7 +6,7 @@
 #include "SEApiMessageSink.hpp"
 #include "SEHostEventDispatcher.hpp"
 
-class SEVideoCompositionManager;
+class ISEVideoCompositionManager;
 
 #include <QWidget>
 #include <QPointer>
@@ -78,7 +78,7 @@ private:
 	// dispatch to.
 	//
 	std::weak_ptr<ISEApiMessageSink> m_apiServer;
-	std::weak_ptr<SEVideoCompositionManager> m_videoCompositionManager;
+	std::weak_ptr<ISEVideoCompositionManager> m_videoCompositionManager;
 
 	//
 	// Three, now: a widget announces its own visibility to its page and

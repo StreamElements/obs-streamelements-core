@@ -3965,14 +3965,15 @@ static void check_deferred_deletes_hold_services_weakly()
 
 	const Handle widgetHandles[] = {
 		//
-		// The transport, as the interface the services container
-		// publishes rather than the websocketpp server behind it.
-		// The weak-handle argument is unchanged by that: what
-		// matters is that a deferred widget delete cannot keep the
-		// service alive, whichever type names it.
+		// Two of the three name the interface the services container
+		// publishes rather than the implementation behind it: the
+		// websocketpp server, and the composition manager. The
+		// weak-handle argument is unchanged by that -- what matters
+		// is that a deferred widget delete cannot keep the service
+		// alive, whichever type names it.
 		//
 		{"ISEApiMessageSink", "m_apiServer"},
-		{"SEVideoCompositionManager", "m_videoCompositionManager"},
+		{"ISEVideoCompositionManager", "m_videoCompositionManager"},
 		{"SEHostEventDispatcher", "m_hostEventDispatcher"},
 	};
 

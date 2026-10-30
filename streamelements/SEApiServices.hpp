@@ -24,7 +24,7 @@ class ISEApiMessageSink;
 class SEHostEventDispatcher;
 class ISEMessageBus;
 class ISESharedVideoCompositionManager;
-class SEVideoCompositionManager;
+class ISEVideoCompositionManager;
 class ISEAudioCompositionManager;
 class SEOutputManager;
 class SEObsActiveSceneTracker;
@@ -143,7 +143,7 @@ struct SEApiServices {
 	std::shared_ptr<ISEMessageBus> messageBus;
 	std::shared_ptr<ISESharedVideoCompositionManager>
 		sharedVideoCompositionManager;
-	std::shared_ptr<SEVideoCompositionManager> videoCompositionManager;
+	std::shared_ptr<ISEVideoCompositionManager> videoCompositionManager;
 	std::shared_ptr<ISEAudioCompositionManager> audioCompositionManager;
 	std::shared_ptr<SEOutputManager> outputManager;
 	std::shared_ptr<SEObsActiveSceneTracker> obsActiveSceneTracker;
