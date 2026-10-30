@@ -3,7 +3,7 @@
 #include <memory>
 
 class SEBrowserWidgetManager;
-class SEObsSceneManager;
+class ISEObsSceneManager;
 class ISEMenuManager;
 class ISEBandwidthTestManager;
 class SEOutputSettingsManager;
@@ -101,7 +101,7 @@ struct SEApiServices {
 	QCefCookieManager *cefCookieManager = nullptr;
 
 	std::shared_ptr<SEBrowserWidgetManager> widgetManager;
-	std::shared_ptr<SEObsSceneManager> obsSceneManager;
+	std::shared_ptr<ISEObsSceneManager> obsSceneManager;
 	std::shared_ptr<ISEMenuManager> menuManager;
 	std::shared_ptr<ISEBandwidthTestManager> bandwidthTestManager;
 	std::shared_ptr<SEOutputSettingsManager> outputSettingsManager;

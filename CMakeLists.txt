@@ -797,6 +797,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/ISEMessageBus.hpp
 	streamelements/SEMessageBus.hpp
 	streamelements/SEControllerServer.hpp
+	streamelements/ISEObsSceneManager.hpp
 	streamelements/SEObsSceneManager.hpp
 	streamelements/ISEExternalSceneDataProviderManager.hpp
 	streamelements/SEExternalSceneDataProviderManager.hpp

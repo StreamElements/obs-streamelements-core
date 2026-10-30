@@ -8,6 +8,7 @@
 #include "SEAsyncTaskQueue.hpp"
 
 #include "cef-headers.hpp"
+#include "ISEObsSceneManager.hpp"
 
 #include <obs.h>
 #include <obs-frontend-api.h>
@@ -22,7 +23,7 @@ class SEAuxiliaryControlsBuilder;
 class SEHostEventDispatcher;
 class SEConfig;
 
-class SEObsSceneManager {
+class SEObsSceneManager : public ISEObsSceneManager {
 private:
 	SESignalHandlerData *m_signalHandlerData = nullptr;
 
@@ -72,7 +73,7 @@ public:
 			m_scenesWidgetManager->Update();
 	}
 
-	void Reset()
+	void Reset() override
 	{
 		auto out1 = CefValue::Create();
 		auto out2 = CefValue::Create();
@@ -88,117 +89,135 @@ public:
 
 	/* Sources */
 
-	void SerializeInputSourceClasses(CefRefPtr<CefValue> &output);
+	void SerializeInputSourceClasses(CefRefPtr<CefValue> &output) override;
 
-	void SerializeSourceClassProperties(CefRefPtr<CefValue> input,
-					    CefRefPtr<CefValue> &output);
+	void
+	SerializeSourceClassProperties(CefRefPtr<CefValue> input,
+				       CefRefPtr<CefValue> &output) override;
 
 	/* Scene items */
 
 	void DeserializeObsBrowserSource(CefRefPtr<CefValue> input,
-					 CefRefPtr<CefValue> &output);
+					 CefRefPtr<CefValue> &output) override;
 
-	void DeserializeObsGameCaptureSource(CefRefPtr<CefValue> input,
-					     CefRefPtr<CefValue> &output);
+	void
+	DeserializeObsGameCaptureSource(CefRefPtr<CefValue> input,
+					CefRefPtr<CefValue> &output) override;
 
-	void DeserializeObsVideoCaptureSource(CefRefPtr<CefValue> input,
-					      CefRefPtr<CefValue> &output);
+	void
+	DeserializeObsVideoCaptureSource(CefRefPtr<CefValue> input,
+					 CefRefPtr<CefValue> &output) override;
 
 	void DeserializeObsNativeSource(CefRefPtr<CefValue> input,
-					CefRefPtr<CefValue> &output);
+					CefRefPtr<CefValue> &output) override;
 
 	void DeserializeObsSceneItemGroup(CefRefPtr<CefValue> input,
-					  CefRefPtr<CefValue> &output);
+					  CefRefPtr<CefValue> &output) override;
 
 	void SerializeObsSceneItems(CefRefPtr<CefValue> input,
 				    CefRefPtr<CefValue> &output,
-				    bool serializeProperties);
+				    bool serializeProperties) override;
 
 	void RemoveObsSceneItemsByIds(CefRefPtr<CefValue> input,
-				      CefRefPtr<CefValue> &output);
-
-	void SetObsSceneItemPropertiesById(CefRefPtr<CefValue> input,
-					   CefRefPtr<CefValue> &output);
-
-	void GetObsSceneItemPropertiesById(CefRefPtr<CefValue> input,
-					   CefRefPtr<CefValue> &output);
-
-	void UngroupObsSceneItemsByGroupId(CefRefPtr<CefValue> input,
-					   CefRefPtr<CefValue> &output);
+				      CefRefPtr<CefValue> &output) override;
 
 	void
-	InvokeCurrentSceneItemDefaultActionById(CefRefPtr<CefValue> input,
-						CefRefPtr<CefValue> &output);
+	SetObsSceneItemPropertiesById(CefRefPtr<CefValue> input,
+				      CefRefPtr<CefValue> &output) override;
+
+	void
+	GetObsSceneItemPropertiesById(CefRefPtr<CefValue> input,
+				      CefRefPtr<CefValue> &output) override;
+
+	void
+	UngroupObsSceneItemsByGroupId(CefRefPtr<CefValue> input,
+				      CefRefPtr<CefValue> &output) override;
+
+	void InvokeCurrentSceneItemDefaultActionById(
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 
 	void InvokeCurrentSceneItemDefaultContextMenuById(
-		CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output);
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 
-	void DeserializeSceneItemsAuxiliaryActions(CefRefPtr<CefValue> input,
-						   CefRefPtr<CefValue> &output);
+	void DeserializeSceneItemsAuxiliaryActions(
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 
-	void SerializeSceneItemsAuxiliaryActions(CefRefPtr<CefValue> &output);
+	void SerializeSceneItemsAuxiliaryActions(
+		CefRefPtr<CefValue> &output) override;
 
 	/* Scenes */
 
 	void SerializeObsScenes(CefRefPtr<CefValue> input,
-				CefRefPtr<CefValue> &output);
+				CefRefPtr<CefValue> &output) override;
 
 	void SerializeObsCurrentScene(CefRefPtr<CefValue> input,
-				      CefRefPtr<CefValue> &output);
+				      CefRefPtr<CefValue> &output) override;
 
 	void DeserializeObsScene(CefRefPtr<CefValue> input,
-				 CefRefPtr<CefValue> &output);
+				 CefRefPtr<CefValue> &output) override;
 
 	void SetCurrentObsSceneById(CefRefPtr<CefValue> input,
-				    CefRefPtr<CefValue> &output);
+				    CefRefPtr<CefValue> &output) override;
 
 	void RemoveObsScenesByIds(CefRefPtr<CefValue> input,
-				  CefRefPtr<CefValue> &output);
+				  CefRefPtr<CefValue> &output) override;
 
 	void SetObsScenePropertiesById(CefRefPtr<CefValue> input,
-				       CefRefPtr<CefValue> &output);
+				       CefRefPtr<CefValue> &output) override;
 
-	void DeserializeScenesAuxiliaryActions(CefRefPtr<CefValue> input,
-					       CefRefPtr<CefValue> &output);
+	void
+	DeserializeScenesAuxiliaryActions(CefRefPtr<CefValue> input,
+					  CefRefPtr<CefValue> &output) override;
 
-	void SerializeScenesAuxiliaryActions(CefRefPtr<CefValue> &output);
+	void
+	SerializeScenesAuxiliaryActions(CefRefPtr<CefValue> &output) override;
 
 	/* Scene collections */
 
-	void SerializeObsSceneCollections(CefRefPtr<CefValue> &output);
+	void SerializeObsSceneCollections(CefRefPtr<CefValue> &output) override;
 
-	void SerializeObsCurrentSceneCollection(CefRefPtr<CefValue> &output);
-
-	void DeserializeObsSceneCollection(CefRefPtr<CefValue> input,
-					   CefRefPtr<CefValue> &output);
+	void SerializeObsCurrentSceneCollection(
+		CefRefPtr<CefValue> &output) override;
 
 	void
-	DeserializeObsCurrentSceneCollectionById(CefRefPtr<CefValue> input,
-						 CefRefPtr<CefValue> &output);
+	DeserializeObsSceneCollection(CefRefPtr<CefValue> input,
+				      CefRefPtr<CefValue> &output) override;
+
+	void DeserializeObsCurrentSceneCollectionById(
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 
 	/* OBS Native Dialogs */
 
 	void OpenSceneItemPropertiesById(CefRefPtr<CefValue> input,
-					 CefRefPtr<CefValue> &output);
+					 CefRefPtr<CefValue> &output) override;
 	void OpenSceneItemFiltersById(CefRefPtr<CefValue> input,
-				      CefRefPtr<CefValue> &output);
+				      CefRefPtr<CefValue> &output) override;
 	void OpenSceneItemInteractionById(CefRefPtr<CefValue> input,
-					  CefRefPtr<CefValue> &output);
-	void OpenSceneItemTransformEditorById(CefRefPtr<CefValue> input,
-					      CefRefPtr<CefValue> &output);
+					  CefRefPtr<CefValue> &output) override;
+	void
+	OpenSceneItemTransformEditorById(CefRefPtr<CefValue> input,
+					 CefRefPtr<CefValue> &output) override;
 
 	/* Viewport Coords */
 
-	void SerializeSceneItemViewportRotation(CefRefPtr<CefValue> input,
-						CefRefPtr<CefValue> &output);
-	void DeserializeSceneItemViewportRotation(CefRefPtr<CefValue> input,
-						  CefRefPtr<CefValue> &output);
+	void SerializeSceneItemViewportRotation(
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
+	void DeserializeSceneItemViewportRotation(
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 
 	void SerializeSceneItemViewportBoundingRectangle(
-		CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output);
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 
-	void DeserializeSceneItemViewportPosition(CefRefPtr<CefValue> input,
-						  CefRefPtr<CefValue> &output);
+	void DeserializeSceneItemViewportPosition(
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 
 protected:
 	void DeserializeAuxiliaryObsSceneItemProperties(

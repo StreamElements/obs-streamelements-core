@@ -4521,17 +4521,21 @@ static void check_handler_include_closure_only_goes_down()
 	// The 208 handler bodies, which dereference the services they are
 	// handed and so drag in whatever those services' headers need.
 	// Zero is the end state; part 2 of the plan is the route, and
-	// eleven of the twenty-seven are interfaces so far.
+	// thirteen of the twenty-seven are interfaces so far.
 	//
-	// 44 when part 2 was written, then 8/31, and 7/25 once
-	// SEMenuManager.hpp and SENativeObsUIControlsManager.hpp left the
-	// closure -- they were the only path to obs-hotkey.h and to six Qt
-	// headers. So it does not only sit flat and then collapse: it moves
-	// whenever an interface cuts the last path to something, which is
-	// why this is a floor as well as a ceiling.
+	// 44 when part 2 was written, then 8/31; 7/25 once SEMenuManager.hpp
+	// and SENativeObsUIControlsManager.hpp left the closure, they being
+	// the only path to obs-hotkey.h and to six Qt headers; and 7/22 once
+	// SEObsSceneManager.hpp left it, taking QAbstractItemModel, QObject
+	// and QToolButton with it. So it does not only sit flat and then
+	// collapse: it moves whenever an interface cuts the last path to
+	// something, which is why this is a floor as well as a ceiling.
+	//
+	// One dirty direct include is left, SEBrowserWidgetManager.hpp, and
+	// it accounts for all 7 obs and all 22 Qt on its own.
 	//
 	report_closure("streamelements/SEApiMessageHandler.cpp",
-		       "the API handler bodies", 7, 25);
+		       "the API handler bodies", 7, 22);
 }
 
 //

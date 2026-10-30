@@ -38,7 +38,7 @@
 #include "ISEMessageBus.hpp"
 #include "ISENativeObsUIControlsManager.hpp"
 #include "SEObsApiTransactionManager.hpp"
-#include "SEObsSceneManager.hpp"
+#include "ISEObsSceneManager.hpp"
 #include "SEOutputManager.hpp"
 #include "SEOutputSettingsManager.hpp"
 #include "ISEPopupWindowManager.hpp"
