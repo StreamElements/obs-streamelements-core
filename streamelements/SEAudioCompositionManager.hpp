@@ -1,5 +1,6 @@
 #pragma once
 #include "SECompositionServices.hpp"
+#include "ISEAudioCompositionManager.hpp"
 
 #include "SEAudioComposition.hpp"
 
@@ -21,7 +22,7 @@
 //
 class SEWebsocketApiServer;
 
-class SEAudioCompositionManager {
+class SEAudioCompositionManager : public ISEAudioCompositionManager {
 private:
 	std::shared_ptr<SEWebsocketApiServer> m_apiServer;
 
@@ -56,14 +57,14 @@ public:
 	~SEAudioCompositionManager();
 
 public:
-	void
-	DeserializeExistingCompositionProperties(CefRefPtr<CefValue> input,
-						 CefRefPtr<CefValue> &output);
+	void DeserializeExistingCompositionProperties(
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 	void DeserializeComposition(CefRefPtr<CefValue> input,
-				    CefRefPtr<CefValue> &output);
-	void SerializeAllCompositions(CefRefPtr<CefValue> &output);
+				    CefRefPtr<CefValue> &output) override;
+	void SerializeAllCompositions(CefRefPtr<CefValue> &output) override;
 	void RemoveCompositionsByIds(CefRefPtr<CefValue> input,
-				     CefRefPtr<CefValue> &output);
+				     CefRefPtr<CefValue> &output) override;
 
 	void SerializeAvailableEncoderClasses(obs_encoder_type type,
 					      CefRefPtr<CefValue> &output);

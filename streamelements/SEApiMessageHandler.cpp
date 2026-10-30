@@ -12,7 +12,6 @@
 
 #include "cef-headers.hpp"
 
-#include "SEConfig.hpp"
 //
 // The services the handler bodies reach through apiServices->, one include
 // each. They used to arrive transitively through SEGlobalStateManager.hpp:
@@ -22,18 +21,21 @@
 // lets the unused include go, and it is also the list part 2 has to replace
 // with interfaces -- so it should be visible rather than implied.
 //
-// SEConfig.hpp and SEMessageBus.hpp are the two already included above.
+// An ISE* name is one part 2 has already replaced: the body calling it
+// did not change, only the type it is calling through.
 //
-#include "SEAudioCompositionManager.hpp"
+#include "ISEAudioCompositionManager.hpp"
 #include "SEAuxiliaryControlsBuilder.hpp"
 #include "SEBackupManager.hpp"
 #include "ISEBandwidthTestManager.hpp"
 #include "SEBrowserDialogManager.hpp"
 #include "SEBrowserWidgetManager.hpp"
+#include "ISEConfig.hpp"
 #include "ISEExternalSceneDataProviderManager.hpp"
 #include "ISEHotkeyManager.hpp"
 #include "SEHttpClient.hpp"
 #include "SEMenuManager.hpp"
+#include "ISEMessageBus.hpp"
 #include "SENativeObsUIControlsManager.hpp"
 #include "SEObsApiTransactionManager.hpp"
 #include "SEObsSceneManager.hpp"
@@ -46,7 +48,7 @@
 #include "SEHostStreamingManager.hpp"
 #include "SEHostUpdateManager.hpp"
 #include "SEShellServices.hpp"
-#include "SESharedVideoCompositionManager.hpp"
+#include "ISESharedVideoCompositionManager.hpp"
 #include "SEStatePersistence.hpp"
 #include "SEStatusBarMessageManager.hpp"
 #include "SEVideoCompositionManager.hpp"
@@ -60,13 +62,13 @@
 // what the umbrella was costing.
 //
 // What is left in this file's include closure is the 27 service headers
-// below, which is part 2 of the plan: the bodies dereference concrete
+// above, which is part 2 of the plan: the bodies dereference concrete
 // service types, and a complete type is what drags in obs.h and Qt.
+// Nine of the twenty-seven are interfaces so far.
 //
 #include "SEUtils/SELogUtils.hpp"
 #include "SEUtils/SEEnvConfigUtils.hpp"
 #include "SEUtils/SEObsSourceCatalogUtils.hpp"
-#include "SEMessageBus.hpp"
 #include "SEApiClientInfo.hpp"
 
 //
@@ -687,7 +689,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 		apiServices->config->SetStartupFlags(
 			apiServices->config->GetStartupFlags() &
-			~SEConfig::STARTUP_FLAGS_ONBOARDING_MODE);
+			~ISEConfig::STARTUP_FLAGS_ONBOARDING_MODE);
 
 		//
 		// Once on-boarding is complete, we assume our state is signed-in.
@@ -699,7 +701,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		//
 		apiServices->config->SetStartupFlags(
 			apiServices->config->GetStartupFlags() |
-			SEConfig::STARTUP_FLAGS_SIGNED_IN);
+			ISEConfig::STARTUP_FLAGS_SIGNED_IN);
 
 		apiServices->menuManager->Update();
 		apiServices->statePersistence->PersistState();
@@ -1120,9 +1122,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		auto config = apiServices->config;
 
-		config->SetStartupFlags(
-			config->GetStartupFlags() |
-			SEConfig::STARTUP_FLAGS_SIGNED_IN);
+		config->SetStartupFlags(config->GetStartupFlags() |
+					ISEConfig::STARTUP_FLAGS_SIGNED_IN);
 
 		apiServices->menuManager->Update();
 		apiServices->statePersistence->PersistState(false);
@@ -1135,9 +1136,8 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	{
 		auto config = apiServices->config;
 
-		config->SetStartupFlags(
-			config->GetStartupFlags() &
-			~SEConfig::STARTUP_FLAGS_SIGNED_IN);
+		config->SetStartupFlags(config->GetStartupFlags() &
+					~ISEConfig::STARTUP_FLAGS_SIGNED_IN);
 
 		apiServices->menuManager->Update();
 		apiServices->statePersistence->PersistState(false);
@@ -1151,12 +1151,12 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		if (args->GetSize() && args->GetType(0) == VTYPE_DICTIONARY) {
 			CefRefPtr<CefValue> message = args->GetValue(0);
 
-			apiServices->messageBus
-				->NotifyAllMessageListeners(
-					SEMessageBus::DEST_ALL_LOCAL,
-					SEMessageBus::SOURCE_WEB,
-					"urn:streamelements:internal:" + target->m_target,
-					message);
+			apiServices->messageBus->NotifyAllMessageListeners(
+				ISEMessageBus::DEST_ALL_LOCAL,
+				ISEMessageBus::SOURCE_WEB,
+				"urn:streamelements:internal:" +
+					target->m_target,
+				message);
 
 			result->SetBool(true);
 		}
@@ -1176,21 +1176,17 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 				apiServices->messageBus
 					->NotifyAllLocalEventListeners(
-						SEMessageBus::
-								DEST_ALL_LOCAL &
-							~SEMessageBus::
+						ISEMessageBus::DEST_ALL_LOCAL &
+							~ISEMessageBus::
 								DEST_BROWSER_SOURCE,
-						SEMessageBus::
-							SOURCE_WEB,
+						ISEMessageBus::SOURCE_WEB,
 						sourceUrl, "hostEventReceived",
 						args->GetValue(0));
 
 				apiServices->messageBus
 					->NotifyAllExternalEventListeners(
-						SEMessageBus::
-							DEST_ALL_EXTERNAL,
-						SEMessageBus::
-							SOURCE_WEB,
+						ISEMessageBus::DEST_ALL_EXTERNAL,
+						ISEMessageBus::SOURCE_WEB,
 						sourceUrl, d->GetString("name"),
 						d->GetValue("data"));
 

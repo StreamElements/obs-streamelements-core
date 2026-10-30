@@ -9,11 +9,11 @@
 #include <shared_mutex>
 #include <set>
 
+#include "ISEConfig.hpp"
 #include "SEUtils.hpp"
 #include "SEMessageBus.hpp"
 
-class SEConfig
-{
+class SEConfig : public ISEConfig {
 private:
 	const char* CONFIG_FILE_NAME = "obs-streamelements-core.ini";
 
@@ -33,8 +33,14 @@ public:
 	}
 
 public:
-	static const uint64_t STARTUP_FLAGS_ONBOARDING_MODE = 0x0000000000000001ULL;
-	static const uint64_t STARTUP_FLAGS_SIGNED_IN       = 0x0000000000000002ULL;
+	//
+	// STARTUP_FLAGS_* moved to ISEConfig and are inherited from
+	// here. A page setting the onboarding bit and SESessionManager
+	// clearing the signed-in bit are both naming values on the
+	// contract, so that is where the values belong; every
+	// SEConfig::STARTUP_FLAGS_* spelling outside the handler still
+	// resolves through this class.
+	//
 
 private:
 	struct Private {
@@ -161,13 +167,13 @@ public:
 
 public:
 	void ReadScopedJsonFile(CefRefPtr<CefValue> input,
-				CefRefPtr<CefValue> &output);
+				CefRefPtr<CefValue> &output) override;
 	void WriteScopedJsonFile(CefRefPtr<CefValue> input,
-				 CefRefPtr<CefValue> &output);
+				 CefRefPtr<CefValue> &output) override;
 	void ReadScopedJsonFilesList(CefRefPtr<CefValue> input,
-				     CefRefPtr<CefValue> &output);
+				     CefRefPtr<CefValue> &output) override;
 	void RemoveScopedJsonFile(CefRefPtr<CefValue> input,
-				  CefRefPtr<CefValue> &output);
+				  CefRefPtr<CefValue> &output) override;
 
 public:
 	int64_t GetSEPluginVersion()
@@ -175,13 +181,13 @@ public:
 		return (int64_t)ReadUint("Header", "Version");
 	}
 
-	int GetStartupFlags()
+	int GetStartupFlags() override
 	{
 		return (int)ReadUint("Startup", "Flags",
 				     STARTUP_FLAGS_ONBOARDING_MODE);
 	}
 
-	void SetStartupFlags(int value)
+	void SetStartupFlags(int value) override
 	{
 		WriteUint("Startup", "Flags", value);
 
@@ -201,7 +207,7 @@ public:
 		SaveConfig();
 	}
 
-	std::string GetUrlOnBoarding()
+	std::string GetUrlOnBoarding() override
 	{
 		std::string result = GetCommandLineOptionValue("streamelements-onboarding-url");
 
@@ -337,4 +343,3 @@ private:
 	// Set by CloseAndPreventFurtherReopens(); see the comment there.
 	bool m_closed = false;
 };
-

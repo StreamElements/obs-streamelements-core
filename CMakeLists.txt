@@ -767,6 +767,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEUtils/SEDiagnosticsUtils.hpp
 	streamelements/SEUtils/SELogUtils.hpp
 	streamelements/SEUtils/SEStringUtils.hpp
+	streamelements/ISEConfig.hpp
 	streamelements/SEConfig.hpp
 	streamelements/SEGlobalStateManager.hpp
 	streamelements/SEMenuManager.hpp
@@ -792,6 +793,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEBugSplatCrashHandler.hpp
 	streamelements/SESentryCrashHandler.hpp
 	streamelements/SEWerRegistration.h
+	streamelements/ISEMessageBus.hpp
 	streamelements/SEMessageBus.hpp
 	streamelements/SEControllerServer.hpp
 	streamelements/SEObsSceneManager.hpp
@@ -817,7 +819,9 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEVideoCompositionManager.hpp
 	streamelements/SEVideoCompositionViewWidget.hpp
 	streamelements/SEAudioComposition.hpp
+	streamelements/ISEAudioCompositionManager.hpp
 	streamelements/SEAudioCompositionManager.hpp
+	streamelements/ISESharedVideoCompositionManager.hpp
 	streamelements/SESharedVideoCompositionManager.hpp
 	streamelements/SEOutput.hpp
 	streamelements/SEOutputManager.hpp

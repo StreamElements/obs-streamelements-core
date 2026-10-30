@@ -3,20 +3,6 @@
 #include "SEConfig.hpp"
 #include "SEGlobalStateManager.hpp"
 
-const SEMessageBus::message_destination_filter_flags_t SEMessageBus::DEST_ALL = 0xFFFFFFFFUL;
-
-const SEMessageBus::message_destination_filter_flags_t SEMessageBus::DEST_ALL_LOCAL = 0x0000FFFFUL;
-const SEMessageBus::message_destination_filter_flags_t SEMessageBus::DEST_UI = 0x00000001UL;
-const SEMessageBus::message_destination_filter_flags_t SEMessageBus::DEST_WORKER = 0x00000002UL;
-const SEMessageBus::message_destination_filter_flags_t SEMessageBus::DEST_BROWSER_SOURCE = 0x00000004UL;
-
-const SEMessageBus::message_destination_filter_flags_t SEMessageBus::DEST_ALL_EXTERNAL = 0xFFFF0000UL;
-const SEMessageBus::message_destination_filter_flags_t SEMessageBus::DEST_EXTERNAL_CONTROLLER = 0x00010000UL;
-
-const char* const SEMessageBus::SOURCE_APPLICATION = "application";
-const char* const SEMessageBus::SOURCE_WEB = "web";
-const char* const SEMessageBus::SOURCE_EXTERNAL = "external";
-
 SEMessageBus::SEMessageBus(
 	Private, std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
 	std::shared_ptr<SEConfig> config)

@@ -22,10 +22,10 @@ class SECleanupManager;
 class SEPreviewManager;
 class ISEApiMessageSink;
 class SEHostEventDispatcher;
-class SEMessageBus;
-class SESharedVideoCompositionManager;
+class ISEMessageBus;
+class ISESharedVideoCompositionManager;
 class SEVideoCompositionManager;
-class SEAudioCompositionManager;
+class ISEAudioCompositionManager;
 class SEOutputManager;
 class SEObsActiveSceneTracker;
 class SEStatePersistence;
@@ -34,7 +34,7 @@ class ISEPopupWindowManager;
 class SEBrowserDialogManager;
 class SESessionManager;
 class SEAuxiliaryControlsBuilder;
-class SEConfig;
+class ISEConfig;
 class SEPleaseWaitWindow;
 class SEObsApiTransactionManager;
 class SEShellServices;
@@ -139,11 +139,11 @@ struct SEApiServices {
 	// Local and external event listeners -- pages, background workers,
 	// browser sources and external controllers.
 	//
-	std::shared_ptr<SEMessageBus> messageBus;
-	std::shared_ptr<SESharedVideoCompositionManager>
+	std::shared_ptr<ISEMessageBus> messageBus;
+	std::shared_ptr<ISESharedVideoCompositionManager>
 		sharedVideoCompositionManager;
 	std::shared_ptr<SEVideoCompositionManager> videoCompositionManager;
-	std::shared_ptr<SEAudioCompositionManager> audioCompositionManager;
+	std::shared_ptr<ISEAudioCompositionManager> audioCompositionManager;
 	std::shared_ptr<SEOutputManager> outputManager;
 	std::shared_ptr<SEObsActiveSceneTracker> obsActiveSceneTracker;
 	std::shared_ptr<SEStatePersistence> statePersistence;
@@ -187,7 +187,7 @@ struct SEApiServices {
 	// near the end, after which it reads as a config full of defaults
 	// rather than a crash.
 	//
-	std::shared_ptr<SEConfig> config;
+	std::shared_ptr<ISEConfig> config;
 
 	//
 	// The modal "please wait" dialog, and the open-transaction registry
