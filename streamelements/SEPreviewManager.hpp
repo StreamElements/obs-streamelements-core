@@ -17,7 +17,7 @@ public:
 	virtual ~SEPreviewManager();
 
 protected:
-	virtual void OnObsExit();
+	virtual void OnObsExit() override;
 
 private:
 	QMainWindow *m_parent;

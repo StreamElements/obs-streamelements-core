@@ -36,7 +36,7 @@ public:
 	std::string DeserializeOne(CefRefPtr<CefValue> input) override;
 
 protected:
-	virtual void OnObsExit();
+	virtual void OnObsExit() override;
 
 private:
 	std::recursive_mutex m_mutex;
