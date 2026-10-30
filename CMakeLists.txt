@@ -770,6 +770,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/ISEConfig.hpp
 	streamelements/SEConfig.hpp
 	streamelements/SEGlobalStateManager.hpp
+	streamelements/ISEMenuManager.hpp
 	streamelements/SEMenuManager.hpp
 	streamelements/ISEBandwidthTestManager.hpp
 	streamelements/SEBandwidthTestManager.hpp
@@ -802,6 +803,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEExternalSceneDataProviderSlobsClient.hpp
 	streamelements/SEExternalSceneDataProvider.hpp
 	streamelements/SEHttpClient.hpp
+	streamelements/ISENativeObsUIControlsManager.hpp
 	streamelements/SENativeObsUIControlsManager.hpp
 	streamelements/SEProfilesManager.hpp
 	streamelements/SEBackupManager.hpp

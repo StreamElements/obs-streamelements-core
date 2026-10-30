@@ -4517,12 +4517,20 @@ static void check_handler_include_closure_only_goes_down()
 		       "the API handler infrastructure", 0, 0);
 
 	//
-	// The 208 handler bodies, which dereference 27 concrete services and
-	// so drag in whatever those services' headers need. Zero is the end
-	// state; part 2 of the plan is the route.
+	// The 208 handler bodies, which dereference the services they are
+	// handed and so drag in whatever those services' headers need.
+	// Zero is the end state; part 2 of the plan is the route, and
+	// eleven of the twenty-seven are interfaces so far.
+	//
+	// 44 when part 2 was written, then 8/31, and 7/25 once
+	// SEMenuManager.hpp and SENativeObsUIControlsManager.hpp left the
+	// closure -- they were the only path to obs-hotkey.h and to six Qt
+	// headers. So it does not only sit flat and then collapse: it moves
+	// whenever an interface cuts the last path to something, which is
+	// why this is a floor as well as a ceiling.
 	//
 	report_closure("streamelements/SEApiMessageHandler.cpp",
-		       "the API handler bodies", 8, 31);
+		       "the API handler bodies", 7, 25);
 }
 
 //

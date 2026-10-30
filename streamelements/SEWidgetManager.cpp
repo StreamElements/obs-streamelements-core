@@ -2,7 +2,7 @@
 
 #include "SEStatePersistence.hpp"
 #include "SEHostEventDispatcher.hpp"
-#include "SEMenuManager.hpp"
+#include "ISEMenuManager.hpp"
 #include "SEUtils.hpp"
 #include "SEGlobalStateManager.hpp"
 
@@ -381,7 +381,7 @@ bool SEWidgetManager::AddDockWidget(
 		// task that lands after teardown finds an expired pointer
 		// instead of interrogating global state.
 		//
-		std::weak_ptr<SEMenuManager> menuManager;
+		std::weak_ptr<ISEMenuManager> menuManager;
 
 		if (auto apiServices = ApiServices()) {
 			menuManager = apiServices->menuManager;

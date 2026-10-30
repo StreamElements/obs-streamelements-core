@@ -18,17 +18,25 @@
 #include <algorithm>
 
 #include "cef-headers.hpp"
+#include "ISENativeObsUIControlsManager.hpp"
 
 #include "SEApiServices.hpp"
 
 #include "SEBrowserWidget.hpp"
 
-#define SE_ENABLE_CENTRAL_WIDGET_DECORATIONS 0
+//
+// SE_ENABLE_CENTRAL_WIDGET_DECORATIONS is defined by the interface
+// above, so that the handler bodies guarded on it see the same switch
+// without including this header.
+//
 
 class SEHostStreamingManager;
 
-class SENativeObsUIControlsManager : public QObject
-{
+//
+// QObject first among the bases, which moc requires.
+//
+class SENativeObsUIControlsManager : public QObject,
+				     public ISENativeObsUIControlsManager {
 	Q_OBJECT
 
 private:
@@ -135,7 +143,7 @@ public:
 	void SetStartStreamingMode(start_streaming_mode_t mode) { m_start_streaming_mode = mode; }
 	start_streaming_mode_t GetStartStreamingMode() { return m_start_streaming_mode; }
 
-	bool GetNativeManageBroadcastButtonVisibility()
+	bool GetNativeManageBroadcastButtonVisibility() override
 	{
 		if (!m_nativeManageBroadcastButton)
 			return false;
@@ -146,24 +154,25 @@ public:
 	void SetStartStreamingAckTimeoutSeconds(int seconds) { m_startStreamingRequestAcknowledgeTimeoutSeconds = std::max<int>(seconds, 1); }
 	int GetStartStreamingAckTimeoutSeconds() { return m_startStreamingRequestAcknowledgeTimeoutSeconds; }
 
-	bool DeserializeStartStreamingUIHandlerProperties(CefRefPtr<CefValue> input);
+	bool DeserializeStartStreamingUIHandlerProperties(
+		CefRefPtr<CefValue> input) override;
 
-	void AdviseRequestStartStreamingAccepted();
-	void AdviseRequestStartStreamingRejected();
+	void AdviseRequestStartStreamingAccepted() override;
+	void AdviseRequestStartStreamingRejected() override;
 
-	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
-	bool DeserializePreviewFrame(CefRefPtr<CefValue> input);
+#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
+	bool DeserializePreviewFrame(CefRefPtr<CefValue> input) override;
 	void SerializePreviewFrame(CefRefPtr<CefValue>& output);
-	void HidePreviewFrame();
-	bool DeserializePreviewTitleBar(CefRefPtr<CefValue> input);
+	void HidePreviewFrame() override;
+	bool DeserializePreviewTitleBar(CefRefPtr<CefValue> input) override;
 	void SerializePreviewTitleBar(CefRefPtr<CefValue>& output);
-	void HidePreviewTitleBar();
-	#endif
+	void HidePreviewTitleBar() override;
+#endif
 
-	void Reset();
+	void Reset() override;
 
 public:
-	void StartStreaming();
+	void StartStreaming() override;
 
 private:
 	void SetStreamingInitialState();

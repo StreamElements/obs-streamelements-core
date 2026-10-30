@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cef-headers.hpp"
+#include "ISEMenuManager.hpp"
 
 #include "SEApiMessageHandler.hpp"
 #include "SEBrowserWidget.hpp"
@@ -23,9 +24,10 @@ class SEAuxiliaryControlsBuilder;
 class SEConfig;
 class SEHostUpdateManager;
 
-class SEMenuManager :
-	public QObject
-{
+//
+// QObject first among the bases, which moc requires.
+//
+class SEMenuManager : public QObject, public ISEMenuManager {
 	Q_OBJECT;
 
 private:
@@ -52,15 +54,15 @@ public:
 	virtual ~SEMenuManager();
 
 public:
-	void Update();
+	void Update() override;
 
-	bool DeserializeAuxiliaryMenuItems(CefRefPtr<CefValue> input);
-	void SerializeAuxiliaryMenuItems(CefRefPtr<CefValue>& output);
+	bool DeserializeAuxiliaryMenuItems(CefRefPtr<CefValue> input) override;
+	void SerializeAuxiliaryMenuItems(CefRefPtr<CefValue> &output) override;
 
-	void Reset();
+	void Reset() override;
 
-	void SetShowBuiltInMenuItems(bool show);
-	bool GetShowBuiltInMenuItems();
+	void SetShowBuiltInMenuItems(bool show) override;
+	bool GetShowBuiltInMenuItems() override;
 
 protected:
 	QMainWindow* mainWindow() { return m_mainWindow; }

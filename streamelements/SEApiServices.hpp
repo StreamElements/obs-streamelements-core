@@ -4,7 +4,7 @@
 
 class SEBrowserWidgetManager;
 class SEObsSceneManager;
-class SEMenuManager;
+class ISEMenuManager;
 class ISEBandwidthTestManager;
 class SEOutputSettingsManager;
 class ISEWorkerManager;
@@ -14,7 +14,7 @@ class SEAnalyticsEventsManager;
 class ISEExternalSceneDataProviderManager;
 class SEHttpClient;
 class SELocalFilesystemHttpServer;
-class SENativeObsUIControlsManager;
+class ISENativeObsUIControlsManager;
 class SEProfilesManager;
 class SEBackupManager;
 class SERazerWyvrnManager;
@@ -102,7 +102,7 @@ struct SEApiServices {
 
 	std::shared_ptr<SEBrowserWidgetManager> widgetManager;
 	std::shared_ptr<SEObsSceneManager> obsSceneManager;
-	std::shared_ptr<SEMenuManager> menuManager;
+	std::shared_ptr<ISEMenuManager> menuManager;
 	std::shared_ptr<ISEBandwidthTestManager> bandwidthTestManager;
 	std::shared_ptr<SEOutputSettingsManager> outputSettingsManager;
 	std::shared_ptr<ISEWorkerManager> workerManager;
@@ -113,7 +113,8 @@ struct SEApiServices {
 		externalSceneDataProviderManager;
 	std::shared_ptr<SEHttpClient> httpClient;
 	std::shared_ptr<SELocalFilesystemHttpServer> localFilesystemHttpServer;
-	std::shared_ptr<SENativeObsUIControlsManager> nativeObsUIControlsManager;
+	std::shared_ptr<ISENativeObsUIControlsManager>
+		nativeObsUIControlsManager;
 	std::shared_ptr<SEProfilesManager> profilesManager;
 	std::shared_ptr<SEBackupManager> backupManager;
 #ifdef SE_ENABLE_WYVRN
