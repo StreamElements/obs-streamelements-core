@@ -12,7 +12,13 @@
 // handler's guard would have kept compiling them out by accident and
 // gone on doing so if anyone ever set this to 1.
 //
+// It is guarded so a build can override it -- tests/ compiles this
+// translation unit twice, once with the feature off as it ships and once
+// with it on, which is the only coverage the four guarded handler bodies
+// can have while the default is 0.
+#ifndef SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
 #define SE_ENABLE_CENTRAL_WIDGET_DECORATIONS 0
+#endif
 
 //
 // What the host API needs from OBS's own UI controls: the preview frame and

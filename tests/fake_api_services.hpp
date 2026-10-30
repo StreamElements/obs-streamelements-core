@@ -53,6 +53,10 @@
 #include "streamelements/ISEWorkerManager.hpp"
 #include "streamelements/SEDockBrowserWidgetInfo.hpp"
 
+#ifdef SE_ENABLE_WYVRN
+#include "streamelements/SERazerWyvrnManager.hpp"
+#endif
+
 #include <cstdint>
 #include <future>
 #include <map>

@@ -454,6 +454,17 @@ FakeApiServices::FakeApiServices()
 		nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
 	services->statusBarMessageManager =
 		std::make_shared<SEStatusBarMessageManager>(nullptr);
+
+#ifdef SE_ENABLE_WYVRN
+	//
+	// Only present in a WYVRN build, and the handler bodies treat null as
+	// "not available yet" rather than as an error -- the real manager
+	// appears a few seconds into the session, after a 3.3-second SDK
+	// init. A test that wants the absent case clears this.
+	//
+	services->razerWyvrnManager =
+		std::make_shared<SERazerWyvrnManager>(nullptr, nullptr);
+#endif
 }
 
 FakeApiServices::~FakeApiServices() {}

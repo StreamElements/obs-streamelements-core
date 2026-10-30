@@ -317,6 +317,26 @@ se_add_test(test_source_invariants
 # supplies the 51 methods plus 11 free functions belonging to the fifteen
 # services the container still carries concretely. Both record into one
 # journal the tests program and read.
+# The same translation unit again, with both optional features ON -- the only
+# coverage the seven guarded handler bodies can have, since the shipping value
+# of both switches compiles them out. A target of its own because the switches
+# change what the file contains, which one binary cannot hold twice.
+#
+# SE_ENABLE_WYVRN brings SERazerWyvrnManager onto the container, so that one
+# needs a link seam of its own.
+se_add_test(test_api_handler_optional
+  test_api_handler_optional.cpp
+  fake_api_services.cpp
+  stub_concrete_services.cpp
+  stub_razer_wyvrn.cpp
+  ${SE_API_HANDLER_SOURCES}
+  "${REPO_ROOT}/streamelements/SEApiMessageHandler.cpp"
+)
+target_compile_definitions(test_api_handler_optional PRIVATE
+  SE_ENABLE_WYVRN
+  SE_ENABLE_CENTRAL_WIDGET_DECORATIONS=1
+)
+
 # test_api_handler_contract.cpp is part of the SAME executable rather than
 # a target of its own: compiling SEApiMessageHandler.cpp is most of this
 # target's build time, and the two files are two kinds of test over it --
