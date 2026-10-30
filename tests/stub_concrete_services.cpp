@@ -26,6 +26,13 @@
 // is a pointer or a shared_ptr to a type that is only forward-declared at
 // the call site, which is why FakeApiServices can pass null for all of them.
 //
+// One warning comes out of this on clang and it is an artefact of the trick
+// rather than a defect: -Wunused-private-field on
+// SEStatusBarMessageManager::m_mainWindow. The production .cpp uses it; this
+// build does not compile that .cpp, so from here the field has no reader.
+// Harmless -- tests/ does not use -Werror -- and emphatically not something
+// to "fix" in the production header.
+//
 
 #include "fake_api_services.hpp"
 

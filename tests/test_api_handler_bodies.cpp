@@ -157,27 +157,37 @@ std::vector<std::string> registered_names()
 // --- the surface ------------------------------------------------------
 
 //
-// 202 in this build, and the arithmetic is worth writing down because the
-// number is build-config-specific and has been misreported as a method count
-// more than once:
+// The arithmetic is worth writing down, because the number is
+// build-config-specific, is PLATFORM-specific too, and has been misreported
+// as a method count more than once:
 //
 //     208   API_HANDLER_BEGIN blocks in the file
 //      -4   behind SE_ENABLE_CENTRAL_WIDGET_DECORATIONS, which is 0
 //      -3   behind SE_ENABLE_WYVRN, undefined here
+//      -1   crashProgramFastFail, behind WIN32, on every other platform
 //      +1   batchInvokeSeries, the one hand-written registration
 //     ---
-//     202
+//     202   on Windows, 201 elsewhere
 //
-// WIN32 is defined in this build, so the one block behind it counts. The
-// live figure differs again -- window.host has 210 KEYS, which is the
-// registered methods plus four properties.
+// The platform term is not hypothetical: hard-coding 202 passed on Windows
+// and failed on macOS the first time this ran there, which is the asymmetry
+// this series has now been caught by four times.
+//
+// The live figure differs again -- window.host has 210 KEYS, which is the
+// registered methods plus four properties, with SE_ENABLE_WYVRN on.
 //
 void the_surface_is_exactly_what_the_arithmetic_says()
 {
 	std::vector<std::string> names = registered_names();
 
-	check_eq(names.size(), 202,
-		 "surface: 208 blocks less the seven compiled out, plus the "
+#ifdef WIN32
+	const std::size_t expected = 202;
+#else
+	const std::size_t expected = 201;
+#endif
+
+	check_eq(names.size(), expected,
+		 "surface: 208 blocks less the ones compiled out, plus the "
 		 "hand-written batchInvokeSeries");
 
 	//
@@ -228,6 +238,18 @@ void every_handler_answers_exactly_once()
 
 	std::vector<std::string> names = registered_names();
 
+	//
+	// Counted rather than assumed: crashProgramFastFail is behind WIN32,
+	// so on every other platform only three of the four are there and
+	// `names.size() - skip.size()` would be one too few.
+	//
+	std::size_t skipped = 0;
+
+	for (const std::string &name : skip) {
+		if (std::find(names.begin(), names.end(), name) != names.end())
+			++skipped;
+	}
+
 	std::size_t swept = 0;
 	std::size_t silent = 0;
 
@@ -259,8 +281,8 @@ void every_handler_answers_exactly_once()
 		++swept;
 	}
 
-	check_eq(swept, names.size() - skip.size(),
-		 "sweep: every registered method bar the four skipped is "
+	check_eq(swept, names.size() - skipped,
+		 "sweep: every registered method bar the skipped ones is "
 		 "exercised");
 
 	check_eq(silent, 0,
