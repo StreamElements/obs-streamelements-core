@@ -123,6 +123,16 @@ public:
 	void SetJson(const std::string &qualified, const std::string &json);
 	void SetValue(const std::string &qualified, CefRefPtr<CefValue> value);
 	void SetBool(const std::string &qualified, bool value);
+
+	//
+	// A different answer each call, front first, falling back to SetBool
+	// once the sequence runs out. Two bodies drain a service in a
+	// `while (service->Method())` loop, and a single programmed answer
+	// can only make that loop run zero times or for ever -- so the loop
+	// itself was unreachable until this existed.
+	//
+	void SetBools(const std::string &qualified,
+		      const std::vector<bool> &values);
 	void SetString(const std::string &qualified, const std::string &value);
 	void SetInt(const std::string &qualified, int64_t value);
 	void SetDict(const std::string &qualified,
@@ -134,11 +144,24 @@ public:
 	void SetComposition(const std::string &qualified,
 			    std::shared_ptr<ISEVideoComposition> value);
 
+	//
+	// The promise showNonModalDialog parks its detached thread on. A
+	// test that programs one decides WHEN the page's call completes,
+	// which is the only way to tell "has not answered yet" from "never
+	// answers".
+	//
+	void
+	SetPromise(const std::string &qualified,
+		   std::shared_ptr<std::promise<CefRefPtr<CefValue>>> value);
+
 	void Reset();
 
 public:
 	std::map<std::string, CefRefPtr<CefValue>> values;
 	std::map<std::string, bool> bools;
+	std::map<std::string, std::vector<bool>> boolSequences;
+	std::map<std::string, std::shared_ptr<std::promise<CefRefPtr<CefValue>>>>
+		promises;
 	std::map<std::string, std::string> strings;
 	std::map<std::string, int64_t> ints;
 	std::map<std::string, CefRefPtr<CefDictionaryValue>> dicts;

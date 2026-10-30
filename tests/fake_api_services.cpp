@@ -110,6 +110,19 @@ void Journal::SetBool(const std::string &qualified, bool value)
 	bools[qualified] = value;
 }
 
+void Journal::SetBools(const std::string &qualified,
+		       const std::vector<bool> &values)
+{
+	boolSequences[qualified] = values;
+}
+
+void Journal::SetPromise(
+	const std::string &qualified,
+	std::shared_ptr<std::promise<CefRefPtr<CefValue>>> value)
+{
+	promises[qualified] = value;
+}
+
 void Journal::SetString(const std::string &qualified, const std::string &value)
 {
 	strings[qualified] = value;
@@ -155,6 +168,8 @@ void Journal::Reset()
 	stringLists.clear();
 	dockInfos.clear();
 	compositions.clear();
+	boolSequences.clear();
+	promises.clear();
 }
 
 // --- argument rendering -----------------------------------------------
@@ -253,7 +268,24 @@ void FillDockInfo(const std::string &service, const std::string &method,
 
 bool BoolFor(const std::string &service, const std::string &method)
 {
-	auto it = journal().bools.find(service + "::" + method);
+	const std::string qualified = service + "::" + method;
+
+	//
+	// A programmed sequence answers first, one entry per call, and the
+	// single answer takes over once it is spent. That is what lets a
+	// drain loop be asked to run a known number of times.
+	//
+	auto seq = journal().boolSequences.find(qualified);
+
+	if (seq != journal().boolSequences.end() && !seq->second.empty()) {
+		const bool value = seq->second.front();
+
+		seq->second.erase(seq->second.begin());
+
+		return value;
+	}
+
+	auto it = journal().bools.find(qualified);
 
 	return it != journal().bools.end() ? it->second : false;
 }
@@ -311,6 +343,11 @@ std::shared_ptr<ISEVideoComposition> CompositionFor(const std::string &service,
 std::shared_ptr<std::promise<CefRefPtr<CefValue>>>
 PromiseFor(const std::string &service, const std::string &method)
 {
+	auto programmed = journal().promises.find(service + "::" + method);
+
+	if (programmed != journal().promises.end())
+		return programmed->second;
+
 	//
 	// showNonModalDialog parks a detached thread on the future of this,
 	// so an unprogrammed call must still answer something satisfiable --

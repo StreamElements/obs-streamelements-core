@@ -27,12 +27,14 @@
 
 #include <cstdarg>
 #include <cstdio>
+#include <chrono>
 #include <functional>
 #include <future>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 //
@@ -188,6 +190,15 @@ struct SentMessage {
 	CefRefPtr<CefListValue> args; // clientMessage only
 };
 
+//
+// Every message the plug-in would have put on the websocket.
+//
+// Reading `sent` directly is for the synchronous tests, where the handler
+// has returned before anything looks at it. One handler --
+// showNonModalDialog, the file's only API_HANDLER_END_ASYNC -- completes on
+// a detached thread of its own, so the pushes take a lock and wait_for()
+// below is the thread-safe way to observe them.
+//
 class RecordingSink : public ISEApiMessageSink {
 public:
 	std::vector<SentMessage> sent;
@@ -197,6 +208,8 @@ public:
 	bool DispatchJSEvent(std::string source, std::string event,
 			     std::string json) override
 	{
+		std::lock_guard<std::mutex> guard(m_mutex);
+
 		sent.push_back({"jsEventGlobal", source, "", "", event, json,
 				nullptr});
 		return true;
@@ -206,6 +219,8 @@ public:
 			     std::shared_ptr<SEApiClientInfo> clientInfo,
 			     std::string event, std::string json) override
 	{
+		std::lock_guard<std::mutex> guard(m_mutex);
+
 		sent.push_back({"jsEvent", source,
 				clientInfo ? clientInfo->m_target : "",
 				clientInfo ? clientInfo->m_unique_id : "",
@@ -217,6 +232,8 @@ public:
 				   std::shared_ptr<SEApiClientInfo> clientInfo,
 				   CefRefPtr<CefProcessMessage> msg) override
 	{
+		std::lock_guard<std::mutex> guard(m_mutex);
+
 		sent.push_back({"clientMessage", source,
 				clientInfo ? clientInfo->m_target : "",
 				clientInfo ? clientInfo->m_unique_id : "",
@@ -237,6 +254,8 @@ public:
 
 	const SentMessage *find(const std::string &name) const
 	{
+		std::lock_guard<std::mutex> guard(m_mutex);
+
 		for (const SentMessage &m : sent) {
 			if (m.name == name)
 				return &m;
@@ -247,6 +266,49 @@ public:
 
 	std::size_t count(const std::string &name) const
 	{
+		std::lock_guard<std::mutex> guard(m_mutex);
+
+		return count_locked(name);
+	}
+
+	//
+	// Wait until `want` messages of this name have arrived, and COPY the
+	// last one out -- a pointer into a vector another thread may still
+	// grow is not something to hand back. Answers false on timeout,
+	// which is itself a real outcome: a page promise that never settles
+	// is what this exists to catch.
+	//
+	bool wait_for(const std::string &name, std::size_t want, int timeoutMs,
+		      SentMessage *out = nullptr) const
+	{
+		for (int waited = 0;; waited += 5) {
+			{
+				std::lock_guard<std::mutex> guard(m_mutex);
+
+				if (count_locked(name) >= want) {
+					if (out) {
+						for (const SentMessage &m :
+						     sent) {
+							if (m.name == name)
+								*out = m;
+						}
+					}
+
+					return true;
+				}
+			}
+
+			if (waited >= timeoutMs)
+				return false;
+
+			std::this_thread::sleep_for(
+				std::chrono::milliseconds(5));
+		}
+	}
+
+private:
+	std::size_t count_locked(const std::string &name) const
+	{
 		std::size_t n = 0;
 
 		for (const SentMessage &m : sent) {
@@ -256,6 +318,8 @@ public:
 
 		return n;
 	}
+
+	mutable std::mutex m_mutex;
 };
 
 // --- message builders -------------------------------------------------

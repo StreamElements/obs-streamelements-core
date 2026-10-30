@@ -1037,6 +1037,236 @@ void an_async_dialog_handler_with_no_arguments_never_answers()
 		 "showNonModalDialog: and the dialog manager is never asked");
 }
 
+//
+// The two bodies that drain rather than call once.
+//
+// `while (widgetManager->DestroyCurrentCentralBrowserWidget()) {}` pops
+// central widgets until there are none left, and until the journal could
+// answer differently per call this loop had never executed at all: one
+// programmed answer makes it run zero times or for ever, and zero is the
+// default. So the drain was reached by no test and by no live probe either
+// -- a probe can only see that the widget is gone, not how many were.
+//
+void the_central_widget_is_drained_until_there_is_none_left()
+{
+	Fixture f;
+
+	f.journal().SetBools(
+		"ISEBrowserWidgetManager::DestroyCurrentCentralBrowserWidget",
+		{true, true, false});
+
+	check_eq(f.Call("hideCentralWidget"), "true",
+		 "hideCentralWidget: answers true once the drain is done");
+
+	const std::vector<std::string> wanted = {
+		"ISEBrowserWidgetManager::DestroyCurrentCentralBrowserWidget",
+		"ISEBrowserWidgetManager::DestroyCurrentCentralBrowserWidget",
+		"ISEBrowserWidgetManager::DestroyCurrentCentralBrowserWidget",
+		"ISEMenuManager::Update",
+		"SEStatePersistence::PersistState",
+	};
+
+	check(f.journal().Sequence() == wanted,
+	      "hideCentralWidget: three calls to destroy -- two that removed "
+	      "a widget and the one that said there were no more -- and only "
+	      "then the menu rebuild and the layout save");
+}
+
+//
+// showCentralWidget drains the same way before pushing, so a page that
+// replaces the central widget twice does not stack them. The push carries
+// the url and the optional on-load script, which is passed as an empty
+// string rather than omitted when the page leaves it out.
+//
+void showing_a_central_widget_drains_before_it_pushes()
+{
+	Fixture f;
+
+	f.journal().SetBools(
+		"ISEBrowserWidgetManager::DestroyCurrentCentralBrowserWidget",
+		{true, false});
+
+	check_eq(f.Call("showCentralWidget", {"{\"url\":\"https://a/\"}"}),
+		 "true", "showCentralWidget: answers true");
+
+	const std::vector<std::string> wanted = {
+		"ISEBrowserWidgetManager::DestroyCurrentCentralBrowserWidget",
+		"ISEBrowserWidgetManager::DestroyCurrentCentralBrowserWidget",
+		"ISEBrowserWidgetManager::PushCentralBrowserWidget",
+		"ISEMenuManager::Update",
+		"SEStatePersistence::PersistState",
+	};
+
+	check(f.journal().Sequence() == wanted,
+	      "showCentralWidget: drained first, pushed second");
+}
+
+//
+// The file's one asynchronous handler, run the way a page runs it.
+//
+// showNonModalDialog hands the dialog manager a promise and parks a
+// detached thread on its future; the page's callback fires when the dialog
+// closes, which can be minutes later. The sweep cannot exercise this -- it
+// skips the name, because with no arguments nothing ever completes it --
+// and a CDP probe cannot tell "still open" from "never answers". Driving
+// the promise from the test is the only way to assert both halves.
+//
+void an_async_dialog_answers_only_when_its_dialog_closes()
+{
+	Fixture f;
+
+	auto promise = std::make_shared<std::promise<CefRefPtr<CefValue>>>();
+
+	f.journal().SetPromise(
+		"SEBrowserDialogManager::DeserializeNonModalDialog", promise);
+
+	check_eq(f.Call("showNonModalDialog",
+			{"{\"id\":\"d1\",\"url\":\"https://a/\"}"}),
+		 "<no reply>",
+		 "showNonModalDialog: nothing is answered while the dialog is "
+		 "still open");
+
+	check_eq(f.journal().Count(
+			 "SEBrowserDialogManager::DeserializeNonModalDialog"),
+		 1, "showNonModalDialog: the manager is asked exactly once");
+
+	check_eq(f.journal().Arg(
+			 "SEBrowserDialogManager::DeserializeNonModalDialog"),
+		 "{\"id\":\"d1\",\"url\":\"https://a/\"}",
+		 "showNonModalDialog: the page's dialog description arrives "
+		 "intact");
+
+	//
+	// The dialog closes with a result. The completion runs on the body's
+	// own detached thread, which is why the sink takes a lock and this
+	// waits rather than looking.
+	//
+	CefRefPtr<CefValue> answer =
+		CefParseJSON("{\"ok\":1}", JSON_PARSER_RFC);
+
+	promise->set_value(answer);
+
+	SentMessage reply;
+
+	check(f.sink->wait_for("executeCallback", 1, 5000, &reply),
+	      "showNonModalDialog: the page's callback fires once the dialog "
+	      "closes");
+
+	if (!reply.args || reply.args->GetSize() < 2)
+		return;
+
+	check_eq(reply.args->GetString(1).ToString(), "{\"ok\":1}",
+		 "showNonModalDialog: and it carries the dialog's own result");
+}
+
+//
+// batchInvokeSeries, the one hand-written registration -- every other name
+// comes from the API_HANDLER_BEGIN macro -- and the only handler that
+// dispatches other handlers.
+//
+// What it is for is the transaction: OBS saves its configuration on a
+// timer, and a page making twenty calls in a row would otherwise provoke
+// twenty saves. So the batch opens a defer-save transaction, runs the calls
+// in series, and closes it. The order is the assertion, because a
+// transaction that outlives the batch leaves OBS not saving at all.
+//
+void a_batch_runs_its_calls_inside_one_defer_save_transaction()
+{
+	Fixture f;
+
+	f.journal().SetInt("ISEConfig::GetStartupFlags", 7);
+	f.journal().SetBool("ISEMenuManager::GetShowBuiltInMenuItems", true);
+
+	const std::string batch =
+		"[{\"invoke\":\"getStartupFlags\",\"invokeArgs\":[]},"
+		"{\"invoke\":\"getShowBuiltInMenuItems\",\"invokeArgs\":[]}]";
+
+	check_eq(f.Call("batchInvokeSeries", {batch}), "[7,true]",
+		 "batchInvokeSeries: the results come back as a list, in the "
+		 "order they were asked for");
+
+	const std::vector<std::string> wanted = {
+		"SEObsApiTransactionManager::BeginDeferSave",
+		"ISEConfig::GetStartupFlags",
+		"ISEMenuManager::GetShowBuiltInMenuItems",
+		"SEObsApiTransactionManager::EndDeferSave",
+	};
+
+	check(f.journal().Sequence() == wanted,
+	      "batchInvokeSeries: the defer-save transaction opens before the "
+	      "first call and closes after the last");
+}
+
+//
+// And the failure path, which matters more than the happy one: a batch that
+// stops early must still close its transaction. Anything else leaves OBS
+// deferring saves for the rest of the session.
+//
+// Three ways to stop early, all of them page-supplied: an element that is
+// not a dictionary, one missing `invoke`, and one whose `invokeArgs` is not
+// a list. The batch abandons the rest of the queue without saying so -- the
+// page gets the results it did get, with no error -- which is worth knowing
+// and is written down nowhere else.
+//
+void a_batch_that_stops_early_still_closes_its_transaction()
+{
+	const char *const malformed[] = {
+		"[{\"invoke\":\"getStartupFlags\",\"invokeArgs\":[]},7]",
+		"[{\"invoke\":\"getStartupFlags\",\"invokeArgs\":[]},"
+		"{\"invokeArgs\":[]}]",
+		"[{\"invoke\":\"getStartupFlags\",\"invokeArgs\":[]},"
+		"{\"invoke\":\"getStartupFlags\",\"invokeArgs\":7}]",
+	};
+
+	for (const char *const batch : malformed) {
+		Fixture f;
+
+		f.journal().SetInt("ISEConfig::GetStartupFlags", 7);
+
+		check_eq(f.Call("batchInvokeSeries", {batch}), "[7]",
+			 std::string("batchInvokeSeries: the calls before the "
+				     "bad entry are answered and the rest "
+				     "dropped silently -- ") +
+				 batch);
+
+		const std::vector<std::string> wanted = {
+			"SEObsApiTransactionManager::BeginDeferSave",
+			"ISEConfig::GetStartupFlags",
+			"SEObsApiTransactionManager::EndDeferSave",
+		};
+
+		check(f.journal().Sequence() == wanted,
+		      std::string(
+			      "batchInvokeSeries: the transaction is "
+			      "closed even when the batch stops early -- ") +
+			      batch);
+	}
+}
+
+//
+// A batch refused outright opens no transaction at all, which is the other
+// half of the same invariant: EndDeferSave is reached on every path that
+// reached BeginDeferSave, and on no path that did not.
+//
+void a_refused_batch_opens_no_transaction()
+{
+	for (const char *const args : {"", "\"not a list\""}) {
+		Fixture f;
+
+		std::vector<std::string> call;
+
+		if (*args)
+			call.push_back(args);
+
+		check_eq(f.Call("batchInvokeSeries", call), "null",
+			 "batchInvokeSeries: a batch that is not a list is "
+			 "refused with null");
+
+		check_eq(f.journal().calls.size(), 0,
+			 "batchInvokeSeries: and nothing is deferred");
+	}
+}
+
 // --- the run ----------------------------------------------------------
 
 const Test tests[] = {
@@ -1083,6 +1313,18 @@ const Test tests[] = {
 	 a_body_with_no_arguments_still_passes_a_null_value},
 	{"an async dialog handler with no arguments never answers",
 	 an_async_dialog_handler_with_no_arguments_never_answers},
+	{"the central widget is drained until there is none left",
+	 the_central_widget_is_drained_until_there_is_none_left},
+	{"showing a central widget drains before it pushes",
+	 showing_a_central_widget_drains_before_it_pushes},
+	{"an async dialog answers only when its dialog closes",
+	 an_async_dialog_answers_only_when_its_dialog_closes},
+	{"a batch runs its calls inside one defer-save transaction",
+	 a_batch_runs_its_calls_inside_one_defer_save_transaction},
+	{"a batch that stops early still closes its transaction",
+	 a_batch_that_stops_early_still_closes_its_transaction},
+	{"a refused batch opens no transaction",
+	 a_refused_batch_opens_no_transaction},
 };
 
 //
