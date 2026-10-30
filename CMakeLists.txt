@@ -722,6 +722,8 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEUtils.hpp
 	streamelements/SEAsyncTaskQueue.hpp
 	streamelements/SEBrowserWidget.hpp
+	streamelements/SEDockBrowserWidgetInfo.hpp
+	streamelements/ISEBrowserWidgetManager.hpp
 	streamelements/SEBrowserWidgetManager.hpp
 	streamelements/SEBandwidthTestClient.hpp
 	streamelements/SEObsBandwidthTestClient.hpp

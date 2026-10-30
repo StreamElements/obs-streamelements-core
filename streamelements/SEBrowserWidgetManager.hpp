@@ -2,16 +2,15 @@
 
 #include "SEWidgetManager.hpp"
 #include "SEBrowserWidget.hpp"
+#include "ISEBrowserWidgetManager.hpp"
 
 #include <map>
 #include <string>
 
 #include <QPointer>
 
-class SEBrowserWidgetManager
-	:
-	protected SEWidgetManager
-{
+class SEBrowserWidgetManager : protected SEWidgetManager,
+			       public ISEBrowserWidgetManager {
 public:
 	class DockBrowserWidgetInfo :
 		public DockWidgetInfo
@@ -57,19 +56,19 @@ public:
 	/********************/
 
 	void PushCentralBrowserWidget(
-		const char* const url,
-		const char* const executeJavaScriptCodeOnLoad);
+		const char *const url,
+		const char *const executeJavaScriptCodeOnLoad) override;
 
-	bool DestroyCurrentCentralBrowserWidget();
+	bool DestroyCurrentCentralBrowserWidget() override;
 
-	bool HasCentralBrowserWidget() { return HasCentralWidget(); }
-
+	bool HasCentralBrowserWidget() override { return HasCentralWidget(); }
 
 	/********************/
 	/* Dockable widgets */
 	/********************/
 
-	std::string AddDockBrowserWidget(CefRefPtr<CefValue> input, std::string requestId = "");
+	std::string AddDockBrowserWidget(CefRefPtr<CefValue> input,
+					 std::string requestId = "") override;
 
 	bool AddDockBrowserWidget(
 		const char* const id,
@@ -89,7 +88,7 @@ public:
 	virtual bool SetWidgetDimensionsById(const char* const id, const int width, const int height) override;
 	virtual bool SetWidgetPositionById(const char* const id, const int left, const int top) override;
 	virtual bool SetWidgetUrlById(const char *const id,
-				      const char *const url);
+				      const char *const url) override;
 
 	virtual bool SetWidgetTitleById(const char* const id,
 		const char* const title) override
@@ -97,31 +96,43 @@ public:
 		return SEWidgetManager::SetWidgetTitleById(id, title);
 	}
 
-	virtual bool ShowDockWidgetById(const char *const id)
+	virtual bool ShowDockWidgetById(const char *const id) override
 	{
 		return SEWidgetManager::ShowWidgetById(id);
 	}
 
-	virtual bool HideDockWidgetById(const char *const id)
+	virtual bool HideDockWidgetById(const char *const id) override
 	{
 		return SEWidgetManager::HideWidgetById(id);
 	}
 
 	virtual bool RemoveDockWidget(const char* const id) override;
 
-	void RemoveAllDockWidgets();
+	void RemoveAllDockWidgets() override;
 
-	void GetDockBrowserWidgetIdentifiers(std::vector<std::string>& result);
+	void GetDockBrowserWidgetIdentifiers(
+		std::vector<std::string> &result) override;
 
 	DockBrowserWidgetInfo* GetDockBrowserWidgetInfo(const char* const id);
 
-	QDockWidget* GetDockWidget(const char* const id) {
+	//
+	// ISEBrowserWidgetManager's view of the getter above: a value, so
+	// that a contract can name it -- DockBrowserWidgetInfo is nested
+	// in this class and a nested class cannot be forward-declared --
+	// and so that a caller cannot forget to free it. The pointer form
+	// stays for this manager's own use.
+	//
+	bool GetDockBrowserWidgetInfo(const char *const id,
+				      SEDockBrowserWidgetInfo &output) override;
+
+	QDockWidget *GetDockWidget(const char *const id) override
+	{
 		std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
 		return SEWidgetManager::GetDockWidget(id);
 	}
 
-	bool HasDockWidget(const char *const id)
+	bool HasDockWidget(const char *const id) override
 	{
 		std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
@@ -135,11 +146,11 @@ public:
 	void DeserializeDockingWidgets(std::string& input) { SEWidgetManager::DeserializeDockingWidgets(input); }
 
 	bool GroupDockingWidgetPairByIds(const char *firstId,
-					 const char *secondId);
+					 const char *secondId) override;
 
 	bool InsertDockingWidgetRelativeToId(const char *firstId,
-					const char *secondId,
-					const bool isBefore);
+					     const char *secondId,
+					     const bool isBefore) override;
 
 	/********************/
 	/* Notification bar */
@@ -150,12 +161,13 @@ public:
 		const int height,
 		const char* const executeJavaScriptCodeOnLoad);
 
-	void HideNotificationBar();
+	void HideNotificationBar() override;
 
-	bool HasNotificationBar();
+	bool HasNotificationBar() override;
 
 	virtual void SerializeNotificationBar(CefRefPtr<CefValue>& output);
-	virtual void DeserializeNotificationBar(CefRefPtr<CefValue>& input);
+	virtual void
+	DeserializeNotificationBar(CefRefPtr<CefValue> &input) override;
 
 	void SerializeNotificationBar(std::string& output);
 	void DeserializeNotificationBar(std::string& input);
@@ -164,14 +176,9 @@ public:
 	/* Critical section */
 	/********************/
 
-	void EnterCriticalSection() {
-		m_mutex.lock();
-	}
+	void EnterCriticalSection() override { m_mutex.lock(); }
 
-	void LeaveCriticalSection() {
-		m_mutex.unlock();
-	}
-
+	void LeaveCriticalSection() override { m_mutex.unlock(); }
 
 private:
 	// QPointer for the same reason as m_dockWidgets (CORE-786): each browser

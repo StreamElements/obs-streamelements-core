@@ -1,7 +1,7 @@
 #include "SEAuxiliaryControlsBuilder.hpp"
 
 #include "SEAnalyticsEventsManager.hpp"
-#include "SEBrowserWidgetManager.hpp"
+#include "ISEBrowserWidgetManager.hpp"
 #include "SEMenuManager.hpp"
 #include "SERemoteIconLoader.hpp"
 
@@ -200,20 +200,19 @@ bool SEAuxiliaryControlsBuilder::DeserializeDocksMenu(QMenu &menu)
 
 	widgetManager->GetDockBrowserWidgetIdentifiers(widgetIds);
 
-	std::vector<SEBrowserWidgetManager::DockBrowserWidgetInfo *> widgets;
+	std::vector<SEDockBrowserWidgetInfo> widgets;
 
 	for (auto id : widgetIds) {
-		auto info = widgetManager->GetDockBrowserWidgetInfo(id.c_str());
+		SEDockBrowserWidgetInfo info;
 
-		if (info) {
+		if (widgetManager->GetDockBrowserWidgetInfo(id.c_str(), info))
 			widgets.push_back(info);
-		}
 	}
 
 	std::sort(widgets.begin(), widgets.end(),
-		  [](SEBrowserWidgetManager::DockBrowserWidgetInfo *a,
-		     SEBrowserWidgetManager::DockBrowserWidgetInfo *b) {
-			  return a->m_title < b->m_title;
+		  [](const SEDockBrowserWidgetInfo &a,
+		     const SEDockBrowserWidgetInfo &b) {
+			  return a.m_title < b.m_title;
 		  });
 
 	//
@@ -222,14 +221,13 @@ bool SEAuxiliaryControlsBuilder::DeserializeDocksMenu(QMenu &menu)
 	//
 	std::weak_ptr<SEApiServices> weakServices = m_services;
 
-	for (auto widget : widgets) {
-		// widget->m_visible
+	for (const auto &widget : widgets) {
 		QAction *widget_action =
-			new QAction(QString(widget->m_title.c_str()));
+			new QAction(QString(widget.m_title.c_str()));
 		menu.addAction(widget_action);
 
-		std::string id = widget->m_id;
-		bool isVisible = widget->m_visible;
+		std::string id = widget.m_id;
+		bool isVisible = widget.m_visible;
 
 		widget_action->setCheckable(true);
 		widget_action->setChecked(isVisible);
@@ -274,10 +272,6 @@ bool SEAuxiliaryControlsBuilder::DeserializeDocksMenu(QMenu &menu)
 
 			widgetManager->LeaveCriticalSection();
 		});
-	}
-
-	for (auto widget : widgets) {
-		delete widget;
 	}
 
 	widgetManager->LeaveCriticalSection();

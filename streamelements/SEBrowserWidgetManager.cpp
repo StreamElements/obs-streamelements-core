@@ -440,6 +440,25 @@ void SEBrowserWidgetManager::GetDockBrowserWidgetIdentifiers(
 	return GetDockWidgetIdentifiers(result);
 }
 
+bool SEBrowserWidgetManager::GetDockBrowserWidgetInfo(
+	const char *const id, SEDockBrowserWidgetInfo &output)
+{
+	DockBrowserWidgetInfo *info = GetDockBrowserWidgetInfo(id);
+
+	if (!info)
+		return false;
+
+	output.m_id = info->m_id;
+	output.m_title = info->m_title;
+	output.m_visible = info->m_visible;
+	output.m_dockingArea = info->m_dockingArea;
+	output.m_url = info->m_url;
+
+	delete info;
+
+	return true;
+}
+
 SEBrowserWidgetManager::DockBrowserWidgetInfo *
 SEBrowserWidgetManager::GetDockBrowserWidgetInfo(
 	const char *const id)

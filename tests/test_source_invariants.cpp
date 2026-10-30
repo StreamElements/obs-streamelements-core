@@ -4520,19 +4520,34 @@ static void check_handler_include_closure_only_goes_down()
 	//
 	// The 208 handler bodies, which dereference the services they are
 	// handed and so drag in whatever those services' headers need.
-	// Zero is the end state; part 2 of the plan is the route, and
-	// thirteen of the twenty-seven are interfaces so far.
-	//
-	// 44 when part 2 was written, then 8/31; 7/25 once SEMenuManager.hpp
-	// and SENativeObsUIControlsManager.hpp left the closure, they being
-	// the only path to obs-hotkey.h and to six Qt headers; and 7/22 once
+	// Zero is the end state. The ladder ran 44 when part 2 was
+	// written, then 8/31; 7/25 once SEMenuManager.hpp and
+	// SENativeObsUIControlsManager.hpp left the closure, they being the
+	// only path to obs-hotkey.h and to six Qt headers; and 7/22 once
 	// SEObsSceneManager.hpp left it, taking QAbstractItemModel, QObject
 	// and QToolButton with it. So it does not only sit flat and then
-	// collapse: it moves whenever an interface cuts the last path to
-	// something, which is why this is a floor as well as a ceiling.
+	// collapse -- it moves whenever an interface cuts the last path to
+	// something, which is why it is a floor as well as a ceiling.
 	//
-	// One dirty direct include is left, SEBrowserWidgetManager.hpp, and
-	// it accounts for all 7 obs and all 22 Qt on its own.
+	// All thirteen service interfaces are in and it is still 7/22,
+	// because the last dirty include was never a service. It is
+	// SEBrowserWidget.hpp, reached because three handler bodies call
+	// SEApiMessageHandlerBase::GetBrowserWidget() and then methods on
+	// the result -- the handler's own widget, not something the
+	// container carries. It had been arriving through
+	// SEBrowserWidgetManager.hpp, which is why that header's closure
+	// measured as the identical set: a shared source, not a cause. The
+	// three methods want an interface of their own, and that is what
+	// takes this to 0/0.
+	//
+	// Two things this number does not mean, both learned the hard way.
+	// It is not compilability: the include that satisfies a complete
+	// type can be deleted and leave the count at zero while the file
+	// stops compiling, which is exactly what happened here. And it is
+	// not linkability: not one of the twenty services the container
+	// still carries concretely can be compiled in tests/ -- every one
+	// of their .cpp files needs obs or Qt -- so a test TU would have no
+	// definition to call even at 0/0.
 	//
 	report_closure("streamelements/SEApiMessageHandler.cpp",
 		       "the API handler bodies", 7, 22);
