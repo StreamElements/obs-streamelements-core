@@ -289,9 +289,15 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("setStartupFlags");
 	{
-		if (args->GetSize()) {
-			apiServices->config->SetStartupFlags(
-				args->GetValue(0)->GetInt());
+		//
+		// The type check is not decoration: CefValueImpl::GetInt() is
+		// `if (m_type != VTYPE_INT) throw;`, and a bare throw outside a
+		// catch calls std::terminate -- so setStartupFlags("x") used to
+		// take the process down. Same idiom as
+		// removeHotkeyBindingById, the other handler that reads an int.
+		//
+		if (args->GetSize() && args->GetType(0) == VTYPE_INT) {
+			apiServices->config->SetStartupFlags(args->GetInt(0));
 
 			result->SetBool(true);
 		}

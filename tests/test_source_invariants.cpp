@@ -4575,18 +4575,30 @@ static void check_handler_include_closure_only_goes_down()
 // then each of its elements), and the getAvailable{Audio,Video}
 // EncoderClassProperties pair (index 0 of a list that may be empty).
 //
+// A sixth survived that first pass, and the reason is instructive: the
+// original three rules all matched on `args->GetX(i)`, and setStartupFlags
+// read its argument one indirection further out, as
+// `args->GetValue(0)->GetInt()`. Same bare throw, same process kill --
+// setStartupFlags("x") was enough -- and invisible to a scan looking for
+// the shorter spelling. Rule "value" below is that hole closed. The lesson
+// is about the shape of this check rather than about that handler: a read
+// has more than one spelling, so each spelling needs its own rule.
+//
 // This is the gate for all 208 bodies rather than only those five. The
 // behavioural tests cover the five; this covers the two hundred that have
 // no behavioural test, and the ones nobody has written yet. It reads the
 // source, so a body compiled out behind SE_ENABLE_WYVRN or
 // SE_ENABLE_CENTRAL_WIDGET_DECORATIONS is still checked.
 //
-// Three rules, each named separately so a failure says which one broke:
+// Four rules, each named separately so a failure says which one broke:
 //
 //   size   an indexed read of args needs an args->GetSize() test
 //   type   a TYPED indexed read needs the type of that index checked
 //   key    a typed read of a dictionary key needs that key's type checked,
 //          because HasKey answers for presence and not for type
+//   value  a typed read through the value handle --
+//          args->GetValue(i)->GetX() -- needs the same check as the
+//          indexed spelling rule "type" covers
 //
 static void check_handler_bodies_type_check_before_they_read()
 {
@@ -4695,6 +4707,47 @@ static void check_handler_bodies_type_check_before_they_read()
 					"model does a bare throw on a "
 					"mismatch, which is std::terminate\n",
 					name.c_str(), t.getter, index.c_str(),
+					t.vtype);
+				++violations;
+			}
+		}
+
+		//
+		// Rule "value". The same read, spelled through the value
+		// handle rather than the list: args->GetValue(0)->GetInt().
+		// Either guard satisfies it, since both ask the same
+		// question of the same value.
+		//
+		for (const Typed &t : typed) {
+			const std::regex read(
+				std::string(R"(args->GetValue\((\d+)\)->)") +
+				t.getter + R"(\(\))");
+
+			for (std::sregex_iterator
+				     it(body.begin(), body.end(), read),
+			     last;
+			     it != last; ++it) {
+				const std::string index = (*it)[1].str();
+
+				const std::string byType = "args->GetType(" +
+							   index +
+							   ")==" + t.vtype;
+				const std::string byValue =
+					"args->GetValue(" + index +
+					")->GetType()==" + t.vtype;
+
+				if (body.find(byType) != std::string::npos ||
+				    body.find(byValue) != std::string::npos)
+					continue;
+
+				std::fprintf(
+					stderr,
+					"FAIL: %s calls "
+					"args->GetValue(%s)->%s() without "
+					"checking that value is %s -- the "
+					"model does a bare throw on a "
+					"mismatch, which is std::terminate\n",
+					name.c_str(), index.c_str(), t.getter,
 					t.vtype);
 				++violations;
 			}
