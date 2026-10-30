@@ -122,14 +122,16 @@ std::vector<std::string> registered_names()
 {
 	Fixture f;
 
-	Fixture g("probe");
-
-	(void)f;
-
-	g.handler->OnProcessMessageReceived(client(), context_created(), 0);
+	//
+	// A second handshake. The fixture's constructor does one and then
+	// clears the sink, so that a test asserting on a call's reply does
+	// not have to step over three handshake messages first -- and this is
+	// the one helper that wants them.
+	//
+	f.handler->OnProcessMessageReceived(client(), context_created(), 0);
 
 	const SentMessage *functions =
-		g.sink->find(MSG_BIND_JAVASCRIPT_FUNCTIONS);
+		f.sink->find(MSG_BIND_JAVASCRIPT_FUNCTIONS);
 
 	std::vector<std::string> names;
 
