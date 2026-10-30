@@ -341,14 +341,24 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	//
+	// The type checks are not politeness. Every typed getter in the local
+	// CefValue model is `if (m_type != VTYPE_X) throw;`
+	// (deps/cef-stub/cef_value.cpp), and a bare throw outside a catch
+	// calls std::terminate -- so reading a page-supplied value without
+	// checking its type first is a process kill a page can trigger by
+	// passing the wrong shape. HasKey alone is not enough: it answers for
+	// presence, not for type.
+	//
 	API_HANDLER_BEGIN("showCentralWidget");
 	{
-		if (args->GetSize()) {
+		if (args->GetSize() && args->GetType(0) == VTYPE_DICTIONARY) {
 			CefRefPtr<CefDictionaryValue> rootDictionary =
-				args->GetValue(0)->GetDictionary();
+				args->GetDictionary(0);
 
 			if (rootDictionary.get() &&
-			    rootDictionary->HasKey("url")) {
+			    rootDictionary->HasKey("url") &&
+			    rootDictionary->GetType("url") == VTYPE_STRING) {
 				// Remove all central widgets
 				while (apiServices->widgetManager
 					       ->DestroyCurrentCentralBrowserWidget()) {
@@ -357,7 +367,10 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				std::string executeJavaScriptCodeOnLoad;
 
 				if (rootDictionary->HasKey(
-					    "executeJavaScriptCodeOnLoad")) {
+					    "executeJavaScriptCodeOnLoad") &&
+				    rootDictionary->GetType(
+					    "executeJavaScriptCodeOnLoad") ==
+					    VTYPE_STRING) {
 					executeJavaScriptCodeOnLoad =
 						rootDictionary
 							->GetString(
@@ -417,13 +430,24 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	//
+	// Both the list and each of its elements are type-checked, for the
+	// reason given on showCentralWidget above: an unchecked read of a
+	// page-supplied value is a std::terminate a page can trigger. An
+	// element of the wrong type is skipped rather than failing the batch,
+	// which is consistent with this handler already reporting success
+	// without checking that any id matched.
+	//
 	API_HANDLER_BEGIN("removeDockingWidgetsByIds");
 	{
-		if (args->GetSize()) {
+		if (args->GetSize() && args->GetType(0) == VTYPE_LIST) {
 			CefRefPtr<CefListValue> list = args->GetList(0);
 
 			if (list.get()) {
 				for (size_t i = 0; i < list->GetSize(); ++i) {
+					if (list->GetType(i) != VTYPE_STRING)
+						continue;
+
 					CefString id = list->GetString(i);
 
 					apiServices->widgetManager
@@ -869,13 +893,17 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	// Same shape, and the same reason, as removeDockingWidgetsByIds.
 	API_HANDLER_BEGIN("removeBackgroundWorkersByIds");
 	{
-		if (args->GetSize()) {
+		if (args->GetSize() && args->GetType(0) == VTYPE_LIST) {
 			CefRefPtr<CefListValue> list = args->GetList(0);
 
 			if (list.get()) {
 				for (size_t i = 0; i < list->GetSize(); ++i) {
+					if (list->GetType(i) != VTYPE_STRING)
+						continue;
+
 					CefString id = list->GetString(i);
 
 					apiServices->workerManager->Remove(
@@ -2178,19 +2206,31 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 	}
 	API_HANDLER_END();
 
+	//
+	// Both guard on GetSize() because CefListValue::GetValue is an
+	// unchecked std::vector subscript (deps/cef-stub/cef_value_list.cpp):
+	// reading index 0 of an empty list is undefined behaviour, and a page
+	// calling either of these with no arguments is all it takes. Every
+	// other body that reads an argument by index already guards; these
+	// two were the only pair in the file that did not.
+	//
 	API_HANDLER_BEGIN("getAvailableAudioEncoderClassProperties");
 	{
-		apiServices->videoCompositionManager
-			->SerializeAvailableAudioEncoderClassProperties(
-				args->GetValue(0), result);
+		if (args->GetSize()) {
+			apiServices->videoCompositionManager
+				->SerializeAvailableAudioEncoderClassProperties(
+					args->GetValue(0), result);
+		}
 	}
 	API_HANDLER_END();
 
 	API_HANDLER_BEGIN("getAvailableVideoEncoderClassProperties");
 	{
-		apiServices->videoCompositionManager
-			->SerializeAvailableVideoEncoderClassProperties(
-				args->GetValue(0), result);
+		if (args->GetSize()) {
+			apiServices->videoCompositionManager
+				->SerializeAvailableVideoEncoderClassProperties(
+					args->GetValue(0), result);
+		}
 	}
 	API_HANDLER_END();
 

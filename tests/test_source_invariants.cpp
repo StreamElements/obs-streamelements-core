@@ -4558,6 +4558,207 @@ static void check_handler_include_closure_only_goes_down()
 }
 
 //
+// Every typed getter in the local CefValue model is
+// `if (m_type != VTYPE_X) throw;` (deps/cef-stub/cef_value.cpp), and a bare
+// throw outside a catch block calls std::terminate. On top of that,
+// CefListValue::GetValue is an unchecked std::vector subscript
+// (deps/cef-stub/cef_value_list.cpp), so reading index 0 of an empty list is
+// undefined behaviour rather than an error.
+//
+// Both mean the same thing for a host API method: a body that reads a
+// page-supplied argument without first checking the list size and the
+// value's type is a process kill that page JavaScript can trigger by
+// sending the wrong shape. Five were reachable that way, found by
+// test_api_handler_bodies and fixed in the same commit as this check:
+// showCentralWidget (a dictionary, and then a string behind HasKey alone),
+// removeDockingWidgetsByIds and removeBackgroundWorkersByIds (a list, and
+// then each of its elements), and the getAvailable{Audio,Video}
+// EncoderClassProperties pair (index 0 of a list that may be empty).
+//
+// This is the gate for all 208 bodies rather than only those five. The
+// behavioural tests cover the five; this covers the two hundred that have
+// no behavioural test, and the ones nobody has written yet. It reads the
+// source, so a body compiled out behind SE_ENABLE_WYVRN or
+// SE_ENABLE_CENTRAL_WIDGET_DECORATIONS is still checked.
+//
+// Three rules, each named separately so a failure says which one broke:
+//
+//   size   an indexed read of args needs an args->GetSize() test
+//   type   a TYPED indexed read needs the type of that index checked
+//   key    a typed read of a dictionary key needs that key's type checked,
+//          because HasKey answers for presence and not for type
+//
+static void check_handler_bodies_type_check_before_they_read()
+{
+	//
+	// Whitespace is removed rather than collapsed, as the other handler
+	// invariants do it: a read and its guard both wrap freely across
+	// lines here, and a wrapped one must not slip through.
+	//
+	const std::string src = strip_line_comments(
+		slurp("streamelements/SEApiMessageHandler.cpp"));
+
+	std::string flat;
+	flat.reserve(src.size());
+
+	for (std::size_t i = 0; i < src.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(src[i])))
+			flat += src[i];
+	}
+
+	struct Typed {
+		const char *getter;
+		const char *vtype;
+	};
+
+	const Typed typed[] = {{"GetString", "VTYPE_STRING"},
+			       {"GetInt", "VTYPE_INT"},
+			       {"GetBool", "VTYPE_BOOL"},
+			       {"GetDouble", "VTYPE_DOUBLE"},
+			       {"GetList", "VTYPE_LIST"},
+			       {"GetDictionary", "VTYPE_DICTIONARY"},
+			       {"GetBinary", "VTYPE_BINARY"}};
+
+	const std::string open = "API_HANDLER_BEGIN(\"";
+
+	std::size_t bodies = 0;
+	std::size_t violations = 0;
+
+	for (std::size_t at = flat.find(open); at != std::string::npos;
+	     at = flat.find(open, at + 1)) {
+		const std::size_t nameBegin = at + open.size();
+		const std::size_t nameEnd = flat.find('"', nameBegin);
+
+		if (nameEnd == std::string::npos)
+			continue;
+
+		const std::string name =
+			flat.substr(nameBegin, nameEnd - nameBegin);
+
+		const std::size_t end = flat.find("API_HANDLER_END", nameEnd);
+
+		if (end == std::string::npos)
+			continue;
+
+		const std::string body = flat.substr(nameEnd, end - nameEnd);
+
+		++bodies;
+
+		const bool hasSizeTest = body.find("args->GetSize()") !=
+					 std::string::npos;
+
+		//
+		// Rule "size". Any read of args by index at all, typed or
+		// not: args->GetValue(0) on an empty list is the undefined
+		// subscript, and it needs no type to be wrong.
+		//
+		std::smatch m;
+
+		if (std::regex_search(body, m,
+				      std::regex(R"(args->Get\w+\(\d+\))")) &&
+		    !hasSizeTest) {
+			std::fprintf(stderr,
+				     "FAIL: %s reads an argument by index "
+				     "without testing args->GetSize() -- "
+				     "CefListValue::GetValue is an unchecked "
+				     "vector subscript\n",
+				     name.c_str());
+			++violations;
+		}
+
+		// Rule "type".
+		for (const Typed &t : typed) {
+			const std::regex read(std::string("args->") + t.getter +
+					      R"(\((\d+)\))");
+
+			for (std::sregex_iterator
+				     it(body.begin(), body.end(), read),
+			     last;
+			     it != last; ++it) {
+				const std::string index = (*it)[1].str();
+
+				const std::string byType = "args->GetType(" +
+							   index +
+							   ")==" + t.vtype;
+				const std::string byValue =
+					"args->GetValue(" + index +
+					")->GetType()==" + t.vtype;
+
+				if (body.find(byType) != std::string::npos ||
+				    body.find(byValue) != std::string::npos)
+					continue;
+
+				std::fprintf(
+					stderr,
+					"FAIL: %s calls args->%s(%s) without "
+					"checking that index is %s -- the "
+					"model does a bare throw on a "
+					"mismatch, which is std::terminate\n",
+					name.c_str(), t.getter, index.c_str(),
+					t.vtype);
+				++violations;
+			}
+		}
+
+		// Rule "key".
+		for (const Typed &t : typed) {
+			//
+			// A custom delimiter, because the pattern itself
+			// contains `)"` -- which ends a plain R"(...)" early
+			// and turns the rest of the line into a syntax error.
+			//
+			const std::regex read(std::string(R"((\w+)->)") +
+					      t.getter +
+					      R"RX(\("([^"]+)"\))RX");
+
+			for (std::sregex_iterator
+				     it(body.begin(), body.end(), read),
+			     last;
+			     it != last; ++it) {
+				const std::string var = (*it)[1].str();
+				const std::string key = (*it)[2].str();
+
+				// Handled by rule "type" above.
+				if (var == "args")
+					continue;
+
+				const std::string guard = var + "->GetType(\"" +
+							  key +
+							  "\")==" + t.vtype;
+
+				if (body.find(guard) != std::string::npos)
+					continue;
+
+				std::fprintf(
+					stderr,
+					"FAIL: %s reads %s->%s(\"%s\") "
+					"without checking that key's type -- "
+					"HasKey answers for presence, not "
+					"type, and a mismatch is "
+					"std::terminate\n",
+					name.c_str(), var.c_str(), t.getter,
+					key.c_str());
+				++violations;
+			}
+		}
+	}
+
+	//
+	// Non-vacuity. If the body scan ever stops finding bodies -- a macro
+	// rename, a reformat the flattening does not survive -- this check
+	// would pass by reading nothing at all, which is how a regression
+	// gate quietly stops being one.
+	//
+	check(bodies >= 200,
+	      "the handler body scan must find the API_HANDLER_BEGIN blocks; "
+	      "fewer than 200 means the scan broke, not that the file shrank");
+
+	check(violations == 0,
+	      "every host API body must check size and type before reading a "
+	      "page-supplied argument");
+}
+
+//
 // --- Every source file ends with a newline.
 //
 // clang promotes -Wnewline-eof to an error under -Werror, so a file whose
@@ -4709,6 +4910,7 @@ int main()
 	check_the_api_call_lock_stays_per_translation_unit();
 	check_the_trace_log_level_memo_is_computed_once();
 	check_handler_include_closure_only_goes_down();
+	check_handler_bodies_type_check_before_they_read();
 	check_every_source_file_ends_with_a_newline();
 
 	if (failures) {
