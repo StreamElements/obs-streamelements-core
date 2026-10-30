@@ -721,6 +721,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/audio-wrapper-source.h
 	streamelements/SEUtils.hpp
 	streamelements/SEAsyncTaskQueue.hpp
+	streamelements/ISEVideoCompositionViewHost.hpp
 	streamelements/SEBrowserWidget.hpp
 	streamelements/SEDockBrowserWidgetInfo.hpp
 	streamelements/ISEBrowserWidgetManager.hpp

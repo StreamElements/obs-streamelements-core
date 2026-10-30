@@ -31,16 +31,11 @@
 #include "SEBrowserDialogManager.hpp"
 #include "ISEBrowserWidgetManager.hpp"
 //
-// Not a service: this is the handler's OWN browser widget, reached
-// through SEApiMessageHandlerBase::GetBrowserWidget(), and three
-// bodies call RemoveVideoCompositionView,
-// SerializeVideoCompositionView and DeserializeVideoCompositionView
-// on it. The complete type used to arrive through
-// SEBrowserWidgetManager.hpp and this include is what that was; it
-// is explicit now because the interface replaced that header. It is
-// the last obs/Qt in this file and wants an interface of its own.
+// Not a service: the handler's OWN browser widget, reached through
+// SEApiMessageHandlerBase::GetBrowserWidget(). It was the last obs
+// and Qt in this file, and this is the interface that ended that.
 //
-#include "SEBrowserWidget.hpp"
+#include "ISEVideoCompositionViewHost.hpp"
 #include "ISEConfig.hpp"
 #include "ISEExternalSceneDataProviderManager.hpp"
 #include "ISEHotkeyManager.hpp"

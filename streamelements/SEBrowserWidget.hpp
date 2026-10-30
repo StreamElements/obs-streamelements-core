@@ -5,6 +5,7 @@
 #include "SEMessageBus.hpp"
 #include "SEApiMessageSink.hpp"
 #include "SEHostEventDispatcher.hpp"
+#include "ISEVideoCompositionViewHost.hpp"
 
 class ISEVideoCompositionManager;
 
@@ -36,10 +37,10 @@ class ISEVideoCompositionManager;
 class QCefWidget;
 class QCefCookieManager;
 
-class SEBrowserWidget :
-	public QWidget
-
-{
+//
+// QWidget first among the bases, which moc requires.
+//
+class SEBrowserWidget : public QWidget, public ISEVideoCompositionViewHost {
 	Q_OBJECT
 
 private:
@@ -140,12 +141,14 @@ public:
 	void SetVideoCompositionView(
 		std::shared_ptr<SEVideoCompositionBase>,
 		QRect &coords);
-	void RemoveVideoCompositionView();
+	void RemoveVideoCompositionView() override;
 
-	void DeserializeVideoCompositionView(CefRefPtr<CefValue> input,
-					     CefRefPtr<CefValue> &output);
+	void
+	DeserializeVideoCompositionView(CefRefPtr<CefValue> input,
+					CefRefPtr<CefValue> &output) override;
 
-	void SerializeVideoCompositionView(CefRefPtr<CefValue> &output);
+	void
+	SerializeVideoCompositionView(CefRefPtr<CefValue> &output) override;
 
 private:
 	std::string GetInitialPageURLInternal();
@@ -292,4 +295,3 @@ public:
 	static SEBrowserWidget *
 	GetWidgetByMessageTargetId(std::string target);
 };
-

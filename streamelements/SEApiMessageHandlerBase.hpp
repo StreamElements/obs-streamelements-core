@@ -28,8 +28,7 @@
 
 #include "SEApiMessageSink.hpp"
 #include "SEApiServices.hpp"
-
-class SEBrowserWidget;
+#include "ISEVideoCompositionViewHost.hpp"
 
 class SEApiMessageHandlerRuntimeStatus {
 public:
@@ -46,7 +45,14 @@ private:
 
 protected:
 	std::string m_containerType;
-	SEBrowserWidget *m_browserWidget = nullptr;
+	//
+	// Held as the contract rather than as SEBrowserWidget *, so that
+	// this header needs no Qt and the three handler bodies that use
+	// it need no complete widget type. The upcast happens in
+	// SetBrowserWidget's two callers, both inside SEBrowserWidget
+	// itself.
+	//
+	ISEVideoCompositionViewHost *m_browserWidget = nullptr;
 
 	//
 	// The services this handler's methods are allowed to use. Injected, so
@@ -78,12 +84,15 @@ public:
 	//
 	// This is necessary for implementing API calls which impact the browser widget itself.
 	//
-	void SetBrowserWidget(SEBrowserWidget *browserWidget)
+	void SetBrowserWidget(ISEVideoCompositionViewHost *browserWidget)
 	{
 		m_browserWidget = browserWidget;
 	}
 
-	SEBrowserWidget *GetBrowserWidget() { return m_browserWidget; }
+	ISEVideoCompositionViewHost *GetBrowserWidget()
+	{
+		return m_browserWidget;
+	}
 
 	//
 	// The handler-facing surface. A registered method body is a

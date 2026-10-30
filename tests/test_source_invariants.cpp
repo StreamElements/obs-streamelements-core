@@ -4529,28 +4529,32 @@ static void check_handler_include_closure_only_goes_down()
 	// collapse -- it moves whenever an interface cuts the last path to
 	// something, which is why it is a floor as well as a ceiling.
 	//
-	// All thirteen service interfaces are in and it is still 7/22,
-	// because the last dirty include was never a service. It is
-	// SEBrowserWidget.hpp, reached because three handler bodies call
+	// Thirteen service interfaces took it to 7/22 and no further,
+	// because the last dirty include was never a service: it was
+	// SEBrowserWidget.hpp, reached because three bodies call
 	// SEApiMessageHandlerBase::GetBrowserWidget() and then methods on
-	// the result -- the handler's own widget, not something the
-	// container carries. It had been arriving through
-	// SEBrowserWidgetManager.hpp, which is why that header's closure
-	// measured as the identical set: a shared source, not a cause. The
-	// three methods want an interface of their own, and that is what
-	// takes this to 0/0.
+	// the result -- the handler's own widget. It had been arriving
+	// through SEBrowserWidgetManager.hpp, which is why that header's
+	// closure measured as the identical set: a shared source, not a
+	// cause. ISEVideoCompositionViewHost is what ended it.
 	//
-	// Two things this number does not mean, both learned the hard way.
-	// It is not compilability: the include that satisfies a complete
-	// type can be deleted and leave the count at zero while the file
-	// stops compiling, which is exactly what happened here. And it is
-	// not linkability: not one of the twenty services the container
-	// still carries concretely can be compiled in tests/ -- every one
-	// of their .cpp files needs obs or Qt -- so a test TU would have no
-	// definition to call even at 0/0.
+	// From here this stops being a ratchet and becomes the invariant
+	// that keeps the file abstract: a body reaching libobs or Qt again,
+	// directly or through a header, fails the suite and the message
+	// names what came back through.
+	//
+	// Two things zero does NOT mean, both learned here the hard way.
+	// It is not compilability -- delete the include that satisfied a
+	// complete type and this reads zero while the file stops compiling,
+	// which is exactly what happened one commit ago. And it is not
+	// linkability: not one of the twenty services the container still
+	// carries concretely can be compiled in tests/, every one of their
+	// .cpp files needing obs or Qt, so a test TU has no definition to
+	// call even now. Both blockers are real and neither is counted
+	// here.
 	//
 	report_closure("streamelements/SEApiMessageHandler.cpp",
-		       "the API handler bodies", 7, 22);
+		       "the API handler bodies", 0, 0);
 }
 
 //
