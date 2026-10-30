@@ -303,3 +303,24 @@ se_add_test(test_wer_gate
 #     bug patterns this PR fixes. ---
 se_add_test(test_source_invariants
   test_source_invariants.cpp)
+
+# --- Behavioural test: the 208 host API method bodies ----------------------
+#
+# The other half of SEApiMessageHandler: test_api_handler_infrastructure
+# compiles the base, this compiles the file with the 208 API_HANDLER_BEGIN
+# blocks in it. That became possible only once part 2 of CORE-757 took that
+# translation unit to zero obs and zero Qt headers in its include closure.
+#
+# Compiling was not the whole price. The bodies CALL their services, so the
+# linker wants a definition for each: fake_api_services.cpp derives a fake
+# from each of the sixteen ISE* interfaces, and stub_concrete_services.cpp
+# supplies the 51 methods plus 11 free functions belonging to the fifteen
+# services the container still carries concretely. Both record into one
+# journal the tests program and read.
+se_add_test(test_api_handler_bodies
+  test_api_handler_bodies.cpp
+  fake_api_services.cpp
+  stub_concrete_services.cpp
+  ${SE_API_HANDLER_SOURCES}
+  "${REPO_ROOT}/streamelements/SEApiMessageHandler.cpp"
+)
