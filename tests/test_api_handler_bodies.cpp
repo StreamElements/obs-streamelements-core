@@ -22,10 +22,7 @@
 // sweep below leaves them alone and says so.
 //
 
-#include "api_handler_harness.hpp"
-#include "fake_api_services.hpp"
-
-#include "streamelements/SEApiMessageHandler.hpp"
+#include "api_handler_fixture.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -41,120 +38,9 @@
 #endif
 
 using namespace se_harness;
+using namespace se_bodies;
 
 namespace {
-
-// --- the fixture ------------------------------------------------------
-
-//
-// A real SEApiMessageHandler over a fully populated container. Fresh per
-// test, and the journal is reset with it, so nothing one body did is
-// visible to the next.
-//
-struct Fixture {
-	se_fakes::FakeApiServices w;
-	std::shared_ptr<RecordingSink> sink = std::make_shared<RecordingSink>();
-	std::shared_ptr<SEApiMessageHandler> handler;
-
-	explicit Fixture(const std::string &containerType = "probe")
-	{
-		//
-		// The journal is reset by FakeApiServices' own constructor,
-		// which also installs the invariants the fakes have to carry,
-		// so nothing is cleared here -- clearing it after w was built
-		// would throw those away.
-		//
-		w.services->apiMessageSink = sink;
-
-		handler = std::make_shared<SEApiMessageHandler>(containerType,
-								w.services);
-
-		world() = World();
-		logged().clear();
-		posted().clear();
-
-		handler->OnProcessMessageReceived(client(), context_created(),
-						  0);
-
-		sink->sent.clear();
-	}
-
-	se_fakes::Journal &journal() const { return se_fakes::journal(); }
-
-	//
-	// Dispatch one host API call and run it. Returns the JSON the page
-	// would receive, or "<no reply>" if the handler never completed --
-	// which is a real outcome and one of the things asserted below.
-	//
-	std::string Call(const std::string &method,
-			 const std::vector<std::string> &jsonArgs = {})
-	{
-		//
-		// Cleared first so that what comes back belongs to THIS call:
-		// the sink's find() answers with the earliest match, so a
-		// second call on one fixture would otherwise read the first
-		// call's reply. The journal is deliberately not cleared --
-		// several tests below assert across a sequence of calls.
-		//
-		sink->sent.clear();
-
-		handler->OnProcessMessageReceived(
-			client(), incoming_call(method, jsonArgs, 1), 0);
-
-		drain_posted();
-
-		const SentMessage *reply = sink->find("executeCallback");
-
-		if (!reply || !reply->args || reply->args->GetSize() < 2)
-			return "<no reply>";
-
-		return reply->args->GetString(1).ToString();
-	}
-
-	std::size_t replies() const { return sink->count("executeCallback"); }
-};
-
-//
-// The names the page is given, read back out of the handshake rather than
-// counted in the source: this is the surface as the renderer sees it.
-//
-std::vector<std::string> registered_names()
-{
-	Fixture f;
-
-	//
-	// A second handshake. The fixture's constructor does one and then
-	// clears the sink, so that a test asserting on a call's reply does
-	// not have to step over three handshake messages first -- and this is
-	// the one helper that wants them.
-	//
-	f.handler->OnProcessMessageReceived(client(), context_created(), 0);
-
-	const SentMessage *functions =
-		f.sink->find(MSG_BIND_JAVASCRIPT_FUNCTIONS);
-
-	std::vector<std::string> names;
-
-	if (!functions || !functions->args || functions->args->GetSize() < 2)
-		return names;
-
-	CefRefPtr<CefValue> parsed =
-		CefParseJSON(functions->args->GetString(1), JSON_PARSER_RFC);
-	CefRefPtr<CefDictionaryValue> dict = parsed ? parsed->GetDictionary()
-						    : nullptr;
-
-	if (!dict)
-		return names;
-
-	CefDictionaryValue::KeyList keys;
-
-	dict->GetKeys(keys);
-
-	for (const CefString &key : keys)
-		names.push_back(key.ToString());
-
-	return names;
-}
 
 // --- the surface ------------------------------------------------------
 
@@ -1153,11 +1039,6 @@ void an_async_dialog_handler_with_no_arguments_never_answers()
 
 // --- the run ----------------------------------------------------------
 
-struct Test {
-	const char *name;
-	void (*fn)();
-};
-
 const Test tests[] = {
 	{"the surface is exactly what the arithmetic says",
 	 the_surface_is_exactly_what_the_arithmetic_says},
@@ -1238,12 +1119,24 @@ int main()
 {
 	fail_loudly_rather_than_popping_a_dialog();
 
-	for (const Test &t : tests) {
+	const auto run = [](const Test &t) {
 		std::printf("  %s\n", t.name);
 		std::fflush(stdout);
 
 		t.fn();
-	}
+	};
+
+	for (const Test &t : tests)
+		run(t);
+
+	//
+	// The contract table, from the other translation unit. Last
+	// because it is the broad pass: a narrative case above failing
+	// first tells you more than two hundred rows reporting the same
+	// cause.
+	//
+	for (std::size_t i = 0; i < contract_test_count; ++i)
+		run(contract_tests[i]);
 
 	if (failures()) {
 		std::fprintf(stderr, "\n%d check(s) failed\n", failures());

@@ -337,10 +337,17 @@ void SEHostUpdateManager::SerializeReleaseGroupProperties(
 
 // --- SEHttpClient: 1 method(s) ---
 
+//
+// a1 is the result, taken by value, so the only way to answer is to mutate
+// what it points at -- which is also why httpRequestText cannot be given a
+// reply by replacing the handle.
+//
 void SEHttpClient::DeserializeHttpRequestText(CefRefPtr<CefValue> a0,
 					      CefRefPtr<CefValue> a1)
 {
-	se_fakes::Record("SEHttpClient", "DeserializeHttpRequestText", a0, a1);
+	se_fakes::Record("SEHttpClient", "DeserializeHttpRequestText", a0);
+	se_fakes::FillValueInPlace("SEHttpClient", "DeserializeHttpRequestText",
+				   a1);
 }
 
 // --- SEObsApiTransactionManager: 4 method(s) ---

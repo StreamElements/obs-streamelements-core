@@ -224,6 +224,15 @@ void FillValue(const std::string &service, const std::string &method,
 		output = it->second;
 }
 
+void FillValueInPlace(const std::string &service, const std::string &method,
+		      CefRefPtr<CefValue> output)
+{
+	auto it = journal().values.find(service + "::" + method);
+
+	if (it != journal().values.end() && output)
+		output->SetValue(it->second);
+}
+
 void FillStrings(const std::string &service, const std::string &method,
 		 std::vector<std::string> &output)
 {

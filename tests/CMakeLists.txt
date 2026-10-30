@@ -317,8 +317,13 @@ se_add_test(test_source_invariants
 # supplies the 51 methods plus 11 free functions belonging to the fifteen
 # services the container still carries concretely. Both record into one
 # journal the tests program and read.
+# test_api_handler_contract.cpp is part of the SAME executable rather than
+# a target of its own: compiling SEApiMessageHandler.cpp is most of this
+# target's build time, and the two files are two kinds of test over it --
+# narrative cases and the contract table -- not two things to build.
 se_add_test(test_api_handler_bodies
   test_api_handler_bodies.cpp
+  test_api_handler_contract.cpp
   fake_api_services.cpp
   stub_concrete_services.cpp
   ${SE_API_HANDLER_SOURCES}

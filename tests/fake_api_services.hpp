@@ -179,6 +179,16 @@ void Record(const std::string &service, const std::string &method,
 //
 void FillValue(const std::string &service, const std::string &method,
 	       CefRefPtr<CefValue> &output);
+
+//
+// The same, for a service that takes its output by VALUE rather than by
+// reference. Four of them do, which means they cannot replace the handle
+// and can only mutate what it points at -- so this mutates in place, as
+// the real service does. Replacing the handle here would write into a
+// local and the handler would never see it.
+//
+void FillValueInPlace(const std::string &service, const std::string &method,
+		      CefRefPtr<CefValue> output);
 void FillStrings(const std::string &service, const std::string &method,
 		 std::vector<std::string> &output);
 void FillDockInfo(const std::string &service, const std::string &method,
@@ -220,6 +230,12 @@ protected:
 	void FillValue(const char *method, CefRefPtr<CefValue> &output) const
 	{
 		se_fakes::FillValue(m_serviceName, method, output);
+	}
+
+	void FillValueInPlace(const char *method,
+			      CefRefPtr<CefValue> output) const
+	{
+		se_fakes::FillValueInPlace(m_serviceName, method, output);
 	}
 
 	void FillStrings(const char *method,
@@ -518,10 +534,15 @@ public:
 				   secondId, isBefore);
 	}
 
+	//
+	// By reference, but an input: the production signature takes
+	// `CefRefPtr<CefValue> &` and reads it. Recording it rather than
+	// overwriting it is what lets showNotificationBar's test assert
+	// that the page's bar description arrived intact.
+	//
 	void DeserializeNotificationBar(CefRefPtr<CefValue> &input) override
 	{
-		Record("DeserializeNotificationBar");
-		FillValue("DeserializeNotificationBar", input);
+		Record("DeserializeNotificationBar", input);
 	}
 
 	void HideNotificationBar() override { Record("HideNotificationBar"); }
@@ -596,25 +617,35 @@ public:
 	{
 	}
 
+	//
+	// All three take the result by VALUE, so they answer by mutating
+	// what it points at. FillValueInPlace does the same, which is what
+	// makes these three handlers' replies assertable at all.
+	//
 	void SerializeProviders(CefRefPtr<CefValue> result) override
 	{
-		Record("SerializeProviders", result);
+		Record("SerializeProviders");
+		FillValueInPlace("SerializeProviders", result);
 	}
 
 	bool
 	SerializeProviderSceneCollections(CefRefPtr<CefValue> input,
 					  CefRefPtr<CefValue> result) override
 	{
-		return RespondBool("SerializeProviderSceneCollections", input,
-				   result);
+		Record("SerializeProviderSceneCollections", input);
+		FillValueInPlace("SerializeProviderSceneCollections", result);
+
+		return BoolFor("SerializeProviderSceneCollections");
 	}
 
 	bool
 	SerializeProviderSceneColletion(CefRefPtr<CefValue> input,
 					CefRefPtr<CefValue> result) override
 	{
-		return RespondBool("SerializeProviderSceneColletion", input,
-				   result);
+		Record("SerializeProviderSceneColletion", input);
+		FillValueInPlace("SerializeProviderSceneColletion", result);
+
+		return BoolFor("SerializeProviderSceneColletion");
 	}
 };
 
