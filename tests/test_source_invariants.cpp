@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <fstream>
 #include <regex>
+#include <set>
 #include <sstream>
 #include <string>
 
@@ -4812,6 +4813,218 @@ static void check_handler_bodies_type_check_before_they_read()
 }
 
 //
+// --- Every stand-in can answer the handler that calls it.
+//
+// tests/ replaces thirty services: thirteen interfaces are faked and
+// fifteen concrete classes have their definitions supplied, plus the WYVRN
+// manager. A stand-in that only RECORDS a parameter the handler passes
+// `result` to looks perfectly reasonable and quietly makes the handler
+// untestable -- the reply is then whatever the dispatcher pre-set, every
+// time, so a test can assert the call but never the answer.
+//
+// Four were like that, found by hand while writing the contract table and
+// fixed in the same commit as this check. Three of them --
+// SerializeProviders and its two siblings -- take the result BY VALUE,
+// which is the second shape: assigning the handle writes into a local and
+// the caller sees nothing, so those have to mutate what it points at.
+//
+// Both are decidable from two facts, which is why this is a source
+// invariant rather than a comment: does the handler hand `result` to this
+// method, and what does the stand-in do with the matching parameter.
+//
+// It reads tests/ rather than streamelements/, unlike every other check
+// here. That is the point -- the production code is fine either way, and
+// what rots is the stand-in beside a newly added interface method.
+//
+static void check_every_stand_in_can_answer_the_handler_that_calls_it()
+{
+	const std::string source = strip_line_comments(
+		slurp("streamelements/SEApiMessageHandler.cpp"));
+
+	//
+	// Whitespace removed rather than collapsed, as the other handler
+	// invariants do it: a call site wraps across as many lines as
+	// clang-format likes, and one that wrapped must not slip through.
+	//
+	std::string handler;
+
+	handler.reserve(source.size());
+
+	for (std::size_t i = 0; i < source.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(source[i])))
+			handler += source[i];
+	}
+
+	//
+	// Every method name the handler passes `result` to. The call sites
+	// wrap freely, so this runs on flattened source and walks the
+	// argument list by hand: a regex cannot match nested parentheses,
+	// and these arguments nest.
+	//
+	std::set<std::string> answersResult;
+
+	const std::regex call(R"((\w+)\()");
+
+	for (std::sregex_iterator it(handler.begin(), handler.end(), call),
+	     last;
+	     it != last; ++it) {
+		const std::string name = (*it)[1].str();
+
+		std::size_t at = static_cast<std::size_t>((*it).position()) +
+				 (*it).length();
+		int depth = 1;
+		std::string args;
+
+		while (at < handler.size() && depth) {
+			const char c = handler[at];
+
+			if (c == '(') {
+				++depth;
+			} else if (c == ')') {
+				--depth;
+
+				if (!depth)
+					break;
+			}
+
+			args += c;
+			++at;
+		}
+
+		if (args == "result" || args.compare(0, 7, "result,") == 0 ||
+		    args.find(",result,") != std::string::npos ||
+		    (args.size() >= 7 &&
+		     args.compare(args.size() - 7, 7, ",result") == 0))
+			answersResult.insert(name);
+	}
+
+	check(answersResult.size() >= 80,
+	      "the handler must still be handing result to scores of service "
+	      "methods; a much smaller number means this scan broke");
+
+	//
+	// Now the stand-ins. A definition is `... Name(params) ... { body }`,
+	// and the ones that matter are those with a Record or a Respond in
+	// them -- anything else is a constructor or a helper.
+	//
+	const char *const standIns[] = {"tests/fake_api_services.hpp",
+					"tests/stub_concrete_services.cpp",
+					"tests/stub_razer_wyvrn.cpp"};
+
+	std::size_t examined = 0;
+	std::size_t violations = 0;
+
+	const std::regex definition(
+		R"((\w+)\(([^)]*)\)[^{;]*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\})");
+
+	for (const char *const path : standIns) {
+		const std::string text = strip_line_comments(slurp(path));
+
+		for (std::sregex_iterator
+			     it(text.begin(), text.end(), definition),
+		     last;
+		     it != last; ++it) {
+			const std::string name = (*it)[1].str();
+			const std::string params = (*it)[2].str();
+			const std::string body = (*it)[3].str();
+
+			if (body.find("Record(") == std::string::npos &&
+			    body.find("Respond") == std::string::npos)
+				continue;
+
+			if (!answersResult.count(name))
+				continue;
+
+			++examined;
+
+			if (body.find("Fill") == std::string::npos) {
+				std::fprintf(
+					stderr,
+					"FAIL: the stand-in for %s only "
+					"records the result the handler hands "
+					"it, so nothing is ever written back "
+					"and no test can assert that "
+					"handler's reply\n",
+					name.c_str());
+				++violations;
+				continue;
+			}
+
+			//
+			// The by-value shape. Find the last
+			// CefRefPtr<CefValue> parameter declared without a
+			// `&`: if the body assigns the handle to it, that
+			// write lands in a local.
+			//
+			std::string byValue;
+
+			std::size_t from = 0;
+
+			for (;;) {
+				const std::size_t comma =
+					params.find(',', from);
+				const std::string p = params.substr(
+					from, comma == std::string::npos
+						      ? std::string::npos
+						      : comma - from);
+
+				if (p.find("CefRefPtr<CefValue>") !=
+					    std::string::npos &&
+				    p.find('&') == std::string::npos) {
+					const std::size_t end =
+						p.find_last_not_of(" \t\r\n");
+					const std::size_t begin =
+						p.find_last_of(" \t\r\n*", end);
+
+					byValue = p.substr(
+						begin == std::string::npos
+							? 0
+							: begin + 1,
+						end - (begin == std::string::npos
+							       ? 0
+							       : begin));
+				}
+
+				if (comma == std::string::npos)
+					break;
+
+				from = comma + 1;
+			}
+
+			if (byValue.empty())
+				continue;
+
+			if (body.find("FillValueInPlace") != std::string::npos)
+				continue;
+
+			if (std::regex_search(
+				    body, std::regex("FillValue\\([^)]*\\b" +
+						     byValue + "\\b"))) {
+				std::fprintf(
+					stderr,
+					"FAIL: the stand-in for %s takes its "
+					"result by value and answers by "
+					"assigning the handle, which writes "
+					"into a local -- it has to mutate "
+					"what the handle points at, as the "
+					"real service does\n",
+					name.c_str());
+				++violations;
+			}
+		}
+	}
+
+	check(examined >= 90,
+	      "the stand-ins must still cover scores of result-answering "
+	      "methods; a much smaller number means the definition scan "
+	      "broke, not that the fakes shrank");
+
+	check(violations == 0,
+	      "every stand-in for a method the handler hands result to must "
+	      "be able to write that result back");
+}
+
+//
 // --- Every source file ends with a newline.
 //
 // clang promotes -Wnewline-eof to an error under -Werror, so a file whose
@@ -4964,6 +5177,7 @@ int main()
 	check_the_trace_log_level_memo_is_computed_once();
 	check_handler_include_closure_only_goes_down();
 	check_handler_bodies_type_check_before_they_read();
+	check_every_stand_in_can_answer_the_handler_that_calls_it();
 	check_every_source_file_ends_with_a_newline();
 
 	if (failures) {
