@@ -1,13 +1,27 @@
 #pragma once
+#include "SECompositionServices.hpp"
 
 #include "SEVideoComposition.hpp"
 #include <shared_mutex>
 #include <string>
 #include <map>
 #include "cef-headers.hpp"
+#include "ISEVideoCompositionManager.hpp"
 
-class SEVideoCompositionManager {
+#include <memory>
+
+//
+// Forward declaration rather than an include: the real header drags windows.h
+// in ahead of winsock2.h on these translation units.
+//
+class SEWebsocketApiServer;
+
+class SEVideoCompositionManager
+	: public std::enable_shared_from_this<SEVideoCompositionManager>,
+	  public ISEVideoCompositionManager {
 private:
+	std::shared_ptr<SEWebsocketApiServer> m_apiServer;
+
 	std::shared_mutex m_mutex;
 	std::map<std::string, std::shared_ptr<SEVideoCompositionBase>> m_videoCompositionsMap;
 	std::shared_ptr<SEVideoCompositionBase> m_nativeVideoComposition;
@@ -15,19 +29,54 @@ private:
 	std::map<std::string, CefRefPtr<CefDictionaryValue>>
 		m_availableEncoderClassesCache;
 
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+	std::shared_ptr<SEMessageBus> m_messageBus;
+
+	//
+	// What every composition this manager creates is handed. The weak
+	// self-handle is filled in per call site, because it cannot be taken
+	// inside this class's own constructor.
+	//
+	SECompositionServices CompositionServices()
+	{
+		return {m_hostEventDispatcher, m_messageBus,
+			weak_from_this()};
+	}
+
 public:
-	SEVideoCompositionManager();
+	SEVideoCompositionManager(
+		std::shared_ptr<SEWebsocketApiServer> apiServer,
+		std::shared_ptr<SEHostEventDispatcher>
+			hostEventDispatcher,
+		std::shared_ptr<SEMessageBus> messageBus);
 	~SEVideoCompositionManager();
 
 public:
-	void
-	DeserializeExistingCompositionProperties(CefRefPtr<CefValue> input,
-						 CefRefPtr<CefValue> &output);
+	void DeserializeExistingCompositionProperties(
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 	void DeserializeComposition(CefRefPtr<CefValue> input,
-				    CefRefPtr<CefValue> &output);
-	void SerializeAllCompositions(CefRefPtr<CefValue> &output);
-	void RemoveCompositionsByIds(
-		CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output);
+				    CefRefPtr<CefValue> &output) override;
+	void SerializeAllCompositions(CefRefPtr<CefValue> &output) override;
+	void RemoveCompositionsByIds(CefRefPtr<CefValue> input,
+				     CefRefPtr<CefValue> &output) override;
+
+	//
+	// Split by kind rather than parameterized by one, so the two handler
+	// bodies that call them stop naming OBS_ENCODER_VIDEO and
+	// OBS_ENCODER_AUDIO. The obs-typed pair below does the work.
+	//
+	void SerializeAvailableVideoEncoderClasses(
+		CefRefPtr<CefValue> &output) override;
+	void SerializeAvailableAudioEncoderClasses(
+		CefRefPtr<CefValue> &output) override;
+
+	void SerializeAvailableVideoEncoderClassProperties(
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
+	void SerializeAvailableAudioEncoderClassProperties(
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 
 	void SerializeAvailableEncoderClasses(obs_encoder_type type,
 					CefRefPtr<CefValue> &output);
@@ -36,9 +85,10 @@ public:
 		CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output,
 		obs_encoder_type encoder_type);
 
-	void SerializeAvailableTransitionClasses(CefRefPtr<CefValue> &output);
+	void SerializeAvailableTransitionClasses(
+		CefRefPtr<CefValue> &output) override;
 
-	void Reset();
+	void Reset() override;
 
 public:
 	std::shared_ptr<SEVideoCompositionBase> GetObsNativeVideoComposition()
@@ -80,6 +130,33 @@ public:
 		return m_videoCompositionsMap[id];
 	}
 
+public:
+	//
+	// ISEVideoCompositionManager's view of the three getters above. They
+	// cannot be the same methods: shared_ptr has no return-type
+	// covariance, and the eleven callers of the getters above need the
+	// concrete SEVideoCompositionBase -- SEBrowserWidget hands it to
+	// SetVideoCompositionView, SEOutput reads its CompositionInfo.
+	//
+	std::shared_ptr<ISEVideoComposition>
+	GetVideoComposition(CefRefPtr<CefValue> input) override
+	{
+		return GetVideoCompositionById(input);
+	}
+
+	std::shared_ptr<ISEVideoComposition>
+	GetVideoComposition(std::string id) override
+	{
+		return GetVideoCompositionById(id);
+	}
+
+	std::shared_ptr<ISEVideoComposition>
+	GetNativeVideoComposition() override
+	{
+		return GetObsNativeVideoComposition();
+	}
+
+public:
 	std::shared_ptr<SEVideoCompositionBase>
 	GetVideoCompositionByScene(obs_scene_t *lookupScene)
 	{

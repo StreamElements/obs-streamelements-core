@@ -5,11 +5,11 @@
 #include <map>
 
 #include "cef-headers.hpp"
+#include "ISEMessageBus.hpp"
 
 #include "SEControllerServer.hpp"
 #include "SEHttpServerManager.hpp"
 
-#include <util/threading.h>
 
 #include <future>
 
@@ -20,55 +20,75 @@
 // * CEF Docking Widgets
 // * Browser Sources
 //
-// Access singleton instance with SEMessageBus::GetInstance()
-//
-class SEMessageBus
-{
+class SEHostEventDispatcher;
+class SEConfig;
+
+class SEMessageBus : public ISEMessageBus {
 private:
 	struct Private {
 		explicit Private() = default;
 	};
 
 public:
-	typedef uint32_t message_destination_filter_flags_t;
-
-	// Message destination type flags
-	static const message_destination_filter_flags_t DEST_ALL;		  // All destinations
-	static const message_destination_filter_flags_t DEST_ALL_LOCAL;		  //   All local destinations
-	static const message_destination_filter_flags_t DEST_UI;		  //     UI
-	static const message_destination_filter_flags_t DEST_WORKER;		  //     Background workers
-	static const message_destination_filter_flags_t DEST_BROWSER_SOURCE;	  //     Browser sources
-	static const message_destination_filter_flags_t DEST_ALL_EXTERNAL;	  //   All external destinations
-	static const message_destination_filter_flags_t DEST_EXTERNAL_CONTROLLER; //     External controllers
-
-	// Message sources
-	static const char* const SOURCE_APPLICATION;
-	static const char* const SOURCE_WEB;
-	static const char* const SOURCE_EXTERNAL;
+	//
+	// The flags typedef, the destination flags and the source names
+	// moved to ISEMessageBus and are inherited from there. They are
+	// vocabulary a caller uses to say where a message goes, which
+	// makes them part of the contract rather than of this
+	// implementation of it -- and every SEMessageBus::DEST_* spelling
+	// elsewhere in the plug-in still resolves through this class, so
+	// none of those sites had to change.
+	//
 
 public:
-	SEMessageBus(Private);
+	//
+	// Takes the dispatcher rather than calling the free functions that
+	// fetched the websocket server from the singleton. The Private tag
+	// keeps construction behind Create(), so that nothing can build a
+	// second bus by accident -- listeners registered on one bus would
+	// never hear events published on the other.
+	//
+	SEMessageBus(Private,
+		     std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+		     std::shared_ptr<SEConfig> config);
 	virtual ~SEMessageBus();
 
-public:
-	static std::shared_ptr<SEMessageBus> GetInstance();
-	static void Destroy();
+	//
+	// A host* event, announced to external controllers. The translation
+	// -- drop the "host" prefix, lower-case what follows -- lived in five
+	// identical copies of a file-static helper, one per class that
+	// announces anything.
+	//
+	void NotifyExternalHostEvent(std::string hostEventName,
+				     std::string argsJson);
 
 public:
-	void AddListener(std::string target, message_destination_filter_flags_t type);
+	//
+	// The only way to build one. SEGlobalStateManager owns the instance
+	// and publishes it in SEApiServices; there is no static instance any
+	// more.
+	//
+	static std::shared_ptr<SEMessageBus>
+	Create(std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+	       std::shared_ptr<SEConfig> config);
+
+public:
+	void AddListener(std::string target,
+			 message_destination_filter_flags_t type) override;
 	void RemoveListener(std::string target);
 
 public:
 	void DeserializeBrowserHttpServer(std::string target,
 					  CefRefPtr<CefValue> input,
-					  CefRefPtr<CefValue> &output);
+					  CefRefPtr<CefValue> &output) override;
 
 	void SerializeBrowserHttpServers(std::string target,
-					 CefRefPtr<CefValue> &output);
+					 CefRefPtr<CefValue> &output) override;
 
-	void RemoveBrowserHttpServersByIds(std::string target,
-					   CefRefPtr<CefValue> input,
-					   CefRefPtr<CefValue> &output);
+	void
+	RemoveBrowserHttpServersByIds(std::string target,
+				      CefRefPtr<CefValue> input,
+				      CefRefPtr<CefValue> &output) override;
 
 public:
 	// Deliver event message to specific browser
@@ -82,28 +102,23 @@ public:
 	// except Browser Sources.
 	//
 	void NotifyAllLocalEventListeners(
-		message_destination_filter_flags_t types,
-		std::string source,
-		std::string sourceAddress,
-		std::string event,
-		CefRefPtr<CefValue> payload);
+		message_destination_filter_flags_t types, std::string source,
+		std::string sourceAddress, std::string event,
+		CefRefPtr<CefValue> payload) override;
 
 	// Deliver message to all external controllers
 	//
 	void NotifyAllExternalEventListeners(
-		message_destination_filter_flags_t types,
-		std::string source,
-		std::string sourceAddress,
-		std::string event,
-		CefRefPtr<CefValue> payload);
+		message_destination_filter_flags_t types, std::string source,
+		std::string sourceAddress, std::string event,
+		CefRefPtr<CefValue> payload) override;
 
 	// Deliver message to all listeners, including Browser Sources and External Controllers
 	//
-	void NotifyAllMessageListeners(
-		message_destination_filter_flags_t types,
-		std::string source,
-		std::string sourceAddress,
-		CefRefPtr<CefValue> payload)
+	void NotifyAllMessageListeners(message_destination_filter_flags_t types,
+				       std::string source,
+				       std::string sourceAddress,
+				       CefRefPtr<CefValue> payload) override
 	{
 		if (HandleSystemCommands(types, source, sourceAddress, payload)) {
 			// System command was handled
@@ -164,9 +179,10 @@ private:
 	};
 
 public:
-	void DeserializeHttpRequestResponse(CefRefPtr<CefValue> idInput,
-					    CefRefPtr<CefValue> responseInput,
-					    CefRefPtr<CefValue> &output);
+	void
+	DeserializeHttpRequestResponse(CefRefPtr<CefValue> idInput,
+				       CefRefPtr<CefValue> responseInput,
+				       CefRefPtr<CefValue> &output) override;
 
 private:
 	class ListenerItem {
@@ -193,5 +209,7 @@ private:
 	SEControllerServer m_external_controller_server;
 
 private:
-	static std::shared_ptr<SEMessageBus> s_instance;
+
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+	std::shared_ptr<SEConfig> m_config;
 };

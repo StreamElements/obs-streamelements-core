@@ -1,13 +1,20 @@
 #pragma once
 
 #include <obs-frontend-api.h>
+#include "SEObsOutputType.hpp"
 #include "SEVideoComposition.hpp"
 #include "SEAudioComposition.hpp"
 
 #include <shared_mutex>
 
-
-enum ObsOutputType { StreamingOutput, RecordingOutput, ReplayBufferOutput };
+//
+// Forward declarations: the custom output factories resolve composition ids
+// through these, and take them as borrowed pointers rather than reaching for
+// the global state manager.
+//
+class SEVideoCompositionManager;
+class SEAudioCompositionManager;
+class SEHostEventDispatcher;
 
 class SEOutputBase
 	: public SEVideoCompositionEventListener,
@@ -409,6 +416,8 @@ private:
 	ObsStateDependencyType m_obsStateDependency = Streaming;
 	ObsOutputType m_obsOutputType = StreamingOutput;
 
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+
 public:
 	SEOutputBase(
 		std::string id, std::string name,
@@ -418,8 +427,19 @@ public:
 			videoComposition,
 		std::shared_ptr<SEAudioCompositionBase>
 			audioComposition,
-		CefRefPtr<CefDictionaryValue> auxData);
+		CefRefPtr<CefDictionaryValue> auxData,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher);
 	virtual ~SEOutputBase();
+
+	//
+	// Public because the two dispatch helpers in SEOutput.cpp are file
+	// statics that are handed the output -- they announce on its behalf,
+	// so they read the dispatcher off it rather than fetching one.
+	//
+	std::shared_ptr<SEHostEventDispatcher> HostEventDispatcher()
+	{
+		return m_hostEventDispatcher;
+	}
 
 	std::string GetId() { return m_id; }
 	std::string GetName() { return m_name; }
@@ -526,10 +546,11 @@ public:
 			audioComposition,
 		std::vector<uint32_t> audioTracks,
 		std::vector<std::shared_ptr<VideoEncoderTemplate>> videoEncoders, obs_service_t *service,
-		const char *bindToIP, CefRefPtr<CefDictionaryValue> auxData)
+		const char *bindToIP, CefRefPtr<CefDictionaryValue> auxData,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 		: SEOutputBase(id, name, StreamingOutput, Streaming,
 					   videoComposition, audioComposition,
-					   auxData),
+					   auxData, hostEventDispatcher),
 		  m_service(service),
 		  m_audioTracks(audioTracks),
 		  m_videoEncoderTemplates(videoEncoders)
@@ -577,7 +598,10 @@ public:
 	}
 
 	static std::shared_ptr<SECustomStreamingOutput>
-	Create(CefRefPtr<CefValue> input);
+	Create(CefRefPtr<CefValue> input,
+	       SEVideoCompositionManager *videoCompositionManager,
+	       SEAudioCompositionManager *audioCompositionManager,
+	       std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher);
 
 	virtual bool IsObsNativeOutput() override { return false; }
 
@@ -604,8 +628,12 @@ public:
 		std::shared_ptr<SEVideoCompositionBase>
 			videoComposition,
 		std::shared_ptr<SEAudioCompositionBase>
-			audioComposition)
-		: SEOutputBase(id, name, StreamingOutput, Streaming, videoComposition, audioComposition, CefDictionaryValue::Create())
+			audioComposition,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
+		: SEOutputBase(id, name, StreamingOutput, Streaming,
+					   videoComposition, audioComposition,
+					   CefDictionaryValue::Create(),
+					   hostEventDispatcher)
 	{
 	}
 
@@ -646,10 +674,12 @@ public:
 		std::shared_ptr<SEVideoCompositionBase>
 			videoComposition,
 		std::shared_ptr<SEAudioCompositionBase>
-			audioComposition)
+			audioComposition,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 		: SEOutputBase(id, name, RecordingOutput, Recording,
 					   videoComposition, audioComposition,
-					   CefDictionaryValue::Create())
+					   CefDictionaryValue::Create(),
+					   hostEventDispatcher)
 	{
 	}
 
@@ -716,10 +746,11 @@ public:
 			audioComposition,
 		std::vector<uint32_t> audioTracks,
 		std::vector<std::shared_ptr<VideoEncoderTemplate>> videoEncoders,
-		CefRefPtr<CefDictionaryValue> auxData)
+		CefRefPtr<CefDictionaryValue> auxData,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 		: SEOutputBase(id, name, RecordingOutput, None,
 					   videoComposition, audioComposition,
-					   auxData),
+					   auxData, hostEventDispatcher),
 		  m_recordingSettings(recordingSettings),
 		  m_audioTracks(audioTracks),
 		  m_videoEncoderTemplates(videoEncoders)
@@ -747,7 +778,10 @@ public:
 	}
 
 	static std::shared_ptr<SECustomRecordingOutput>
-	Create(CefRefPtr<CefValue> input);
+	Create(CefRefPtr<CefValue> input,
+	       SEVideoCompositionManager *videoCompositionManager,
+	       SEAudioCompositionManager *audioCompositionManager,
+	       std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher);
 
 	virtual bool IsObsNativeOutput() override { return false; }
 
@@ -777,11 +811,13 @@ public:
 		std::shared_ptr<SEVideoCompositionBase>
 			videoComposition,
 		std::shared_ptr<SEAudioCompositionBase>
-			audioComposition)
+			audioComposition,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 		: SEOutputBase(id, name, ReplayBufferOutput,
 					   ReplayBuffer,
 					   videoComposition, audioComposition,
-					   CefDictionaryValue::Create())
+					   CefDictionaryValue::Create(),
+					   hostEventDispatcher)
 	{
 	}
 
@@ -855,10 +891,11 @@ public:
 			audioComposition,
 		std::vector<uint32_t> audioTracks,
 		std::vector<std::shared_ptr<VideoEncoderTemplate>> videoEncoders,
-		CefRefPtr<CefDictionaryValue> auxData)
+		CefRefPtr<CefDictionaryValue> auxData,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 		: SEOutputBase(id, name, ReplayBufferOutput, Streaming,
 					   videoComposition, audioComposition,
-					   auxData),
+					   auxData, hostEventDispatcher),
 		  m_recordingSettings(recordingSettings),
 		  m_audioTracks(audioTracks),
 		  m_videoEncoderTemplates(videoEncoders)
@@ -885,7 +922,10 @@ public:
 	}
 
 	static std::shared_ptr<SECustomReplayBufferOutput>
-	Create(CefRefPtr<CefValue> input);
+	Create(CefRefPtr<CefValue> input,
+	       SEVideoCompositionManager *videoCompositionManager,
+	       SEAudioCompositionManager *audioCompositionManager,
+	       std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher);
 
 	virtual bool IsObsNativeOutput() override { return false; }
 

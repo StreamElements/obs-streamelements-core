@@ -1,10 +1,14 @@
 #include "SEBackupManager.hpp"
+#include "SECleanupManager.hpp"
+#include "SEConfig.hpp"
+#include "SELocalFilesystemHttpServer.hpp"
 #include "SEUtils.hpp"
 #include "SENetworkDialog.hpp"
 #include "SEGlobalStateManager.hpp"
 
 #include <obs.h>
 #include <obs-frontend-api.h>
+#include <QMainWindow>
 #include <util/config-file.h>
 
 #include "deps/zip/zip.h"
@@ -89,9 +93,16 @@ static void glob_files(std::string pattern,
 	os_globfree(glob);
 }
 
-static bool GetLocalPathFromURL(std::string url, std::string &path)
+//
+// Takes the cleanup manager as a borrowed raw pointer: it neither owns nor
+// extends the lifetime, and the caller is a member whose own reference
+// outlives the call.
+//
+static bool GetLocalPathFromURL(std::string url, std::string &path,
+				SECleanupManager *cleanupManager)
 {
-	if (VerifySessionSignedAbsolutePathURL(url, path))
+	if (SELocalFilesystemHttpServer::VerifySessionSignedAbsolutePathURL(
+		    url, path))
 		return true;
 
 	if (!GetTemporaryFilePath("obs-live-restore", path))
@@ -103,8 +114,7 @@ static bool GetLocalPathFromURL(std::string url, std::string &path)
 		obs_frontend_push_ui_translation(obs_module_get_string);
 
 		SENetworkDialog netDialog(
-			SEGlobalStateManager::GetInstance()
-				->mainWindow());
+			(QMainWindow *)obs_frontend_get_main_window());
 
 		obs_frontend_pop_ui_translation();
 
@@ -117,9 +127,7 @@ static bool GetLocalPathFromURL(std::string url, std::string &path)
 	if (!result)
 		os_unlink(path.c_str());
 	else
-		SEGlobalStateManager::GetInstance()
-			->GetCleanupManager()
-			->AddPath(path);
+		cleanupManager->AddPath(path);
 
 	return result;
 }
@@ -215,7 +223,7 @@ static bool ScanForFileReferencesMonikersToRestore(CefRefPtr<CefValue> &node,
 
 			std::string srcPath = srcBasePath + "/" + relPath;
 
-			if (os_file_exists(srcPath.c_str())) {
+			if (FileExists(srcPath)) {
 				std::string destPath =
 					destBasePath + "/" + relPath;
 
@@ -396,16 +404,24 @@ static bool ScanForFileReferencesMonikersToRestore(std::string srcBasePath,
 	return true;
 }
 
+//
+// Takes the HTTP server as a borrowed raw pointer, for the same reason
+// GetLocalPathFromURL above takes the cleanup manager that way: it neither
+// owns it nor extends its lifetime, and the caller is a member whose own
+// reference outlives the whole recursion.
+//
 static bool
-ScanForFileReferences(CefRefPtr<CefValue> &node, std::map<std::string, std::string> &filesMap)
+ScanForFileReferences(CefRefPtr<CefValue> &node,
+		      std::map<std::string, std::string> &filesMap,
+		      SELocalFilesystemHttpServer *httpServer)
 {
 	if (node->GetType() == VTYPE_STRING) {
 		std::string path = node->GetString().ToString();
 
 		if (!filesMap.count(path)) {
-			if (os_file_exists(path.c_str())) {
+			if (FileExists(path) && httpServer) {
 				filesMap[path] =
-					CreateSessionSignedAbsolutePathURL(
+					httpServer->CreateSessionSignedAbsolutePathURL(
 						utf8_to_wstring(path));
 			}
 		}
@@ -416,7 +432,8 @@ ScanForFileReferences(CefRefPtr<CefValue> &node, std::map<std::string, std::stri
 			CefRefPtr<CefValue> value =
 				list->GetValue(index)->Copy();
 
-			if (!ScanForFileReferences(value, filesMap))
+			if (!ScanForFileReferences(value, filesMap,
+						   httpServer))
 				return false;
 		}
 	} else if (node->GetType() == VTYPE_DICTIONARY) {
@@ -428,7 +445,8 @@ ScanForFileReferences(CefRefPtr<CefValue> &node, std::map<std::string, std::stri
 				CefRefPtr<CefValue> value =
 					d->GetValue(key)->Copy();
 
-				if (!ScanForFileReferences(value, filesMap))
+				if (!ScanForFileReferences(value, filesMap,
+							   httpServer))
 					return false;
 			}
 		}
@@ -448,7 +466,7 @@ ScanForFileReferencesToBackup(zip_t *zip, CefRefPtr<CefValue> &node,
 	if (node->GetType() == VTYPE_STRING) {
 		std::string path = node->GetString().ToString();
 
-		if (os_file_exists(path.c_str())) {
+		if (FileExists(path)) {
 			int64_t fileSize = os_get_file_size(path.c_str());
 
 			if (fileSize > MAX_BACKUP_FILE_SIZE) {
@@ -544,7 +562,7 @@ static CefRefPtr<CefValue> ReadCollectionById(std::string basePath,
 	std::string relPath = "basic/scenes/" + collection + ".json";
 	std::string absPath = basePath + "/" + relPath;
 
-	if (os_file_exists(absPath.c_str())) {
+	if (FileExists(absPath)) {
 		char *buffer = os_quick_read_utf8_file(absPath.c_str());
 		CefRefPtr<CefValue> content = CefParseJSON(
 			CefString(buffer), JSON_PARSER_ALLOW_TRAILING_COMMAS);
@@ -565,7 +583,7 @@ static bool AddCollectionToZip(zip_t *zip, std::string basePath,
 	std::string relPath = "basic/scenes/" + collection + ".json";
 	std::string absPath = basePath + "/" + relPath;
 
-	if (!os_file_exists(absPath.c_str()))
+	if (!FileExists(absPath))
 		return false;
 
 	if (!includeReferencedFiles) {
@@ -599,7 +617,7 @@ static bool AddProfileToZip(zip_t *zip, std::string basePath,
 			      std::regex_replace(profile, std::regex(" "), "_");
 	std::string absPath = basePath + "/" + relPath;
 
-	if (!os_file_exists(absPath.c_str()))
+	if (!FileExists(absPath))
 		return false;
 
 	if (!AddFileToZip(zip, absPath + "/basic.ini", relPath + "/basic.ini"))
@@ -639,10 +657,17 @@ static bool AddProfileToZip(zip_t *zip, std::string basePath,
 	return true;
 }
 
-static bool AddScopedStorageToZip(zip_t *zip, std::string timestamp)
+//
+// Borrowed raw pointer, like GetLocalPathFromURL above: the caller is a
+// member whose own reference outlives the call.
+//
+static bool AddScopedStorageToZip(zip_t *zip, std::string timestamp,
+				  SEConfig *config)
 {
-	std::string basePath = SEConfig::GetInstance()
-				       ->GetScopedConfigStorageRootPath();
+	if (!config)
+		return false;
+
+	std::string basePath = config->GetScopedConfigStorageRootPath();
 
 	std::map<std::string, std::string> relToAbsMap;
 
@@ -744,7 +769,15 @@ static void ReadListOfIdsFromCefValue(CefRefPtr<CefValue> input,
 	}
 }
 
-SEBackupManager::SEBackupManager() {}
+SEBackupManager::SEBackupManager(
+	std::shared_ptr<SECleanupManager> cleanupManager,
+	std::shared_ptr<SELocalFilesystemHttpServer> httpServer,
+	std::shared_ptr<SEConfig> config)
+	: m_cleanupManager(cleanupManager),
+	  m_httpServer(httpServer),
+	  m_config(config)
+{
+}
 
 SEBackupManager::~SEBackupManager() {}
 
@@ -786,7 +819,8 @@ void SEBackupManager::QueryLocalBackupPackageReferencedFiles(
 
 		std::map<std::string, std::string> filesMap;
 
-		if (!ScanForFileReferences(collectionValue, filesMap))
+		if (!ScanForFileReferences(collectionValue, filesMap,
+					   m_httpServer.get()))
 			continue;
 
 		CefRefPtr<CefListValue> list = CefListValue::Create();
@@ -879,9 +913,7 @@ void SEBackupManager::CreateLocalBackupPackage(
 	if (!zip)
 		return;
 
-	SEGlobalStateManager::GetInstance()
-		->GetCleanupManager()
-		->AddPath(backupPackagePath);
+	m_cleanupManager->AddPath(backupPackagePath);
 
 	for (auto profile : requestProfiles) {
 		if (!AddProfileToZip(zip, basePath, profile))
@@ -914,7 +946,7 @@ void SEBackupManager::CreateLocalBackupPackage(
 		addedCollections->SetDictionary(addedCollections->GetSize(), d);
 	}
 
-	if (!AddScopedStorageToZip(zip, timestamp)) {
+	if (!AddScopedStorageToZip(zip, timestamp, m_config.get())) {
 		// NOP
 	}
 
@@ -924,8 +956,11 @@ void SEBackupManager::CreateLocalBackupPackage(
 
 	out->SetList("profiles", addedProfiles);
 	out->SetList("sceneCollections", addedCollections);
-	out->SetString("url", CreateSessionSignedAbsolutePathURL(
-				      utf8_to_wstring(backupPackagePath)));
+	out->SetString("url",
+		       m_httpServer ? m_httpServer->CreateSessionSignedAbsolutePathURL(
+					      utf8_to_wstring(
+						      backupPackagePath))
+				    : std::string());
 
 	output->SetDictionary(out);
 }
@@ -949,7 +984,7 @@ void SEBackupManager::QueryBackupPackageContent(
 
 	std::string localPath;
 
-	if (!GetLocalPathFromURL(url, localPath))
+	if (!GetLocalPathFromURL(url, localPath, m_cleanupManager.get()))
 		return;
 
 	zip_t *zip = zip_open(localPath.c_str(), 0, 'r');
@@ -1011,8 +1046,11 @@ void SEBackupManager::QueryBackupPackageContent(
 
 	CefRefPtr<CefDictionaryValue> result = CefDictionaryValue::Create();
 
-	result->SetString("url", CreateSessionSignedAbsolutePathURL(
-					 utf8_to_wstring(localPath)));
+	result->SetString("url",
+			  m_httpServer
+				  ? m_httpServer->CreateSessionSignedAbsolutePathURL(
+					    utf8_to_wstring(localPath))
+				  : std::string());
 	result->SetList("profiles", profilesList);
 	result->SetList("sceneCollections", collectionsList);
 
@@ -1128,9 +1166,7 @@ void SEBackupManager::RestoreBackupPackageContent(
 	if (!GetTemporaryFilePath("obs-live-restore-content", extractPath))
 		return;
 
-	SEGlobalStateManager::GetInstance()
-		->GetCleanupManager()
-		->AddPath(extractPath);
+	m_cleanupManager->AddPath(extractPath);
 
 	std::string extractRootPath = extractPath + ".dir";
 
@@ -1144,7 +1180,7 @@ void SEBackupManager::RestoreBackupPackageContent(
     
 	std::string localPath;
 
-	if (!GetLocalPathFromURL(url, localPath))
+	if (!GetLocalPathFromURL(url, localPath, m_cleanupManager.get()))
 		return;
 
 	zip_t *zip = zip_open(localPath.c_str(), 0, 'r');
@@ -1387,9 +1423,7 @@ void SEBackupManager::RestoreBackupPackageContent(
 
             /* Cleanup temporary resources */
 
-            SEGlobalStateManager::GetInstance()
-                ->GetCleanupManager()
-                ->Clean();
+            m_cleanupManager->Clean();
 
             /* Exit OBS */
 
@@ -1412,9 +1446,7 @@ void SEBackupManager::RestoreBackupPackageContent(
     if (ScanForFileReferencesMonikersToRestore(extractPath, destBasePath)) {
         /* Cleanup temporary resources */
 
-        SEGlobalStateManager::GetInstance()
-            ->GetCleanupManager()
-            ->Clean();
+        m_cleanupManager->Clean();
 
 	// Prevent front-end from saving it's shit and overwriting our backup
 	obs_frontend_defer_save_begin();

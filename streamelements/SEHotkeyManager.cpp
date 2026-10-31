@@ -1,5 +1,6 @@
 #include "SEHotkeyManager.hpp"
 #include "SEUtils.hpp"
+#include "SEHostEventDispatcher.hpp"
 
 #include <util/dstr.h>
 #include <obs-module.h>
@@ -149,9 +150,18 @@ static void DeserializeAndApplyHotkeyTriggersToHotkeyID(
 		static_cast<void *>(&AtomicUpdate));
 }
 
-void SEHotkeyManager::hotkey_change_handler(void*, calldata_t*)
+void SEHotkeyManager::hotkey_change_handler(void *data, calldata_t *)
 {
-	AdviseHostHotkeyBindingsChanged();
+	//
+	// signal_handler_connect() below is given `this`, so the manager --
+	// and with it the dispatcher -- arrives as the callback's context.
+	//
+	auto self = static_cast<SEHotkeyManager *>(data);
+
+	if (!self || !self->m_hostEventDispatcher)
+		return;
+
+	self->m_hostEventDispatcher->AdviseHostHotkeyBindingsChanged();
 }
 
 static const char* HOTKEY_BINDINGS_CHANGED_SIGNAL_NAMES[] = {
@@ -162,7 +172,9 @@ static const char* HOTKEY_BINDINGS_CHANGED_SIGNAL_NAMES[] = {
 	nullptr
 };
 
-SEHotkeyManager::SEHotkeyManager()
+SEHotkeyManager::SEHotkeyManager(
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
+	: m_hostEventDispatcher(hostEventDispatcher)
 {
 	for (size_t i = 0; HOTKEY_BINDINGS_CHANGED_SIGNAL_NAMES[i]; ++i) {
 		signal_handler_connect(
@@ -424,27 +436,35 @@ void SEHotkeyManager::hotkeyTriggered(obs_hotkey_id id, obs_hotkey_t *hotkey, bo
 	if (m_registeredHotkeyDataString.count(id)) {
 		std::string dataString = m_registeredHotkeyDataString[id];
 
-		if (pressed) {
-			DispatchJSEventGlobal("hostHotkeyPressed", dataString);
-		}
-		else {
-			DispatchJSEventGlobal("hostHotkeyReleased", dataString);
-		}
+		if (!m_hostEventDispatcher)
+			return;
+
+		m_hostEventDispatcher->DispatchJSEventGlobal(
+			pressed ? "hostHotkeyPressed" : "hostHotkeyReleased",
+			dataString);
 	}
 }
 
-obs_hotkey_id SEHotkeyManager::DeserializeSingleHotkeyBinding(CefRefPtr<CefValue> input)
+int64_t
+SEHotkeyManager::DeserializeSingleHotkeyBinding(CefRefPtr<CefValue> input)
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
 	if (input->GetType() != VTYPE_DICTIONARY) {
-		return OBS_INVALID_HOTKEY_ID;
+		return -1;
 	}
 
 	CefRefPtr<CefDictionaryValue> root = input->GetDictionary();
 
-	if (!root->HasKey("name") || !root->HasKey("description")) {
-		return OBS_INVALID_HOTKEY_ID;
+	// Type-checked, not merely present: GetString(k) is
+	// `m_map[k]->GetString()`, and that getter is
+	// `if (m_type != VTYPE_STRING) throw;` -- a bare throw outside a
+	// catch, so std::terminate. addHotkeyBinding({name: 7, ...}) reached
+	// it from any page.
+	if (!root->HasKey("name") || root->GetType("name") != VTYPE_STRING ||
+	    !root->HasKey("description") ||
+	    root->GetType("description") != VTYPE_STRING) {
+		return -1;
 	}
 
 	std::string name = root->GetString("name");
@@ -460,7 +480,7 @@ obs_hotkey_id SEHotkeyManager::DeserializeSingleHotkeyBinding(CefRefPtr<CefValue
 	}
 
 	if (!name.size() || !description.size()) {
-		return false;
+		return -1;
 	}
 
 	auto hotkeyFunc = [](void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed) {
@@ -473,7 +493,7 @@ obs_hotkey_id SEHotkeyManager::DeserializeSingleHotkeyBinding(CefRefPtr<CefValue
 
 	if (m_registeredHotkeyNamesToHotkeyIds.count(name)) {
 		// Existing hotkey binding
-		return OBS_INVALID_HOTKEY_ID;
+		return -1;
 	}
 	else {
 		// New hotkey
@@ -504,7 +524,7 @@ obs_hotkey_id SEHotkeyManager::DeserializeSingleHotkeyBinding(CefRefPtr<CefValue
 
 		if (context.id != OBS_INVALID_HOTKEY_ID) {
 			// We already have the same hotkey name registered
-			return OBS_INVALID_HOTKEY_ID;
+			return -1;
 		}
 
 		// Register new hotkey
@@ -536,10 +556,17 @@ obs_hotkey_id SEHotkeyManager::DeserializeSingleHotkeyBinding(CefRefPtr<CefValue
 		DeserializeAndApplyHotkeyTriggersToHotkeyID(id, CefListValue::Create());
 	}
 
-	return id;
+	return static_cast<int64_t>(id);
 }
 
-bool SEHotkeyManager::RemoveHotkeyBindingById(obs_hotkey_id id)
+bool SEHotkeyManager::RemoveHotkeyBindingById(uint64_t id_)
+{
+	const obs_hotkey_id id = static_cast<obs_hotkey_id>(id_);
+
+	return RemoveHotkeyBindingByObsId(id);
+}
+
+bool SEHotkeyManager::RemoveHotkeyBindingByObsId(obs_hotkey_id id)
 {
 	std::lock_guard<std::recursive_mutex> guard(m_mutex);
 

@@ -3,6 +3,7 @@
 #include "SEApiMessageHandler.hpp"
 #include "SERemoteIconLoader.hpp"
 #include "SEConfig.hpp"
+#include "SEAuxiliaryControlsBuilder.hpp"
 
 #include <obs.h>
 #include <obs.hpp>
@@ -212,8 +213,10 @@ static bool HandleDefaultActionRequest(obs_sceneitem_t *scene_item,
 						scene_item);
 			};
 
-			handled = DeserializeAndInvokeAction(
-				value, defaultAction, defaultContextMenu);
+			handled = monitor->GetAuxiliaryControls()
+					  ->DeserializeAndInvokeAction(
+						  value, defaultAction,
+						  defaultContextMenu);
 		}
 		#endif
 	}
@@ -260,7 +263,9 @@ HandleSceneItemContextMenuRequest(obs_sceneitem_t *scene_item,
 
 			QMenu menu; //(m_mainWindow);
 
-			handled = DeserializeMenu(value, menu, defaultAction,
+			handled = monitor->GetAuxiliaryControls()
+					  ->DeserializeMenu(
+						  value, menu, defaultAction,
 						  defaultContextMenu);
 
 			if (handled) {
@@ -281,8 +286,8 @@ HandleSceneItemContextMenuRequest(obs_sceneitem_t *scene_item,
 	#endif
 }
 
-static bool IsContextMenuAllowed() {
-	if (SEConfig::GetInstance()->IsOnBoardingMode())
+static bool IsContextMenuAllowed(SEConfig *config) {
+	if (!config || config->IsOnBoardingMode())
 		return true;
 
 	bool allowed = true;
@@ -328,10 +333,10 @@ static bool IsContextMenuAllowed() {
 	return allowed;
 }
 
-static bool IsSceneItemSettingsActionAllowed()
+static bool IsSceneItemSettingsActionAllowed(SEConfig *config)
 {
 	#if SE_ENABLE_SCENEITEM_DEFAULT_ACTION
-	if (SEConfig::GetInstance()->IsOnBoardingMode())
+	if (!config || config->IsOnBoardingMode())
 		return true;
 
 	bool allowed = true;
@@ -365,8 +370,8 @@ static bool IsSceneItemSettingsActionAllowed()
 	#endif
 }
 
-static bool IsSceneItemReorderActionAllowed() {
-	if (SEConfig::GetInstance()->IsOnBoardingMode())
+static bool IsSceneItemReorderActionAllowed(SEConfig *config) {
+	if (!config || config->IsOnBoardingMode())
 		return true;
 
 	bool allowed = true;
@@ -419,7 +424,9 @@ public:
 			/* OBS preview pane */
 			if (e->type() == QEvent::ContextMenu) {
 				// Handle context menu for preview window events
-				bool handled = !IsContextMenuAllowed();
+				bool handled = !IsContextMenuAllowed(
+					m_monitor ? m_monitor->GetConfig().get()
+						  : nullptr);
 
 				if (!handled) {
 					sceneitem_list_t *list =
@@ -505,7 +512,10 @@ public:
 			if (!scene_item)
 				return false;
 
-			bool handled = !IsContextMenuAllowed();
+			bool handled = !IsContextMenuAllowed(
+				this->m_monitor
+					? this->m_monitor->GetConfig().get()
+					: nullptr);
 
 			if (!handled) {
 				handled = HandleSceneItemContextMenuRequest(
@@ -527,8 +537,12 @@ public:
 /* ================================================================= */
 
 SESceneItemsMonitor::SESceneItemsMonitor(
-	QMainWindow *mainWindow)
-	: m_mainWindow(mainWindow)
+	QMainWindow *mainWindow,
+	std::shared_ptr<SEAuxiliaryControlsBuilder> auxiliaryControlsBuilder,
+	std::shared_ptr<SEConfig> config)
+	: m_mainWindow(mainWindow),
+	  m_auxiliaryControls(auxiliaryControlsBuilder),
+	  m_config(config)
 {
 	m_eventFilter = new SceneItemsLocalEventFilter(m_mainWindow, this);
 
@@ -963,7 +977,9 @@ static void deserializeAuxSceneItemsControls(
 	CefRefPtr<CefListValue> list = monitor->GetSceneItemActions(scene_item);
 
 	for (size_t index = 0; index < list->GetSize(); ++index) {
-		QWidget *control = DeserializeAuxiliaryControlWidget(
+		QWidget *control =
+			monitor->GetAuxiliaryControls()
+				->DeserializeAuxiliaryControlWidget(
 			list->GetValue(index),
 			[monitor, scene_item]() {
 				monitor->InvokeCurrentSceneItemDefaultAction(
@@ -1012,8 +1028,9 @@ static void deserializeSceneItemIcon(SESceneItemsMonitor *monitor,
 
 	std::string url = "";
 
-	QWidget *itemIcon = DeserializeRemoteIconWidget(
-		monitor->GetSceneItemIcon(scene_item), defaultPixmap);
+	QWidget *itemIcon =
+		monitor->GetAuxiliaryControls()->DeserializeRemoteIconWidget(
+			monitor->GetSceneItemIcon(scene_item), defaultPixmap);
 
 	itemIcon->setAutoFillBackground(false);
 	itemIcon->setStyleSheet("background: none");
@@ -1118,7 +1135,7 @@ void SESceneItemsMonitor::UpdateSceneItemsWidgets()
 	obs_scene_enum_items(scene, retrieveSceneItemsWithAddRef, &sceneItems);
 
 	bool isSignedIn =
-		!SEConfig::GetInstance()->IsOnBoardingMode();
+		!m_config->IsOnBoardingMode();
 
 	for (auto toolButton : m_sceneItemsToolBar->findChildren<QToolButton *>()) {
 		auto action = toolButton->defaultAction();
@@ -1129,10 +1146,12 @@ void SESceneItemsMonitor::UpdateSceneItemsWidgets()
 		bool enabled = true;
 
 		if (action->objectName() == "actionSourceProperties") {
-			enabled = IsSceneItemSettingsActionAllowed();
+			enabled = IsSceneItemSettingsActionAllowed(
+				m_config.get());
 		} else if (action->objectName() == "actionSourceUp" ||
 			   action->objectName() == "actionSourceDown") {
-			enabled = IsSceneItemReorderActionAllowed();
+			enabled = IsSceneItemReorderActionAllowed(
+				m_config.get());
 		}
 
 		toolButton->setEnabled(enabled);
@@ -1420,8 +1439,9 @@ void SESceneItemsMonitor::UpdateSceneItemsToolbar()
 	CefRefPtr<CefListValue> list = m_sceneItemsToolBarActions->GetList();
 
 	for (size_t index = 0; index < list->GetSize(); ++index) {
-		QWidget *control = DeserializeAuxiliaryControlWidget(
-			list->GetValue(index));
+		QWidget *control =
+			m_auxiliaryControls->DeserializeAuxiliaryControlWidget(
+				list->GetValue(index));
 
 		if (!control)
 			continue;

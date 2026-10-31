@@ -15,11 +15,21 @@ void SEHttpClient::DeserializeHttpRequestText(
 	if (input->GetType() == VTYPE_DICTIONARY) {
 		CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
 
-		std::string method =
-			d->HasKey("method") ? d->GetString("method").ToString() : "GET";
+		// Type-checked as well as present. HasKey answers for
+		// presence only, and GetString(k) forwards to the value's own
+		// `if (m_type != VTYPE_STRING) throw;` -- a bare throw
+		// outside a catch, which is std::terminate rather than
+		// anything catchable. The "headers" read below already did
+		// this; these two did not.
+		std::string method = (d->HasKey("method") &&
+				      d->GetType("method") == VTYPE_STRING)
+					     ? d->GetString("method").ToString()
+					     : "GET";
 
 		std::string url =
-			d->HasKey("url") ? d->GetString("url") : "";
+			(d->HasKey("url") && d->GetType("url") == VTYPE_STRING)
+				? d->GetString("url")
+				: "";
 
 		http_client_headers_t request_headers;
 
@@ -80,15 +90,34 @@ void SEHttpClient::DeserializeHttpRequestText(
 			}
 		};
 
-		if (method == "GET" || method == "DELETE" || method == "OPTIONS") {
+		//
+		// No usable url: answer the failure shape rather than hand
+		// "" to libcurl.
+		//
+		// Not hypothetical, and not a consequence of the type check
+		// above. HttpGetString("") does not return on this machine,
+		// and this body runs under the per-translation-unit API call
+		// lock for its whole length -- so one such call from any
+		// page silently wedges every host API method for the life of
+		// the process, with OBS itself still reporting as
+		// responsive. Measured: after one, getHostProperties() never
+		// answered again.
+		//
+		// Reachable on master through the missing-key branch, which
+		// produced the same "" long before a wrongly typed url
+		// could.
+		//
+		if (url.empty()) {
+			error_string = "No URL specified";
+		} else if (method == "GET" || method == "DELETE" ||
+			   method == "OPTIONS") {
 			success = HttpGetString(
 				method,
 				url.c_str(),
 				request_headers,
 				cb,
 				nullptr);
-		}
-		else {
+		} else {
 			std::string post_data;
 
 			if (d->HasKey("body") && d->GetType("body") == VTYPE_STRING) {

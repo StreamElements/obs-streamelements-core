@@ -5,6 +5,12 @@
 #include "SENetworkDialog.hpp"
 #include "SESecretRedactor.hpp"
 #include "SEConfig.hpp"
+
+// Included after the headers above, not before them: these pull in windows.h,
+// and ahead of SEUtils/SEGlobalStateManager that lands before winsock2.h and
+// redefines every socket struct.
+#include "SEPerformanceHistoryTracker.hpp"
+#include "SEAnalyticsEventsManager.hpp"
 #include "Version.hpp"
 #include "ui_SEReportIssueDialog.h"
 
@@ -119,8 +125,14 @@ static double GetCpuCoreBenchmark(const uint64_t CPU_BENCH_TOTAL, uint64_t& cpu_
 }
 #pragma optimize("", on)
 
-SEReportIssueDialog::SEReportIssueDialog(QWidget *parent) :
+SEReportIssueDialog::SEReportIssueDialog(
+	std::shared_ptr<SEPerformanceHistoryTracker> performanceHistoryTracker,
+	std::shared_ptr<SEAnalyticsEventsManager> analyticsEventsManager,
+	std::shared_ptr<SEConfig> config, QWidget *parent) :
     QDialog(parent),
+    m_performanceHistoryTracker(performanceHistoryTracker),
+    m_analyticsEventsManager(analyticsEventsManager),
+    m_config(config),
     ui(new Ui::SEReportIssueDialog)
 {
     ui->setupUi(this);
@@ -338,8 +350,8 @@ void SEReportIssueDialog::accept()
 		{
 #ifdef WIN32
 			QMainWindow *mainWindow =
-				SEGlobalStateManager::GetInstance()
-					->mainWindow();
+				(QMainWindow *)
+					obs_frontend_get_main_window();
 
 			QScreen *screen = QGuiApplication::primaryScreen();
 			if (const QWindow *window =
@@ -634,14 +646,10 @@ void SEReportIssueDialog::accept()
 				// Histogram CPU & memory usage (past hour, 1 minute intervals)
 
 				auto cpuUsageHistory =
-					SEGlobalStateManager::GetInstance()
-						->GetPerformanceHistoryTracker()
-						->getCpuUsageSnapshot();
+					m_performanceHistoryTracker->getCpuUsageSnapshot();
 
 				auto memoryUsageHistory =
-					SEGlobalStateManager::GetInstance()
-						->GetPerformanceHistoryTracker()
-						->getMemoryUsageSnapshot();
+					m_performanceHistoryTracker->getMemoryUsageSnapshot();
 
 				char lineBuf[512];
 
@@ -723,9 +731,7 @@ void SEReportIssueDialog::accept()
 		zip_close(zip);
 
 		if (!dialog.cancelled()) {
-			SEGlobalStateManager::GetInstance()
-				->GetAnalyticsEventsManager()
-				->trackEvent(
+			m_analyticsEventsManager->trackEvent(
 					"se_live_report_issue",
 					json11::Json::object{
 						{"message",
@@ -746,13 +752,14 @@ void SEReportIssueDialog::accept()
 			obs_frontend_push_ui_translation(obs_module_get_string);
 
 			SENetworkDialog netDialog(
-				SEGlobalStateManager::GetInstance()->mainWindow());
+				(QMainWindow *)
+					obs_frontend_get_main_window());
 
 			obs_frontend_pop_ui_translation();
 
 			bool success = netDialog.UploadFile(
 				tempBufPath.c_str(),
-				SEConfig::GetInstance()->GetUrlReportIssue().c_str(),
+				m_config->GetUrlReportIssue().c_str(),
 				"package",
 				obs_module_text("StreamElements.ReportIssue.Upload.Message"));
 

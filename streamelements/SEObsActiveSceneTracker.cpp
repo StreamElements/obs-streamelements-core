@@ -1,40 +1,38 @@
 #include "SEObsActiveSceneTracker.hpp"
+#include "SEWebsocketApiServer.hpp"
 #include "SEMessageBus.hpp"
 #include "SEGlobalStateManager.hpp"
+#include "SEVideoCompositionManager.hpp"
 
 #include "callback/calldata.h"
 
-static void dispatch_event(std::string name, std::string args)
+//
+// Takes the api server as a borrowed raw pointer: the caller is a member
+// whose own reference outlives the call, and this neither owns it nor
+// extends its life.
+//
+static void dispatch_event(SEWebsocketApiServer *apiServer,
+			   std::shared_ptr<SEMessageBus> messageBus,
+			   std::string name, std::string args)
 {
-	if (!SEGlobalStateManager::IsInstanceAvailable())
-		return;
+	if (apiServer)
+		apiServer->DispatchJSEvent("system", name, args);
 
-	auto apiServer = SEGlobalStateManager::GetInstance()
-				 ->GetWebsocketApiServer();
-
-	if (!apiServer)
-		return;
-
-	apiServer->DispatchJSEvent("system", name, args);
-
-	std::string externalEventName =
-		name.c_str() + 4; /* remove 'host' prefix */
-	externalEventName[0] =
-		tolower(externalEventName[0]); /* lower case first letter */
-
-	auto msgBus = SEMessageBus::GetInstance();
-
-	if (!msgBus)
-		return;
-
-	msgBus->NotifyAllExternalEventListeners(
-		SEMessageBus::DEST_ALL_EXTERNAL,
-		SEMessageBus::SOURCE_APPLICATION, "OBS",
-		externalEventName,
-		CefParseJSON(args, JSON_PARSER_ALLOW_TRAILING_COMMAS));
+	//
+	// Both halves are held by the caller now, so the availability check
+	// that stood in for "is the plugin still here" is gone with it.
+	//
+	if (messageBus)
+		messageBus->NotifyExternalHostEvent(name, args);
 }
 
-SEObsActiveSceneTracker::SEObsActiveSceneTracker()
+SEObsActiveSceneTracker::SEObsActiveSceneTracker(
+	std::shared_ptr<SEMessageBus> messageBus,
+	std::shared_ptr<SEWebsocketApiServer> apiServer,
+	std::shared_ptr<SEVideoCompositionManager> videoCompositionManager)
+	: m_messageBus(messageBus),
+	  m_apiServer(apiServer),
+	  m_videoCompositionManager(videoCompositionManager)
 {
 	UpdateTransition();
 
@@ -131,18 +129,11 @@ void SEObsActiveSceneTracker::UpdateTransition()
 
 void SEObsActiveSceneTracker::DispatchTransitionChanged()
 {
-	if (!SEGlobalStateManager::IsInstanceAvailable())
-		return;
-
-	auto videoCompositionManager =
-		SEGlobalStateManager::GetInstance()
-			->GetVideoCompositionManager();
-
-	if (!videoCompositionManager)
+	if (!m_videoCompositionManager)
 		return;
 
 	auto videoComposition =
-		videoCompositionManager->GetObsNativeVideoComposition();
+		m_videoCompositionManager->GetObsNativeVideoComposition();
 
 	if (!videoComposition)
 		return;
@@ -154,13 +145,13 @@ void SEObsActiveSceneTracker::DispatchTransitionChanged()
 	std::string name = "hostActiveTransitionChanged";
 	std::string args = json.dump();
 
-	dispatch_event(name, args);
+	dispatch_event(m_apiServer.get(), m_messageBus, name, args);
 
 	CefRefPtr<CefValue> compositionJsonValue = CefValue::Create();
 
 	videoComposition->SerializeComposition(compositionJsonValue);
 
-	dispatch_event("hostVideoCompositionChanged",
+	dispatch_event(m_apiServer.get(), m_messageBus, "hostVideoCompositionChanged",
 		       CefWriteJSON(compositionJsonValue, JSON_WRITER_DEFAULT));
 }
 
@@ -204,8 +195,7 @@ void SEObsActiveSceneTracker::handle_transition_start(
 		json11::Json json = json11::Json::object{
 			{"sceneId", GetIdFromPointer(destSource.Get())},
 			{"videoCompositionId",
-			 SEGlobalStateManager::GetInstance()
-				 ->GetVideoCompositionManager()
+			 self->m_videoCompositionManager
 				 ->GetObsNativeVideoComposition()
 				 ->GetId()},
 			{"name", sourceName},
@@ -215,7 +205,7 @@ void SEObsActiveSceneTracker::handle_transition_start(
 		std::string name = "hostActiveSceneChanging";
 		std::string args = json.dump();
 
-		dispatch_event(name, args);
+		dispatch_event(self->m_apiServer.get(), self->m_messageBus, name, args);
 	}
 }
 

@@ -1,4 +1,11 @@
 #include "SEMenuManager.hpp"
+#include "SEHostUpdateManager.hpp"
+
+#include "SESessionManager.hpp"
+#include "SEPerformanceHistoryTracker.hpp"
+#include "SEAnalyticsEventsManager.hpp"
+#include "SEAuxiliaryControlsBuilder.hpp"
+#include "SEReportIssueDialog.hpp"
 #include "SEGlobalStateManager.hpp"
 #include "SEConfig.hpp"
 
@@ -12,8 +19,20 @@
 
 #include <algorithm>
 
-SEMenuManager::SEMenuManager(QMainWindow *parent)
-	: m_mainWindow(parent)
+SEMenuManager::SEMenuManager(
+	QMainWindow *parent, std::shared_ptr<SESessionManager> sessionManager,
+	std::shared_ptr<SEPerformanceHistoryTracker> performanceHistoryTracker,
+	std::shared_ptr<SEAnalyticsEventsManager> analyticsEventsManager,
+	std::shared_ptr<SEAuxiliaryControlsBuilder> auxiliaryControlsBuilder,
+	std::shared_ptr<SEConfig> config,
+	std::shared_ptr<SEHostUpdateManager> hostUpdateManager)
+	: m_mainWindow(parent),
+	  m_sessionManager(sessionManager),
+	  m_performanceHistoryTracker(performanceHistoryTracker),
+	  m_analyticsEventsManager(analyticsEventsManager),
+	  m_auxiliaryControls(auxiliaryControlsBuilder),
+	  m_config(config),
+	  m_hostUpdateManager(hostUpdateManager)
 {
 	m_auxMenuItems = CefValue::Create();
 	m_auxMenuItems->SetNull();
@@ -78,12 +97,11 @@ void SEMenuManager::UpdateInternal()
 		QAction *onboarding_action = new QAction(obs_module_text(
 			"StreamElements.Action.ForceOnboarding"));
 		setupMenu->addAction(onboarding_action);
-		onboarding_action->connect(onboarding_action, &QAction::triggered, [this] {
-			SEGlobalStateManager::GetInstance()
-				->Reset(false,
-					SEGlobalStateManager::
-						OnBoarding);
-		});
+		onboarding_action->connect(
+			onboarding_action, &QAction::triggered, [this] {
+				m_sessionManager->Reset(
+					false, SESessionManager::OnBoarding);
+			});
 
 		setupMenu->addAction(createURL(
 			obs_module_text("StreamElements.Action.Overlays"),
@@ -94,7 +112,8 @@ void SEMenuManager::UpdateInternal()
 			QMenu *docksMenu = new QMenu(obs_module_text(
 				"StreamElements.Action.DocksContainer"));
 
-			DeserializeDocksMenu(*docksMenu);
+			m_auxiliaryControls->DeserializeDocksMenu(
+				*docksMenu);
 
 			m_menu->addMenu(docksMenu);
 		}
@@ -102,17 +121,16 @@ void SEMenuManager::UpdateInternal()
 		QAction *import_action = new QAction(
 			obs_module_text("StreamElements.Action.Import"));
 		m_menu->addAction(import_action);
-		import_action->connect(import_action, &QAction::triggered, [this] {
-			SEGlobalStateManager::GetInstance()
-				->Reset(false,
-					SEGlobalStateManager::
-						Import);
-		});
+		import_action->connect(
+			import_action, &QAction::triggered, [this] {
+				m_sessionManager->Reset(
+					false, SESessionManager::Import);
+			});
 
 		m_menu->addSeparator();
 	}
 
-	DeserializeMenu(m_auxMenuItems, *m_menu);
+	m_auxiliaryControls->DeserializeMenu(m_auxMenuItems, *m_menu);
 
 	m_menu->addSeparator();
 
@@ -121,17 +139,15 @@ void SEMenuManager::UpdateInternal()
 	m_menu->addAction(check_for_updates_action);
 	check_for_updates_action->connect(
 		check_for_updates_action, &QAction::triggered, [this] {
-			calldata_t *cd = SETRACE_ADDREF(calldata_create());
-			calldata_set_bool(cd, "allow_downgrade", false);
-			calldata_set_bool(cd, "force_install", false);
-			calldata_set_bool(cd, "allow_use_last_response", false);
-
-			signal_handler_signal(
-				obs_get_signal_handler(),
-				"streamelements_request_check_for_updates",
-				cd);
-
-			calldata_destroy(SETRACE_DECREF(cd));
+			//
+			// The interactive check. This used to build its own
+			// calldata and fire the obs signal here, which made
+			// this file the second place that knew the update
+			// signal names (CORE-757).
+			//
+			if (m_hostUpdateManager)
+				m_hostUpdateManager
+					->RequestCheckForUpdatesInteractive();
 		});
 
 	QMenu *helpMenu = new QMenu(
@@ -142,9 +158,8 @@ void SEMenuManager::UpdateInternal()
 	QAction *report_issue = new QAction(
 		obs_module_text("StreamElements.Action.ReportIssue"));
 	helpMenu->addAction(report_issue);
-	report_issue->connect(report_issue, &QAction::triggered, [this] {
-		SEGlobalStateManager::GetInstance()->ReportIssue();
-	});
+	report_issue->connect(report_issue, &QAction::triggered,
+			      [this] { ReportIssue(); });
 
 	helpMenu->addAction(createURL(
 		obs_module_text("StreamElements.Action.LiveSupport.MenuItem"),
@@ -155,13 +170,11 @@ void SEMenuManager::UpdateInternal()
 	{
 		bool isLoggedIn =
 			SEConfig::STARTUP_FLAGS_SIGNED_IN ==
-			(SEConfig::GetInstance()->GetStartupFlags() &
+			(m_config->GetStartupFlags() &
 			 SEConfig::STARTUP_FLAGS_SIGNED_IN);
 
 		auto reset_action_handler = [this] {
-			SEGlobalStateManager::
-				GetInstance()
-					->Reset();
+			m_sessionManager->Reset();
 		};
 
 		if (isLoggedIn) {
@@ -194,7 +207,7 @@ bool SEMenuManager::DeserializeAuxiliaryMenuItems(
 	SYNC_ACCESS();
 
 	QMenu menu;
-	bool result = DeserializeMenu(input, menu);
+	bool result = m_auxiliaryControls->DeserializeMenu(input, menu);
 
 	if (result) {
 		m_auxMenuItems = input->Copy();
@@ -229,10 +242,10 @@ void SEMenuManager::SaveConfig()
 {
 	SYNC_ACCESS();
 
-	SEConfig::GetInstance()->SetAuxMenuItemsConfig(
+	m_config->SetAuxMenuItemsConfig(
 		CefWriteJSON(m_auxMenuItems, JSON_WRITER_DEFAULT).ToString());
 
-	SEConfig::GetInstance()->SetShowBuiltInMenuItems(
+	m_config->SetShowBuiltInMenuItems(
 		m_showBuiltInMenuItems);
 }
 
@@ -241,10 +254,10 @@ void SEMenuManager::LoadConfig()
 	SYNC_ACCESS();
 
 	m_showBuiltInMenuItems =
-		SEConfig::GetInstance()->GetShowBuiltInMenuItems();
+		m_config->GetShowBuiltInMenuItems();
 
 	CefRefPtr<CefValue> val = CefParseJSON(
-		SEConfig::GetInstance()->GetAuxMenuItemsConfig(),
+		m_config->GetAuxMenuItemsConfig(),
 		JSON_PARSER_ALLOW_TRAILING_COMMAS);
 
 	if (!val.get() || val->GetType() != VTYPE_LIST)
@@ -263,4 +276,18 @@ void SEMenuManager::SetShowBuiltInMenuItems(bool show)
 bool SEMenuManager::GetShowBuiltInMenuItems()
 {
 	return m_showBuiltInMenuItems;
+}
+
+void SEMenuManager::ReportIssue()
+{
+	obs_frontend_push_ui_translation(obs_module_get_string);
+
+	SEReportIssueDialog dialog(m_performanceHistoryTracker,
+				   m_analyticsEventsManager, m_config,
+				   mainWindow());
+
+	obs_frontend_pop_ui_translation();
+
+	if (dialog.exec() == QDialog::Accepted) {
+	}
 }

@@ -1,4 +1,6 @@
 #pragma once
+#include "SECompositionServices.hpp"
+#include "ISEAudioCompositionManager.hpp"
 
 #include "SEAudioComposition.hpp"
 
@@ -12,8 +14,18 @@
 #include <map>
 #include <shared_mutex>
 
-class SEAudioCompositionManager {
+#include <memory>
+
+//
+// Forward declaration rather than an include: the real header drags windows.h
+// in ahead of winsock2.h on these translation units.
+//
+class SEWebsocketApiServer;
+
+class SEAudioCompositionManager : public ISEAudioCompositionManager {
 private:
+	std::shared_ptr<SEWebsocketApiServer> m_apiServer;
+
 	std::shared_mutex m_mutex;
 	std::map<std::string,
 		 std::shared_ptr<SEAudioCompositionBase>>
@@ -24,19 +36,35 @@ private:
 	std::map<std::string, CefRefPtr<CefDictionaryValue>>
 		m_availableEncoderClassesCache;
 
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+	std::shared_ptr<SEMessageBus> m_messageBus;
+
+	//
+	// Audio compositions announce too; the video manager handle in here
+	// is unused on this side.
+	//
+	SECompositionServices CompositionServices()
+	{
+		return {m_hostEventDispatcher, m_messageBus, {}};
+	}
+
 public:
-	SEAudioCompositionManager();
+	SEAudioCompositionManager(
+		std::shared_ptr<SEWebsocketApiServer> apiServer,
+		std::shared_ptr<SEHostEventDispatcher>
+			hostEventDispatcher,
+		std::shared_ptr<SEMessageBus> messageBus);
 	~SEAudioCompositionManager();
 
 public:
-	void
-	DeserializeExistingCompositionProperties(CefRefPtr<CefValue> input,
-						 CefRefPtr<CefValue> &output);
+	void DeserializeExistingCompositionProperties(
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 	void DeserializeComposition(CefRefPtr<CefValue> input,
-				    CefRefPtr<CefValue> &output);
-	void SerializeAllCompositions(CefRefPtr<CefValue> &output);
+				    CefRefPtr<CefValue> &output) override;
+	void SerializeAllCompositions(CefRefPtr<CefValue> &output) override;
 	void RemoveCompositionsByIds(CefRefPtr<CefValue> input,
-				     CefRefPtr<CefValue> &output);
+				     CefRefPtr<CefValue> &output) override;
 
 	void SerializeAvailableEncoderClasses(obs_encoder_type type,
 					      CefRefPtr<CefValue> &output);

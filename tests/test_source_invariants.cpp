@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <fstream>
 #include <regex>
+#include <set>
 #include <sstream>
 #include <string>
 
@@ -79,13 +80,24 @@ static void check_c2_video_encoder_template_match()
 // to CEF clients as a callback id.
 static void check_c4_no_self_assign_cefclientid()
 {
-	auto src = slurp("streamelements/SEApiMessageHandler.cpp");
+	//
+	// Both halves of the split handler: the async-call context is built by
+	// the base and read by InvokeHandler in the derived file, so checking
+	// one of them would pass for the wrong reason.
+	//
+	const char *const files[] = {
+		"streamelements/SEApiMessageHandlerBase.cpp",
+		"streamelements/SEApiMessageHandler.cpp",
+	};
 
 	std::regex bad(
 		R"(context\s*->\s*cefClientId\s*=\s*context\s*->\s*cefClientId)");
-	check(count_matches(src, bad) == 0,
-	      "C4: SEApiMessageHandler.cpp must not contain "
-	      "`context->cefClientId = context->cefClientId` (self-assign)");
+
+	for (const char *const file : files)
+		check(count_matches(slurp(file), bad) == 0,
+		      "C4: the API handler sources must not contain "
+		      "`context->cefClientId = context->cefClientId` "
+		      "(self-assign)");
 }
 
 // --- C5: CefParseJSON returns null on malformed input. The result must
@@ -93,7 +105,10 @@ static void check_c4_no_self_assign_cefclientid()
 // check, because that dereferences a null CefRefPtr.
 static void check_c5_cefparsejson_null_guarded()
 {
-	auto src = slurp("streamelements/SEApiMessageHandler.cpp");
+	//
+	// The parse happens in the dispatcher, which is the base half.
+	//
+	auto src = slurp("streamelements/SEApiMessageHandlerBase.cpp");
 
 	// The fix guards parsedValue against null before SetValue.
 	// We assert one of two acceptable patterns:
@@ -319,7 +334,7 @@ static void check_event_pumps_are_counted()
 	static const char *const kSources[] = {
 		"streamelements/SEBrowserWidgetManager.cpp",
 		"streamelements/SEGlobalStateManager.cpp",
-		"streamelements/SENativeOBSControlsManager.cpp",
+		"streamelements/SENativeObsUIControlsManager.cpp",
 		"streamelements/SEWidgetManager.cpp",
 		"streamelements/SEWorkerManager.cpp",
 		"streamelements/SEReportIssueDialog.cpp",
@@ -339,7 +354,7 @@ static void check_event_pumps_are_counted()
 
 	// And the wrapper itself must still contain exactly one real pump.
 	auto utils = strip_line_comments(
-		slurp("streamelements/SEUtils.cpp"));
+		slurp("streamelements/SEUtils/SELifecycleUtils.cpp"));
 
 	std::regex pump(R"(QApplication::sendPostedEvents\(\);)");
 
@@ -380,8 +395,14 @@ static void check_dock_deletion_is_gated()
 		}
 	}
 
+	//
+	// The deleter has its own domain now: naming QPointer<QDockWidget> in
+	// a declaration put Qt into every includer of SELifecycleUtils.hpp,
+	// which is the one header a translation unit reads to ask whether the
+	// world is up yet.
+	//
 	auto utils = strip_line_comments(
-		slurp("streamelements/SEUtils.cpp"));
+		slurp("streamelements/SEUtils/SEDockUtils.cpp"));
 
 	check(utils.find("SEIsUiTeardownSafe()") != std::string::npos,
 	      "CORE-786: SEDeleteDockWidgetWhenSafe() must gate on SEIsUiTeardownSafe()");
@@ -437,7 +458,12 @@ static void check_obs_close_is_watched()
 
 	// The gate has to actually be consulted on the teardown path, and the
 	// unsafe branch must leak rather than destroy.
-	check(code.find("SEGlobalStateManager::Leak()") !=
+	//
+	// This was SEGlobalStateManager::Leak(), a static that could only
+	// exist while the root was a singleton. The leak is now what it
+	// always was underneath -- a heap-allocated reference nobody frees --
+	// written where its reason is documented (CORE-757).
+	check(code.find("new std::shared_ptr<SEGlobalStateManager>(") !=
 		      std::string::npos,
 	      "CORE-786: the EXIT path must leak rather than tear down when teardown is unsafe");
 
@@ -620,7 +646,7 @@ static void check_sentry_init_is_diagnosable()
 static void check_queued_tasks_suppressed_during_crash()
 {
 	auto code = strip_line_comments(
-		slurp("streamelements/SEUtils.cpp"));
+		slurp("streamelements/SEUtils/SEAsyncTaskUtils.cpp"));
 
 	// Both queued paths -- QtPostTask's executor and QtDelayTask's timer
 	// lambda -- must skip the task AND release the waiter. Dropping a task
@@ -827,7 +853,7 @@ static void check_consent_prompt_is_bounded()
 static void check_encoder_released_once_per_object()
 {
 	auto code = strip_line_comments(
-		slurp("streamelements/SEUtils.hpp"));
+		slurp("streamelements/SEUtils/SELazyOBSVideoEncoderProvider.hpp"));
 
 	auto remove = code.find("void RemoveConsumer()");
 	check(remove != std::string::npos,
@@ -1533,7 +1559,7 @@ static void check_scene_signal_handler_lifetime()
 
 	const std::string itemRemove =
 		function_body(cpp, "static void process_scene_item_remove(");
-	const auto read = itemRemove.find("->m_obsSceneManager");
+	const auto read = itemRemove.find("->ObsSceneManager()");
 	const auto removeGroup =
 		itemRemove.find("remove_scene_signals(group_scene");
 	check(read != std::string::npos && removeGroup != std::string::npos &&
@@ -1542,11 +1568,21 @@ static void check_scene_signal_handler_lifetime()
 	      "m_obsSceneManager before remove_scene_signals(), which can "
 	      "delete the handler data (CORE-1715)");
 
+	//
+	// Anchored on the tail of the signature, not the head: the parameter
+	// list has changed once already (the composition manager is injected
+	// now), and a head anchor made this check pass vacuously --
+	// function_body() returned nothing, so the guard read as absent
+	// rather than as unfound.
+	//
 	const std::string dispatch = function_body(
-		cpp,
-		"static void dispatch_sceneitem_event(const std::string "
-		"&compositionId,\n\t\t\t\t     obs_sceneitem_t *sceneitem,\n"
-		"\t\t\t\t     std::string eventName,");
+		cpp, "std::string eventName, bool serializeDetails = true)");
+
+	check(!dispatch.empty(),
+	      "scene signals: cannot find the one-event "
+	      "dispatch_sceneitem_event overload -- this invariant needs its "
+	      "anchor updated; it is not reporting a missing guard");
+
 	const auto guard =
 		dispatch.find("if (!videoComposition && !onUiThread)");
 	const auto serialize = dispatch.find("SerializeSourceAndSceneItem(");
@@ -1579,7 +1615,7 @@ static void check_scene_signal_handler_lifetime()
 static void check_widget_teardown_leaves_the_paint_tree()
 {
 	const std::string utils = strip_line_comments(
-		slurp("streamelements/SEUtils.cpp"));
+		slurp("streamelements/SEUtils/SEDockUtils.cpp"));
 
 	const std::string deleteDock =
 		function_body(utils, "void SEDeleteDockWidgetWhenSafe(");
@@ -1851,7 +1887,28 @@ static void check_rejected_signature_stops_the_handler()
 	auto src = slurp(
 		"streamelements/SELocalFilesystemHttpServer.cpp");
 
-	auto begin = src.find("if (!VerifySessionSignedAbsolutePathURL(");
+	//
+	// The call moved onto this class in CORE-757, so it is qualified and
+	// wrapped across three lines now. Flattened for the shape of the
+	// check, so that the invariant pins the rejection and not the
+	// formatting -- and it still pins the negation, because a check whose
+	// `!` went missing would accept every forged path.
+	//
+	std::string flat;
+	flat.reserve(src.size());
+
+	for (std::size_t i = 0; i < src.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(src[i])))
+			flat += src[i];
+	}
+
+	check(flat.find("if(!SELocalFilesystemHttpServer::"
+			"VerifySessionSignedAbsolutePathURL(") !=
+		      std::string::npos,
+	      "file server: the session signature check must still be present, "
+	      "and must still be a rejection");
+
+	auto begin = src.find("VerifySessionSignedAbsolutePathURL(");
 	check(begin != std::string::npos,
 	      "file server: the session signature check must still be present");
 	if (begin == std::string::npos)
@@ -1946,6 +2003,1011 @@ static std::vector<std::size_t> find_all(const std::string &code,
 	     p = code.find(needle, p + 1))
 		hits.push_back(p);
 	return hits;
+}
+
+//
+// Dependency injection, stage 1: the services a consumer was handed must not
+// also be reachable through the global singleton from inside that consumer.
+//
+// The point of the refactor is lifetime -- an injected shared_ptr keeps the
+// service alive exactly as long as its consumer needs it, instead of until
+// SEGlobalStateManager::Shutdown() decides. A single surviving
+// GetInstance()->GetX() defeats that for the whole object, because the
+// shutdown ordering is back in charge on that path.
+//
+// Listed per consumer rather than globally: other reaches (mainWindow(), the
+// config getters) are later stages and must not fail this check early.
+//
+static void check_injected_services_are_not_also_fetched_globally()
+{
+	struct Consumer {
+		const char *file;
+		const char *service;
+	};
+
+	const Consumer consumers[] = {
+		{"streamelements/SEBackupManager.cpp", "GetCleanupManager"},
+		{"streamelements/SEReportIssueDialog.cpp",
+		 "GetPerformanceHistoryTracker"},
+		{"streamelements/SEReportIssueDialog.cpp",
+		 "GetAnalyticsEventsManager"},
+		{"streamelements/SEVideoCompositionManager.cpp",
+		 "GetWebsocketApiServer"},
+		{"streamelements/SEAudioCompositionManager.cpp",
+		 "GetWebsocketApiServer"},
+		{"streamelements/SESharedVideoCompositionManager.cpp",
+		 "GetWebsocketApiServer"},
+		{"streamelements/SEObsActiveSceneTracker.cpp",
+		 "GetWebsocketApiServer"},
+		{"streamelements/SESharedVideoCompositionManager.cpp",
+		 "GetVideoCompositionManager"},
+		{"streamelements/SEObsActiveSceneTracker.cpp",
+		 "GetVideoCompositionManager"},
+		{"streamelements/SEOutput.cpp", "GetVideoCompositionManager"},
+		{"streamelements/SEOutput.cpp", "GetAudioCompositionManager"},
+	};
+
+	for (const auto &consumer : consumers) {
+		const std::string src =
+			strip_line_comments(slurp(consumer.file));
+
+		const bool reaches =
+			src.find(std::string("GetInstance()")) !=
+				std::string::npos &&
+			src.find(consumer.service) != std::string::npos;
+
+		const std::string message =
+			std::string(consumer.file) + " still calls " +
+			consumer.service +
+			"() -- it is injected now, so use the member. "
+			"Reaching through the singleton puts this object's "
+			"lifetime back under Shutdown()";
+
+		check(!reaches, message.c_str());
+	}
+}
+
+static void check_state_persistence_borrows_the_managers_it_serializes()
+{
+	//
+	// SEStatePersistence reads four managers that own widgets, and three
+	// of them are in SEApiServices beside it. Owning them here would put
+	// it inside the reference graph of the things it serializes; borrowing
+	// keeps it out. It is safe because the container destroys its fields
+	// in reverse declaration order and statePersistence is declared after
+	// all four, so it dies first.
+	//
+	const std::string hpp = strip_line_comments(
+		slurp("streamelements/SEStatePersistence.hpp"));
+
+	const char *const borrowed[] = {"SEBrowserWidgetManager",
+					"SEWorkerManager", "SEHotkeyManager",
+					"SENativeObsUIControlsManager"};
+
+	for (const char *const manager : borrowed) {
+		const std::string owned = std::string("std::shared_ptr<") +
+					  manager + "> m_";
+
+		const std::string message =
+			std::string("SEStatePersistence owns its ") + manager +
+			" -- it borrows the managers it serializes, so that a "
+			"manager whose destructor deletes widgets cannot be "
+			"kept alive by the object that saves its state";
+
+		check(hpp.find(owned) == std::string::npos, message.c_str());
+
+		const std::string borrow = std::string(manager) + " *m_";
+
+		check(hpp.find(borrow) != std::string::npos,
+		      (std::string("SEStatePersistence no longer references ") +
+		       manager +
+		       " at all -- this invariant would then pass vacuously")
+			      .c_str());
+	}
+}
+
+static void check_widget_manager_does_not_own_state_persistence()
+{
+	//
+	// The other half of the same rule. SEWidgetManager's deferred saves
+	// need the persistence object, but it is destroyed before this
+	// manager -- it borrows raw pointers to it and to three of its
+	// siblings -- so a strong handle here would invert the order and
+	// leave those pointers dangling.
+	//
+	const std::string hpp = strip_line_comments(
+		slurp("streamelements/SEWidgetManager.hpp"));
+
+	check(hpp.find("std::shared_ptr<SEStatePersistence>  m_") ==
+		      std::string::npos &&
+		      hpp.find("std::shared_ptr<SEStatePersistence> m_") ==
+			      std::string::npos,
+	      "SEWidgetManager owns SEStatePersistence -- it must hold it "
+	      "weakly, because the container destroys statePersistence first "
+	      "and that object borrows raw pointers to this manager");
+
+	check(hpp.find("std::weak_ptr<SEStatePersistence>") !=
+		      std::string::npos,
+	      "SEWidgetManager no longer holds SEStatePersistence weakly -- "
+	      "this invariant would then pass vacuously, and the deferred "
+	      "saves would be back to reaching through the services bundle");
+}
+
+static void check_non_modal_dialogs_are_closed_by_their_owner()
+{
+	//
+	// A non-modal dialog destroyed without emitting finished() used to
+	// park the API handler's detached thread on future.wait() for the
+	// life of the process, because the promise lived only in the finished
+	// handler's capture. SEBrowserDialogManager holds it, so its
+	// destructor has to both reject the dialog and satisfy the promise.
+	//
+	const std::string dtor = function_body(
+		strip_line_comments(
+			slurp("streamelements/SEBrowserDialogManager.cpp")),
+		"SEBrowserDialogManager::~SEBrowserDialogManager");
+
+	check(!dtor.empty(),
+	      "SEBrowserDialogManager has no destructor -- the dialogs it owns "
+	      "would ride into Qt teardown with a live CEF browser");
+
+	check(dtor.find("reject()") != std::string::npos,
+	      "~SEBrowserDialogManager does not reject() the dialogs still "
+	      "open: their browsers and API handlers are then torn down from "
+	      "inside ~QWidget");
+
+	check(dtor.find("set_value") != std::string::npos,
+	      "~SEBrowserDialogManager does not satisfy the promises of the "
+	      "dialogs still open -- showNonModalDialog's detached thread "
+	      "stays parked on future.wait() forever");
+
+	//
+	// And the disarm, without which the destructor's own reject() lets a
+	// finished handler run and call set_value on a promise this
+	// destructor has already satisfied -- std::future_error.
+	//
+	check(dtor.find("*m_alive = false") != std::string::npos,
+	      "~SEBrowserDialogManager does not disarm the queued finished "
+	      "handlers before rejecting, so one of them can double-satisfy a "
+	      "promise");
+}
+
+//
+// --- The auxiliary action invoker (CORE-757).
+//
+// SEApiMessageHandler::InvokeHandler used to be a file-static shared_ptr,
+// built on first use and never released, because its only caller was a free
+// function in SEUtils with nothing to hand it. That one pointer meant the
+// services container's refcount could never reach zero -- with no widget,
+// no dock and no dialog alive -- which is why ~SEGlobalStateManager had to
+// empty the container by hand to let shutdown finish.
+//
+// It is a member of SEAuxiliaryControlsBuilder now, which the container
+// owns, so it dies with everything else.
+//
+static void check_the_invoke_handler_is_not_immortal()
+{
+	const std::string handler = strip_line_comments(
+		slurp("streamelements/SEApiMessageHandler.hpp"));
+
+	check(handler.find("s_singleton") == std::string::npos,
+	      "SEApiMessageHandler::InvokeHandler holds a file static again. "
+	      "A never-released shared_ptr to a handler keeps the services "
+	      "container alive for the life of the process, which is the leak "
+	      "that forced a teardown step to empty the container by hand.");
+
+	std::string src = strip_line_comments(
+		slurp("streamelements/SEAuxiliaryControlsBuilder.hpp"));
+
+	std::string flat;
+	flat.reserve(src.size());
+
+	for (std::size_t i = 0; i < src.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(src[i])))
+			flat += src[i];
+	}
+
+	//
+	// Non-vacuity: the handler has to be owned somewhere, and this is the
+	// only place. Without this the check above passes on a tree where the
+	// handler was deleted outright.
+	//
+	check(flat.find("std::shared_ptr<SEApiMessageHandler::InvokeHandler>"
+			"m_invokeHandler") != std::string::npos,
+	      "SEAuxiliaryControlsBuilder no longer owns the InvokeHandler -- "
+	      "find where it went before trusting the check above");
+}
+
+//
+// --- The config is owned, and closed on purpose (CORE-757).
+//
+// SEConfig was a `new`d raw pointer behind GetInstance(), with a Destroy()
+// that deleted it and an s_destroyed latch so a later GetInstance() could
+// not resurrect it. 47 call sites reached it; 32 of them dereferenced the
+// result without a null check, which is a crash on any path that runs after
+// Destroy() -- and one does: SEStatePersistence::PersistState() is reached
+// from SEWidgetManager's deferred saves, which drain in SEDrainEventQueue()
+// on the line after Destroy() used to run.
+//
+// Owned now, and published in SEApiServices. Destroy() is gone, but both
+// halves of what it did survive under a name that says so:
+// CloseAndPreventFurtherReopens() flushes and closes while the filesystem
+// and libobs are both known good, and latches so GetConfig() cannot
+// re-open the file afterwards. Unlike Destroy() it leaves the object alive
+// and reading as defaults, so a late write is a no-op rather than a null
+// dereference.
+//
+static void check_the_config_is_owned_and_closed_explicitly()
+{
+	const std::string hdr =
+		strip_line_comments(slurp("streamelements/SEConfig.hpp"));
+
+	check(hdr.find("s_instance") == std::string::npos &&
+		      hdr.find("GetInstance") == std::string::npos,
+	      "SEConfig is a singleton again -- it is owned by "
+	      "SEGlobalStateManager and published in SEApiServices");
+
+	check(hdr.find("CloseAndPreventFurtherReopens") != std::string::npos,
+	      "SEConfig::CloseAndPreventFurtherReopens() is gone. Without "
+	      "it the ini is flushed whenever the container happens to be "
+	      "destroyed, which is later than the save wants to be");
+
+	const std::string root = strip_line_comments(
+		slurp("streamelements/SEGlobalStateManager.cpp"));
+
+	check(root.find("m_config->CloseAndPreventFurtherReopens()") !=
+		      std::string::npos,
+	      "Shutdown() no longer closes the config explicitly");
+
+	//
+	// The flag is what stops GetConfig() re-opening the file after the
+	// final save -- the job s_destroyed used to do, now per instance.
+	//
+	const std::string src =
+		strip_line_comments(slurp("streamelements/SEConfig.cpp"));
+
+	const std::string getConfig = function_body(src, "SEConfig::GetConfig");
+
+	check(!getConfig.empty(),
+	      "cannot find SEConfig::GetConfig -- this invariant needs "
+	      "updating");
+
+	check(getConfig.find("m_closed") != std::string::npos,
+	      "SEConfig::GetConfig() no longer checks m_closed, so a read "
+	      "after CloseAndPreventFurtherReopens() re-opens the ini and "
+	      "nothing ever closes it again");
+}
+
+//
+// --- Only the destructor starts teardown (CORE-757).
+//
+// Shutdown() does what member destruction cannot: it orders the teardown.
+// That makes it necessary, and it also makes it something no caller should
+// be able to invoke -- a plug-in whose services have been released but
+// whose root object is still standing is a state nothing else in the tree
+// is written to survive. It was public with exactly one caller, its own
+// destructor, which is the same looseness IsInitialized() had before it
+// was removed.
+//
+static void check_only_the_destructor_starts_teardown()
+{
+	const std::string hdr = strip_line_comments(
+		slurp("streamelements/SEGlobalStateManager.hpp"));
+
+	const std::size_t decl = hdr.find("void Shutdown();");
+
+	check(decl != std::string::npos,
+	      "SEGlobalStateManager::Shutdown() is gone -- this invariant "
+	      "needs updating");
+
+	//
+	// The nearest access specifier above the declaration is the one it
+	// sits under.
+	//
+	const std::size_t pub = hdr.rfind("public:", decl);
+	const std::size_t prot = hdr.rfind("protected:", decl);
+	const std::size_t priv = hdr.rfind("private:", decl);
+
+	check(priv != std::string::npos &&
+		      (pub == std::string::npos || priv > pub) &&
+		      (prot == std::string::npos || priv > prot),
+	      "SEGlobalStateManager::Shutdown() is reachable from outside the "
+	      "class again. Teardown is the destructor's job; nothing else "
+	      "should be able to release the services and leave the root "
+	      "standing");
+
+	const std::string cpp = strip_line_comments(
+		slurp("streamelements/SEGlobalStateManager.cpp"));
+
+	const std::string dtor = function_body(
+		cpp, "SEGlobalStateManager::~SEGlobalStateManager");
+
+	check(dtor.find("Shutdown();") != std::string::npos,
+	      "the root's destructor no longer calls Shutdown(), so the "
+	      "ordered teardown never runs at all");
+}
+
+//
+// --- The ini is closed before the event queue is drained (CORE-757).
+//
+// Both orders look harmless and one of them loses the user's layout. The
+// drain removes the browser widget docks, and SEWidgetManager's deferred
+// saves land on that same queue -- so a PersistState() running after the
+// docks are gone writes the UI state back as "no docks", and the next
+// start comes up without them. Closing the config first leaves it
+// readable-but-defaulted, which turns those late writes into no-ops.
+//
+// The second half of this is the close that is NOT gated on
+// m_initialized: m_config and the crash handler that opens the ini
+// through it are built before Initialize()'s obs_browser_init_panel()
+// bail, so Shutdown() can return early having left the file open, and the
+// crash handler being deliberately leaked means no destructor closes it.
+//
+static void check_the_config_is_closed_before_the_queue_is_drained()
+{
+	const std::string cpp = strip_line_comments(
+		slurp("streamelements/SEGlobalStateManager.cpp"));
+
+	const std::string shutdown =
+		function_body(cpp, "void SEGlobalStateManager::Shutdown");
+
+	check(!shutdown.empty(),
+	      "cannot find SEGlobalStateManager::Shutdown -- this invariant "
+	      "needs updating");
+
+	const std::size_t close_at =
+		shutdown.find("CloseAndPreventFurtherReopens()");
+	const std::size_t drain_at = shutdown.find("SEDrainEventQueue()");
+
+	check(close_at != std::string::npos,
+	      "Shutdown() no longer closes the config");
+
+	check(drain_at != std::string::npos,
+	      "Shutdown() no longer drains the event queue -- this invariant "
+	      "needs updating");
+
+	check(close_at < drain_at,
+	      "the config must be closed BEFORE the event queue is drained: "
+	      "the drain removes the docks and runs SEWidgetManager's "
+	      "deferred saves, so draining first persists a UI state with no "
+	      "docks in it and the next start comes up empty");
+
+	const std::string dtor = function_body(
+		cpp, "SEGlobalStateManager::~SEGlobalStateManager");
+
+	check(dtor.find("CloseAndPreventFurtherReopens()") !=
+		      std::string::npos,
+	      "the destructor must close the config too, ungated: Shutdown() "
+	      "returns at its !m_initialized early-out on the "
+	      "obs_browser_init_panel() bail, by which point the crash "
+	      "handler has already opened the ini through it");
+}
+
+//
+// --- No singletons, not just no root singleton (CORE-757).
+//
+// The root was the big one, but it was not the only one: SEConfig,
+// SEPleaseWaitWindow, SENativeObsUIControlsManager and a file-local
+// SourceDataManager were all static-instance-plus-accessor, and each one
+// was reached from wherever it was wanted. They are owned and injected now.
+//
+// This is the check that keeps it that way, and it is deliberately blunt:
+// no GetInstance anywhere under streamelements/, and no `s_instance`. A
+// service is constructed by whoever owns it and handed to whoever needs it.
+//
+static void check_no_singletons_remain()
+{
+	const char *const dirs[] = {"/streamelements",
+				    "/streamelements/SEUtils"};
+
+	int scanned = 0;
+
+	for (const char *const dir : dirs) {
+		const std::string path = std::string(se_tests::kRepoRoot) + dir;
+
+		std::error_code ec;
+		std::filesystem::directory_iterator it(path, ec);
+
+		check(!ec, (std::string("cannot read ") + dir +
+			    " -- this invariant would then pass vacuously")
+				   .c_str());
+
+		for (std::filesystem::directory_iterator end;
+		     it != end && !ec; it.increment(ec)) {
+			const std::filesystem::path &p = it->path();
+			const std::string ext = p.extension().string();
+
+			if (ext != ".cpp" && ext != ".hpp" && ext != ".mm")
+				continue;
+
+			std::ifstream in(p.string());
+
+			if (!in)
+				continue;
+
+			std::ostringstream buf;
+			buf << in.rdbuf();
+
+			const std::string src =
+				strip_line_comments(buf.str());
+			const std::string name = p.filename().string();
+
+			++scanned;
+
+			check(src.find("GetInstance") == std::string::npos,
+			      (name + " has a GetInstance(). Construct it "
+				      "where it belongs and hand it to the "
+				      "things that need it -- SEApiServices "
+				      "is how a host API consumer gets one.")
+				     .c_str());
+
+			check(src.find("s_instance") == std::string::npos,
+			      (name + " has a static instance. That is the "
+				      "half of a singleton that makes the "
+				      "accessor look harmless to add back.")
+				     .c_str());
+		}
+	}
+
+	check(scanned > 100,
+	      "scanned too few files -- this invariant would then pass "
+	      "vacuously");
+}
+
+//
+// --- There is no singleton (CORE-757).
+//
+// This was a ratchet. It counted SEGlobalStateManager::GetInstance()
+// reaches and failed if the number grew: 291 of them when the work started,
+// then 47, 14, 8, 4, 2, and now none. The root is created by the module
+// entry point, which holds the only reference; everything else is handed
+// what it needs.
+//
+// Two halves, and both matter. A GetInstance() needs a static instance to
+// return, and a static instance is what makes adding a GetInstance() back
+// look harmless -- so the absence of the accessor is checked together with
+// the absence of the thing it would hand out.
+//
+// Whitespace-insensitive, which the ratchet was not: clang-format had
+// wrapped one reach in SEBrowserWidget.cpp between the scope operator and
+// GetInstance, so the literal search never saw it. It was real -- the
+// shared cookie manager -- and it survived five rounds of counting.
+//
+static void check_the_root_is_not_a_singleton()
+{
+	const char *const dirs[] = {"/streamelements",
+				    "/streamelements/SEUtils"};
+
+	std::vector<std::string> files;
+
+	for (const char *const dir : dirs) {
+		const std::string path = std::string(se_tests::kRepoRoot) + dir;
+
+		std::error_code ec;
+		std::filesystem::directory_iterator it(path, ec);
+
+		check(!ec, (std::string("cannot read ") + dir +
+			    " -- this invariant would then pass vacuously")
+				   .c_str());
+
+		for (std::filesystem::directory_iterator end;
+		     it != end && !ec; it.increment(ec)) {
+			const std::string ext = it->path().extension().string();
+
+			if (ext == ".cpp" || ext == ".hpp" || ext == ".mm")
+				files.push_back(it->path().string());
+		}
+	}
+
+	//
+	// The plug-in entry point lives at the repo root rather than under
+	// streamelements/, and it is the one place allowed to create the
+	// root -- through Create(), which is checked for separately below.
+	//
+	files.push_back(std::string(se_tests::kRepoRoot) +
+			"/obs-streamelements-core-plugin.cpp");
+
+	check(files.size() > 100,
+	      "scanned too few files -- this invariant would then pass "
+	      "vacuously");
+
+	//
+	// Flattened, so that a reach wrapped across lines cannot hide. The
+	// member names are spelled with "::" attached because that is what
+	// whitespace removal leaves.
+	//
+	const char *const banned[] = {
+		"SEGlobalStateManager::GetInstance(",
+		"SEGlobalStateManager::IsInstanceAvailable(",
+		"SEGlobalStateManager::Destroy(",
+		"SEGlobalStateManager::Leak(",
+	};
+
+	int scanned = 0;
+
+	for (const std::string &file : files) {
+		std::ifstream in(file);
+
+		if (!in)
+			continue;
+
+		std::ostringstream buf;
+		buf << in.rdbuf();
+
+		const std::string src = strip_line_comments(buf.str());
+
+		std::string flat;
+		flat.reserve(src.size());
+
+		for (std::size_t i = 0; i < src.size(); ++i) {
+			if (!std::isspace(static_cast<unsigned char>(src[i])))
+				flat += src[i];
+		}
+
+		++scanned;
+
+		for (const char *const needle : banned) {
+			check(flat.find(needle) == std::string::npos,
+			      (file + " reaches " + needle +
+			       ") -- the root is not a singleton any more. Take "
+			       "what you need as a constructor parameter, or "
+			       "ask whoever constructs you to hand it to you.")
+				      .c_str());
+		}
+	}
+
+	check(scanned > 100,
+	      "read too few files -- this invariant would then pass vacuously");
+
+	//
+	// And the other half: no static instance to hand out, and the one
+	// sanctioned way to build the root still present. Without the second
+	// check this file would pass on a tree where Create() had been
+	// renamed and a new accessor added beside it.
+	//
+	const std::string root = strip_line_comments(
+		slurp("streamelements/SEGlobalStateManager.hpp"));
+
+	check(root.find("s_instance") == std::string::npos,
+	      "SEGlobalStateManager holds a static instance again. That is "
+	      "what a GetInstance() returns, and the 291 reaches this work "
+	      "removed all existed because there was one.");
+
+	check(root.find("static std::shared_ptr<SEGlobalStateManager> "
+			"Create();") != std::string::npos,
+	      "SEGlobalStateManager::Create() is gone -- find out what "
+	      "replaced it before trusting the checks above");
+}
+
+static void check_nothing_but_the_manager_owns_the_services_container()
+{
+	//
+	// Every ring this refactor removed had one shape: something the
+	// container destroys held the container strongly. The structural
+	// guard against them coming back is that exactly one place owns it --
+	// SEGlobalStateManager, the root -- and that every holder whose
+	// lifetime a service in the container controls keeps a weak handle.
+	//
+	// Matching on the member spelling is what makes this safe to run
+	// across the whole directory: constructor parameters in this tree are
+	// named apiServices or services, never m_*, so a parameter cannot
+	// trip it.
+	//
+	// This replaces a hand-maintained list of consumers. A new class that
+	// takes the bundle and stores it strongly fails here without anyone
+	// remembering to add it.
+	//
+	const std::string dir = std::string(se_tests::kRepoRoot) +
+				"/streamelements";
+
+	std::vector<std::string> owners;
+	std::vector<std::string> weakHolders;
+	int scanned = 0;
+
+	std::error_code ec;
+	std::filesystem::directory_iterator it(dir, ec);
+
+	check(!ec, "cannot read streamelements/ -- this invariant would then "
+		   "pass vacuously");
+
+	std::vector<std::filesystem::path> files;
+
+	for (std::filesystem::directory_iterator end;
+	     it != end && !ec; it.increment(ec)) {
+		files.push_back(it->path());
+	}
+
+	for (const std::filesystem::path &path : files) {
+		const std::string ext = path.extension().string();
+
+		if (ext != ".hpp" && ext != ".cpp")
+			continue;
+
+		std::ifstream in(path.string());
+
+		if (!in)
+			continue;
+
+		std::ostringstream buf;
+		buf << in.rdbuf();
+
+		const std::string src = strip_line_comments(buf.str());
+		const std::string name = path.filename().string();
+
+		++scanned;
+
+		if (src.find("std::shared_ptr<SEApiServices> m_") !=
+		    std::string::npos)
+			owners.push_back(name);
+
+		if (src.find("std::weak_ptr<SEApiServices> m_") !=
+		    std::string::npos)
+			weakHolders.push_back(name);
+	}
+
+	check(scanned > 100,
+	      "scanned too few files under streamelements/ -- this invariant "
+	      "would then pass vacuously");
+
+	for (const std::string &owner : owners) {
+		check(owner == "SEGlobalStateManager.hpp",
+		      (owner +
+		       " owns SEApiServices strongly. Only the root may: a "
+		       "class the container's own services destroy must hold "
+		       "it weakly, or shutdown stalls on a ring that runs "
+		       "through a destructor and never unwinds.")
+			      .c_str());
+	}
+
+	check(owners.size() == 1,
+	      "SEApiServices is not owned exactly once -- the root "
+	      "(SEGlobalStateManager.hpp) must own it, and nothing else may");
+
+	//
+	// Non-vacuity, and the other half of the rule: the holders that were
+	// converted have to still be holding it weakly.
+	//
+	const char *const holders[] = {"SEApiMessageHandlerBase.hpp",
+				       "SEBrowserDialog.hpp",
+				       "SEBrowserDialogManager.hpp",
+				       "SENativeObsUIControlsManager.hpp",
+				       "SEPopupWindowManager.hpp",
+				       "SEWidgetManager.hpp",
+				       "SEWorkerManager.hpp"};
+
+	for (const char *const holder : holders) {
+		check(std::find(weakHolders.begin(), weakHolders.end(),
+				std::string(holder)) != weakHolders.end(),
+		      (std::string(holder) +
+		       " no longer holds SEApiServices weakly -- either the "
+		       "edge went back to being strong under another name, or "
+		       "the class stopped holding the bundle and this list "
+		       "needs updating")
+			      .c_str());
+	}
+}
+
+static void check_api_handler_locks_the_services_once_per_dispatch()
+{
+	//
+	// The bundle is held weakly, so somebody has to lock it. That
+	// somebody is the dispatcher, once per call, before the handler
+	// lookup -- not each of the two hundred handler bodies, and not an
+	// operator->() that would lock two or three times per call and turn
+	// a dead bundle into a null-field dereference instead of an early
+	// return.
+	//
+	//
+	// The dispatcher is the base half; the handler bodies that must not
+	// reach around it are the derived half. Both are read below.
+	//
+	const std::string src = strip_line_comments(
+		slurp("streamelements/SEApiMessageHandlerBase.cpp"));
+
+	const std::string bodies = strip_line_comments(
+		slurp("streamelements/SEApiMessageHandler.cpp"));
+
+	//
+	// Flattened, because the reach used to wrap across as many as four
+	// lines and a wrapped one must not slip through. Both halves of the
+	// split handler go into the same flattened buffer: the ban is on the
+	// shape, wherever it appears.
+	//
+	std::string flat;
+	flat.reserve(src.size() + bodies.size());
+
+	for (std::size_t i = 0; i < src.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(src[i])))
+			flat += src[i];
+	}
+
+	for (std::size_t i = 0; i < bodies.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(bodies[i])))
+			flat += bodies[i];
+	}
+
+	//
+	// Reading a service through self is what is banned, not mentioning
+	// the member: the two dispatch sites legitimately lock it, and one of
+	// them does so through context->self.
+	//
+	check(flat.find("self->m_services->") == std::string::npos,
+	      "a handler body in the API handler sources reads a service "
+	      "through self->m_services -- handlers take the locked bundle as "
+	      "their apiServices parameter");
+
+	const std::string dispatch = function_body(
+		src, "SEApiMessageHandlerBase::InvokeApiCallHandlerAsync");
+
+	check(!dispatch.empty(),
+	      "InvokeApiCallHandlerAsync not found -- this invariant cannot "
+	      "check where the bundle is locked");
+
+	check(dispatch.find("m_services.lock()") != std::string::npos,
+	      "InvokeApiCallHandlerAsync does not lock the services bundle -- "
+	      "it has to, once, before dispatching, and bail with a null "
+	      "result if it cannot");
+
+	//
+	// And it must answer the caller on that path: returning silently
+	// leaves the page's promise pending for the life of the process.
+	//
+	const std::size_t lock_at = dispatch.find("m_services.lock()");
+	const std::size_t callback_at = dispatch.find("result_callback", lock_at);
+	const std::size_t handler_at = dispatch.find("m_apiCallHandlers", lock_at);
+
+	check(callback_at != std::string::npos &&
+		      (handler_at == std::string::npos ||
+		       callback_at < handler_at),
+	      "InvokeApiCallHandlerAsync does not answer the caller when the "
+	      "bundle cannot be locked -- the page's promise would never "
+	      "settle");
+}
+
+static void check_api_handler_takes_its_services_by_injection()
+{
+	//
+	// The handler's two hundred methods reach their services through the
+	// injected SEApiServices bundle. The reach they used to make wrapped
+	// across as many as four lines, so flatten the file before looking for
+	// it.
+	//
+	std::string src = strip_line_comments(
+		slurp("streamelements/SEApiMessageHandler.cpp"));
+
+	std::string flat;
+	flat.reserve(src.size());
+
+	for (std::size_t i = 0; i < src.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(src[i])))
+			flat += src[i];
+	}
+
+	//
+	// GetRazerWyvrnManager is deliberately absent: it is fetched by a
+	// file-local helper that has no object to be injected into, and that
+	// helper documents why. Everything else must come from the bundle.
+	//
+	//
+	// Not all of these are services: PersistState and the
+	// user-interface-state pair moved onto SEStatePersistence, which the
+	// handler reaches through the container like any other service.
+	//
+	const char *const services[] = {"PersistState",
+					"SerializeUserInterfaceState",
+					"DeserializeUserInterfaceState",
+					"GetObsSceneManager",
+					"GetMenuManager",
+					"GetWidgetManager",
+					"GetOutputManager",
+					"GetVideoCompositionManager",
+					"GetAudioCompositionManager",
+					"GetSharedVideoCompositionManager",
+					"GetNativeOBSControlsManager",
+					"GetOutputSettingsManager",
+					"GetHotkeyManager",
+					"GetBackupManager",
+					"GetWebsocketApiServer",
+					"GetBandwidthTestManager",
+					"GetExternalSceneDataProviderManager",
+					"GetProfilesManager",
+					"GetWorkerManager",
+					"GetAnalyticsEventsManager",
+					"GetHttpClient",
+					"DeserializeStatusBarTemporaryMessage",
+					"DeserializePopupWindow",
+					"DeserializeModalDialog",
+					"DeserializeNonModalDialog",
+					"SerializeAllNonModalDialogs",
+					"DeserializeCloseNonModalDialogsByIds",
+					"DeserializeFocusNonModalDialogById",
+					"DeserializeNonModalDialogDimensionsById",
+					"Reset",
+					"DeleteCookies"};
+
+	for (const char *const service : services) {
+		const std::string reach =
+			std::string("SEGlobalStateManager::GetInstance()->") +
+			service;
+
+		const std::string message =
+			std::string("SEApiMessageHandler.cpp fetches ") +
+			service +
+			"() from the singleton -- it is in the injected "
+			"SEApiServices bundle, so use m_services (or "
+			"self->m_services inside a handler body)";
+
+		check(flat.find(reach) == std::string::npos, message.c_str());
+	}
+
+	//
+	// And the bundle has to actually be used, or the check above passes
+	// for the wrong reason.
+	//
+	check(flat.find("apiServices->obsSceneManager") != std::string::npos,
+	      "SEApiMessageHandler.cpp no longer uses the injected services "
+	      "bundle -- this invariant would then pass vacuously");
+}
+
+static void check_api_services_container_is_not_emptied_at_teardown()
+{
+	//
+	// The inverse of the invariant that used to live here. While the
+	// rings were real, ~SEGlobalStateManager emptied the container and
+	// that one statement was the only reason shutdown completed. Every
+	// back-edge into the container is weak now, so the statement is gone
+	// and must stay gone: an owner reaching in to end other objects'
+	// lifetimes is exactly what this refactor removed, and putting it
+	// back would hide the next missing weak edge instead of fixing it.
+	//
+	const std::string src = strip_line_comments(
+		slurp("streamelements/SEGlobalStateManager.cpp"));
+
+	const std::string dtor = function_body(
+		src, "SEGlobalStateManager::~SEGlobalStateManager");
+
+	check(!dtor.empty(),
+	      "cannot find SEGlobalStateManager's destructor -- this invariant "
+	      "needs updating");
+
+	check(dtor.find("*m_apiServices = SEApiServices()") ==
+		      std::string::npos,
+	      "SEGlobalStateManager's destructor empties m_apiServices again. "
+	      "If shutdown hangs, a holder that one of the container's "
+	      "services destroys is holding the container strongly -- make "
+	      "that edge weak instead of adding a teardown step");
+
+	//
+	// And in Shutdown(), which is where the container is released now.
+	// Releasing this object's own handle is not the same statement --
+	// see the comment there -- but the forbidden one would be just as
+	// wrong a function earlier, so check both rather than leave it
+	// somewhere to move to.
+	//
+	const std::string shutdown =
+		function_body(src, "void SEGlobalStateManager::Shutdown()");
+
+	check(!shutdown.empty(),
+	      "cannot find SEGlobalStateManager::Shutdown() -- this invariant "
+	      "needs updating");
+
+	check(shutdown.find("*m_apiServices = SEApiServices()") ==
+		      std::string::npos,
+	      "Shutdown() empties the services container. Releasing the "
+	      "root's own handle is fine and is what the last line does; "
+	      "reaching in to drop handles other objects still hold is the "
+	      "teardown step this refactor removed -- if shutdown hangs, find "
+	      "the strong back-edge instead");
+}
+
+//
+// --- The services are released at the end of Shutdown() (CORE-757) ------
+//
+// Shutdown() releases the root handle on every service and then, as its
+// final statement, the container that holds the second handle on each. Only
+// after that is "has this service outlived the plug-in?" a question with a
+// true answer, which is why the audit is the line after it.
+//
+// Left to member destruction instead, the services would outlive Shutdown()
+// by an unknowable amount -- the audit could then only run from
+// obs_module_unload, where it cannot tell a service released on time from
+// one released while the root was being destroyed.
+//
+// The order is the whole invariant: watch, release, report.
+//
+static void check_the_services_are_released_at_the_end_of_shutdown()
+{
+	const std::string src = strip_line_comments(
+		slurp("streamelements/SEGlobalStateManager.cpp"));
+
+	const std::string shutdown =
+		function_body(src, "void SEGlobalStateManager::Shutdown()");
+
+	check(!shutdown.empty(),
+	      "cannot find SEGlobalStateManager::Shutdown() -- this invariant "
+	      "needs updating (CORE-757)");
+
+	const auto watch = shutdown.find("WatchServicesForTeardownAudit()");
+	const auto release = shutdown.find("m_apiServices = nullptr");
+	const auto report =
+		shutdown.find("SEReportServicesOutlivingTeardown()");
+
+	check(watch != std::string::npos,
+	      "Shutdown() no longer takes the weak handles, so the audit has "
+	      "nothing to report on (CORE-757)");
+
+	check(release != std::string::npos,
+	      "Shutdown() no longer releases the services container, so the "
+	      "services outlive it by however long the root happens to live "
+	      "and the audit below cannot mean what it says (CORE-757)");
+
+	check(report != std::string::npos,
+	      "nothing reports which services outlived teardown. The weak "
+	      "handles are taken and never looked at (CORE-757)");
+
+	check(watch < release && release < report,
+	      "Shutdown() must watch, then release the container, then "
+	      "report. Reporting before the release names every service as a "
+	      "survivor; releasing before the watch leaves nothing to watch "
+	      "(CORE-757)");
+
+	//
+	// The report has to be the end of it. A step added afterwards that
+	// released anything else would be outside what the audit can see.
+	//
+	const std::string tail = shutdown.substr(report);
+
+	check(tail.find(";") != std::string::npos,
+	      "unexpected shape at the end of Shutdown() -- this invariant "
+	      "needs updating (CORE-757)");
+
+	const std::string after = tail.substr(tail.find(";") + 1);
+
+	std::string rest;
+	for (std::size_t i = 0; i < after.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(after[i])))
+			rest += after[i];
+	}
+
+	check(rest == "}",
+	      "SEReportServicesOutlivingTeardown() is no longer the last "
+	      "statement of Shutdown(). Anything after it is teardown the "
+	      "audit cannot see (CORE-757)");
+
+	//
+	// And obs_module_unload must not report as well: two reports of the
+	// same thing is how the second one stops being read.
+	//
+	const std::string plugin =
+		strip_line_comments(slurp("obs-streamelements-core-plugin.cpp"));
+
+	check(plugin.find("SEReportServicesOutlivingTeardown()") ==
+		      std::string::npos,
+	      "obs_module_unload reports the teardown audit again. Shutdown() "
+	      "already did, from a point that can tell a service released on "
+	      "time from one released during destruction (CORE-757)");
+}
+
+static void check_api_services_is_a_container_and_nothing_else()
+{
+	//
+	// No methods, no accessors, no policy: a consumer takes the one or two
+	// members it needs, and a container with behaviour on it would grow
+	// into the singleton this refactor is removing.
+	//
+	const std::string src =
+		strip_line_comments(slurp("streamelements/SEApiServices.hpp"));
+
+	const std::string body = function_body(src, "struct SEApiServices");
+
+	check(!body.empty(),
+	      "cannot find struct SEApiServices -- this invariant needs "
+	      "updating");
+
+	check(body.find('(') == std::string::npos,
+	      "SEApiServices has something callable in it -- it is a container "
+	      "of shared_ptr members, and anything else belongs on the service "
+	      "that owns the behaviour");
 }
 
 static void check_crash_path_filesystem_calls_never_throw()
@@ -2350,6 +3412,2220 @@ static void check_cefparsejson_results_are_guarded_everywhere()
 	}
 }
 
+//
+// --- Every published service is watched at teardown (CORE-757).
+//
+// WatchServicesForTeardownAudit() takes a weak handle on each service so
+// that SEReportServicesOutlivingTeardown() can name the ones still alive
+// once the plug-in is gone. The value of that depends entirely on the list
+// being complete: a service nobody watches is exactly the one that goes
+// missing quietly, which is the failure the audit exists to catch.
+//
+// So the list is checked against SEApiServices rather than maintained by
+// hand. Adding a service to the container and forgetting the audit fails
+// here.
+//
+static void check_every_published_service_is_watched_at_teardown()
+{
+	std::string hdr = strip_line_comments(
+		slurp("streamelements/SEApiServices.hpp"));
+
+	//
+	// A declaration can wrap, so flatten first: the long ones read
+	// "std::shared_ptr<SEExternalSceneDataProviderManager>" on one line
+	// and the field name on the next.
+	//
+	std::string flat;
+	flat.reserve(hdr.size());
+
+	for (std::size_t i = 0; i < hdr.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(hdr[i])))
+			flat += hdr[i];
+	}
+
+	const std::string body = function_body(
+		strip_line_comments(
+			slurp("streamelements/SEGlobalStateManager.cpp")),
+		"void SEGlobalStateManager::WatchServicesForTeardownAudit");
+
+	check(!body.empty(),
+	      "cannot find WatchServicesForTeardownAudit -- this invariant "
+	      "needs updating");
+
+	const std::string decl = "std::shared_ptr<";
+
+	std::size_t found = 0;
+	bool sawConfig = false;
+
+	for (std::size_t at = flat.find(decl); at != std::string::npos;
+	     at = flat.find(decl, at + 1)) {
+		const std::size_t close = flat.find('>', at + decl.size());
+
+		if (close == std::string::npos)
+			break;
+
+		const std::size_t semi = flat.find(';', close);
+
+		if (semi == std::string::npos)
+			break;
+
+		const std::string field =
+			flat.substr(close + 1, semi - close - 1);
+
+		if (field.empty())
+			continue;
+
+		++found;
+
+		//
+		// The three the crash handler holds. It is never deleted, so
+		// these are alive after teardown on every clean run and have
+		// to be classified as expected rather than warned about --
+		// an audit that cries wolf every shutdown is one nobody
+		// reads. They are still watched, because "held by the crash
+		// handler and nothing else" is the thing worth confirming.
+		//
+		const bool keptByCrashHandler =
+			field == "config" ||
+			field == "performanceHistoryTracker" ||
+			field == "analyticsEventsManager";
+
+		if (field == "config")
+			sawConfig = true;
+
+		const std::string plain = "SE_WATCH(" + field + ")";
+		const std::string kept = "SE_WATCH_KEPT(" + field + ")";
+
+		if (keptByCrashHandler) {
+			const std::string msg =
+				std::string("the crash handler holds ") +
+				field +
+				" and is never deleted, so it must be "
+				"SE_WATCH_KEPT and not SE_WATCH -- otherwise "
+				"every clean shutdown logs a warning";
+
+			check(body.find(kept) != std::string::npos,
+			      msg.c_str());
+
+			check(body.find(plain) == std::string::npos,
+			      msg.c_str());
+
+			continue;
+		}
+
+		const std::string msg =
+			std::string("SEApiServices publishes ") + field +
+			" but WatchServicesForTeardownAudit() does not watch "
+			"it, so nothing would report it outliving shutdown";
+
+		check(body.find(plain) != std::string::npos, msg.c_str());
+
+		//
+		// And it must not be quietly reclassified as expected.
+		//
+		const std::string msg2 =
+			std::string("SEApiServices publishes ") + field +
+			" and it is marked SE_WATCH_KEPT, which means a leak "
+			"of it would be logged as expected rather than as a "
+			"warning. Only what the crash handler holds belongs "
+			"in that list";
+
+		check(body.find(kept) == std::string::npos, msg2.c_str());
+	}
+
+	//
+	// Non-vacuity: the scan has to have found the fields at all.
+	//
+	check(found >= 30,
+	      "found fewer than 30 published services in SEApiServices.hpp, "
+	      "so the declaration scan has stopped matching and every check "
+	      "above passed for free");
+
+	check(sawConfig,
+	      "the config field is gone from SEApiServices, so the exemption "
+	      "above is stale");
+}
+
+//
+// --- SESignalHandlerData's composition handle is per-path (CORE-757).
+//
+// It holds the composition manager strongly when SEObsSceneManager created
+// it and weakly when SEVideoComposition did, and the difference is not a
+// style choice either way:
+//
+//   - strong on the scene-manager path, because this object is refcounted
+//     and a callback can hold a reference past ~SEObsSceneManager. The
+//     scene manager is the only other holder, so a weak handle made that
+//     window a failed lock and an event that went nowhere.
+//
+//   - weak on the composition path, because the composition manager owns
+//     the composition which owns this. Strong there is a ring, and the
+//     whole composition manager would leak.
+//
+// Both halves have been wrong in this file before: the comment claimed
+// strong while every path was weak. Making it unconditionally strong is the
+// obvious "fix" and is the ring, so the discriminator is what gets pinned.
+//
+static void check_signal_handler_data_holds_the_composition_per_path()
+{
+	const std::string hdr = strip_line_comments(
+		slurp("streamelements/SEObsSceneManager.hpp"));
+
+	std::string flat;
+	flat.reserve(hdr.size());
+
+	for (std::size_t i = 0; i < hdr.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(hdr[i])))
+			flat += hdr[i];
+	}
+
+	check(flat.find("std::weak_ptr<SEVideoCompositionManager>"
+			"m_videoCompositionManager;") != std::string::npos,
+	      "SESignalHandlerData no longer keeps a weak handle on the "
+	      "composition manager. SEVideoComposition creates one of these "
+	      "and the manager owns the composition, so that path has to stay "
+	      "weak or the manager leaks");
+
+	check(flat.find("std::shared_ptr<SEVideoCompositionManager>"
+			"m_videoCompositionManagerStrong;") !=
+		      std::string::npos,
+	      "SESignalHandlerData no longer keeps a strong handle for the "
+	      "scene-manager path, so a callback outliving "
+	      "~SEObsSceneManager is back to a failed lock");
+
+	//
+	// Once per constructor, and the condition is the point: the strong
+	// handle is taken only when a scene manager created this.
+	//
+	const std::string guarded =
+		"m_videoCompositionManagerStrong(obsSceneManager.expired()?"
+		"nullptr:videoCompositionManager.lock())";
+
+	std::size_t guards = 0;
+
+	for (std::size_t at = flat.find(guarded); at != std::string::npos;
+	     at = flat.find(guarded, at + guarded.size()))
+		++guards;
+
+	check(guards == 2,
+	      "the strong composition handle is no longer guarded on "
+	      "obsSceneManager in both constructors. Unconditionally strong "
+	      "is a ring: the composition manager owns the composition that "
+	      "owns this object. An empty weak_ptr reads as expired, which is "
+	      "what makes expired() the test for which path built this");
+
+	check(flat.find("if(m_videoCompositionManagerStrong)"
+			"returnm_videoCompositionManagerStrong;") !=
+		      std::string::npos,
+	      "VideoCompositionManager() no longer prefers the strong handle, "
+	      "so the scene-manager path gets the weak one anyway and the "
+	      "second member buys nothing");
+}
+
+//
+// --- The data-driven scans do not call os_file_exists (CORE-757).
+//
+// os_file_exists("") leaks one allocation per call, inside libobs:
+// os_utf8_to_wcs_ptr() always bmalloc()s its output and then returns the
+// LENGTH of the conversion, which is zero for an empty string, so
+// os_file_exists() reads that as failure and returns before its own bfree().
+//
+// Measured, not deduced: one queryUserEnvironmentBackupReferencedFiles call
+// leaked exactly 37 allocations, five runs in a row, and bisecting it gave
+// os_file_exists over the collection's real strings at 600 per 200 passes
+// against 0 for the same traversal without the call and 0 for the idle
+// control. Three empty strings in each of fourteen collections.
+//
+// So the two files that ask this question about strings out of a scene
+// collection or a WYVRN config go through FileExists(), which answers the
+// empty case itself. Paths built in code are not the problem, but they use
+// it too, so that there is no "why not this one" to wonder about.
+//
+static void check_data_driven_scans_do_not_call_os_file_exists()
+{
+	const char *files[] = {
+		"streamelements/SEBackupManager.cpp",
+		"streamelements/SERazerWyvrnManager.cpp",
+	};
+
+	for (const char *relpath : files) {
+		const std::string src =
+			strip_line_comments(slurp(relpath));
+
+		const std::string msg =
+			std::string(relpath) +
+			" calls os_file_exists directly. It walks strings that "
+			"come from a scene collection or a WYVRN config, and "
+			"os_file_exists leaks one allocation for every empty "
+			"one -- use FileExists() from SEPathUtils instead";
+
+		check(src.find("os_file_exists(") == std::string::npos,
+		      msg.c_str());
+	}
+
+	//
+	// And the helper still has to be the thing that handles it.
+	//
+	const std::string impl = function_body(
+		strip_line_comments(
+			slurp("streamelements/SEUtils/SEPathUtils.cpp")),
+		"bool FileExists");
+
+	check(!impl.empty(),
+	      "cannot find FileExists in SEPathUtils.cpp -- this invariant "
+	      "needs updating");
+
+	check(impl.find("path.empty()") != std::string::npos,
+	      "FileExists no longer short-circuits an empty path, which is "
+	      "the entire reason it exists");
+
+	check(impl.find("os_file_exists(") != std::string::npos,
+	      "FileExists no longer calls os_file_exists, so it is answering "
+	      "the question some other way than intended");
+}
+
+//
+// --- The scene manager drains outside its own mutex (CORE-757) ----------
+//
+// ~SEObsSceneManager used to take m_mutex as its first statement and still
+// hold it through CleanObsSceneSignals() and Wait(), which drain
+// SESignalHandlerData's task queue -- on that queue's own thread. Waiting
+// for a queue to drain while holding a lock its tasks might take is a
+// deadlock, and CORE-757 carries a three-variant demonstration of this
+// exact shape. It did not hang only because both EnqueueAsyncTask() sites
+// enqueue lambdas that call file-static dispatch functions which happen not
+// to touch m_mutex.
+//
+// Brace-depth tracking rather than positions, which is the difference
+// between checking the fix and checking its shape: a guard declared in a
+// narrower scope is fine once that scope has closed, and a guard anywhere
+// still open when a drain runs is the bug -- including one sitting a few
+// lines above the drain inside the same block, which a "locks come last"
+// rule reports as clean.
+//
+static void check_the_scene_manager_drains_outside_its_mutex()
+{
+	const std::string body = function_body(
+		strip_line_comments(
+			slurp("streamelements/SEObsSceneManager.cpp")),
+		"SEObsSceneManager::~SEObsSceneManager");
+
+	check(!body.empty(),
+	      "scene manager teardown: ~SEObsSceneManager not found -- this "
+	      "invariant needs updating (CORE-757)");
+
+	// Depths at which a lock still in scope was declared.
+	std::vector<int> openLocks;
+
+	int depth = 0;
+	bool sawLock = false;
+	bool sawDrain = false;
+	bool drainUnderLock = false;
+
+	for (std::size_t i = 0; i < body.size();) {
+		if (body[i] == '{') {
+			++depth;
+			++i;
+			continue;
+		}
+
+		if (body[i] == '}') {
+			--depth;
+
+			// Everything declared deeper than this has just gone
+			// out of scope, which is what releases it.
+			while (openLocks.size() && openLocks.back() > depth)
+				openLocks.pop_back();
+
+			++i;
+			continue;
+		}
+
+		const char *lock = "lock_guard";
+		const char *alt = "unique_lock";
+
+		if (!body.compare(i, std::strlen(lock), lock) ||
+		    !body.compare(i, std::strlen(alt), alt)) {
+			openLocks.push_back(depth);
+			sawLock = true;
+			i += std::strlen(lock);
+			continue;
+		}
+
+		const char *clean = "CleanObsSceneSignals()";
+		const char *wait = "->Wait()";
+
+		if (!body.compare(i, std::strlen(clean), clean) ||
+		    !body.compare(i, std::strlen(wait), wait)) {
+			sawDrain = true;
+
+			if (openLocks.size())
+				drainUnderLock = true;
+
+			i += std::strlen(wait);
+			continue;
+		}
+
+		++i;
+	}
+
+	check(sawLock,
+	      "scene manager teardown: no lock found in ~SEObsSceneManager -- "
+	      "this invariant needs updating (CORE-757)");
+
+	check(sawDrain,
+	      "scene manager teardown: no drain found in "
+	      "~SEObsSceneManager -- this invariant needs updating "
+	      "(CORE-757)");
+
+	check(!drainUnderLock,
+	      "~SEObsSceneManager drains SESignalHandlerData's task queue "
+	      "while holding m_mutex. That queue drains on its own thread, so "
+	      "a task reaching any of this class's locking methods would "
+	      "deadlock teardown -- variant A of the demonstration in "
+	      "CORE-757. Disconnect, drain, and only then take the lock to "
+	      "tear the members down (CORE-757)");
+}
+
+//
+// --- SESignalHandlerData holds its owners weakly (CORE-757) -------------
+//
+// Two raw back-pointers used to live here, and the issue calls the first of
+// them the one hidden edge that mattered: SEObsSceneManager *, dereferenced
+// by five file-static signal callbacks to call Update(), and
+// SEVideoCompositionBase *, whose owner the composition manager can replace
+// or drop at any time. Both of their owners own this object, so neither can
+// become a shared_ptr -- that is a ring refcounting cannot unwind -- which
+// leaves weak_ptr as the only handle that is both safe to hold and honest
+// about whether the target is still there.
+//
+// Raw is what nothing enforces. A weak handle makes "it has gone" a value
+// the compiler forces every reader to deal with.
+//
+static void check_signal_handler_data_holds_its_owners_weakly()
+{
+	const std::string hdr = strip_line_comments(
+		slurp("streamelements/SEObsSceneManager.hpp"));
+
+	std::string flat;
+	flat.reserve(hdr.size());
+
+	for (std::size_t i = 0; i < hdr.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(hdr[i])))
+			flat += hdr[i];
+	}
+
+	check(flat.find("std::weak_ptr<SEObsSceneManager>m_obsSceneManager;") !=
+		      std::string::npos,
+	      "SESignalHandlerData no longer holds the scene manager as a "
+	      "weak_ptr. It cannot be raw -- five signal callbacks "
+	      "dereference it on OBS threads and only teardown ordering said "
+	      "it was alive -- and it cannot be shared, because the scene "
+	      "manager owns this object (CORE-757)");
+
+	check(flat.find("std::weak_ptr<SEVideoCompositionBase>"
+			"m_videoComposition;") != std::string::npos,
+	      "SESignalHandlerData no longer holds the video composition as a "
+	      "weak_ptr. The composition manager owns the composition and the "
+	      "composition owns this, so strong is a ring and raw outlives "
+	      "the composition whenever anything still holds this object "
+	      "(CORE-757)");
+
+	//
+	// The shapes that came before, named so the failure explains itself
+	// rather than leaving someone to rediscover why they were wrong.
+	//
+	check(flat.find("SEObsSceneManager*m_obsSceneManager") ==
+		      std::string::npos,
+	      "SESignalHandlerData is back to a raw pointer to the scene "
+	      "manager that owns it (CORE-757)");
+
+	check(flat.find("SEVideoCompositionBase*m_videoCompositionBase") ==
+		      std::string::npos,
+	      "SESignalHandlerData is back to a raw pointer to the video "
+	      "composition that owns it (CORE-757)");
+
+	//
+	// And the accessor, because a weak member that every caller locks
+	// inline is the boilerplate this refactor rejected.
+	//
+	check(flat.find("std::shared_ptr<SEObsSceneManager>ObsSceneManager()"
+			"{returnm_obsSceneManager.lock();}") !=
+		      std::string::npos,
+	      "SESignalHandlerData::ObsSceneManager() is gone, so the "
+	      "callbacks are locking the weak handle themselves (CORE-757)");
+}
+
+//
+// --- The scene manager is attached where it is built (CORE-757) ---------
+//
+// AttachObsSignals() exists because a constructor cannot hand out a weak
+// handle to itself: inside SEObsSceneManager(), make_shared has not
+// returned, so weak_from_this() would be empty and every signal callback
+// would find no manager at all. It therefore takes the handle from the
+// container, and it is also where the OBS signals are connected -- so that
+// the handle is in place before anything can fire rather than there being a
+// window in which a signal arrives and finds it empty.
+//
+// Which makes the call a correctness requirement, not a convention: without
+// it the manager has no signals connected at all and the whole scene-event
+// surface is silent. Hence pinning the pair.
+//
+static void check_the_scene_manager_is_attached_where_it_is_built()
+{
+	const std::string gsm = strip_line_comments(
+		slurp("streamelements/SEGlobalStateManager.cpp"));
+
+	const auto built = gsm.find("m_obsSceneManager = std::make_shared<");
+	const auto attached =
+		gsm.find("m_obsSceneManager->AttachObsSignals(m_obsSceneManager)");
+
+	check(built != std::string::npos,
+	      "the scene manager is no longer built in Initialize() -- this "
+	      "invariant needs updating (CORE-757)");
+
+	check(attached != std::string::npos,
+	      "nothing calls SEObsSceneManager::AttachObsSignals(), so the "
+	      "manager is built with no OBS signals connected and no weak "
+	      "handle in its callback data (CORE-757)");
+
+	check(built < attached,
+	      "AttachObsSignals() is called before the scene manager is "
+	      "built (CORE-757)");
+
+	//
+	// The constructor must not build the callback data itself, which is
+	// the shape that makes the weak handle empty.
+	//
+	const std::string ctor = function_body(
+		strip_line_comments(
+			slurp("streamelements/SEObsSceneManager.cpp")),
+		"SEObsSceneManager::SEObsSceneManager(");
+
+	check(!ctor.empty(),
+	      "SEObsSceneManager constructor not found -- this invariant "
+	      "needs updating (CORE-757)");
+
+	check(ctor.find("new SESignalHandlerData") == std::string::npos,
+	      "SEObsSceneManager builds its SESignalHandlerData in its own "
+	      "constructor again. weak_from_this() is empty there, so the "
+	      "data would hold a handle that never locks -- that is what "
+	      "AttachObsSignals() is for (CORE-757)");
+
+	//
+	// Same for the composition path, which has the same problem and the
+	// same answer.
+	//
+	const std::string composition = strip_line_comments(
+		slurp("streamelements/SEVideoComposition.cpp"));
+
+	check(composition.find("result->AttachObsSignals()") !=
+		      std::string::npos,
+	      "SECustomVideoComposition::Create() no longer attaches the "
+	      "signal data, so the composition is built with no scene "
+	      "signals armed (CORE-757)");
+
+	check(composition.find("weak_from_this()") != std::string::npos,
+	      "SECustomVideoComposition no longer passes weak_from_this() to "
+	      "its signal data (CORE-757)");
+}
+
+//
+// --- A deferred delete holds its services weakly (CORE-757) -------------
+//
+// Two objects in this plug-in are destroyed by Qt rather than by us, at a
+// time nobody here chooses: SEBrowserWidget, whose owners hand the dock to
+// SEDeleteDockWidgetWhenSafe() (CORE-777 and CORE-1922 are what make a
+// synchronous delete unsafe), and ThemeChangeListener, which Shutdown()
+// releases with deleteLater() and which therefore waits for an event-loop
+// pass the plug-in no longer gets.
+//
+// Both routinely outlive Shutdown(). Holding a service strongly from there
+// is not a ring and does not hang anything -- it quietly extends that
+// service past the end of teardown, and everything the service owns with
+// it. Measured, with the audit at the end of Shutdown(): one surviving
+// background-worker widget held the composition manager, which held three
+// custom compositions and their signal data, for a total of four services
+// still standing; the theme listener held the message bus and, through it,
+// the host event dispatcher and the websocket API server, for three more.
+// Every one of them went away when these handles became weak.
+//
+// A failed lock in either place means the plug-in has shut down, which is
+// exactly when there is no registry to unregister from, no composition to
+// look up and no page to dispatch to.
+//
+static void check_deferred_deletes_hold_services_weakly()
+{
+	const std::string widget = strip_line_comments(
+		slurp("streamelements/SEBrowserWidget.hpp"));
+
+	struct Handle {
+		const char *service;
+		const char *member;
+	};
+
+	const Handle widgetHandles[] = {
+		//
+		// Two of the three name the interface the services container
+		// publishes rather than the implementation behind it: the
+		// websocketpp server, and the composition manager. The
+		// weak-handle argument is unchanged by that -- what matters
+		// is that a deferred widget delete cannot keep the service
+		// alive, whichever type names it.
+		//
+		{"ISEApiMessageSink", "m_apiServer"},
+		{"ISEVideoCompositionManager", "m_videoCompositionManager"},
+		{"SEHostEventDispatcher", "m_hostEventDispatcher"},
+	};
+
+	for (const Handle &h : widgetHandles) {
+		const std::string weak = std::string("std::weak_ptr<") +
+					 h.service + "> " + h.member + ";";
+		const std::string strong = std::string("std::shared_ptr<") +
+					   h.service + "> " + h.member + ";";
+
+		const std::string why =
+			std::string("SEBrowserWidget::") + h.member +
+			" is not a weak_ptr. Its owners defer the delete, so a "
+			"widget outlives Shutdown() and a strong handle keeps "
+			"that service -- and whatever it owns -- alive with it "
+			"(CORE-757)";
+
+		check(widget.find(weak) != std::string::npos, why.c_str());
+		check(widget.find(strong) == std::string::npos, why.c_str());
+	}
+
+	//
+	// The listener is a nested class, and the root declares a message bus
+	// of its own in the same header, so this has to read the class body
+	// rather than the file.
+	//
+	const std::string listener = function_body(
+		strip_line_comments(
+			slurp("streamelements/SEGlobalStateManager.hpp")),
+		"class ThemeChangeListener");
+
+	check(!listener.empty(),
+	      "cannot find ThemeChangeListener -- this invariant needs "
+	      "updating (CORE-757)");
+
+	const Handle listenerHandles[] = {
+		{"SEHostEventDispatcher", "m_hostEventDispatcher"},
+		{"SEMessageBus", "m_messageBus"},
+	};
+
+	for (const Handle &h : listenerHandles) {
+		const std::string weak = std::string("std::weak_ptr<") +
+					 h.service + "> " + h.member + ";";
+		const std::string strong = std::string("std::shared_ptr<") +
+					   h.service + "> " + h.member + ";";
+
+		const std::string why =
+			std::string("ThemeChangeListener::") + h.member +
+			" is not a weak_ptr. Shutdown() releases this widget "
+			"with deleteLater(), so it outlives teardown and a "
+			"strong handle makes that service outlive it too "
+			"(CORE-757)";
+
+		check(listener.find(weak) != std::string::npos, why.c_str());
+		check(listener.find(strong) == std::string::npos, why.c_str());
+	}
+}
+
+//
+// --- The handler file is on its way out of libobs and Qt (CORE-757) ------
+//
+// A ratchet, in the idiom of the one above: the number is a ceiling and a
+// floor at once, so it moves only in the commit that moves it.
+//
+// It counts every token in SEApiMessageHandler.cpp that cannot be compiled
+// without a libobs or Qt header -- 68 of them today, and the target is
+// zero. At zero the translation unit that holds all 208 API_HANDLER_BEGIN
+// blocks compiles in this suite, and every host API method becomes testable
+// at once, in one file, with no obs-studio tree. Today it fails on its
+// second include: SEConfig.hpp(3): cannot open include file 'obs-module.h'.
+//
+// The handlers stay in one file. Being able to read what the host exposes
+// and what it does not is worth more than per-domain translation units, so
+// the file stops talking to libobs and Qt instead: each family below moves
+// to the service or SEUtils domain that owns that concern, and the handler
+// body becomes a call.
+//
+// What this does not count, deliberately: calls to free helpers declared in
+// SEUtils. A function whose declaration is clean compiles without libobs,
+// and the test links its own definition -- test_session_signature already
+// does exactly that for CreateCryptoSecureRandomNumberString(). Those are
+// measured by what their headers drag in, which is a different number.
+//
+// Two hand counts of this came out at 53, then 87, before it was measured
+// properly. Both searched obs_[a-z] and Q[A-Z], which miss every OBS_*
+// constant -- 34 of the original 95, more than a third -- along with
+// blog, the LOG_* levels, calldata_*, os_event_* and signal_handler_*.
+// The families are spelled out one per row so the vocabulary is
+// inherited rather than guessed at again.
+//
+// 95 to 1, and 1 is the floor: the dispatcher's QtPostTask in
+// SEApiMessageHandlerBase::OnProcessMessageReceived. API calls run on
+// the Qt thread by design, it is the macro CLAUDE.md mandates over a
+// raw QMetaObject::invokeMethod, and it is already a link seam -- its
+// impl is declared in a header whose closure is obs-free and Qt-free,
+// so test_api_handler_infrastructure links its own definition. Every
+// other family below is pinned at zero.
+//
+static void check_api_handler_obs_qt_tokens_only_go_down()
+{
+	//
+	// Both halves of the split handler, summed. The infrastructure moved
+	// into SEApiMessageHandlerBase.cpp and took 22 of these tokens with
+	// it; counting one file would have read as progress that had not
+	// happened. The ratchet is on the handler surface as a whole.
+	//
+	const std::string src =
+		strip_line_comments(
+			slurp("streamelements/SEApiMessageHandlerBase.cpp")) +
+		"\n" +
+		strip_line_comments(
+			slurp("streamelements/SEApiMessageHandler.cpp"));
+
+	struct Family {
+		const char *what;
+		const char *pattern;
+		int expected;
+	};
+
+	//
+	// Per family, so a failure says which concern moved rather than only
+	// that the total did. Three families sit at zero and are floors now:
+	// b*alloc, because nothing here allocates through libobs and nothing
+	// should start; and blog with the LOG_* levels, because these files
+	// log through SELog, whose declaration needs no libobs. A blog call
+	// reappearing would put that include back.
+	//
+	const Family families[] = {
+		{"libobs functions and types", R"(\bobs_[a-z]\w*)", 0},
+		{"libobs constants", R"(\bOBS_[A-Z]\w*)", 0},
+		{"blog", R"(\bblog\b)", 0},
+		{"libobs log levels", R"(\bLOG_[A-Z]\w*)", 0},
+		{"calldata", R"(\bcalldata_\w*)", 0},
+		{"os_* from libobs/util", R"(\bos_[a-z]\w*)", 0},
+		//
+		// OS_* was missed by every family above: OBS_[A-Z] does not
+		// match it, and os_[a-z] is case-sensitive. The one
+		// occurrence was OS_EVENT_TYPE_AUTO, which has gone with the
+		// os_event family -- so the gap is closed at zero rather than
+		// discovered later at some other number.
+		//
+		{"libobs OS_ constants", R"(\bOS_[A-Z]\w*)", 0},
+		{"libobs signal handlers", R"(\bsignal_handler_\w*)", 0},
+		{"libobs allocation",
+		 R"(\b(?:bfree|bzalloc|bmalloc|bstrdup)\b)", 0},
+		{"Qt types", R"(\bQ[A-Z]\w*)", 0},
+		{"Qt task macros", R"(\bQt(?:PostTask|ExecSync|DelayTask)\b)",
+		 1},
+	};
+
+	int expected_total = 0;
+
+	for (const Family &f : families) {
+		expected_total += f.expected;
+
+		const int n = static_cast<int>(
+			count_matches(src, std::regex(f.pattern)));
+
+		if (n == f.expected)
+			continue;
+
+		std::ostringstream msg;
+
+		msg << "the API handler sources: " << f.what << " -- " << n
+		    << " occurrence(s), expected " << f.expected << ". ";
+
+		if (n > f.expected)
+			msg << "Nothing new may reach libobs or Qt from "
+			       "these files: put the implementation on the "
+			       "service "
+			       "or SEUtils domain that owns the concern, and "
+			       "call that from the handler (CORE-757).";
+		else
+			msg << "If you removed some, lower the number here in "
+			       "the same commit -- this count is a floor as "
+			       "well as a ceiling, so progress is recorded "
+			       "rather than assumed (CORE-757).";
+
+		check(false, msg.str().c_str());
+	}
+
+	//
+	// Keeps the headline in the comment above honest: the rows and the
+	// total are edited together or not at all.
+	//
+	check(expected_total == 1,
+	      "the per-family counts no longer sum to 1 -- update the total "
+	      "in the comment above in the same commit (CORE-757)");
+}
+
+//
+// --- The API call lock is per translation unit, on purpose (CORE-757) ----
+//
+// API_HANDLER_BEGIN has one definition, in SEApiMessageHandler.hpp. The lock
+// it takes does not: the macro names `s_sync_api_call_mutex` unqualified, and
+// each expanding translation unit defines its own. That reads like an
+// oversight and is the opposite.
+//
+// showModalDialog's body calls SEBrowserDialogManager::DeserializeModalDialog,
+// which calls dialog->exec() synchronously. So it holds the lock of the TU it
+// was compiled in for the entire lifetime of the modal dialog -- and the only
+// way that dialog ever closes is its own endModalDialog / endDialog handler,
+// compiled in SEDialogApiMessageHandler.cpp. Share one mutex between them and
+// the exit
+// path blocks on the lock its own opener is holding, for good. The mutex is
+// recursive, which does not help: the two run on different threads.
+//
+// Before the macro moved into the header there were two copies of it, one per
+// TU, and the two lock domains were a side effect of that duplication rather
+// than anything anybody had written down. This is what writes it down.
+//
+static void check_the_api_call_lock_stays_per_translation_unit()
+{
+	const std::string header =
+		slurp("streamelements/SEApiMessageHandlerBase.hpp");
+
+	//
+	// One definition of the shape.
+	//
+	std::size_t defs = 0;
+
+	for (std::size_t i = header.find("#define API_HANDLER_BEGIN");
+	     i != std::string::npos;
+	     i = header.find("#define API_HANDLER_BEGIN", i + 1))
+		++defs;
+
+	check(defs == 1,
+	      "SEApiMessageHandlerBase.hpp must define API_HANDLER_BEGIN "
+	      "exactly once -- it is the single definition every "
+	      "registering "
+	      "translation unit expands (CORE-757)");
+
+	//
+	// And the lock it takes has to be the unqualified name, so that it
+	// binds to the definition in whichever TU expands it.
+	//
+	const std::size_t begin_at = header.find("#define API_HANDLER_BEGIN");
+	const std::size_t end_at =
+		header.find("#define API_HANDLER_END", begin_at);
+
+	check(end_at != std::string::npos,
+	      "API_HANDLER_END not found after API_HANDLER_BEGIN -- this "
+	      "invariant cannot locate the macro body (CORE-757)");
+
+	const std::string macro = header.substr(begin_at, end_at - begin_at);
+
+	check(macro.find("s_sync_api_call_mutex") != std::string::npos,
+	      "API_HANDLER_BEGIN no longer locks s_sync_api_call_mutex. If the "
+	      "lock moved onto the handler object or into the dispatcher, "
+	      "every API call shares one domain and a modal dialog can no "
+	      "longer be closed -- see the comment on this check (CORE-757)");
+
+	check(macro.find("::s_sync_api_call_mutex") == std::string::npos,
+	      "API_HANDLER_BEGIN qualifies s_sync_api_call_mutex, which binds "
+	      "every expansion to one mutex. It must stay unqualified so each "
+	      "translation unit supplies its own (CORE-757)");
+
+	//
+	// Two expanding TUs, two definitions, neither carrying its own copy
+	// of the macro any more.
+	//
+	struct Expander {
+		const char *path;
+		const char *what;
+	};
+
+	const Expander expanders[] = {
+		{"streamelements/SEApiMessageHandler.cpp",
+		 "the host API handlers"},
+		{"streamelements/SEDialogApiMessageHandler.cpp",
+		 "the dialog handlers that close a modal dialog"},
+	};
+
+	for (const Expander &e : expanders) {
+		const std::string src = slurp(e.path);
+
+		check(src.find("API_HANDLER_BEGIN(") != std::string::npos,
+		      "this invariant expects this file to register handlers, "
+		      "and it no longer does -- it needs updating (CORE-757)");
+
+		check(src.find("#define API_HANDLER_") == std::string::npos,
+		      "a second copy of the API handler macros has appeared. "
+		      "There is one definition, in "
+		      "SEApiMessageHandlerBase.hpp (CORE-757)");
+
+		check(strip_line_comments(src).find(
+			      "static std::recursive_mutex "
+			      "s_sync_api_call_mutex;") != std::string::npos,
+		      "this file expands API_HANDLER_BEGIN but does not define "
+		      "its own s_sync_api_call_mutex. It must: sharing one "
+		      "with the other expander deadlocks every modal dialog "
+		      "(CORE-757)");
+	}
+
+	//
+	// The reason above rests on the modal dialog still being opened with a
+	// blocking exec() from inside a handler body. If that ever stops being
+	// true, the two domains may be able to merge -- but it should be a
+	// decision, not a surprise.
+	//
+	const std::string modal = function_body(
+		strip_line_comments(
+			slurp("streamelements/SEBrowserDialogManager.cpp")),
+		"SEBrowserDialogManager::DeserializeModalDialog");
+
+	check(!modal.empty(),
+	      "DeserializeModalDialog not found -- the premise of this "
+	      "invariant can no longer be checked (CORE-757)");
+
+	check(modal.find("exec()") != std::string::npos,
+	      "DeserializeModalDialog no longer blocks in exec(). That is the "
+	      "whole reason the API call lock is per translation unit, so "
+	      "revisit this check and the comment on API_HANDLER_BEGIN rather "
+	      "than deleting either (CORE-757)");
+}
+
+//
+// The trace-log-level memo is read from every thread that logs, so it has to
+// be a once-guaranteed static rather than a hand-rolled flag.
+//
+// The shape this bans: `static bool has_result` plus a `static bool result`,
+// read and written with no synchronisation. It computed the right answer --
+// the flag was assigned, below the loop, so argv was walked once -- but it was
+// a data race, and the flag's appearance in the loop condition, where it could
+// never be true, is what made it read as a broken memo. The replacement is a
+// function-local `static const bool` initialised from a lambda, which the
+// compiler guards.
+//
+// Pinned by a source invariant because there is no other way to reach it: the
+// body needs QCoreApplication::arguments(), so SEAppEnvUtils.cpp cannot be
+// compiled in this suite, and the race is not observable from a test even
+// where it can.
+//
+static void check_the_trace_log_level_memo_is_computed_once()
+{
+	const std::string src = strip_line_comments(
+		slurp("streamelements/SEUtils/SEAppEnvUtils.cpp"));
+
+	const std::string body = function_body(src, "bool IsTraceLogLevel()");
+
+	check(!body.empty(),
+	      "IsTraceLogLevel() not found in SEAppEnvUtils.cpp -- has it "
+	      "moved? (CORE-757)");
+
+	if (body.empty())
+		return;
+
+	//
+	// Positive: the answer is a const static initialised in place, which is
+	// the form the standard initialises exactly once.
+	//
+	check(body.find("static const bool") != std::string::npos,
+	      "IsTraceLogLevel() must memoize into a function-local "
+	      "`static const bool` initialised from a lambda -- that form is "
+	      "initialised exactly once even when several threads arrive "
+	      "together, which a plain flag is not (CORE-757)");
+
+	//
+	// Negative: no mutable static left to race on. `static const` is
+	// excluded so the positive check above does not trip this one.
+	//
+	std::string mutable_statics = body;
+
+	for (const std::string &token :
+	     {std::string("static const"), std::string("static constexpr")}) {
+		for (;;) {
+			const auto at = mutable_statics.find(token);
+
+			if (at == std::string::npos)
+				break;
+
+			mutable_statics.erase(at, token.size());
+		}
+	}
+
+	check(mutable_statics.find("static") == std::string::npos,
+	      "IsTraceLogLevel() has a mutable static again. A flag written "
+	      "after it is read is a data race on every thread that logs; "
+	      "memoize with `static const bool x = []{...}();` instead "
+	      "(CORE-757)");
+}
+
+//
+// Part 2's ratchet: the obs and Qt headers in a translation unit's include
+// closure, which is what decides whether it can be compiled in this suite.
+//
+// The infrastructure half is at zero and is pinned there absolutely. It got
+// there by naming the five SEUtils domains it uses instead of the SEUtils.hpp
+// umbrella, and the umbrella is the way back: re-adding that one line puts
+// five obs headers and eleven Qt ones into the closure for two tokens of use,
+// and nothing about the build would complain. The token ratchet would not
+// notice either -- it counts what the source says, not what it includes --
+// so this is the check that holds that commit in place.
+//
+// The handler half is a moving number and a ceiling, lowered by the commit
+// that lowers it. Unlike the token ratchet it falls only when the LAST path
+// to a header is cut -- obs.h alone has fifteen independent introducers --
+// so it sits flat and then collapses. That is understood and accepted: it is
+// the final assertion that the handlers can join the suite, not a progress
+// meter. Use the token ratchet to watch progress.
+//
+static bool try_slurp(const std::string &relpath, std::string &out)
+{
+	std::ifstream in(std::string(se_tests::kRepoRoot) + "/" + relpath);
+
+	if (!in)
+		return false;
+
+	std::stringstream ss;
+	ss << in.rdbuf();
+	out = ss.str();
+	return true;
+}
+
+static void include_closure(const std::string &root,
+			    std::vector<std::string> &obs,
+			    std::vector<std::string> &qt)
+{
+	//
+	// The include directories the plug-in builds with, in the order the
+	// compiler searches them. A header that resolves inside the repo is
+	// followed; one that does not is external, and external is what is
+	// being counted.
+	//
+	static const char *const kSearchPath[] = {
+		"streamelements", "streamelements/SEUtils", "",
+		"deps/cef-stub",  "streamelements/deps",
+	};
+
+	const std::regex inc(R"(#[ \t]*include[ \t]*[<"]([^">]+)[">])");
+	const std::regex is_obs(
+		R"(obs[\w.-]*\.hp?p?|(?:util|graphics|media-io|callback)/.*)");
+	const std::regex is_qt(R"(Q[A-Z]\w*|Qt\w*(?:/.*)?)");
+
+	std::vector<std::string> queue{root};
+	std::vector<std::string> seen;
+	std::vector<std::string> external;
+
+	while (!queue.empty()) {
+		const std::string file = queue.back();
+		queue.pop_back();
+
+		if (std::find(seen.begin(), seen.end(), file) != seen.end())
+			continue;
+
+		seen.push_back(file);
+
+		std::string raw;
+
+		if (!try_slurp(file, raw))
+			continue;
+
+		const std::string body = strip_line_comments(raw);
+		const auto slash = file.find_last_of('/');
+		const std::string dir = slash == std::string::npos
+						? std::string()
+						: file.substr(0, slash);
+
+		for (auto it = std::sregex_iterator(body.begin(), body.end(),
+						    inc);
+		     it != std::sregex_iterator(); ++it) {
+			const std::string header = (*it)[1].str();
+
+			std::vector<std::string> candidates;
+
+			if (!dir.empty())
+				candidates.push_back(dir + "/" + header);
+
+			for (const char *const d : kSearchPath) {
+				candidates.push_back(*d ? std::string(d) + "/" +
+								     header
+							: header);
+			}
+
+			std::string resolved;
+
+			for (const std::string &c : candidates) {
+				if (std::filesystem::exists(
+					    std::string(se_tests::kRepoRoot) +
+					    "/" + c)) {
+					resolved = c;
+					break;
+				}
+			}
+
+			if (resolved.empty())
+				external.push_back(header);
+			else
+				queue.push_back(resolved);
+		}
+	}
+
+	std::sort(external.begin(), external.end());
+	external.erase(std::unique(external.begin(), external.end()),
+		       external.end());
+
+	for (const std::string &h : external) {
+		if (std::regex_match(h, is_obs))
+			obs.push_back(h);
+		else if (std::regex_match(h, is_qt))
+			qt.push_back(h);
+	}
+}
+
+static void report_closure(const char *root, const char *what,
+			   std::size_t expected_obs, std::size_t expected_qt)
+{
+	std::vector<std::string> obs, qt;
+
+	include_closure(root, obs, qt);
+
+	char msg[1024];
+
+	if (obs.size() != expected_obs || qt.size() != expected_qt) {
+		std::string found;
+
+		for (const std::string &h : obs)
+			found += " " + h;
+
+		for (const std::string &h : qt)
+			found += " " + h;
+
+		std::snprintf(
+			msg, sizeof(msg),
+			"%s: %zu obs and %zu Qt header(s) in the include "
+			"closure, expected %zu and %zu. Found:%s. This count "
+			"is a floor as well as a ceiling -- if you removed "
+			"some, lower it here in the same commit (CORE-757)",
+			what, obs.size(), qt.size(), expected_obs, expected_qt,
+			found.c_str());
+
+		check(false, msg);
+	}
+}
+
+static void check_handler_include_closure_only_goes_down()
+{
+	//
+	// Zero, absolutely. The five domain headers this file names in place
+	// of SEUtils.hpp are what hold it there.
+	//
+	report_closure("streamelements/SEApiMessageHandlerBase.cpp",
+		       "the API handler infrastructure", 0, 0);
+
+	//
+	// The 208 handler bodies, which dereference the services they are
+	// handed and so drag in whatever those services' headers need.
+	// Zero is the end state. The ladder ran 44 when part 2 was
+	// written, then 8/31; 7/25 once SEMenuManager.hpp and
+	// SENativeObsUIControlsManager.hpp left the closure, they being the
+	// only path to obs-hotkey.h and to six Qt headers; and 7/22 once
+	// SEObsSceneManager.hpp left it, taking QAbstractItemModel, QObject
+	// and QToolButton with it. So it does not only sit flat and then
+	// collapse -- it moves whenever an interface cuts the last path to
+	// something, which is why it is a floor as well as a ceiling.
+	//
+	// Thirteen service interfaces took it to 7/22 and no further,
+	// because the last dirty include was never a service: it was
+	// SEBrowserWidget.hpp, reached because three bodies call
+	// SEApiMessageHandlerBase::GetBrowserWidget() and then methods on
+	// the result -- the handler's own widget. It had been arriving
+	// through SEBrowserWidgetManager.hpp, which is why that header's
+	// closure measured as the identical set: a shared source, not a
+	// cause. ISEVideoCompositionViewHost is what ended it.
+	//
+	// From here this stops being a ratchet and becomes the invariant
+	// that keeps the file abstract: a body reaching libobs or Qt again,
+	// directly or through a header, fails the suite and the message
+	// names what came back through.
+	//
+	// Two things zero does NOT mean, both learned here the hard way.
+	// It is not compilability -- delete the include that satisfied a
+	// complete type and this reads zero while the file stops compiling,
+	// which is exactly what happened one commit ago. And it is not
+	// linkability: not one of the twenty services the container still
+	// carries concretely can be compiled in tests/, every one of their
+	// .cpp files needing obs or Qt, so a test TU has no definition to
+	// call even now. Both blockers are real and neither is counted
+	// here.
+	//
+	report_closure("streamelements/SEApiMessageHandler.cpp",
+		       "the API handler bodies", 0, 0);
+}
+
+//
+// Every typed getter in the local CefValue model is
+// `if (m_type != VTYPE_X) throw;` (deps/cef-stub/cef_value.cpp), and a bare
+// throw outside a catch block calls std::terminate. On top of that,
+// CefListValue::GetValue is an unchecked std::vector subscript
+// (deps/cef-stub/cef_value_list.cpp), so reading index 0 of an empty list is
+// undefined behaviour rather than an error.
+//
+// Both mean the same thing for a host API method: a body that reads a
+// page-supplied argument without first checking the list size and the
+// value's type is a process kill that page JavaScript can trigger by
+// sending the wrong shape. Five were reachable that way, found by
+// test_api_handler_bodies and fixed in the same commit as this check:
+// showCentralWidget (a dictionary, and then a string behind HasKey alone),
+// removeDockingWidgetsByIds and removeBackgroundWorkersByIds (a list, and
+// then each of its elements), and the getAvailable{Audio,Video}
+// EncoderClassProperties pair (index 0 of a list that may be empty).
+//
+// A sixth survived that first pass, and the reason is instructive: the
+// original three rules all matched on `args->GetX(i)`, and setStartupFlags
+// read its argument one indirection further out, as
+// `args->GetValue(0)->GetInt()`. Same bare throw, same process kill --
+// setStartupFlags("x") was enough -- and invisible to a scan looking for
+// the shorter spelling. Rule "value" below is that hole closed. The lesson
+// is about the shape of this check rather than about that handler: a read
+// has more than one spelling, so each spelling needs its own rule.
+//
+// This is the gate for all 208 bodies rather than only those five. The
+// behavioural tests cover the five; this covers the two hundred that have
+// no behavioural test, and the ones nobody has written yet. It reads the
+// source, so a body compiled out behind SE_ENABLE_WYVRN or
+// SE_ENABLE_CENTRAL_WIDGET_DECORATIONS is still checked.
+//
+// Four rules, each named separately so a failure says which one broke:
+//
+//   size   an indexed read of args needs an args->GetSize() test
+//   type   a TYPED indexed read needs the type of that index checked
+//   key    a typed read of a dictionary key needs that key's type checked,
+//          because HasKey answers for presence and not for type
+//   value  a typed read through the value handle --
+//          args->GetValue(i)->GetX() -- needs the same check as the
+//          indexed spelling rule "type" covers
+//
+static void check_handler_bodies_type_check_before_they_read()
+{
+	//
+	// Whitespace is removed rather than collapsed, as the other handler
+	// invariants do it: a read and its guard both wrap freely across
+	// lines here, and a wrapped one must not slip through.
+	//
+	const std::string src = strip_line_comments(
+		slurp("streamelements/SEApiMessageHandler.cpp"));
+
+	std::string flat;
+	flat.reserve(src.size());
+
+	for (std::size_t i = 0; i < src.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(src[i])))
+			flat += src[i];
+	}
+
+	struct Typed {
+		const char *getter;
+		const char *vtype;
+	};
+
+	const Typed typed[] = {{"GetString", "VTYPE_STRING"},
+			       {"GetInt", "VTYPE_INT"},
+			       {"GetBool", "VTYPE_BOOL"},
+			       {"GetDouble", "VTYPE_DOUBLE"},
+			       {"GetList", "VTYPE_LIST"},
+			       {"GetDictionary", "VTYPE_DICTIONARY"},
+			       {"GetBinary", "VTYPE_BINARY"}};
+
+	const std::string open = "API_HANDLER_BEGIN(\"";
+
+	std::size_t bodies = 0;
+	std::size_t violations = 0;
+
+	for (std::size_t at = flat.find(open); at != std::string::npos;
+	     at = flat.find(open, at + 1)) {
+		const std::size_t nameBegin = at + open.size();
+		const std::size_t nameEnd = flat.find('"', nameBegin);
+
+		if (nameEnd == std::string::npos)
+			continue;
+
+		const std::string name =
+			flat.substr(nameBegin, nameEnd - nameBegin);
+
+		const std::size_t end = flat.find("API_HANDLER_END", nameEnd);
+
+		if (end == std::string::npos)
+			continue;
+
+		const std::string body = flat.substr(nameEnd, end - nameEnd);
+
+		++bodies;
+
+		const bool hasSizeTest = body.find("args->GetSize()") !=
+					 std::string::npos;
+
+		//
+		// Rule "size". Any read of args by index at all, typed or
+		// not: args->GetValue(0) on an empty list is the undefined
+		// subscript, and it needs no type to be wrong.
+		//
+		std::smatch m;
+
+		if (std::regex_search(body, m,
+				      std::regex(R"(args->Get\w+\(\d+\))")) &&
+		    !hasSizeTest) {
+			std::fprintf(stderr,
+				     "FAIL: %s reads an argument by index "
+				     "without testing args->GetSize() -- "
+				     "CefListValue::GetValue is an unchecked "
+				     "vector subscript\n",
+				     name.c_str());
+			++violations;
+		}
+
+		// Rule "type".
+		for (const Typed &t : typed) {
+			const std::regex read(std::string("args->") + t.getter +
+					      R"(\((\d+)\))");
+
+			for (std::sregex_iterator
+				     it(body.begin(), body.end(), read),
+			     last;
+			     it != last; ++it) {
+				const std::string index = (*it)[1].str();
+
+				const std::string byType = "args->GetType(" +
+							   index +
+							   ")==" + t.vtype;
+				const std::string byValue =
+					"args->GetValue(" + index +
+					")->GetType()==" + t.vtype;
+
+				if (body.find(byType) != std::string::npos ||
+				    body.find(byValue) != std::string::npos)
+					continue;
+
+				std::fprintf(
+					stderr,
+					"FAIL: %s calls args->%s(%s) without "
+					"checking that index is %s -- the "
+					"model does a bare throw on a "
+					"mismatch, which is std::terminate\n",
+					name.c_str(), t.getter, index.c_str(),
+					t.vtype);
+				++violations;
+			}
+		}
+
+		//
+		// Rule "value". The same read, spelled through the value
+		// handle rather than the list: args->GetValue(0)->GetInt().
+		// Either guard satisfies it, since both ask the same
+		// question of the same value.
+		//
+		for (const Typed &t : typed) {
+			const std::regex read(
+				std::string(R"(args->GetValue\((\d+)\)->)") +
+				t.getter + R"(\(\))");
+
+			for (std::sregex_iterator
+				     it(body.begin(), body.end(), read),
+			     last;
+			     it != last; ++it) {
+				const std::string index = (*it)[1].str();
+
+				const std::string byType = "args->GetType(" +
+							   index +
+							   ")==" + t.vtype;
+				const std::string byValue =
+					"args->GetValue(" + index +
+					")->GetType()==" + t.vtype;
+
+				if (body.find(byType) != std::string::npos ||
+				    body.find(byValue) != std::string::npos)
+					continue;
+
+				std::fprintf(
+					stderr,
+					"FAIL: %s calls "
+					"args->GetValue(%s)->%s() without "
+					"checking that value is %s -- the "
+					"model does a bare throw on a "
+					"mismatch, which is std::terminate\n",
+					name.c_str(), index.c_str(), t.getter,
+					t.vtype);
+				++violations;
+			}
+		}
+
+		// Rule "key".
+		for (const Typed &t : typed) {
+			//
+			// A custom delimiter, because the pattern itself
+			// contains `)"` -- which ends a plain R"(...)" early
+			// and turns the rest of the line into a syntax error.
+			//
+			const std::regex read(std::string(R"((\w+)->)") +
+					      t.getter +
+					      R"RX(\("([^"]+)"\))RX");
+
+			for (std::sregex_iterator
+				     it(body.begin(), body.end(), read),
+			     last;
+			     it != last; ++it) {
+				const std::string var = (*it)[1].str();
+				const std::string key = (*it)[2].str();
+
+				// Handled by rule "type" above.
+				if (var == "args")
+					continue;
+
+				const std::string guard = var + "->GetType(\"" +
+							  key +
+							  "\")==" + t.vtype;
+
+				if (body.find(guard) != std::string::npos)
+					continue;
+
+				std::fprintf(
+					stderr,
+					"FAIL: %s reads %s->%s(\"%s\") "
+					"without checking that key's type -- "
+					"HasKey answers for presence, not "
+					"type, and a mismatch is "
+					"std::terminate\n",
+					name.c_str(), var.c_str(), t.getter,
+					key.c_str());
+				++violations;
+			}
+		}
+	}
+
+	//
+	// Non-vacuity. If the body scan ever stops finding bodies -- a macro
+	// rename, a reformat the flattening does not survive -- this check
+	// would pass by reading nothing at all, which is how a regression
+	// gate quietly stops being one.
+	//
+	check(bodies >= 200,
+	      "the handler body scan must find the API_HANDLER_BEGIN blocks; "
+	      "fewer than 200 means the scan broke, not that the file shrank");
+
+	check(violations == 0,
+	      "every host API body must check size and type before reading a "
+	      "page-supplied argument");
+}
+
+//
+// --- Every stand-in can answer the handler that calls it.
+//
+// tests/ replaces thirty services: thirteen interfaces are faked and
+// fifteen concrete classes have their definitions supplied, plus the WYVRN
+// manager. A stand-in that only RECORDS a parameter the handler passes
+// `result` to looks perfectly reasonable and quietly makes the handler
+// untestable -- the reply is then whatever the dispatcher pre-set, every
+// time, so a test can assert the call but never the answer.
+//
+// Four were like that, found by hand while writing the contract table and
+// fixed in the same commit as this check. Three of them --
+// SerializeProviders and its two siblings -- take the result BY VALUE,
+// which is the second shape: assigning the handle writes into a local and
+// the caller sees nothing, so those have to mutate what it points at.
+//
+// Both are decidable from two facts, which is why this is a source
+// invariant rather than a comment: does the handler hand `result` to this
+// method, and what does the stand-in do with the matching parameter.
+//
+// It reads tests/ rather than streamelements/, unlike every other check
+// here. That is the point -- the production code is fine either way, and
+// what rots is the stand-in beside a newly added interface method.
+//
+//
+// The other side of the argument the gate above checks.
+//
+// check_handler_bodies_type_check_before_they_read reads handler BODIES,
+// and that is only half the surface. A body that reads nothing itself but
+// hands args->GetValue(0) to a service is not safe: the service reads the
+// value, through the same getters, and `if (m_type != VTYPE_X) throw;`
+// outside a catch is std::terminate wherever it is written. Seven service
+// methods were in exactly that state while the body gate reported all 208
+// bodies clean -- showNonModalDialog, showModalDialog, openPopupWindow,
+// showStatusBarTemporaryMessage, setEncodingSettings, setStreamingSettings
+// and streamingBandwidthTestBegin, 46 unguarded reads between them, every
+// one reachable from any page with one wrong argument.
+//
+// So: for every method a handler hands a raw page value to, the parameter
+// that receives it must have its type checked before it is read, and the
+// dictionary members read off it must have theirs checked too -- HasKey
+// answers for presence, and GetString(k) is `m_map[k]->GetString()`, the
+// same throwing getter.
+//
+// Deliberately conservative in one way: a parameter passed to any function
+// before it is read counts as checked, because that is how the ten
+// add*SceneItem* handlers are safe -- IsSceneItemInfoValid() tests the
+// type one call deeper. Reporting those would make this gate cry wolf, and
+// a gate that cries wolf gets deleted.
+//
+static void check_services_type_check_what_the_handlers_hand_them()
+{
+	const std::string source = strip_line_comments(
+		slurp("streamelements/SEApiMessageHandler.cpp"));
+
+	std::string handler;
+	handler.reserve(source.size());
+
+	for (std::size_t i = 0; i < source.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(source[i])))
+			handler += source[i];
+	}
+
+	//
+	// Every (method, parameter position) a raw page value travels to.
+	// Walked by hand rather than matched, because the arguments nest and
+	// a regex cannot count parentheses.
+	//
+	std::set<std::pair<std::string, std::size_t>> handed;
+
+	const std::regex call(R"((\w+)\()");
+
+	for (std::sregex_iterator it(handler.begin(), handler.end(), call),
+	     last;
+	     it != last; ++it) {
+		const std::string name = (*it)[1].str();
+
+		if (name == "GetValue" || name == "GetType" ||
+		    name == "GetSize")
+			continue;
+
+		std::size_t at = static_cast<std::size_t>((*it).position()) +
+				 (*it).length();
+		int depth = 1;
+		std::string args;
+
+		while (at < handler.size() && depth) {
+			const char c = handler[at];
+
+			if (c == '(') {
+				++depth;
+			} else if (c == ')') {
+				--depth;
+
+				if (!depth)
+					break;
+			}
+
+			args += c;
+			++at;
+		}
+
+		if (args.find("args->GetValue(") == std::string::npos)
+			continue;
+
+		// Split at depth 0 to learn each argument's position.
+		std::vector<std::string> parts;
+		std::string cur;
+		int d = 0;
+
+		//
+		// Only brackets, deliberately: `<` and `>` cannot be
+		// counted as nesting here because every `->` in the
+		// flattened text would close a level that nothing opened,
+		// and then no argument is ever seen at depth 0.
+		//
+		for (const char c : args) {
+			if (c == '(' || c == '[')
+				++d;
+			else if (c == ')' || c == ']')
+				--d;
+
+			if (c == ',' && d == 0) {
+				parts.push_back(cur);
+				cur.clear();
+			} else {
+				cur += c;
+			}
+		}
+
+		parts.push_back(cur);
+
+		for (std::size_t pos = 0; pos < parts.size(); ++pos) {
+			if (std::regex_match(
+				    parts[pos],
+				    std::regex(R"(args->GetValue\(\d+\))")))
+				handed.insert(std::make_pair(name, pos));
+		}
+	}
+
+	check(handed.size() >= 60,
+	      "the handler must still be handing raw page values to scores of "
+	      "service methods; a much smaller number means this scan broke");
+
+	//
+	// Now the services. Every .cpp and .hpp under streamelements/,
+	// flattened the same way, so a definition that wraps is still found.
+	//
+	const std::string dir =
+		std::string(se_tests::kRepoRoot) + "/streamelements";
+
+	std::error_code ec;
+	std::filesystem::directory_iterator walk(dir, ec);
+
+	check(!ec, "cannot read streamelements/ -- this invariant would then "
+		   "pass vacuously");
+
+	std::vector<std::filesystem::path> files;
+
+	for (std::filesystem::directory_iterator end; walk != end && !ec;
+	     walk.increment(ec)) {
+		files.push_back(walk->path());
+	}
+
+	struct Typed {
+		const char *getter;
+		const char *vtype;
+	};
+
+	const Typed typed[] = {{"GetString", "VTYPE_STRING"},
+			       {"GetInt", "VTYPE_INT"},
+			       {"GetBool", "VTYPE_BOOL"},
+			       {"GetDouble", "VTYPE_DOUBLE"},
+			       {"GetList", "VTYPE_LIST"},
+			       {"GetDictionary", "VTYPE_DICTIONARY"},
+			       {"GetBinary", "VTYPE_BINARY"}};
+
+	std::size_t examined = 0;
+	std::size_t violations = 0;
+
+	for (const std::filesystem::path &path : files) {
+		const std::string ext = path.extension().string();
+
+		if (ext != ".hpp" && ext != ".cpp")
+			continue;
+
+		std::ifstream in(path.string());
+
+		if (!in)
+			continue;
+
+		std::ostringstream buf;
+		buf << in.rdbuf();
+
+		const std::string text = strip_line_comments(buf.str());
+
+		std::string flat;
+		flat.reserve(text.size());
+
+		for (std::size_t i = 0; i < text.size(); ++i) {
+			if (!std::isspace(static_cast<unsigned char>(text[i])))
+				flat += text[i];
+		}
+
+		const std::string file = path.filename().string();
+
+		//
+		// Not `pair<const std::string, ...>`: that is a map's
+		// element type, and binding it to a set's element
+		// constructs a temporary pair on every iteration.
+		// -Wrange-loop-construct says so on clang, and MSVC does
+		// not -- the fourth clang-only diagnostic in this series.
+		//
+		for (const std::pair<std::string, std::size_t> &want : handed) {
+			const std::string &method = want.first;
+			const std::size_t pos = want.second;
+
+			//
+			// A definition rather than a call: the name is
+			// preceded by `::` (out of line) or by a type (an
+			// inline body in a header), and is followed by a
+			// parameter list and then a brace.
+			//
+			const std::string needle = method + "(";
+
+			for (std::size_t at = flat.find(needle);
+			     at != std::string::npos;
+			     at = flat.find(needle, at + 1)) {
+				std::size_t p = at + needle.size();
+				int depth = 1;
+				std::string params;
+
+				while (p < flat.size() && depth) {
+					const char c = flat[p];
+
+					if (c == '(') {
+						++depth;
+					} else if (c == ')') {
+						--depth;
+
+						if (!depth)
+							break;
+					}
+
+					params += c;
+					++p;
+				}
+
+				if (p >= flat.size() || flat[p] != ')')
+					continue;
+
+				// A definition, not a declaration or a call.
+				std::size_t brace = p + 1;
+
+				while (brace < flat.size() &&
+				       flat[brace] != '{' &&
+				       flat[brace] != ';' && flat[brace] != ')')
+					++brace;
+
+				if (brace >= flat.size() || flat[brace] != '{')
+					continue;
+
+				if (params.find("CefRefPtr<CefValue>") ==
+				    std::string::npos)
+					continue;
+
+				// The body.
+				int braces = 0;
+				std::size_t end = brace;
+
+				while (end < flat.size()) {
+					if (flat[end] == '{') {
+						++braces;
+					} else if (flat[end] == '}') {
+						--braces;
+
+						if (!braces)
+							break;
+					}
+
+					++end;
+				}
+
+				const std::string body =
+					flat.substr(brace, end - brace + 1);
+
+				// The parameter at `pos`, by name.
+				std::vector<std::string> names;
+				std::string cur;
+				int d = 0;
+
+				for (const char c : params) {
+					if (c == '(' || c == '<')
+						++d;
+					else if (c == ')' || c == '>')
+						--d;
+
+					if (c == ',' && d == 0) {
+						names.push_back(cur);
+						cur.clear();
+					} else {
+						cur += c;
+					}
+				}
+
+				names.push_back(cur);
+
+				if (pos >= names.size())
+					continue;
+
+				std::smatch id;
+				const std::string decl = names[pos];
+
+				if (!std::regex_search(
+					    decl, id,
+					    std::regex(R"((\w+)\s*$)")))
+					continue;
+
+				const std::string var = id[1].str();
+
+				if (var.empty() ||
+				    decl.find("CefRefPtr<CefValue>") ==
+					    std::string::npos)
+					continue;
+
+				++examined;
+
+				//
+				// Rule "parameter": the value itself.
+				//
+				for (const Typed &t : typed) {
+					const std::string read =
+						var + "->" + t.getter + "()";
+
+					const std::size_t readAt =
+						body.find(read);
+
+					if (readAt == std::string::npos)
+						continue;
+
+					const std::string before =
+						body.substr(0, readAt);
+
+					if (before.find(var + "->GetType()") !=
+					    std::string::npos)
+						continue;
+
+					//
+					// Handed to a validator first, which
+					// is how the ten add*SceneItem*
+					// handlers are safe: their type
+					// check lives in
+					// IsSceneItemInfoValid, one call
+					// deeper. Matched by shape rather
+					// than by any call at all, so that
+					// GetVideoComposition(input) does
+					// not silence a real finding -- it
+					// did, while this was written.
+					//
+					if (std::regex_search(
+						    before,
+						    std::regex(
+							    R"((?:Is|Validate|Check)\w*\()" +
+							    var + R"([,)])")))
+						continue;
+
+					std::fprintf(
+						stderr,
+						"FAIL: %s::%s reads %s->%s() "
+						"without checking its type, "
+						"and a handler hands that "
+						"parameter a raw page value "
+						"-- the model does a bare "
+						"throw on a mismatch, which "
+						"is std::terminate\n",
+						file.c_str(), method.c_str(),
+						var.c_str(), t.getter);
+					++violations;
+				}
+
+				//
+				// Rule "element": a value taken out of a
+				// list by index, which is a third spelling
+				// again -- `servers->GetValue(i)->
+				// GetDictionary()`. The index is whatever
+				// expression the loop uses, so it is matched
+				// rather than assumed, and the guard has to
+				// ask about the same one.
+				//
+				// Added because a mutation escaped: deleting
+				// the element type check in
+				// BeginBandwidthTest left this gate green.
+				//
+				for (const Typed &t : typed) {
+					const std::regex element(
+						std::string(
+							R"((\w+)->GetValue\(([^()]+)\)->)") +
+						t.getter + R"(\(\))");
+
+					for (std::sregex_iterator
+						     it(body.begin(),
+							body.end(), element),
+					     last;
+					     it != last; ++it) {
+						const std::string owner =
+							(*it)[1].str();
+						const std::string index =
+							(*it)[2].str();
+
+						const std::string guard =
+							owner + "->GetValue(" +
+							index + ")->GetType()";
+
+						if (body.find(guard) !=
+						    std::string::npos)
+							continue;
+
+						std::fprintf(
+							stderr,
+							"FAIL: %s::%s reads "
+							"%s->GetValue(%s)->%s()"
+							" without checking "
+							"that element's type "
+							"-- the mismatch is "
+							"std::terminate\n",
+							file.c_str(),
+							method.c_str(),
+							owner.c_str(),
+							index.c_str(),
+							t.getter);
+						++violations;
+					}
+				}
+
+				//
+				// Rule "member": the keys read off it. Same
+				// rule as the body gate's, and the same
+				// reason -- GetString(k) forwards to the
+				// value's own throwing getter.
+				//
+				for (const Typed &t : typed) {
+					const std::regex member(
+						std::string(R"((\w+)->)") +
+						t.getter +
+						R"RX(\("([^"]+)"\))RX");
+
+					for (std::sregex_iterator
+						     it(body.begin(),
+							body.end(), member),
+					     last;
+					     it != last; ++it) {
+						const std::string owner =
+							(*it)[1].str();
+						const std::string key =
+							(*it)[2].str();
+
+						//
+						// Both polarities, because a
+						// gate reads `==VTYPE_X &&`
+						// and a refusal reads
+						// `!=VTYPE_X ||`, and both
+						// spellings, because the
+						// type of a key can be asked
+						// of the dictionary or of the
+						// value it holds. All four
+						// ask the same question.
+						//
+						const std::string byKey =
+							owner + "->GetType(\"" +
+							key + "\")";
+						const std::string byValue =
+							owner +
+							"->GetValue(\"" + key +
+							"\")->GetType()";
+
+						if (body.find(byKey +
+							      "==" + t.vtype) !=
+							    std::string::npos ||
+						    body.find(byKey +
+							      "!=" + t.vtype) !=
+							    std::string::npos ||
+						    body.find(byValue +
+							      "==" + t.vtype) !=
+							    std::string::npos ||
+						    body.find(byValue +
+							      "!=" + t.vtype) !=
+							    std::string::npos)
+							continue;
+
+						//
+						// Or a validator vouched for
+						// the whole value before any
+						// member was read, as
+						// IsSceneItemInfoValid does
+						// for name, class and
+						// settings.
+						//
+						if (std::regex_search(
+							    body,
+							    std::regex(
+								    R"((?:Is|Validate|Check)\w*\()" +
+								    var +
+								    R"([,)])")))
+							continue;
+
+						std::fprintf(
+							stderr,
+							"FAIL: %s::%s reads "
+							"%s->%s(\"%s\") "
+							"without checking "
+							"that key's type -- "
+							"HasKey answers for "
+							"presence, not type, "
+							"and the mismatch is "
+							"std::terminate\n",
+							file.c_str(),
+							method.c_str(),
+							owner.c_str(), t.getter,
+							key.c_str());
+						++violations;
+					}
+				}
+			}
+		}
+	}
+
+	check(examined >= 40,
+	      "far fewer service methods were examined than this handler "
+	      "hands values to; the definition scan broke");
+
+	check(violations == 0,
+	      "every service method a handler hands a raw page value to must "
+	      "check that value's type, and its members', before reading "
+	      "them");
+
+	std::printf("    (%zu handler-to-service argument positions, %zu "
+		    "service method definitions examined)\n",
+		    handed.size(), examined);
+}
+
+static void check_every_stand_in_can_answer_the_handler_that_calls_it()
+{
+	const std::string source = strip_line_comments(
+		slurp("streamelements/SEApiMessageHandler.cpp"));
+
+	//
+	// Whitespace removed rather than collapsed, as the other handler
+	// invariants do it: a call site wraps across as many lines as
+	// clang-format likes, and one that wrapped must not slip through.
+	//
+	std::string handler;
+
+	handler.reserve(source.size());
+
+	for (std::size_t i = 0; i < source.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(source[i])))
+			handler += source[i];
+	}
+
+	//
+	// Every method name the handler passes `result` to. The call sites
+	// wrap freely, so this runs on flattened source and walks the
+	// argument list by hand: a regex cannot match nested parentheses,
+	// and these arguments nest.
+	//
+	std::set<std::string> answersResult;
+
+	const std::regex call(R"((\w+)\()");
+
+	for (std::sregex_iterator it(handler.begin(), handler.end(), call),
+	     last;
+	     it != last; ++it) {
+		const std::string name = (*it)[1].str();
+
+		std::size_t at = static_cast<std::size_t>((*it).position()) +
+				 (*it).length();
+		int depth = 1;
+		std::string args;
+
+		while (at < handler.size() && depth) {
+			const char c = handler[at];
+
+			if (c == '(') {
+				++depth;
+			} else if (c == ')') {
+				--depth;
+
+				if (!depth)
+					break;
+			}
+
+			args += c;
+			++at;
+		}
+
+		if (args == "result" || args.compare(0, 7, "result,") == 0 ||
+		    args.find(",result,") != std::string::npos ||
+		    (args.size() >= 7 &&
+		     args.compare(args.size() - 7, 7, ",result") == 0))
+			answersResult.insert(name);
+	}
+
+	check(answersResult.size() >= 80,
+	      "the handler must still be handing result to scores of service "
+	      "methods; a much smaller number means this scan broke");
+
+	//
+	// Now the stand-ins. A definition is `... Name(params) ... { body }`,
+	// and the ones that matter are those with a Record or a Respond in
+	// them -- anything else is a constructor or a helper.
+	//
+	const char *const standIns[] = {"tests/fake_api_services.hpp",
+					"tests/stub_concrete_services.cpp",
+					"tests/stub_razer_wyvrn.cpp"};
+
+	std::size_t examined = 0;
+	std::size_t violations = 0;
+
+	const std::regex definition(
+		R"((\w+)\(([^)]*)\)[^{;]*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\})");
+
+	for (const char *const path : standIns) {
+		const std::string text = strip_line_comments(slurp(path));
+
+		for (std::sregex_iterator
+			     it(text.begin(), text.end(), definition),
+		     last;
+		     it != last; ++it) {
+			const std::string name = (*it)[1].str();
+			const std::string params = (*it)[2].str();
+			const std::string body = (*it)[3].str();
+
+			if (body.find("Record(") == std::string::npos &&
+			    body.find("Respond") == std::string::npos)
+				continue;
+
+			if (!answersResult.count(name))
+				continue;
+
+			++examined;
+
+			if (body.find("Fill") == std::string::npos) {
+				std::fprintf(
+					stderr,
+					"FAIL: the stand-in for %s only "
+					"records the result the handler hands "
+					"it, so nothing is ever written back "
+					"and no test can assert that "
+					"handler's reply\n",
+					name.c_str());
+				++violations;
+				continue;
+			}
+
+			//
+			// The by-value shape. Find the last
+			// CefRefPtr<CefValue> parameter declared without a
+			// `&`: if the body assigns the handle to it, that
+			// write lands in a local.
+			//
+			std::string byValue;
+
+			std::size_t from = 0;
+
+			for (;;) {
+				const std::size_t comma =
+					params.find(',', from);
+				const std::string p = params.substr(
+					from, comma == std::string::npos
+						      ? std::string::npos
+						      : comma - from);
+
+				if (p.find("CefRefPtr<CefValue>") !=
+					    std::string::npos &&
+				    p.find('&') == std::string::npos) {
+					const std::size_t end =
+						p.find_last_not_of(" \t\r\n");
+					const std::size_t begin =
+						p.find_last_of(" \t\r\n*", end);
+
+					byValue = p.substr(
+						begin == std::string::npos
+							? 0
+							: begin + 1,
+						end - (begin == std::string::npos
+							       ? 0
+							       : begin));
+				}
+
+				if (comma == std::string::npos)
+					break;
+
+				from = comma + 1;
+			}
+
+			if (byValue.empty())
+				continue;
+
+			if (body.find("FillValueInPlace") != std::string::npos)
+				continue;
+
+			if (std::regex_search(
+				    body, std::regex("FillValue\\([^)]*\\b" +
+						     byValue + "\\b"))) {
+				std::fprintf(
+					stderr,
+					"FAIL: the stand-in for %s takes its "
+					"result by value and answers by "
+					"assigning the handle, which writes "
+					"into a local -- it has to mutate "
+					"what the handle points at, as the "
+					"real service does\n",
+					name.c_str());
+				++violations;
+			}
+		}
+	}
+
+	check(examined >= 90,
+	      "the stand-ins must still cover scores of result-answering "
+	      "methods; a much smaller number means the definition scan "
+	      "broke, not that the fakes shrank");
+
+	check(violations == 0,
+	      "every stand-in for a method the handler hands result to must "
+	      "be able to write that result back");
+}
+
+//
+// --- Every source file ends with a newline.
+//
+// clang promotes -Wnewline-eof to an error under -Werror, so a file whose
+// last line has no terminator fails the macOS build outright. MSVC does
+// not warn at all, and that asymmetry is the whole point of putting this
+// here: SEApiMessageHandlerBase.cpp was committed without one, built
+// clean on Windows eleven times across this series, and then broke the
+// first macOS build of stage 3 on a byte no editor shows.
+//
+// It belongs in the suite rather than only in CI, because the suite is
+// what a Windows-only change can run before pushing, and it costs
+// milliseconds.
+//
+static void check_every_source_file_ends_with_a_newline()
+{
+	const char *const dirs[] = {"/streamelements",
+				    "/streamelements/SEUtils",
+				    "/streamelements/updater",
+				    "/streamelements/restore-script-host",
+				    "/tests"};
+
+	int scanned = 0;
+
+	for (const char *const dir : dirs) {
+		const std::string path = std::string(se_tests::kRepoRoot) + dir;
+
+		std::error_code ec;
+		std::filesystem::directory_iterator it(path, ec);
+
+		check(!ec, (std::string("cannot read ") + dir +
+			    " -- this invariant would then pass vacuously")
+				   .c_str());
+
+		for (std::filesystem::directory_iterator end; it != end && !ec;
+		     it.increment(ec)) {
+			const std::filesystem::path &p = it->path();
+			const std::string ext = p.extension().string();
+
+			if (ext != ".cpp" && ext != ".hpp" && ext != ".mm" &&
+			    ext != ".c" && ext != ".h")
+				continue;
+
+			//
+			// Binary, so the byte read is the file's own and
+			// not something the text layer translated.
+			//
+			std::ifstream in(p.string(), std::ios::binary);
+
+			if (!in)
+				continue;
+
+			in.seekg(0, std::ios::end);
+
+			if (static_cast<std::streamoff>(in.tellg()) <= 0)
+				continue;
+
+			in.seekg(-1, std::ios::end);
+
+			char last = 0;
+			in.read(&last, 1);
+
+			++scanned;
+
+			if (last == '\n')
+				continue;
+
+			check(false,
+			      (p.filename().string() +
+			       " has no trailing newline -- clang makes "
+			       "that an error under -Werror "
+			       "(-Wnewline-eof), so the macOS build fails "
+			       "on it while MSVC says nothing (CORE-757)")
+				      .c_str());
+		}
+	}
+
+	//
+	// 237 files as of stage 3. A floor well under that catches a scan
+	// that silently stopped finding anything.
+	//
+	check(scanned > 150,
+	      "the trailing-newline scan found almost no files -- it would "
+	      "then pass vacuously");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -2388,7 +5664,38 @@ int main()
 	check_wyvrn_sdk_calls_stay_on_the_sdk_thread();
 	check_config_never_hands_libobs_a_null_config();
 	check_rejected_signature_stops_the_handler();
+	check_injected_services_are_not_also_fetched_globally();
+	check_api_handler_takes_its_services_by_injection();
+	check_api_handler_locks_the_services_once_per_dispatch();
+	check_nothing_but_the_manager_owns_the_services_container();
+	check_the_invoke_handler_is_not_immortal();
+	check_the_config_is_owned_and_closed_explicitly();
+	check_only_the_destructor_starts_teardown();
+	check_the_config_is_closed_before_the_queue_is_drained();
+	check_the_root_is_not_a_singleton();
+	check_no_singletons_remain();
+	check_non_modal_dialogs_are_closed_by_their_owner();
+	check_state_persistence_borrows_the_managers_it_serializes();
+	check_widget_manager_does_not_own_state_persistence();
+	check_api_services_container_is_not_emptied_at_teardown();
+	check_api_services_is_a_container_and_nothing_else();
 	check_crash_path_filesystem_calls_never_throw();
+	check_every_published_service_is_watched_at_teardown();
+	check_signal_handler_data_holds_the_composition_per_path();
+	check_data_driven_scans_do_not_call_os_file_exists();
+	check_the_scene_manager_drains_outside_its_mutex();
+	check_signal_handler_data_holds_its_owners_weakly();
+	check_the_scene_manager_is_attached_where_it_is_built();
+	check_the_services_are_released_at_the_end_of_shutdown();
+	check_deferred_deletes_hold_services_weakly();
+	check_api_handler_obs_qt_tokens_only_go_down();
+	check_the_api_call_lock_stays_per_translation_unit();
+	check_the_trace_log_level_memo_is_computed_once();
+	check_handler_include_closure_only_goes_down();
+	check_handler_bodies_type_check_before_they_read();
+	check_services_type_check_what_the_handlers_hand_them();
+	check_every_stand_in_can_answer_the_handler_that_calls_it();
+	check_every_source_file_ends_with_a_newline();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

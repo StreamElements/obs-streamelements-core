@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cef-headers.hpp"
+#include "ISEMenuManager.hpp"
 
 #include "SEApiMessageHandler.hpp"
 #include "SEBrowserWidget.hpp"
@@ -11,33 +12,57 @@
 #include <QMenu>
 #include <QPointer>
 
+#include <memory>
 #include <string>
 #include <vector>
 
 class SEBrowserWidget;
+class SESessionManager;
+class SEPerformanceHistoryTracker;
+class SEAnalyticsEventsManager;
+class SEAuxiliaryControlsBuilder;
+class SEConfig;
+class SEHostUpdateManager;
 
-class SEMenuManager :
-	public QObject
-{
+//
+// QObject first among the bases, which moc requires.
+//
+class SEMenuManager : public QObject, public ISEMenuManager {
 	Q_OBJECT;
 
 private:
 	enum aux_menu_item_type_t { Command, Separator, Container };
 
 public:
-	SEMenuManager(QMainWindow* parent);
+	//
+	// The session manager is held strongly, and that is not a ring: it
+	// holds the services bundle weakly, and nothing it owns owns this.
+	// It is injected because two menu items are the non-API way into a
+	// session reset, and reaching the singleton for them was the last
+	// reason this class needed it.
+	//
+	SEMenuManager(QMainWindow *parent,
+		      std::shared_ptr<SESessionManager> sessionManager,
+		      std::shared_ptr<SEPerformanceHistoryTracker>
+			      performanceHistoryTracker,
+		      std::shared_ptr<SEAnalyticsEventsManager>
+			      analyticsEventsManager,
+		      std::shared_ptr<SEAuxiliaryControlsBuilder>
+			      auxiliaryControlsBuilder,
+		      std::shared_ptr<SEConfig> config,
+		      std::shared_ptr<SEHostUpdateManager> hostUpdateManager);
 	virtual ~SEMenuManager();
 
 public:
-	void Update();
+	void Update() override;
 
-	bool DeserializeAuxiliaryMenuItems(CefRefPtr<CefValue> input);
-	void SerializeAuxiliaryMenuItems(CefRefPtr<CefValue>& output);
+	bool DeserializeAuxiliaryMenuItems(CefRefPtr<CefValue> input) override;
+	void SerializeAuxiliaryMenuItems(CefRefPtr<CefValue> &output) override;
 
-	void Reset();
+	void Reset() override;
 
-	void SetShowBuiltInMenuItems(bool show);
-	bool GetShowBuiltInMenuItems();
+	void SetShowBuiltInMenuItems(bool show) override;
+	bool GetShowBuiltInMenuItems() override;
 
 protected:
 	QMainWindow* mainWindow() { return m_mainWindow; }
@@ -50,6 +75,34 @@ private:
 
 private:
 	QMainWindow* m_mainWindow;
+	std::shared_ptr<SESessionManager> m_sessionManager;
+
+	//
+	// For the Report Issue dialog, which this menu is the only trigger
+	// for. It was a method on SEGlobalStateManager, which is why opening
+	// it meant reaching for the singleton.
+	//
+	std::shared_ptr<SEPerformanceHistoryTracker>
+		m_performanceHistoryTracker;
+	std::shared_ptr<SEAnalyticsEventsManager> m_analyticsEventsManager;
+
+	//
+	// Builds this menu's aux items and its docks submenu from the
+	// description a page sends. Was reached through the singleton from
+	// free functions in SEUtils.
+	//
+	std::shared_ptr<SEAuxiliaryControlsBuilder> m_auxiliaryControls;
+
+	//
+	// The aux menu items and the built-in-items flag are read from and
+	// written to the plug-in's ini, and the onboarding flag decides
+	// whether the menu is built at all.
+	//
+	std::shared_ptr<SEConfig> m_config;
+	std::shared_ptr<SEHostUpdateManager> m_hostUpdateManager;
+
+private:
+	void ReportIssue();
 
 	//
 	// QPointer, not QMenu*, because we do not own this.

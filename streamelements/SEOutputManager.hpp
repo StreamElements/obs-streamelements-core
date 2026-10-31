@@ -1,10 +1,25 @@
 #pragma once
 
-#include "SEOutput.hpp"
-#include "SEVideoCompositionManager.hpp"
-#include "SEAudioCompositionManager.hpp"
+#include "SEObsOutputType.hpp"
+#include "cef-headers.hpp"
 
+#include <map>
+#include <memory>
 #include <shared_mutex>
+#include <string>
+
+//
+// Forward declarations rather than includes. Each of these is held only
+// through a shared_ptr and this class's destructor is defined in the .cpp,
+// which is what lets the types stay incomplete here. Including them instead
+// cost twenty-one external headers -- obs.h, obs-frontend-api.h and
+// nineteen Qt ones -- for three pointers, with no member of any of them
+// named in this file (CORE-757 part 2).
+//
+class SEOutputBase;
+class SEVideoCompositionManager;
+class SEAudioCompositionManager;
+class SEHostEventDispatcher;
 
 class SEOutputManager {
 private:
@@ -17,12 +32,19 @@ private:
 	std::shared_ptr<SEAudioCompositionManager>
 		m_audioCompositionManager;
 
+	//
+	// Handed to every output this manager creates, because an output
+	// announces its own start, stop, error and list changes.
+	//
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+
 public:
 	SEOutputManager(
 		std::shared_ptr<SEVideoCompositionManager>
 			videoCompositionManager,
 		std::shared_ptr<SEAudioCompositionManager>
-			audioCompositionManager);
+			audioCompositionManager,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher);
 	~SEOutputManager();
 
 public:

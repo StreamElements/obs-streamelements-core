@@ -1,0 +1,85 @@
+name: Tests
+
+# The ctest suite under tests/, which until now has only ever run on whoever's
+# machine remembered to run it. `build.yml` proves the plugin compiles and
+# `CI/check-format.sh` proves it is formatted; nothing proved that 13
+# executables and 56 source invariants still pass, so a PR could go green with
+# an invariant broken. CORE-757 asked for exactly this ("Ratchet in CI") and
+# the ratchet it describes -- the GetInstance() call-site count, driven from
+# 291 to zero -- lived in a test that CI never executed.
+#
+# This is a separate workflow rather than a job inside build.yml on purpose.
+# The suite links neither libobs nor Qt and needs no obs-studio tree, so it
+# has nothing in common with that pipeline: no OBS checkout, no dependency
+# bundle, no signing, no build number. It finishes in about a minute, which is
+# only true while it stays independent of all of that.
+#
+# Windows and macOS, and deliberately not Linux. Both of these are verified by
+# hand before this landed; nobody has ever built the suite on Linux, and a
+# runner is the wrong place to find out that a test file leans on a transitive
+# include gcc does not provide. Add ubuntu-latest here once someone has run it
+# once locally.
+#
+# Plain runner images, where build.yml pins windows-2025-vs2026 and macos-26.
+# That pipeline has to match the OBS dependency bundle it downloads; this one
+# has no dependencies at all, so taking whatever compiler the image ships is
+# free and is itself a small amount of extra signal.
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - 'docs/**'
+      - '.github/workflows/pages.yml'
+      - 'README.md'
+    tags-ignore:
+      - '**'
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ctest:
+    name: ctest (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Both platforms always report. A failure on one is not a reason to stop
+      # knowing about the other, and the interesting failures here are the
+      # ones that show up on a single platform.
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          # The invariants read production sources from the working tree, not
+          # from history.
+          fetch-depth: 1
+
+      - name: Configure
+        run: cmake -S tests -B tests/build
+
+      # Debug on both: the Windows generator is multi-config, and ctest there
+      # silently reports a stale pass if the configuration it is asked for is
+      # not the one that was built.
+      - name: Build
+        run: cmake --build tests/build --config Debug --parallel
+
+      # The test count is part of the output and worth reading: test_http_utils
+      # registers only where libcurl is present, so macOS runs 13 and Windows
+      # runs 12. A smaller number than that on either platform means a test
+      # stopped being registered rather than stopped failing.
+      - name: List what will run
+        run: ctest --test-dir tests/build -C Debug --show-only
+
+      - name: Run
+        run: ctest --test-dir tests/build -C Debug --output-on-failure

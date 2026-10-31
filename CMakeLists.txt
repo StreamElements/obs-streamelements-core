@@ -537,15 +537,46 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEObsBandwidthTestClient.cpp
 	streamelements/SEWidgetManager.cpp
 	streamelements/SEObsAppMonitor.cpp
+	streamelements/SEApiMessageHandlerBase.cpp
 	streamelements/SEApiMessageHandler.cpp
+	streamelements/SEStatePersistence.cpp
+	streamelements/SEHostInfoProvider.cpp
+	streamelements/SEHostStreamingManager.cpp
+	streamelements/SEHostUpdateManager.cpp
+	streamelements/SEShellServices.cpp
+	streamelements/SEStatusBarMessageManager.cpp
+	streamelements/SEPopupWindowManager.cpp
+	streamelements/SEAuxiliaryControlsBuilder.cpp
+	streamelements/SEObsApiTransactionManager.cpp
+	streamelements/SEBrowserDialogManager.cpp
+	streamelements/SESessionManager.cpp
+	streamelements/SEHostEventDispatcher.cpp
+	streamelements/SEUtils/SECryptoUtils.cpp
+	streamelements/SEUtils/SEHttpUtils.cpp
+	streamelements/SEUtils/SEObsDataUtils.cpp
+	streamelements/SEUtils/SEObsSourceCatalogUtils.cpp
+	streamelements/SEUtils/SEAsyncTaskUtils.cpp
+	streamelements/SEUtils/SESystemInfoUtils.cpp
+	streamelements/SEUtils/SEAppEnvUtils.cpp
+	streamelements/SEUtils/SEOverlayUrlUtils.cpp
+	streamelements/SEUtils/SELifecycleUtils.cpp
+	streamelements/SEUtils/SEDockUtils.cpp
+	streamelements/SEUtils/SEObsEncoderUtils.cpp
+	streamelements/SEUtils/SEObsSceneUtils.cpp
+	streamelements/SEUtils/SEEnvConfigUtils.cpp
+	streamelements/SEUtils/SEPathUtils.cpp
+	streamelements/SEUtils/SEDiagnosticsUtils.cpp
+	streamelements/SEUtils/SELogUtils.cpp
+	streamelements/SEUtils/SEStringUtils.cpp
 	streamelements/SEConfig.cpp
 	streamelements/SEGlobalStateManager.cpp
 	streamelements/SEMenuManager.cpp
 	streamelements/SEBandwidthTestManager.cpp
 	streamelements/SEOutputSettingsManager.cpp
 	streamelements/SEWorkerManager.cpp
+	streamelements/SEDialogApiCall.cpp
+	streamelements/SEDialogApiMessageHandler.cpp
 	streamelements/SEBrowserDialog.cpp
-	streamelements/SEUtils.cpp
 	streamelements/SEHotkeyManager.cpp
 	streamelements/SEReportIssueDialog.cpp
 	streamelements/SESecretRedactor.cpp
@@ -558,7 +589,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEObsSceneManager.cpp
 	streamelements/SEExternalSceneDataProviderSlobsClient.cpp
 	streamelements/SEHttpClient.cpp
-	streamelements/SENativeOBSControlsManager.cpp
+	streamelements/SENativeObsUIControlsManager.cpp
 	streamelements/SEProfilesManager.cpp
 	streamelements/SEBackupManager.cpp
 	streamelements/SECleanupManager.cpp
@@ -690,20 +721,69 @@ set(obs-streamelements-core_HEADERS
 	streamelements/audio-wrapper-source.h
 	streamelements/SEUtils.hpp
 	streamelements/SEAsyncTaskQueue.hpp
+	streamelements/ISEVideoCompositionViewHost.hpp
 	streamelements/SEBrowserWidget.hpp
+	streamelements/SEDockBrowserWidgetInfo.hpp
+	streamelements/ISEBrowserWidgetManager.hpp
 	streamelements/SEBrowserWidgetManager.hpp
 	streamelements/SEBandwidthTestClient.hpp
 	streamelements/SEObsBandwidthTestClient.hpp
 	streamelements/SEWidgetManager.hpp
 	streamelements/SEObsAppMonitor.hpp
+	streamelements/SEApiMessageHandlerBase.hpp
 	streamelements/SEApiMessageHandler.hpp
+	streamelements/SEApiClientInfo.hpp
+	streamelements/SEApiMessageSink.hpp
+	streamelements/SEApiServices.hpp
+	streamelements/SEStatePersistence.hpp
+	streamelements/SEHostInfoProvider.hpp
+	streamelements/SEHostStreamingManager.hpp
+	streamelements/SEHostUpdateManager.hpp
+	streamelements/SEShellServices.hpp
+	streamelements/SEStatusBarMessageManager.hpp
+	streamelements/ISEPopupWindowManager.hpp
+	streamelements/SEPopupWindowManager.hpp
+	streamelements/SEAuxiliaryControlsBuilder.hpp
+	streamelements/SEObsApiTransactionManager.hpp
+	streamelements/SEObsOutputType.hpp
+	streamelements/SEBrowserDialogManager.hpp
+	streamelements/SESessionManager.hpp
+	streamelements/SEHostEventDispatcher.hpp
+	streamelements/SECompositionServices.hpp
+	streamelements/SEUtils/SECryptoUtils.hpp
+	streamelements/SEUtils/SECancelableTask.hpp
+	streamelements/SEUtils/SEHttpUtils.hpp
+	streamelements/SEUtils/SELazyOBSVideoEncoderProvider.hpp
+	streamelements/SEUtils/SEObsDataUtils.hpp
+	streamelements/SEUtils/SEObsSourceCatalogUtils.hpp
+	streamelements/SEUtils/SEAsyncTaskUtils.hpp
+	streamelements/SEUtils/SESystemInfoUtils.hpp
+	streamelements/SEUtils/SEAppEnvUtils.hpp
+	streamelements/SEUtils/SEOverlayUrlUtils.hpp
+	streamelements/SEUtils/SELifecycleUtils.hpp
+	streamelements/SEUtils/SEDockUtils.hpp
+	streamelements/SEUtils/SEReentrancyUtils.hpp
+	streamelements/SEUtils/SEObsEncoderUtils.hpp
+	streamelements/SEUtils/SEObsSceneUtils.hpp
+	streamelements/SEUtils/SEEnvConfigUtils.hpp
+	streamelements/SEUtils/SEPathUtils.hpp
+	streamelements/SEUtils/SEDiagnosticsUtils.hpp
+	streamelements/SEUtils/SELogUtils.hpp
+	streamelements/SEUtils/SEStringUtils.hpp
+	streamelements/ISEConfig.hpp
 	streamelements/SEConfig.hpp
 	streamelements/SEGlobalStateManager.hpp
+	streamelements/ISEMenuManager.hpp
 	streamelements/SEMenuManager.hpp
+	streamelements/ISEBandwidthTestManager.hpp
 	streamelements/SEBandwidthTestManager.hpp
 	streamelements/SEOutputSettingsManager.hpp
-	streamelements/SEWorkerManager.cpp
+	streamelements/ISEWorkerManager.hpp
+	streamelements/SEWorkerManager.hpp
+	streamelements/SEDialogApiCall.hpp
+	streamelements/SEDialogApiMessageHandler.hpp
 	streamelements/SEBrowserDialog.hpp
+	streamelements/ISEHotkeyManager.hpp
 	streamelements/SEHotkeyManager.hpp
 	streamelements/SEReportIssueDialog.hpp
 	streamelements/SESecretRedactor.hpp
@@ -717,14 +797,18 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEBugSplatCrashHandler.hpp
 	streamelements/SESentryCrashHandler.hpp
 	streamelements/SEWerRegistration.h
+	streamelements/ISEMessageBus.hpp
 	streamelements/SEMessageBus.hpp
 	streamelements/SEControllerServer.hpp
+	streamelements/ISEObsSceneManager.hpp
 	streamelements/SEObsSceneManager.hpp
+	streamelements/ISEExternalSceneDataProviderManager.hpp
 	streamelements/SEExternalSceneDataProviderManager.hpp
 	streamelements/SEExternalSceneDataProviderSlobsClient.hpp
 	streamelements/SEExternalSceneDataProvider.hpp
 	streamelements/SEHttpClient.hpp
-	streamelements/SENativeOBSControlsManager.hpp
+	streamelements/ISENativeObsUIControlsManager.hpp
+	streamelements/SENativeObsUIControlsManager.hpp
 	streamelements/SEProfilesManager.hpp
 	streamelements/SEBackupManager.hpp
 	streamelements/SECleanupManager.hpp
@@ -737,11 +821,15 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEHttpServerManager.hpp
 	streamelements/SEWebsocketApiServer.hpp
 	streamelements/SELocalFilesystemHttpServer.hpp
+	streamelements/ISEVideoComposition.hpp
 	streamelements/SEVideoComposition.hpp
+	streamelements/ISEVideoCompositionManager.hpp
 	streamelements/SEVideoCompositionManager.hpp
 	streamelements/SEVideoCompositionViewWidget.hpp
 	streamelements/SEAudioComposition.hpp
+	streamelements/ISEAudioCompositionManager.hpp
 	streamelements/SEAudioCompositionManager.hpp
+	streamelements/ISESharedVideoCompositionManager.hpp
 	streamelements/SESharedVideoCompositionManager.hpp
 	streamelements/SEOutput.hpp
 	streamelements/SEOutputManager.hpp

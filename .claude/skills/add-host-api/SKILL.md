@@ -1,6 +1,6 @@
 ---
 name: add-host-api
-description: Add or modify a window.host.* method exposed to the SE.Live web front end. Use whenever a task involves the host API, the JS bridge, API_HANDLER_BEGIN, StreamElementsApiMessageHandler, or making a new native capability callable from page JavaScript.
+description: Add or modify a window.host.* method exposed to the SE.Live web front end. Use whenever a task involves the host API, the JS bridge, API_HANDLER_BEGIN, SEApiMessageHandler, or making a new native capability callable from page JavaScript.
 ---
 
 # Adding a host API method
@@ -11,7 +11,7 @@ Target method: `$ARGUMENTS`
 
 ## 1. Register the handler
 
-All handlers live in `StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()` in `streamelements/StreamElementsApiMessageHandler.cpp`. Add yours there, in the block with the other `API_HANDLER_BEGIN` entries, grouped near related methods rather than appended at the end.
+All handlers live in `SEApiMessageHandler::RegisterIncomingApiCallHandlers()` in `streamelements/SEApiMessageHandler.cpp`. The macros themselves are defined once, in `streamelements/SEApiMessageHandler.hpp`. Add yours there, in the block with the other `API_HANDLER_BEGIN` entries, grouped near related methods rather than appended at the end.
 
 ```cpp
 API_HANDLER_BEGIN("myNewMethod");
@@ -38,18 +38,18 @@ Variables the macro puts in scope: `self`, `message`, `args` (`CefRefPtr<CefList
 - `API_HANDLER_END()` calls `complete_callback()` for you. Use it when the result is ready when the block returns.
 - `API_HANDLER_END_ASYNC()` does not. Use it when you hand work off (a Qt task, a network call, an OBS event) and **you** must call `complete_callback()` on every path afterwards, including error and early-return paths. A missed call leaves the JS promise pending forever.
 
-`API_HANDLER_BEGIN` takes a global `std::recursive_mutex s_sync_api_call_mutex` for the whole body, so all API calls serialize against each other. Don't do long or blocking work inside a synchronous handler — it stalls every other API call. Hand off with `QtPostTask` and use `API_HANDLER_END_ASYNC()` instead.
+`API_HANDLER_BEGIN` takes `s_sync_api_call_mutex` for the whole body. That lock is **per translation unit, deliberately** — the macro names it unqualified and each registering file defines its own, because `showModalDialog` holds this one while `exec()` runs and the dialog handlers that close that dialog have to be in a different lock domain. The comment on the macro explains it, and `check_the_api_call_lock_stays_per_translation_unit` enforces it; don't merge them. So the handlers in `SEApiMessageHandler.cpp` serialize against each other, not against the three in `SEBrowserDialog.cpp`. Don't do long or blocking work inside a synchronous handler — it stalls every other API call in its domain. Hand off with `QtPostTask` and use `API_HANDLER_END_ASYNC()` instead.
 
 Note the recursive mutex: a handler that synchronously invokes another handler on the same thread will not deadlock, but re-entrancy is real — don't rely on state being untouched across a nested call.
 
 ## 3. Touching OBS or Qt state
 
-- UI/Qt work must go through `QtPostTask` / `QtExecSync` / `QtDelayTask` from `StreamElementsUtils.hpp`. They are macros that capture `__FILE__`/`__LINE__` for the crash handler — don't replace them with `QMetaObject::invokeMethod`.
-- Reaching a subsystem goes through the singleton: `StreamElementsGlobalStateManager::GetInstance()->GetFooManager()`. Check `StreamElementsGlobalStateManager::IsInstanceAvailable()` first when the handler can run during shutdown.
+- UI/Qt work must go through `QtPostTask` / `QtExecSync` / `QtDelayTask` from `SEUtils/SEAsyncTaskUtils.hpp`. They are macros that capture `__FILE__`/`__LINE__` for the crash handler — don't replace them with `QMetaObject::invokeMethod`.
+- Reaching a subsystem goes through the injected bundle: `apiServices->fooManager`. `apiServices` is a parameter the macro puts in scope — the dispatcher locks it once per call and bails if it is gone, so a handler body needs no availability check of its own. There is no `SEGlobalStateManager::GetInstance()` (CORE-757); if the service you need is not in `SEApiServices`, add it there and publish it in `PublishApiServices()`.
 
 ## 4. Serialization helpers
 
-Convert between OBS/native objects and `CefValue` with the existing `Serialize*` / `Deserialize*` helpers in `streamelements/StreamElementsUtils.hpp`. Add a matching pair there rather than hand-rolling dictionary building inside the handler, and keep the two symmetrical.
+Convert between OBS/native objects and `CefValue` with the existing `Serialize*` / `Deserialize*` helpers under `streamelements/SEUtils/` — the domain headers behind the `SEUtils.hpp` umbrella. Add a matching pair in the domain that fits rather than hand-rolling dictionary building inside the handler, and keep the two symmetrical.
 
 Remember that `CefRefPtr` is `std::shared_ptr` here (`deps/cef-stub/cef_value.hpp`) and this whole value tree is a local JSON-ish data model — there is no CEF refcounting or thread affinity to respect.
 
@@ -65,5 +65,5 @@ The web front end reads this to decide what it can call, so skipping the bump sh
 ## 6. Finish
 
 - If you added a new file (rare for this — most methods go in the existing handler), add it to the explicit `_SOURCES` / `_HEADERS` lists in `CMakeLists.txt`.
-- Run `clang-format -i -style=file -fallback-style=none streamelements/StreamElementsApiMessageHandler.cpp` (and any other file you touched). Never run `./formatcode.sh`.
+- The pre-commit hook formats the lines you touched, so long as `git config core.hooksPath .githooks` has been run in this clone. To do it by hand: `clang-format -i -style=file -fallback-style=none streamelements/SEApiMessageHandler.cpp` (and any other file you touched). Never run `./formatcode.sh`.
 - There are no tests. State plainly that the change is unverified beyond compiling, and mention the JS-side call the front end would need to make.

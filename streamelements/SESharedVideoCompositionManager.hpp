@@ -1,11 +1,27 @@
 #pragma once
 
 #include "cef-headers.hpp"
+#include "ISESharedVideoCompositionManager.hpp"
 #include "SEVideoCompositionManager.hpp"
 #include "SEVideoComposition.hpp"
 
-class SESharedVideoCompositionManager: public SEVideoCompositionEventListener {
+#include <memory>
+
+//
+// Forward declaration rather than an include: the real header drags windows.h
+// in ahead of winsock2.h on these translation units.
+//
+class SEWebsocketApiServer;
+
+class SEMessageBus;
+
+class SESharedVideoCompositionManager
+	: public SEVideoCompositionEventListener,
+	  public ISESharedVideoCompositionManager {
 private:
+	std::shared_ptr<SEWebsocketApiServer> m_apiServer;
+	std::shared_ptr<SEMessageBus> m_messageBus;
+
 	std::shared_mutex m_mutex;
 
 	std::map<std::string,
@@ -25,26 +41,35 @@ private:
 
 public:
 	SESharedVideoCompositionManager(
-		std::shared_ptr<SEVideoCompositionManager> videoCompositionManager);
+		std::shared_ptr<SEWebsocketApiServer> apiServer,
+		std::shared_ptr<SEVideoCompositionManager>
+			videoCompositionManager,
+		std::shared_ptr<SEMessageBus> messageBus);
 
 	~SESharedVideoCompositionManager();
 
-	void Reset();
+	void Reset() override;
 
-	void DeserializeSharedVideoComposition(CefRefPtr<CefValue> input,
-					       CefRefPtr<CefValue> &output);
+	void
+	DeserializeSharedVideoComposition(CefRefPtr<CefValue> input,
+					  CefRefPtr<CefValue> &output) override;
 
 	void DeserializeSharedVideoCompositionProperties(
-		CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output);
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 
-	void SerializeAllSharedVideoCompositions(CefRefPtr<CefValue> &output);
+	void SerializeAllSharedVideoCompositions(
+		CefRefPtr<CefValue> &output) override;
 
-	void RemoveSharedVideoCompositionsByIds(CefRefPtr<CefValue> input,
-						CefRefPtr<CefValue> &output);
+	void RemoveSharedVideoCompositionsByIds(
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 
 	void ConnectVideoCompositionToSharedVideoComposition(
-		CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output);
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 
 	void DisconnectVideoCompositionsFromSharedVideoCompositionsByIds(
-		CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output);
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 };

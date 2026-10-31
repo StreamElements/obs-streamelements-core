@@ -16,18 +16,18 @@
 // is not linked -- and must therefore stay behind the preprocessor rather than
 // behind a runtime condition.
 //
-SECrashHandler *SECrashHandler::Create()
+SECrashHandler *SECrashHandler::Create(std::shared_ptr<SEConfig> config)
 {
 #ifdef SE_CRASH_HANDLER_BUGSPLAT
 	blog(LOG_INFO,
 	     "obs-streamelements-core: StreamElements: Crash Handler: backend is BugSplat");
 
-	return new SEBugSplatCrashHandler();
+	return new SEBugSplatCrashHandler(config);
 #elif defined(SE_CRASH_HANDLER_SENTRY)
 	blog(LOG_INFO,
 	     "obs-streamelements-core: StreamElements: Crash Handler: backend is Sentry");
 
-	return new SESentryCrashHandler();
+	return new SESentryCrashHandler(config);
 #else
 	blog(LOG_WARNING,
 	     "obs-streamelements-core: StreamElements: Crash Handler: compiled out; crashes will not be reported");

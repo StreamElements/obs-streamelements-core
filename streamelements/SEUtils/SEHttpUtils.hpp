@@ -1,0 +1,89 @@
+#pragma once
+
+//
+// The libcurl wrappers: synchronous GET and POST in buffer and string
+// flavours, plus one cancelable asynchronous GET.
+//
+// SetGlobalCURLOptions is declared here and defined per platform, because the
+// proxy settings come from different places: the Windows body is at the foot
+// of SEHttpUtils.cpp and the macOS one is in SEUtils.mm.
+//
+// Nothing in this cluster needs Qt or libobs, so the tests compile the .cpp
+// directly. The two platform bodies are the exception, which is why
+// test_http_utils supplies its own SetGlobalCURLOptions off Windows.
+//
+
+#include "SECancelableTask.hpp"
+
+#include <curl/curl.h>
+
+#include <functional>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
+
+void SetGlobalCURLOptions(CURL *curl, const char *url);
+
+//
+// The host entries the user excluded from their proxy, in the form
+// CURLOPT_NOPROXY takes. Each platform body of SetGlobalCURLOptions reads its
+// own list -- lpszProxyBypass on Windows, kSCPropNetProxiesExceptionsList on
+// macOS -- and hands the raw entries here, so the translation exists once and
+// can be tested without a proxy or a socket.
+//
+// The loopback is always in the result, list or no list.
+//
+std::string
+ProxyBypassListToCurlNoProxy(const std::vector<std::string> &entries);
+
+typedef std::function<bool(void *data, size_t datalen, void *userdata,
+			   char *error_msg, int http_code)>
+	http_client_callback_t;
+typedef std::function<void(char *data, void *userdata, char *error_msg,
+			   int http_code)>
+	http_client_string_callback_t;
+typedef std::function<void(void *data, size_t datalen, void *userdata,
+			   char *error_msg, int http_code)>
+	http_client_buffer_callback_t;
+typedef std::multimap<std::string, std::string> http_client_headers_t;
+
+bool HttpGet(const char *url, http_client_headers_t request_headers,
+	     http_client_callback_t callback, void *userdata);
+
+bool HttpGet(std::string method, const char *url,
+	     http_client_headers_t request_headers,
+	     http_client_callback_t callback, void *userdata);
+
+bool HttpPost(std::string method, const char *url,
+	      http_client_headers_t request_headers, void *buffer,
+	      size_t buffer_len, http_client_callback_t callback,
+	      void *userdata);
+
+bool HttpPost(const char *url, http_client_headers_t request_headers,
+	      void *buffer, size_t buffer_len, http_client_callback_t callback,
+	      void *userdata);
+
+bool HttpGetString(std::string method, const char *url,
+		   http_client_headers_t request_headers,
+		   http_client_string_callback_t callback, void *userdata);
+
+bool HttpGetString(const char *url, http_client_headers_t request_headers,
+		   http_client_string_callback_t callback, void *userdata);
+
+bool HttpGetBuffer(const char *url, http_client_headers_t request_headers,
+		   http_client_buffer_callback_t callback, void *userdata);
+
+bool HttpPostString(std::string method, const char *url,
+		    http_client_headers_t request_headers, const char *postData,
+		    http_client_string_callback_t callback, void *userdata);
+
+bool HttpPostString(const char *url, http_client_headers_t request_headers,
+		    const char *postData,
+		    http_client_string_callback_t callback, void *userdata);
+
+typedef std::function<void(bool success, void *, size_t)>
+	async_http_request_callback_t;
+
+std::shared_ptr<CancelableTask>
+HttpGetAsync(std::string url, async_http_request_callback_t callback);

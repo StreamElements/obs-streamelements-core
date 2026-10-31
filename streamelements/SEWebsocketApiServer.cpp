@@ -5,6 +5,21 @@
 #include <asio/ts/buffer.hpp>
 #include <asio/ts/internet.hpp>
 
+#include <type_traits>
+
+//
+// SEApiClientInfo stores the connection handle as std::weak_ptr<void>, so
+// that it can be declared without websocketpp. That is what
+// websocketpp::connection_hdl is -- but it is configurable: without
+// _WEBSOCKETPP_CPP11_MEMORY_ the library falls back to boost's smart
+// pointers and the two would stop converting. Fail here, at the one place
+// that includes both, rather than in nine signatures elsewhere.
+//
+static_assert(
+	std::is_same<websocketpp::connection_hdl, std::weak_ptr<void>>::value,
+	"websocketpp::connection_hdl is no longer std::weak_ptr<void>; "
+	"SEApiClientInfo::m_con_hdl has to follow it");
+
 std::shared_ptr<SEWebsocketApiServer::ClientInfo>
 SEWebsocketApiServer::AddConnection(std::string target,
 	std::string unique_id,

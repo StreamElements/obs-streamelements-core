@@ -1,4 +1,5 @@
-#include "SENativeOBSControlsManager.hpp"
+#include "SENativeObsUIControlsManager.hpp"
+#include "SEHostStreamingManager.hpp"
 #include "SEGlobalStateManager.hpp"
 #include "SEUtils.hpp"
 #include <QDockWidget>
@@ -11,37 +12,19 @@
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 
-static std::shared_ptr<SENativeOBSControlsManager> s_instance =
-	nullptr;
-static std::mutex s_mutex;
-
-void SENativeOBSControlsManager::Destroy()
+std::shared_ptr<SENativeObsUIControlsManager> SENativeObsUIControlsManager::Create(
+	QMainWindow *mainWindow,
+	std::shared_ptr<SEHostStreamingManager> hostStreamingManager)
 {
-	std::lock_guard<std::mutex> guard(s_mutex);
-
-	if (s_instance) {
-		s_instance = nullptr;
-	}
+	return std::make_shared<SENativeObsUIControlsManager>(
+		SENativeObsUIControlsManager::Private(), mainWindow,
+		hostStreamingManager);
 }
 
-std::shared_ptr<SENativeOBSControlsManager> SENativeOBSControlsManager::GetInstance()
-{
-	if (s_instance == nullptr) {
-		std::lock_guard<std::mutex> guard(s_mutex);
-
-		s_instance =
-			std::make_shared<SENativeOBSControlsManager>(
-				SENativeOBSControlsManager::Private(),
-				(QMainWindow *)obs_frontend_get_main_window());
-	}
-
-	return s_instance;
-}
-
-SENativeOBSControlsManager::SENativeOBSControlsManager(
-	SENativeOBSControlsManager::Private, QMainWindow *mainWindow)
-	:
-	m_mainWindow(mainWindow)
+SENativeObsUIControlsManager::SENativeObsUIControlsManager(
+	SENativeObsUIControlsManager::Private, QMainWindow *mainWindow,
+	std::shared_ptr<SEHostStreamingManager> hostStreamingManager)
+	: m_hostStreamingManager(hostStreamingManager), m_mainWindow(mainWindow)
 {
 	QDockWidget* controlsDock = (QDockWidget*)m_mainWindow->findChild<QDockWidget*>("controlsDock");
 
@@ -52,13 +35,19 @@ SENativeOBSControlsManager::SENativeOBSControlsManager(
 	if (m_nativeManageBroadcastButton) {
 		auto manageBroadcastVisibilityCallback =
 			[this](bool isVisible) -> void {
-				if (isVisible) {
-					DispatchJSEventGlobal(
-						"hostNativeManageBroadcastButtonVisible", "null");
-				} else {
-					DispatchJSEventGlobal(
-						"hostNativeManageBroadcastButtonHidden", "null");
-			}};
+				auto services = m_apiServices.lock();
+
+				if (!services ||
+				    !services->hostEventDispatcher)
+					return;
+
+				services->hostEventDispatcher
+					->DispatchJSEventGlobal(
+						isVisible
+							? "hostNativeManageBroadcastButtonVisible"
+							: "hostNativeManageBroadcastButtonHidden",
+						"null");
+			};
 
 		m_nativeManageBroadcastButtonVisibilityChangeTracker =
 			std::make_shared<WidgetVisibilityChangeTracker>(
@@ -144,7 +133,7 @@ SENativeOBSControlsManager::SENativeOBSControlsManager(
 	#endif
 }
 
-SENativeOBSControlsManager::~SENativeOBSControlsManager()
+SENativeObsUIControlsManager::~SENativeObsUIControlsManager()
 {
 	obs_frontend_remove_event_callback(handle_obs_frontend_event, this);
 
@@ -198,7 +187,7 @@ SENativeOBSControlsManager::~SENativeOBSControlsManager()
 }
 
 #if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
-bool SENativeOBSControlsManager::DeserializePreviewFrame(
+bool SENativeObsUIControlsManager::DeserializePreviewFrame(
 	CefRefPtr<CefValue> input)
 {
 	if (input->GetType() != VTYPE_DICTIONARY)
@@ -241,7 +230,7 @@ bool SENativeOBSControlsManager::DeserializePreviewFrame(
 	return true;
 }
 
-void SENativeOBSControlsManager::SerializePreviewFrame(
+void SENativeObsUIControlsManager::SerializePreviewFrame(
 	CefRefPtr<CefValue> &output)
 {
 	if (m_previewFrameVisible) {
@@ -251,7 +240,7 @@ void SENativeOBSControlsManager::SerializePreviewFrame(
 	}
 }
 
-void SENativeOBSControlsManager::HidePreviewFrame()
+void SENativeObsUIControlsManager::HidePreviewFrame()
 {
 	m_previewFrameVisible = false;
 
@@ -262,7 +251,7 @@ void SENativeOBSControlsManager::HidePreviewFrame()
 	m_previewFrameSettings = CefDictionaryValue::Create();
 }
 
-bool SENativeOBSControlsManager::DeserializePreviewTitleBar(
+bool SENativeObsUIControlsManager::DeserializePreviewTitleBar(
 	CefRefPtr<CefValue> input)
 {
 	if (input->GetType() != VTYPE_DICTIONARY)
@@ -277,26 +266,46 @@ bool SENativeOBSControlsManager::DeserializePreviewTitleBar(
 	std::string url = "about:blank";
 	std::string executeJavaScriptOnLoad = "";
 
-	if (rootDictionary->HasKey("height")) {
+	//
+	// Each key is type-checked as well as present: HasKey answers for
+	// presence, and GetInt(k) forwards to the held value's
+	// `if (m_type != VTYPE_INT) throw;` -- a bare throw outside a catch,
+	// so std::terminate. A wrongly typed key keeps the default above,
+	// which is the rule the dock and dialog handlers already follow.
+	//
+	if (rootDictionary->HasKey("height") &&
+	    rootDictionary->GetType("height") == VTYPE_INT) {
 		height = rootDictionary->GetInt("height");
 	}
 
-	if (rootDictionary->HasKey("url")) {
+	if (rootDictionary->HasKey("url") &&
+	    rootDictionary->GetType("url") == VTYPE_STRING) {
 		url = rootDictionary->GetString("url").ToString();
 	}
 
-	if (rootDictionary->HasKey("executeJavaScriptOnLoad")) {
+	if (rootDictionary->HasKey("executeJavaScriptOnLoad") &&
+	    rootDictionary->GetType("executeJavaScriptOnLoad") ==
+		    VTYPE_STRING) {
 		executeJavaScriptOnLoad =
 			rootDictionary
 				->GetString("executeJavaScriptOnLoad")
 				.ToString();
 	}
 
+	auto apiServices = m_apiServices.lock();
+
+	if (!apiServices) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: SENativeObsUIControlsManager: not showing the preview title bar: the services bundle is gone");
+
+		return false;
+	}
+
 	m_previewTitleBrowser = new SEBrowserWidget(
 		nullptr, SEMessageBus::DEST_UI, url.c_str(),
 		executeJavaScriptOnLoad.c_str(), "reload",
 		"obsPreviewAreaTitleBar",
-		CreateGloballyUniqueIdString().c_str());
+		CreateGloballyUniqueIdString().c_str(), apiServices);
 
 	m_previewTitleBrowser->setSizePolicy(QSizePolicy(
 		QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding));
@@ -312,7 +321,7 @@ bool SENativeOBSControlsManager::DeserializePreviewTitleBar(
 	return true;
 }
 
-void SENativeOBSControlsManager::SerializePreviewTitleBar(
+void SENativeObsUIControlsManager::SerializePreviewTitleBar(
 	CefRefPtr<CefValue> &output)
 {
 	if (m_previewTitleContainer->isVisible()) {
@@ -322,7 +331,7 @@ void SENativeOBSControlsManager::SerializePreviewTitleBar(
 	}
 }
 
-void SENativeOBSControlsManager::HidePreviewTitleBar()
+void SENativeObsUIControlsManager::HidePreviewTitleBar()
 {
 	// Reparented into OBS's central widget, so Qt owns it. See CORE-635.
 	if (!m_previewTitleContainer)
@@ -352,7 +361,7 @@ void SENativeOBSControlsManager::HidePreviewTitleBar()
 // control, the hotkey and the timeout tracker -- and each one dereferenced it
 // unguarded. See CORE-635.
 //
-void SENativeOBSControlsManager::ClickNativeStartStopStreamingButton()
+void SENativeObsUIControlsManager::ClickNativeStartStopStreamingButton()
 {
 	if (!m_nativeStartStopStreamingButton) {
 		blog(LOG_WARNING,
@@ -365,9 +374,9 @@ void SENativeOBSControlsManager::ClickNativeStartStopStreamingButton()
 }
 
 
-void SENativeOBSControlsManager::Reset()
+void SENativeObsUIControlsManager::Reset()
 {
-	SetStartStreamingMode(SENativeOBSControlsManager::start);
+	SetStartStreamingMode(SENativeObsUIControlsManager::start);
 
 	os_atomic_set_bool(&m_isStreamingTransitionState, false);
 
@@ -377,19 +386,18 @@ void SENativeOBSControlsManager::Reset()
 	#endif
 }
 
-void SENativeOBSControlsManager::SetStreamingInitialState()
+void SENativeObsUIControlsManager::SetStreamingInitialState()
 {
 	if (!m_startStopStreamingButton) return;
 
-	if (obs_frontend_streaming_active()) {
+	if (m_hostStreamingManager->IsStreaming()) {
 		SetStreamingActiveState();
-	}
-	else {
+	} else {
 		SetStreamingStoppedState();
 	}
 }
 
-void SENativeOBSControlsManager::SetStreamingActiveState()
+void SENativeObsUIControlsManager::SetStreamingActiveState()
 {
 	if (!m_startStopStreamingButton) return;
 
@@ -405,7 +413,7 @@ void SENativeOBSControlsManager::SetStreamingActiveState()
 	});
 }
 
-void SENativeOBSControlsManager::SetStreamingStoppedState()
+void SENativeObsUIControlsManager::SetStreamingStoppedState()
 {
 	if (!m_startStopStreamingButton) return;
 
@@ -423,21 +431,20 @@ void SENativeOBSControlsManager::SetStreamingStoppedState()
 	});
 }
 
-void SENativeOBSControlsManager::SetStreamingTransitionState()
+void SENativeObsUIControlsManager::SetStreamingTransitionState()
 {
 	if (!m_startStopStreamingButton) return;
 
 	os_atomic_set_bool(&m_isStreamingTransitionState, true);
 
-	if (obs_frontend_streaming_active()) {
+	if (m_hostStreamingManager->IsStreaming()) {
 		SetStreamingTransitionStoppingState();
-	}
-	else {
+	} else {
 		SetStreamingTransitionStartingState();
 	}
 }
 
-void SENativeOBSControlsManager::SetStreamingTransitionStartingState()
+void SENativeObsUIControlsManager::SetStreamingTransitionStartingState()
 {
 	if (!m_startStopStreamingButton) return;
 
@@ -455,7 +462,7 @@ void SENativeOBSControlsManager::SetStreamingTransitionStartingState()
 	});
 }
 
-void SENativeOBSControlsManager::SetStreamingRequestedState()
+void SENativeObsUIControlsManager::SetStreamingRequestedState()
 {
 	QtExecSync([&] {
 		if (!m_startStopStreamingButton)
@@ -472,7 +479,7 @@ void SENativeOBSControlsManager::SetStreamingRequestedState()
 	});
 }
 
-void SENativeOBSControlsManager::SetStreamingTransitionStoppingState()
+void SENativeObsUIControlsManager::SetStreamingTransitionStoppingState()
 {
 	if (!m_startStopStreamingButton) return;
 
@@ -490,34 +497,33 @@ void SENativeOBSControlsManager::SetStreamingTransitionStoppingState()
 	});
 }
 
-void SENativeOBSControlsManager::OnStartStopStreamingButtonClicked()
+void SENativeObsUIControlsManager::OnStartStopStreamingButtonClicked()
 {
-	if (obs_frontend_streaming_active()) {
+	if (m_hostStreamingManager->IsStreaming()) {
 		blog(LOG_INFO, "obs-streamelements-core: streaming stop requested by UI control");
 
 		// obs_frontend_streaming_stop();
 		ClickNativeStartStopStreamingButton();
-	}
-	else {
+	} else {
 		blog(LOG_INFO, "obs-streamelements-core: streaming start requested by UI control");
 
 		BeginStartStreaming();
 	}
 }
 
-void SENativeOBSControlsManager::OnStartStopStreamingButtonUpdate()
+void SENativeObsUIControlsManager::OnStartStopStreamingButtonUpdate()
 {
 	QtExecSync([this]() -> void {
 		m_startStopStreamingButton->setMenu(m_nativeStartStopStreamingButton->menu());
 	});
 }
 
-void SENativeOBSControlsManager::handle_obs_frontend_event(enum obs_frontend_event event, void* data)
+void SENativeObsUIControlsManager::handle_obs_frontend_event(enum obs_frontend_event event, void* data)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
-	SENativeOBSControlsManager *self =
-		(SENativeOBSControlsManager *)data;
+	SENativeObsUIControlsManager *self =
+		(SENativeObsUIControlsManager *)data;
 
 	switch (event) {
 	case OBS_FRONTEND_EVENT_FINISHED_LOADING:
@@ -545,7 +551,7 @@ void SENativeOBSControlsManager::handle_obs_frontend_event(enum obs_frontend_eve
 	}
 }
 
-void SENativeOBSControlsManager::SetStreamingStyle(bool streaming)
+void SENativeObsUIControlsManager::SetStreamingStyle(bool streaming)
 {
 	if (!m_startStopStreamingButton)
 		return;
@@ -570,9 +576,9 @@ void SENativeOBSControlsManager::SetStreamingStyle(bool streaming)
 
 static const char* HOTKEY_NAME_START_STREAMING = "OBSBasic.StartStreaming";
 
-bool SENativeOBSControlsManager::hotkey_enum_callback(void* data, obs_hotkey_id id, obs_hotkey_t* key)
+bool SENativeObsUIControlsManager::hotkey_enum_callback(void* data, obs_hotkey_id id, obs_hotkey_t* key)
 {
-	SENativeOBSControlsManager* self = (SENativeOBSControlsManager*)data;
+	SENativeObsUIControlsManager* self = (SENativeObsUIControlsManager*)data;
 
 	if (obs_hotkey_get_registerer_type(key) == OBS_HOTKEY_REGISTERER_FRONTEND) {
 		if (strcmp(obs_hotkey_get_name(key), HOTKEY_NAME_START_STREAMING) == 0) {
@@ -585,15 +591,14 @@ bool SENativeOBSControlsManager::hotkey_enum_callback(void* data, obs_hotkey_id 
 	return true; // continue enumerating
 }
 
-void SENativeOBSControlsManager::hotkey_routing_func(void* data, obs_hotkey_id id, bool pressed)
+void SENativeObsUIControlsManager::hotkey_routing_func(void* data, obs_hotkey_id id, bool pressed)
 {
-	SENativeOBSControlsManager* self = (SENativeOBSControlsManager*)data;
+	SENativeObsUIControlsManager* self = (SENativeObsUIControlsManager*)data;
 
 	if (id == self->m_startStopStreamingHotkeyId) {
-		if (pressed &&
-			!obs_frontend_streaming_active() &&
-			self->m_startStopStreamingButton &&
-			self->m_startStopStreamingButton->isEnabled()) {
+		if (pressed && !self->m_hostStreamingManager->IsStreaming() &&
+		    self->m_startStopStreamingButton &&
+		    self->m_startStopStreamingButton->isEnabled()) {
 			blog(LOG_INFO, "obs-streamelements-core: streaming start requested by hotkey");
 
 			self->BeginStartStreaming();
@@ -607,9 +612,9 @@ void SENativeOBSControlsManager::hotkey_routing_func(void* data, obs_hotkey_id i
 	}
 }
 
-void SENativeOBSControlsManager::hotkey_change_handler(void* data, calldata_t* param)
+void SENativeObsUIControlsManager::hotkey_change_handler(void* data, calldata_t* param)
 {
-	SENativeOBSControlsManager* self = (SENativeOBSControlsManager*)data;
+	SENativeObsUIControlsManager* self = (SENativeObsUIControlsManager*)data;
 
 	auto key = static_cast<obs_hotkey_t*>(calldata_ptr(param, "key"));
 
@@ -620,7 +625,7 @@ void SENativeOBSControlsManager::hotkey_change_handler(void* data, calldata_t* p
 	}
 }
 
-void SENativeOBSControlsManager::InitHotkeys()
+void SENativeObsUIControlsManager::InitHotkeys()
 {
 	obs_enum_hotkeys(hotkey_enum_callback, this);
 
@@ -635,7 +640,7 @@ void SENativeOBSControlsManager::InitHotkeys()
 	obs_hotkey_enable_callback_rerouting(true);
 }
 
-void SENativeOBSControlsManager::ShutdownHotkeys()
+void SENativeObsUIControlsManager::ShutdownHotkeys()
 {
 	signal_handler_disconnect(
 		obs_get_signal_handler(),
@@ -645,7 +650,7 @@ void SENativeOBSControlsManager::ShutdownHotkeys()
 	);
 }
 
-void SENativeOBSControlsManager::BeginStartStreaming()
+void SENativeObsUIControlsManager::BeginStartStreaming()
 {
 	switch (m_start_streaming_mode) {
 	case start:
@@ -656,36 +661,47 @@ void SENativeOBSControlsManager::BeginStartStreaming()
 	case request:
 		SetStreamingRequestedState();
 
-		DispatchJSEventGlobal("hostStreamingStartRequested", "null");
+		if (auto services = m_apiServices.lock()) {
+		services->hostEventDispatcher->DispatchJSEventGlobal(
+			"hostStreamingStartRequested", "null");
+	}
 		break;
 	}
 }
 
-void SENativeOBSControlsManager::StartStreaming()
+void SENativeObsUIControlsManager::StartStreaming()
 {
 	SetStreamingInitialState();
 
 	m_startStopStreamingButton->setEnabled(false);
 
+	//
+	// QPointer, not the plug-in's availability: the question five seconds
+	// later is whether *this* object is still there to re-enable its own
+	// button, and Qt zeroes a QPointer when the QObject dies (CORE-757).
+	//
+	QPointer<SENativeObsUIControlsManager> self(this);
+
 	QtDelayTask(
-		[this]() {
-			if (!SEGlobalStateManager::
-				    IsInstanceAvailable())
+		[self]() {
+			if (!self)
 				return;
 
-			if (!os_atomic_load_bool(&m_isStreamingTransitionState))
-				m_startStopStreamingButton->setEnabled(true);
+			if (!os_atomic_load_bool(
+				    &self->m_isStreamingTransitionState))
+				self->m_startStopStreamingButton->setEnabled(
+					true);
 		},
 		5000);
 
-	obs_frontend_streaming_start();
+	m_hostStreamingManager->RequestStart();
 
 	if (!m_startStopStreamingButton)
 		return;
 }
 
 
-bool SENativeOBSControlsManager::DeserializeStartStreamingUIHandlerProperties(CefRefPtr<CefValue> input)
+bool SENativeObsUIControlsManager::DeserializeStartStreamingUIHandlerProperties(CefRefPtr<CefValue> input)
 {
 	if (!input.get() || input->GetType() != VTYPE_DICTIONARY) {
 		return false;
@@ -713,7 +729,7 @@ bool SENativeOBSControlsManager::DeserializeStartStreamingUIHandlerProperties(Ce
 	return true;
 }
 
-void SENativeOBSControlsManager::StartTimeoutTracker()
+void SENativeObsUIControlsManager::StartTimeoutTracker()
 {
 	std::lock_guard<std::recursive_mutex> guard(m_timeoutTimerMutex);
 
@@ -743,7 +759,7 @@ void SENativeOBSControlsManager::StartTimeoutTracker()
 	QMetaObject::invokeMethod(m_timeoutTimer, "start", Qt::QueuedConnection, Q_ARG(int, m_startStreamingRequestAcknowledgeTimeoutSeconds * 1000));
 }
 
-void SENativeOBSControlsManager::StopTimeoutTracker()
+void SENativeObsUIControlsManager::StopTimeoutTracker()
 {
 	std::lock_guard<std::recursive_mutex> guard(m_timeoutTimerMutex);
 
@@ -760,12 +776,12 @@ void SENativeOBSControlsManager::StopTimeoutTracker()
 	}
 }
 
-void SENativeOBSControlsManager::AdviseRequestStartStreamingAccepted()
+void SENativeObsUIControlsManager::AdviseRequestStartStreamingAccepted()
 {
 	StopTimeoutTracker();
 }
 
-void SENativeOBSControlsManager::AdviseRequestStartStreamingRejected()
+void SENativeObsUIControlsManager::AdviseRequestStartStreamingRejected()
 {
 	StopTimeoutTracker();
 

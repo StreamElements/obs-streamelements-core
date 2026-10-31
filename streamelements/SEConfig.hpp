@@ -3,66 +3,81 @@
 #include <obs-module.h>
 #include <util/config-file.h>
 
+#include <memory>
 #include <string>
 #include <mutex>
 #include <shared_mutex>
 #include <set>
 
+#include "ISEConfig.hpp"
 #include "SEUtils.hpp"
 #include "SEMessageBus.hpp"
 
-class SEConfig
-{
+class SEConfig : public ISEConfig {
 private:
 	const char* CONFIG_FILE_NAME = "obs-streamelements-core.ini";
 
+	//
+	// Weak, and handed over by SEGlobalStateManager::Initialize() rather
+	// than fetched: this class is built before the bus exists, and a
+	// strong handle here would keep the bus alive past the plugin. Only
+	// one setter writes the startup flags, and publishing that change is
+	// the one thing this class needs the bus for.
+	//
+	std::weak_ptr<SEMessageBus> m_messageBus;
+
 public:
-	static const uint64_t STARTUP_FLAGS_ONBOARDING_MODE = 0x0000000000000001ULL;
-	static const uint64_t STARTUP_FLAGS_SIGNED_IN       = 0x0000000000000002ULL;
+	void SetMessageBus(std::shared_ptr<SEMessageBus> messageBus)
+	{
+		m_messageBus = messageBus;
+	}
+
+public:
+	//
+	// STARTUP_FLAGS_* moved to ISEConfig and are inherited from
+	// here. A page setting the onboarding bit and SESessionManager
+	// clearing the signed-in bit are both naming values on the
+	// contract, so that is where the values belong; every
+	// SEConfig::STARTUP_FLAGS_* spelling outside the handler still
+	// resolves through this class.
+	//
 
 private:
-	SEConfig();
-	~SEConfig();
+	struct Private {
+		explicit Private() = default;
+	};
 
 public:
-	static SEConfig* GetInstance() {
-		if (s_destroyed)
-			return nullptr;
+	SEConfig(Private);
+	~SEConfig();
 
-		{
-			std::shared_lock<decltype(s_mutex)> lock(s_mutex);
+	//
+	// The only way to build one. SEGlobalStateManager owns the instance
+	// and publishes it in SEApiServices; a second one would be a second
+	// handle on the same ini file, with two sets of unflushed writes.
+	//
+	static std::shared_ptr<SEConfig> Create();
 
-			if (s_instance) {
-				return s_instance;
-			}
-		}
-
-		std::unique_lock<decltype(s_mutex)> lock(s_mutex);
-
-		if (!s_instance) {
-			s_instance = new SEConfig();
-		}
-
-		return s_instance;
-	}
-
-	static void Destroy()
-	{
-		std::unique_lock<decltype(s_mutex)> lock(s_mutex);
-
-		if (s_instance) {
-			delete s_instance;
-			s_instance = nullptr;
-		}
-
-		s_destroyed = true;
-	}
+	//
+	// Flush and close, at the point in Shutdown() where it is still safe
+	// to touch the filesystem and libobs. This was Destroy(), and it is
+	// still needed as an operation even though the singleton is not: the
+	// destructor does the same work, but it runs with the rest of the
+	// container, which is later than the save wants to be.
+	//
+	// The second half of the name is the job the s_destroyed latch used
+	// to do: GetConfig() returns null afterwards rather than re-opening
+	// the file. Every accessor below already treats a null config as
+	// "use the default", so a write that arrives late is a no-op rather
+	// than a crash -- and one does arrive late: SEDrainEventQueue() runs
+	// on the next line of Shutdown() and SEWidgetManager's deferred
+	// saves land there.
+	//
+	void CloseAndPreventFurtherReopens();
 
 public:
 	config_t* GetConfig();
 	void SaveConfig();
-
-	config_t* GetObsUserConfig() { return m_obsUserConfig; }
 
 private:
 	//
@@ -152,13 +167,13 @@ public:
 
 public:
 	void ReadScopedJsonFile(CefRefPtr<CefValue> input,
-				CefRefPtr<CefValue> &output);
+				CefRefPtr<CefValue> &output) override;
 	void WriteScopedJsonFile(CefRefPtr<CefValue> input,
-				 CefRefPtr<CefValue> &output);
+				 CefRefPtr<CefValue> &output) override;
 	void ReadScopedJsonFilesList(CefRefPtr<CefValue> input,
-				     CefRefPtr<CefValue> &output);
+				     CefRefPtr<CefValue> &output) override;
 	void RemoveScopedJsonFile(CefRefPtr<CefValue> input,
-				  CefRefPtr<CefValue> &output);
+				  CefRefPtr<CefValue> &output) override;
 
 public:
 	int64_t GetSEPluginVersion()
@@ -166,19 +181,21 @@ public:
 		return (int64_t)ReadUint("Header", "Version");
 	}
 
-	int GetStartupFlags()
+	int GetStartupFlags() override
 	{
 		return (int)ReadUint("Startup", "Flags",
 				     STARTUP_FLAGS_ONBOARDING_MODE);
 	}
 
-	void SetStartupFlags(int value)
+	void SetStartupFlags(int value) override
 	{
 		WriteUint("Startup", "Flags", value);
 
 		SaveConfig();
 
-		SEMessageBus::GetInstance()->PublishSystemState();
+		if (auto messageBus = m_messageBus.lock()) {
+			messageBus->PublishSystemState();
+		}
 	}
 
 	std::string GetStartupState() { return ReadString("Startup", "State"); }
@@ -190,7 +207,7 @@ public:
 		SaveConfig();
 	}
 
-	std::string GetUrlOnBoarding()
+	std::string GetUrlOnBoarding() override
 	{
 		std::string result = GetCommandLineOptionValue("streamelements-onboarding-url");
 
@@ -322,11 +339,7 @@ private:
 	config_t* m_config = nullptr;
 	// True when m_config is the in-memory fallback, which has no file.
 	bool m_configIsMemoryOnly = false;
-	config_t *m_obsUserConfig = nullptr;
 
-private:
-	static SEConfig* s_instance;
-	static bool s_destroyed;
-	static std::shared_mutex s_mutex;
+	// Set by CloseAndPreventFurtherReopens(); see the comment there.
+	bool m_closed = false;
 };
-

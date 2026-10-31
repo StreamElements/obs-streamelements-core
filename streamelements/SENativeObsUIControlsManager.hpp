@@ -18,13 +18,25 @@
 #include <algorithm>
 
 #include "cef-headers.hpp"
+#include "ISENativeObsUIControlsManager.hpp"
+
+#include "SEApiServices.hpp"
 
 #include "SEBrowserWidget.hpp"
 
-#define SE_ENABLE_CENTRAL_WIDGET_DECORATIONS 0
+//
+// SE_ENABLE_CENTRAL_WIDGET_DECORATIONS is defined by the interface
+// above, so that the handler bodies guarded on it see the same switch
+// without including this header.
+//
 
-class SENativeOBSControlsManager : public QObject
-{
+class SEHostStreamingManager;
+
+//
+// QObject first among the bases, which moc requires.
+//
+class SENativeObsUIControlsManager : public QObject,
+				     public ISENativeObsUIControlsManager {
 	Q_OBJECT
 
 private:
@@ -88,20 +100,50 @@ public:
 	};
 
 public:
-	static std::shared_ptr<SENativeOBSControlsManager> GetInstance();
-	static void Destroy();
+	//
+	// Owned by SEGlobalStateManager and published in SEApiServices. It
+	// was a singleton with a file-static instance, which is why the root
+	// had to call Destroy() on it by name at teardown (CORE-757).
+	//
+	static std::shared_ptr<SENativeObsUIControlsManager>
+	Create(QMainWindow *mainWindow,
+	       std::shared_ptr<SEHostStreamingManager> hostStreamingManager);
 
-	SENativeOBSControlsManager(Private,
-					       QMainWindow *mainWindow);
-	virtual ~SENativeOBSControlsManager();
+	SENativeObsUIControlsManager(
+		Private, QMainWindow *mainWindow,
+		std::shared_ptr<SEHostStreamingManager> hostStreamingManager);
+	virtual ~SENativeObsUIControlsManager();
 
 public:
 	QMainWindow* mainWindow() { return m_mainWindow; }
 
+private:
+	//
+	// OBS's own single stream, as a service rather than as four direct
+	// calls to obs_frontend_streaming_*. The dependency runs this way
+	// round -- a UI class asking a service for the host's state --
+	// because the reverse, a service reaching into a Qt class to start a
+	// stream, is what this replaces (CORE-757).
+	//
+	std::shared_ptr<SEHostStreamingManager> m_hostStreamingManager;
+
+public:
+	//
+	// A setter rather than a constructor argument because this class hands
+	// out its own instance through GetInstance(), so Initialize() cannot
+	// get a word in while it is being built. It is called there, right
+	// after that instance is obtained, and the only thing it feeds is the
+	// preview title bar browser, which is created later on demand.
+	//
+	void SetApiServices(std::shared_ptr<SEApiServices> apiServices)
+	{
+		m_apiServices = apiServices;
+	}
+
 	void SetStartStreamingMode(start_streaming_mode_t mode) { m_start_streaming_mode = mode; }
 	start_streaming_mode_t GetStartStreamingMode() { return m_start_streaming_mode; }
 
-	bool GetNativeManageBroadcastButtonVisibility()
+	bool GetNativeManageBroadcastButtonVisibility() override
 	{
 		if (!m_nativeManageBroadcastButton)
 			return false;
@@ -112,24 +154,25 @@ public:
 	void SetStartStreamingAckTimeoutSeconds(int seconds) { m_startStreamingRequestAcknowledgeTimeoutSeconds = std::max<int>(seconds, 1); }
 	int GetStartStreamingAckTimeoutSeconds() { return m_startStreamingRequestAcknowledgeTimeoutSeconds; }
 
-	bool DeserializeStartStreamingUIHandlerProperties(CefRefPtr<CefValue> input);
+	bool DeserializeStartStreamingUIHandlerProperties(
+		CefRefPtr<CefValue> input) override;
 
-	void AdviseRequestStartStreamingAccepted();
-	void AdviseRequestStartStreamingRejected();
+	void AdviseRequestStartStreamingAccepted() override;
+	void AdviseRequestStartStreamingRejected() override;
 
-	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
-	bool DeserializePreviewFrame(CefRefPtr<CefValue> input);
+#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
+	bool DeserializePreviewFrame(CefRefPtr<CefValue> input) override;
 	void SerializePreviewFrame(CefRefPtr<CefValue>& output);
-	void HidePreviewFrame();
-	bool DeserializePreviewTitleBar(CefRefPtr<CefValue> input);
+	void HidePreviewFrame() override;
+	bool DeserializePreviewTitleBar(CefRefPtr<CefValue> input) override;
 	void SerializePreviewTitleBar(CefRefPtr<CefValue>& output);
-	void HidePreviewTitleBar();
-	#endif
+	void HidePreviewTitleBar() override;
+#endif
 
-	void Reset();
+	void Reset() override;
 
 public:
-	void StartStreaming();
+	void StartStreaming() override;
 
 private:
 	void SetStreamingInitialState();
@@ -179,7 +222,16 @@ private:
 
 	bool m_isStreamingTransitionState = false;
 
-	#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
+	//
+	// Weak. Everything this class builds from the bundle -- browser
+	// widgets and API message handlers -- holds a strong reference to it,
+	// and this class destroys them, so a strong reference here closes a
+	// ring the refcount can never unwind. See the comment in
+	// SEApiServices.hpp.
+	//
+	std::weak_ptr<SEApiServices> m_apiServices;
+
+#if SE_ENABLE_CENTRAL_WIDGET_DECORATIONS
 	QPointer<QFrame> m_previewFrame = nullptr;
 	QPointer<QVBoxLayout> m_previewFrameLayout = nullptr;
 	QPointer<QLayout> m_nativePreviewLayout = nullptr;

@@ -34,13 +34,28 @@ Two kinds live there, and `se_add_test(<name> <sources>)` in `tests/CMakeLists.t
 
 Anything self-contained enough to compile without libobs/Qt belongs here rather than in a throwaway harness — parsers, redaction, string handling, pure helpers. Deliberately keeping a unit under test free of OBS dependencies is a good reason to structure it that way.
 
-CI does **not** run these yet, so they are a local gate: the pipeline still only proves that it compiles and that `CI/check-format.sh` passes. Don't call a change verified on the basis of tests that were never run against it.
+CI runs this suite on Windows and macOS (`.github/workflows/tests.yml`), so a red ctest blocks a PR. It is still worth running locally before pushing, and don't call a change verified on the basis of tests that were never run against it.
+
+`CI/check-format.sh` exists but **no workflow invokes it** — formatting is enforced by the pre-commit hook below, not by the pipeline.
 
 ## Formatting
 
 `.clang-format` at the root is authoritative: 8-wide tabs (`UseTab: ForContinuationAndIndentation`), 80-column limit, `AccessModifierOffset: -8`, brace on the next line for **function definitions only** (everything else K&R), `PointerAlignment: Right`, `SortIncludes: false`.
 
 Format only the files you edited: `clang-format -i -style=file -fallback-style=none <file>`. **Never run `./formatcode.sh`** — it has no exclusions and would reformat all of `deps/` and `streamelements/deps/`.
+
+**Install the pre-commit hook once per clone:** `git config core.hooksPath .githooks`. It is
+not installed automatically, and a clone without it formats nothing.
+
+`.githooks/pre-commit` formats **only the line ranges this commit touches**, then re-stages
+them. That restriction is the point: the tree was formatted by older clang-format releases,
+so a whole-file run with a newer one rewrites code nobody edited — 19.1.5 reformats 225
+lines of `tests/test_source_invariants.cpp` unprompted. Line ranges keep the blast radius
+equal to the diff, which is why no clang-format version is pinned.
+
+A file with unstaged changes is never re-staged — that would commit a version nobody
+reviewed. The hook reports it and fails instead. `CLANG_FORMAT=<path>` overrides discovery;
+`SE_SKIP_FORMAT=1` or `--no-verify` skips it.
 
 ## Don't edit
 
@@ -52,8 +67,8 @@ Format only the files you edited: `clang-format -i -style=file -fallback-style=n
 
 - **`CefRefPtr` / `CefValue` / `CefListValue` here are not CEF.** `deps/cef-stub/` reimplements them (`#define CefRefPtr std::shared_ptr`) as a JSON-ish data model used as the wire format. CEF refcounting and thread-affinity rules do not apply, and real CEF APIs are unavailable.
 - **The browser bridge is a WebSocket, not CEF IPC** — `StreamElementsWebsocketApiServer` listens on port 27952; page JS receives `window.host.*` from an injected bootstrap script.
-- **Host API methods** are registered in `StreamElementsApiMessageHandler::RegisterIncomingApiCallHandlers()` via the `API_HANDLER_BEGIN` / `API_HANDLER_END` macros. Use `/add-host-api`.
-- **A new subsystem becomes a manager on `StreamElementsGlobalStateManager`** (the singleton god object): add `std::shared_ptr<Foo> m_foo` plus a `GetFoo()` accessor, and wire it into `Initialize()` and the destructor. Guard access with `StreamElementsGlobalStateManager::IsInstanceAvailable()` — the instance is gone during shutdown.
+- **Host API methods** are registered in `SEApiMessageHandler::RegisterIncomingApiCallHandlers()` via the `API_HANDLER_BEGIN` / `API_HANDLER_END` macros, which are defined once in `SEApiMessageHandler.hpp`. The lock they take is **per translation unit on purpose** — `showModalDialog` holds it across a blocking `exec()`, so the dialog handlers that close that dialog must lock something else. Use `/add-host-api`.
+- **A new subsystem becomes a manager on `SEGlobalStateManager`**, which is the root, not a singleton: add `std::shared_ptr<Foo> m_foo`, construct it in `Initialize()` after whatever it depends on, and publish it in `PublishApiServices()` so consumers can be handed it. **There is no `GetInstance()` and no `IsInstanceAvailable()`** (CORE-757) — a class that needs the manager takes it as a constructor parameter. The exceptions are the two whose dependency set genuinely is most of the surface, `SEApiMessageHandler` and `SESessionManager`: they hold `std::weak_ptr<SEApiServices>` and lock it per call. Anything the container's own services destroy — a browser widget, a dialog, an API handler — must hold the container weakly or shutdown stalls on a ring refcounting cannot unwind; `check_nothing_but_the_manager_owns_the_services_container` enforces it.
 - **To reach the Qt/UI thread, use the `QtPostTask` / `QtExecSync` / `QtDelayTask` macros** from `StreamElementsUtils.hpp`. They are macros, not functions: they capture `__FILE__`/`__LINE__` into an async-call context the crash handler reads. Don't substitute raw `QMetaObject::invokeMethod`.
 - **Naming**: one class per file, file name == class name, `StreamElements<Thing>.hpp` / `.cpp`; members `m_camelCase`, file statics `s_`, globals `g_`.
 - **User-visible strings** go through `obs_module_text()`, with keys added to `data/locale/en-US.ini`.

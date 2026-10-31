@@ -5,15 +5,27 @@
 
 #include "SEObsAppMonitor.hpp"
 
+#include <memory>
+
+class SEHostEventDispatcher;
+
 class SEPreviewManager : public SEObsAppMonitor {
 public:
-	SEPreviewManager(QMainWindow *parent);
+	SEPreviewManager(
+		QMainWindow *parent,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher);
 	virtual ~SEPreviewManager();
 
 protected:
-	virtual void OnObsExit();
+	virtual void OnObsExit() override;
 
 private:
 	QMainWindow *m_parent;
 	QObject *m_eventFilter;
+
+	//
+	// Handed to the event filter, which is the object that announces the
+	// preview's mouse and focus events.
+	//
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
 };
