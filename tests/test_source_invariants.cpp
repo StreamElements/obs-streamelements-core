@@ -5018,8 +5018,14 @@ static void check_services_type_check_what_the_handlers_hand_them()
 
 		const std::string file = path.filename().string();
 
-		for (const std::pair<const std::string, std::size_t> &want :
-		     handed) {
+		//
+		// Not `pair<const std::string, ...>`: that is a map's
+		// element type, and binding it to a set's element
+		// constructs a temporary pair on every iteration.
+		// -Wrange-loop-construct says so on clang, and MSVC does
+		// not -- the fourth clang-only diagnostic in this series.
+		//
+		for (const std::pair<std::string, std::size_t> &want : handed) {
 			const std::string &method = want.first;
 			const std::size_t pos = want.second;
 
