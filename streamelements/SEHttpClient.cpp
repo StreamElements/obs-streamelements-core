@@ -90,15 +90,34 @@ void SEHttpClient::DeserializeHttpRequestText(
 			}
 		};
 
-		if (method == "GET" || method == "DELETE" || method == "OPTIONS") {
+		//
+		// No usable url: answer the failure shape rather than hand
+		// "" to libcurl.
+		//
+		// Not hypothetical, and not a consequence of the type check
+		// above. HttpGetString("") does not return on this machine,
+		// and this body runs under the per-translation-unit API call
+		// lock for its whole length -- so one such call from any
+		// page silently wedges every host API method for the life of
+		// the process, with OBS itself still reporting as
+		// responsive. Measured: after one, getHostProperties() never
+		// answered again.
+		//
+		// Reachable on master through the missing-key branch, which
+		// produced the same "" long before a wrongly typed url
+		// could.
+		//
+		if (url.empty()) {
+			error_string = "No URL specified";
+		} else if (method == "GET" || method == "DELETE" ||
+			   method == "OPTIONS") {
 			success = HttpGetString(
 				method,
 				url.c_str(),
 				request_headers,
 				cb,
 				nullptr);
-		}
-		else {
+		} else {
 			std::string post_data;
 
 			if (d->HasKey("body") && d->GetType("body") == VTYPE_STRING) {
