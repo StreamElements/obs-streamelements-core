@@ -114,15 +114,17 @@ void the_surface_is_exactly_what_the_arithmetic_says()
 void every_handler_answers_exactly_once()
 {
 	//
-	// The three that exist to take the process down, and the one that is
-	// known not to answer -- see
-	// an_async_dialog_handler_with_no_arguments_never_answers, which
-	// pins that as the defect it is.
+	// Only the three that exist to take the process down.
 	//
-	const std::vector<std::string> skip = {"crashProgram",
-					       "crashProgramFastFail",
-					       "deadlockProgram",
-					       "showNonModalDialog"};
+	// showNonModalDialog used to be a fourth, because with no arguments
+	// nothing ever called its completion -- it is the file's only
+	// API_HANDLER_END_ASYNC, and that macro calls nothing. Now that it
+	// refuses with a reply, the sweep covers it like everything else,
+	// and that is the point: the exemption was hiding the defect, so
+	// removing it is part of the fix rather than a tidy-up after it.
+	//
+	const std::vector<std::string> skip = {
+		"crashProgram", "crashProgramFastFail", "deadlockProgram"};
 
 	std::vector<std::string> names = registered_names();
 
@@ -1011,33 +1013,6 @@ void a_body_with_no_arguments_still_passes_a_null_value()
 // --- a handler that can leave a page waiting for ever -----------------
 
 //
-// showNonModalDialog is the file's only API_HANDLER_END_ASYNC, which means
-// nothing completes the call for it -- the body must do so on every path.
-// It does not: with no arguments it falls straight through, no thread is
-// started, and complete_callback is never called. The page's promise never
-// settles.
-//
-// Recorded rather than fixed, in the idiom the infrastructure test already
-// uses for InvokeApiCallHandlerAsync's silent path: a test that will start
-// failing the moment somebody fixes it, with a comment saying why that is
-// the good outcome. It is also why the sweep above has to skip this one
-// name.
-//
-void an_async_dialog_handler_with_no_arguments_never_answers()
-{
-	Fixture f;
-
-	check_eq(f.Call("showNonModalDialog"), "<no reply>",
-		 "showNonModalDialog: with no arguments the call is never "
-		 "completed, so the page's promise never settles. If this "
-		 "test fails because a reply arrived, the defect has been "
-		 "fixed -- update the expectation and delete this comment");
-
-	check_eq(f.journal().calls.size(), 0,
-		 "showNonModalDialog: and the dialog manager is never asked");
-}
-
-//
 // The two bodies that drain rather than call once.
 //
 // `while (widgetManager->DestroyCurrentCentralBrowserWidget()) {}` pops
@@ -1106,10 +1081,10 @@ void showing_a_central_widget_drains_before_it_pushes()
 //
 // showNonModalDialog hands the dialog manager a promise and parks a
 // detached thread on its future; the page's callback fires when the dialog
-// closes, which can be minutes later. The sweep cannot exercise this -- it
-// skips the name, because with no arguments nothing ever completes it --
-// and a CDP probe cannot tell "still open" from "never answers". Driving
-// the promise from the test is the only way to assert both halves.
+// closes, which can be minutes later. The sweep reaches the name but not
+// this path -- it calls with no arguments, which is now a refusal -- and a
+// CDP probe cannot tell "still open" from "never answers". Driving the
+// promise from the test is the only way to assert both halves.
 //
 void an_async_dialog_answers_only_when_its_dialog_closes()
 {
@@ -1157,6 +1132,86 @@ void an_async_dialog_answers_only_when_its_dialog_closes()
 
 	check_eq(reply.args->GetString(1).ToString(), "{\"ok\":1}",
 		 "showNonModalDialog: and it carries the dialog's own result");
+}
+
+//
+// The same handler's refusal path, which is the one that used to answer
+// nothing at all.
+//
+// showNonModalDialog is the file's only API_HANDLER_END_ASYNC, and that
+// macro expands to `});` -- it calls complete_callback for nobody. The
+// thread that calls it was started only inside `if (args->GetSize())`, so a
+// call with no arguments fell out of the body having promised the page a
+// reply and left no one to send it. Not a value the page could handle: the
+// promise behind window.host.showNonModalDialog() stayed pending for the
+// life of the process.
+//
+// The two assertions are separate on purpose. "Answers false" is the
+// visible fix; "asks the manager nothing" is what says the refusal happened
+// in the body rather than through a dialog that failed to open -- and it is
+// the half that would still pass if someone later moved the completion
+// into the service.
+//
+void an_async_dialog_with_no_arguments_still_answers()
+{
+	Fixture f;
+
+	check_eq(f.Call("showNonModalDialog", {}), "false",
+		 "showNonModalDialog: a call with no arguments is refused "
+		 "rather than left pending");
+
+	check_eq(f.journal().Count(
+			 "SEBrowserDialogManager::DeserializeNonModalDialog"),
+		 0,
+		 "showNonModalDialog: and the dialog manager is not asked to "
+		 "open anything");
+}
+
+//
+// A description the manager refuses -- no "url", or the wrong type
+// entirely -- is the other way this call can end without a dialog, and it
+// must still settle the page's promise.
+//
+// It does, and the mechanism is worth pinning from this side because it is
+// not obvious: the production manager fulfils the promise itself in its
+// else branch rather than returning an unfulfilled one. That is what keeps
+// the body's detached thread from waiting for ever on a promise nothing
+// holds, so the contract is "every promise this manager returns is either
+// stored against a live dialog or already satisfied". The fake's default
+// mirrors it.
+//
+void an_async_dialog_the_manager_refuses_still_answers()
+{
+	Fixture f;
+
+	//
+	// Deliberately not programmed: PromiseFor's default answers an
+	// already-satisfied promise, exactly as the manager's else branch
+	// does.
+	//
+	// Satisfied before the call even returns, and the reply still has to
+	// be waited for: the body hands it to a detached thread either way,
+	// so "answered" and "answered by the time Call returns" are
+	// different questions. The first is the one that matters to a page.
+	//
+	f.Call("showNonModalDialog", {"{}"});
+
+	SentMessage reply;
+
+	check(f.sink->wait_for("executeCallback", 1, 5000, &reply),
+	      "showNonModalDialog: a description the manager refuses is still "
+	      "answered");
+
+	check_eq(f.journal().Count(
+			 "SEBrowserDialogManager::DeserializeNonModalDialog"),
+		 1, "showNonModalDialog: the manager was still asked");
+
+	if (!reply.args || reply.args->GetSize() < 2)
+		return;
+
+	check_eq(reply.args->GetString(1).ToString(), "null",
+		 "showNonModalDialog: and the answer is null rather than "
+		 "nothing");
 }
 
 //
@@ -1311,14 +1366,16 @@ const Test tests[] = {
 	 a_rejected_hotkey_binding_answers_null_rather_than_zero},
 	{"a body with no arguments still passes a null value",
 	 a_body_with_no_arguments_still_passes_a_null_value},
-	{"an async dialog handler with no arguments never answers",
-	 an_async_dialog_handler_with_no_arguments_never_answers},
 	{"the central widget is drained until there is none left",
 	 the_central_widget_is_drained_until_there_is_none_left},
 	{"showing a central widget drains before it pushes",
 	 showing_a_central_widget_drains_before_it_pushes},
 	{"an async dialog answers only when its dialog closes",
 	 an_async_dialog_answers_only_when_its_dialog_closes},
+	{"an async dialog with no arguments still answers",
+	 an_async_dialog_with_no_arguments_still_answers},
+	{"an async dialog the manager refuses still answers",
+	 an_async_dialog_the_manager_refuses_still_answers},
 	{"a batch runs its calls inside one defer-save transaction",
 	 a_batch_runs_its_calls_inside_one_defer_save_transaction},
 	{"a batch that stops early still closes its transaction",

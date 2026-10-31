@@ -937,7 +937,21 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 
 	API_HANDLER_BEGIN("showNonModalDialog");
 	{
-		if (args->GetSize()) {
+		//
+		// The only API_HANDLER_END_ASYNC in this file, so nothing
+		// completes this call but the code below: END_ASYNC is
+		// `});` and calls nothing. Every path has to reach
+		// complete_callback, or the page's promise stays pending for
+		// the life of the process.
+		//
+		// Refusing with no arguments is the path that did not: the
+		// thread that calls complete_callback was started only
+		// inside this `if`. A refusal answers now instead, with the
+		// false the dispatcher pre-set.
+		//
+		if (!args->GetSize()) {
+			complete_callback();
+		} else {
 			auto promise_ptr =
 				apiServices->browserDialogManager
 					->DeserializeNonModalDialog(
