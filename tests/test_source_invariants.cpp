@@ -4836,6 +4836,516 @@ static void check_handler_bodies_type_check_before_they_read()
 // here. That is the point -- the production code is fine either way, and
 // what rots is the stand-in beside a newly added interface method.
 //
+//
+// The other side of the argument the gate above checks.
+//
+// check_handler_bodies_type_check_before_they_read reads handler BODIES,
+// and that is only half the surface. A body that reads nothing itself but
+// hands args->GetValue(0) to a service is not safe: the service reads the
+// value, through the same getters, and `if (m_type != VTYPE_X) throw;`
+// outside a catch is std::terminate wherever it is written. Seven service
+// methods were in exactly that state while the body gate reported all 208
+// bodies clean -- showNonModalDialog, showModalDialog, openPopupWindow,
+// showStatusBarTemporaryMessage, setEncodingSettings, setStreamingSettings
+// and streamingBandwidthTestBegin, 46 unguarded reads between them, every
+// one reachable from any page with one wrong argument.
+//
+// So: for every method a handler hands a raw page value to, the parameter
+// that receives it must have its type checked before it is read, and the
+// dictionary members read off it must have theirs checked too -- HasKey
+// answers for presence, and GetString(k) is `m_map[k]->GetString()`, the
+// same throwing getter.
+//
+// Deliberately conservative in one way: a parameter passed to any function
+// before it is read counts as checked, because that is how the ten
+// add*SceneItem* handlers are safe -- IsSceneItemInfoValid() tests the
+// type one call deeper. Reporting those would make this gate cry wolf, and
+// a gate that cries wolf gets deleted.
+//
+static void check_services_type_check_what_the_handlers_hand_them()
+{
+	const std::string source = strip_line_comments(
+		slurp("streamelements/SEApiMessageHandler.cpp"));
+
+	std::string handler;
+	handler.reserve(source.size());
+
+	for (std::size_t i = 0; i < source.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(source[i])))
+			handler += source[i];
+	}
+
+	//
+	// Every (method, parameter position) a raw page value travels to.
+	// Walked by hand rather than matched, because the arguments nest and
+	// a regex cannot count parentheses.
+	//
+	std::set<std::pair<std::string, std::size_t>> handed;
+
+	const std::regex call(R"((\w+)\()");
+
+	for (std::sregex_iterator it(handler.begin(), handler.end(), call),
+	     last;
+	     it != last; ++it) {
+		const std::string name = (*it)[1].str();
+
+		if (name == "GetValue" || name == "GetType" ||
+		    name == "GetSize")
+			continue;
+
+		std::size_t at = static_cast<std::size_t>((*it).position()) +
+				 (*it).length();
+		int depth = 1;
+		std::string args;
+
+		while (at < handler.size() && depth) {
+			const char c = handler[at];
+
+			if (c == '(') {
+				++depth;
+			} else if (c == ')') {
+				--depth;
+
+				if (!depth)
+					break;
+			}
+
+			args += c;
+			++at;
+		}
+
+		if (args.find("args->GetValue(") == std::string::npos)
+			continue;
+
+		// Split at depth 0 to learn each argument's position.
+		std::vector<std::string> parts;
+		std::string cur;
+		int d = 0;
+
+		//
+		// Only brackets, deliberately: `<` and `>` cannot be
+		// counted as nesting here because every `->` in the
+		// flattened text would close a level that nothing opened,
+		// and then no argument is ever seen at depth 0.
+		//
+		for (const char c : args) {
+			if (c == '(' || c == '[')
+				++d;
+			else if (c == ')' || c == ']')
+				--d;
+
+			if (c == ',' && d == 0) {
+				parts.push_back(cur);
+				cur.clear();
+			} else {
+				cur += c;
+			}
+		}
+
+		parts.push_back(cur);
+
+		for (std::size_t pos = 0; pos < parts.size(); ++pos) {
+			if (std::regex_match(
+				    parts[pos],
+				    std::regex(R"(args->GetValue\(\d+\))")))
+				handed.insert(std::make_pair(name, pos));
+		}
+	}
+
+	check(handed.size() >= 60,
+	      "the handler must still be handing raw page values to scores of "
+	      "service methods; a much smaller number means this scan broke");
+
+	//
+	// Now the services. Every .cpp and .hpp under streamelements/,
+	// flattened the same way, so a definition that wraps is still found.
+	//
+	const std::string dir =
+		std::string(se_tests::kRepoRoot) + "/streamelements";
+
+	std::error_code ec;
+	std::filesystem::directory_iterator walk(dir, ec);
+
+	check(!ec, "cannot read streamelements/ -- this invariant would then "
+		   "pass vacuously");
+
+	std::vector<std::filesystem::path> files;
+
+	for (std::filesystem::directory_iterator end; walk != end && !ec;
+	     walk.increment(ec)) {
+		files.push_back(walk->path());
+	}
+
+	struct Typed {
+		const char *getter;
+		const char *vtype;
+	};
+
+	const Typed typed[] = {{"GetString", "VTYPE_STRING"},
+			       {"GetInt", "VTYPE_INT"},
+			       {"GetBool", "VTYPE_BOOL"},
+			       {"GetDouble", "VTYPE_DOUBLE"},
+			       {"GetList", "VTYPE_LIST"},
+			       {"GetDictionary", "VTYPE_DICTIONARY"},
+			       {"GetBinary", "VTYPE_BINARY"}};
+
+	std::size_t examined = 0;
+	std::size_t violations = 0;
+
+	for (const std::filesystem::path &path : files) {
+		const std::string ext = path.extension().string();
+
+		if (ext != ".hpp" && ext != ".cpp")
+			continue;
+
+		std::ifstream in(path.string());
+
+		if (!in)
+			continue;
+
+		std::ostringstream buf;
+		buf << in.rdbuf();
+
+		const std::string text = strip_line_comments(buf.str());
+
+		std::string flat;
+		flat.reserve(text.size());
+
+		for (std::size_t i = 0; i < text.size(); ++i) {
+			if (!std::isspace(static_cast<unsigned char>(text[i])))
+				flat += text[i];
+		}
+
+		const std::string file = path.filename().string();
+
+		for (const std::pair<const std::string, std::size_t> &want :
+		     handed) {
+			const std::string &method = want.first;
+			const std::size_t pos = want.second;
+
+			//
+			// A definition rather than a call: the name is
+			// preceded by `::` (out of line) or by a type (an
+			// inline body in a header), and is followed by a
+			// parameter list and then a brace.
+			//
+			const std::string needle = method + "(";
+
+			for (std::size_t at = flat.find(needle);
+			     at != std::string::npos;
+			     at = flat.find(needle, at + 1)) {
+				std::size_t p = at + needle.size();
+				int depth = 1;
+				std::string params;
+
+				while (p < flat.size() && depth) {
+					const char c = flat[p];
+
+					if (c == '(') {
+						++depth;
+					} else if (c == ')') {
+						--depth;
+
+						if (!depth)
+							break;
+					}
+
+					params += c;
+					++p;
+				}
+
+				if (p >= flat.size() || flat[p] != ')')
+					continue;
+
+				// A definition, not a declaration or a call.
+				std::size_t brace = p + 1;
+
+				while (brace < flat.size() &&
+				       flat[brace] != '{' &&
+				       flat[brace] != ';' && flat[brace] != ')')
+					++brace;
+
+				if (brace >= flat.size() || flat[brace] != '{')
+					continue;
+
+				if (params.find("CefRefPtr<CefValue>") ==
+				    std::string::npos)
+					continue;
+
+				// The body.
+				int braces = 0;
+				std::size_t end = brace;
+
+				while (end < flat.size()) {
+					if (flat[end] == '{') {
+						++braces;
+					} else if (flat[end] == '}') {
+						--braces;
+
+						if (!braces)
+							break;
+					}
+
+					++end;
+				}
+
+				const std::string body =
+					flat.substr(brace, end - brace + 1);
+
+				// The parameter at `pos`, by name.
+				std::vector<std::string> names;
+				std::string cur;
+				int d = 0;
+
+				for (const char c : params) {
+					if (c == '(' || c == '<')
+						++d;
+					else if (c == ')' || c == '>')
+						--d;
+
+					if (c == ',' && d == 0) {
+						names.push_back(cur);
+						cur.clear();
+					} else {
+						cur += c;
+					}
+				}
+
+				names.push_back(cur);
+
+				if (pos >= names.size())
+					continue;
+
+				std::smatch id;
+				const std::string decl = names[pos];
+
+				if (!std::regex_search(
+					    decl, id,
+					    std::regex(R"((\w+)\s*$)")))
+					continue;
+
+				const std::string var = id[1].str();
+
+				if (var.empty() ||
+				    decl.find("CefRefPtr<CefValue>") ==
+					    std::string::npos)
+					continue;
+
+				++examined;
+
+				//
+				// Rule "parameter": the value itself.
+				//
+				for (const Typed &t : typed) {
+					const std::string read =
+						var + "->" + t.getter + "()";
+
+					const std::size_t readAt =
+						body.find(read);
+
+					if (readAt == std::string::npos)
+						continue;
+
+					const std::string before =
+						body.substr(0, readAt);
+
+					if (before.find(var + "->GetType()") !=
+					    std::string::npos)
+						continue;
+
+					//
+					// Handed to a validator first, which
+					// is how the ten add*SceneItem*
+					// handlers are safe: their type
+					// check lives in
+					// IsSceneItemInfoValid, one call
+					// deeper. Matched by shape rather
+					// than by any call at all, so that
+					// GetVideoComposition(input) does
+					// not silence a real finding -- it
+					// did, while this was written.
+					//
+					if (std::regex_search(
+						    before,
+						    std::regex(
+							    R"((?:Is|Validate|Check)\w*\()" +
+							    var + R"([,)])")))
+						continue;
+
+					std::fprintf(
+						stderr,
+						"FAIL: %s::%s reads %s->%s() "
+						"without checking its type, "
+						"and a handler hands that "
+						"parameter a raw page value "
+						"-- the model does a bare "
+						"throw on a mismatch, which "
+						"is std::terminate\n",
+						file.c_str(), method.c_str(),
+						var.c_str(), t.getter);
+					++violations;
+				}
+
+				//
+				// Rule "element": a value taken out of a
+				// list by index, which is a third spelling
+				// again -- `servers->GetValue(i)->
+				// GetDictionary()`. The index is whatever
+				// expression the loop uses, so it is matched
+				// rather than assumed, and the guard has to
+				// ask about the same one.
+				//
+				// Added because a mutation escaped: deleting
+				// the element type check in
+				// BeginBandwidthTest left this gate green.
+				//
+				for (const Typed &t : typed) {
+					const std::regex element(
+						std::string(
+							R"((\w+)->GetValue\(([^()]+)\)->)") +
+						t.getter + R"(\(\))");
+
+					for (std::sregex_iterator
+						     it(body.begin(),
+							body.end(), element),
+					     last;
+					     it != last; ++it) {
+						const std::string owner =
+							(*it)[1].str();
+						const std::string index =
+							(*it)[2].str();
+
+						const std::string guard =
+							owner + "->GetValue(" +
+							index + ")->GetType()";
+
+						if (body.find(guard) !=
+						    std::string::npos)
+							continue;
+
+						std::fprintf(
+							stderr,
+							"FAIL: %s::%s reads "
+							"%s->GetValue(%s)->%s()"
+							" without checking "
+							"that element's type "
+							"-- the mismatch is "
+							"std::terminate\n",
+							file.c_str(),
+							method.c_str(),
+							owner.c_str(),
+							index.c_str(),
+							t.getter);
+						++violations;
+					}
+				}
+
+				//
+				// Rule "member": the keys read off it. Same
+				// rule as the body gate's, and the same
+				// reason -- GetString(k) forwards to the
+				// value's own throwing getter.
+				//
+				for (const Typed &t : typed) {
+					const std::regex member(
+						std::string(R"((\w+)->)") +
+						t.getter +
+						R"RX(\("([^"]+)"\))RX");
+
+					for (std::sregex_iterator
+						     it(body.begin(),
+							body.end(), member),
+					     last;
+					     it != last; ++it) {
+						const std::string owner =
+							(*it)[1].str();
+						const std::string key =
+							(*it)[2].str();
+
+						//
+						// Both polarities, because a
+						// gate reads `==VTYPE_X &&`
+						// and a refusal reads
+						// `!=VTYPE_X ||`, and both
+						// spellings, because the
+						// type of a key can be asked
+						// of the dictionary or of the
+						// value it holds. All four
+						// ask the same question.
+						//
+						const std::string byKey =
+							owner + "->GetType(\"" +
+							key + "\")";
+						const std::string byValue =
+							owner +
+							"->GetValue(\"" + key +
+							"\")->GetType()";
+
+						if (body.find(byKey +
+							      "==" + t.vtype) !=
+							    std::string::npos ||
+						    body.find(byKey +
+							      "!=" + t.vtype) !=
+							    std::string::npos ||
+						    body.find(byValue +
+							      "==" + t.vtype) !=
+							    std::string::npos ||
+						    body.find(byValue +
+							      "!=" + t.vtype) !=
+							    std::string::npos)
+							continue;
+
+						//
+						// Or a validator vouched for
+						// the whole value before any
+						// member was read, as
+						// IsSceneItemInfoValid does
+						// for name, class and
+						// settings.
+						//
+						if (std::regex_search(
+							    body,
+							    std::regex(
+								    R"((?:Is|Validate|Check)\w*\()" +
+								    var +
+								    R"([,)])")))
+							continue;
+
+						std::fprintf(
+							stderr,
+							"FAIL: %s::%s reads "
+							"%s->%s(\"%s\") "
+							"without checking "
+							"that key's type -- "
+							"HasKey answers for "
+							"presence, not type, "
+							"and the mismatch is "
+							"std::terminate\n",
+							file.c_str(),
+							method.c_str(),
+							owner.c_str(), t.getter,
+							key.c_str());
+						++violations;
+					}
+				}
+			}
+		}
+	}
+
+	check(examined >= 40,
+	      "far fewer service methods were examined than this handler "
+	      "hands values to; the definition scan broke");
+
+	check(violations == 0,
+	      "every service method a handler hands a raw page value to must "
+	      "check that value's type, and its members', before reading "
+	      "them");
+
+	std::printf("    (%zu handler-to-service argument positions, %zu "
+		    "service method definitions examined)\n",
+		    handed.size(), examined);
+}
+
 static void check_every_stand_in_can_answer_the_handler_that_calls_it()
 {
 	const std::string source = strip_line_comments(
@@ -5177,6 +5687,7 @@ int main()
 	check_the_trace_log_level_memo_is_computed_once();
 	check_handler_include_closure_only_goes_down();
 	check_handler_bodies_type_check_before_they_read();
+	check_services_type_check_what_the_handlers_hand_them();
 	check_every_stand_in_can_answer_the_handler_that_calls_it();
 	check_every_source_file_ends_with_a_newline();
 

@@ -456,7 +456,14 @@ SEHotkeyManager::DeserializeSingleHotkeyBinding(CefRefPtr<CefValue> input)
 
 	CefRefPtr<CefDictionaryValue> root = input->GetDictionary();
 
-	if (!root->HasKey("name") || !root->HasKey("description")) {
+	// Type-checked, not merely present: GetString(k) is
+	// `m_map[k]->GetString()`, and that getter is
+	// `if (m_type != VTYPE_STRING) throw;` -- a bare throw outside a
+	// catch, so std::terminate. addHotkeyBinding({name: 7, ...}) reached
+	// it from any page.
+	if (!root->HasKey("name") || root->GetType("name") != VTYPE_STRING ||
+	    !root->HasKey("description") ||
+	    root->GetType("description") != VTYPE_STRING) {
 		return -1;
 	}
 

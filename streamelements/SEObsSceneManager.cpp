@@ -3049,7 +3049,10 @@ void SEObsSceneManager::DeserializeObsScene(
 
 	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
 
-	if (!d->HasKey("name"))
+	// Type-checked, not merely present: GetString(k) reaches the held
+	// value's `if (m_type != VTYPE_STRING) throw;`, a bare throw outside
+	// a catch, so std::terminate.
+	if (!d->HasKey("name") || d->GetType("name") != VTYPE_STRING)
 		return;
 
 	bool activate = true;
@@ -3163,7 +3166,10 @@ void SEObsSceneManager::SetObsScenePropertiesById(
 
 	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
 
-	if (!d->HasKey("id"))
+	// Type-checked for the same reason as everywhere else here: HasKey
+	// answers for presence, and the read itself is std::terminate on a
+	// mismatch.
+	if (!d->HasKey("id") || d->GetType("id") != VTYPE_STRING)
 		return;
 
 	auto videoComposition = GetVideoComposition(input);
@@ -3180,7 +3186,7 @@ void SEObsSceneManager::SetObsScenePropertiesById(
 
 	obs_source_t *source = obs_scene_get_source(scene);
 
-	if (d->HasKey("name")) {
+	if (d->HasKey("name") && d->GetType("name") == VTYPE_STRING) {
 		ObsSetUniqueSourceName(
 			source,
 			d->GetString("name").ToString());
@@ -3188,28 +3194,28 @@ void SEObsSceneManager::SetObsScenePropertiesById(
 		result = true;
 	}
 
-	#if SE_ENABLE_SCENE_ICONS
+#if SE_ENABLE_SCENE_ICONS
 	if (d->HasKey("icon")) {
 		m_scenesWidgetManager->SetSceneIcon(
 			scene, d->GetValue("icon")->Copy());
 	}
-	#endif
+#endif
 
-	#if SE_ENABLE_SCENE_DEFAULT_ACTION
+#if SE_ENABLE_SCENE_DEFAULT_ACTION
 	if (d->HasKey("defaultAction")) {
 		m_scenesWidgetManager->SetSceneDefaultAction(
 			scene,
 			d->GetValue("defaultAction")->Copy());
 	}
-	#endif
+#endif
 
-	#if SE_ENABLE_SCENE_CONTEXT_MENU
+#if SE_ENABLE_SCENE_CONTEXT_MENU
 	if (d->HasKey("contextMenu")) {
 		m_scenesWidgetManager->SetSceneContextMenu(
 			scene,
 			d->GetValue("contextMenu")->Copy());
 	}
-	#endif
+#endif
 
 	if (d->HasKey("auxiliaryData")) {
 		m_scenesWidgetManager->SetSceneAuxiliaryData(
@@ -3444,7 +3450,7 @@ void SEObsSceneManager::SetObsSceneItemPropertiesById(
 	obs_source_t *source = obs_sceneitem_get_source(
 		sceneitem); // does not increment refcount
 
-	if (d->HasKey("name")) {
+	if (d->HasKey("name") && d->GetType("name") == VTYPE_STRING) {
 		ObsSetUniqueSourceName(
 			source,
 			d->GetString("name").ToString());

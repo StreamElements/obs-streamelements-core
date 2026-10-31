@@ -249,8 +249,14 @@ SEWorkerManager::DeserializeOne(CefRefPtr<CefValue> input)
 		CefRefPtr<CefDictionaryValue> dict = input->GetDictionary();
 
 		if (!!dict.get() && dict->HasKey("url") && dict->GetType("url") == VTYPE_STRING) {
-			std::string id =
-				dict->HasKey("id") ? dict->GetString("id") : "";
+			// Type-checked like "url" and
+			// "executeJavaScriptOnLoad" around it: HasKey alone
+			// leaves GetString(k) to reach the held value's bare
+			// `throw;`, which outside a catch is std::terminate.
+			std::string id = (dict->HasKey("id") &&
+					  dict->GetType("id") == VTYPE_STRING)
+						 ? dict->GetString("id")
+						 : "";
 			std::string url = dict->GetString("url");
 
 			std::string executeJavaScriptOnLoad = "";

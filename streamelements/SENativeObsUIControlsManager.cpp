@@ -266,15 +266,26 @@ bool SENativeObsUIControlsManager::DeserializePreviewTitleBar(
 	std::string url = "about:blank";
 	std::string executeJavaScriptOnLoad = "";
 
-	if (rootDictionary->HasKey("height")) {
+	//
+	// Each key is type-checked as well as present: HasKey answers for
+	// presence, and GetInt(k) forwards to the held value's
+	// `if (m_type != VTYPE_INT) throw;` -- a bare throw outside a catch,
+	// so std::terminate. A wrongly typed key keeps the default above,
+	// which is the rule the dock and dialog handlers already follow.
+	//
+	if (rootDictionary->HasKey("height") &&
+	    rootDictionary->GetType("height") == VTYPE_INT) {
 		height = rootDictionary->GetInt("height");
 	}
 
-	if (rootDictionary->HasKey("url")) {
+	if (rootDictionary->HasKey("url") &&
+	    rootDictionary->GetType("url") == VTYPE_STRING) {
 		url = rootDictionary->GetString("url").ToString();
 	}
 
-	if (rootDictionary->HasKey("executeJavaScriptOnLoad")) {
+	if (rootDictionary->HasKey("executeJavaScriptOnLoad") &&
+	    rootDictionary->GetType("executeJavaScriptOnLoad") ==
+		    VTYPE_STRING) {
 		executeJavaScriptOnLoad =
 			rootDictionary
 				->GetString("executeJavaScriptOnLoad")

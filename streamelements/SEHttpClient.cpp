@@ -15,11 +15,21 @@ void SEHttpClient::DeserializeHttpRequestText(
 	if (input->GetType() == VTYPE_DICTIONARY) {
 		CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
 
-		std::string method =
-			d->HasKey("method") ? d->GetString("method").ToString() : "GET";
+		// Type-checked as well as present. HasKey answers for
+		// presence only, and GetString(k) forwards to the value's own
+		// `if (m_type != VTYPE_STRING) throw;` -- a bare throw
+		// outside a catch, which is std::terminate rather than
+		// anything catchable. The "headers" read below already did
+		// this; these two did not.
+		std::string method = (d->HasKey("method") &&
+				      d->GetType("method") == VTYPE_STRING)
+					     ? d->GetString("method").ToString()
+					     : "GET";
 
 		std::string url =
-			d->HasKey("url") ? d->GetString("url") : "";
+			(d->HasKey("url") && d->GetType("url") == VTYPE_STRING)
+				? d->GetString("url")
+				: "";
 
 		http_client_headers_t request_headers;
 

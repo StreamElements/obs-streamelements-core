@@ -106,9 +106,21 @@ bool SEBrowserDialogManager::DeserializeModalDialog(CefRefPtr<CefValue> input,
 
 	output->SetNull();
 
+	//
+	// `input` is whatever a page passed to window.host.showModalDialog().
+	// Every typed getter on the CefValue model is
+	// `if (m_type != VTYPE_X) throw;` -- a bare throw outside a catch,
+	// so std::terminate rather than an exception. Each read below is
+	// therefore type-checked first, members included: HasKey() is not a
+	// type check, because GetString(k) is `m_map[k]->GetString()` and
+	// lands on exactly the same getter.
+	//
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return false;
+
 	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
 
-	if (d.get() && d->HasKey("url")) {
+	if (d.get() && d->HasKey("url") && d->GetType("url") == VTYPE_STRING) {
 		auto apiServices = m_apiServices.lock();
 
 		if (!apiServices) {
@@ -121,7 +133,8 @@ bool SEBrowserDialogManager::DeserializeModalDialog(CefRefPtr<CefValue> input,
 		std::string url = d->GetString("url").ToString();
 		std::string executeJavaScriptOnLoad;
 
-		if (d->HasKey("executeJavaScriptOnLoad")) {
+		if (d->HasKey("executeJavaScriptOnLoad") &&
+		    d->GetType("executeJavaScriptOnLoad") == VTYPE_STRING) {
 			executeJavaScriptOnLoad =
 				d->GetString("executeJavaScriptOnLoad");
 		}
@@ -130,15 +143,17 @@ bool SEBrowserDialogManager::DeserializeModalDialog(CefRefPtr<CefValue> input,
 		int height = 600;
 		bool isIncognito = false;
 
-		if (d->HasKey("width")) {
+		if (d->HasKey("width") && d->GetType("width") == VTYPE_INT) {
 			width = d->GetInt("width");
 		}
 
-		if (d->HasKey("height")) {
+		if (d->HasKey("height") && d->GetType("height") == VTYPE_INT) {
 			height = d->GetInt("height");
 		}
 
-		if (d->HasKey("incognitoMode") && d->GetBool("incognitoMode")) {
+		if (d->HasKey("incognitoMode") &&
+		    d->GetType("incognitoMode") == VTYPE_BOOL &&
+		    d->GetBool("incognitoMode")) {
 			isIncognito = true;
 		}
 
@@ -147,7 +162,7 @@ bool SEBrowserDialogManager::DeserializeModalDialog(CefRefPtr<CefValue> input,
 						  isIncognito, "modalDialog",
 						  apiServices);
 
-		if (d->HasKey("title")) {
+		if (d->HasKey("title") && d->GetType("title") == VTYPE_STRING) {
 			dialog->setWindowTitle(QString(
 				d->GetString("title").ToString().c_str()));
 		}
@@ -329,11 +344,30 @@ SEBrowserDialogManager::DeserializeNonModalDialog(CefRefPtr<CefValue> input)
 
 	auto promise = std::make_shared<std::promise<CefRefPtr<CefValue>>>();
 
-	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
+	//
+	// Every path out of here either stores the promise in
+	// m_nonModalDialogs, where QDialog::finished or this object's
+	// destructor will fulfil it, or fulfils it in the else branch below.
+	// Keep that true: the caller parks a detached thread on
+	// get_future().wait(), so a promise returned unfulfilled and
+	// unstored is a thread, an api call context and a page promise that
+	// never come back.
+	//
+	// That is also why the type check below does not return early.
+	// `input` is whatever a page passed to
+	// window.host.showNonModalDialog(), and a typed getter on the
+	// CefValue model is `if (m_type != VTYPE_X) throw;` -- a bare throw
+	// outside a catch, so std::terminate. HasKey() is not a type check
+	// either: GetString(k) is `m_map[k]->GetString()`, the same getter.
+	//
+	CefRefPtr<CefDictionaryValue> d = input->GetType() == VTYPE_DICTIONARY
+						  ? input->GetDictionary()
+						  : nullptr;
 
 	auto apiServices = m_apiServices.lock();
 
-	if (d.get() && d->HasKey("url") && apiServices) {
+	if (d.get() && d->HasKey("url") && d->GetType("url") == VTYPE_STRING &&
+	    apiServices) {
 		std::string url = d->GetString("url").ToString();
 		std::string executeJavaScriptOnLoad;
 		std::string id;
@@ -346,7 +380,8 @@ SEBrowserDialogManager::DeserializeNonModalDialog(CefRefPtr<CefValue> input)
 			id = CreateGloballyUniqueIdString();
 		}
 
-		if (d->HasKey("executeJavaScriptOnLoad")) {
+		if (d->HasKey("executeJavaScriptOnLoad") &&
+		    d->GetType("executeJavaScriptOnLoad") == VTYPE_STRING) {
 			executeJavaScriptOnLoad =
 				d->GetString("executeJavaScriptOnLoad");
 		}
@@ -355,15 +390,17 @@ SEBrowserDialogManager::DeserializeNonModalDialog(CefRefPtr<CefValue> input)
 		int height = 600;
 		bool isIncognito = false;
 
-		if (d->HasKey("width")) {
+		if (d->HasKey("width") && d->GetType("width") == VTYPE_INT) {
 			width = d->GetInt("width");
 		}
 
-		if (d->HasKey("height")) {
+		if (d->HasKey("height") && d->GetType("height") == VTYPE_INT) {
 			height = d->GetInt("height");
 		}
 
-		if (d->HasKey("incognitoMode") && d->GetBool("incognitoMode")) {
+		if (d->HasKey("incognitoMode") &&
+		    d->GetType("incognitoMode") == VTYPE_BOOL &&
+		    d->GetBool("incognitoMode")) {
 			isIncognito = true;
 		}
 
@@ -372,7 +409,7 @@ SEBrowserDialogManager::DeserializeNonModalDialog(CefRefPtr<CefValue> input)
 						  isIncognito, "nonModalDialog",
 						  apiServices);
 
-		if (d->HasKey("title")) {
+		if (d->HasKey("title") && d->GetType("title") == VTYPE_STRING) {
 			dialog->setWindowTitle(QString(
 				d->GetString("title").ToString().c_str()));
 		}

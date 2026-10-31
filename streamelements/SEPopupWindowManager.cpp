@@ -48,9 +48,19 @@ SEPopupWindowManager::~SEPopupWindowManager()
 
 bool SEPopupWindowManager::DeserializePopupWindow(CefRefPtr<CefValue> input)
 {
+	//
+	// A typed getter on the CefValue model is
+	// `if (m_type != VTYPE_X) throw;`, and a bare throw outside a catch
+	// is std::terminate -- so every read of a page-supplied value needs
+	// its type checked first, members included: HasKey() alone forwards
+	// to the same getter.
+	//
+	if (input->GetType() != VTYPE_DICTIONARY)
+		return false;
+
 	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
 
-	if (d.get() && d->HasKey("url")) {
+	if (d.get() && d->HasKey("url") && d->GetType("url") == VTYPE_STRING) {
 		auto apiServices = m_apiServices.lock();
 
 		if (!apiServices) {
@@ -69,9 +79,12 @@ bool SEPopupWindowManager::DeserializePopupWindow(CefRefPtr<CefValue> input)
 		// because a page may depend on it.
 		//
 		bool enableHostApi = d->HasKey("enableHostApi") &&
+				     d->GetType("enableHostApi") ==
+					     VTYPE_BOOL &&
 				     d->GetBool("enableHostApi");
 
-		if (d->HasKey("executeJavaScriptOnLoad")) {
+		if (d->HasKey("executeJavaScriptOnLoad") &&
+		    d->GetType("executeJavaScriptOnLoad") == VTYPE_STRING) {
 			executeJavaScriptOnLoad =
 				d->GetString("executeJavaScriptOnLoad");
 		}
