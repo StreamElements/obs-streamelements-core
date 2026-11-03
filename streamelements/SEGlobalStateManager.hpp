@@ -311,7 +311,7 @@ private:
 	// one fact; they are not, and the old name invited reusing this one
 	// for that question.
 	//
-	bool m_initialize_finished_and_shutdown_is_expected_to_run = false;
+	bool m_initializeFinishedAndShutdownIsExpectedToRun = false;
 	QPointer<QMainWindow> m_mainWindow = nullptr;
 	QPointer<QWidget> m_nativeCentralWidget = nullptr;
 	std::shared_ptr<SEBrowserWidgetManager> m_widgetManager =

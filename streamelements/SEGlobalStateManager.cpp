@@ -268,7 +268,7 @@ SEGlobalStateManager::~SEGlobalStateManager()
 	// it -- which is what opens the ini -- are both built before
 	// Initialize()'s first bail, the obs_browser_init_panel()
 	// failure. Shutdown() can therefore return at its
-	// !m_initialize_finished_and_shutdown_is_expected_to_run
+	// !m_initializeFinishedAndShutdownIsExpectedToRun
 	// early-out having left the file open, and nothing else would
 	// ever close it: the crash handler holds the config and is
 	// deliberately never deleted, so the object's own destructor does
@@ -819,7 +819,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	// it before RestoreState() would make each of a dozen dock
 	// creations write a half-restored layout back over the saved one.
 	//
-	// m_initialize_finished_and_shutdown_is_expected_to_run stays at the
+	// m_initializeFinishedAndShutdownIsExpectedToRun stays at the
 	// end too, and is a different question despite the two having been
 	// set in the same breath before this change: its one functional
 	// reader is the guard at the top of Shutdown(), so it means
@@ -844,8 +844,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 	// Draining the posted-event queue runs arbitrary code while this
 	// Initialize() is still on the stack and
-	// m_initialize_finished_and_shutdown_is_expected_to_run is still
-	// false:
+	// m_initializeFinishedAndShutdownIsExpectedToRun is still false:
 	// deferred deletes, frontend callbacks, and any modal dialog's own event
 	// loop. Nothing constructed above may be assumed live below this point.
 	SEDrainEventQueue();
@@ -913,7 +912,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	// is true. `ready` means "the bundle is wired and a dispatch may
 	// run", which became true much earlier.
 	//
-	m_initialize_finished_and_shutdown_is_expected_to_run = true;
+	m_initializeFinishedAndShutdownIsExpectedToRun = true;
 
 	// From here on an OBS close is an ordinary close, and teardown runs
 	// normally (CORE-786).
@@ -1077,7 +1076,7 @@ void SEGlobalStateManager::Shutdown()
 {
 	PREVENT_RECURSIVE_REENTRY();
 
-	if (!m_initialize_finished_and_shutdown_is_expected_to_run) {
+	if (!m_initializeFinishedAndShutdownIsExpectedToRun) {
 		return;
 	}
 
@@ -1253,7 +1252,7 @@ void SEGlobalStateManager::Shutdown()
 
 	SEDrainEventQueue();
 
-	m_initialize_finished_and_shutdown_is_expected_to_run = false;
+	m_initializeFinishedAndShutdownIsExpectedToRun = false;
 
 	if (m_apiServices)
 		m_apiServices->ready = false;
