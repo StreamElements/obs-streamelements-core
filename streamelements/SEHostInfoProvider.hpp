@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ISEHostInfoProvider.hpp"
+
 //
 // A read-only description of the host and the machine it is running on:
 // versions, platform, CPU and memory usage, hardware, and the loaded OBS
@@ -22,7 +24,7 @@
 
 class SEAnalyticsEventsManager;
 
-class SEHostInfoProvider {
+class SEHostInfoProvider : public ISEHostInfoProvider {
 public:
 	SEHostInfoProvider(std::shared_ptr<SEAnalyticsEventsManager>
 				   analyticsEventsManager);
@@ -32,7 +34,7 @@ public:
 	//
 	// Versions, platform, architecture, and the machine and session ids.
 	//
-	void SerializeHostProperties(CefRefPtr<CefValue> &output);
+	void SerializeHostProperties(CefRefPtr<CefValue> &output) override;
 
 	//
 	// The three system readings and the module list. Each one was a
@@ -40,10 +42,11 @@ public:
 	// "what can the host tell a page about itself" is one surface rather
 	// than five unrelated calls.
 	//
-	void SerializeSystemCPUUsageTimes(CefRefPtr<CefValue> &output);
-	void SerializeSystemMemoryUsage(CefRefPtr<CefValue> &output);
-	void SerializeSystemHardwareProperties(CefRefPtr<CefValue> &output);
-	void SerializeLoadedHostModules(CefRefPtr<CefValue> &output);
+	void SerializeSystemCPUUsageTimes(CefRefPtr<CefValue> &output) override;
+	void SerializeSystemMemoryUsage(CefRefPtr<CefValue> &output) override;
+	void
+	SerializeSystemHardwareProperties(CefRefPtr<CefValue> &output) override;
+	void SerializeLoadedHostModules(CefRefPtr<CefValue> &output) override;
 
 private:
 	std::shared_ptr<SEAnalyticsEventsManager> m_analyticsEventsManager;

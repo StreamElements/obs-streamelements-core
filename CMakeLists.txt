@@ -735,18 +735,28 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEApiClientInfo.hpp
 	streamelements/SEApiMessageSink.hpp
 	streamelements/SEApiServices.hpp
+	streamelements/ISEStatePersistence.hpp
 	streamelements/SEStatePersistence.hpp
+	streamelements/ISEHostInfoProvider.hpp
 	streamelements/SEHostInfoProvider.hpp
+	streamelements/ISEHostStreamingManager.hpp
 	streamelements/SEHostStreamingManager.hpp
+	streamelements/ISEHostUpdateManager.hpp
 	streamelements/SEHostUpdateManager.hpp
+	streamelements/ISEShellServices.hpp
 	streamelements/SEShellServices.hpp
+	streamelements/ISEStatusBarMessageManager.hpp
 	streamelements/SEStatusBarMessageManager.hpp
 	streamelements/ISEPopupWindowManager.hpp
 	streamelements/SEPopupWindowManager.hpp
+	streamelements/ISEAuxiliaryControlsBuilder.hpp
 	streamelements/SEAuxiliaryControlsBuilder.hpp
+	streamelements/ISEObsApiTransactionManager.hpp
 	streamelements/SEObsApiTransactionManager.hpp
 	streamelements/SEObsOutputType.hpp
+	streamelements/ISEBrowserDialogManager.hpp
 	streamelements/SEBrowserDialogManager.hpp
+	streamelements/ISESessionManager.hpp
 	streamelements/SESessionManager.hpp
 	streamelements/SEHostEventDispatcher.hpp
 	streamelements/SECompositionServices.hpp
@@ -777,6 +787,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEMenuManager.hpp
 	streamelements/ISEBandwidthTestManager.hpp
 	streamelements/SEBandwidthTestManager.hpp
+	streamelements/ISEOutputSettingsManager.hpp
 	streamelements/SEOutputSettingsManager.hpp
 	streamelements/ISEWorkerManager.hpp
 	streamelements/SEWorkerManager.hpp
@@ -806,10 +817,13 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEExternalSceneDataProviderManager.hpp
 	streamelements/SEExternalSceneDataProviderSlobsClient.hpp
 	streamelements/SEExternalSceneDataProvider.hpp
+	streamelements/ISEHttpClient.hpp
 	streamelements/SEHttpClient.hpp
 	streamelements/ISENativeObsUIControlsManager.hpp
 	streamelements/SENativeObsUIControlsManager.hpp
+	streamelements/ISEProfilesManager.hpp
 	streamelements/SEProfilesManager.hpp
+	streamelements/ISEBackupManager.hpp
 	streamelements/SEBackupManager.hpp
 	streamelements/SECleanupManager.hpp
 	streamelements/SEPreviewManager.hpp
@@ -832,6 +846,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/ISESharedVideoCompositionManager.hpp
 	streamelements/SESharedVideoCompositionManager.hpp
 	streamelements/SEOutput.hpp
+	streamelements/ISEOutputManager.hpp
 	streamelements/SEOutputManager.hpp
 	streamelements/SEObsActiveSceneTracker.hpp
 	streamelements/canvas-config.hpp

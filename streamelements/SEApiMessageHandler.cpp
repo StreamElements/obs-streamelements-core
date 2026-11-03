@@ -25,10 +25,10 @@
 // did not change, only the type it is calling through.
 //
 #include "ISEAudioCompositionManager.hpp"
-#include "SEAuxiliaryControlsBuilder.hpp"
-#include "SEBackupManager.hpp"
+#include "ISEAuxiliaryControlsBuilder.hpp"
+#include "ISEBackupManager.hpp"
 #include "ISEBandwidthTestManager.hpp"
-#include "SEBrowserDialogManager.hpp"
+#include "ISEBrowserDialogManager.hpp"
 #include "ISEBrowserWidgetManager.hpp"
 //
 // Not a service: the handler's OWN browser widget, reached through
@@ -39,24 +39,24 @@
 #include "ISEConfig.hpp"
 #include "ISEExternalSceneDataProviderManager.hpp"
 #include "ISEHotkeyManager.hpp"
-#include "SEHttpClient.hpp"
+#include "ISEHttpClient.hpp"
 #include "ISEMenuManager.hpp"
 #include "ISEMessageBus.hpp"
 #include "ISENativeObsUIControlsManager.hpp"
-#include "SEObsApiTransactionManager.hpp"
+#include "ISEObsApiTransactionManager.hpp"
 #include "ISEObsSceneManager.hpp"
-#include "SEOutputManager.hpp"
-#include "SEOutputSettingsManager.hpp"
+#include "ISEOutputManager.hpp"
+#include "ISEOutputSettingsManager.hpp"
 #include "ISEPopupWindowManager.hpp"
-#include "SEProfilesManager.hpp"
-#include "SESessionManager.hpp"
-#include "SEHostInfoProvider.hpp"
-#include "SEHostStreamingManager.hpp"
-#include "SEHostUpdateManager.hpp"
-#include "SEShellServices.hpp"
+#include "ISEProfilesManager.hpp"
+#include "ISESessionManager.hpp"
+#include "ISEHostInfoProvider.hpp"
+#include "ISEHostStreamingManager.hpp"
+#include "ISEHostUpdateManager.hpp"
+#include "ISEShellServices.hpp"
 #include "ISESharedVideoCompositionManager.hpp"
-#include "SEStatePersistence.hpp"
-#include "SEStatusBarMessageManager.hpp"
+#include "ISEStatePersistence.hpp"
+#include "ISEStatusBarMessageManager.hpp"
 #include "ISEVideoCompositionManager.hpp"
 #include "ISEWorkerManager.hpp"
 #ifdef SE_ENABLE_WYVRN
@@ -193,7 +193,7 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 				// heap-allocated context has no business in
 				// the container's refcount.
 				//
-				std::shared_ptr<SEObsApiTransactionManager>
+				std::shared_ptr<ISEObsApiTransactionManager>
 					transactions;
 			};
 

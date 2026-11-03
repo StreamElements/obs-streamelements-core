@@ -6,17 +6,17 @@ class ISEBrowserWidgetManager;
 class ISEObsSceneManager;
 class ISEMenuManager;
 class ISEBandwidthTestManager;
-class SEOutputSettingsManager;
+class ISEOutputSettingsManager;
 class ISEWorkerManager;
 class ISEHotkeyManager;
 class SEPerformanceHistoryTracker;
 class SEAnalyticsEventsManager;
 class ISEExternalSceneDataProviderManager;
-class SEHttpClient;
+class ISEHttpClient;
 class SELocalFilesystemHttpServer;
 class ISENativeObsUIControlsManager;
-class SEProfilesManager;
-class SEBackupManager;
+class ISEProfilesManager;
+class ISEBackupManager;
 class SERazerWyvrnManager;
 class SECleanupManager;
 class SEPreviewManager;
@@ -26,21 +26,21 @@ class ISEMessageBus;
 class ISESharedVideoCompositionManager;
 class ISEVideoCompositionManager;
 class ISEAudioCompositionManager;
-class SEOutputManager;
+class ISEOutputManager;
 class SEObsActiveSceneTracker;
-class SEStatePersistence;
-class SEStatusBarMessageManager;
+class ISEStatePersistence;
+class ISEStatusBarMessageManager;
 class ISEPopupWindowManager;
-class SEBrowserDialogManager;
-class SESessionManager;
-class SEAuxiliaryControlsBuilder;
+class ISEBrowserDialogManager;
+class ISESessionManager;
+class ISEAuxiliaryControlsBuilder;
 class ISEConfig;
 class SEPleaseWaitWindow;
-class SEObsApiTransactionManager;
-class SEShellServices;
-class SEHostStreamingManager;
-class SEHostUpdateManager;
-class SEHostInfoProvider;
+class ISEObsApiTransactionManager;
+class ISEShellServices;
+class ISEHostStreamingManager;
+class ISEHostUpdateManager;
+class ISEHostInfoProvider;
 
 //
 // The objects SEGlobalStateManager::Initialize() creates, in one place, so
@@ -104,19 +104,19 @@ struct SEApiServices {
 	std::shared_ptr<ISEObsSceneManager> obsSceneManager;
 	std::shared_ptr<ISEMenuManager> menuManager;
 	std::shared_ptr<ISEBandwidthTestManager> bandwidthTestManager;
-	std::shared_ptr<SEOutputSettingsManager> outputSettingsManager;
+	std::shared_ptr<ISEOutputSettingsManager> outputSettingsManager;
 	std::shared_ptr<ISEWorkerManager> workerManager;
 	std::shared_ptr<ISEHotkeyManager> hotkeyManager;
 	std::shared_ptr<SEPerformanceHistoryTracker> performanceHistoryTracker;
 	std::shared_ptr<SEAnalyticsEventsManager> analyticsEventsManager;
 	std::shared_ptr<ISEExternalSceneDataProviderManager>
 		externalSceneDataProviderManager;
-	std::shared_ptr<SEHttpClient> httpClient;
+	std::shared_ptr<ISEHttpClient> httpClient;
 	std::shared_ptr<SELocalFilesystemHttpServer> localFilesystemHttpServer;
 	std::shared_ptr<ISENativeObsUIControlsManager>
 		nativeObsUIControlsManager;
-	std::shared_ptr<SEProfilesManager> profilesManager;
-	std::shared_ptr<SEBackupManager> backupManager;
+	std::shared_ptr<ISEProfilesManager> profilesManager;
+	std::shared_ptr<ISEBackupManager> backupManager;
 #ifdef SE_ENABLE_WYVRN
 	std::shared_ptr<SERazerWyvrnManager> razerWyvrnManager;
 #endif
@@ -145,9 +145,9 @@ struct SEApiServices {
 		sharedVideoCompositionManager;
 	std::shared_ptr<ISEVideoCompositionManager> videoCompositionManager;
 	std::shared_ptr<ISEAudioCompositionManager> audioCompositionManager;
-	std::shared_ptr<SEOutputManager> outputManager;
+	std::shared_ptr<ISEOutputManager> outputManager;
 	std::shared_ptr<SEObsActiveSceneTracker> obsActiveSceneTracker;
-	std::shared_ptr<SEStatePersistence> statePersistence;
+	std::shared_ptr<ISEStatePersistence> statePersistence;
 
 	//
 	// Extracted from SEGlobalStateManager, and declared after
@@ -155,13 +155,13 @@ struct SEApiServices {
 	// declaration order, and what these own has to go before the
 	// managers above that serialize it.
 	//
-	std::shared_ptr<SEStatusBarMessageManager> statusBarMessageManager;
+	std::shared_ptr<ISEStatusBarMessageManager> statusBarMessageManager;
 
 	//
 	// Opening something outside our own process: a URL in the default
 	// browser, a path in the file manager.
 	//
-	std::shared_ptr<SEShellServices> shellServices;
+	std::shared_ptr<ISEShellServices> shellServices;
 
 	//
 	// Three host-level concerns that had no owner at all: OBS's own
@@ -169,18 +169,18 @@ struct SEApiServices {
 	// read-only description of the host and machine. Each was libobs
 	// called straight from a handler body.
 	//
-	std::shared_ptr<SEHostStreamingManager> hostStreamingManager;
-	std::shared_ptr<SEHostUpdateManager> hostUpdateManager;
-	std::shared_ptr<SEHostInfoProvider> hostInfoProvider;
+	std::shared_ptr<ISEHostStreamingManager> hostStreamingManager;
+	std::shared_ptr<ISEHostUpdateManager> hostUpdateManager;
+	std::shared_ptr<ISEHostInfoProvider> hostInfoProvider;
 	std::shared_ptr<ISEPopupWindowManager> popupWindowManager;
-	std::shared_ptr<SEBrowserDialogManager> browserDialogManager;
-	std::shared_ptr<SESessionManager> sessionManager;
+	std::shared_ptr<ISEBrowserDialogManager> browserDialogManager;
+	std::shared_ptr<ISESessionManager> sessionManager;
 
 	//
 	// Owns no widget and borrows no raw pointer, so unlike the four above
 	// it its position here is not load-bearing.
 	//
-	std::shared_ptr<SEAuxiliaryControlsBuilder> auxiliaryControlsBuilder;
+	std::shared_ptr<ISEAuxiliaryControlsBuilder> auxiliaryControlsBuilder;
 
 	//
 	// The plug-in's own ini. First to be constructed and last to be
@@ -196,5 +196,5 @@ struct SEApiServices {
 	// map in SEUtils (CORE-757).
 	//
 	std::shared_ptr<SEPleaseWaitWindow> pleaseWaitWindow;
-	std::shared_ptr<SEObsApiTransactionManager> obsApiTransactionManager;
+	std::shared_ptr<ISEObsApiTransactionManager> obsApiTransactionManager;
 };

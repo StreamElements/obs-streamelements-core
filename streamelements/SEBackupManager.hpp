@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ISEBackupManager.hpp"
+
 #include "cef-headers.hpp"
 
 #include <memory>
@@ -15,8 +17,7 @@ class SECleanupManager;
 class SELocalFilesystemHttpServer;
 class SEConfig;
 
-class SEBackupManager
-{
+class SEBackupManager : public ISEBackupManager {
 public:
 	//
 	// Takes the cleanup manager it schedules temporary paths with, rather
@@ -34,18 +35,18 @@ public:
 	~SEBackupManager();
 
 public:
-	void
-	QueryLocalBackupPackageReferencedFiles(CefRefPtr<CefValue> input,
-					       CefRefPtr<CefValue> &output);
+	void QueryLocalBackupPackageReferencedFiles(
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 
 	void CreateLocalBackupPackage(CefRefPtr<CefValue> input,
-					 CefRefPtr<CefValue> &output);
+				      CefRefPtr<CefValue> &output) override;
 
 	void QueryBackupPackageContent(CefRefPtr<CefValue> input,
-				       CefRefPtr<CefValue> &output);
+				       CefRefPtr<CefValue> &output) override;
 
 	void RestoreBackupPackageContent(CefRefPtr<CefValue> input,
-					 CefRefPtr<CefValue> &output);
+					 CefRefPtr<CefValue> &output) override;
 
 private:
 	std::shared_ptr<SECleanupManager> m_cleanupManager;

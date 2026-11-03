@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ISEAuxiliaryControlsBuilder.hpp"
+
 //
 // Menus, actions, icons and control widgets built from a CefValue
 // description, and the host API call an action invokes.
@@ -33,7 +35,8 @@ class QWidget;
 class QPixmap;
 
 class SEAuxiliaryControlsBuilder
-	: public std::enable_shared_from_this<SEAuxiliaryControlsBuilder> {
+	: public std::enable_shared_from_this<SEAuxiliaryControlsBuilder>,
+	  public ISEAuxiliaryControlsBuilder {
 public:
 	SEAuxiliaryControlsBuilder(std::weak_ptr<SEApiServices> apiServices);
 	~SEAuxiliaryControlsBuilder();
@@ -65,7 +68,7 @@ public:
 	// exec(QCursor::pos()) itself, which is the only reason the host API
 	// surface named a Qt type at all.
 	//
-	bool ShowMenuAtMousePointerPosition(CefRefPtr<CefValue> input);
+	bool ShowMenuAtMousePointerPosition(CefRefPtr<CefValue> input) override;
 
 	QWidget *DeserializeAuxiliaryControlWidget(
 		CefRefPtr<CefValue> input,

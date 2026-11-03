@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ISEBrowserDialogManager.hpp"
+
 #include "cef-headers.hpp"
 
 #include <future>
@@ -24,7 +26,7 @@ struct SEApiServices;
 // forever, because the promise existed only inside the finished handler's
 // capture. The registry holds it now, so the destructor can fulfil it.
 //
-class SEBrowserDialogManager {
+class SEBrowserDialogManager : public ISEBrowserDialogManager {
 public:
 	//
 	// The bundle is kept weakly. Each dialog holds a strong reference to
@@ -37,18 +39,21 @@ public:
 	~SEBrowserDialogManager();
 
 	bool DeserializeModalDialog(CefRefPtr<CefValue> input,
-				    CefRefPtr<CefValue> &output);
+				    CefRefPtr<CefValue> &output) override;
 
 	std::shared_ptr<std::promise<CefRefPtr<CefValue>>>
-	DeserializeNonModalDialog(CefRefPtr<CefValue> input);
+	DeserializeNonModalDialog(CefRefPtr<CefValue> input) override;
 
 	bool HasNonModalDialog(const char *id);
 	std::string GetNonModalDialogUrl(const char *id);
-	void SerializeAllNonModalDialogs(CefRefPtr<CefValue> &output);
-	bool DeserializeCloseNonModalDialogsByIds(CefRefPtr<CefValue> input);
-	bool DeserializeFocusNonModalDialogById(CefRefPtr<CefValue> input);
+	void SerializeAllNonModalDialogs(CefRefPtr<CefValue> &output) override;
+	bool DeserializeCloseNonModalDialogsByIds(
+		CefRefPtr<CefValue> input) override;
+	bool
+	DeserializeFocusNonModalDialogById(CefRefPtr<CefValue> input) override;
 	bool DeserializeNonModalDialogDimensionsById(
-		CefRefPtr<CefValue> dialogId, CefRefPtr<CefValue> dimensions);
+		CefRefPtr<CefValue> dialogId,
+		CefRefPtr<CefValue> dimensions) override;
 
 private:
 	QMainWindow *m_mainWindow = nullptr;

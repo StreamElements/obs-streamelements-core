@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ISEHostUpdateManager.hpp"
+
 //
 // The release channel this installation follows, and asking the updater to
 // look for a new build.
@@ -22,7 +24,7 @@
 
 #include "cef-headers.hpp"
 
-class SEHostUpdateManager {
+class SEHostUpdateManager : public ISEHostUpdateManager {
 public:
 	SEHostUpdateManager();
 	~SEHostUpdateManager();
@@ -33,21 +35,23 @@ public:
 	// what the handler answered before, rather than a half-filled
 	// dictionary.
 	//
-	void SerializeReleaseGroupProperties(CefRefPtr<CefValue> &output);
+	void
+	SerializeReleaseGroupProperties(CefRefPtr<CefValue> &output) override;
 
 	//
 	// Both keys or neither: output is left untouched unless the input
 	// carries both as strings, exactly as the handler body decided.
 	//
-	void DeserializeReleaseGroupProperties(CefRefPtr<CefValue> input,
-					       CefRefPtr<CefValue> &output);
+	void
+	DeserializeReleaseGroupProperties(CefRefPtr<CefValue> input,
+					  CefRefPtr<CefValue> &output) override;
 
 	//
 	// Silent: the updater checks and installs without putting anything up
 	// in front of the user. This is what a page asks for.
 	//
 	void RequestCheckForUpdates(bool allowDowngrade, bool forceInstall,
-				    bool allowUseLastResponse);
+				    bool allowUseLastResponse) override;
 
 	//
 	// Interactive: the updater shows its own UI. This is what the menu

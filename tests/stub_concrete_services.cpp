@@ -431,6 +431,19 @@ void SEOutputManager::TriggerSplitRecordingOutputById(CefRefPtr<CefValue> a0,
 			    "TriggerSplitRecordingOutputById", a1);
 }
 
+//
+// Not called by any handler body -- SESessionManager calls it when signing
+// out, and that file is not compiled here. It needs a definition anyway now
+// that ISEOutputManager declares it pure virtual, because the vtable does.
+//
+// Which is the interface earning its keep in the most direct way available:
+// as a plain stub list this method was simply absent, and nothing noticed.
+//
+void SEOutputManager::Reset()
+{
+	se_fakes::Record("SEOutputManager", "Reset");
+}
+
 // --- SEOutputSettingsManager: 7 method(s) ---
 
 void SEOutputSettingsManager::GetAvailableAudioEncoders(CefRefPtr<CefValue> &a0)

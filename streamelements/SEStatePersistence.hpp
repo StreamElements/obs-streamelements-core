@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ISEStatePersistence.hpp"
+
 #include "cef-headers.hpp"
 
 #include <memory>
@@ -21,7 +23,7 @@ class SEConfig;
 // wanted to save state had to reach for the singleton to do it. The managers
 // it reads are injected, so it can be driven with any set of them.
 //
-class SEStatePersistence {
+class SEStatePersistence : public ISEStatePersistence {
 public:
 	//
 	// The managers are borrowed, not owned. The owner is
@@ -47,11 +49,11 @@ public:
 	//
 	void SetEnabled(bool enabled) { m_enabled = enabled; }
 
-	void PersistState(bool sendEventToGuest = true);
+	void PersistState(bool sendEventToGuest = true) override;
 	void RestoreState();
 
-	void SerializeUserInterfaceState(CefRefPtr<CefValue> &output);
-	bool DeserializeUserInterfaceState(CefRefPtr<CefValue> input);
+	void SerializeUserInterfaceState(CefRefPtr<CefValue> &output) override;
+	bool DeserializeUserInterfaceState(CefRefPtr<CefValue> input) override;
 
 private:
 	QMainWindow *m_mainWindow = nullptr;

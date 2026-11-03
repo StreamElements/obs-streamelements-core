@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ISEHostStreamingManager.hpp"
+
 //
 // OBS's own single stream: whether it is running, and asking it to start or
 // stop.
@@ -23,7 +25,7 @@
 
 #include "cef-headers.hpp"
 
-class SEHostStreamingManager {
+class SEHostStreamingManager : public ISEHostStreamingManager {
 public:
 	SEHostStreamingManager();
 	~SEHostStreamingManager();
@@ -34,12 +36,12 @@ public:
 	// is the shape the host API method already answered with, and pages
 	// read the key.
 	//
-	void SerializeStreamingStatus(CefRefPtr<CefValue> &output);
+	void SerializeStreamingStatus(CefRefPtr<CefValue> &output) override;
 
 	//
 	// Asks OBS to stop. Reached from a page.
 	//
-	void RequestStop();
+	void RequestStop() override;
 
 public:
 	//

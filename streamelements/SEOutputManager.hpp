@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ISEOutputManager.hpp"
+
 #include "SEObsOutputType.hpp"
 #include "cef-headers.hpp"
 
@@ -21,7 +23,7 @@ class SEVideoCompositionManager;
 class SEAudioCompositionManager;
 class SEHostEventDispatcher;
 
-class SEOutputManager {
+class SEOutputManager : public ISEOutputManager {
 private:
 	std::shared_mutex m_mutex;
 	std::map<ObsOutputType,
@@ -49,27 +51,28 @@ public:
 
 public:
 	void DeserializeOutput(ObsOutputType outputType,
-			  CefRefPtr<CefValue> input,
-			  CefRefPtr<CefValue> &output);
+			       CefRefPtr<CefValue> input,
+			       CefRefPtr<CefValue> &output) override;
 	void SerializeAllOutputs(ObsOutputType outputType,
-				 CefRefPtr<CefValue> &output);
+				 CefRefPtr<CefValue> &output) override;
 	void RemoveOutputsByIds(ObsOutputType outputType,
-			   CefRefPtr<CefValue> input,
-			   CefRefPtr<CefValue> &output);
+				CefRefPtr<CefValue> input,
+				CefRefPtr<CefValue> &output) override;
 	void EnableOutputsByIds(ObsOutputType outputType,
-			   CefRefPtr<CefValue> input,
-			   CefRefPtr<CefValue> &output);
+				CefRefPtr<CefValue> input,
+				CefRefPtr<CefValue> &output) override;
 	void DisableOutputsByIds(ObsOutputType outputType,
-			    CefRefPtr<CefValue> input,
-			    CefRefPtr<CefValue> &output);
+				 CefRefPtr<CefValue> input,
+				 CefRefPtr<CefValue> &output) override;
 
-	void TriggerSplitRecordingOutputById(CefRefPtr<CefValue> input,
-					     CefRefPtr<CefValue> &output);
+	void
+	TriggerSplitRecordingOutputById(CefRefPtr<CefValue> input,
+					CefRefPtr<CefValue> &output) override;
 
 	void TriggerSaveReplayBufferById(CefRefPtr<CefValue> input,
-					 CefRefPtr<CefValue> &output);
+					 CefRefPtr<CefValue> &output) override;
 
-	void Reset();
+	void Reset() override;
 
 private:
 	bool GetValidIds(ObsOutputType outputType,

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ISEShellServices.hpp"
+
 //
 // Handing something to the desktop shell: a URL to the default browser, a
 // path to the file manager.
@@ -21,7 +23,7 @@
 
 #include <string>
 
-class SEShellServices {
+class SEShellServices : public ISEShellServices {
 public:
 	SEShellServices();
 	~SEShellServices();
@@ -37,7 +39,7 @@ public:
 	// method existed should not start seeing `false` because the code
 	// moved.
 	//
-	bool OpenDefaultBrowser(std::string url);
+	bool OpenDefaultBrowser(std::string url) override;
 
 	//
 	// Shows the file in the platform's file manager, selected where the
@@ -45,5 +47,5 @@ public:
 	// was launched.
 	//
 	void RevealFileInGraphicalShell(CefRefPtr<CefValue> input,
-					CefRefPtr<CefValue> &output);
+					CefRefPtr<CefValue> &output) override;
 };

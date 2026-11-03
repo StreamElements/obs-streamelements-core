@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ISEObsApiTransactionManager.hpp"
+
 //
 // Long-running host API calls that must not be interrupted: the caller opens
 // a transaction, OBS stops autosaving its scene collection for the duration,
@@ -22,7 +24,8 @@
 class SEPleaseWaitWindow;
 
 class SEObsApiTransactionManager
-	: public std::enable_shared_from_this<SEObsApiTransactionManager> {
+	: public std::enable_shared_from_this<SEObsApiTransactionManager>,
+	  public ISEObsApiTransactionManager {
 public:
 	SEObsApiTransactionManager(
 		std::shared_ptr<SEPleaseWaitWindow> pleaseWaitWindow);
@@ -34,11 +37,11 @@ public:
 	// dialog and begins the autosave deferral; both are undone when the
 	// last one closes.
 	//
-	std::string Create(int timeoutMilliseconds = 60000);
+	std::string Create(int timeoutMilliseconds = 60000) override;
 
 	// Closes one by id. Unknown ids are ignored, which is what makes the
 	// timeout and an explicit completion safe to race.
-	void Complete(std::string id);
+	void Complete(std::string id) override;
 
 	//
 	// The autosave deferral on its own, with no dialog and no timeout.
@@ -51,8 +54,8 @@ public:
 	// deferral did not own that use of it. libobs counts the deferrals,
 	// so this nests with Create()/Complete() safely.
 	//
-	void BeginDeferSave();
-	void EndDeferSave();
+	void BeginDeferSave() override;
+	void EndDeferSave() override;
 
 private:
 	class Handle;

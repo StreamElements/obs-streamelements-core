@@ -1,9 +1,10 @@
 #pragma once
 
+#include "ISEOutputSettingsManager.hpp"
+
 #include "../cef-headers.hpp"
 
-class SEOutputSettingsManager
-{
+class SEOutputSettingsManager : public ISEOutputSettingsManager {
 public:
 	SEOutputSettingsManager();
 	virtual ~SEOutputSettingsManager();
@@ -17,17 +18,17 @@ public:
 	// it through -- and made the two kinds a local in a handler body.
 	// The vocabulary is on the implementation side now.
 	//
-	void GetAvailableEncoders(CefRefPtr<CefValue> &result);
-	void GetAvailableVideoEncoders(CefRefPtr<CefValue> &result);
-	void GetAvailableAudioEncoders(CefRefPtr<CefValue> &result);
+	void GetAvailableEncoders(CefRefPtr<CefValue> &result) override;
+	void GetAvailableVideoEncoders(CefRefPtr<CefValue> &result) override;
+	void GetAvailableAudioEncoders(CefRefPtr<CefValue> &result) override;
 
-	bool SetStreamingSettings(CefRefPtr<CefValue> input);
+	bool SetStreamingSettings(CefRefPtr<CefValue> input) override;
 
-	bool SetEncodingSettings(CefRefPtr<CefValue> input);
-	bool GetEncodingSettings(CefRefPtr<CefValue>& output);
+	bool SetEncodingSettings(CefRefPtr<CefValue> input) override;
+	bool GetEncodingSettings(CefRefPtr<CefValue> &output) override;
 
 	void GetEncoderProperties(CefRefPtr<CefValue> input,
-				  CefRefPtr<CefValue> &output);
+				  CefRefPtr<CefValue> &output) override;
 
 private:
 	void StopAllOutputs();

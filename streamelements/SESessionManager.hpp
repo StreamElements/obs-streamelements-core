@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ISESessionManager.hpp"
+
 #include <memory>
 
 class QMainWindow;
@@ -18,14 +20,19 @@ struct SEApiServices;
 // also clears STARTUP_FLAGS_SIGNED_IN. SwitchToOBSStudio() is the way back,
 // behind a confirmation.
 //
-class SESessionManager {
+class SESessionManager : public ISESessionManager {
 public:
 	//
-	// Default is a plain reset; OnBoarding and Import each add a query
-	// parameter to the on-boarding URL so the page knows which flow it is
-	// showing.
+	// UiModifier -- Default is a plain reset; OnBoarding and Import each
+	// add a query parameter to the on-boarding URL so the page knows
+	// which flow it is showing.
 	//
-	enum UiModifier { Default = 0, OnBoarding = 1, Import = 2 };
+	// It is inherited from ISESessionManager rather than declared here,
+	// because Reset() takes one and Reset() is on that contract.
+	// Redeclaring it would SHADOW the interface's: Reset's second
+	// parameter would become a different type, the method would override
+	// nothing, and this class would stay abstract.
+	//
 
 	//
 	// The cookie manager is borrowed: SEGlobalStateManager creates it from
@@ -48,8 +55,8 @@ public:
 	~SESessionManager();
 
 	void Reset(bool deleteAllCookies = true,
-		   UiModifier uiModifier = Default);
-	void DeleteCookies();
+		   UiModifier uiModifier = Default) override;
+	void DeleteCookies() override;
 
 	void StartOnBoardingUI(UiModifier uiModifier);
 	void StopOnBoardingUI();
