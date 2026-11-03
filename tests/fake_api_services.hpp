@@ -747,7 +747,7 @@ public:
 };
 
 //
-// ISEMessageBus -- 8 method(s).
+// ISEMessageBus -- 9 method(s).
 //
 class FakeMessageBus : public ISEMessageBus, public FakeService {
 public:
@@ -757,6 +757,11 @@ public:
 			 message_destination_filter_flags_t type) override
 	{
 		Record("AddListener", target, type);
+	}
+
+	void RemoveListener(std::string target) override
+	{
+		Record("RemoveListener", target);
 	}
 
 	void DeserializeBrowserHttpServer(std::string target,

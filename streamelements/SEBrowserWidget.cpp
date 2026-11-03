@@ -453,6 +453,8 @@ SEBrowserWidget::SEBrowserWidget(
 	m_cefWidget->setStartupScript(script + m_executeJavaScriptCodeOnLoad);
 
 	if (apiServices && apiServices->messageBus) {
+		m_messageBus = apiServices->messageBus;
+
 		apiServices->messageBus->AddListener(
 			m_clientId, m_messageDestinationFlags);
 	}
@@ -538,6 +540,19 @@ void SEBrowserWidget::DestroyBrowser()
 
 	if (m_requestedApiMessageHandler) {
 		m_requestedApiMessageHandler->SetBrowserWidget(nullptr);
+	}
+
+	{
+		//
+		// Pairs with the AddListener in the constructor. Without it
+		// the bus kept this target -- and the SEHttpServerManager it
+		// made for it -- for the life of the process.
+		//
+		auto messageBus = m_messageBus.lock();
+
+		if (messageBus) {
+			messageBus->RemoveListener(m_clientId);
+		}
 	}
 
 	if (s_widgets.count(m_clientId)) {

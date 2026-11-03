@@ -75,7 +75,7 @@ public:
 public:
 	void AddListener(std::string target,
 			 message_destination_filter_flags_t type) override;
-	void RemoveListener(std::string target);
+	void RemoveListener(std::string target) override;
 
 public:
 	void DeserializeBrowserHttpServer(std::string target,

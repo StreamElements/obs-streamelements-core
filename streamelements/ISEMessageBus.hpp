@@ -66,6 +66,23 @@ public:
 	virtual void AddListener(std::string target,
 				 message_destination_filter_flags_t type) = 0;
 
+	//
+	// Unregisters it again, from the same widget's teardown.
+	//
+	// On the contract because a second container consumer calls it, which
+	// is the rule that decides what belongs here -- what only the root
+	// calls does not.
+	//
+	// Nothing called this at all until then, so every target a browser
+	// ever registered stayed in the listener list for the life of the
+	// process, together with the SEHttpServerManager AddListener creates
+	// for it. Bounded for docks, which reuse their id when reopened, but
+	// pop-ups and background workers mint a new one each time -- and a
+	// notify to a departed target was dispatched to a websocket client
+	// that no longer exists.
+	//
+	virtual void RemoveListener(std::string target) = 0;
+
 public:
 	//
 	// The per-listener HTTP servers a page can ask the bus to run on its

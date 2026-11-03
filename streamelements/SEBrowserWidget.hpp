@@ -87,6 +87,15 @@ private:
 	std::weak_ptr<ISEVideoCompositionManager> m_videoCompositionManager;
 
 	//
+	// Held for one reason: DestroyBrowser() has to unregister the
+	// listener the constructor registered, and the widget deliberately
+	// does not keep the services bundle (C5). Weak for the reason above
+	// -- if the bus is already gone there is no listener list left to
+	// remove this target from.
+	//
+	std::weak_ptr<ISEMessageBus> m_messageBus;
+
+	//
 	// Three, now: a widget announces its own visibility to its page and
 	// rebinds window.host.hostContainerHidden when it changes.
 	//
