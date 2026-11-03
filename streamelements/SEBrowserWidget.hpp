@@ -99,7 +99,7 @@ private:
 	// Three, now: a widget announces its own visibility to its page and
 	// rebinds window.host.hostContainerHidden when it changes.
 	//
-	std::weak_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+	std::weak_ptr<ISEHostEventDispatcher> m_hostEventDispatcher;
 	SEMessageBus::message_destination_filter_flags_t
 		m_messageDestinationFlags;
 

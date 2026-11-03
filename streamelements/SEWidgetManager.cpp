@@ -228,7 +228,7 @@ bool SEWidgetManager::AddDockWidget(
 	class TrackedDockWidget : public QDockWidget {
 	public:
 		TrackedDockWidget(
-			std::shared_ptr<SEHostEventDispatcher> dispatcher,
+			std::shared_ptr<ISEHostEventDispatcher> dispatcher,
 			const QString &title, QWidget *parent = Q_NULLPTR,
 			Qt::WindowFlags flags = Qt::WindowFlags())
 			: QDockWidget(title, parent, flags),
@@ -243,7 +243,7 @@ bool SEWidgetManager::AddDockWidget(
 		// reach through, and a dock outlives any particular call. Not
 		// a ring -- nothing the dispatcher holds owns a dock.
 		//
-		std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+		std::shared_ptr<ISEHostEventDispatcher> m_hostEventDispatcher;
 
 	protected:
 		virtual void resizeEvent(QResizeEvent *event) override

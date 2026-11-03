@@ -758,6 +758,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEBrowserDialogManager.hpp
 	streamelements/ISESessionManager.hpp
 	streamelements/SESessionManager.hpp
+	streamelements/ISEHostEventDispatcher.hpp
 	streamelements/SEHostEventDispatcher.hpp
 	streamelements/SECompositionServices.hpp
 	streamelements/SEUtils/SECryptoUtils.hpp
@@ -801,6 +802,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEProgressDialog.hpp
 	streamelements/SEPerformanceHistoryTracker.hpp
 	streamelements/SENetworkDialog.hpp
+	streamelements/ISEAnalyticsEventsManager.hpp
 	streamelements/SEAnalyticsEventsManager.hpp
 	streamelements/SECrashHandler.hpp
 	streamelements/SECrashContext.hpp
@@ -825,6 +827,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEProfilesManager.hpp
 	streamelements/ISEBackupManager.hpp
 	streamelements/SEBackupManager.hpp
+	streamelements/ISECleanupManager.hpp
 	streamelements/SECleanupManager.hpp
 	streamelements/SEPreviewManager.hpp
 	streamelements/SESceneItemsMonitor.hpp

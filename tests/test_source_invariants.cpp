@@ -3976,7 +3976,7 @@ static void check_deferred_deletes_hold_services_weakly()
 		//
 		{"ISEApiMessageSink", "m_apiServer"},
 		{"ISEVideoCompositionManager", "m_videoCompositionManager"},
-		{"SEHostEventDispatcher", "m_hostEventDispatcher"},
+		{"ISEHostEventDispatcher", "m_hostEventDispatcher"},
 	};
 
 	for (const Handle &h : widgetHandles) {
@@ -6066,6 +6066,149 @@ static void check_contract_default_arguments_agree_with_their_overrides()
 	      "known defaulted methods -- it would then pass vacuously");
 }
 
+//
+// --- The dispatch gate opens before the first browser widget exists.
+//
+// services->ready is what SEApiMessageHandlerBase::IsPluginInitialized()
+// tests, and a message arriving while it is false is answered with
+// `return true` -- reported as handled, nothing registered, no window.host
+// built. MSG_ON_CONTEXT_CREATED arrives once per page context and nothing
+// re-sends it or polls, so a page that lands in that window keeps a live
+// websocket with no host API on it for the life of that context.
+//
+// It used to be set at the very end of Initialize(), about 120 lines after
+// the docks, workers and on-boarding central widget are created. Nothing
+// was ever observed landing in that window, because CEF takes seconds to
+// get a page connected and the window is a fraction of a millisecond --
+// the protection was latency, not ordering.
+//
+// Moving the flag above widget creation makes it ordering, and the
+// guarantee is only as good as the statement order, which is exactly the
+// kind of thing a later edit undoes without noticing. Hence this check.
+//
+// THE PREMISE, pinned by the second half below, because the whole argument
+// rests on it: every client of the websocket API server is one of our own
+// browser widgets. If something else could connect -- an obs-browser
+// source, an external process -- then "no widget yet" would not mean "no
+// client yet", and the flag's position would guarantee nothing.
+//
+static void check_the_dispatch_gate_opens_before_the_first_browser_widget()
+{
+	const std::string cpp = strip_line_comments(
+		slurp("streamelements/SEGlobalStateManager.cpp"));
+
+	const std::string init =
+		function_body(cpp, "void SEGlobalStateManager::Initialize");
+
+	check(!init.empty(),
+	      "cannot find SEGlobalStateManager::Initialize -- this invariant "
+	      "would then pass vacuously (CORE-757)");
+
+	if (init.empty())
+		return;
+
+	const std::size_t gate = init.find("ready = true");
+
+	//
+	// The two branches that build the first browser widgets: the regular
+	// path restores the docks and background workers, the on-boarding
+	// path pushes the central widget through the session reset.
+	//
+	const std::size_t restore = init.find("RestoreState()");
+	const std::size_t onboarding = init.find("Reset(false)");
+
+	check(gate != std::string::npos,
+	      "Initialize() no longer sets services->ready -- this invariant "
+	      "needs updating (CORE-757)");
+
+	check(restore != std::string::npos,
+	      "Initialize() no longer calls RestoreState() -- this invariant "
+	      "needs updating (CORE-757)");
+
+	check(onboarding != std::string::npos,
+	      "Initialize() no longer calls Reset(false) for on-boarding -- "
+	      "this invariant needs updating (CORE-757)");
+
+	if (gate == std::string::npos || restore == std::string::npos ||
+	    onboarding == std::string::npos)
+		return;
+
+	check(gate < onboarding && gate < restore,
+	      "services->ready must be set BEFORE the block that creates the "
+	      "docks, the background workers and the on-boarding central "
+	      "widget. Those widgets are this websocket server's only "
+	      "clients, so setting it first is what makes it impossible for "
+	      "a page to ever find it false -- and a page that does gets no "
+	      "window.host for the life of its context, because "
+	      "context-created arrives once and nothing retries (CORE-757)");
+
+	//
+	// The premise. Both are single-site today, and both have to stay
+	// that way for the ordering above to mean anything:
+	//
+	//   RegisterMessageHandler -- becoming a client of the server
+	//   setStartupScript       -- receiving the shim that builds
+	//                             window.host and knows the port
+	//
+	// A second caller of either is not necessarily wrong, but it is a
+	// new kind of client, and whoever adds one has to re-answer "can
+	// this connect before Initialize() reaches the gate?".
+	//
+	struct Premise {
+		const char *call;
+		const char *why;
+	};
+
+	const Premise premises[] = {
+		{"RegisterMessageHandler(", "registers a websocket API client"},
+		{"setStartupScript(",
+		 "injects the shim that builds window.host"},
+	};
+
+	for (const Premise &p : premises) {
+		int callers = 0;
+
+		const char *const files[] = {
+			"streamelements/SEBrowserWidget.cpp",
+			"streamelements/SEBrowserWidgetManager.cpp",
+			"streamelements/SEWidgetManager.cpp",
+			"streamelements/SEWorkerManager.cpp",
+			"streamelements/SEPopupWindowManager.cpp",
+			"streamelements/SEBrowserDialog.cpp",
+			"streamelements/SENativeObsUIControlsManager.cpp",
+			"streamelements/SEGlobalStateManager.cpp",
+		};
+
+		for (const char *const file : files) {
+			const std::string src =
+				strip_line_comments(slurp(file));
+
+			for (std::size_t at = src.find(p.call);
+			     at != std::string::npos;
+			     at = src.find(p.call, at + 1)) {
+				//
+				// The declaration in a header is not a call;
+				// these are all .cpp files, so any occurrence
+				// outside a comment is one.
+				//
+				++callers;
+			}
+		}
+
+		check(callers == 1,
+		      (std::string("exactly one site may call ") + p.call +
+		       ") -- it " + p.why +
+		       ", and the dispatch-gate ordering above is only sound "
+		       "while our own browser widgets are the server's only "
+		       "clients. Found " +
+		       std::to_string(callers) +
+		       ". A new one is not necessarily wrong, but it has to "
+		       "re-answer whether it can connect before Initialize() "
+		       "reaches the gate (CORE-757)")
+			      .c_str());
+	}
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -6139,6 +6282,7 @@ int main()
 	check_no_platform_guard_uses_the_bare_APPLE_macro();
 	check_no_shared_mutex_is_acquired_recursively();
 	check_contract_default_arguments_agree_with_their_overrides();
+	check_the_dispatch_gate_opens_before_the_first_browser_widget();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ISEAnalyticsEventsManager.hpp"
+
 #include "SEUtils.hpp"
 #include "deps/moodycamel/concurrentqueue.h"
 #include "deps/moodycamel/blockingconcurrentqueue.h"
@@ -13,8 +15,7 @@
 
 class SEConfig;
 
-class SEAnalyticsEventsManager
-{
+class SEAnalyticsEventsManager : public ISEAnalyticsEventsManager {
 public:
 	//
 	// The config is read once, here, for the analytics app id. Taken
@@ -38,9 +39,10 @@ public:
 		AddRawEvent(eventName, props, fields, true);
 	}
 
-	void trackEvent(const char *eventName,
-			json11::Json::object props = json11::Json::object{},
-			json11::Json::array fields = json11::Json::array{})
+	void
+	trackEvent(const char *eventName,
+		   json11::Json::object props = json11::Json::object{},
+		   json11::Json::array fields = json11::Json::array{}) override
 	{
 		if (!eventName) {
 			return;

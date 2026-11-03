@@ -10,7 +10,7 @@ class ISEOutputSettingsManager;
 class ISEWorkerManager;
 class ISEHotkeyManager;
 class SEPerformanceHistoryTracker;
-class SEAnalyticsEventsManager;
+class ISEAnalyticsEventsManager;
 class ISEExternalSceneDataProviderManager;
 class ISEHttpClient;
 class SELocalFilesystemHttpServer;
@@ -18,10 +18,10 @@ class ISENativeObsUIControlsManager;
 class ISEProfilesManager;
 class ISEBackupManager;
 class SERazerWyvrnManager;
-class SECleanupManager;
+class ISECleanupManager;
 class SEPreviewManager;
 class ISEApiMessageSink;
-class SEHostEventDispatcher;
+class ISEHostEventDispatcher;
 class ISEMessageBus;
 class ISESharedVideoCompositionManager;
 class ISEVideoCompositionManager;
@@ -132,7 +132,7 @@ struct SEApiServices {
 	std::shared_ptr<ISEWorkerManager> workerManager;
 	std::shared_ptr<ISEHotkeyManager> hotkeyManager;
 	std::shared_ptr<SEPerformanceHistoryTracker> performanceHistoryTracker;
-	std::shared_ptr<SEAnalyticsEventsManager> analyticsEventsManager;
+	std::shared_ptr<ISEAnalyticsEventsManager> analyticsEventsManager;
 	std::shared_ptr<ISEExternalSceneDataProviderManager>
 		externalSceneDataProviderManager;
 	std::shared_ptr<ISEHttpClient> httpClient;
@@ -144,7 +144,7 @@ struct SEApiServices {
 #ifdef SE_ENABLE_WYVRN
 	std::shared_ptr<SERazerWyvrnManager> razerWyvrnManager;
 #endif
-	std::shared_ptr<SECleanupManager> cleanupManager;
+	std::shared_ptr<ISECleanupManager> cleanupManager;
 	std::shared_ptr<SEPreviewManager> previewManager;
 	//
 	// The transport, as an interface. The root holds the concrete
@@ -158,7 +158,7 @@ struct SEApiServices {
 	// Host events on their way to pages. Everything that announces a
 	// host* event holds this rather than fetching the server.
 	//
-	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher;
+	std::shared_ptr<ISEHostEventDispatcher> hostEventDispatcher;
 
 	//
 	// Local and external event listeners -- pages, background workers,

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ISEHostEventDispatcher.hpp"
+
 #include "cef-headers.hpp"
 
 #include <memory>
@@ -23,19 +25,20 @@ class SEWebsocketApiServer;
 // Holding the server is not a ring: nothing the server owns owns this.
 //
 class SEHostEventDispatcher
-	: public std::enable_shared_from_this<SEHostEventDispatcher> {
+	: public std::enable_shared_from_this<SEHostEventDispatcher>,
+	  public ISEHostEventDispatcher {
 public:
 	SEHostEventDispatcher(std::shared_ptr<SEWebsocketApiServer> apiServer);
 	~SEHostEventDispatcher();
 
 	void DispatchJSEventGlobal(std::string event,
-				   std::string eventArgsJson);
+				   std::string eventArgsJson) override;
 
 	void DispatchJSEventContainer(std::string target, std::string event,
-				      std::string eventArgsJson);
+				      std::string eventArgsJson) override;
 
 	void DispatchClientMessage(std::string target,
-				   CefRefPtr<CefProcessMessage> msg);
+				   CefRefPtr<CefProcessMessage> msg) override;
 
 	//
 	// Both debounce by 250ms on the Qt thread, so they can be called from
@@ -46,7 +49,7 @@ public:
 	// announce, and that is what the availability check inside the old
 	// free functions was standing in for.
 	//
-	void AdviseHostUserInterfaceStateChanged();
+	void AdviseHostUserInterfaceStateChanged() override;
 	void AdviseHostHotkeyBindingsChanged();
 
 private:
