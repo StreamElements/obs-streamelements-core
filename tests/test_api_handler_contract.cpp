@@ -871,16 +871,25 @@ const Row rows[] = {
 	//
 	// Destructive on a live profile -- they sign the account out -- so
 	// these three rows are the only coverage these bodies will ever
-	// have. completeOnBoarding reads the flags TWICE and writes twice,
-	// rather than computing both changes from one read: with the fake
-	// answering 3 both times, the first write is 2 and the second 3.
+	// have. completeOnBoarding computes both flag changes from ONE read
+	// and writes once: ONBOARDING_MODE (1) cleared, SIGNED_IN (2) set, so
+	// a fake answering 3 produces a single SetStartupFlags(2).
+	//
+	// It used to read twice and write twice, and this row is what showed
+	// why that is worth fixing rather than merely tidying. The fake
+	// answers 3 to both reads -- as any writer between them would -- and
+	// the second read-modify-write then OR'd SIGNED_IN into a stale 3 and
+	// wrote 3 back, silently discarding the ONBOARDING_MODE clear the
+	// first write had just made. A user who hit that window stayed in
+	// onboarding mode on the next start. Benign in production only
+	// because the config write happens to be visible to the very next
+	// read.
 	//
 	{"beginOnBoarding", "[]", "", "SESessionManager::Reset(true|0)",
 	 "true"},
 	{"completeOnBoarding", "[]", "ISEConfig::GetStartupFlags=int:3",
 	 "ISEBrowserWidgetManager::DestroyCurrentCentralBrowserWidget;"
 	 "ISEConfig::GetStartupFlags;ISEConfig::SetStartupFlags(2);"
-	 "ISEConfig::GetStartupFlags;ISEConfig::SetStartupFlags(3);"
 	 "ISEMenuManager::Update;SEStatePersistence::PersistState(true)",
 	 "true"},
 	{"adviseSignedIn", "[]", "ISEConfig::GetStartupFlags=int:0",

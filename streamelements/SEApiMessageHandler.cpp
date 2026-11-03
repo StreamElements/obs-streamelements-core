@@ -723,10 +723,6 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 			       ->DestroyCurrentCentralBrowserWidget()) {
 		}
 
-		apiServices->config->SetStartupFlags(
-			apiServices->config->GetStartupFlags() &
-			~ISEConfig::STARTUP_FLAGS_ONBOARDING_MODE);
-
 		//
 		// Once on-boarding is complete, we assume our state is signed-in.
 		//
@@ -735,8 +731,18 @@ void SEApiMessageHandler::RegisterIncomingApiCallHandlers()
 		//
 		// For those cases, we provide the adviseSignedIn() API call.
 		//
+		// Both changes are computed from one read and written once.
+		// This used to be two read-modify-write pairs, which is two
+		// windows in which another writer's change is read back and
+		// overwritten instead of one -- adviseSignedIn and
+		// adviseSignedOut, which touch the same word, each do a single
+		// pair. One window is not none: nothing here is a
+		// compare-and-swap, and the flags are not guarded by a lock
+		// the handler holds.
+		//
 		apiServices->config->SetStartupFlags(
-			apiServices->config->GetStartupFlags() |
+			(apiServices->config->GetStartupFlags() &
+			 ~ISEConfig::STARTUP_FLAGS_ONBOARDING_MODE) |
 			ISEConfig::STARTUP_FLAGS_SIGNED_IN);
 
 		apiServices->menuManager->Update();
