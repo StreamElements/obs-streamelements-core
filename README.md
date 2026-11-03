@@ -26,13 +26,23 @@ as a sibling — `StreamElementsBrowserWidget.cpp` includes
 obs-studio/
 ├── CMakeUserPresets.json          <- copy of this repo's CMakeUserPresets.json (Windows)
 └── plugins/
-    ├── CMakeLists.txt             <- must contain: add_obs_plugin(obs-streamelements-core)
+    ├── CMakeLists.txt             <- must contain: add_core_module(obs-streamelements-core)
     ├── obs-browser/               <- required
     └── obs-streamelements-core/   <- this repo
 ```
 
 Clone obs-studio with `--recursive` so `obs-browser` comes along. CI pins
-obs-studio to tag `31.1.2`; newer trees also work.
+obs-studio to tag `33.0.1`.
+
+Register the plugin in the obs-studio tree by adding one line to
+`plugins/CMakeLists.txt`, **before** its trailing `set_obs_core_modules()`:
+
+```cmake
+add_core_module(obs-streamelements-core)
+```
+
+On OBS 32 and earlier the macro is spelled `add_obs_plugin(...)` and there is no
+`set_obs_core_modules()`; the rename landed in 33.0.0.
 
 ## Windows
 
