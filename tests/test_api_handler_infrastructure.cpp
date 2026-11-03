@@ -511,12 +511,21 @@ void a_call_with_no_services_is_answered_rather_than_left_pending()
 }
 
 //
-// Current behaviour, recorded rather than endorsed: this is the one path
-// through InvokeApiCallHandlerAsync that answers nothing at all. Its callers
-// are InvokeHandler and the batchInvokeSeries registration, so what is left
-// hanging is an internal invocation rather than a page's promise -- but it
-// is still a return with no callback, and a test is where that gets noticed
-// if it ever becomes a page-facing path.
+// By design -- Ilya, 2026-11-03. This is the one path through
+// InvokeApiCallHandlerAsync that answers nothing at all, and that is the
+// intended behaviour rather than a defect awaiting a fix.
+//
+// The reasoning: after Shutdown() there is nothing left to answer WITH. The
+// services are released, the registry is cleared, and a callback invoked
+// from here would run against a half-torn-down handler on whichever thread
+// happened to call in. Dropping the call is the safe end of that trade.
+//
+// Its callers are InvokeHandler and the batchInvokeSeries registration, so
+// what goes unanswered is an internal invocation and never a page's
+// promise. That is the condition the decision rests on, which is why this
+// test stays: it is a statement of intent, and it is also the tripwire if
+// a page-facing caller is ever added -- then the trade changes, because a
+// page's promise would never settle.
 //
 void a_shut_down_handler_answers_nothing_at_all()
 {
@@ -534,9 +543,10 @@ void a_shut_down_handler_answers_nothing_at_all()
 		0);
 
 	check_eq(calls, 0,
-		 "after Shutdown(): the caller gets no callback -- the one "
-		 "path that answers nothing. If this ever becomes reachable "
-		 "from a page, that page's promise never settles");
+		 "after Shutdown(): the caller gets no callback. This is by "
+		 "design -- there is nothing left to answer with -- and holds "
+		 "only while every caller is internal. A page-facing caller "
+		 "would make this a hung promise");
 
 	check_eq(stub_state().echoCalls, 0,
 		 "after Shutdown(): the handler does not run");

@@ -341,6 +341,22 @@ void SEApiMessageHandlerBase::InvokeApiCallHandlerAsync(
 		return;
 	}
 
+	//
+	// After Shutdown() the call is dropped without answering, and that is
+	// deliberate -- Ilya, 2026-11-03. Unlike the dead-bundle path above,
+	// which answers null, there is nothing left here to answer with: the
+	// registry is cleared and the services released, so a callback run
+	// from this point would execute against a half-torn-down handler on
+	// whichever thread called in.
+	//
+	// It is safe because every caller is internal -- InvokeHandler and the
+	// batchInvokeSeries registration -- so what goes unanswered is an
+	// internal invocation, never a page's promise. That condition is the
+	// whole basis of the decision: route a page-facing call through here
+	// and its promise would never settle.
+	//
+	// a_shut_down_handler_answers_nothing_at_all() pins it.
+	//
 	auto runtimeStatus = m_runtimeStatus;
 
 	if (!runtimeStatus->m_running)

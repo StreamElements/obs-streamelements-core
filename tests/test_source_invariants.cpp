@@ -4856,11 +4856,24 @@ static void check_handler_bodies_type_check_before_they_read()
 // answers for presence, and GetString(k) is `m_map[k]->GetString()`, the
 // same throwing getter.
 //
-// Deliberately conservative in one way: a parameter passed to any function
+// Deliberately conservative in one way: a parameter passed to a VALIDATOR
 // before it is read counts as checked, because that is how the ten
 // add*SceneItem* handlers are safe -- IsSceneItemInfoValid() tests the
 // type one call deeper. Reporting those would make this gate cry wolf, and
 // a gate that cries wolf gets deleted.
+//
+// A validator is matched by shape -- `Is*`, `Validate*` or `Check*` -- and
+// not by "any preceding call", which is what this note used to claim. The
+// broader rule was tried first and rejected because it was silently too
+// weak: GetVideoComposition(input) runs before the read in
+// SetObsScenePropertiesById, so escaping on any call hid a real defect.
+// Narrowing it to those three prefixes is what let that one be found.
+//
+// The honest limit of the narrow rule is the obvious one: a method named
+// Is*/Validate*/Check* that does not in fact test the type silences a real
+// finding. The escape trades a false positive for a false negative, and
+// that is the right trade only because the name has to be chosen to earn
+// it.
 //
 static void check_services_type_check_what_the_handlers_hand_them()
 {
@@ -5626,6 +5639,432 @@ static void check_every_source_file_ends_with_a_newline()
 	      "then pass vacuously");
 }
 
+//
+// --- `APPLE` is not a compiler define, and three guards were spelled with
+// it.
+//
+// CMake sets APPLE as a *variable*; nothing in CMakeLists.txt passes it to
+// the compiler, so `#ifdef APPLE` is false on every platform including
+// macOS. Three sites had it, and the build stayed green past all of them
+// because an undefined name in a preprocessor conditional is simply 0:
+//
+//   SEShellServices.cpp     the Finder reveal, so
+//                           openFileLocationInHostFileManager answered
+//                           false on macOS without doing anything
+//   updater/updater.cpp     <unistd.h>, while the getpid() that needs it
+//                           sits under a correctly spelled __APPLE__
+//   SEBrowserWidget.hpp     QMacCocoaViewContainer and Cocoa/Cocoa.h,
+//                           used by nothing, so that one was deleted
+//
+// Invisible to the compiler, to both ratchets and to a macOS build, which
+// is exactly the shape that wants a source check. Comment-stripped first,
+// because the two commits above describe the mistake in prose.
+//
+static void check_no_platform_guard_uses_the_bare_APPLE_macro()
+{
+	const char *const dirs[] = {"/streamelements",
+				    "/streamelements/SEUtils",
+				    "/streamelements/updater",
+				    "/streamelements/restore-script-host",
+				    "/tests"};
+
+	//
+	// APPLE as a whole word in a preprocessor conditional. `__APPLE__`
+	// does not match, because \b sits between `_` and `A` only if the
+	// preceding character is not a word character -- and `_` is one.
+	//
+	const std::regex bad(
+		R"(#\s*(?:if|ifdef|ifndef|elif)\b[^\n]*\bAPPLE\b)");
+
+	int scanned = 0;
+
+	for (const char *const dir : dirs) {
+		const std::string path = std::string(se_tests::kRepoRoot) + dir;
+
+		std::error_code ec;
+		std::filesystem::directory_iterator it(path, ec);
+
+		check(!ec, (std::string("cannot read ") + dir +
+			    " -- this invariant would then pass vacuously")
+				   .c_str());
+
+		for (std::filesystem::directory_iterator end; it != end && !ec;
+		     it.increment(ec)) {
+			const std::filesystem::path &p = it->path();
+			const std::string ext = p.extension().string();
+
+			if (ext != ".cpp" && ext != ".hpp" && ext != ".mm" &&
+			    ext != ".c" && ext != ".h")
+				continue;
+
+			if (p.string().find("deps") != std::string::npos)
+				continue;
+
+			++scanned;
+
+			const std::string src = strip_line_comments(
+				slurp(std::string(dir).substr(1) + "/" +
+				      p.filename().string()));
+
+			if (count_matches(src, bad) == 0)
+				continue;
+
+			check(false,
+			      (p.filename().string() +
+			       " guards on the bare `APPLE` macro -- that is "
+			       "a CMake variable, never passed to the "
+			       "compiler, so the branch is dead on every "
+			       "platform. Use __APPLE__ (CORE-757)")
+				      .c_str());
+		}
+	}
+
+	check(scanned > 150,
+	      "the APPLE-guard scan found almost no files -- it would then "
+	      "pass vacuously");
+}
+
+//
+// --- A std::shared_mutex must not be acquired recursively.
+//
+// Four getters did: each took a shared_lock on its own m_mutex and then
+// called a sibling that takes the same one.
+//
+//   SEVideoCompositionManager::GetVideoCompositionById(CefRefPtr<CefValue>)
+//   SEAudioCompositionManager::GetAudioCompositionById(CefRefPtr<CefValue>)
+//   SEOutputBase::SerializeOutput              -- twice, via IsActive()
+//
+// Recursive acquisition of a std::shared_mutex is undefined behaviour even
+// for shared ownership, and on Windows it is concretely worse: MSVC backs
+// it with an SRWLOCK, which Microsoft documents as non-recursive, so a
+// writer arriving between the outer and inner acquisition deadlocks the
+// inner one against a lock the same thread already holds. All three
+// classes have writers -- Reset(), DeserializeComposition(), SetEnabled(),
+// Start(), Stop(). They survived because the window is a few instructions
+// wide.
+//
+// The fix is a lock-free *Internal() called under the lock the caller
+// already holds, which is the shape SEOutputBase::StartInternal() was
+// already using in the same file. So this pins the delegation rather than
+// trying to re-derive reachability: each body must call the Internal one
+// and must not call the public locking sibling.
+//
+// Not generalised to the whole tree deliberately. A tree-wide version
+// needs class-scope resolution of the mutex member, because
+// SECustomAudioComposition::m_mutex *shadows*
+// SEAudioCompositionBase::m_mutex and a name-based scan reads
+// SerializeComposition() calling GetName() as recursion when the two lock
+// different mutexes. The standalone scanner that found these lives in the
+// 2026-10-31 scratchpad as lockscan.py and reports those two as its only
+// remaining hits.
+//
+static void check_no_shared_mutex_is_acquired_recursively()
+{
+	struct Site {
+		const char *file;
+		const char *marker;
+		const char *internal;
+		const char *locking_sibling;
+	};
+
+	//
+	// Each: the body that holds the lock, the lock-free call it must
+	// make, and the locking call it must not.
+	//
+	const Site sites[] = {
+		{"streamelements/SEVideoCompositionManager.hpp",
+		 "GetVideoCompositionById(CefRefPtr<CefValue> input)",
+		 "GetObsNativeVideoCompositionInternal(",
+		 "GetObsNativeVideoComposition("},
+		{"streamelements/SEAudioCompositionManager.hpp",
+		 "GetAudioCompositionById(CefRefPtr<CefValue> input)",
+		 "GetObsNativeAudioCompositionInternal(",
+		 "GetObsNativeAudioComposition("},
+		{"streamelements/SEOutput.cpp",
+		 "void SEOutputBase::SerializeOutput(", "IsActiveInternal(",
+		 "IsActive("},
+	};
+
+	for (const Site &site : sites) {
+		const std::string src = strip_line_comments(slurp(site.file));
+
+		const std::string body = function_body(src, site.marker);
+
+		check(!body.empty(),
+		      (std::string("recursive shared_mutex: ") + site.marker +
+		       " not found in " + site.file +
+		       " -- this check would then pass vacuously (CORE-757)")
+			      .c_str());
+
+		if (body.empty())
+			continue;
+
+		check(body.find(site.internal) != std::string::npos,
+		      (std::string("recursive shared_mutex: ") + site.marker +
+		       " must call " + site.internal +
+		       ") -- the lock-free body -- while it holds m_mutex "
+		       "(CORE-757)")
+			      .c_str());
+
+		//
+		// Substring, not regex: these names end in `(`, which would
+		// open a group. It also makes the prefix problem disappear
+		// -- "IsActive(" cannot occur inside "IsActiveInternal(",
+		// because the character after the prefix is `I` and not `(`.
+		//
+		std::size_t sibling_hits = 0;
+
+		for (std::size_t at = body.find(site.locking_sibling);
+		     at != std::string::npos;
+		     at = body.find(site.locking_sibling, at + 1))
+			++sibling_hits;
+
+		check(sibling_hits == 0,
+		      (std::string("recursive shared_mutex: ") + site.marker +
+		       " calls the locking " + site.locking_sibling +
+		       ") while already holding m_mutex -- acquiring a "
+		       "std::shared_mutex recursively is undefined "
+		       "behaviour, and MSVC's SRWLOCK deadlocks on it "
+		       "(CORE-757)")
+			      .c_str());
+	}
+}
+
+//
+// --- A contract's default arguments must match its implementation's.
+//
+// Three methods on the ISE* contracts carry default arguments:
+// ISEObsApiTransactionManager::Create, ISESessionManager::Reset and
+// ISEStatePersistence::PersistState. Each is declared with its defaults
+// twice -- once on the interface, once on the concrete override -- and
+// that duplication is deliberate but dangerous.
+//
+// Deliberate, because both static types are called without the argument. A
+// handler calls PersistState() through ISEStatePersistence; SEWidgetManager
+// holds the concrete class weakly for its two deferred saves and calls
+// PersistState() too. A derived declaration without the default would hide
+// the base's and break the second; dropping the default from the interface
+// would mean editing some two dozen handler bodies, which part 2 exists to
+// avoid.
+//
+// Dangerous, because a default argument is bound at the CALL SITE from the
+// STATIC type. If the two copies ever disagree, the same call means two
+// different things depending on which handle it goes through, and nothing
+// in the compiler says so -- no warning, no error, no runtime symptom
+// except a layout that saves when it should not.
+//
+// So the duplication is allowed and pinned. Derived generally rather than
+// from a list of three, because the next interface to gain a default would
+// otherwise be unguarded.
+//
+static void check_contract_default_arguments_agree_with_their_overrides()
+{
+	const std::string dir =
+		std::string(se_tests::kRepoRoot) + "/streamelements";
+
+	//
+	// `virtual <stuff> Name(<params>) = 0;` on flattened source, where
+	// <params> contains a default. Non-greedy so a parameter list cannot
+	// swallow the next declaration.
+	//
+	//
+	// Read from source that still HAS its whitespace. Flattening first
+	// destroys the boundary between the return type and the name --
+	// `virtual void Reset(` becomes `virtualvoidReset(` and the name
+	// capture picks up the tail of the return type. Only the parameter
+	// list gets flattened, and only for the comparison.
+	//
+	const std::regex decl(
+		R"(virtual\s[\w:<>,&*\s]+?\b(\w+)\s*\(([^;{]*)\)\s*=\s*0\s*;)");
+
+	//
+	// Whitespace out, so a declaration wrapped across lines by
+	// clang-format compares equal to the same one wrapped differently --
+	// which these two always are, the interface and the implementation
+	// having different indentation.
+	//
+	auto flatten = [](const std::string &s) {
+		std::string out;
+		out.reserve(s.size());
+
+		for (char c : s) {
+			if (!std::isspace(static_cast<unsigned char>(c)))
+				out += c;
+		}
+
+		return out;
+	};
+
+	//
+	// One parameter per element, split on top-level commas. Angle
+	// brackets count here -- CefRefPtr<CefValue> is the common case --
+	// and unlike the service-argument gate there is no `->` in a
+	// parameter list to confuse a `>` for nesting.
+	//
+	auto params_of = [](const std::string &s) {
+		std::vector<std::string> out;
+		std::string cur;
+		int depth = 0;
+
+		for (char c : s) {
+			if (c == '(' || c == '[' || c == '<')
+				++depth;
+			else if (c == ')' || c == ']' || c == '>')
+				--depth;
+
+			if (c == ',' && depth == 0) {
+				out.push_back(cur);
+				cur.clear();
+				continue;
+			}
+
+			cur += c;
+		}
+
+		if (!cur.empty())
+			out.push_back(cur);
+
+		return out;
+	};
+
+	int checked = 0;
+
+	std::error_code ec;
+	std::filesystem::directory_iterator it(dir, ec);
+
+	check(!ec, "cannot read streamelements/ -- the contract default "
+		   "argument check would then pass vacuously");
+
+	for (std::filesystem::directory_iterator end; it != end && !ec;
+	     it.increment(ec)) {
+		const std::filesystem::path &p = it->path();
+		const std::string name = p.filename().string();
+
+		if (name.rfind("ISE", 0) != 0 || p.extension() != ".hpp")
+			continue;
+
+		//
+		// The implementation is the same name without the leading I,
+		// which is the convention every one of these follows.
+		//
+		const std::string impl = name.substr(1);
+
+		if (!std::filesystem::exists(dir + "/" + impl))
+			continue;
+
+		const std::string iface_src =
+			strip_line_comments(slurp("streamelements/" + name));
+		const std::string impl_src =
+			strip_line_comments(slurp("streamelements/" + impl));
+
+		for (std::sregex_iterator
+			     m(iface_src.begin(), iface_src.end(), decl),
+		     last;
+		     m != last; ++m) {
+			const std::string method = (*m)[1].str();
+			const std::string params = flatten((*m)[2].str());
+
+			if (params.find('=') == std::string::npos)
+				continue;
+
+			++checked;
+
+			//
+			// The override's parameter list, by the same shape.
+			//
+			const std::regex over(
+				R"(\b)" + method +
+				R"(\s*\(([^;{]*)\)\s*override\s*;)");
+
+			std::smatch o;
+
+			if (!std::regex_search(impl_src, o, over)) {
+				check(false,
+				      (impl + " does not declare " + method +
+				       "(...) override, but " + name +
+				       " gives it a default argument "
+				       "(CORE-757)")
+					      .c_str());
+				continue;
+			}
+
+			//
+			// The rule is "may omit, must not contradict".
+			//
+			// An override that declares no default cannot be
+			// called without the argument at all, so it fails
+			// loudly at compile time rather than quietly meaning
+			// something else -- ISEHotkeyManager and
+			// SEHotkeyManager are in exactly that state, and it
+			// is safe. Two DIFFERENT defaults are the hazard,
+			// because then the same call site means one thing
+			// through the contract and another through the
+			// concrete handle, with nothing to say so.
+			//
+			const std::vector<std::string> want = params_of(params);
+			const std::vector<std::string> got =
+				params_of(flatten(o[1].str()));
+
+			check(want.size() == got.size(),
+			      (name + "::" + method + " takes " +
+			       std::to_string(want.size()) +
+			       " parameter(s) and its override in " + impl +
+			       " takes " + std::to_string(got.size()) +
+			       " (CORE-757)")
+				      .c_str());
+
+			if (want.size() != got.size())
+				continue;
+
+			for (std::size_t i = 0; i < want.size(); ++i) {
+				const auto we = want[i].find('=');
+				const auto ge = got[i].find('=');
+
+				check(want[i].substr(0, we) ==
+					      got[i].substr(0, ge),
+				      (name + "::" + method + " parameter " +
+				       std::to_string(i + 1) +
+				       " differs from its override in " + impl +
+				       ": '" + want[i] + "' vs '" + got[i] +
+				       "' (CORE-757)")
+					      .c_str());
+
+				if (we == std::string::npos ||
+				    ge == std::string::npos)
+					continue;
+
+				check(want[i].substr(we) == got[i].substr(ge),
+				      (name + "::" + method + " parameter " +
+				       std::to_string(i + 1) +
+				       " has a DIFFERENT default argument in " +
+				       impl + ": '" + want[i].substr(we) +
+				       "' vs '" + got[i].substr(ge) +
+				       "'. A default is bound from the static "
+				       "type at the call site, so the same "
+				       "call would mean two different things "
+				       "depending on which handle it went "
+				       "through -- silently (CORE-757)")
+					      .c_str());
+			}
+		}
+	}
+
+	//
+	// Four: Create, Reset, PersistState and -- found by this check rather
+	// than known beforehand -- SerializeHotkeyBindings, which predates
+	// the three and whose override declares no default at all. A hand
+	// grep for defaults missed it because the declaration is wrapped
+	// across two lines, which is the argument for deriving this from
+	// source instead of from a list.
+	//
+	// A floor, so a regex that stops matching reports itself instead of
+	// passing.
+	//
+	check(checked >= 4,
+	      "the contract default-argument scan found fewer than the four "
+	      "known defaulted methods -- it would then pass vacuously");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -5696,6 +6135,9 @@ int main()
 	check_services_type_check_what_the_handlers_hand_them();
 	check_every_stand_in_can_answer_the_handler_that_calls_it();
 	check_every_source_file_ends_with_a_newline();
+	check_no_platform_guard_uses_the_bare_APPLE_macro();
+	check_no_shared_mutex_is_acquired_recursively();
+	check_contract_default_arguments_agree_with_their_overrides();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",
