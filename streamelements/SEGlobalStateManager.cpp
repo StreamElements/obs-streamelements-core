@@ -770,6 +770,65 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			"Start-up flags indicate on-boarding mode";
 	}
 
+	//
+	// --- The gate opens BEFORE the first browser widget exists --------
+	//
+	// This has to sit above the block below, and the reason is an
+	// ordering guarantee rather than a preference.
+	//
+	// `ready` is what SEApiMessageHandlerBase::IsPluginInitialized()
+	// tests, and a message arriving while it is false is answered with
+	// `return true` -- reported as handled, nothing registered, no
+	// window.host built. MSG_ON_CONTEXT_CREATED arrives once per page
+	// context and nothing re-sends it or polls, so a page that lands in
+	// that window is left with a live websocket and no host API for the
+	// life of that context. Only a reload recovers it.
+	//
+	// Every client of the websocket API server is one of OUR browser
+	// widgets: the docks and workers restored below, the central widget
+	// the on-boarding branch pushes, plus pop-ups, dialogs, the
+	// notification bar and the preview title bar created later on
+	// demand. Seven construction sites, all SEBrowserWidget, and the
+	// shim that builds window.host is injected in exactly one place --
+	// SEBrowserWidget::SEBrowserWidget, into a QCefWidget panel. An
+	// obs-browser *source* never receives it and cannot be a client; we
+	// do not control obs-browser any more, so that is not coming back.
+	// External controllers reach us over named pipes, not this socket.
+	//
+	// So the set of possible clients is empty until the block below
+	// runs, and setting the flag first makes it impossible for any
+	// client to ever observe it false. The guarantee is in the
+	// statement order, which is why this comment is long: moving this
+	// line back down, or moving widget creation above it, silently
+	// reopens the window.
+	//
+	// What this deliberately does NOT claim. A dispatch is now possible
+	// in principle during the rest of Initialize(), and it would see a
+	// plug-in that is wired but not finished: m_statePersistence is not
+	// enabled yet, so PersistState() is a silent no-op; the updater is
+	// not initialised, so a check-for-updates request emits a signal
+	// nobody is listening for; and the menu has not been rebuilt. That
+	// is accepted on purpose, because it trades a PERMANENT, silent
+	// failure for a transient one -- a page served early loses one
+	// call, where before it lost window.host altogether and never got
+	// it back.
+	//
+	// m_statePersistence->SetEnabled(true) specifically cannot move up
+	// here with it: PersistState() is gated on that flag, and enabling
+	// it before RestoreState() would make each of a dozen dock
+	// creations write a half-restored layout back over the saved one.
+	//
+	// m_initialized stays at the end too, and is a different question
+	// despite the two having been set in the same breath before this
+	// change: its one functional reader is the `!m_initialized` guard
+	// at the top of Shutdown(), so it means "Initialize() ran to
+	// completion" and must not become true before that is so. `ready`
+	// means "the bundle is wired and a dispatch may run". Proximity had
+	// made them look like one fact.
+	//
+	if (m_apiServices)
+		m_apiServices->ready = true;
+
 	if (isOnBoarding) {
 		// On-boarding
 
@@ -831,16 +890,26 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 	streamelements_updater_init();
 
+	//
+	// Enabled only now, and not earlier: PersistState() is gated on this
+	// flag, and turning it on before RestoreState() above would make
+	// each dock created during the restore write a half-restored layout
+	// back over the saved one.
+	//
 	m_statePersistence->SetEnabled(true);
-	m_initialized = true;
 
 	//
-	// Last, and in the same breath as m_initialized: this is what tells
-	// an API message handler that the bundle is wired up and a dispatch
-	// may run. See SEApiServices::ready.
+	// Last, and on its own -- `m_apiServices->ready` used to be set here
+	// beside it and now sits above the widget-creation block, for the
+	// reason documented there.
 	//
-	if (m_apiServices)
-		m_apiServices->ready = true;
+	// The two are different facts. This one's only functional reader is
+	// the `!m_initialized` guard at the top of Shutdown(), so it means
+	// "Initialize() ran to completion" and must not be true before that
+	// is true. `ready` means "the bundle is wired and a dispatch may
+	// run", which became true much earlier.
+	//
+	m_initialized = true;
 
 	// From here on an OBS close is an ordinary close, and teardown runs
 	// normally (CORE-786).

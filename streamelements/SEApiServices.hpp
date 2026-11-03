@@ -70,12 +70,36 @@ struct QCefCookieManager;
 
 struct SEApiServices {
 	//
-	// False until Initialize() has finished, and false again from the
-	// moment Shutdown() begins. The one non-pointer member, and the
-	// question an API message handler asks before it dispatches: a
-	// browser source can connect to the websocket server while the
-	// plug-in is still starting, and a handler that ran then would reach
-	// into services that are constructed but not yet wired together.
+	// The one non-pointer member, and the question an API message
+	// handler asks before it dispatches: true once the bundle is wired
+	// together and a dispatch may run, false again from the moment
+	// Shutdown() begins.
+	//
+	// WHEN it becomes true is load-bearing, so it is set in one place
+	// and that place is chosen: SEGlobalStateManager::Initialize(), just
+	// ABOVE the block that restores the docks and background workers or
+	// pushes the on-boarding central widget. The long comment at that
+	// line is the real documentation; the short version is that every
+	// client of the websocket API server is one of our own
+	// SEBrowserWidgets, so setting the flag before the first one exists
+	// is what makes it impossible for a page to find it false -- and a
+	// page that does find it false gets no window.host for the life of
+	// its context, because the context-created message arrives once and
+	// nothing retries.
+	//
+	// It used to be set at the very end of Initialize(), which left a
+	// window between widget creation and the flag. Nothing was ever
+	// observed landing in it, since CEF takes seconds to get a page
+	// connected and the window was a fraction of a millisecond -- the
+	// protection was latency, not ordering.
+	//
+	// The earlier note here said the flag existed because a browser
+	// source could connect during start-up. That is no longer true and
+	// was the stated reason for the old placement: browser sources are
+	// not supported, the shim that builds window.host is injected only
+	// into our own QCefWidget panels, and obs-browser is not ours to
+	// change. DEST_BROWSER_SOURCE on ISEMessageBus is left over from
+	// the same era.
 	//
 	// It replaces SEGlobalStateManager::IsInstanceAvailable(), which
 	// asked exactly this -- "does the root exist and is it initialized?"
