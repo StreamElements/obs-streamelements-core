@@ -17,7 +17,7 @@ and verified.
 
 This plugin does not build on its own. It is built as part of an obs-studio
 tree, and it has a hard dependency on the `obs-browser` plugin being present
-as a sibling — `StreamElementsBrowserWidget.cpp` includes
+as a sibling — `SEBrowserWidget.cpp` includes
 `../../obs-browser/panel/browser-panel.hpp` by relative path.
 
 ## Layout
