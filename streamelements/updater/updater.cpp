@@ -30,7 +30,14 @@
 #include "../SEUtils.hpp"
 #include "../Version.hpp"
 
-#ifdef APPLE
+//
+// __APPLE__, not APPLE: APPLE is a CMake variable and nothing passes it to
+// the compiler, so this include never happened on macOS -- while the body
+// that needs it, further down, is guarded on `#ifdef __APPLE__` and spelled
+// correctly. getpid() was reaching a declaration some other header happened
+// to pull in.
+//
+#ifdef __APPLE__
 #include <sys/types.h>
 #include <unistd.h>
 #endif

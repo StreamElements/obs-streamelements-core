@@ -27,15 +27,16 @@ void SEShellServices::RevealFileInGraphicalShell(CefRefPtr<CefValue> input,
 	// Moved verbatim from SEUtils/SEWidgetUtils.cpp, which had nothing
 	// else in it.
 	//
-	// Including the macOS branch's guard, which is `#ifdef APPLE` and not
-	// `#ifdef __APPLE__`. APPLE is a CMake variable, not a compiler
-	// define, and nothing in CMakeLists.txt passes it -- so that branch
-	// has never been compiled and openFileLocationInHostFileManager
-	// answers false on macOS without doing anything. Left as it is on
-	// purpose: correcting it turns a no-op into a process launch on a
-	// platform this commit cannot test, which wants a commit and a build
-	// of its own. Two other sites spell it the same way,
-	// SEBrowserWidget.hpp and updater/updater.cpp.
+	// The macOS branch below used to be guarded on `#ifdef APPLE`, which
+	// is a CMake variable and not a compiler define -- nothing in
+	// CMakeLists.txt passes it, so the branch had never been compiled and
+	// openFileLocationInHostFileManager answered false on macOS without
+	// doing anything. It is `__APPLE__` now, which is the commit of its
+	// own that the previous note here asked for.
+	//
+	// So this is a behaviour change on macOS: the method now launches
+	// osascript and reveals the file, where before it was a silent
+	// no-op. The Windows branch is untouched.
 	//
 	output->SetBool(false);
 
@@ -65,7 +66,7 @@ void SEShellServices::RevealFileInGraphicalShell(CefRefPtr<CefValue> input,
 	output->SetBool(QProcess::startDetached(explorer, param));
 #endif
 
-#ifdef APPLE
+#ifdef __APPLE__
 	QStringList scriptArgs;
 	scriptArgs
 		<< QLatin1String("-e")

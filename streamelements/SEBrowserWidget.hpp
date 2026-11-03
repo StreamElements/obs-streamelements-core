@@ -29,10 +29,15 @@ class ISEVideoCompositionManager;
 
 #include <QtWidgets>
 
-#ifdef APPLE
-#include <QMacCocoaViewContainer>
-#include <Cocoa/Cocoa.h>
-#endif
+//
+// There was an `#ifdef APPLE` block here including QMacCocoaViewContainer
+// and Cocoa/Cocoa.h. It is deleted rather than corrected to `__APPLE__`:
+// APPLE is a CMake variable and nothing passes it to the compiler, so the
+// block never compiled anywhere -- and nothing in this class names either
+// header, so enabling it would add an unused Cocoa include to every macOS
+// translation unit that includes this file. Deleted is the only direction
+// that is right whether or not the Qt in use still ships the first one.
+//
 
 class QCefWidget;
 class QCefCookieManager;
