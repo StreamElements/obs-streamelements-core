@@ -267,7 +267,8 @@ SEGlobalStateManager::~SEGlobalStateManager()
 	// crash handler that reads the reporter's contact details through
 	// it -- which is what opens the ini -- are both built before
 	// Initialize()'s first bail, the obs_browser_init_panel()
-	// failure. Shutdown() can therefore return at its !m_initialized
+	// failure. Shutdown() can therefore return at its
+	// !m_initialize_finished_and_shutdown_is_expected_to_run
 	// early-out having left the file open, and nothing else would
 	// ever close it: the crash handler holds the config and is
 	// deliberately never deleted, so the object's own destructor does
@@ -818,12 +819,13 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	// it before RestoreState() would make each of a dozen dock
 	// creations write a half-restored layout back over the saved one.
 	//
-	// m_initialized stays at the end too, and is a different question
-	// despite the two having been set in the same breath before this
-	// change: its one functional reader is the `!m_initialized` guard
-	// at the top of Shutdown(), so it means "Initialize() ran to
-	// completion" and must not become true before that is so. `ready`
-	// means "the bundle is wired and a dispatch may run". Proximity had
+	// m_initialize_finished_and_shutdown_is_expected_to_run stays at the
+	// end too, and is a different question despite the two having been
+	// set in the same breath before this change: its one functional
+	// reader is the guard at the top of Shutdown(), so it means
+	// "Initialize() ran to completion" and must not become true before
+	// that is so. `ready` means "the bundle is wired and a dispatch may
+	// run". Proximity had
 	// made them look like one fact.
 	//
 	if (m_apiServices)
@@ -841,7 +843,9 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	}
 
 	// Draining the posted-event queue runs arbitrary code while this
-	// Initialize() is still on the stack and m_initialized is still false:
+	// Initialize() is still on the stack and
+	// m_initialize_finished_and_shutdown_is_expected_to_run is still
+	// false:
 	// deferred deletes, frontend callbacks, and any modal dialog's own event
 	// loop. Nothing constructed above may be assumed live below this point.
 	SEDrainEventQueue();
@@ -904,12 +908,12 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	// reason documented there.
 	//
 	// The two are different facts. This one's only functional reader is
-	// the `!m_initialized` guard at the top of Shutdown(), so it means
+	// the guard at the top of Shutdown(), so it means
 	// "Initialize() ran to completion" and must not be true before that
 	// is true. `ready` means "the bundle is wired and a dispatch may
 	// run", which became true much earlier.
 	//
-	m_initialized = true;
+	m_initialize_finished_and_shutdown_is_expected_to_run = true;
 
 	// From here on an OBS close is an ordinary close, and teardown runs
 	// normally (CORE-786).
@@ -1073,7 +1077,7 @@ void SEGlobalStateManager::Shutdown()
 {
 	PREVENT_RECURSIVE_REENTRY();
 
-	if (!m_initialized) {
+	if (!m_initialize_finished_and_shutdown_is_expected_to_run) {
 		return;
 	}
 
@@ -1249,7 +1253,7 @@ void SEGlobalStateManager::Shutdown()
 
 	SEDrainEventQueue();
 
-	m_initialized = false;
+	m_initialize_finished_and_shutdown_is_expected_to_run = false;
 
 	if (m_apiServices)
 		m_apiServices->ready = false;

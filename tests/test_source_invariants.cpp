@@ -2338,7 +2338,8 @@ static void check_only_the_destructor_starts_teardown()
 // readable-but-defaulted, which turns those late writes into no-ops.
 //
 // The second half of this is the close that is NOT gated on
-// m_initialized: m_config and the crash handler that opens the ini
+// m_initialize_finished_and_shutdown_is_expected_to_run: m_config and the
+// crash handler that opens the ini
 // through it are built before Initialize()'s obs_browser_init_panel()
 // bail, so Shutdown() can return early having left the file open, and the
 // crash handler being deliberately leaked means no destructor closes it.
@@ -2375,10 +2376,11 @@ static void check_the_config_is_closed_before_the_queue_is_drained()
 	const std::string dtor = function_body(
 		cpp, "SEGlobalStateManager::~SEGlobalStateManager");
 
-	check(dtor.find("CloseAndPreventFurtherReopens()") !=
-		      std::string::npos,
+	check(dtor.find("CloseAndPreventFurtherReopens()") != std::string::npos,
 	      "the destructor must close the config too, ungated: Shutdown() "
-	      "returns at its !m_initialized early-out on the "
+	      "returns at its "
+	      "!m_initialize_finished_and_shutdown_is_expected_to_run "
+	      "early-out on the "
 	      "obs_browser_init_panel() bail, by which point the crash "
 	      "handler has already opened the ini through it");
 }

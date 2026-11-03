@@ -298,7 +298,20 @@ protected:
 	virtual void OnObsExit() override;
 
 private:
-	bool m_initialized = false;
+	//
+	// Named for its one reader rather than for its value: the guard at
+	// the top of Shutdown(), which exists because Initialize() bails
+	// when obs_browser_init_panel() fails and the destructor calls
+	// Shutdown() regardless. Tearing down a graph that was never built
+	// is what this prevents.
+	//
+	// It is NOT "the plug-in is usable" -- that is SEApiServices::ready,
+	// which becomes true much earlier, before the first browser widget
+	// is created. The two were set in the same breath once and read as
+	// one fact; they are not, and the old name invited reusing this one
+	// for that question.
+	//
+	bool m_initialize_finished_and_shutdown_is_expected_to_run = false;
 	QPointer<QMainWindow> m_mainWindow = nullptr;
 	QPointer<QWidget> m_nativeCentralWidget = nullptr;
 	std::shared_ptr<SEBrowserWidgetManager> m_widgetManager =
