@@ -453,6 +453,27 @@ public:
 
 	virtual bool IsActive();
 
+protected:
+	//
+	// IsActive() without the lock, for callers that already hold
+	// m_mutex -- SerializeOutput() is the one, and it asks twice.
+	//
+	// It held the lock at function scope and called IsActive(), which
+	// takes the same m_mutex again. Acquiring a std::shared_mutex
+	// recursively is undefined behaviour even for shared ownership, and
+	// MSVC backs it with an SRWLOCK that Microsoft documents as
+	// non-recursive: a writer arriving between the two acquisitions --
+	// SetEnabled(), Start() and Stop() are the writers -- deadlocks the
+	// second against a lock this thread already holds.
+	//
+	// Non-virtual on purpose. IsActive() is declared virtual but nothing
+	// overrides it, so there is no dispatch to lose; a future override
+	// would want to override this one too, which is why it is protected
+	// rather than private. Same shape as StartInternal() below.
+	//
+	bool IsActiveInternal();
+
+public:
 	virtual bool CanDisable() { return false; }
 
 	virtual bool IsObsNativeOutput() { return false; }

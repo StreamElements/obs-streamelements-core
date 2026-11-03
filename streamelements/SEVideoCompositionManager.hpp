@@ -90,12 +90,51 @@ public:
 
 	void Reset() override;
 
+private:
+	//
+	// The lock-free bodies behind the three public getters below. Each of
+	// those takes m_mutex and delegates here, so no public getter calls
+	// another one.
+	//
+	// That rule is the fix, not a tidy-up. m_mutex is a
+	// std::shared_mutex, and acquiring one recursively -- even for shared
+	// ownership -- is undefined behaviour. On Windows it is worse than
+	// undefined in practice: MSVC backs std::shared_mutex with an
+	// SRWLOCK, which Microsoft documents as non-recursive, and a writer
+	// arriving between the outer and the inner shared acquisition
+	// deadlocks the inner one against a lock the same thread is already
+	// holding. Reset() and DeserializeComposition are the writers.
+	//
+	// GetVideoCompositionById(CefRefPtr<CefValue>) did exactly that on
+	// two of its paths: it held the lock and then called
+	// GetObsNativeVideoComposition(), which takes it again. It survived
+	// because the window between the two acquisitions is a few
+	// instructions wide, so the writer has to arrive inside it.
+	//
+	// SEAudioCompositionManager had the identical shape and is fixed the
+	// same way.
+	//
+	std::shared_ptr<SEVideoCompositionBase>
+	GetObsNativeVideoCompositionInternal()
+	{
+		return m_nativeVideoComposition;
+	}
+
+	std::shared_ptr<SEVideoCompositionBase>
+	GetVideoCompositionByIdInternal(std::string id)
+	{
+		if (!m_videoCompositionsMap.count(id))
+			return nullptr;
+
+		return m_videoCompositionsMap[id];
+	}
+
 public:
 	std::shared_ptr<SEVideoCompositionBase> GetObsNativeVideoComposition()
 	{
 		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
-		return m_nativeVideoComposition;
+		return GetObsNativeVideoCompositionInternal();
 	}
 
 	std::shared_ptr<SEVideoCompositionBase>
@@ -103,10 +142,7 @@ public:
 	{
 		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
-		if (!m_videoCompositionsMap.count(id))
-			return nullptr;
-
-		return m_videoCompositionsMap[id];
+		return GetVideoCompositionByIdInternal(id);
 	}
 
 	std::shared_ptr<SEVideoCompositionBase>
@@ -115,19 +151,16 @@ public:
 		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
-			return GetObsNativeVideoComposition();
+			return GetObsNativeVideoCompositionInternal();
 
 		auto d = input->GetDictionary();
 
 		if (!d->HasKey("videoCompositionId") || d->GetType("videoCompositionId") != VTYPE_STRING)
-			return GetObsNativeVideoComposition();
+			return GetObsNativeVideoCompositionInternal();
 
 		std::string id = d->GetString("videoCompositionId");
 
-		if (!m_videoCompositionsMap.count(id))
-			return nullptr;
-
-		return m_videoCompositionsMap[id];
+		return GetVideoCompositionByIdInternal(id);
 	}
 
 public:

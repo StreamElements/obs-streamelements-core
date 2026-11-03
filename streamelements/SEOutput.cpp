@@ -571,7 +571,7 @@ void SEOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 	d->SetString("videoCompositionId", m_videoComposition->GetId());
 	d->SetString("audioCompositionId", m_audioComposition->GetId());
 	d->SetBool("isEnabled", IsEnabled());
-	d->SetBool("isActive", IsActive());
+	d->SetBool("isActive", IsActiveInternal());
 	d->SetBool("canDisable", CanDisable());
 	d->SetBool("canRemove", !IsObsNativeOutput());
 	d->SetBool("isObsNativeVideoComposition",
@@ -593,7 +593,7 @@ void SEOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 	OBSOutputAutoRelease obs_output = GetOutput();
 	SETRACE_DECREF(obs_output.Get());
 
-	if (obs_output && IsActive()) {
+	if (obs_output && IsActiveInternal()) {
 		auto stats = CefDictionaryValue::Create();
 
 		stats->SetBool("canPause", obs_output_can_pause(obs_output));
@@ -713,6 +713,11 @@ bool SEOutputBase::IsActive()
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
+	return IsActiveInternal();
+}
+
+bool SEOutputBase::IsActiveInternal()
+{
 	OBSOutputAutoRelease output = GetOutput();
 	SETRACE_DECREF(output.Get());
 

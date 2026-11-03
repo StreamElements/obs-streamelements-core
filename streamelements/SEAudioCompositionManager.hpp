@@ -73,13 +73,42 @@ public:
 
 	void Reset();
 
+private:
+	//
+	// The lock-free bodies behind the three public getters below. Each of
+	// those takes m_mutex and delegates here, so no public getter calls
+	// another one.
+	//
+	// Same defect and same fix as SEVideoCompositionManager, which
+	// carries the full reasoning: m_mutex is a std::shared_mutex,
+	// acquiring one recursively is undefined behaviour, and MSVC backs it
+	// with an SRWLOCK that Microsoft documents as non-recursive -- so a
+	// writer arriving between the outer and inner shared acquisition
+	// deadlocks the inner one. Reset() and DeserializeComposition are the
+	// writers here too.
+	//
+	std::shared_ptr<SEAudioCompositionBase>
+	GetObsNativeAudioCompositionInternal()
+	{
+		return m_nativeAudioComposition;
+	}
+
+	std::shared_ptr<SEAudioCompositionBase>
+	GetAudioCompositionByIdInternal(std::string id)
+	{
+		if (!m_audioCompositionsMap.count(id))
+			return nullptr;
+
+		return m_audioCompositionsMap[id];
+	}
+
 public:
 	std::shared_ptr<SEAudioCompositionBase>
 	GetObsNativeAudioComposition()
 	{
 		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
-		return m_nativeAudioComposition;
+		return GetObsNativeAudioCompositionInternal();
 	}
 
 	std::shared_ptr<SEAudioCompositionBase>
@@ -87,10 +116,7 @@ public:
 	{
 		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
-		if (!m_audioCompositionsMap.count(id))
-			return nullptr;
-
-		return m_audioCompositionsMap[id];
+		return GetAudioCompositionByIdInternal(id);
 	}
 
 	std::shared_ptr<SEAudioCompositionBase>
@@ -99,19 +125,16 @@ public:
 		std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 		if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
-			return GetObsNativeAudioComposition();
+			return GetObsNativeAudioCompositionInternal();
 
 		auto d = input->GetDictionary();
 
 		if (!d->HasKey("audioCompositionId") ||
 		    d->GetType("audioCompositionId") != VTYPE_STRING)
-			return GetObsNativeAudioComposition();
+			return GetObsNativeAudioCompositionInternal();
 
 		std::string id = d->GetString("audioCompositionId");
 
-		if (!m_audioCompositionsMap.count(id))
-			return nullptr;
-
-		return m_audioCompositionsMap[id];
+		return GetAudioCompositionByIdInternal(id);
 	}
 };
