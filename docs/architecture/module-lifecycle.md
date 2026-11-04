@@ -25,25 +25,53 @@ keys in `data/locale/en-US.ini`.
 
 ## Start-up
 
-```
-obs_module_load            register audio_wrapper_source
-obs_module_post_load       InstallObsCloseWatcher(); add_event_callback
-   …OBS loads its own UI…
-OBS_FRONTEND_EVENT_FINISHED_LOADING
-   StreamElementsInitializeScope            ← suppresses event pumping
-      SEGlobalStateManager::Create()
-      SEGlobalStateManager::Initialize(main window)
-         SEConfig                           ← first, everything may read it
-         SECrashHandler                     ← second, so a crash in the rest is reportable
-         SEApiServices (empty container)
-         …~39 services, in dependency order…
-         PublishApiServices()               ← fills the container
-         WatchServicesForTeardownAudit()
-         apiServices->ready = true          ← the dispatch gate
-         …docks, background workers, central widget…
-         SENoteInitializeCompleted()
-   "init done"
-```
+<figure class="se-fig">
+<div class="se-fig-scroll">
+<svg viewBox="0 0 880 650" role="img" aria-label="Start-up in four steps. obs_module_load registers audio_wrapper_source and nothing else. obs_module_post_load installs the OBS close watcher and the frontend event callback. OBS then loads its own UI. On OBS_FRONTEND_EVENT_FINISHED_LOADING, inside a StreamElementsInitializeScope that suppresses event pumping, SEGlobalStateManager is created and initialised: SEConfig first because everything may read it, SECrashHandler second so a crash in the rest is reportable, then the empty SEApiServices container, then about 39 services in dependency order, PublishApiServices, WatchServicesForTeardownAudit, then apiServices ready is set to true which is the dispatch gate, then docks, background workers and the central widget, then SENoteInitializeCompleted. Finally init done is logged.">
+<title>The start-up sequence, and where the dispatch gate opens</title>
+<path class="se-edge" d="M 54,20 V 142 M 54,178 V 618"/>
+<path class="se-frame" d="M 54,142 V 178"/>
+<path class="se-head" d="M 54,88 L 48.5,79 L 59.5,79 Z M 54,174 L 48.5,165 L 59.5,165 Z"/>
+<circle class="se-head" cx="54" cy="45" r="5"/>
+<circle class="se-head" cx="54" cy="117" r="5"/>
+<circle class="se-head" cx="54" cy="196" r="5"/>
+<circle class="se-head" cx="54" cy="618" r="5"/>
+<rect class="se-box" x="78" y="20" width="460" height="50" rx="6"/>
+<text class="se-id" x="98" y="42">obs_module_load</text>
+<text class="se-sub" x="98" y="60">registers audio_wrapper_source, and nothing else</text>
+<rect class="se-box" x="78" y="92" width="460" height="50" rx="6"/>
+<text class="se-id" x="98" y="114">obs_module_post_load</text>
+<text class="se-sub" x="98" y="132">InstallObsCloseWatcher(); add_event_callback</text>
+<text class="se-note" x="78" y="166">&hellip; OBS loads its own UI &hellip;</text>
+<rect class="se-box" x="78" y="178" width="460" height="36" rx="6"/>
+<text class="se-id" x="98" y="201">OBS_FRONTEND_EVENT_FINISHED_LOADING</text>
+<rect class="se-frame" x="78" y="226" width="778" height="360" rx="6"/>
+<text class="se-id" x="100" y="252">StreamElementsInitializeScope</text>
+<text class="se-sub" x="100" y="270">suppresses event pumping for everything below</text>
+<path class="se-frame" d="M 112,344 V 574"/>
+<text class="se-id" x="100" y="306">SEGlobalStateManager::Create()</text>
+<text class="se-id" x="100" y="332">SEGlobalStateManager::Initialize(main window)</text>
+<text class="se-id" x="124" y="358">SEConfig</text>
+<text class="se-note" x="450" y="358">first &mdash; everything below may read it</text>
+<text class="se-id" x="124" y="384">SECrashHandler</text>
+<text class="se-note" x="450" y="384">second &mdash; so a crash in the rest is reportable</text>
+<text class="se-id" x="124" y="410">SEApiServices</text>
+<text class="se-note" x="450" y="410">the container, still empty</text>
+<text class="se-note" x="124" y="436">&hellip; ~39 services, in dependency order &hellip;</text>
+<text class="se-id" x="124" y="462">PublishApiServices()</text>
+<text class="se-note" x="450" y="462">fills the container</text>
+<text class="se-id" x="124" y="488">WatchServicesForTeardownAudit()</text>
+<rect class="se-box-em" x="108" y="498" width="740" height="26" rx="4"/>
+<text class="se-id" x="124" y="514">apiServices-&gt;ready = true</text>
+<text class="se-note-em" x="450" y="514">the dispatch gate opens here</text>
+<text class="se-note" x="124" y="540">&hellip; docks, background workers, central widget &hellip;</text>
+<text class="se-id" x="124" y="566">SENoteInitializeCompleted()</text>
+<text class="se-id" x="78" y="616">"init done"</text>
+<text class="se-sub" x="78" y="634">logged last, so the log says whether any of this ran</text>
+</svg>
+</div>
+<figcaption>Time runs down the spine, and the dashed gap is OBS building its own UI. Everything in the panel happens inside one <code>StreamElementsInitializeScope</code>, with event pumping suppressed; the accented line is the dispatch gate, and the three orderings below say why it and the two constructions above it sit exactly where they do.</figcaption>
+</figure>
 
 Three orderings in that list are load-bearing and each is pinned by a test.
 

@@ -76,6 +76,13 @@ markdown_extensions:
 plugins:
   - search
 
+# The figures in these pages are hand-authored inline SVG, drawn in
+# currentColor so one set of shapes serves both palettes. This stylesheet
+# carries only what cannot be an opacity of the page's own foreground --
+# the accent, the surface fill -- plus the overflow and caption rules.
+extra_css:
+  - assets/diagrams.css
+
 # An explicit nav, unlike the API reference, which has 141 files and lets
 # MkDocs infer the tree. This one is a dozen chapters meant to be read in
 # order, and the order is the argument.

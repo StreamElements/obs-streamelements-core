@@ -88,13 +88,40 @@ Four reference cycles used to run through this container, all of the shape
 `container -> service -> container`, plus one that refcounting cannot see at
 all:
 
-```
-SEWidgetManager::~SEWidgetManager() removes and deletes the docks
-  -> docks destroy the SEBrowserWidgets
-    -> widgets release shared_ptr<SEApiMessageHandler>
-      -> handlers release shared_ptr<SEApiServices>
-        -> container releases shared_ptr<SEBrowserWidgetManager>, allowing its destructor
-```
+<figure class="se-fig">
+<div class="se-fig-scroll">
+<svg viewBox="0 0 880 260" role="img" aria-label="A five-node ownership chain that would close into a cycle. SEApiServices, the service container, owns SEBrowserWidgetManager, which deletes the QDockWidgets in its destructor. Each dock destroys its SEBrowserWidget, which holds an SEApiMessageHandler, which refers back to SEApiServices. That last edge is a weak_ptr, locked per call: non-owning, so the chain never closes and the container's reference count can reach zero.">
+<title>The ownership chain through the container, and the one edge that does not own</title>
+<text class="se-note" x="279" y="40" text-anchor="middle">owns</text>
+<text class="se-note" x="569" y="40" text-anchor="middle">deletes in ~dtor</text>
+<rect class="se-box" x="24" y="48" width="220" height="58" rx="6"/>
+<text class="se-id" x="134" y="72" text-anchor="middle">SEApiServices</text>
+<text class="se-sub" x="134" y="90" text-anchor="middle">the service container</text>
+<rect class="se-box" x="314" y="48" width="220" height="58" rx="6"/>
+<text class="se-id" x="424" y="72" text-anchor="middle">SEBrowserWidgetManager</text>
+<text class="se-sub" x="424" y="90" text-anchor="middle">owns the docks</text>
+<rect class="se-box" x="604" y="48" width="220" height="58" rx="6"/>
+<text class="se-id" x="714" y="72" text-anchor="middle">QDockWidget</text>
+<text class="se-sub" x="714" y="90" text-anchor="middle">owns its browser widget</text>
+<path class="se-edge" d="M 246,77 H 305 M 536,77 H 595 M 714,106 V 139"/>
+<path class="se-head" d="M 314,77 L 305,72 L 305,82 Z M 604,77 L 595,72 L 595,82 Z M 714,148 L 708.5,139 L 719.5,139 Z"/>
+<text class="se-note" x="726" y="130">destroys</text>
+<rect class="se-box" x="604" y="148" width="220" height="58" rx="6"/>
+<text class="se-id" x="714" y="172" text-anchor="middle">SEBrowserWidget</text>
+<text class="se-sub" x="714" y="190" text-anchor="middle">one CEF panel</text>
+<rect class="se-box" x="314" y="148" width="220" height="58" rx="6"/>
+<text class="se-id" x="424" y="172" text-anchor="middle">SEApiMessageHandler</text>
+<text class="se-sub" x="424" y="190" text-anchor="middle">the page's window.host</text>
+<path class="se-edge" d="M 598,177 H 543"/>
+<path class="se-head" d="M 534,177 L 543,172 L 543,182 Z"/>
+<text class="se-note" x="569" y="140" text-anchor="middle">holds</text>
+<path class="se-edge-weak" d="M 424,206 V 234 H 139 V 115"/>
+<path class="se-head-em" d="M 139,106 L 133.5,115 L 144.5,115 Z"/>
+<text class="se-note-em" x="156" y="228">weak_ptr&lt;SEApiServices&gt; &mdash; non-owning, locked per call</text>
+</svg>
+</div>
+<figcaption>Make that last edge a <code>shared_ptr</code> and the chain closes: the container cannot release the widget manager until the handler releases the container, which cannot happen until the manager's destructor has deleted the docks. <code>check_nothing_but_the_manager_owns_the_services_container</code> is what keeps it weak.</figcaption>
+</figure>
 
 That loop hung OBS: a complete shutdown in the log, process never exited,
 `QCoreApplication::exec` still on the main thread's stack. It was broken for a

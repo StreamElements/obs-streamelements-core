@@ -7,20 +7,64 @@ button. Nearly all of them are a web page in a CEF widget.
 
 ## The widget hierarchy
 
-```
-SEWidgetManager            : SEObsAppMonitor          generic Qt widget & dock plumbing
-   └ SEBrowserWidgetManager : protected SEWidgetManager, public ISEBrowserWidgetManager
-                                                       the same, for browser widgets
-SEBrowserWidget                                        one CEF panel
-SEWorkerManager            → ISEWorkerManager          off-screen browser widgets
-SEBrowserDialogManager     → ISEBrowserDialogManager   modal + non-modal dialogs
-SEPopupWindowManager       → ISEPopupWindowManager     separate top-level windows
-SEMenuManager              → ISEMenuManager            the SE.Live menu
-SEAuxiliaryControlsBuilder → ISEAuxiliaryControlsBuilder  context menus, aux buttons
-SENativeObsUIControlsManager → ISENativeObsUIControlsManager  OBS's own controls
-SEStatusBarMessageManager  → ISEStatusBarMessageManager temporary status-bar text
-SEStatePersistence         → ISEStatePersistence       what survives a restart
-```
+<figure class="se-fig">
+<div class="se-fig-scroll">
+<svg viewBox="0 0 880 430" role="img" aria-label="The widget family. SEObsAppMonitor is the base; SEWidgetManager derives from it and handles widgets, docks and the central widget; SEBrowserWidgetManager inherits that plumbing protected and implements ISEBrowserWidgetManager. Eight sibling managers, each published behind its own ISE contract, cover off-screen workers, modal and non-modal dialogs, pop-up windows, the SE.Live menu, context menus and auxiliary buttons, OBS's own UI controls, status-bar messages and state persistence. SEBrowserWidget, one CEF panel borrowed from the sibling obs-browser plug-in, is created by the browser widget manager, and the worker, dialog and pop-up managers each wrap one too.">
+<title>The widget managers, their contracts, and the panel they all wrap</title>
+<text class="se-cap" x="24" y="34">QT PLUMBING</text>
+<rect class="se-box" x="24" y="46" width="260" height="52" rx="6"/>
+<text class="se-id" x="44" y="70">SEObsAppMonitor</text>
+<text class="se-sub" x="44" y="88">OBS app lifecycle hooks</text>
+<path class="se-edge" d="M 154,98 V 119"/>
+<path class="se-head" d="M 154,128 L 148.5,119 L 159.5,119 Z"/>
+<rect class="se-box" x="24" y="128" width="260" height="52" rx="6"/>
+<text class="se-id" x="44" y="152">SEWidgetManager</text>
+<text class="se-sub" x="44" y="170">widgets, docks, central widget</text>
+<path class="se-edge-em" d="M 154,180 V 201"/>
+<path class="se-head-em" d="M 154,210 L 148.5,201 L 159.5,201 Z"/>
+<text class="se-note-em" x="166" y="198">protected</text>
+<rect class="se-box" x="24" y="210" width="260" height="66" rx="6"/>
+<text class="se-id" x="44" y="234">SEBrowserWidgetManager</text>
+<text class="se-sub" x="44" y="252">public ISEBrowserWidgetManager</text>
+<text class="se-sub" x="44" y="268">the same, for browser widgets</text>
+<rect class="se-frame" x="316" y="18" width="540" height="298" rx="6"/>
+<text class="se-cap" x="332" y="42">SIBLING MANAGERS</text>
+<text class="se-sub" x="332" y="60">each published behind its own ISE&lt;Class&gt; contract</text>
+<rect class="se-box" x="332" y="76" width="246" height="48" rx="6"/>
+<text class="se-id-sm" x="346" y="96">SEWorkerManager</text>
+<text class="se-sub" x="346" y="114">off-screen browser widgets</text>
+<rect class="se-box" x="594" y="76" width="246" height="48" rx="6"/>
+<text class="se-id-sm" x="608" y="96">SEBrowserDialogManager</text>
+<text class="se-sub" x="608" y="114">modal + non-modal dialogs</text>
+<rect class="se-box" x="332" y="134" width="246" height="48" rx="6"/>
+<text class="se-id-sm" x="346" y="154">SEPopupWindowManager</text>
+<text class="se-sub" x="346" y="172">separate top-level windows</text>
+<rect class="se-box" x="594" y="134" width="246" height="48" rx="6"/>
+<text class="se-id-sm" x="608" y="154">SEMenuManager</text>
+<text class="se-sub" x="608" y="172">the SE.Live menu</text>
+<rect class="se-box" x="332" y="192" width="246" height="48" rx="6"/>
+<text class="se-id-sm" x="346" y="212">SEAuxiliaryControlsBuilder</text>
+<text class="se-sub" x="346" y="230">context menus, aux buttons</text>
+<rect class="se-box" x="594" y="192" width="246" height="48" rx="6"/>
+<text class="se-id-sm" x="608" y="212">SENativeObsUIControlsManager</text>
+<text class="se-sub" x="608" y="230">OBS's own controls</text>
+<rect class="se-box" x="332" y="250" width="246" height="48" rx="6"/>
+<text class="se-id-sm" x="346" y="270">SEStatusBarMessageManager</text>
+<text class="se-sub" x="346" y="288">temporary status-bar text</text>
+<rect class="se-box" x="594" y="250" width="246" height="48" rx="6"/>
+<text class="se-id-sm" x="608" y="270">SEStatePersistence</text>
+<text class="se-sub" x="608" y="288">what survives a restart</text>
+<path class="se-edge" d="M 154,276 V 343 M 586,316 V 343"/>
+<path class="se-head" d="M 154,352 L 148.5,343 L 159.5,343 Z M 586,352 L 580.5,343 L 591.5,343 Z"/>
+<text class="se-note" x="166" y="316">creates</text>
+<text class="se-note" x="598" y="338">workers, dialogs and pop-ups wrap one too</text>
+<rect class="se-box" x="24" y="352" width="832" height="58" rx="6"/>
+<text class="se-id" x="440" y="376" text-anchor="middle">SEBrowserWidget</text>
+<text class="se-sub" x="440" y="394" text-anchor="middle">one CEF panel, borrowed from the sibling obs-browser plug-in</text>
+</svg>
+</div>
+<figcaption>Eleven classes and one panel. Every manager in the frame is reached through its interface rather than its class, which is what lets a handler body compile in a test binary with no Qt at all; the four that put a page on screen all create the same <code>SEBrowserWidget</code>.</figcaption>
+</figure>
 
 The inheritance is `protected`: the dock plumbing is an implementation detail
 of the browser widget manager, not part of its contract. The seven methods it
