@@ -1,12 +1,21 @@
 name: Pages
 
-# Publishes two things to GitHub Pages from docs/:
+# Publishes three things to GitHub Pages from docs/:
 #
 #   /              the release-channel status page (docs/status.html), which used
 #                  to live at cdn.streamelements.com/obs/qa/status.html as a
 #                  single hand-uploaded file, outside version control and review
 #   /api/          the JavaScript OBS API reference, built from docs/api/ with
 #                  MkDocs Material so it has a nav sidebar and full-text search
+#   /architecture/ how the plug-in is built, from docs/architecture/, as a
+#                  SECOND MkDocs site rather than a section of the first: the
+#                  API reference is published as site_url .../api/ and its front
+#                  page carries 217 generated anchor links into its own pages,
+#                  so folding another subtree under it would move every one of
+#                  those URLs and put "JavaScript OBS API" over pages that
+#                  document C++. The two cross-link with absolute URLs, because
+#                  each build only knows its own docs_dir and `strict: true`
+#                  turns an unresolvable relative link into a build failure.
 #
 # Deliberately its own workflow rather than a job in build.yml. build.yml fans out
 # to Windows and macOS OBS builds that take tens of minutes and, on master, tags
@@ -27,6 +36,7 @@ on:
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
+      - 'mkdocs.architecture.yml'
       - '.github/workflows/pages.yml'
   # Republish without touching the pages. Needed at least once, to deploy after
   # Pages is enabled by hand, rather than pushing an empty commit to master.
@@ -83,6 +93,13 @@ jobs:
       # of publishing dead links.
       - name: Build docs/api -> _site/api
         run: mkdocs build
+
+      # The second site, into a sibling directory of the first. Separate
+      # configs rather than one site with two sections: see the header.
+      # Also strict, so a dead cross-reference inside the architecture tree
+      # fails here rather than publishing.
+      - name: Build docs/architecture -> _site/architecture
+        run: mkdocs build -f mkdocs.architecture.yml
 
       # Everything else in docs/ is served verbatim at the site root, exactly as
       # before. Copied AFTER the MkDocs build, and with `-n`, so a docs/api change

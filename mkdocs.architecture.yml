@@ -1,0 +1,100 @@
+# Builds docs/architecture/ into the /architecture/ section of the GitHub
+# Pages site, beside the JavaScript OBS API reference at /api/.
+#
+# A SECOND MkDocs site rather than a section of the first, on purpose. The
+# API reference is published as `site_url: .../api/` and its front page
+# carries 217 generated anchor links into its own group pages; folding a
+# second subtree under it would move every one of those URLs and make
+# "JavaScript OBS API" the site name over pages that document C++. Two
+# sibling sites each keep their own nav, their own search index and their
+# own stable URLs, and pages.yml builds both.
+#
+# The two link to each other with ABSOLUTE https URLs, not relative paths.
+# Each build only knows its own docs_dir, so `../api/...` is a link MkDocs
+# cannot resolve, and with `strict: true` an unresolved link is a build
+# failure rather than a warning. An external URL is not validated.
+
+site_name: Architecture
+site_description: >-
+  How the SE.Live OBS plug-in is put together: lifecycle, services, the
+  host API bridge, compositions, outputs, UI, threading and diagnostics.
+site_url: https://streamelements.github.io/obs-streamelements-core/architecture/
+repo_url: https://github.com/StreamElements/obs-streamelements-core
+edit_uri: edit/master/docs/architecture/
+
+docs_dir: docs/architecture
+site_dir: _site/architecture
+
+# Same settings as the API build, and for the same reason: these pages
+# cross-reference each other heavily, so a renamed heading or a moved file
+# should fail here rather than publish a dead link.
+strict: true
+validation:
+  links:
+    absolute_links: relative_to_docs
+    unrecognized_links: warn
+    anchors: warn
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.top
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - toc:
+      permalink: true
+  - tables
+  - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+plugins:
+  - search
+
+# An explicit nav, unlike the API reference, which has 141 files and lets
+# MkDocs infer the tree. This one is a dozen chapters meant to be read in
+# order, and the order is the argument.
+nav:
+  - Overview: README.md
+  - Module lifecycle: module-lifecycle.md
+  - Services and injection: services.md
+  - The host API bridge: host-api-bridge.md
+  - The data model: data-model.md
+  - Compositions and scenes: compositions.md
+  - Outputs and encoders: outputs.md
+  - UI and widgets: ui.md
+  - Threading and locks: threading.md
+  - Diagnostics: diagnostics.md
+  - Build: build.md
+  - Testing: testing.md
+  - Enforced invariants: invariants.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/StreamElements/obs-streamelements-core

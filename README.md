@@ -13,6 +13,17 @@ That tree is the source of truth. It replaces `JavaScript OBS API Version
 [`tools/docx-to-markdown/`](tools/docx-to-markdown/) for how it was converted
 and verified.
 
+# Architecture
+
+How the plugin itself is put together — lifecycle, the service container and
+the injection rules, the host API bridge, compositions, outputs, UI,
+threading, diagnostics, build and testing — is documented in
+**[`docs/architecture/`](docs/architecture/)**, published beside the API
+reference at <a href="https://streamelements.github.io/obs-streamelements-core/architecture/" target="_blank">https://streamelements.github.io/obs-streamelements-core/architecture/</a>.
+
+Start with [the overview](docs/architecture/README.md); it has a map of the
+chapters and a table of where to start by what you are doing.
+
 # Building locally
 
 This plugin does not build on its own. It is built as part of an obs-studio
