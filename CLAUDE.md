@@ -4,6 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `obs-streamelements-core` is the SE.Live native OBS Studio plugin — C++/Objective-C++ with Qt 6, built as part of an obs-studio tree.
 
+## Documentation
+
+**`docs/architecture/` has to stay true: a change that alters what those pages
+describe updates them in the same commit.** That means a renamed or added class,
+a new or removed service or interface, a changed construction or teardown order,
+a new lock or a widened lock scope, a new `check_*` invariant, a changed entry
+point, a new build switch — the chapters name specific classes, counts and
+invariant names, so a stale page lies about code somebody is reading right now.
+Treat "I renamed something" as a documentation task, not only a code one.
+
+Thirteen chapters, published beside the JS API reference at `/architecture/` by
+`.github/workflows/pages.yml`, which only runs on `master`. Build them with
+`mkdocs build -f mkdocs.architecture.yml`; it is `strict: true`, so a dead
+cross-link or anchor fails the build rather than publishing. Prose wraps at 79
+columns. The figures are hand-authored inline SVG drawn in `currentColor` so one
+drawing serves the light and the dark palette — the few values that cannot be an
+opacity of the page foreground live in `docs/architecture/assets/diagrams.css`.
+
+`docs/api/` is the other half and a separate site: it documents the surface a
+page sees, so a new or changed `window.host` method needs an edit in both trees.
+
 ## Build
 
 This plugin does **not** build standalone. It must sit at `obs-studio/plugins/obs-streamelements-core` (it already does here), with the sibling `obs-studio/plugins/obs-browser` present — `SEBrowserWidget.cpp` includes `../../obs-browser/panel/browser-panel.hpp` by relative path. Configure and build from the obs-studio root, not from this directory.

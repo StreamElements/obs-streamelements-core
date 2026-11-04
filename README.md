@@ -2,6 +2,11 @@
 
 Core SE.Live OBS plugin.
 
+Documentation: **[Architecture](docs/architecture/)** — how the plugin is put
+together · **[JavaScript OBS API](docs/api/)** — the `window.host` surface a
+page sees. Both are published on GitHub Pages; links and detail in the two
+sections below.
+
 # JavaScript OBS API
 
 The host API this plugin exposes to page JavaScript — 217 `window.host` calls,
