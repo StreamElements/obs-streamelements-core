@@ -146,7 +146,25 @@ bool DeserializeObsTransition(CefRefPtr<CefValue> input,
 	}
 
 	if (useExisting) {
-		transition = GetExistingObsTransition(id);
+		//
+		// SETRACE_AUTODECREF, because GetExistingObsTransition()
+		// annotates its obs_source_get_ref() with SETRACE_ADDREF and
+		// the OBSSourceAutoRelease below releases that reference
+		// through its destructor, which is not annotated. The obs
+		// refcount was always correct -- nothing leaked -- but the
+		// SETRACE counter gained +1 per call, so the shutdown line
+		// `reference count balance = N` reported a leak that was not
+		// there, once per successful transition change on the OBS
+		// main canvas. That made the plug-in's only leak signal
+		// untrustworthy, which is worse than a small leak.
+		//
+		// Same shape as SEVideoCompositionBase::SerializeTransition,
+		// which pairs GetTransitionRef() with SETRACE_AUTODECREF for
+		// exactly this reason. The custom-composition branch below
+		// needs no annotation: SETRACE_SCOPEREF does not count, and
+		// its release is unannotated too, so both sides are silent.
+		//
+		transition = SETRACE_AUTODECREF(GetExistingObsTransition(id));
 
 		if (!transition) {
 			return false;

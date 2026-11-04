@@ -451,8 +451,18 @@ private:
 		--m_refCount;
 
 		if (m_refCount <= 0 && m_object) {
+			//
+			// The last consumer has left, so the encoder is
+			// released. This is the ordinary path -- it runs for
+			// every active output on every clean shutdown -- and
+			// the message used to open with "error: " while being
+			// logged at LOG_INFO, which made a normal teardown
+			// read as a failure. The genuine error here is the
+			// negative-count check at the bottom of this
+			// function, and that one is a LOG_ERROR.
+			//
 			blog(LOG_INFO,
-			     "[obs-streamelements-core]: error: SELazyOBSVideoEncoderProvider::RemoveConsumer calling allocator->Reset(): (refCount: %d, object: %s): %s",
+			     "[obs-streamelements-core]: SELazyOBSVideoEncoderProvider::RemoveConsumer: last consumer left, releasing the encoder and resetting the allocator (refCount: %d, object: %s): %s",
 			     m_refCount, GetIdFromPointer(m_object).c_str(),
 			     slug().c_str());
 

@@ -2331,13 +2331,25 @@ void SECustomReplayBufferOutput::handle_output_saved(
 	auto self =
 		static_cast<SECustomReplayBufferOutput *>(my_data);
 
-	if (!self->GetOutput())
+	//
+	// GetOutput() hands back an owned, SETRACE-counted reference on
+	// every override. This handler used to call it TWICE and discard
+	// both -- once for the null test and once as an argument to
+	// obs_output_get_proc_handler() -- which leaked two obs_output
+	// references and added two to the shutdown reference-count
+	// balance for every replay-buffer save. Acquire once, hold it,
+	// hand the count back: the idiom the rest of this file uses.
+	//
+	OBSOutputAutoRelease output = self->GetOutput();
+	SETRACE_DECREF(output.Get());
+
+	if (!output)
 		return;
 
 	auto eventArgs = CefDictionaryValue::Create();
 
 	calldata_t *proc_cd = SETRACE_ADDREF(calldata_create());
-	auto proc_handler = obs_output_get_proc_handler(self->GetOutput());
+	auto proc_handler = obs_output_get_proc_handler(output);
 	proc_handler_call(proc_handler, "get_last_replay", proc_cd);
 
 	const char *path = nullptr;

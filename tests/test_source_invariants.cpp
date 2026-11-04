@@ -5832,6 +5832,325 @@ static void check_no_shared_mutex_is_acquired_recursively()
 }
 
 //
+// --- No libobs transition call may run while m_currentSceneMutex is held.
+//
+// Same hazard as the check above -- a std::shared_mutex acquired
+// recursively on one thread -- but invisible to it, because the recursion
+// does not pass through any call this source can see. It leaves through
+// libobs and comes back in through a signal handler:
+//
+//   SECustomVideoComposition::SetCurrentScene
+//     holds unique_lock(m_currentSceneMutex)
+//     -> obs_transition_start -> obs_transition_set
+//        -> signal_handler_signal("transition_stop")      [SYNCHRONOUS]
+//          -> handle_transition_stop
+//            -> SECustomVideoComposition::GetCurrentSceneRef
+//              -> shared_lock(m_currentSceneMutex)        [PARKS FOR EVER]
+//
+// libobs emits "transition_stop" from obs_transition_set() on the calling
+// thread whenever a transition is already active
+// (obs-source-transition.c). MSVC backs std::shared_mutex with an SRWLOCK
+// that Microsoft documents as non-recursive, so the nested acquire never
+// returns: the OBS UI thread is gone, with no shutdown and no trace dump.
+//
+// Reproduced live 2026-11-04 by switching scenes on an SE.Live canvas whose
+// transition was a stinger -- the stinger branch starts the transition
+// twice, so the second call always finds one active. Any transition type
+// reaches it given two scene changes inside one transition's duration.
+//
+// The rule is therefore about the LOCK SCOPE and not about stingers: read
+// m_currentScene out under the lock, release it, then talk to libobs.
+//
+static std::string scope_from(const std::string &src, std::size_t from)
+{
+	int depth = 0;
+
+	for (std::size_t i = from; i < src.size(); ++i) {
+		if (src[i] == '{') {
+			++depth;
+		} else if (src[i] == '}') {
+			if (depth == 0)
+				return src.substr(from, i - from);
+
+			--depth;
+		}
+	}
+
+	return src.substr(from);
+}
+
+static void check_no_transition_call_runs_under_the_current_scene_lock()
+{
+	const std::string src = strip_line_comments(
+		slurp("streamelements/SEVideoComposition.cpp"));
+
+	//
+	// Every lock on this mutex is constructed through decltype, in both
+	// polarities, so these two markers find the constructions and cannot
+	// match the member's own declaration.
+	//
+	const char *const markers[] = {
+		"std::shared_lock<decltype(m_currentSceneMutex)>",
+		"std::unique_lock<decltype(m_currentSceneMutex)>",
+	};
+
+	std::size_t sites = 0;
+
+	for (const char *marker : markers) {
+		for (std::size_t at = src.find(marker); at != std::string::npos;
+		     at = src.find(marker, at + 1)) {
+			++sites;
+
+			const std::string scope = scope_from(src, at);
+
+			check(scope.find("obs_transition_") ==
+				      std::string::npos,
+			      (std::string("a libobs transition call runs "
+					   "while m_currentSceneMutex is held, "
+					   "in the scope opened by `") +
+			       marker +
+			       "` -- obs_transition_set() emits "
+			       "\"transition_stop\" synchronously when a "
+			       "transition is active, and "
+			       "handle_transition_stop() re-enters that mutex "
+			       "through GetCurrentSceneRef(), which deadlocks "
+			       "the OBS UI thread. Read the current scene out "
+			       "under the lock, release it, then call libobs.")
+				      .c_str());
+		}
+	}
+
+	//
+	// Non-vacuity: six lock sites in this file today. If a rename stops
+	// the markers matching, the loop above would pass by finding nothing.
+	//
+	check(sites >= 5,
+	      "expected at least 5 m_currentSceneMutex lock sites in "
+	      "SEVideoComposition.cpp; the markers no longer match, so the "
+	      "transition-under-lock check is vacuous");
+}
+
+//
+// --- A SETRACE-counted reference must be given back to the counter.
+//
+// Several getters hand out an owned reference and annotate the acquire:
+// their body is `return SETRACE_ADDREF(obs_..._get_ref(x));`. The callers
+// all park that reference in an OBS*AutoRelease, whose destructor releases
+// the obs reference but is NOT annotated -- so the acquire has to be paired
+// explicitly, in one of the two spellings this tree uses:
+//
+//   OBSSceneAutoRelease s = SETRACE_AUTODECREF(c->GetCurrentSceneRef());
+//
+//   OBSSceneAutoRelease s = c->GetCurrentSceneRef();
+//   SETRACE_DECREF(s.Get());
+//
+// Miss it and the obs refcount is still correct -- nothing leaks -- but
+// `reference count balance = N` at shutdown reports a leak that is not
+// there. That is worse than it sounds: the balance line is the only
+// leak signal this plug-in has, and a false positive makes every reading
+// of it worthless.
+//
+// It happened: DeserializeObsTransition() took GetExistingObsTransition()'s
+// counted reference into an OBSSourceAutoRelease and never paired it, so
+// the balance grew by one for every successful transition change on the OBS
+// main canvas. Two end-to-end runs reported 3 and 2, which was read as a
+// streaming leak for most of a day -- the mode-2 per-pointer dump is what
+// finally named the site. A scan of the other eight call sites of these
+// getters found all eight correctly paired, seven of them in the
+// second spelling above, which is why this check accepts both.
+//
+static void check_counted_references_are_given_back_to_the_counter()
+{
+	const char *const files[] = {
+		"streamelements/SEUtils/SEObsEncoderUtils.cpp",
+		"streamelements/SEVideoComposition.cpp",
+		"streamelements/SEVideoComposition.hpp",
+		"streamelements/SEObsSceneManager.cpp",
+		"streamelements/SEOutput.cpp",
+	};
+
+	//
+	// Getters whose body returns SETRACE_ADDREF(...), so the caller owns
+	// a counted reference.
+	//
+	const char *const getters[] = {
+		"GetExistingObsTransition",
+		"GetCurrentSceneRef",
+		"GetSceneByIdRef",
+		"GetSceneByNameRef",
+		"GetTransitionRef",
+		"GetRootSceneRef",
+		"GetOutput",
+	};
+
+	std::size_t sites = 0;
+
+	for (const char *file : files) {
+		const std::size_t sites_before = sites;
+		const std::string src = strip_line_comments(slurp(file));
+
+		std::string flat;
+		flat.reserve(src.size());
+
+		for (std::size_t i = 0; i < src.size(); ++i) {
+			if (std::isspace(static_cast<unsigned char>(src[i]))) {
+				if (!flat.empty() && flat.back() != ' ')
+					flat += ' ';
+			} else {
+				flat += src[i];
+			}
+		}
+
+		for (const char *getter : getters) {
+			const std::string needle = std::string(getter) + "(";
+
+			for (std::size_t at = flat.find(needle);
+			     at != std::string::npos;
+			     at = flat.find(needle, at + 1)) {
+				//
+				// Only the shape that parks the reference in an
+				// auto-release local; a `return
+				// SETRACE_ADDREF(...)` definition or an
+				// argument pass-through is not this check's
+				// business.
+				//
+				const std::size_t line_start =
+					flat.rfind(';', at) == std::string::npos
+						? 0
+						: flat.rfind(';', at) + 1;
+				const std::string stmt = flat.substr(
+					line_start, at - line_start);
+
+				if (stmt.find("AutoRelease") ==
+					    std::string::npos ||
+				    stmt.find('=') == std::string::npos)
+					continue;
+
+				++sites;
+
+				//
+				// The window covers the assignment itself and
+				// the statement after it, which is where the
+				// second spelling puts its decrement.
+				//
+				const std::string window = flat.substr(
+					line_start,
+					std::min<std::size_t>(
+						260, flat.size() - line_start));
+
+				check(window.find("SETRACE_AUTODECREF") !=
+						      std::string::npos ||
+					      window.find("SETRACE_DECREF") !=
+						      std::string::npos,
+				      (std::string("a SETRACE-counted "
+						   "reference from ") +
+				       getter +
+				       "() is parked in an OBS*AutoRelease "
+				       "without being handed back to the "
+				       "counter, in " +
+				       file +
+				       " -- the obs refcount stays correct, "
+				       "but `reference count balance` at "
+				       "shutdown will report a leak that is "
+				       "not there. Pair it with "
+				       "SETRACE_AUTODECREF(...) or a "
+				       "following SETRACE_DECREF(x.Get()).")
+					      .c_str());
+			}
+		}
+
+		//
+		// Per file, not just in total: a global floor lets a rename in
+		// one file hide every site it had while the others keep the
+		// count above the line. SEObsEncoderUtils.cpp is exempt
+		// because its only site separates the declaration from the
+		// assignment, which this scan deliberately does not chase --
+		// it is pinned by name in the table below instead.
+		//
+		if (std::string(file) !=
+		    "streamelements/SEUtils/SEObsEncoderUtils.cpp") {
+			check(sites > sites_before,
+			      (std::string("no counted-reference call site "
+					   "found in ") +
+			       file +
+			       " -- it had some, so the scan has stopped "
+			       "matching the shape and is now vacuous for "
+			       "this file")
+				      .c_str());
+		}
+	}
+
+	//
+	// Non-vacuity: nine such sites across these files today.
+	//
+	check(sites >= 8,
+	      "expected at least 8 counted-reference call sites across the "
+	      "composition, scene and output sources; the scan found fewer, "
+	      "so it is no longer looking at the right shape");
+
+	//
+	// Two sites the scan above cannot reach, pinned by name. The scan
+	// requires the auto-release type and the assignment to sit in one
+	// statement; both of these separate the declaration from the
+	// assignment, or take the reference without one at all -- and they are
+	// the two that were actually wrong, so they are worth naming rather
+	// than generalising the scan until it is noisy enough to be deleted.
+	//
+	struct Site {
+		const char *file;
+		const char *must_contain;
+		const char *must_not_contain;
+		const char *why;
+	};
+
+	//
+	// These needles have ALL whitespace removed, not collapsed, and are
+	// matched against source with all whitespace removed. Collapsing to
+	// single spaces is not enough: clang-format decides on its own
+	// whether the call below fits on one line, and the first version of
+	// this check broke the moment the formatter joined it -- a reflow
+	// must not be able to turn a passing invariant into a failing one.
+	//
+	const Site named[] = {
+		{"streamelements/SEUtils/SEObsEncoderUtils.cpp",
+		 "SETRACE_AUTODECREF(GetExistingObsTransition(id));",
+		 "transition=GetExistingObsTransition(id);",
+		 "DeserializeObsTransition() must hand back the counted "
+		 "reference GetExistingObsTransition() gave it; without this "
+		 "the shutdown balance grows by one for every transition "
+		 "change on the OBS main canvas, reporting a leak that is not "
+		 "there"},
+		{"streamelements/SEOutput.cpp",
+		 "OBSOutputAutoReleaseoutput=self->GetOutput();",
+		 "if(!self->GetOutput())",
+		 "SECustomReplayBufferOutput::handle_output_saved() must "
+		 "acquire the output once and hold it; calling GetOutput() "
+		 "for a null test and again as an argument leaks two "
+		 "obs_output references per replay-buffer save"},
+	};
+
+	for (const Site &site : named) {
+		const std::string src = strip_line_comments(slurp(site.file));
+
+		std::string flat;
+		flat.reserve(src.size());
+
+		for (std::size_t i = 0; i < src.size(); ++i) {
+			if (!std::isspace(static_cast<unsigned char>(src[i])))
+				flat += src[i];
+		}
+
+		check(flat.find(site.must_contain) != std::string::npos,
+		      (std::string(site.file) + ": " + site.why).c_str());
+
+		check(flat.find(site.must_not_contain) == std::string::npos,
+		      (std::string(site.file) +
+		       ": the unpaired form is back -- " + site.why)
+			      .c_str());
+	}
+}
+
+//
 // --- A contract's default arguments must match its implementation's.
 //
 // Three methods on the ISE* contracts carry default arguments:
@@ -6281,6 +6600,8 @@ int main()
 	check_every_source_file_ends_with_a_newline();
 	check_no_platform_guard_uses_the_bare_APPLE_macro();
 	check_no_shared_mutex_is_acquired_recursively();
+	check_no_transition_call_runs_under_the_current_scene_lock();
+	check_counted_references_are_given_back_to_the_counter();
 	check_contract_default_arguments_agree_with_their_overrides();
 	check_the_dispatch_gate_opens_before_the_first_browser_widget();
 

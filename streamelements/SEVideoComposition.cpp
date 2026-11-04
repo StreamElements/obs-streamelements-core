@@ -1741,13 +1741,20 @@ void SECustomVideoComposition::SetTransition(
 
 	transition_set_defaults(m_transition, m_baseWidth, m_baseHeight);
 
-	{
-		std::shared_lock<decltype(m_currentSceneMutex)> currentSceneLock(
-			m_currentSceneMutex);
+	//
+	// The current scene is read out BEFORE obs_transition_set() rather
+	// than around it, for the reason spelled out in SetCurrentScene():
+	// obs_transition_set() emits "transition_stop" synchronously when a
+	// transition is already active, and our handler re-enters
+	// m_currentSceneMutex through GetCurrentSceneRef(). Two shared
+	// acquires on one thread deadlock only when a writer arrives between
+	// them, so this site was latent where SetCurrentScene's was certain
+	// -- the same hazard either way.
+	//
+	OBSSceneAutoRelease currentScene =
+		SETRACE_AUTODECREF(GetCurrentSceneRef());
 
-		obs_transition_set(transition,
-				   obs_scene_get_source(m_currentScene));
-	}
+	obs_transition_set(transition, obs_scene_get_source(currentScene));
 
 	auto jsonValue = CefValue::Create();
 	SerializeComposition(jsonValue);
@@ -1798,6 +1805,39 @@ bool SECustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 		if (scene == item) {
 			obs_scene_t *oldCurrentScene = nullptr;
 
+			//
+			// m_currentSceneMutex guards m_currentScene and
+			// nothing else, so the swap happens under it while the
+			// libobs calls below happen OUTSIDE it. That is not
+			// tidying: holding it across obs_transition_start()
+			// deadlocks OBS outright.
+			//
+			// obs_transition_set(), which obs_transition_start()
+			// calls, emits "transition_stop" SYNCHRONOUSLY on the
+			// calling thread whenever a transition is already
+			// active (libobs obs-source-transition.c). Our handler
+			// for that signal, handle_transition_stop(), calls
+			// GetCurrentSceneRef(), which takes a shared_lock on
+			// this same mutex. A shared acquire nested inside this
+			// thread's own exclusive hold is undefined behaviour,
+			// and MSVC backs std::shared_mutex with an SRWLOCK
+			// that Microsoft documents as non-recursive: it parks
+			// for ever and the OBS UI thread is gone.
+			//
+			// Reproduced live on a canvas whose transition was a
+			// stinger: the stinger branch below starts the
+			// transition twice, so the second call always finds
+			// one active and always signals. Any transition type
+			// reaches it, though -- two scene changes inside one
+			// transition's duration is enough -- which is why the
+			// fix is the lock scope rather than the stinger
+			// branch. HandleObsSceneCollectionCleanupComplete()
+			// was already written this way.
+			//
+			// Swapping first also means a handler that runs
+			// re-entrantly sees the scene being switched TO, which
+			// is what an active-scene-changed event should name.
+			//
 			{
 				std::unique_lock<decltype(m_currentSceneMutex)>
 					currentSceneLock(m_currentSceneMutex);
@@ -1805,52 +1845,65 @@ bool SECustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 				if (m_currentScene == scene)
 					return true;
 
-				{
-					auto source = obs_scene_get_source(
-						m_currentScene);
-					if (source) {
-						obs_source_dec_active(source);
-						obs_source_dec_showing(source);
-					}
-				}
+				//
+				// Takes over the reference m_currentScene
+				// held; released at the end of this block.
+				//
+				oldCurrentScene = m_currentScene;
+				m_currentScene = SETRACE_ADDREF(
+					obs_scene_get_ref(scene));
+			}
 
+			if (oldCurrentScene) {
+				auto source =
+					obs_scene_get_source(oldCurrentScene);
+
+				if (source) {
+					obs_source_dec_active(source);
+					obs_source_dec_showing(source);
+				}
+			}
+
+			obs_transition_start(
+				m_transition, OBS_TRANSITION_MODE_AUTO,
+				GetTransitionDurationMilliseconds(),
+				obs_scene_get_source(scene));
+
+			std::string transition_id =
+				obs_source_get_id(m_transition);
+
+			if (transition_id == "obs_stinger_transition") {
+				//
+				// You may be wondering what is going on here.
+				//
+				// Apparently, the STINGER transition, sets it's duration only after the
+				// first call to "obs_transition_start", and does not execute the first time it
+				// is being called, performing a CUT transition instead.
+				//
+				// Calling obs_transition_start() twice seems to fix this issue, and not
+				// interfere with other transition types.
+				//
+				// We will still execute it only for the STINGER transition just to be safe.
+				//
+				// NOTE: this second call is what makes the
+				// re-entrancy described above certain rather
+				// than occasional -- the first call leaves the
+				// transition active, so the second one always
+				// emits "transition_stop" inline.
+				//
 				obs_transition_start(
 					m_transition, OBS_TRANSITION_MODE_AUTO,
 					GetTransitionDurationMilliseconds(),
 					obs_scene_get_source(scene));
+			}
 
-				std::string transition_id =
-					obs_source_get_id(m_transition);
-
-				if (transition_id == "obs_stinger_transition") {
-					//
-					// You may be wondering what is going on here.
-					//
-					// Apparently, the STINGER transition, sets it's duration only after the
-					// first call to "obs_transition_start", and does not execute the first time it
-					// is being called, performing a CUT transition instead.
-					//
-					// Calling obs_transition_start() twice seems to fix this issue, and not
-					// interfere with other transition types.
-					//
-					// We will still execute it only for the STINGER transition just to be safe.
-					//
-					obs_transition_start(
-						m_transition,
-						OBS_TRANSITION_MODE_AUTO,
-						GetTransitionDurationMilliseconds(),
-						obs_scene_get_source(scene));
-				}
-
+			{
 				auto source = obs_scene_get_source(scene);
+
 				if (source) {
 					obs_source_inc_showing(source);
 					obs_source_inc_active(source);
 				}
-
-				oldCurrentScene = m_currentScene;
-				m_currentScene = SETRACE_ADDREF(
-					obs_scene_get_ref(scene));
 			}
 
 			if (oldCurrentScene) {
