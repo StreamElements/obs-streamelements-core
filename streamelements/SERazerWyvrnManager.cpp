@@ -346,8 +346,22 @@ void SERazerWyvrnManager::ThreadProc()
 		// cannot be memset or assigned wholesale - value-initialise and
 		// fill the fields.
 		wcscpy_s(info.Title, L"SE.Live");
+		// The note is carried here as well as in the app's
+		// registration with Razer, so the two descriptions match. It
+		// is the one behaviour a page cannot infer from this API:
+		// Synapse arbitrates between applications, and a Chroma App
+		// higher in its App Priority List takes the device over, so
+		// effects going quiet mid-session is that list working rather
+		// than SE.Live failing. Description is wchar_t[1024] and this
+		// is 246 characters, so wcscpy_s has room -- it would invoke
+		// the invalid parameter handler rather than truncate.
 		wcscpy_s(info.Description,
-			 L"StreamElements SE.Live plug-in for OBS Studio");
+			 L"StreamElements SE.Live plug-in for OBS Studio. "
+			 L"Note: When you stream a game that it is integrated "
+			 L"with Chroma Apps, your device's lighting and/or "
+			 L"haptics will be taken over by the corresponding "
+			 L"Chroma app if it is higher in the App Priority "
+			 L"List.");
 		wcscpy_s(info.Author.Name, L"StreamElements");
 		wcscpy_s(info.Author.Contact, L"https://streamelements.com");
 
