@@ -1,7 +1,7 @@
 #include "SECrashContext.hpp"
 
 #include "cef-headers.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 #include <obs-frontend-api.h>
 #include <QMainWindow>
 #include "SESecretRedactor.hpp"

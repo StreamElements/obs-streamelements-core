@@ -1,6 +1,6 @@
 #include "SEWorkerManager.hpp"
 #include "SEApiMessageHandler.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 
 #include <QUuid>
 #include <QWidget>

@@ -12,11 +12,11 @@ struct SEApiServices;
 // The SE.Live login session, and the on-boarding UI that is the signed-out
 // state of it.
 //
-// These five methods were on SEGlobalStateManager and they are one state
-// machine: Reset() announces hostStateReset, optionally clears the cookies
-// and resets the menu, then starts the on-boarding UI, which pushes the
-// on-boarding URL into the central widget, drops every dock, worker and
-// managed hotkey binding, and sets STARTUP_FLAGS_ONBOARDING_MODE -- which
+// These five methods were on SEMain and they are one state machine: Reset()
+// announces hostStateReset, optionally clears the cookies and resets the menu,
+// then starts the on-boarding UI, which pushes the on-boarding URL into the
+// central widget, drops every dock, worker and managed hotkey binding, and sets
+// STARTUP_FLAGS_ONBOARDING_MODE -- which
 // also clears STARTUP_FLAGS_SIGNED_IN. SwitchToOBSStudio() is the way back,
 // behind a confirmation.
 //
@@ -35,9 +35,9 @@ public:
 	//
 
 	//
-	// The cookie manager is borrowed: SEGlobalStateManager creates it from
-	// the browser panel and deletes it in Shutdown(), which can run before
-	// this object is destroyed, so it calls ForgetCookieManager() first.
+	// The cookie manager is borrowed: SEMain creates it from the browser
+	// panel and deletes it in Shutdown(), which can run before this object
+	// is destroyed, so it calls ForgetCookieManager() first.
 	//
 	// The services bundle is held weakly and locked per call. This is the
 	// second place whose dependency set genuinely is most of the surface
@@ -69,8 +69,8 @@ public:
 	void SwitchToOBSStudio();
 
 	//
-	// Called by SEGlobalStateManager::Shutdown() immediately before it
-	// deletes the cookie manager this object borrows.
+	// Called by SEMain::Shutdown() immediately before it deletes the cookie
+	// manager this object borrows.
 	//
 	void ForgetCookieManager() { m_cefCookieManager = nullptr; }
 

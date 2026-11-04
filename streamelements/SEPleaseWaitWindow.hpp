@@ -17,9 +17,9 @@ class SEPleaseWaitWindow : public QDialog {
 
 public:
 	//
-	// Owned by SEGlobalStateManager and published in SEApiServices. It
-	// was a singleton reached by the transaction map in SEUtils, which
-	// is now a service that takes it (CORE-757).
+	// Owned by SEMain and published in SEApiServices. It was a singleton
+	// reached by the transaction map in SEUtils, which is now a service
+	// that takes it (CORE-757).
 	//
 	// Modality does not depend on the Qt parent -- the constructor sets
 	// ApplicationModal explicitly -- but the parent is kept for stacking

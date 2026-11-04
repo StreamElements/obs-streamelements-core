@@ -19,20 +19,20 @@ class SEConfig;
 // workers, hotkey bindings, the main window's geometry -- writes it to the
 // config, and puts it back on the next launch.
 //
-// It was four methods on SEGlobalStateManager, which is why anything that
-// wanted to save state had to reach for the singleton to do it. The managers
-// it reads are injected, so it can be driven with any set of them.
+// It was four methods on SEMain, which is why anything that wanted to save
+// state had to reach for the singleton to do it. The managers it reads are
+// injected, so it can be driven with any set of them.
 //
 class SEStatePersistence : public ISEStatePersistence {
 public:
 	//
-	// The managers are borrowed, not owned. The owner is
-	// SEGlobalStateManager, which keeps them alive for longer than this
-	// object: SEApiServices destroys its fields in reverse declaration
-	// order, and statePersistence is declared after all four, so it is
-	// destroyed first. Raw pointers say that, and they keep this out of
-	// the reference graph entirely -- a manager whose destructor deletes
-	// widgets cannot be kept alive by the thing that serializes it.
+	// The managers are borrowed, not owned. The owner is SEMain, which
+	// keeps them alive for longer than this object: SEApiServices destroys
+	// its fields in reverse declaration order, and statePersistence is
+	// declared after all four, so it is destroyed first. Raw pointers say
+	// that, and they keep this out of the reference graph entirely -- a
+	// manager whose destructor deletes widgets cannot be kept alive by the
+	// thing that serializes it.
 	//
 	SEStatePersistence(
 		QMainWindow *mainWindow, SEBrowserWidgetManager *widgetManager,

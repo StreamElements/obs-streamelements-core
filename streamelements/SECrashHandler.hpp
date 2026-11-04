@@ -61,7 +61,7 @@ public:
 public:
 	// Stops the Windows hang-detection worker before OBS tears itself down.
 	// Defaults to a no-op for backends that have none, which is what lets
-	// SEGlobalStateManager call this without a platform guard.
+	// SEMain call this without a platform guard.
 	virtual void StopAsyncHangDetection() {}
 
 public:

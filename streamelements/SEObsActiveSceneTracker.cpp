@@ -1,7 +1,7 @@
 #include "SEObsActiveSceneTracker.hpp"
 #include "SEWebsocketApiServer.hpp"
 #include "SEMessageBus.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 #include "SEVideoCompositionManager.hpp"
 
 #include "callback/calldata.h"

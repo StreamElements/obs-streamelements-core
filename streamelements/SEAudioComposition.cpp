@@ -6,7 +6,7 @@
 #include "SEUtils.hpp"
 #include "SEObsSceneManager.hpp"
 #include "SEMessageBus.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 
 #include <exception>
 

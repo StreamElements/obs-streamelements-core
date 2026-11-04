@@ -4,7 +4,7 @@
 #include "SEHostEventDispatcher.hpp"
 #include "ISEMenuManager.hpp"
 #include "SEUtils.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 
 #include <cassert>
 #include <mutex>
@@ -113,8 +113,9 @@ void SEWidgetManager::PushCentralWidget(
 	//if (m_currentCentralWidget) return;
 	if (m_nativeCentralWidget) return;
 
-	// This will be additionally enforced by OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED event
-	// handler in handle_obs_frontend_event defined in SEGlobalStateManager.cpp
+	// This will be additionally enforced by
+	// OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED event handler in
+	// handle_obs_frontend_event defined in SEMain.cpp
 	//obs_frontend_set_preview_program_mode(false);
 
 	// Make sure changes take effect by draining the event queue

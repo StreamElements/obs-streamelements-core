@@ -177,7 +177,7 @@ static void check_c10_no_duplicate_handler_setcurrentprofile()
 //   UpdateInternal+0x54  mov rcx,[rsi+18h]  rsi=0  ->  read of 0x18
 static void check_menu_manager_update_guarded()
 {
-	auto src = slurp("streamelements/SEGlobalStateManager.cpp");
+	auto src = slurp("streamelements/SEMain.cpp");
 
 	// Every occurrence must be the guarded one. Counting both forms and
 	// comparing is what distinguishes them: the call sits on its own line
@@ -333,7 +333,7 @@ static void check_event_pumps_are_counted()
 {
 	static const char *const kSources[] = {
 		"streamelements/SEBrowserWidgetManager.cpp",
-		"streamelements/SEGlobalStateManager.cpp",
+		"streamelements/SEMain.cpp",
 		"streamelements/SENativeObsUIControlsManager.cpp",
 		"streamelements/SEWidgetManager.cpp",
 		"streamelements/SEWorkerManager.cpp",
@@ -459,12 +459,11 @@ static void check_obs_close_is_watched()
 	// The gate has to actually be consulted on the teardown path, and the
 	// unsafe branch must leak rather than destroy.
 	//
-	// This was SEGlobalStateManager::Leak(), a static that could only
-	// exist while the root was a singleton. The leak is now what it
-	// always was underneath -- a heap-allocated reference nobody frees --
-	// written where its reason is documented (CORE-757).
-	check(code.find("new std::shared_ptr<SEGlobalStateManager>(") !=
-		      std::string::npos,
+	// This was SEMain::Leak(), a static that could only exist while the
+	// root was a singleton. The leak is now what it always was underneath
+	// -- a heap-allocated reference nobody frees -- written where its
+	// reason is documented (CORE-757).
+	check(code.find("new std::shared_ptr<SEMain>(") != std::string::npos,
 	      "CORE-786: the EXIT path must leak rather than tear down when teardown is unsafe");
 
 	// Removing our callback mutates the vector OBSStudioAPI::on_event() is
@@ -486,8 +485,7 @@ static void check_obs_close_is_watched()
 	      "CORE-786: the close watcher must not consume events");
 
 	// And Initialize() must record completion, or the gate never opens.
-	auto gsm = strip_line_comments(
-		slurp("streamelements/SEGlobalStateManager.cpp"));
+	auto gsm = strip_line_comments(slurp("streamelements/SEMain.cpp"));
 
 	check(gsm.find("SENoteInitializeCompleted();") != std::string::npos,
 	      "CORE-786: Initialize() must call SENoteInitializeCompleted() on completion");
@@ -1280,7 +1278,7 @@ static void check_no_dock_is_added_to_an_invalid_area()
 	static const char *const sources[] = {
 		"streamelements/SEWidgetManager.cpp",
 		"streamelements/SEWorkerManager.cpp",
-		"streamelements/SEGlobalStateManager.cpp",
+		"streamelements/SEMain.cpp",
 		"streamelements/SEBrowserWidgetManager.cpp",
 	};
 
@@ -1302,7 +1300,7 @@ static void check_no_dock_is_added_to_an_invalid_area()
 	// The theme listener is a QDockWidget in the main window, so saveState()
 	// and restoreState() identify it by objectName. Qt requires one to be
 	// set for every dock in the window; this had none.
-	auto global = slurp("streamelements/SEGlobalStateManager.cpp");
+	auto global = slurp("streamelements/SEMain.cpp");
 
 	check(global.find("m_themeChangeListener->setObjectName(") !=
 		      std::string::npos,
@@ -2011,7 +2009,7 @@ static std::vector<std::size_t> find_all(const std::string &code,
 //
 // The point of the refactor is lifetime -- an injected shared_ptr keeps the
 // service alive exactly as long as its consumer needs it, instead of until
-// SEGlobalStateManager::Shutdown() decides. A single surviving
+// SEMain::Shutdown() decides. A single surviving
 // GetInstance()->GetX() defeats that for the whole object, because the
 // shutdown ordering is back in charge on that path.
 //
@@ -2179,8 +2177,8 @@ static void check_non_modal_dialogs_are_closed_by_their_owner()
 // built on first use and never released, because its only caller was a free
 // function in SEUtils with nothing to hand it. That one pointer meant the
 // services container's refcount could never reach zero -- with no widget,
-// no dock and no dialog alive -- which is why ~SEGlobalStateManager had to
-// empty the container by hand to let shutdown finish.
+// no dock and no dialog alive -- which is why ~SEMain had to empty the
+// container by hand to let shutdown finish.
 //
 // It is a member of SEAuxiliaryControlsBuilder now, which the container
 // owns, so it dies with everything else.
@@ -2245,15 +2243,15 @@ static void check_the_config_is_owned_and_closed_explicitly()
 	check(hdr.find("s_instance") == std::string::npos &&
 		      hdr.find("GetInstance") == std::string::npos,
 	      "SEConfig is a singleton again -- it is owned by "
-	      "SEGlobalStateManager and published in SEApiServices");
+	      "SEMain and published in SEApiServices");
 
 	check(hdr.find("CloseAndPreventFurtherReopens") != std::string::npos,
 	      "SEConfig::CloseAndPreventFurtherReopens() is gone. Without "
 	      "it the ini is flushed whenever the container happens to be "
 	      "destroyed, which is later than the save wants to be");
 
-	const std::string root = strip_line_comments(
-		slurp("streamelements/SEGlobalStateManager.cpp"));
+	const std::string root =
+		strip_line_comments(slurp("streamelements/SEMain.cpp"));
 
 	check(root.find("m_config->CloseAndPreventFurtherReopens()") !=
 		      std::string::npos,
@@ -2291,13 +2289,13 @@ static void check_the_config_is_owned_and_closed_explicitly()
 //
 static void check_only_the_destructor_starts_teardown()
 {
-	const std::string hdr = strip_line_comments(
-		slurp("streamelements/SEGlobalStateManager.hpp"));
+	const std::string hdr =
+		strip_line_comments(slurp("streamelements/SEMain.hpp"));
 
 	const std::size_t decl = hdr.find("void Shutdown();");
 
 	check(decl != std::string::npos,
-	      "SEGlobalStateManager::Shutdown() is gone -- this invariant "
+	      "SEMain::Shutdown() is gone -- this invariant "
 	      "needs updating");
 
 	//
@@ -2311,16 +2309,15 @@ static void check_only_the_destructor_starts_teardown()
 	check(priv != std::string::npos &&
 		      (pub == std::string::npos || priv > pub) &&
 		      (prot == std::string::npos || priv > prot),
-	      "SEGlobalStateManager::Shutdown() is reachable from outside the "
+	      "SEMain::Shutdown() is reachable from outside the "
 	      "class again. Teardown is the destructor's job; nothing else "
 	      "should be able to release the services and leave the root "
 	      "standing");
 
-	const std::string cpp = strip_line_comments(
-		slurp("streamelements/SEGlobalStateManager.cpp"));
+	const std::string cpp =
+		strip_line_comments(slurp("streamelements/SEMain.cpp"));
 
-	const std::string dtor = function_body(
-		cpp, "SEGlobalStateManager::~SEGlobalStateManager");
+	const std::string dtor = function_body(cpp, "SEMain::~SEMain");
 
 	check(dtor.find("Shutdown();") != std::string::npos,
 	      "the root's destructor no longer calls Shutdown(), so the "
@@ -2346,14 +2343,14 @@ static void check_only_the_destructor_starts_teardown()
 //
 static void check_the_config_is_closed_before_the_queue_is_drained()
 {
-	const std::string cpp = strip_line_comments(
-		slurp("streamelements/SEGlobalStateManager.cpp"));
+	const std::string cpp =
+		strip_line_comments(slurp("streamelements/SEMain.cpp"));
 
 	const std::string shutdown =
-		function_body(cpp, "void SEGlobalStateManager::Shutdown");
+		function_body(cpp, "void SEMain::Shutdown");
 
 	check(!shutdown.empty(),
-	      "cannot find SEGlobalStateManager::Shutdown -- this invariant "
+	      "cannot find SEMain::Shutdown -- this invariant "
 	      "needs updating");
 
 	const std::size_t close_at =
@@ -2373,8 +2370,7 @@ static void check_the_config_is_closed_before_the_queue_is_drained()
 	      "deferred saves, so draining first persists a UI state with no "
 	      "docks in it and the next start comes up empty");
 
-	const std::string dtor = function_body(
-		cpp, "SEGlobalStateManager::~SEGlobalStateManager");
+	const std::string dtor = function_body(cpp, "SEMain::~SEMain");
 
 	check(dtor.find("CloseAndPreventFurtherReopens()") != std::string::npos,
 	      "the destructor must close the config too, ungated: Shutdown() "
@@ -2458,7 +2454,7 @@ static void check_no_singletons_remain()
 //
 // --- There is no singleton (CORE-757).
 //
-// This was a ratchet. It counted SEGlobalStateManager::GetInstance()
+// This was a ratchet. It counted SEMain::GetInstance()
 // reaches and failed if the number grew: 291 of them when the work started,
 // then 47, 14, 8, 4, 2, and now none. The root is created by the module
 // entry point, which holds the only reference; everything else is handed
@@ -2518,10 +2514,10 @@ static void check_the_root_is_not_a_singleton()
 	// whitespace removal leaves.
 	//
 	const char *const banned[] = {
-		"SEGlobalStateManager::GetInstance(",
-		"SEGlobalStateManager::IsInstanceAvailable(",
-		"SEGlobalStateManager::Destroy(",
-		"SEGlobalStateManager::Leak(",
+		"SEMain::GetInstance(",
+		"SEMain::IsInstanceAvailable(",
+		"SEMain::Destroy(",
+		"SEMain::Leak(",
 	};
 
 	int scanned = 0;
@@ -2566,17 +2562,17 @@ static void check_the_root_is_not_a_singleton()
 	// check this file would pass on a tree where Create() had been
 	// renamed and a new accessor added beside it.
 	//
-	const std::string root = strip_line_comments(
-		slurp("streamelements/SEGlobalStateManager.hpp"));
+	const std::string root =
+		strip_line_comments(slurp("streamelements/SEMain.hpp"));
 
 	check(root.find("s_instance") == std::string::npos,
-	      "SEGlobalStateManager holds a static instance again. That is "
+	      "SEMain holds a static instance again. That is "
 	      "what a GetInstance() returns, and the 291 reaches this work "
 	      "removed all existed because there was one.");
 
-	check(root.find("static std::shared_ptr<SEGlobalStateManager> "
+	check(root.find("static std::shared_ptr<SEMain> "
 			"Create();") != std::string::npos,
-	      "SEGlobalStateManager::Create() is gone -- find out what "
+	      "SEMain::Create() is gone -- find out what "
 	      "replaced it before trusting the checks above");
 }
 
@@ -2584,10 +2580,10 @@ static void check_nothing_but_the_manager_owns_the_services_container()
 {
 	//
 	// Every ring this refactor removed had one shape: something the
-	// container destroys held the container strongly. The structural
-	// guard against them coming back is that exactly one place owns it --
-	// SEGlobalStateManager, the root -- and that every holder whose
-	// lifetime a service in the container controls keeps a weak handle.
+	// container destroys held the container strongly. The structural guard
+	// against them coming back is that exactly one place owns it -- SEMain,
+	// the root -- and that every holder whose lifetime a service in the
+	// container controls keeps a weak handle.
 	//
 	// Matching on the member spelling is what makes this safe to run
 	// across the whole directory: constructor parameters in this tree are
@@ -2651,7 +2647,7 @@ static void check_nothing_but_the_manager_owns_the_services_container()
 	      "would then pass vacuously");
 
 	for (const std::string &owner : owners) {
-		check(owner == "SEGlobalStateManager.hpp",
+		check(owner == "SEMain.hpp",
 		      (owner +
 		       " owns SEApiServices strongly. Only the root may: a "
 		       "class the container's own services destroy must hold "
@@ -2662,7 +2658,7 @@ static void check_nothing_but_the_manager_owns_the_services_container()
 
 	check(owners.size() == 1,
 	      "SEApiServices is not owned exactly once -- the root "
-	      "(SEGlobalStateManager.hpp) must own it, and nothing else may");
+	      "(SEMain.hpp) must own it, and nothing else may");
 
 	//
 	// Non-vacuity, and the other half of the rule: the holders that were
@@ -2828,8 +2824,7 @@ static void check_api_handler_takes_its_services_by_injection()
 
 	for (const char *const service : services) {
 		const std::string reach =
-			std::string("SEGlobalStateManager::GetInstance()->") +
-			service;
+			std::string("SEMain::GetInstance()->") + service;
 
 		const std::string message =
 			std::string("SEApiMessageHandler.cpp fetches ") +
@@ -2853,27 +2848,26 @@ static void check_api_handler_takes_its_services_by_injection()
 static void check_api_services_container_is_not_emptied_at_teardown()
 {
 	//
-	// The inverse of the invariant that used to live here. While the
-	// rings were real, ~SEGlobalStateManager emptied the container and
-	// that one statement was the only reason shutdown completed. Every
-	// back-edge into the container is weak now, so the statement is gone
-	// and must stay gone: an owner reaching in to end other objects'
-	// lifetimes is exactly what this refactor removed, and putting it
-	// back would hide the next missing weak edge instead of fixing it.
+	// The inverse of the invariant that used to live here. While the rings
+	// were real, ~SEMain emptied the container and that one statement was
+	// the only reason shutdown completed. Every back-edge into the
+	// container is weak now, so the statement is gone and must stay gone:
+	// an owner reaching in to end other objects' lifetimes is exactly what
+	// this refactor removed, and putting it back would hide the next
+	// missing weak edge instead of fixing it.
 	//
-	const std::string src = strip_line_comments(
-		slurp("streamelements/SEGlobalStateManager.cpp"));
+	const std::string src =
+		strip_line_comments(slurp("streamelements/SEMain.cpp"));
 
-	const std::string dtor = function_body(
-		src, "SEGlobalStateManager::~SEGlobalStateManager");
+	const std::string dtor = function_body(src, "SEMain::~SEMain");
 
 	check(!dtor.empty(),
-	      "cannot find SEGlobalStateManager's destructor -- this invariant "
+	      "cannot find SEMain's destructor -- this invariant "
 	      "needs updating");
 
 	check(dtor.find("*m_apiServices = SEApiServices()") ==
 		      std::string::npos,
-	      "SEGlobalStateManager's destructor empties m_apiServices again. "
+	      "SEMain's destructor empties m_apiServices again. "
 	      "If shutdown hangs, a holder that one of the container's "
 	      "services destroys is holding the container strongly -- make "
 	      "that edge weak instead of adding a teardown step");
@@ -2886,10 +2880,10 @@ static void check_api_services_container_is_not_emptied_at_teardown()
 	// somewhere to move to.
 	//
 	const std::string shutdown =
-		function_body(src, "void SEGlobalStateManager::Shutdown()");
+		function_body(src, "void SEMain::Shutdown()");
 
 	check(!shutdown.empty(),
-	      "cannot find SEGlobalStateManager::Shutdown() -- this invariant "
+	      "cannot find SEMain::Shutdown() -- this invariant "
 	      "needs updating");
 
 	check(shutdown.find("*m_apiServices = SEApiServices()") ==
@@ -2918,14 +2912,14 @@ static void check_api_services_container_is_not_emptied_at_teardown()
 //
 static void check_the_services_are_released_at_the_end_of_shutdown()
 {
-	const std::string src = strip_line_comments(
-		slurp("streamelements/SEGlobalStateManager.cpp"));
+	const std::string src =
+		strip_line_comments(slurp("streamelements/SEMain.cpp"));
 
 	const std::string shutdown =
-		function_body(src, "void SEGlobalStateManager::Shutdown()");
+		function_body(src, "void SEMain::Shutdown()");
 
 	check(!shutdown.empty(),
-	      "cannot find SEGlobalStateManager::Shutdown() -- this invariant "
+	      "cannot find SEMain::Shutdown() -- this invariant "
 	      "needs updating (CORE-757)");
 
 	const auto watch = shutdown.find("WatchServicesForTeardownAudit()");
@@ -3445,9 +3439,8 @@ static void check_every_published_service_is_watched_at_teardown()
 	}
 
 	const std::string body = function_body(
-		strip_line_comments(
-			slurp("streamelements/SEGlobalStateManager.cpp")),
-		"void SEGlobalStateManager::WatchServicesForTeardownAudit");
+		strip_line_comments(slurp("streamelements/SEMain.cpp")),
+		"void SEMain::WatchServicesForTeardownAudit");
 
 	check(!body.empty(),
 	      "cannot find WatchServicesForTeardownAudit -- this invariant "
@@ -3874,8 +3867,8 @@ static void check_signal_handler_data_holds_its_owners_weakly()
 //
 static void check_the_scene_manager_is_attached_where_it_is_built()
 {
-	const std::string gsm = strip_line_comments(
-		slurp("streamelements/SEGlobalStateManager.cpp"));
+	const std::string gsm =
+		strip_line_comments(slurp("streamelements/SEMain.cpp"));
 
 	const auto built = gsm.find("m_obsSceneManager = std::make_shared<");
 	const auto attached =
@@ -4002,8 +3995,7 @@ static void check_deferred_deletes_hold_services_weakly()
 	// rather than the file.
 	//
 	const std::string listener = function_body(
-		strip_line_comments(
-			slurp("streamelements/SEGlobalStateManager.hpp")),
+		strip_line_comments(slurp("streamelements/SEMain.hpp")),
 		"class ThemeChangeListener");
 
 	check(!listener.empty(),
@@ -6413,15 +6405,13 @@ static void check_contract_default_arguments_agree_with_their_overrides()
 //
 static void check_the_dispatch_gate_opens_before_the_first_browser_widget()
 {
-	const std::string cpp = strip_line_comments(
-		slurp("streamelements/SEGlobalStateManager.cpp"));
+	const std::string cpp =
+		strip_line_comments(slurp("streamelements/SEMain.cpp"));
 
-	const std::string init =
-		function_body(cpp, "void SEGlobalStateManager::Initialize");
+	const std::string init = function_body(cpp, "void SEMain::Initialize");
 
-	check(!init.empty(),
-	      "cannot find SEGlobalStateManager::Initialize -- this invariant "
-	      "would then pass vacuously (CORE-757)");
+	check(!init.empty(), "cannot find SEMain::Initialize -- this invariant "
+			     "would then pass vacuously (CORE-757)");
 
 	if (init.empty())
 		return;
@@ -6495,7 +6485,7 @@ static void check_the_dispatch_gate_opens_before_the_first_browser_widget()
 			"streamelements/SEPopupWindowManager.cpp",
 			"streamelements/SEBrowserDialog.cpp",
 			"streamelements/SENativeObsUIControlsManager.cpp",
-			"streamelements/SEGlobalStateManager.cpp",
+			"streamelements/SEMain.cpp",
 		};
 
 		for (const char *const file : files) {

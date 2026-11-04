@@ -7,13 +7,13 @@
 // description, and the host API call an action invokes.
 //
 // These were free functions in SEUtils that fetched what they needed from
-// SEGlobalStateManager: the docks submenu wants the widget, menu and
-// analytics managers, and an invoked action wants the entire host API
-// surface. The second of those is why this is one service holding the
-// services bundle weakly rather than a handful of injected managers -- the
-// same exception SEApiMessageHandler and SESessionManager already make, for
-// the same reason, and the reason the InvokeHandler below could never be
-// handed anything and became a singleton instead.
+// SEMain: the docks submenu wants the widget, menu and analytics managers, and
+// an invoked action wants the entire host API surface. The second of those is
+// why this is one service holding the services bundle weakly rather than a
+// handful of injected managers -- the same exception SEApiMessageHandler and
+// SESessionManager already make, for the same reason, and the reason the
+// InvokeHandler below could never be handed anything and became a singleton
+// instead.
 //
 // Everything a page can describe here ends up on a Qt object that outlives
 // the call that built it -- a QAction on a menu the menu bar owns, a push

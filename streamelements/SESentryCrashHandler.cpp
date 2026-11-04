@@ -1616,10 +1616,10 @@ void SESentryCrashHandler::StopAsyncHangDetection()
 
 SESentryCrashHandler::~SESentryCrashHandler()
 {
-	// Deliberately not calling sentry_close(): the BugSplat handler likewise
-	// never tears down, on the grounds that shutting the reporter down early
-	// loses exceptions thrown during shutdown. See
-	// SEGlobalStateManager::Shutdown().
+	// Deliberately not calling sentry_close(): the BugSplat handler
+	// likewise never tears down, on the grounds that shutting the reporter
+	// down early loses exceptions thrown during shutdown. See
+	// SEMain::Shutdown().
 	//
 	// The exception filter is left installed for the same reason, and
 	// s_crashContext is left alive because a filter running on another

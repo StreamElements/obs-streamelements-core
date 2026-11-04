@@ -78,9 +78,9 @@ private:
 	std::shared_ptr<SESessionManager> m_sessionManager;
 
 	//
-	// For the Report Issue dialog, which this menu is the only trigger
-	// for. It was a method on SEGlobalStateManager, which is why opening
-	// it meant reaching for the singleton.
+	// For the Report Issue dialog, which this menu is the only trigger for.
+	// It was a method on SEMain, which is why opening it meant reaching for
+	// the singleton.
 	//
 	std::shared_ptr<SEPerformanceHistoryTracker>
 		m_performanceHistoryTracker;

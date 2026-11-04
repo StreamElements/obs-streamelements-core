@@ -17,11 +17,10 @@ struct SEApiServices;
 // Pop-up browser windows opened by the host API: a top-level QMainWindow
 // with a SEBrowserWidget as its central widget.
 //
-// It was one method on SEGlobalStateManager, and the windows it opened were
-// not tracked by anything, so nothing ever closed one. Each carried a live
-// CEF browser into Qt's teardown -- see the comment in
-// ~SEBrowserWidgetManager for why that is the dangerous order --
-// which is what the destructor here fixes.
+// It was one method on SEMain, and the windows it opened were not tracked by
+// anything, so nothing ever closed one. Each carried a live CEF browser into
+// Qt's teardown -- see the comment in ~SEBrowserWidgetManager for why that is
+// the dangerous order -- which is what the destructor here fixes.
 //
 class SEPopupWindowManager : public ISEPopupWindowManager {
 public:

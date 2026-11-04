@@ -6,11 +6,10 @@ architecture.
 
 ## The root is not a singleton
 
-`SEGlobalStateManager` derives from `SEObsAppMonitor`, is created by
-`SEGlobalStateManager::Create()` from `obs-streamelements-core-plugin.cpp`, and
-is owned by one `static std::shared_ptr` in that file. It was a singleton
-reached through `GetInstance()` from 291 places; CORE-757 removed every one of
-them.
+`SEMain` derives from `SEObsAppMonitor`, is created by `SEMain::Create()` from
+`obs-streamelements-core-plugin.cpp`, and is owned by one `static
+std::shared_ptr` in that file. It was a singleton reached through
+`GetInstance()` from 291 places; CORE-757 removed every one of them.
 
 So:
 
@@ -53,11 +52,11 @@ struct is a lifetime change disguised as a tidy-up.
 
 ## The root keeps concrete handles; the container publishes interfaces
 
-`SEGlobalStateManager` holds each service by its concrete type and drives its
-lifecycle — `Shutdown()`, `Reset()`, `Update()`, `SetEnabled()`.
-`PublishApiServices()` then assigns those into the container, where the member
-type is an **`ISE*` interface**. There are 34 such interface headers, each
-beside its implementation, declaring only what a container consumer calls.
+`SEMain` holds each service by its concrete type and drives its lifecycle —
+`Shutdown()`, `Reset()`, `Update()`, `SetEnabled()`. `PublishApiServices()`
+then assigns those into the container, where the member type is an **`ISE*`
+interface**. There are 34 such interface headers, each beside its
+implementation, declaring only what a container consumer calls.
 
 Why the split: lifecycle methods only the root calls have no place on an
 API-facing contract, and the inverse is also true — a method two container
@@ -140,9 +139,9 @@ this today:
 `SEWorkerManager`.
 
 `check_nothing_but_the_manager_owns_the_services_container` allows exactly one
-strong `shared_ptr<SEApiServices>` member in the tree, in
-`SEGlobalStateManager.hpp`. It is the invariant that makes the rings
-unconstructible, and it replaced a hand-maintained list of consumers.
+strong `shared_ptr<SEApiServices>` member in the tree, in `SEMain.hpp`. It is
+the invariant that makes the rings unconstructible, and it replaced a
+hand-maintained list of consumers.
 
 Two holders are the deliberate exceptions to "take what you need by
 injection", because their dependency set genuinely is most of the surface:
@@ -197,8 +196,8 @@ destroyed.
    `obs-streamelements-core_SOURCES` and `obs-streamelements-core_HEADERS`
    lists. There is no globbing.
 5. **Add the field to `SEApiServices`**, minding the destruction-order rules
-   above, and a concrete member plus a getter on `SEGlobalStateManager` if the
-   root drives its lifecycle.
+   above, and a concrete member plus a getter on `SEMain` if the root drives
+   its lifecycle.
 6. **Construct it in `Initialize()`** after whatever it depends on, assign it
    in `PublishApiServices()`, and add an `SE_WATCH` line.
 7. **Run the tests.** Several invariants will tell you if you have broken one

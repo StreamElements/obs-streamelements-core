@@ -1,7 +1,7 @@
 #include "SEMessageBus.hpp"
 #include "SEHostEventDispatcher.hpp"
 #include "SEConfig.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 
 SEMessageBus::SEMessageBus(
 	Private, std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,

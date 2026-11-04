@@ -1,6 +1,6 @@
 #include "SEAudioCompositionManager.hpp"
 #include "SEWebsocketApiServer.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 
 //
 // One of five identical copies of this translation; it lives on

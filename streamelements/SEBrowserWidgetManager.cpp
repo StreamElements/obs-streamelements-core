@@ -1,6 +1,6 @@
 #include "SEBrowserWidgetManager.hpp"
 #include "SEUtils.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 
 #include <QUuid>
 #include <QMainWindow>

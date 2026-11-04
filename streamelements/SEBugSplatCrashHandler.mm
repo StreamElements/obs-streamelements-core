@@ -337,9 +337,9 @@ void SEBugSplatCrashHandler::OnReportingServicesSet()
 
 void SEBugSplatCrashHandler::StopAsyncHangDetection()
 {
-    // There is no hang detection on macOS. Previously the declaration existed
-    // without a definition and SEGlobalStateManager guarded the
-    // call with #ifdef WIN32; defining it here lets the guard go away.
+	// There is no hang detection on macOS. Previously the declaration existed
+	// without a definition and SEMain guarded the call with #ifdef WIN32;
+	// defining it here lets the guard go away.
 }
 
 SEBugSplatCrashHandler::~SEBugSplatCrashHandler()

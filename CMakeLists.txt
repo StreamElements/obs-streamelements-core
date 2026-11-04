@@ -569,7 +569,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEUtils/SELogUtils.cpp
 	streamelements/SEUtils/SEStringUtils.cpp
 	streamelements/SEConfig.cpp
-	streamelements/SEGlobalStateManager.cpp
+	streamelements/SEMain.cpp
 	streamelements/SEMenuManager.cpp
 	streamelements/SEBandwidthTestManager.cpp
 	streamelements/SEOutputSettingsManager.cpp
@@ -783,7 +783,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEUtils/SEStringUtils.hpp
 	streamelements/ISEConfig.hpp
 	streamelements/SEConfig.hpp
-	streamelements/SEGlobalStateManager.hpp
+	streamelements/SEMain.hpp
 	streamelements/ISEMenuManager.hpp
 	streamelements/SEMenuManager.hpp
 	streamelements/ISEBandwidthTestManager.hpp

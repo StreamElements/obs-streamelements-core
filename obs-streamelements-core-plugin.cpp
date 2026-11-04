@@ -38,7 +38,7 @@ using namespace json11;
 /* ========================================================================= */
 
 #include <obs-frontend-api.h>
-#include "streamelements/SEGlobalStateManager.hpp"
+#include "streamelements/SEMain.hpp"
 #include "streamelements/SEUtils.hpp"
 
 /* ========================================================================= */
@@ -259,11 +259,10 @@ static void InstallObsCloseWatcher()
 
 //
 // The plug-in's root object. Owned here, by the only code with any business
-// owning it: it was a singleton reached through
-// SEGlobalStateManager::GetInstance() from 291 places, and the last of those
-// was this file creating it (CORE-757).
+// owning it: it was a singleton reached through SEMain::GetInstance() from 291
+// places, and the last of those was this file creating it (CORE-757).
 //
-static std::shared_ptr<SEGlobalStateManager> s_globalStateManager;
+static std::shared_ptr<SEMain> s_main;
 
 void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 {
@@ -288,12 +287,10 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 		{
 			StreamElementsInitializeScope initializeScope;
 
-			s_globalStateManager =
-				SEGlobalStateManager::Create();
+			s_main = SEMain::Create();
 
-			s_globalStateManager->Initialize(
-				static_cast<QMainWindow *>(
-					obs_frontend_get_main_window()));
+			s_main->Initialize(static_cast<QMainWindow *>(
+				obs_frontend_get_main_window()));
 		}
 
 		blog(LOG_INFO, "[obs-streamelements-core]: init done");
@@ -335,21 +332,20 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 			// Heap-allocated and never freed, so the refcount
 			// never reaches zero and no destructor runs -- not
 			// now, and not during static destruction at process
-			// exit either. This was SEGlobalStateManager::Leak(),
+			// exit either. This was SEMain::Leak(),
 			// which could only exist while the instance was
 			// static.
-			if (s_globalStateManager)
-				new std::shared_ptr<SEGlobalStateManager>(
-					s_globalStateManager);
+			if (s_main)
+				new std::shared_ptr<SEMain>(s_main);
 
-			s_globalStateManager = nullptr;
+			s_main = nullptr;
 			break;
 		}
 
 		// Shutdown StreamElements plug-in
 		blog(LOG_INFO, "[obs-streamelements-core]: shutting down");
 
-		s_globalStateManager = nullptr;
+		s_main = nullptr;
 		break;
 	default:
 		break;

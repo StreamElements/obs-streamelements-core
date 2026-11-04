@@ -4,7 +4,7 @@
 #include "SELocalFilesystemHttpServer.hpp"
 #include "SEUtils.hpp"
 #include "SENetworkDialog.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 
 #include <obs.h>
 #include <obs-frontend-api.h>

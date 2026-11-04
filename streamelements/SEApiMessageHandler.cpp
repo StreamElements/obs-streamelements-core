@@ -14,12 +14,12 @@
 
 //
 // The services the handler bodies reach through apiServices->, one include
-// each. They used to arrive transitively through SEGlobalStateManager.hpp:
-// that header's own symbol was never referenced here, but it was pulling in
-// roughly four hundred of this translation unit's four hundred and fifty
-// local headers, and every service header among them. Naming them is what
-// lets the unused include go, and it is also the list part 2 has to replace
-// with interfaces -- so it should be visible rather than implied.
+// each. They used to arrive transitively through SEMain.hpp: that header's own
+// symbol was never referenced here, but it was pulling in roughly four hundred
+// of this translation unit's four hundred and fifty local headers, and every
+// service header among them. Naming them is what lets the unused include go,
+// and it is also the list part 2 has to replace with interfaces -- so it should
+// be visible rather than implied.
 //
 // An ISE* name is one part 2 has already replaced: the body calling it
 // did not change, only the type it is calling through.

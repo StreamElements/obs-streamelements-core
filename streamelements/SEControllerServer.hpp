@@ -35,13 +35,12 @@ class SEMessageBus;
 // external controllers, such as Elgato Streamdeck.
 //
 //
-// The accepting flag below replaced
-// SEGlobalStateManager::IsInstanceAvailable() (CORE-757). The question the
-// pipe callback has to answer is not "is the plug-in available" but "is this
-// server still willing to forward" -- and that is strictly narrower: the bus
-// that owns this object by value runs its own destructor body before this
-// one's, so there was a window in which the singleton still looked available
-// while the bus was already coming apart.
+// The accepting flag below replaced SEMain::IsInstanceAvailable() (CORE-757).
+// The question the pipe callback has to answer is not "is the plug-in
+// available" but "is this server still willing to forward" -- and that is
+// strictly narrower: the bus that owns this object by value runs its own
+// destructor body before this one's, so there was a window in which the
+// singleton still looked available while the bus was already coming apart.
 //
 class SEControllerServer
 {

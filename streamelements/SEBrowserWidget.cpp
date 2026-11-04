@@ -1,7 +1,7 @@
 #include "SEBrowserWidget.hpp"
 #include "SEApiMessageHandler.hpp"
 #include "SEUtils.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 #include "SEVideoCompositionViewWidget.hpp"
 
 #include "../../obs-browser/panel/browser-panel.hpp"

@@ -5,7 +5,7 @@
 #include <obs.hpp>
 #include <obs-frontend-api.h>
 
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 
 #include <set>
 #include <string>

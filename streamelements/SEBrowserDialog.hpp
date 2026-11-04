@@ -45,9 +45,9 @@ public:
 	// the deferral is what keeps us from deleting a widget from inside
 	// its own event handler.
 	//
-	// This used to be SEGlobalStateManager::IsInstanceAvailable(), which
-	// happened to answer it: the instance is released before the
-	// container that owns the dialog manager is destroyed (CORE-757).
+	// This used to be SEMain::IsInstanceAvailable(), which happened to
+	// answer it: the instance is released before the container that owns
+	// the dialog manager is destroyed (CORE-757).
 	//
 	void NoteOwnerTeardown() { m_ownerTeardown = true; }
 

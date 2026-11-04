@@ -27,7 +27,7 @@
 
 #include "cef-headers.hpp"
 #include "SECrashContext.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 #include "SEUtils.hpp"
 #include <util/base.h>
 #include <util/platform.h>

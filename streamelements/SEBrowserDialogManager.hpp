@@ -19,9 +19,9 @@ struct SEApiServices;
 // exec(), and any number of non-modal ones, which are registered by id until
 // they close.
 //
-// This was a map, a mutex and eight methods on SEGlobalStateManager. Moving
-// it into a class that owns the registry is what lets the dialogs be closed
-// by their owner: until now a non-modal dialog destroyed without emitting
+// This was a map, a mutex and eight methods on SEMain. Moving it into a class
+// that owns the registry is what lets the dialogs be closed by their owner:
+// until now a non-modal dialog destroyed without emitting
 // finished() parked the API handler's detached thread on future.wait()
 // forever, because the promise existed only inside the finished handler's
 // capture. The registry holds it now, so the destructor can fulfil it.

@@ -5,7 +5,7 @@
 #include <QVBoxLayout>
 #include "SEVideoCompositionViewWidget.hpp"
 #include "SEUtils.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 
 #include "SEBrowserDialog.hpp"
 

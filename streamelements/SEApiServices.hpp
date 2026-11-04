@@ -43,11 +43,11 @@ class ISEHostUpdateManager;
 class ISEHostInfoProvider;
 
 //
-// The objects SEGlobalStateManager::Initialize() creates, in one place, so
-// that something which needs several of them can be handed them all at once
-// instead of reaching for a singleton. A container and nothing else: plain
-// data members, no methods, no accessors, no policy. Expect it to be broken
-// into smaller pieces as consumers turn out to need only a part of it.
+// The objects SEMain::Initialize() creates, in one place, so that something
+// which needs several of them can be handed them all at once instead of
+// reaching for a singleton. A container and nothing else: plain data members,
+// no methods, no accessors, no policy. Expect it to be broken into smaller
+// pieces as consumers turn out to need only a part of it.
 //
 // A member is null until Initialize() has got that far. After that it stays
 // set for as long as the container lives: the container's lifetime is the
@@ -75,17 +75,16 @@ struct SEApiServices {
 	// together and a dispatch may run, false again from the moment
 	// Shutdown() begins.
 	//
-	// WHEN it becomes true is load-bearing, so it is set in one place
-	// and that place is chosen: SEGlobalStateManager::Initialize(), just
-	// ABOVE the block that restores the docks and background workers or
-	// pushes the on-boarding central widget. The long comment at that
-	// line is the real documentation; the short version is that every
-	// client of the websocket API server is one of our own
-	// SEBrowserWidgets, so setting the flag before the first one exists
-	// is what makes it impossible for a page to find it false -- and a
-	// page that does find it false gets no window.host for the life of
-	// its context, because the context-created message arrives once and
-	// nothing retries.
+	// WHEN it becomes true is load-bearing, so it is set in one place and
+	// that place is chosen: SEMain::Initialize(), just ABOVE the block that
+	// restores the docks and background workers or pushes the on-boarding
+	// central widget. The long comment at that line is the real
+	// documentation; the short version is that every client of the
+	// websocket API server is one of our own SEBrowserWidgets, so setting
+	// the flag before the first one exists is what makes it impossible for
+	// a page to find it false -- and a page that does find it false gets no
+	// window.host for the life of its context, because the context-created
+	// message arrives once and nothing retries.
 	//
 	// It used to be set at the very end of Initialize(), which left a
 	// window between widget creation and the flag. Nothing was ever
@@ -101,18 +100,18 @@ struct SEApiServices {
 	// change. DEST_BROWSER_SOURCE on ISEMessageBus is left over from
 	// the same era.
 	//
-	// It replaces SEGlobalStateManager::IsInstanceAvailable(), which
-	// asked exactly this -- "does the root exist and is it initialized?"
+	// It replaces SEMain::IsInstanceAvailable(), which asked exactly this
+	// -- "does the root exist and is it initialized?"
 	// -- of global state (CORE-757). The "does it exist" half is the
 	// weak_ptr lock that every holder already does.
 	//
 	bool ready = false;
 
 	//
-	// Borrowed, not owned: SEGlobalStateManager creates the browser panel
-	// and deletes it in Shutdown(). It is in here because it is one of
-	// the objects Initialize() creates, and because the things that need
-	// it -- browser widgets -- are handed this bundle and not the panel.
+	// Borrowed, not owned: SEMain creates the browser panel and deletes it
+	// in Shutdown(). It is in here because it is one of the objects
+	// Initialize() creates, and because the things that need it -- browser
+	// widgets -- are handed this bundle and not the panel.
 	//
 	QCef *cef = nullptr;
 
@@ -174,10 +173,9 @@ struct SEApiServices {
 	std::shared_ptr<ISEStatePersistence> statePersistence;
 
 	//
-	// Extracted from SEGlobalStateManager, and declared after
-	// statePersistence on purpose: fields are destroyed in reverse
-	// declaration order, and what these own has to go before the
-	// managers above that serialize it.
+	// Extracted from SEMain, and declared after statePersistence on
+	// purpose: fields are destroyed in reverse declaration order, and what
+	// these own has to go before the managers above that serialize it.
 	//
 	std::shared_ptr<ISEStatusBarMessageManager> statusBarMessageManager;
 

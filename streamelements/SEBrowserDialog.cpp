@@ -1,6 +1,6 @@
 #include "SEBrowserDialog.hpp"
 #include "SEDialogApiMessageHandler.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 
 #include <QVBoxLayout>
 

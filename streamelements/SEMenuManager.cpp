@@ -6,7 +6,7 @@
 #include "SEAnalyticsEventsManager.hpp"
 #include "SEAuxiliaryControlsBuilder.hpp"
 #include "SEReportIssueDialog.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 #include "SEConfig.hpp"
 
 #include <callback/signal.h>

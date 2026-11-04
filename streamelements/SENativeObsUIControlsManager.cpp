@@ -1,6 +1,6 @@
 #include "SENativeObsUIControlsManager.hpp"
 #include "SEHostStreamingManager.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 #include "SEUtils.hpp"
 #include <QDockWidget>
 #include <QVBoxLayout>

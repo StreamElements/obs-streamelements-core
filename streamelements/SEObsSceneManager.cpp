@@ -16,7 +16,7 @@
 #include <QHBoxLayout>
 #include <QPushButton>
 
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 
 #include "canvas-mutate.hpp"
 #include "canvas-scan.hpp"

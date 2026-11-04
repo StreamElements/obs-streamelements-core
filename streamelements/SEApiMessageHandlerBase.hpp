@@ -124,11 +124,10 @@ public:
 
 protected:
 	//
-	// Whether a dispatch may run at all: obs is up, the services bundle
-	// is still there, and the root has finished wiring it together. It
-	// was a file-static asking SEGlobalStateManager whether the plug-in
-	// was available, which is the same question put to global state
-	// (CORE-757).
+	// Whether a dispatch may run at all: obs is up, the services bundle is
+	// still there, and the root has finished wiring it together. It was a
+	// file-static asking SEMain whether the plug-in was available, which is
+	// the same question put to global state (CORE-757).
 	//
 	bool IsPluginInitialized();
 

@@ -18,11 +18,11 @@ private:
 	const char* CONFIG_FILE_NAME = "obs-streamelements-core.ini";
 
 	//
-	// Weak, and handed over by SEGlobalStateManager::Initialize() rather
-	// than fetched: this class is built before the bus exists, and a
-	// strong handle here would keep the bus alive past the plugin. Only
-	// one setter writes the startup flags, and publishing that change is
-	// the one thing this class needs the bus for.
+	// Weak, and handed over by SEMain::Initialize() rather than fetched:
+	// this class is built before the bus exists, and a strong handle here
+	// would keep the bus alive past the plugin. Only one setter writes the
+	// startup flags, and publishing that change is the one thing this class
+	// needs the bus for.
 	//
 	std::weak_ptr<SEMessageBus> m_messageBus;
 
@@ -52,9 +52,9 @@ public:
 	~SEConfig();
 
 	//
-	// The only way to build one. SEGlobalStateManager owns the instance
-	// and publishes it in SEApiServices; a second one would be a second
-	// handle on the same ini file, with two sets of unflushed writes.
+	// The only way to build one. SEMain owns the instance and publishes it
+	// in SEApiServices; a second one would be a second handle on the same
+	// ini file, with two sets of unflushed writes.
 	//
 	static std::shared_ptr<SEConfig> Create();
 

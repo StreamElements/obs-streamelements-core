@@ -1,14 +1,14 @@
 #include "SEReportIssueDialog.hpp"
 #include "SEProgressDialog.hpp"
 #include "SEUtils.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 #include "SENetworkDialog.hpp"
 #include "SESecretRedactor.hpp"
 #include "SEConfig.hpp"
 
 // Included after the headers above, not before them: these pull in windows.h,
-// and ahead of SEUtils/SEGlobalStateManager that lands before winsock2.h and
-// redefines every socket struct.
+// and ahead of SEUtils/SEMain that lands before winsock2.h and redefines every
+// socket struct.
 #include "SEPerformanceHistoryTracker.hpp"
 #include "SEAnalyticsEventsManager.hpp"
 #include "Version.hpp"

@@ -1,4 +1,4 @@
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 #include "SEApiMessageHandler.hpp"
 #include "SEUtils.hpp"
 #include "Version.hpp"
@@ -27,9 +27,7 @@
 
 /* ========================================================================= */
 
-SEGlobalStateManager::ApplicationStateListener::
-	ApplicationStateListener()
-	: m_timer(this)
+SEMain::ApplicationStateListener::ApplicationStateListener() : m_timer(this)
 {
 	uint32_t obsMajorVersion = obs_get_version() >> 24;
 
@@ -44,8 +42,7 @@ SEGlobalStateManager::ApplicationStateListener::
 	}
 }
 
-SEGlobalStateManager::ApplicationStateListener::
-	~ApplicationStateListener()
+SEMain::ApplicationStateListener::~ApplicationStateListener()
 {
 	uint32_t obsMajorVersion = obs_get_version() >> 24;
 
@@ -54,8 +51,7 @@ SEGlobalStateManager::ApplicationStateListener::
 	}
 }
 
-void SEGlobalStateManager::ApplicationStateListener::
-	applicationStateChanged()
+void SEMain::ApplicationStateListener::applicationStateChanged()
 {
 	// This is an unpleasant hack for OBS versions before
 	// OBS 22.
@@ -82,14 +78,14 @@ static void SetMainWindowStyle()
 		blog(LOG_INFO, "SetMainWindowStyle");
 	}
 
-	QMainWindow* main = (QMainWindow*)obs_frontend_get_main_window();
+	QMainWindow *main = (QMainWindow *)obs_frontend_get_main_window();
 
 	//qApp->setStyleSheet("QMainWindow::separator { border: none; padding: 0; margin: 0; }");
 	//qApp->setStyleSheet("QDockWindow { margin: 0 4px 4px 4px; }");
-//			dock->setStyleSheet("QDockWidget { margin: 0 -4px -4px -4px; }");
+	//			dock->setStyleSheet("QDockWidget { margin: 0 -4px -4px -4px; }");
 }
 
-SEGlobalStateManager::ThemeChangeListener::ThemeChangeListener(
+SEMain::ThemeChangeListener::ThemeChangeListener(
 	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
 	std::shared_ptr<SEMessageBus> messageBus)
 	: QDockWidget(),
@@ -102,8 +98,7 @@ SEGlobalStateManager::ThemeChangeListener::ThemeChangeListener(
 	SetMainWindowStyle();
 }
 
-void SEGlobalStateManager::ThemeChangeListener::changeEvent(
-	QEvent *event)
+void SEMain::ThemeChangeListener::changeEvent(QEvent *event)
 {
 	if (event->type() == QEvent::StyleChange) {
 		//SetMainWindowStyle();
@@ -140,7 +135,7 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 	// Shutdown() removes this one before the manager is destroyed, and the
 	// Leak() path never destroys it at all.
 	//
-	auto self = static_cast<SEGlobalStateManager *>(data);
+	auto self = static_cast<SEMain *>(data);
 
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
 
@@ -253,12 +248,9 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 
 /* ========================================================================= */
 
-SEGlobalStateManager::SEGlobalStateManager(
-	SEGlobalStateManager::Private)
-{
-}
+SEMain::SEMain(SEMain::Private) {}
 
-SEGlobalStateManager::~SEGlobalStateManager()
+SEMain::~SEMain()
 {
 	Shutdown();
 
@@ -305,16 +297,15 @@ SEGlobalStateManager::~SEGlobalStateManager()
 	//
 }
 
-std::shared_ptr<SEGlobalStateManager> SEGlobalStateManager::Create()
+std::shared_ptr<SEMain> SEMain::Create()
 {
-	return std::make_shared<SEGlobalStateManager>(
-		SEGlobalStateManager::Private());
+	return std::make_shared<SEMain>(SEMain::Private());
 }
 
 #include <QWindow>
 #include <QObjectList>
 
-void SEGlobalStateManager::PublishApiServices()
+void SEMain::PublishApiServices()
 {
 	if (!m_apiServices)
 		return;
@@ -367,7 +358,7 @@ void SEGlobalStateManager::PublishApiServices()
 	m_apiServices->obsApiTransactionManager = m_obsApiTransactionManager;
 }
 
-void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
+void SEMain::Initialize(QMainWindow *obs_main_window)
 {
 	m_mainWindow = obs_main_window;
 
@@ -388,26 +379,25 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 	/*
 	struct local_context {
-		SEGlobalStateManager *self;
+		SEMain *self;
 		QMainWindow *obs_main_window;
 	};
 	*/
 
 	// http://doc.qt.io/qt-5/qmainwindow.html#DockOption-enum
-	obs_main_window->setDockOptions(
-		QMainWindow::AnimatedDocks |
-		QMainWindow::AllowNestedDocks |
-		QMainWindow::AllowTabbedDocks);
+	obs_main_window->setDockOptions(QMainWindow::AnimatedDocks |
+					QMainWindow::AllowNestedDocks |
+					QMainWindow::AllowTabbedDocks);
 
 #ifdef _WIN32
-	std::string storagePath = std::string("../obs-browser/") + GetCefVersionString();
+	std::string storagePath =
+		std::string("../obs-browser/") + GetCefVersionString();
 #else
 	std::string storagePath = GetCefVersionString();
 #endif
 	std::string fullStoragePath;
 	{
-		auto rpath = obs_module_config_path(
-			storagePath.c_str());
+		auto rpath = obs_module_config_path(storagePath.c_str());
 
 #ifdef _WIN32
 		auto path = os_get_abs_path_ptr(rpath);
@@ -426,7 +416,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_cef = obs_browser_init_panel();
 	if (!m_cef) {
 		blog(LOG_ERROR,
-			"obs-streamelements-core: obs_browser_init_panel() failed");
+		     "obs-streamelements-core: obs_browser_init_panel() failed");
 		return;
 	}
 	if (!m_cef->initialized()) {
@@ -471,17 +461,16 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	m_sessionManager = std::make_shared<SESessionManager>(
 		mainWindow(), m_cefCookieManager, m_apiServices);
 
-	m_httpClient =
-		std::make_shared<SEHttpClient>();
-	m_localFilesystemHttpServer = std::make_shared<
-		SELocalFilesystemHttpServer>();
+	m_httpClient = std::make_shared<SEHttpClient>();
+	m_localFilesystemHttpServer =
+		std::make_shared<SELocalFilesystemHttpServer>();
 	//
 	// Before the menu manager, which takes it: the same rule the cleanup
 	// manager and the backup manager follow two lines down -- a
 	// dependency exists before the thing that holds it.
 	//
-	m_performanceHistoryTracker = std::make_shared<
-		SEPerformanceHistoryTracker>();
+	m_performanceHistoryTracker =
+		std::make_shared<SEPerformanceHistoryTracker>();
 	m_analyticsEventsManager =
 		std::make_shared<SEAnalyticsEventsManager>(m_config);
 
@@ -558,30 +547,26 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		obs_main_window, m_sessionManager, m_performanceHistoryTracker,
 		m_analyticsEventsManager, m_auxiliaryControlsBuilder, m_config,
 		m_hostUpdateManager);
-	m_bwTestManager = std::make_shared<SEBandwidthTestManager>(
-		m_hostEventDispatcher);
-	m_outputSettingsManager = std::make_shared<
-		SEOutputSettingsManager>();
+	m_bwTestManager =
+		std::make_shared<SEBandwidthTestManager>(m_hostEventDispatcher);
+	m_outputSettingsManager = std::make_shared<SEOutputSettingsManager>();
 	m_workerManager = std::make_shared<SEWorkerManager>(m_apiServices);
 	m_hotkeyManager =
 		std::make_shared<SEHotkeyManager>(m_hostEventDispatcher);
-	m_externalSceneDataProviderManager = std::make_shared<
-		SEExternalSceneDataProviderManager>(
-		m_localFilesystemHttpServer);
+	m_externalSceneDataProviderManager =
+		std::make_shared<SEExternalSceneDataProviderManager>(
+			m_localFilesystemHttpServer);
 	m_nativeObsUIControlsManager = SENativeObsUIControlsManager::Create(
 		obs_main_window, m_hostStreamingManager);
 	m_nativeObsUIControlsManager->SetApiServices(m_apiServices);
-	m_profilesManager =
-		std::make_shared<SEProfilesManager>();
+	m_profilesManager = std::make_shared<SEProfilesManager>();
 	// Constructed before the backup manager, which now takes it: a
 	// dependency has to exist before the thing that holds it.
-	m_cleanupManager =
-		std::make_shared<SECleanupManager>();
+	m_cleanupManager = std::make_shared<SECleanupManager>();
 	m_backupManager = std::make_shared<SEBackupManager>(
 		m_cleanupManager, m_localFilesystemHttpServer, m_config);
-	m_previewManager =
-		std::make_shared<SEPreviewManager>(
-			mainWindow(), m_hostEventDispatcher);
+	m_previewManager = std::make_shared<SEPreviewManager>(
+		mainWindow(), m_hostEventDispatcher);
 
 	m_windowStateEventFilter =
 		std::make_shared<WindowStateChangeEventFilter>(
@@ -594,16 +579,14 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	// Start() returns immediately. CoreInitSDK costs a flat ~3.3 s, so it
 	// runs on the manager's own SDK thread and OBS start is not delayed;
 	// WYVRN becomes available a few seconds into the session.
-	m_razerWyvrnManager =
-		std::make_shared<SERazerWyvrnManager>(
-			m_hostEventDispatcher, m_localFilesystemHttpServer);
+	m_razerWyvrnManager = std::make_shared<SERazerWyvrnManager>(
+		m_hostEventDispatcher, m_localFilesystemHttpServer);
 	m_razerWyvrnManager->Start();
 #endif
 
-	m_outputManager =
-		std::make_shared<SEOutputManager>(
-			m_videoCompositionManager, m_audioCompositionManager,
-			m_hostEventDispatcher);
+	m_outputManager = std::make_shared<SEOutputManager>(
+		m_videoCompositionManager, m_audioCompositionManager,
+		m_hostEventDispatcher);
 
 	m_sharedVideoCompositionManager =
 		std::make_shared<SESharedVideoCompositionManager>(
@@ -647,8 +630,8 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	PublishApiServices();
 
 	m_appStateListener = new ApplicationStateListener();
-	m_themeChangeListener = new ThemeChangeListener(m_hostEventDispatcher,
-							m_messageBus);
+	m_themeChangeListener =
+		new ThemeChangeListener(m_hostEventDispatcher, m_messageBus);
 
 	// objectName, because QMainWindow::saveState() and restoreState()
 	// identify docks by it and Qt's documentation requires it to be set for
@@ -670,9 +653,8 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		QIcon(QPixmap(QString(":/images/icon.png"))),
 		obs_module_text("StreamElements.Action.LiveSupport"));*/
 
-		QPushButton *liveSupport =
-			new QPushButton(obs_module_text(
-				"StreamElements.Action.LiveSupport"));
+		QPushButton *liveSupport = new QPushButton(
+			obs_module_text("StreamElements.Action.LiveSupport"));
 
 		liveSupport->setStyleSheet(QString(
 			"QPushButton { background-color: #d9dded; border: 1px solid #546ac8; color: #032ee1; padding: 2px; border-radius: 0px; } "
@@ -680,13 +662,11 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 			"QPushButton:pressed { background-color: #808dc0; border: 1px solid #546ac8; color: #ffffff; } "));
 
 		QDockWidget *controlsDock =
-			(QDockWidget *)obs_main_window
-				->findChild<QDockWidget *>(
-					"controlsDock");
+			(QDockWidget *)obs_main_window->findChild<QDockWidget *>(
+				"controlsDock");
 		QVBoxLayout *buttonsVLayout =
-			(QVBoxLayout *)controlsDock
-				->findChild<QVBoxLayout *>(
-					"buttonsVLayout");
+			(QVBoxLayout *)controlsDock->findChild<QVBoxLayout *>(
+				"buttonsVLayout");
 		buttonsVLayout->addWidget(liveSupport);
 
 		QObject::connect(
@@ -703,8 +683,7 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 					obs_module_text(
 						"StreamElements.Action.LiveSupport.URL"),
 					QUrl::TolerantMode);
-				QDesktopServices::openUrl(
-					navigate_url);
+				QDesktopServices::openUrl(navigate_url);
 			});
 	}
 
@@ -720,18 +699,16 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 		char version_buf[512];
 		sprintf(version_buf,
 #ifdef __APPLE__
-        "SE.Live %s",
+			"SE.Live %s",
 #else
 			"SE.Live %s",
 #endif
-			GetSEPluginVersionString()
-				.c_str());
+			GetSEPluginVersionString().c_str());
 
 		container->layout()->addWidget(
 			new QLabel(version_buf, container));
 
-		obs_main_window->statusBar()
-			->addPermanentWidget(container);
+		obs_main_window->statusBar()->addPermanentWidget(container);
 	}
 
 	std::string onBoardingReason = "";
@@ -740,23 +717,22 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 	if (MKDIR_ERROR == os_mkdirs_ret) {
 		blog(LOG_WARNING,
-			"obs-streamelements-core: init: set on-boarding mode due to error creating new cookie storage path: %s",
-			fullStoragePath.c_str());
+		     "obs-streamelements-core: init: set on-boarding mode due to error creating new cookie storage path: %s",
+		     fullStoragePath.c_str());
 
 		isOnBoarding = true;
-		onBoardingReason =
-			"Failed creating new cookie storage folder";
+		onBoardingReason = "Failed creating new cookie storage folder";
 	} else if (MKDIR_SUCCESS == os_mkdirs_ret) {
 		blog(LOG_INFO,
-			"obs-streamelements-core: init: set on-boarding mode due to new cookie storage path: %s",
-			fullStoragePath.c_str());
+		     "obs-streamelements-core: init: set on-boarding mode due to new cookie storage path: %s",
+		     fullStoragePath.c_str());
 
 		isOnBoarding = true;
 		onBoardingReason = "New cookie storage folder";
 	} else if (m_config->GetSEPluginVersion() !=
 		   STREAMELEMENTS_PLUGIN_VERSION) {
 		blog(LOG_INFO,
-			"obs-streamelements-core: init: set on-boarding mode due to configuration version mismatch");
+		     "obs-streamelements-core: init: set on-boarding mode due to configuration version mismatch");
 
 		isOnBoarding = true;
 		onBoardingReason =
@@ -764,11 +740,10 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 	} else if (m_config->GetStartupFlags() &
 		   SEConfig::STARTUP_FLAGS_ONBOARDING_MODE) {
 		blog(LOG_INFO,
-			"obs-streamelements-core: init: set on-boarding mode due to start-up flags");
+		     "obs-streamelements-core: init: set on-boarding mode due to start-up flags");
 
 		isOnBoarding = true;
-		onBoardingReason =
-			"Start-up flags indicate on-boarding mode";
+		onBoardingReason = "Start-up flags indicate on-boarding mode";
 	}
 
 	//
@@ -861,19 +836,16 @@ void SEGlobalStateManager::Initialize(QMainWindow *obs_main_window)
 
 	{
 		json11::Json::object eventProps;
-		json11::Json::array fields =
-			json11::Json::array{};
+		json11::Json::array fields = json11::Json::array{};
 		fields.push_back(json11::Json::array{
-			"is_onboarding",
-			isOnBoarding ? "true" : "false"});
+			"is_onboarding", isOnBoarding ? "true" : "false"});
 		if (isOnBoarding) {
 			fields.push_back(json11::Json::array{
-				"onboarding_reason",
-				onBoardingReason});
+				"onboarding_reason", onBoardingReason});
 		}
 
-		GetAnalyticsEventsManager()
-			->trackEvent("se_live_initialized", eventProps, fields);
+		GetAnalyticsEventsManager()->trackEvent("se_live_initialized",
+							eventProps, fields);
 	}
 
 	// Update visible state.
@@ -958,7 +930,7 @@ static void WatchService(const char *name, std::shared_ptr<void> service,
 			{name, service, keptByCrashHandler});
 }
 
-void SEGlobalStateManager::WatchServicesForTeardownAudit()
+void SEMain::WatchServicesForTeardownAudit()
 {
 	if (!m_apiServices)
 		return;
@@ -1065,14 +1037,14 @@ void SEReportServicesOutlivingTeardown()
 	if (s_watchedServices.size() && !leaked) {
 		blog(LOG_INFO,
 		     "[obs-streamelements-core]: %zu of %zu services released cleanly, %zu held by the crash handler",
-		     s_watchedServices.size() - kept,
-		     s_watchedServices.size(), kept);
+		     s_watchedServices.size() - kept, s_watchedServices.size(),
+		     kept);
 	}
 
 	s_watchedServices.clear();
 }
 
-void SEGlobalStateManager::Shutdown()
+void SEMain::Shutdown()
 {
 	PREVENT_RECURSIVE_REENTRY();
 
@@ -1120,7 +1092,7 @@ void SEGlobalStateManager::Shutdown()
 		//delete m_crashHandler; // TODO: Shutting down the crash handler might be contributing to us missing some exceptions during shutdown
 		//m_crashHandler = nullptr;
 	}
-	
+
 	//mainWindow()->removeDockWidget(m_themeChangeListener);
 	if (m_themeChangeListener) {
 		m_themeChangeListener->deleteLater();
@@ -1218,7 +1190,6 @@ void SEGlobalStateManager::Shutdown()
 		m_cef = nullptr;
 	}
 
-
 	//
 	// Flush and close the ini here rather than letting the destructor do
 	// it with the rest of the container: this is the last point at which
@@ -1292,7 +1263,7 @@ void SEGlobalStateManager::Shutdown()
 	SEReportServicesOutlivingTeardown();
 }
 
-void SEGlobalStateManager::OnObsExit()
+void SEMain::OnObsExit()
 {
 	if (!m_statePersistence)
 		return;

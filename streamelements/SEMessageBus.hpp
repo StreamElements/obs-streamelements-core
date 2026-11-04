@@ -64,9 +64,8 @@ public:
 
 public:
 	//
-	// The only way to build one. SEGlobalStateManager owns the instance
-	// and publishes it in SEApiServices; there is no static instance any
-	// more.
+	// The only way to build one. SEMain owns the instance and publishes it
+	// in SEApiServices; there is no static instance any more.
 	//
 	static std::shared_ptr<SEMessageBus>
 	Create(std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,

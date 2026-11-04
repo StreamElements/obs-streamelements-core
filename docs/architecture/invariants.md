@@ -39,7 +39,7 @@ clang-format joining it onto one.
 
 | check | rule |
 | --- | --- |
-| `check_the_root_is_not_a_singleton` | no `SEGlobalStateManager::GetInstance()`. Was a ratchet: 291 → 47 → … → 0, now absolute |
+| `check_the_root_is_not_a_singleton` | no `SEMain::GetInstance()`. Was a ratchet: 291 → 47 → … → 0, now absolute |
 | `check_no_singletons_remain` | and not just the root — `SEConfig`, `SEPleaseWaitWindow`, `SENativeObsUIControlsManager` and a file-local source-data map were singletons too |
 | `check_nothing_but_the_manager_owns_the_services_container` | exactly one strong `shared_ptr<SEApiServices>` member in the tree. This is what makes the rings unconstructible |
 | `check_api_services_is_a_container_and_nothing_else` | no methods, no accessors, no policy on the container |

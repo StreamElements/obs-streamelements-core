@@ -51,15 +51,15 @@ struct QCefCookieManager;
 #include "SEOutputManager.hpp"
 #include "SEObsActiveSceneTracker.hpp"
 
-class SEGlobalStateManager : public SEObsAppMonitor {
+class SEMain : public SEObsAppMonitor {
 private:
 	struct Private {
 		explicit Private() = default;
 	};
 
 private:
-	QCef* m_cef = nullptr;
-	QCefCookieManager* m_cefCookieManager = nullptr;
+	QCef *m_cef = nullptr;
+	QCefCookieManager *m_cefCookieManager = nullptr;
 
 private:
 	class WindowStateChangeEventFilter : public QObject {
@@ -77,9 +77,8 @@ private:
 
 	public:
 		WindowStateChangeEventFilter(
-			QObject *target,
-			std::shared_ptr<SEHostEventDispatcher>
-				hostEventDispatcher)
+			QObject *target, std::shared_ptr<SEHostEventDispatcher>
+						 hostEventDispatcher)
 			: m_target(target),
 			  m_hostEventDispatcher(hostEventDispatcher)
 		{
@@ -113,8 +112,8 @@ private:
 	};
 
 public:
-	SEGlobalStateManager(Private);
-	virtual ~SEGlobalStateManager();
+	SEMain(Private);
+	virtual ~SEMain();
 
 public:
 	//
@@ -122,7 +121,7 @@ public:
 	// one reference; nothing can reach this object without being handed
 	// it, which is the whole of CORE-757.
 	//
-	static std::shared_ptr<SEGlobalStateManager> Create();
+	static std::shared_ptr<SEMain> Create();
 
 public:
 	void Initialize(QMainWindow *obs_main_window);
@@ -162,8 +161,6 @@ private:
 	void WatchServicesForTeardownAudit();
 
 public:
-
-
 	QCef *GetCef() { return m_cef; }
 
 	//
@@ -188,13 +185,11 @@ public:
 	{
 		return m_menuManager;
 	}
-	std::shared_ptr<SEBandwidthTestManager>
-	GetBandwidthTestManager()
+	std::shared_ptr<SEBandwidthTestManager> GetBandwidthTestManager()
 	{
 		return m_bwTestManager;
 	}
-	std::shared_ptr<SEOutputSettingsManager>
-	GetOutputSettingsManager()
+	std::shared_ptr<SEOutputSettingsManager> GetOutputSettingsManager()
 	{
 		return m_outputSettingsManager;
 	}
@@ -211,8 +206,7 @@ public:
 	{
 		return m_performanceHistoryTracker;
 	}
-	std::shared_ptr<SEAnalyticsEventsManager>
-	GetAnalyticsEventsManager()
+	std::shared_ptr<SEAnalyticsEventsManager> GetAnalyticsEventsManager()
 	{
 		return m_analyticsEventsManager;
 	}
@@ -221,10 +215,7 @@ public:
 	{
 		return m_externalSceneDataProviderManager;
 	}
-	std::shared_ptr<SEHttpClient> GetHttpClient()
-	{
-		return m_httpClient;
-	}
+	std::shared_ptr<SEHttpClient> GetHttpClient() { return m_httpClient; }
 	std::shared_ptr<SELocalFilesystemHttpServer>
 	GetLocalFilesystemHttpServer()
 	{
@@ -236,10 +227,7 @@ public:
 	{
 		return m_nativeObsUIControlsManager;
 	}
-	QCefCookieManager *GetCookieManager()
-	{
-		return m_cefCookieManager;
-	}
+	QCefCookieManager *GetCookieManager() { return m_cefCookieManager; }
 	std::shared_ptr<SEProfilesManager> GetProfilesManager()
 	{
 		return m_profilesManager;
@@ -262,14 +250,13 @@ public:
 	{
 		return m_previewManager;
 	}
-	std::shared_ptr<SEWebsocketApiServer>
-	GetWebsocketApiServer()
+	std::shared_ptr<SEWebsocketApiServer> GetWebsocketApiServer()
 	{
 		return m_websocketApiServer;
 	}
 
-	std::shared_ptr <SESharedVideoCompositionManager>
-		GetSharedVideoCompositionManager()
+	std::shared_ptr<SESharedVideoCompositionManager>
+	GetSharedVideoCompositionManager()
 	{
 		return m_sharedVideoCompositionManager;
 	}
@@ -277,8 +264,7 @@ public:
 	{
 		return m_videoCompositionManager;
 	}
-	std::shared_ptr<SEAudioCompositionManager>
-	GetAudioCompositionManager()
+	std::shared_ptr<SEAudioCompositionManager> GetAudioCompositionManager()
 	{
 		return m_audioCompositionManager;
 	}
@@ -286,12 +272,11 @@ public:
 	{
 		return m_outputManager;
 	}
-	std::shared_ptr<SEObsActiveSceneTracker>
-		GetObsActiveSceneTracker()
+	std::shared_ptr<SEObsActiveSceneTracker> GetObsActiveSceneTracker()
 	{
 		return m_obsActiveSceneTracker;
 	}
-		
+
 	QMainWindow *mainWindow() { return m_mainWindow; }
 
 protected:
@@ -314,83 +299,72 @@ private:
 	bool m_initializeFinishedAndShutdownIsExpectedToRun = false;
 	QPointer<QMainWindow> m_mainWindow = nullptr;
 	QPointer<QWidget> m_nativeCentralWidget = nullptr;
-	std::shared_ptr<SEBrowserWidgetManager> m_widgetManager =
-		nullptr;
-	std::shared_ptr<SEObsSceneManager> m_obsSceneManager =
-		nullptr;
+	std::shared_ptr<SEBrowserWidgetManager> m_widgetManager = nullptr;
+	std::shared_ptr<SEObsSceneManager> m_obsSceneManager = nullptr;
 	std::shared_ptr<SEMenuManager> m_menuManager = nullptr;
-	std::shared_ptr<SEBandwidthTestManager> m_bwTestManager =
+	std::shared_ptr<SEBandwidthTestManager> m_bwTestManager = nullptr;
+	std::shared_ptr<SEOutputSettingsManager> m_outputSettingsManager =
 		nullptr;
-	std::shared_ptr<SEOutputSettingsManager>
-		m_outputSettingsManager = nullptr;
 	std::shared_ptr<SEWorkerManager> m_workerManager = nullptr;
 	std::shared_ptr<SEHotkeyManager> m_hotkeyManager = nullptr;
 	std::shared_ptr<SEPerformanceHistoryTracker>
 		m_performanceHistoryTracker = nullptr;
-	std::shared_ptr<SEAnalyticsEventsManager>
-		m_analyticsEventsManager = nullptr;
+	std::shared_ptr<SEAnalyticsEventsManager> m_analyticsEventsManager =
+		nullptr;
 	SECrashHandler *m_crashHandler = nullptr;
 	std::shared_ptr<SEExternalSceneDataProviderManager>
 		m_externalSceneDataProviderManager = nullptr;
 	std::shared_ptr<SEHttpClient> m_httpClient = nullptr;
-	std::shared_ptr<SELocalFilesystemHttpServer>
-		m_localFilesystemHttpServer;
+	std::shared_ptr<SELocalFilesystemHttpServer> m_localFilesystemHttpServer;
 	std::shared_ptr<SENativeObsUIControlsManager>
 		m_nativeObsUIControlsManager = nullptr;
-	std::shared_ptr<SEProfilesManager> m_profilesManager =
-		nullptr;
+	std::shared_ptr<SEProfilesManager> m_profilesManager = nullptr;
 	std::shared_ptr<SEBackupManager> m_backupManager = nullptr;
 #ifdef SE_ENABLE_WYVRN
-	std::shared_ptr<SERazerWyvrnManager> m_razerWyvrnManager =
-		nullptr;
+	std::shared_ptr<SERazerWyvrnManager> m_razerWyvrnManager = nullptr;
 #endif
-	std::shared_ptr<SECleanupManager> m_cleanupManager =
-		nullptr;
-	std::shared_ptr<SEPreviewManager> m_previewManager =
-		nullptr;
-	std::shared_ptr<SEWebsocketApiServer> m_websocketApiServer =
-		nullptr;
+	std::shared_ptr<SECleanupManager> m_cleanupManager = nullptr;
+	std::shared_ptr<SEPreviewManager> m_previewManager = nullptr;
+	std::shared_ptr<SEWebsocketApiServer> m_websocketApiServer = nullptr;
 	std::shared_ptr<WindowStateChangeEventFilter> m_windowStateEventFilter =
 		nullptr;
 	std::shared_ptr<SESharedVideoCompositionManager>
 		m_sharedVideoCompositionManager = nullptr;
-	std::shared_ptr<SEVideoCompositionManager>
-		m_videoCompositionManager = nullptr;
-	std::shared_ptr<SEAudioCompositionManager>
-		m_audioCompositionManager = nullptr;
+	std::shared_ptr<SEVideoCompositionManager> m_videoCompositionManager =
+		nullptr;
+	std::shared_ptr<SEAudioCompositionManager> m_audioCompositionManager =
+		nullptr;
 	std::shared_ptr<SEOutputManager> m_outputManager = nullptr;
-	std::shared_ptr<SEObsActiveSceneTracker>
-		m_obsActiveSceneTracker = nullptr;
+	std::shared_ptr<SEObsActiveSceneTracker> m_obsActiveSceneTracker =
+		nullptr;
 	std::shared_ptr<SEApiServices> m_apiServices = nullptr;
 	std::shared_ptr<SEStatePersistence> m_statePersistence = nullptr;
-	std::shared_ptr<SEStatusBarMessageManager>
-		m_statusBarMessageManager = nullptr;
+	std::shared_ptr<SEStatusBarMessageManager> m_statusBarMessageManager =
+		nullptr;
 	std::shared_ptr<SEShellServices> m_shellServices = nullptr;
 	std::shared_ptr<SEHostStreamingManager> m_hostStreamingManager =
 		nullptr;
 	std::shared_ptr<SEHostUpdateManager> m_hostUpdateManager = nullptr;
 	std::shared_ptr<SEHostInfoProvider> m_hostInfoProvider = nullptr;
-	std::shared_ptr<SEPopupWindowManager> m_popupWindowManager =
-		nullptr;
+	std::shared_ptr<SEPopupWindowManager> m_popupWindowManager = nullptr;
 	std::shared_ptr<SEBrowserDialogManager> m_browserDialogManager =
 		nullptr;
 	std::shared_ptr<SESessionManager> m_sessionManager = nullptr;
-	std::shared_ptr<SEAuxiliaryControlsBuilder>
-		m_auxiliaryControlsBuilder = nullptr;
+	std::shared_ptr<SEAuxiliaryControlsBuilder> m_auxiliaryControlsBuilder =
+		nullptr;
 	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher = nullptr;
 	std::shared_ptr<SEMessageBus> m_messageBus = nullptr;
 	std::shared_ptr<SEConfig> m_config = nullptr;
 	std::shared_ptr<SEPleaseWaitWindow> m_pleaseWaitWindow = nullptr;
-	std::shared_ptr<SEObsApiTransactionManager>
-		m_obsApiTransactionManager = nullptr;
+	std::shared_ptr<SEObsApiTransactionManager> m_obsApiTransactionManager =
+		nullptr;
 
 private:
 	class ThemeChangeListener : public QDockWidget {
 	public:
-		ThemeChangeListener(
-			std::shared_ptr<SEHostEventDispatcher>
-				hostEventDispatcher,
-			std::shared_ptr<SEMessageBus> messageBus);
+		ThemeChangeListener(std::shared_ptr<SEHostEventDispatcher>
+					    hostEventDispatcher,
+				    std::shared_ptr<SEMessageBus> messageBus);
 
 	protected:
 		virtual void changeEvent(QEvent *event) override;

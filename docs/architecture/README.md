@@ -88,7 +88,7 @@ Everything else follows from those three.
 
 Three facts about this diagram are worth more than the diagram:
 
-- **The root is not a singleton.** `SEGlobalStateManager` is created by
+- **The root is not a singleton.** `SEMain` is created by
   `obs-streamelements-core-plugin.cpp` and owned there; a class that needs a
   service is *handed* it. There is no `GetInstance()` and no
   `IsInstanceAvailable()` anywhere in the plug-in, and two source invariants

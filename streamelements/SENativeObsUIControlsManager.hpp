@@ -101,9 +101,9 @@ public:
 
 public:
 	//
-	// Owned by SEGlobalStateManager and published in SEApiServices. It
-	// was a singleton with a file-static instance, which is why the root
-	// had to call Destroy() on it by name at teardown (CORE-757).
+	// Owned by SEMain and published in SEApiServices. It was a singleton
+	// with a file-static instance, which is why the root had to call
+	// Destroy() on it by name at teardown (CORE-757).
 	//
 	static std::shared_ptr<SENativeObsUIControlsManager>
 	Create(QMainWindow *mainWindow,
