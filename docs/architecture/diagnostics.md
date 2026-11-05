@@ -162,6 +162,15 @@ Events are queued and posted by a worker pool, so a caller never blocks on
 the network. `trackSynchronousEvent` is the exception and exists for the
 crash handler, which has no later to post from.
 
+**`trackEvent` is called from several threads at once** — the Qt thread,
+the WYVRN SDK thread, the crash handler's — so the manager's two pieces
+of shared mutable state are `std::atomic`: the previous event's
+timestamp, taken with a single `exchange` so that one event claims it,
+and the worker threads' stop flag, which the destructor writes while they
+read it. `m_startTime` is `const` instead, because it is written once and
+only read after. `check_the_analytics_managers_shared_state_is_atomic`
+pins all three.
+
 **The one subsystem whose outcome only analytics can see is Razer WYVRN.**
 Init runs on the SDK thread seconds after startup and ends in “unavailable”
 on the overwhelming majority of machines, so the status reaches a page that

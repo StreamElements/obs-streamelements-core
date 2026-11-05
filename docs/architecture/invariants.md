@@ -1,7 +1,7 @@
 # Enforced invariants
 
 `tests/test_source_invariants.cpp` opens the production sources and asserts
-that a fixed pattern is absent — or that a required one is present. **75
+that a fixed pattern is absent — or that a required one is present. **76
 checks** run from its `main()`. They exist because this plug-in's worst bugs
 are not type errors: they are a lock held one line too long, a strong pointer
 where a weak one belonged, an `#ifdef` that silently stopped meaning anything.
@@ -155,6 +155,7 @@ clang-format joining it onto one.
 | `check_wyvrn_signature_check_is_not_disabled` | the SDK is never built with its Authenticode verification skipped |
 | `check_wyvrn_sdk_calls_stay_on_the_sdk_thread` | the Chroma stack beneath it is COM-based and thread-affine |
 | `check_wyvrn_init_reports_its_outcome_to_analytics` | all three terminal branches of the init decision fire their event, with the status vocabulary and field names the dashboard reads — a branch that forgets one removes a cohort from the numbers and fails nothing |
+| `check_the_analytics_managers_shared_state_is_atomic` | the event timestamp and the workers' stop flag are atomic, the timestamp is taken with one `exchange`, and the subtraction after it is guarded against the reordering that `exchange` does not prevent |
 
 ### Portability and hygiene
 

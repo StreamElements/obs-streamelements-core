@@ -8,10 +8,11 @@
 
 SEAnalyticsEventsManager::SEAnalyticsEventsManager(
 	std::shared_ptr<SEConfig> config, size_t numWorkers)
+	// m_startTime is const, so it is initialised here rather than
+	// assigned below. It is declared before m_prevEventTime, so it is
+	// already set by the time the second initialiser reads it.
+	: m_startTime(os_gettime_ns()), m_prevEventTime(m_startTime)
 {
-	uint64_t now = os_gettime_ns();
-	m_startTime = now;
-	m_prevEventTime = now;
 	m_appId = config->GetHeapAnalyticsAppId();
 	m_sessionId = CreateGloballyUniqueIdString();
 	m_identity = GetComputerSystemUniqueId();
@@ -69,10 +70,41 @@ void SEAnalyticsEventsManager::AddRawEvent(
 
 	json11::Json::object props; //	= propertiesJson;
 
-	uint64_t now = os_gettime_ns();
-	uint64_t secondsSinceStart = (now - m_startTime) / (uint64_t)1000000000L;
-	uint64_t secondsSincePrevEvent = (now - m_prevEventTime) / (uint64_t)1000000000L;
-	m_prevEventTime = now;
+	//
+	// One atomic exchange, not a read followed by a write.
+	//
+	// This function runs on whichever thread tracked the event: the Qt
+	// thread for a dock click or the plug-in's own startup event, the
+	// crash handler's thread for the synchronous one, the WYVRN SDK
+	// thread for the init outcome. The old read-then-assign was a data
+	// race between them -- unsynchronised access to a non-atomic
+	// uint64_t, so undefined behaviour rather than merely a stale
+	// number. exchange() makes "the previous event's time" a value that
+	// exactly one event can claim, which an atomic load followed by an
+	// atomic store still would not.
+	//
+	// Default (sequentially consistent) ordering, deliberately: on x86
+	// an exchange is a locked instruction either way, so a weaker order
+	// would buy nothing and cost the reader a question.
+	//
+	const uint64_t now = os_gettime_ns();
+	const uint64_t prevEventTime = m_prevEventTime.exchange(now);
+
+	const uint64_t secondsSinceStart =
+		(now - m_startTime) / (uint64_t)1000000000L;
+
+	//
+	// Guarded, and the guard is not redundant: the exchange orders the
+	// writes but not the os_gettime_ns() calls that precede them, so two
+	// threads can read the clock in one order and reach the exchange in
+	// the other. The loser then sees a previous time later than its own
+	// now, and unsigned that underflows to ~584 years instead of the 0
+	// those two events are genuinely apart.
+	//
+	const uint64_t secondsSincePrevEvent =
+		now > prevEventTime
+			? (now - prevEventTime) / (uint64_t)1000000000L
+			: 0;
 
 	char atoi_buf[32] = {0};
 

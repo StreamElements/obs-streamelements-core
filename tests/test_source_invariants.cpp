@@ -1871,6 +1871,90 @@ static void check_wyvrn_init_reports_its_outcome_to_analytics()
 	      "no obvious cause");
 }
 
+// --- The analytics manager's shared state must be atomic.
+//
+// AddRawEvent runs on whichever thread tracked the event: the Qt thread for
+// a dock click or the plug-in's own startup event, the crash handler's
+// thread for the synchronous one, and the WYVRN SDK thread for the init
+// outcome (CORE-1022). It used to read m_prevEventTime and then assign it,
+// which across those threads is unsynchronised access to a non-atomic
+// uint64_t -- undefined behaviour, not merely a stale "seconds since
+// previous event". The same shape sat three lines away on the worker
+// threads' stop flag, which the destructor writes while four of them read
+// it in a loop condition nothing stops the compiler hoisting.
+//
+// Both are atomic now, and the timestamp is taken with one exchange so that
+// "the previous event's time" is a value exactly one event can claim. An
+// atomic load followed by an atomic store would remove the undefined
+// behaviour and keep the lost update, which is why this check names the
+// operation and not just the type.
+static void check_the_analytics_managers_shared_state_is_atomic()
+{
+	const std::string hpp = strip_line_comments(
+		slurp("streamelements/SEAnalyticsEventsManager.hpp"));
+	const std::string cpp = strip_line_comments(
+		slurp("streamelements/SEAnalyticsEventsManager.cpp"));
+
+	check(hpp.find("std::atomic<uint64_t> m_prevEventTime") !=
+		      std::string::npos,
+	      "analytics: m_prevEventTime must be std::atomic<uint64_t> -- "
+	      "AddRawEvent read-modify-writes it from the Qt thread, the "
+	      "WYVRN SDK thread and the crash handler's thread");
+
+	check(hpp.find("std::atomic<bool> m_taskConsumersKeepRunning") !=
+		      std::string::npos,
+	      "analytics: m_taskConsumersKeepRunning must be "
+	      "std::atomic<bool> -- the destructor writes it while the four "
+	      "worker threads read it in their loop condition, and a plain "
+	      "bool there lets the compiler hoist the load out of the loop");
+
+	//
+	// m_startTime is the one that only looked shared: written once in the
+	// constructor's initialiser list and read-only afterwards. const
+	// keeps that true by compiler, and distinguishes it from the two
+	// above without a reader having to go and check.
+	//
+	check(hpp.find("const uint64_t m_startTime") != std::string::npos,
+	      "analytics: m_startTime must stay const -- it is read from "
+	      "every tracking thread, and const is what says it is never "
+	      "written after construction");
+
+	const std::string body = function_body(
+		cpp, "void SEAnalyticsEventsManager::AddRawEvent(");
+
+	check(!body.empty(),
+	      "analytics: AddRawEvent() not found -- has it moved?");
+
+	if (body.empty())
+		return;
+
+	check(body.find("m_prevEventTime.exchange(") != std::string::npos,
+	      "analytics: AddRawEvent must take the previous event's time "
+	      "with a single m_prevEventTime.exchange(now). A load followed "
+	      "by a store lets two events claim the same previous time and "
+	      "lose one of the updates");
+
+	//
+	// Negative: no separate write left anywhere in the body.
+	//
+	check(body.find("m_prevEventTime =") == std::string::npos &&
+		      body.find("m_prevEventTime.store(") == std::string::npos,
+	      "analytics: AddRawEvent must not write m_prevEventTime "
+	      "separately from reading it -- that is the same lost update "
+	      "with only the undefined behaviour taken out");
+
+	//
+	// And the underflow guard, which is the half a reviewer deletes as
+	// redundant.
+	//
+	check(body.find("now > prevEventTime") != std::string::npos,
+	      "analytics: the seconds-since-previous-event subtraction must "
+	      "be guarded. The exchange orders the writes, not the "
+	      "os_gettime_ns calls before them, so the losing thread can see "
+	      "a previous time later than its own now -- unsigned, that is "
+	      "~584 years instead of 0");
+}
+
 // --- A null config_t must never reach libobs.
 //
 // GetConfig() ignored config_open()'s result. libobs leaves the config null
@@ -6678,6 +6762,7 @@ int main()
 	check_wyvrn_signature_check_is_not_disabled();
 	check_wyvrn_sdk_calls_stay_on_the_sdk_thread();
 	check_wyvrn_init_reports_its_outcome_to_analytics();
+	check_the_analytics_managers_shared_state_is_atomic();
 	check_config_never_hands_libobs_a_null_config();
 	check_rejected_signature_stops_the_handler();
 	check_injected_services_are_not_also_fetched_globally();
