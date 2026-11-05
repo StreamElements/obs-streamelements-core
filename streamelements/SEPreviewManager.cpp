@@ -1,4 +1,5 @@
 #include "SEPreviewManager.hpp"
+#include "SEHostEventDispatcher.hpp"
 
 #include <obs.h>
 #include <obs-frontend-api.h>
@@ -12,12 +13,27 @@
 class PreviewMouseEventFilter : public QObject {
 private:
 	QMainWindow *m_mainWindow;
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
 
 public:
-	PreviewMouseEventFilter(QMainWindow *mainWindow)
-		: m_mainWindow(mainWindow)
+	PreviewMouseEventFilter(
+		QMainWindow *mainWindow,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
+		: m_mainWindow(mainWindow),
+		  m_hostEventDispatcher(hostEventDispatcher)
 	{
 		QCoreApplication::instance()->installEventFilter(this);
+	}
+
+	//
+	// One place that checks the handle rather than three.
+	//
+	void Dispatch(std::string event, std::string argsJson)
+	{
+		if (!m_hostEventDispatcher)
+			return;
+
+		m_hostEventDispatcher->DispatchJSEventGlobal(event, argsJson);
 	}
 
 	virtual ~PreviewMouseEventFilter()
@@ -35,12 +51,12 @@ public:
 			    Qt::NoModifier) {
 				if (o->objectName() ==
 				    QString("previewWindow")) {
-					DispatchJSEventGlobal(
+					Dispatch(
 						"hostVideoPreviewMouseDoubleClicked",
 						"null");
 				} else if (o->objectName() ==
 						   QString("sourcesDockWindow")) {
-					DispatchJSEventGlobal(
+					Dispatch(
 						"hostCurrentSceneItemsListMouseDoubleClicked",
 						"null");
 				}
@@ -49,7 +65,7 @@ public:
 
 		case QEvent::FocusAboutToChange:
 			if (o->objectName() == "OBSBasicWindow") {
-				DispatchJSEventGlobal(
+				Dispatch(
 					"hostBeforeFocusChange", "null");
 			}
 			break;
@@ -61,10 +77,13 @@ public:
 	}
 };
 
-SEPreviewManager::SEPreviewManager(QMainWindow *parent)
+SEPreviewManager::SEPreviewManager(
+	QMainWindow *parent,
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 	: m_parent(parent)
 {
-	m_eventFilter = new PreviewMouseEventFilter(m_parent);
+	m_eventFilter = new PreviewMouseEventFilter(m_parent,
+						    m_hostEventDispatcher);
 }
 
 SEPreviewManager::~SEPreviewManager()

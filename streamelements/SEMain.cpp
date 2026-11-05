@@ -1,0 +1,1274 @@
+#include "SEMain.hpp"
+#include "SEApiMessageHandler.hpp"
+#include "SEUtils.hpp"
+#include "Version.hpp"
+#include "SEBrowserDialog.hpp"
+#include "SEReportIssueDialog.hpp"
+
+#include "base64/base64.hpp"
+#include "json11/json11.hpp"
+#include "cef-headers.hpp"
+
+#include <util/threading.h>
+#include <util/util.hpp>
+
+#include <QPushButton>
+#include <QMessageBox>
+#include <QGuiApplication>
+
+#include "updater/updater.hpp"
+
+#ifndef WIN32
+#include <errno.h>
+#include <string.h>
+#endif
+
+#include <future>
+
+/* ========================================================================= */
+
+SEMain::ApplicationStateListener::ApplicationStateListener() : m_timer(this)
+{
+	uint32_t obsMajorVersion = obs_get_version() >> 24;
+
+	if (obsMajorVersion < 22) {
+		m_timer.setSingleShot(false);
+		m_timer.setInterval(100);
+
+		QObject::connect(&m_timer, &QTimer::timeout,
+				 [this]() { applicationStateChanged(); });
+
+		m_timer.start();
+	}
+}
+
+SEMain::ApplicationStateListener::~ApplicationStateListener()
+{
+	uint32_t obsMajorVersion = obs_get_version() >> 24;
+
+	if (obsMajorVersion < 22) {
+		m_timer.stop();
+	}
+}
+
+void SEMain::ApplicationStateListener::applicationStateChanged()
+{
+	// This is an unpleasant hack for OBS versions before
+	// OBS 22.
+	//
+	// Older versions of OBS enabled global hotkeys only
+	// when the OBS window was not focused to prevent
+	// hotkey collision with text boxes and "natural"
+	// program hotkeys. This mechanism relies on Qt's
+	// QGuiApplication::applicationStateChanged event which
+	// does not fire under certain conditions with CEF in
+	// focus for the first time you set a hotkey.
+	//
+	// To mitigate, we re-enable background hotkeys
+	// 10 times/sec for older OBS versions.
+	//
+	obs_hotkey_enable_background_press(true);
+}
+
+/* ========================================================================= */
+
+static void SetMainWindowStyle()
+{
+	if (IsTraceLogLevel()) {
+		blog(LOG_INFO, "SetMainWindowStyle");
+	}
+
+	QMainWindow *main = (QMainWindow *)obs_frontend_get_main_window();
+
+	//qApp->setStyleSheet("QMainWindow::separator { border: none; padding: 0; margin: 0; }");
+	//qApp->setStyleSheet("QDockWindow { margin: 0 4px 4px 4px; }");
+	//			dock->setStyleSheet("QDockWidget { margin: 0 -4px -4px -4px; }");
+}
+
+SEMain::ThemeChangeListener::ThemeChangeListener(
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+	std::shared_ptr<SEMessageBus> messageBus)
+	: QDockWidget(),
+	  m_hostEventDispatcher(hostEventDispatcher),
+	  m_messageBus(messageBus)
+{
+	setVisible(false);
+	setFloating(true);
+
+	SetMainWindowStyle();
+}
+
+void SEMain::ThemeChangeListener::changeEvent(QEvent *event)
+{
+	if (event->type() == QEvent::StyleChange) {
+		//SetMainWindowStyle();
+
+		std::string newTheme = GetCurrentThemeName();
+
+		if (newTheme != m_currentTheme) {
+			json11::Json json = json11::Json::object{
+				{"name", newTheme},
+			};
+
+			if (auto dispatcher = m_hostEventDispatcher.lock()) {
+				dispatcher->DispatchJSEventGlobal(
+					"hostUIThemeChanged", json.dump());
+			}
+
+			if (auto messageBus = m_messageBus.lock()) {
+				messageBus->NotifyExternalHostEvent(
+					"hostUIThemeChanged", json.dump());
+			}
+
+			m_currentTheme = newTheme;
+		}
+	}
+}
+
+/* ========================================================================= */
+
+static void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
+{
+	//
+	// Registered with the manager as its callback data, so this does not
+	// have to look one up. Valid for as long as callbacks can arrive:
+	// Shutdown() removes this one before the manager is destroyed, and the
+	// Leak() path never destroys it at all.
+	//
+	auto self = static_cast<SEMain *>(data);
+
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
+	UNUSED_PARAMETER(data);
+
+	std::string name;
+	std::string args = "null";
+
+	switch (event) {
+	case OBS_FRONTEND_EVENT_STREAMING_STARTING:
+		name = "hostStreamingStarting";
+		break;
+	case OBS_FRONTEND_EVENT_STREAMING_STARTED:
+		name = "hostStreamingStarted";
+		break;
+	case OBS_FRONTEND_EVENT_STREAMING_STOPPING:
+		name = "hostStreamingStopping";
+		break;
+	case OBS_FRONTEND_EVENT_STREAMING_STOPPED:
+		name = "hostStreamingStopped";
+		break;
+	case OBS_FRONTEND_EVENT_RECORDING_STARTING:
+		name = "hostRecordingStarting";
+		break;
+	case OBS_FRONTEND_EVENT_RECORDING_STARTED:
+		name = "hostRecordingStarted";
+		break;
+	case OBS_FRONTEND_EVENT_RECORDING_STOPPING:
+		name = "hostRecordingStopping";
+		break;
+	case OBS_FRONTEND_EVENT_RECORDING_STOPPED:
+		name = "hostRecordingStopped";
+		break;
+	case OBS_FRONTEND_EVENT_SCENE_CHANGED: {
+		obs_source_t *source =
+			SETRACE_ADDREF(obs_frontend_get_current_scene());
+
+		if (source) {
+			const char *sourceName = obs_source_get_name(source);
+
+			if (sourceName) {
+				json11::Json json = json11::Json::object{
+					{"sceneId", GetIdFromPointer(source)},
+					{"videoCompositionId",
+					 self->GetVideoCompositionManager()
+						 ->GetObsNativeVideoComposition()
+						 ->GetId()},
+					{"name", sourceName},
+					{"width",
+					 (int)obs_source_get_width(source)},
+					{"height",
+					 (int)obs_source_get_height(source)}};
+
+				name = "hostActiveSceneChanged";
+				args = json.dump();
+			}
+
+			obs_source_release(SETRACE_DECREF(source));
+		}
+		break;
+	}
+	case OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED:
+		name = "hostSceneListChanged";
+		break;
+	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED:
+		name = "hostSceneCollectionChanged";
+		break;
+	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_LIST_CHANGED:
+		name = "hostSceneCollectionListChanged";
+		break;
+	case OBS_FRONTEND_EVENT_PROFILE_CHANGED:
+		name = "hostProfileChanged";
+		break;
+	case OBS_FRONTEND_EVENT_PROFILE_LIST_CHANGED:
+		name = "hostProfileListChanged";
+		break;
+	case OBS_FRONTEND_EVENT_EXIT:
+	case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
+		name = "hostExit";
+		break;
+	//
+	// OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED was handled here once, to
+	// force studio mode off while a central browser widget was visible:
+	// the two compete for the same space, and the central widget is how
+	// macOS support constrains us. The handler has been commented out for
+	// a long time -- kept as prose rather than as dead code, because the
+	// conflict it describes is real but the code it contained reached the
+	// singleton for the widget manager.
+	//
+	default:
+		return;
+	}
+
+	if (name.size()) {
+		//
+		// Both audiences, through the two services this object holds.
+		// It is handed to the callback as private_data, so there is
+		// nothing to ask whether the plugin is alive -- if it were
+		// not, self would not be here.
+		//
+		if (auto dispatcher = self->GetHostEventDispatcher()) {
+			dispatcher->DispatchJSEventGlobal(name, args);
+		}
+
+		if (auto msgBus = self->GetMessageBus()) {
+			msgBus->NotifyExternalHostEvent(name, args);
+		}
+	}
+}
+
+/* ========================================================================= */
+
+SEMain::SEMain(SEMain::Private) {}
+
+SEMain::~SEMain()
+{
+	Shutdown();
+
+	//
+	// Ungated, unlike the close inside Shutdown(). m_config and the
+	// crash handler that reads the reporter's contact details through
+	// it -- which is what opens the ini -- are both built before
+	// Initialize()'s first bail, the obs_browser_init_panel()
+	// failure. Shutdown() can therefore return at its
+	// !m_initializeFinishedAndShutdownIsExpectedToRun
+	// early-out having left the file open, and nothing else would
+	// ever close it: the crash handler holds the config and is
+	// deliberately never deleted, so the object's own destructor does
+	// not run either.
+	//
+	// A no-op on every path that got as far as Initialize() finishing,
+	// where Shutdown() has already closed it and released the handle.
+	//
+	if (m_config)
+		m_config->CloseAndPreventFurtherReopens();
+
+	//
+	// The container is not emptied here. It used to be, because the
+	// references formed a ring -- a service owning widgets, each widget
+	// owning an API handler, each handler holding the container -- that
+	// refcounting could not unwind, and a teardown step was the only
+	// thing breaking it. Every one of those back-edges is a weak_ptr now,
+	// so each service goes when its last real user does.
+	//
+	// Shutdown() releases the container as its last act, which is a
+	// different statement in every way that matters: this object letting
+	// go of its own handle, at a point where nothing else holds one, as
+	// against reaching inside to drop handles other objects were still
+	// using. The audit at the end of Shutdown() is what proves the
+	// difference on every run.
+	//
+	// If a shutdown hang comes back, the fix is the weak edge that went
+	// missing, not a line here: an owner deciding other objects'
+	// lifetimes is what this refactor exists to remove.
+	// check_nothing_but_the_manager_owns_the_services_container is the
+	// structural guard, and
+	// check_api_services_container_is_not_emptied_at_teardown is the
+	// guard on this comment.
+	//
+}
+
+std::shared_ptr<SEMain> SEMain::Create()
+{
+	return std::make_shared<SEMain>(SEMain::Private());
+}
+
+#include <QWindow>
+#include <QObjectList>
+
+void SEMain::PublishApiServices()
+{
+	if (!m_apiServices)
+		return;
+
+	m_apiServices->cef = m_cef;
+	m_apiServices->cefCookieManager = m_cefCookieManager;
+	m_apiServices->widgetManager = m_widgetManager;
+	m_apiServices->obsSceneManager = m_obsSceneManager;
+	m_apiServices->menuManager = m_menuManager;
+	m_apiServices->bandwidthTestManager = m_bwTestManager;
+	m_apiServices->outputSettingsManager = m_outputSettingsManager;
+	m_apiServices->workerManager = m_workerManager;
+	m_apiServices->hotkeyManager = m_hotkeyManager;
+	m_apiServices->performanceHistoryTracker = m_performanceHistoryTracker;
+	m_apiServices->analyticsEventsManager = m_analyticsEventsManager;
+	m_apiServices->externalSceneDataProviderManager =
+		m_externalSceneDataProviderManager;
+	m_apiServices->httpClient = m_httpClient;
+	m_apiServices->localFilesystemHttpServer = m_localFilesystemHttpServer;
+	m_apiServices->nativeObsUIControlsManager =
+		m_nativeObsUIControlsManager;
+	m_apiServices->profilesManager = m_profilesManager;
+	m_apiServices->backupManager = m_backupManager;
+#ifdef SE_ENABLE_WYVRN
+	m_apiServices->razerWyvrnManager = m_razerWyvrnManager;
+#endif
+	m_apiServices->cleanupManager = m_cleanupManager;
+	m_apiServices->previewManager = m_previewManager;
+	m_apiServices->apiMessageSink = m_websocketApiServer;
+	m_apiServices->hostEventDispatcher = m_hostEventDispatcher;
+	m_apiServices->messageBus = m_messageBus;
+	m_apiServices->sharedVideoCompositionManager =
+		m_sharedVideoCompositionManager;
+	m_apiServices->videoCompositionManager = m_videoCompositionManager;
+	m_apiServices->audioCompositionManager = m_audioCompositionManager;
+	m_apiServices->outputManager = m_outputManager;
+	m_apiServices->obsActiveSceneTracker = m_obsActiveSceneTracker;
+	m_apiServices->statePersistence = m_statePersistence;
+	m_apiServices->statusBarMessageManager = m_statusBarMessageManager;
+	m_apiServices->shellServices = m_shellServices;
+	m_apiServices->hostStreamingManager = m_hostStreamingManager;
+	m_apiServices->hostUpdateManager = m_hostUpdateManager;
+	m_apiServices->hostInfoProvider = m_hostInfoProvider;
+	m_apiServices->popupWindowManager = m_popupWindowManager;
+	m_apiServices->browserDialogManager = m_browserDialogManager;
+	m_apiServices->sessionManager = m_sessionManager;
+	m_apiServices->auxiliaryControlsBuilder = m_auxiliaryControlsBuilder;
+	m_apiServices->config = m_config;
+	m_apiServices->pleaseWaitWindow = m_pleaseWaitWindow;
+	m_apiServices->obsApiTransactionManager = m_obsApiTransactionManager;
+}
+
+void SEMain::Initialize(QMainWindow *obs_main_window)
+{
+	m_mainWindow = obs_main_window;
+
+	//
+	// First, before the crash handler: that reads the contact details a
+	// previous crash report left behind, in its own constructor, so that
+	// a crash which never reaches the prompt still says who it came
+	// from.
+	//
+	m_config = SEConfig::Create();
+
+	// Initialize on the main thread.
+	//
+	// Which backend this is -- BugSplat, Sentry, or none at all -- is decided
+	// at build time by the STREAMELEMENTS_CRASH_HANDLER CMake variable. Create()
+	// returns nullptr when crash reporting is compiled out.
+	m_crashHandler = SECrashHandler::Create(m_config);
+
+	/*
+	struct local_context {
+		SEMain *self;
+		QMainWindow *obs_main_window;
+	};
+	*/
+
+	// http://doc.qt.io/qt-5/qmainwindow.html#DockOption-enum
+	obs_main_window->setDockOptions(QMainWindow::AnimatedDocks |
+					QMainWindow::AllowNestedDocks |
+					QMainWindow::AllowTabbedDocks);
+
+#ifdef _WIN32
+	std::string storagePath =
+		std::string("../obs-browser/") + GetCefVersionString();
+#else
+	std::string storagePath = GetCefVersionString();
+#endif
+	std::string fullStoragePath;
+	{
+		auto rpath = obs_module_config_path(storagePath.c_str());
+
+#ifdef _WIN32
+		auto path = os_get_abs_path_ptr(rpath);
+
+		fullStoragePath = path;
+
+		bfree(path);
+#else
+		fullStoragePath = rpath;
+#endif
+
+		bfree(rpath);
+	}
+	int os_mkdirs_ret = os_mkdirs(fullStoragePath.c_str());
+
+	m_cef = obs_browser_init_panel();
+	if (!m_cef) {
+		blog(LOG_ERROR,
+		     "obs-streamelements-core: obs_browser_init_panel() failed");
+		return;
+	}
+	if (!m_cef->initialized()) {
+		m_cef->init_browser();
+		m_cef->wait_for_browser_init();
+	}
+
+	m_cefCookieManager = m_cef->create_cookie_manager(storagePath, true);
+
+	//
+	// Created before any service, and filled in by PublishApiServices()
+	// once they all exist: the widget manager and the worker manager are
+	// constructed here and hand the bundle on to every API handler they
+	// create, which happens later, when a page loads.
+	//
+	m_apiServices = std::make_shared<SEApiServices>();
+
+	//
+	// Needs nothing but the bundle, and three things below take it: the
+	// menu manager, and the two scene-list monitors the scene manager
+	// builds. It keeps the bundle weakly and locks it per call, so being
+	// built before any of its contents exist is fine.
+	//
+	m_auxiliaryControlsBuilder =
+		std::make_shared<SEAuxiliaryControlsBuilder>(m_apiServices);
+
+	//
+	// The dialog, and the registry that raises it when a long-running
+	// API call opens a transaction.
+	//
+	m_pleaseWaitWindow = SEPleaseWaitWindow::Create(mainWindow());
+	m_obsApiTransactionManager =
+		std::make_shared<SEObsApiTransactionManager>(
+			m_pleaseWaitWindow);
+
+	//
+	// Before the menu manager, which takes it: two of its menu items
+	// are the non-API way into a session reset. Nothing else has to
+	// exist yet -- the session manager locks the bundle per call, and
+	// by the time a menu item can be clicked it is filled in.
+	//
+	m_sessionManager = std::make_shared<SESessionManager>(
+		mainWindow(), m_cefCookieManager, m_apiServices);
+
+	m_httpClient = std::make_shared<SEHttpClient>();
+	m_localFilesystemHttpServer =
+		std::make_shared<SELocalFilesystemHttpServer>();
+	//
+	// Before the menu manager, which takes it: the same rule the cleanup
+	// manager and the backup manager follow two lines down -- a
+	// dependency exists before the thing that holds it.
+	//
+	m_performanceHistoryTracker =
+		std::make_shared<SEPerformanceHistoryTracker>();
+	m_analyticsEventsManager =
+		std::make_shared<SEAnalyticsEventsManager>(m_config);
+
+	//
+	// As soon as both exist. The crash handler was constructed before
+	// either of them, so that a crash during the rest of startup is still
+	// caught; from here on a report carries the CPU and memory histograms
+	// and, on macOS, is tracked as an analytics event.
+	//
+	if (m_crashHandler) {
+		m_crashHandler->SetReportingServices(
+			m_performanceHistoryTracker, m_analyticsEventsManager);
+	}
+	m_widgetManager = std::make_shared<SEBrowserWidgetManager>(
+		obs_main_window, m_apiServices);
+
+	//
+	// Constructed ahead of everything that takes it. Its constructor binds
+	// port 27952 and starts accepting, so this opens the socket a few
+	// microseconds earlier in startup than it used to -- the managers
+	// between here and its old position are synchronous and immediate, and
+	// the panels that connect to it take seconds to come up.
+	//
+	m_websocketApiServer = std::make_shared<SEWebsocketApiServer>();
+
+	//
+	// Right after the server it forwards to, and before everything that
+	// announces a host event, so each of those can be handed it.
+	//
+	m_hostEventDispatcher =
+		std::make_shared<SEHostEventDispatcher>(m_websocketApiServer);
+
+	//
+	// Owned here and published in the bundle. It was a singleton, which
+	// is why it had to be handed the dispatcher after construction.
+	//
+	m_messageBus = SEMessageBus::Create(m_hostEventDispatcher, m_config);
+
+	//
+	// The config publishes a system-state change when the startup flags
+	// are written, which is the only thing it needs the bus for.
+	//
+	m_config->SetMessageBus(m_messageBus);
+
+	m_videoCompositionManager = std::make_shared<SEVideoCompositionManager>(
+		m_websocketApiServer, m_hostEventDispatcher, m_messageBus);
+	m_audioCompositionManager = std::make_shared<SEAudioCompositionManager>(
+		m_websocketApiServer, m_hostEventDispatcher, m_messageBus);
+
+	//
+	// The composition manager is injected rather than fetched inside the
+	// constructor, which is where CORE-735's shape lived: it is built
+	// above, so the ordering is now the compiler's business.
+	//
+	m_obsSceneManager = std::make_shared<SEObsSceneManager>(
+		obs_main_window, m_videoCompositionManager,
+		m_auxiliaryControlsBuilder, m_hostEventDispatcher, m_config);
+
+	//
+	// Immediately, and not optional: the manager has no OBS signals
+	// connected until this runs. It takes the handle the line above has
+	// just created, because what it builds holds the manager weakly and
+	// a constructor cannot hand out a weak handle to itself.
+	// check_the_scene_manager_is_attached_where_it_is_built pins the
+	// pair.
+	//
+	m_obsSceneManager->AttachObsSignals(m_obsSceneManager);
+	m_hostStreamingManager = std::make_shared<SEHostStreamingManager>();
+	m_hostUpdateManager = std::make_shared<SEHostUpdateManager>();
+	m_hostInfoProvider =
+		std::make_shared<SEHostInfoProvider>(m_analyticsEventsManager);
+
+	m_menuManager = std::make_shared<SEMenuManager>(
+		obs_main_window, m_sessionManager, m_performanceHistoryTracker,
+		m_analyticsEventsManager, m_auxiliaryControlsBuilder, m_config,
+		m_hostUpdateManager);
+	m_bwTestManager =
+		std::make_shared<SEBandwidthTestManager>(m_hostEventDispatcher);
+	m_outputSettingsManager = std::make_shared<SEOutputSettingsManager>();
+	m_workerManager = std::make_shared<SEWorkerManager>(m_apiServices);
+	m_hotkeyManager =
+		std::make_shared<SEHotkeyManager>(m_hostEventDispatcher);
+	m_externalSceneDataProviderManager =
+		std::make_shared<SEExternalSceneDataProviderManager>(
+			m_localFilesystemHttpServer);
+	m_nativeObsUIControlsManager = SENativeObsUIControlsManager::Create(
+		obs_main_window, m_hostStreamingManager);
+	m_nativeObsUIControlsManager->SetApiServices(m_apiServices);
+	m_profilesManager = std::make_shared<SEProfilesManager>();
+	// Constructed before the backup manager, which now takes it: a
+	// dependency has to exist before the thing that holds it.
+	m_cleanupManager = std::make_shared<SECleanupManager>();
+	m_backupManager = std::make_shared<SEBackupManager>(
+		m_cleanupManager, m_localFilesystemHttpServer, m_config);
+	m_previewManager = std::make_shared<SEPreviewManager>(
+		mainWindow(), m_hostEventDispatcher);
+
+	m_windowStateEventFilter =
+		std::make_shared<WindowStateChangeEventFilter>(
+			mainWindow(), m_hostEventDispatcher);
+
+#ifdef SE_ENABLE_WYVRN
+	// After the websocket API server, because reaching Ok or a failure
+	// status dispatches hostRazerWyvrnStatusChanged through it.
+	//
+	// Start() returns immediately. CoreInitSDK costs a flat ~3.3 s, so it
+	// runs on the manager's own SDK thread and OBS start is not delayed;
+	// WYVRN becomes available a few seconds into the session.
+	m_razerWyvrnManager = std::make_shared<SERazerWyvrnManager>(
+		m_hostEventDispatcher, m_localFilesystemHttpServer);
+	m_razerWyvrnManager->Start();
+#endif
+
+	m_outputManager = std::make_shared<SEOutputManager>(
+		m_videoCompositionManager, m_audioCompositionManager,
+		m_hostEventDispatcher);
+
+	m_sharedVideoCompositionManager =
+		std::make_shared<SESharedVideoCompositionManager>(
+			m_websocketApiServer, m_videoCompositionManager,
+			m_messageBus);
+
+	m_obsActiveSceneTracker = std::make_shared<SEObsActiveSceneTracker>(
+		m_messageBus, m_websocketApiServer, m_videoCompositionManager);
+
+	//
+	// .get(), because the persistence object borrows these four rather
+	// than owning them -- see the comment on its constructor.
+	//
+	m_statePersistence = std::make_shared<SEStatePersistence>(
+		mainWindow(), m_widgetManager.get(), m_workerManager.get(),
+		m_hotkeyManager.get(), m_nativeObsUIControlsManager.get(),
+		m_hostEventDispatcher, m_config);
+
+	//
+	// Handed over after construction, and held weakly: the deferred saves
+	// in SEWidgetManager used to reach it through the services bundle,
+	// which is an edge from a widget-owning manager back to the bundle.
+	//
+	m_widgetManager->SetStatePersistence(m_statePersistence);
+
+	m_statusBarMessageManager =
+		std::make_shared<SEStatusBarMessageManager>(mainWindow());
+
+	//
+	// Depends on nothing, so it could be constructed anywhere; here,
+	// beside the other small services, so the order reads as one list.
+	//
+	m_shellServices = std::make_shared<SEShellServices>();
+
+	m_popupWindowManager =
+		std::make_shared<SEPopupWindowManager>(m_apiServices);
+
+	m_browserDialogManager = std::make_shared<SEBrowserDialogManager>(
+		mainWindow(), m_apiServices);
+
+	PublishApiServices();
+
+	m_appStateListener = new ApplicationStateListener();
+	m_themeChangeListener =
+		new ThemeChangeListener(m_hostEventDispatcher, m_messageBus);
+
+	// objectName, because QMainWindow::saveState() and restoreState()
+	// identify docks by it and Qt's documentation requires it to be set for
+	// every dock in the window. This one had none, so it was saved and
+	// matched under an empty key (CORE-967).
+	m_themeChangeListener->setObjectName("streamelements_theme_listener");
+
+	// Bottom on both platforms now. The Windows branch passed
+	// Qt::NoDockWidgetArea, which addDockWidget rejects -- the dock was
+	// never added at all, which is one of the four "invalid 'area'
+	// argument" warnings in every OBS log. It is invisible and floating
+	// either way; see SEWidgetManager::AddDockWidget.
+	mainWindow()->addDockWidget(Qt::BottomDockWidgetArea,
+				    m_themeChangeListener);
+
+	{
+		// Set up "Live Support" button
+		/*QPushButton* liveSupport = new QPushButton(
+		QIcon(QPixmap(QString(":/images/icon.png"))),
+		obs_module_text("StreamElements.Action.LiveSupport"));*/
+
+		QPushButton *liveSupport = new QPushButton(
+			obs_module_text("StreamElements.Action.LiveSupport"));
+
+		liveSupport->setStyleSheet(QString(
+			"QPushButton { background-color: #d9dded; border: 1px solid #546ac8; color: #032ee1; padding: 2px; border-radius: 0px; } "
+			"QPushButton:hover { background-color: #99aaec; border: 1px solid #546ac8; color: #ffffff; } "
+			"QPushButton:pressed { background-color: #808dc0; border: 1px solid #546ac8; color: #ffffff; } "));
+
+		QDockWidget *controlsDock =
+			(QDockWidget *)obs_main_window->findChild<QDockWidget *>(
+				"controlsDock");
+		QVBoxLayout *buttonsVLayout =
+			(QVBoxLayout *)controlsDock->findChild<QVBoxLayout *>(
+				"buttonsVLayout");
+		buttonsVLayout->addWidget(liveSupport);
+
+		QObject::connect(
+			liveSupport, &QPushButton::clicked,
+			[analytics = m_analyticsEventsManager]() {
+				analytics->trackEvent(
+					"live_support_click",
+					json11::Json::object{
+						{"type", "button_click"},
+						{"placement",
+						 "live_support_button"}});
+
+				QUrl navigate_url = QUrl(
+					obs_module_text(
+						"StreamElements.Action.LiveSupport.URL"),
+					QUrl::TolerantMode);
+				QDesktopServices::openUrl(navigate_url);
+			});
+	}
+
+	{
+		// Set up status bar
+		QWidget *container = new QWidget();
+		QHBoxLayout *layout = new QHBoxLayout();
+
+		layout->setContentsMargins(5, 0, 5, 0);
+
+		container->setLayout(layout);
+
+		char version_buf[512];
+		sprintf(version_buf,
+#ifdef __APPLE__
+			"SE.Live %s",
+#else
+			"SE.Live %s",
+#endif
+			GetSEPluginVersionString().c_str());
+
+		container->layout()->addWidget(
+			new QLabel(version_buf, container));
+
+		obs_main_window->statusBar()->addPermanentWidget(container);
+	}
+
+	std::string onBoardingReason = "";
+
+	bool isOnBoarding = false;
+
+	if (MKDIR_ERROR == os_mkdirs_ret) {
+		blog(LOG_WARNING,
+		     "obs-streamelements-core: init: set on-boarding mode due to error creating new cookie storage path: %s",
+		     fullStoragePath.c_str());
+
+		isOnBoarding = true;
+		onBoardingReason = "Failed creating new cookie storage folder";
+	} else if (MKDIR_SUCCESS == os_mkdirs_ret) {
+		blog(LOG_INFO,
+		     "obs-streamelements-core: init: set on-boarding mode due to new cookie storage path: %s",
+		     fullStoragePath.c_str());
+
+		isOnBoarding = true;
+		onBoardingReason = "New cookie storage folder";
+	} else if (m_config->GetSEPluginVersion() !=
+		   STREAMELEMENTS_PLUGIN_VERSION) {
+		blog(LOG_INFO,
+		     "obs-streamelements-core: init: set on-boarding mode due to configuration version mismatch");
+
+		isOnBoarding = true;
+		onBoardingReason =
+			"State saved by other version of the plug-in";
+	} else if (m_config->GetStartupFlags() &
+		   SEConfig::STARTUP_FLAGS_ONBOARDING_MODE) {
+		blog(LOG_INFO,
+		     "obs-streamelements-core: init: set on-boarding mode due to start-up flags");
+
+		isOnBoarding = true;
+		onBoardingReason = "Start-up flags indicate on-boarding mode";
+	}
+
+	//
+	// --- The gate opens BEFORE the first browser widget exists --------
+	//
+	// This has to sit above the block below, and the reason is an
+	// ordering guarantee rather than a preference.
+	//
+	// `ready` is what SEApiMessageHandlerBase::IsPluginInitialized()
+	// tests, and a message arriving while it is false is answered with
+	// `return true` -- reported as handled, nothing registered, no
+	// window.host built. MSG_ON_CONTEXT_CREATED arrives once per page
+	// context and nothing re-sends it or polls, so a page that lands in
+	// that window is left with a live websocket and no host API for the
+	// life of that context. Only a reload recovers it.
+	//
+	// Every client of the websocket API server is one of OUR browser
+	// widgets: the docks and workers restored below, the central widget
+	// the on-boarding branch pushes, plus pop-ups, dialogs, the
+	// notification bar and the preview title bar created later on
+	// demand. Seven construction sites, all SEBrowserWidget, and the
+	// shim that builds window.host is injected in exactly one place --
+	// SEBrowserWidget::SEBrowserWidget, into a QCefWidget panel. An
+	// obs-browser *source* never receives it and cannot be a client; we
+	// do not control obs-browser any more, so that is not coming back.
+	// External controllers reach us over named pipes, not this socket.
+	//
+	// So the set of possible clients is empty until the block below
+	// runs, and setting the flag first makes it impossible for any
+	// client to ever observe it false. The guarantee is in the
+	// statement order, which is why this comment is long: moving this
+	// line back down, or moving widget creation above it, silently
+	// reopens the window.
+	//
+	// What this deliberately does NOT claim. A dispatch is now possible
+	// in principle during the rest of Initialize(), and it would see a
+	// plug-in that is wired but not finished: m_statePersistence is not
+	// enabled yet, so PersistState() is a silent no-op; the updater is
+	// not initialised, so a check-for-updates request emits a signal
+	// nobody is listening for; and the menu has not been rebuilt. That
+	// is accepted on purpose, because it trades a PERMANENT, silent
+	// failure for a transient one -- a page served early loses one
+	// call, where before it lost window.host altogether and never got
+	// it back.
+	//
+	// m_statePersistence->SetEnabled(true) specifically cannot move up
+	// here with it: PersistState() is gated on that flag, and enabling
+	// it before RestoreState() would make each of a dozen dock
+	// creations write a half-restored layout back over the saved one.
+	//
+	// m_initializeFinishedAndShutdownIsExpectedToRun stays at the
+	// end too, and is a different question despite the two having been
+	// set in the same breath before this change: its one functional
+	// reader is the guard at the top of Shutdown(), so it means
+	// "Initialize() ran to completion" and must not become true before
+	// that is so. `ready` means "the bundle is wired and a dispatch may
+	// run". Proximity had
+	// made them look like one fact.
+	//
+	if (m_apiServices)
+		m_apiServices->ready = true;
+
+	if (isOnBoarding) {
+		// On-boarding
+
+		// Reset state but don't erase all cookies
+		m_sessionManager->Reset(false);
+	} else {
+		// Regular
+
+		m_statePersistence->RestoreState();
+	}
+
+	// Draining the posted-event queue runs arbitrary code while this
+	// Initialize() is still on the stack and
+	// m_initializeFinishedAndShutdownIsExpectedToRun is still false:
+	// deferred deletes, frontend callbacks, and any modal dialog's own event
+	// loop. Nothing constructed above may be assumed live below this point.
+	SEDrainEventQueue();
+
+	// Guarded because of the pump above, not out of caution. Observed: OBS
+	// held OBSInit open in its modal update dialog for ~5 minutes, and by the
+	// time this line ran m_menuManager was null. The fault then landed inside
+	// UpdateInternal's own `if (!m_menu)` guard -- SYNC_ACCESS() locks a
+	// static mutex, so it touches no member, which makes that guard the first
+	// read through `this` and therefore the crash site rather than the
+	// protection it looks like.
+	if (m_menuManager)
+		m_menuManager->Update();
+
+	{
+		json11::Json::object eventProps;
+		json11::Json::array fields = json11::Json::array{};
+		fields.push_back(json11::Json::array{
+			"is_onboarding", isOnBoarding ? "true" : "false"});
+		if (isOnBoarding) {
+			fields.push_back(json11::Json::array{
+				"onboarding_reason", onBoardingReason});
+		}
+
+		GetAnalyticsEventsManager()->trackEvent("se_live_initialized",
+							eventProps, fields);
+	}
+
+	// Update visible state.
+	//
+	// Through m_menuManager, not GetInstance()->GetMenuManager(): this is a
+	// member function and the member is right here. Going through the singleton
+	// is what crashed. GetInstance() lazily constructs when s_instance is not
+	// this instance, and a freshly constructed manager has every shared_ptr
+	// member null -- so ->Update() ran on a null SEMenuManager.
+	//
+	// Confirmed from two minidumps of the same fault: UpdateInternal entered
+	// with this == nullptr, while this->m_menuManager on the instance running
+	// Initialize() was non-null. Two different objects; the singleton returned
+	// the empty one.
+	if (m_menuManager)
+		m_menuManager->Update();
+
+	streamelements_updater_init();
+
+	//
+	// Enabled only now, and not earlier: PersistState() is gated on this
+	// flag, and turning it on before RestoreState() above would make
+	// each dock created during the restore write a half-restored layout
+	// back over the saved one.
+	//
+	m_statePersistence->SetEnabled(true);
+
+	//
+	// Last, and on its own -- `m_apiServices->ready` used to be set here
+	// beside it and now sits above the widget-creation block, for the
+	// reason documented there.
+	//
+	// The two are different facts. This one's only functional reader is
+	// the guard at the top of Shutdown(), so it means
+	// "Initialize() ran to completion" and must not be true before that
+	// is true. `ready` means "the bundle is wired and a dispatch may
+	// run", which became true much earlier.
+	//
+	m_initializeFinishedAndShutdownIsExpectedToRun = true;
+
+	// From here on an OBS close is an ordinary close, and teardown runs
+	// normally (CORE-786).
+	SENoteInitializeCompleted();
+
+	obs_frontend_add_event_callback(handle_obs_frontend_event, this);
+}
+
+//
+// --- Loud when a service outlives teardown (CORE-757) --------------------
+//
+// weak handles, taken while everything is still alive and inspected at the
+// end of Shutdown(), after the last strong handle has gone. expired() is the
+// whole question, which is why this is not a use_count() comparison:
+// services legitimately hold each other -- fifteen managers hold the host
+// event dispatcher -- so there is no fixed expected count to compare
+// against, and the only number that means anything is whether the object
+// survived its owners.
+//
+namespace {
+struct WatchedService {
+	const char *name;
+	std::weak_ptr<void> handle;
+
+	//
+	// True for the handful the crash handler holds. That handler is
+	// deliberately never deleted, so these outlive teardown on every
+	// clean run; they are reported as a fact rather than a warning,
+	// because an audit that cries wolf on every shutdown is one nobody
+	// reads.
+	//
+	bool keptByCrashHandler;
+};
+} // namespace
+
+static std::vector<WatchedService> s_watchedServices;
+
+static void WatchService(const char *name, std::shared_ptr<void> service,
+			 bool keptByCrashHandler)
+{
+	if (service)
+		s_watchedServices.push_back(
+			{name, service, keptByCrashHandler});
+}
+
+void SEMain::WatchServicesForTeardownAudit()
+{
+	if (!m_apiServices)
+		return;
+
+	s_watchedServices.clear();
+
+	//
+	// The container's own fields rather than this object's members,
+	// because the container is the published surface and
+	// check_every_published_service_is_watched_at_teardown holds the two
+	// lists together.
+	//
+#define SE_WATCH(field) WatchService(#field, m_apiServices->field, false)
+#define SE_WATCH_KEPT(field) WatchService(#field, m_apiServices->field, true)
+
+	SE_WATCH(widgetManager);
+	SE_WATCH(obsSceneManager);
+	SE_WATCH(menuManager);
+	SE_WATCH(bandwidthTestManager);
+	SE_WATCH(outputSettingsManager);
+	SE_WATCH(workerManager);
+	SE_WATCH(hotkeyManager);
+	SE_WATCH(externalSceneDataProviderManager);
+	SE_WATCH(httpClient);
+	SE_WATCH(localFilesystemHttpServer);
+	SE_WATCH(nativeObsUIControlsManager);
+	SE_WATCH(profilesManager);
+	SE_WATCH(backupManager);
+#ifdef SE_ENABLE_WYVRN
+	SE_WATCH(razerWyvrnManager);
+#endif
+	SE_WATCH(cleanupManager);
+	SE_WATCH(previewManager);
+	SE_WATCH(apiMessageSink);
+	SE_WATCH(hostEventDispatcher);
+	SE_WATCH(messageBus);
+	SE_WATCH(sharedVideoCompositionManager);
+	SE_WATCH(videoCompositionManager);
+	SE_WATCH(audioCompositionManager);
+	SE_WATCH(outputManager);
+	SE_WATCH(obsActiveSceneTracker);
+	SE_WATCH(statePersistence);
+	SE_WATCH(statusBarMessageManager);
+	SE_WATCH(shellServices);
+	SE_WATCH(hostStreamingManager);
+	SE_WATCH(hostUpdateManager);
+	SE_WATCH(hostInfoProvider);
+	SE_WATCH(popupWindowManager);
+	SE_WATCH(browserDialogManager);
+	SE_WATCH(sessionManager);
+	SE_WATCH(auxiliaryControlsBuilder);
+	SE_WATCH(pleaseWaitWindow);
+	SE_WATCH(obsApiTransactionManager);
+
+	//
+	// The three SECrashHandler holds, so that a fault during or after
+	// teardown can still be reported with the reporter's contact details,
+	// the performance history leading up to it, and an analytics event.
+	// That handler is never deleted -- Shutdown() leaves the delete
+	// commented out on purpose -- so these three are still alive when the
+	// plug-in is gone, every clean run.
+	//
+	// Watched anyway rather than skipped, because "held by the crash
+	// handler and nothing else" is worth seeing: the first live run of
+	// this audit reported performanceHistoryTracker with two handles and
+	// analyticsEventsManager with one, and reading those lines is how
+	// anyone confirms the arrangement is still what it was meant to be.
+	// They just are not warnings.
+	//
+	SE_WATCH_KEPT(config);
+	SE_WATCH_KEPT(performanceHistoryTracker);
+	SE_WATCH_KEPT(analyticsEventsManager);
+
+#undef SE_WATCH
+#undef SE_WATCH_KEPT
+}
+
+void SEReportServicesOutlivingTeardown()
+{
+	size_t leaked = 0;
+	size_t kept = 0;
+
+	for (const WatchedService &watched : s_watchedServices) {
+		if (watched.handle.expired())
+			continue;
+
+		if (watched.keptByCrashHandler) {
+			++kept;
+
+			blog(LOG_INFO,
+			     "[obs-streamelements-core]: %s is still held after teardown, as expected: the crash handler keeps it and is never deleted (%ld handle(s))",
+			     watched.name, watched.handle.use_count());
+
+			continue;
+		}
+
+		++leaked;
+
+		blog(LOG_WARNING,
+		     "[obs-streamelements-core]: %s outlived teardown: %ld handle(s) still held after Shutdown() released the services. Something is holding it that nobody wrote down -- a queued task, a detached thread, or a reference ring",
+		     watched.name, watched.handle.use_count());
+	}
+
+	if (s_watchedServices.size() && !leaked) {
+		blog(LOG_INFO,
+		     "[obs-streamelements-core]: %zu of %zu services released cleanly, %zu held by the crash handler",
+		     s_watchedServices.size() - kept, s_watchedServices.size(),
+		     kept);
+	}
+
+	s_watchedServices.clear();
+}
+
+void SEMain::Shutdown()
+{
+	PREVENT_RECURSIVE_REENTRY();
+
+	if (!m_initializeFinishedAndShutdownIsExpectedToRun) {
+		return;
+	}
+
+	//
+	// While they are all still alive. Reported at the bottom of this
+	// function, once the container has been released and every one of
+	// them should be gone.
+	//
+	WatchServicesForTeardownAudit();
+
+	// Before anything below blocks. From here the Qt main thread is ours and
+	// will not return to its event loop, so a worker waiting on QtExecSync
+	// must be released rather than left to deadlock us (CORE-1131).
+	SetShuttingDown();
+
+	obs_frontend_remove_event_callback(handle_obs_frontend_event, this);
+
+	m_statePersistence->PersistState(false);
+
+	m_statePersistence->SetEnabled(false);
+
+	streamelements_updater_shutdown();
+
+	// Early, and explicitly rather than by releasing the pointer: this
+	// joins the SDK thread, which unwinds through CoreUnInit() on its way
+	// out. Two things must still be alive while that happens -- the
+	// websocket API server, so the ShuttingDown status reaches the page,
+	// and the crash handler below, so a fault inside Razer's DLL is still
+	// reported.
+#ifdef SE_ENABLE_WYVRN
+	if (m_razerWyvrnManager) {
+		m_razerWyvrnManager->Shutdown();
+	}
+#endif
+
+	// Shutdown on the main thread. No platform guard: StopAsyncHangDetection()
+	// is a no-op on backends that have no hang detection.
+	if (m_crashHandler) {
+		m_crashHandler->StopAsyncHangDetection();
+
+		//delete m_crashHandler; // TODO: Shutting down the crash handler might be contributing to us missing some exceptions during shutdown
+		//m_crashHandler = nullptr;
+	}
+
+	//mainWindow()->removeDockWidget(m_themeChangeListener);
+	if (m_themeChangeListener) {
+		m_themeChangeListener->deleteLater();
+		m_themeChangeListener = nullptr;
+	}
+	if (m_appStateListener) {
+		m_appStateListener->deleteLater();
+		m_appStateListener = nullptr;
+	}
+
+	m_obsActiveSceneTracker = nullptr;
+	m_analyticsEventsManager = nullptr;
+	m_performanceHistoryTracker = nullptr;
+	m_outputSettingsManager = nullptr;
+	m_bwTestManager = nullptr;
+	m_widgetManager = nullptr;
+	m_workerManager = nullptr;
+
+	m_obsSceneManager = nullptr;
+
+	m_sharedVideoCompositionManager = nullptr;
+	m_outputManager = nullptr;
+	m_videoCompositionManager = nullptr;
+	m_audioCompositionManager = nullptr;
+
+	m_menuManager = nullptr;
+	m_auxiliaryControlsBuilder = nullptr;
+	m_hotkeyManager = nullptr;
+	m_externalSceneDataProviderManager = nullptr;
+	m_httpClient = nullptr;
+	m_localFilesystemHttpServer = nullptr;
+
+	m_nativeObsUIControlsManager = nullptr;
+
+	m_profilesManager = nullptr;
+	m_backupManager = nullptr;
+#ifdef SE_ENABLE_WYVRN
+	m_razerWyvrnManager = nullptr;
+#endif
+	m_cleanupManager = nullptr;
+	m_previewManager = nullptr;
+	m_messageBus = nullptr;
+	m_hostEventDispatcher = nullptr;
+	m_obsApiTransactionManager = nullptr;
+	m_pleaseWaitWindow = nullptr;
+
+	//
+	// m_config is deliberately NOT released here. The explicit
+	// CloseAndPreventFurtherReopens() below needs the handle, and
+	// releasing it early would not even destroy the object, because the
+	// crash handler holds it and the crash handler is deliberately never
+	// deleted -- so the ini would go unflushed and its config_t unclosed
+	// for the life of the process.
+	//
+	m_websocketApiServer = nullptr;
+	m_windowStateEventFilter = nullptr;
+	m_statePersistence = nullptr;
+	m_statusBarMessageManager = nullptr;
+	m_shellServices = nullptr;
+	m_hostStreamingManager = nullptr;
+	m_hostUpdateManager = nullptr;
+	m_hostInfoProvider = nullptr;
+	m_popupWindowManager = nullptr;
+	m_browserDialogManager = nullptr;
+
+	//
+	// The session manager borrows this pointer and can outlive
+	// Shutdown() -- the container holds it until this object is
+	// destroyed -- so take the pointer away before deleting what it
+	// points at.
+	//
+	if (m_sessionManager) {
+		m_sessionManager->ForgetCookieManager();
+	}
+
+	m_sessionManager = nullptr;
+
+	//
+	// Both are borrowed by the bundle, which outlives Shutdown() -- it is
+	// a member, destroyed with this object -- so take the pointers away
+	// before deleting what they point at.
+	//
+	if (m_apiServices) {
+		m_apiServices->cefCookieManager = nullptr;
+		m_apiServices->cef = nullptr;
+	}
+
+	if (m_cefCookieManager) {
+		delete m_cefCookieManager;
+		m_cefCookieManager = nullptr;
+	}
+
+	if (m_cef) {
+		delete m_cef;
+		m_cef = nullptr;
+	}
+
+	//
+	// Flush and close the ini here rather than letting the destructor do
+	// it with the rest of the container: this is the last point at which
+	// the filesystem and libobs are both known good.
+	//
+	// Before SEDrainEventQueue() on purpose, and that order is
+	// load-bearing. The drain removes the browser widget docks, and
+	// SEWidgetManager's deferred saves land on the same queue -- so a
+	// PersistState() running there would snapshot a UI teardown has
+	// already dismantled and write it back as "no docks", and the next
+	// start would come up without them. Closing first leaves the config
+	// readable-but-defaulted, so those late writes are no-ops rather
+	// than a persisted empty layout -- which is also why the close
+	// leaves the object alive instead of destroying it.
+	//
+	// check_the_config_is_closed_before_the_queue_is_drained pins the
+	// order.
+	//
+	if (m_config)
+		m_config->CloseAndPreventFurtherReopens();
+
+	//
+	// Released after the close, not before. The object itself outlives
+	// this: SECrashHandler holds it so that a crash during or after
+	// teardown can still read the reporter's contact details, and that
+	// handler is never deleted. CloseAndPreventFurtherReopens() is what
+	// makes that safe -- it leaves an inert config that reads as
+	// defaults.
+	//
+	m_config = nullptr;
+
+	SEDrainEventQueue();
+
+	m_initializeFinishedAndShutdownIsExpectedToRun = false;
+
+	if (m_apiServices)
+		m_apiServices->ready = false;
+
+	//
+	// The root's own handle on the container, and the last one in the
+	// process. Every service handle above is already released, nothing
+	// else holds the container strongly --
+	// check_nothing_but_the_manager_owns_the_services_container is the
+	// guard on that -- and the Qt queue that could still have been
+	// carrying a lambda with a captured copy has just been drained. So
+	// this line is what destroys the services.
+	//
+	// Not the same thing as the teardown step this refactor removed. That
+	// one reached into the container and dropped handles other objects
+	// were still using, to break a ring; this drops only the handle this
+	// object owns, exactly as the thirty-odd lines above it do. The rings
+	// are gone, which is what makes dropping it sufficient rather than a
+	// workaround -- and
+	// check_api_services_container_is_not_emptied_at_teardown still
+	// forbids the other thing, here as well as in the destructor.
+	//
+	// Here rather than left to member destruction so that "the plug-in
+	// has shut down" and "its services are gone" are the same moment.
+	// Without it the audit below could only run from obs_module_unload,
+	// which answers a weaker question: it cannot distinguish a service
+	// that was released on time from one that happened to be released
+	// while the root was being destroyed.
+	//
+	m_apiServices = nullptr;
+
+	//
+	// Which makes this the check that everything the plug-in built is
+	// gone, with the three the crash handler deliberately keeps named as
+	// such. A clean run ends in "N of N services released cleanly".
+	//
+	SEReportServicesOutlivingTeardown();
+}
+
+void SEMain::OnObsExit()
+{
+	if (!m_statePersistence)
+		return;
+
+	m_statePersistence->PersistState(false);
+
+	m_statePersistence->SetEnabled(false);
+}

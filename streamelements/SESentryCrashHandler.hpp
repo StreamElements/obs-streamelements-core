@@ -55,9 +55,12 @@
 //
 class SESentryCrashHandler : public SECrashHandler {
 public:
-	SESentryCrashHandler();
+	SESentryCrashHandler(std::shared_ptr<SEConfig> config);
 	virtual ~SESentryCrashHandler();
 
 public:
 	virtual void StopAsyncHangDetection() override;
+
+protected:
+	virtual void OnReportingServicesSet() override;
 };

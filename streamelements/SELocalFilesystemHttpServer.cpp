@@ -6,6 +6,7 @@
 #include <QUrlQuery>
 
 #include <algorithm>
+#include <regex>
 
 static size_t LocalReadFile(void *buffer, size_t len, FILE *wf)
 {
@@ -31,7 +32,9 @@ SELocalFilesystemHttpServer() {
 		std::string urlString = url.url().toStdString();
 		std::string path;
 
-		if (!VerifySessionSignedAbsolutePathURL(urlString, path)) {
+		if (!SELocalFilesystemHttpServer::
+			    VerifySessionSignedAbsolutePathURL(urlString,
+							       path)) {
 			blog(LOG_WARNING,
 			     "SELocalFilesystemHttpServer: invalid request signature: %s",
 			     urlString.c_str());
@@ -126,4 +129,58 @@ SELocalFilesystemHttpServer() {
 SELocalFilesystemHttpServer::~SELocalFilesystemHttpServer()
 {
 	m_server->Stop();
+}
+
+std::string SELocalFilesystemHttpServer::CreateSessionSignedAbsolutePathURL(
+	std::wstring path)
+{
+	// static, because constructing a std::wregex compiles the pattern and
+	// this is called once per asset. getAllRazerWyvrnEvents signs ~23,700
+	// URLs in one call; at two fresh regexes each that was ~47,000 pattern
+	// compilations and the dominant cost of the whole request.
+	static const std::wregex kHash(L"#");
+	static const std::wregex kAmp(L"&");
+
+	path = std::regex_replace(path, kHash, L"%23");
+	path = std::regex_replace(path, kAmp, L"%26");
+
+	QUrl parts(GetBaseUrl().c_str());
+
+	parts.setPath(
+		QString::fromStdWString((std::wstring(L"/") + path).c_str()));
+
+	std::string message = parts.path().toStdString();
+
+	message = message.erase(0, 1);
+
+	return parts.url().toStdString() + std::string("?digest=") +
+	       CreateSessionMessageSignature(message);
+}
+
+bool SELocalFilesystemHttpServer::VerifySessionSignedAbsolutePathURL(
+	std::string url, std::string &path)
+{
+	QUrl parts(url.c_str());
+
+	path = parts.path().toStdString();
+
+	path = path.erase(0, 1);
+
+	if (!parts.hasQuery())
+		return false;
+
+	QUrlQuery query(parts.query());
+
+	if (!query.hasQueryItem("digest"))
+		return false;
+
+	std::string signature = query.queryItemValue("digest").toStdString();
+
+	//
+	// A copy, because VerifySessionMessageSignature takes its message by
+	// non-const reference and `path` is this function's out-parameter.
+	//
+	std::string message = path;
+
+	return VerifySessionMessageSignature(message, signature);
 }

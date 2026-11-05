@@ -3,9 +3,12 @@
 #include "SESceneItemsMonitor.hpp"
 #include "SEScenesListWidgetManager.hpp"
 #include "SEVideoComposition.hpp"
+#include "SEVideoCompositionManager.hpp"
+#include "SEHostEventDispatcher.hpp"
 #include "SEAsyncTaskQueue.hpp"
 
 #include "cef-headers.hpp"
+#include "ISEObsSceneManager.hpp"
 
 #include <obs.h>
 #include <obs-frontend-api.h>
@@ -16,14 +19,46 @@
 #include <mutex>
 
 class SESignalHandlerData;
+class SEAuxiliaryControlsBuilder;
+class SEHostEventDispatcher;
+class SEConfig;
 
-class SEObsSceneManager {
+class SEObsSceneManager : public ISEObsSceneManager {
 private:
 	SESignalHandlerData *m_signalHandlerData = nullptr;
 
 public:
-	SEObsSceneManager(QMainWindow *parent);
+	//
+	// The composition manager is injected. It used to be fetched from the
+	// singleton in this constructor's own body -- the CORE-735 shape:
+	// GetInstance() during construction, correct only because s_instance
+	// happened to be the instance building us.
+	//
+	SEObsSceneManager(
+		QMainWindow *parent,
+		std::shared_ptr<SEVideoCompositionManager> videoCompositionManager,
+		std::shared_ptr<SEAuxiliaryControlsBuilder>
+			auxiliaryControlsBuilder,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+		std::shared_ptr<SEConfig> config);
 	virtual ~SEObsSceneManager();
+
+	//
+	// The OBS hookup, and deliberately not part of the constructor.
+	//
+	// SESignalHandlerData holds this object as a weak_ptr, and a weak_ptr
+	// cannot be made from an object whose shared_ptr does not exist yet:
+	// inside the constructor make_shared has not returned, so there is
+	// nothing to be weak about and every callback would find no manager
+	// at all. The container therefore calls this on the line after it
+	// builds us.
+	//
+	// The signals are connected here rather than in the constructor for
+	// the same reason stated the other way round: the handle is in place
+	// before anything can fire, instead of there being a window in which
+	// a signal arrives and finds it empty.
+	//
+	void AttachObsSignals(std::weak_ptr<SEObsSceneManager> self);
 
 private:
 	void CleanObsSceneSignals();
@@ -38,7 +73,7 @@ public:
 			m_scenesWidgetManager->Update();
 	}
 
-	void Reset()
+	void Reset() override
 	{
 		auto out1 = CefValue::Create();
 		auto out2 = CefValue::Create();
@@ -54,117 +89,135 @@ public:
 
 	/* Sources */
 
-	void SerializeInputSourceClasses(CefRefPtr<CefValue> &output);
+	void SerializeInputSourceClasses(CefRefPtr<CefValue> &output) override;
 
-	void SerializeSourceClassProperties(CefRefPtr<CefValue> input,
-					    CefRefPtr<CefValue> &output);
+	void
+	SerializeSourceClassProperties(CefRefPtr<CefValue> input,
+				       CefRefPtr<CefValue> &output) override;
 
 	/* Scene items */
 
 	void DeserializeObsBrowserSource(CefRefPtr<CefValue> input,
-					 CefRefPtr<CefValue> &output);
+					 CefRefPtr<CefValue> &output) override;
 
-	void DeserializeObsGameCaptureSource(CefRefPtr<CefValue> input,
-					     CefRefPtr<CefValue> &output);
+	void
+	DeserializeObsGameCaptureSource(CefRefPtr<CefValue> input,
+					CefRefPtr<CefValue> &output) override;
 
-	void DeserializeObsVideoCaptureSource(CefRefPtr<CefValue> input,
-					      CefRefPtr<CefValue> &output);
+	void
+	DeserializeObsVideoCaptureSource(CefRefPtr<CefValue> input,
+					 CefRefPtr<CefValue> &output) override;
 
 	void DeserializeObsNativeSource(CefRefPtr<CefValue> input,
-					CefRefPtr<CefValue> &output);
+					CefRefPtr<CefValue> &output) override;
 
 	void DeserializeObsSceneItemGroup(CefRefPtr<CefValue> input,
-					  CefRefPtr<CefValue> &output);
+					  CefRefPtr<CefValue> &output) override;
 
 	void SerializeObsSceneItems(CefRefPtr<CefValue> input,
 				    CefRefPtr<CefValue> &output,
-				    bool serializeProperties);
+				    bool serializeProperties) override;
 
 	void RemoveObsSceneItemsByIds(CefRefPtr<CefValue> input,
-				      CefRefPtr<CefValue> &output);
-
-	void SetObsSceneItemPropertiesById(CefRefPtr<CefValue> input,
-					   CefRefPtr<CefValue> &output);
-
-	void GetObsSceneItemPropertiesById(CefRefPtr<CefValue> input,
-					   CefRefPtr<CefValue> &output);
-
-	void UngroupObsSceneItemsByGroupId(CefRefPtr<CefValue> input,
-					   CefRefPtr<CefValue> &output);
+				      CefRefPtr<CefValue> &output) override;
 
 	void
-	InvokeCurrentSceneItemDefaultActionById(CefRefPtr<CefValue> input,
-						CefRefPtr<CefValue> &output);
+	SetObsSceneItemPropertiesById(CefRefPtr<CefValue> input,
+				      CefRefPtr<CefValue> &output) override;
+
+	void
+	GetObsSceneItemPropertiesById(CefRefPtr<CefValue> input,
+				      CefRefPtr<CefValue> &output) override;
+
+	void
+	UngroupObsSceneItemsByGroupId(CefRefPtr<CefValue> input,
+				      CefRefPtr<CefValue> &output) override;
+
+	void InvokeCurrentSceneItemDefaultActionById(
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 
 	void InvokeCurrentSceneItemDefaultContextMenuById(
-		CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output);
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 
-	void DeserializeSceneItemsAuxiliaryActions(CefRefPtr<CefValue> input,
-						   CefRefPtr<CefValue> &output);
+	void DeserializeSceneItemsAuxiliaryActions(
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 
-	void SerializeSceneItemsAuxiliaryActions(CefRefPtr<CefValue> &output);
+	void SerializeSceneItemsAuxiliaryActions(
+		CefRefPtr<CefValue> &output) override;
 
 	/* Scenes */
 
 	void SerializeObsScenes(CefRefPtr<CefValue> input,
-				CefRefPtr<CefValue> &output);
+				CefRefPtr<CefValue> &output) override;
 
 	void SerializeObsCurrentScene(CefRefPtr<CefValue> input,
-				      CefRefPtr<CefValue> &output);
+				      CefRefPtr<CefValue> &output) override;
 
 	void DeserializeObsScene(CefRefPtr<CefValue> input,
-				 CefRefPtr<CefValue> &output);
+				 CefRefPtr<CefValue> &output) override;
 
 	void SetCurrentObsSceneById(CefRefPtr<CefValue> input,
-				    CefRefPtr<CefValue> &output);
+				    CefRefPtr<CefValue> &output) override;
 
 	void RemoveObsScenesByIds(CefRefPtr<CefValue> input,
-				  CefRefPtr<CefValue> &output);
+				  CefRefPtr<CefValue> &output) override;
 
 	void SetObsScenePropertiesById(CefRefPtr<CefValue> input,
-				       CefRefPtr<CefValue> &output);
+				       CefRefPtr<CefValue> &output) override;
 
-	void DeserializeScenesAuxiliaryActions(CefRefPtr<CefValue> input,
-					       CefRefPtr<CefValue> &output);
+	void
+	DeserializeScenesAuxiliaryActions(CefRefPtr<CefValue> input,
+					  CefRefPtr<CefValue> &output) override;
 
-	void SerializeScenesAuxiliaryActions(CefRefPtr<CefValue> &output);
+	void
+	SerializeScenesAuxiliaryActions(CefRefPtr<CefValue> &output) override;
 
 	/* Scene collections */
 
-	void SerializeObsSceneCollections(CefRefPtr<CefValue> &output);
+	void SerializeObsSceneCollections(CefRefPtr<CefValue> &output) override;
 
-	void SerializeObsCurrentSceneCollection(CefRefPtr<CefValue> &output);
-
-	void DeserializeObsSceneCollection(CefRefPtr<CefValue> input,
-					   CefRefPtr<CefValue> &output);
+	void SerializeObsCurrentSceneCollection(
+		CefRefPtr<CefValue> &output) override;
 
 	void
-	DeserializeObsCurrentSceneCollectionById(CefRefPtr<CefValue> input,
-						 CefRefPtr<CefValue> &output);
+	DeserializeObsSceneCollection(CefRefPtr<CefValue> input,
+				      CefRefPtr<CefValue> &output) override;
+
+	void DeserializeObsCurrentSceneCollectionById(
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 
 	/* OBS Native Dialogs */
 
 	void OpenSceneItemPropertiesById(CefRefPtr<CefValue> input,
-					 CefRefPtr<CefValue> &output);
+					 CefRefPtr<CefValue> &output) override;
 	void OpenSceneItemFiltersById(CefRefPtr<CefValue> input,
-				      CefRefPtr<CefValue> &output);
+				      CefRefPtr<CefValue> &output) override;
 	void OpenSceneItemInteractionById(CefRefPtr<CefValue> input,
-					  CefRefPtr<CefValue> &output);
-	void OpenSceneItemTransformEditorById(CefRefPtr<CefValue> input,
-					      CefRefPtr<CefValue> &output);
+					  CefRefPtr<CefValue> &output) override;
+	void
+	OpenSceneItemTransformEditorById(CefRefPtr<CefValue> input,
+					 CefRefPtr<CefValue> &output) override;
 
 	/* Viewport Coords */
 
-	void SerializeSceneItemViewportRotation(CefRefPtr<CefValue> input,
-						CefRefPtr<CefValue> &output);
-	void DeserializeSceneItemViewportRotation(CefRefPtr<CefValue> input,
-						  CefRefPtr<CefValue> &output);
+	void SerializeSceneItemViewportRotation(
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
+	void DeserializeSceneItemViewportRotation(
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 
 	void SerializeSceneItemViewportBoundingRectangle(
-		CefRefPtr<CefValue> input, CefRefPtr<CefValue> &output);
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 
-	void DeserializeSceneItemViewportPosition(CefRefPtr<CefValue> input,
-						  CefRefPtr<CefValue> &output);
+	void DeserializeSceneItemViewportPosition(
+		CefRefPtr<CefValue> input,
+		CefRefPtr<CefValue> &output) override;
 
 protected:
 	void DeserializeAuxiliaryObsSceneItemProperties(
@@ -201,6 +254,20 @@ protected:
 
 private:
 	QMainWindow *m_parent;
+	std::shared_ptr<SEVideoCompositionManager> m_videoCompositionManager;
+	std::shared_ptr<SEConfig> m_config;
+
+	// Held only to hand to SESignalHandlerData in AttachObsSignals(),
+	// which runs after the constructor.
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+
+	//
+	// Was a file-static that fetched the manager itself. All nineteen
+	// call sites are members of this class, so it becomes one and reads
+	// the injected handle instead.
+	//
+	std::shared_ptr<SEVideoCompositionBase>
+	GetVideoComposition(CefRefPtr<CefValue> input);
 	SESceneItemsMonitor *m_sceneItemsMonitor = nullptr;
 	SEScenesListWidgetManager *m_scenesWidgetManager = nullptr;
 };
@@ -211,19 +278,52 @@ private:
 		nullptr;
 
 public:
+	//
+	// Holds the composition manager strongly, and that is the point: the
+	// callbacks this object is handed to run on the graphics thread and
+	// on the task-queue worker, where "is the plugin still alive?" used
+	// to be asked of the singleton. Holding the lookup service for as
+	// long as the callbacks can fire answers it by construction. No ring
+	// -- the composition manager does not own the scene manager.
+	//
+	// It was weak on every path while this comment said otherwise, and it
+	// mattered in exactly the window the comment is about: this object is
+	// refcounted, a callback can hold a reference past
+	// ~SEObsSceneManager -- the destructor does Wait() then Release(), so
+	// anything still in flight keeps it alive -- and the scene manager is
+	// the only other holder. During that window the lock failed and the
+	// event went nowhere.
+	//
+	// Strong only on this path, though, which is why there are two
+	// members. SEVideoComposition builds one of these too and passes an
+	// empty handle for obsSceneManager; there a strong handle closes a
+	// ring, because the composition manager owns the composition which
+	// owns this. So
+	// that is the discriminator below, and the weak handle is what the
+	// composition path gets.
+	//
 	SESignalHandlerData(
-		SEObsSceneManager *obsSceneManager,
-		SEVideoCompositionBase *videoCompositionBase)
+		std::weak_ptr<SEObsSceneManager> obsSceneManager,
+		std::weak_ptr<SEVideoCompositionManager>
+			videoCompositionManager,
+		std::weak_ptr<SEVideoCompositionBase> videoComposition,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 		: m_obsSceneManager(obsSceneManager),
-		  m_videoCompositionBase(videoCompositionBase)
+		  m_videoCompositionManager(videoCompositionManager),
+		  m_videoCompositionManagerStrong(
+			  obsSceneManager.expired()
+				  ? nullptr
+				  : videoCompositionManager.lock()),
+		  m_videoComposition(videoComposition),
+		  m_hostEventDispatcher(hostEventDispatcher)
 	{
-		// Cached now, while the composition is provably alive. Every later
-		// reader wants the id and nothing else, so caching it means the
-		// composition pointer never has to be dereferenced again -- which
-		// is what makes it safe for the composition to die first.
-		m_videoCompositionId = videoCompositionBase
-					       ? videoCompositionBase->GetId()
-					       : std::string();
+		// Cached now, while the composition is provably alive. Every
+		// later reader wants the id and nothing else, so caching it is
+		// what makes it safe for the composition to die first.
+		auto composition = videoComposition.lock();
+
+		m_videoCompositionId = composition ? composition->GetId()
+						   : std::string();
 
 		m_asyncTaskQueue = std::make_shared<SEAsyncTaskQueue>(
 			(std::string(
@@ -262,12 +362,26 @@ public:
 private:
 	SESignalHandlerData(
 		SESignalHandlerData *parent,
-		SEObsSceneManager *obsSceneManager,
-		SEVideoCompositionBase *videoCompositionBase,
+		std::weak_ptr<SEObsSceneManager> obsSceneManager,
+		std::weak_ptr<SEVideoCompositionManager>
+			videoCompositionManager,
+		std::weak_ptr<SEVideoCompositionBase> videoComposition,
+		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
 		obs_scene_t *scene)
 		: m_parent(parent),
 		  m_obsSceneManager(obsSceneManager),
-		  m_videoCompositionBase(videoCompositionBase),
+		  m_videoCompositionManager(videoCompositionManager),
+		  //
+		  // Same rule as the public constructor: a child of a
+		  // scene-manager root inherits the strong handle, a child of
+		  // a composition root does not.
+		  //
+		  m_videoCompositionManagerStrong(
+			  obsSceneManager.expired()
+				  ? nullptr
+				  : videoCompositionManager.lock()),
+		  m_videoComposition(videoComposition),
+		  m_hostEventDispatcher(hostEventDispatcher),
 		  m_scene(SETRACE_ADDREF(obs_scene_get_ref(scene)))
 	{
 		// No m_asyncTaskQueue here, since there is a parent to refer to
@@ -285,10 +399,10 @@ private:
 			std::lock_guard<std::mutex> lock(
 				m_videoCompositionMutex);
 
-			m_videoCompositionBase = nullptr;
+			m_videoComposition.reset();
 		}
 
-		m_obsSceneManager = nullptr;
+		m_obsSceneManager.reset();
 
 		for (auto kv : m_scenes) {
 			delete kv.second;
@@ -334,7 +448,7 @@ public:
 		}
 		
 		if (shouldDelete) {
-			// The cached id, not m_videoCompositionBase->GetId():
+			// The cached id, not the composition itself:
 			// this runs on the teardown path, which is exactly when
 			// the composition is most likely to be gone already.
 			blog(LOG_INFO,
@@ -418,9 +532,9 @@ private:
 
 		if (!m_scenes.count(scene)) {
 			m_scenes[scene] = new SESignalHandlerData(
-				this,
-				m_obsSceneManager, m_videoCompositionBase,
-				scene);
+				this, m_obsSceneManager,
+				m_videoCompositionManager, m_videoComposition,
+				m_hostEventDispatcher, scene);
 
 			m_scenes_refcount[scene] = 1;
 
@@ -589,8 +703,8 @@ public:
 
 		std::lock_guard<std::mutex> lock(m_videoCompositionMutex);
 
-		return m_videoCompositionBase ? m_videoCompositionId
-					      : std::string();
+		return m_videoComposition.expired() ? std::string()
+						    : m_videoCompositionId;
 	}
 
 	//
@@ -598,8 +712,13 @@ public:
 	//
 	// Release() alone is not enough: it only reaches ~SESignalHandlerData,
 	// and therefore Clear(), when the refcount happens to drop to zero. If
-	// anything else still holds a reference, the back-pointer survives the
-	// composition and the next signal dereferences freed memory.
+	// anything else still holds a reference, the handle survives the
+	// composition.
+	//
+	// Surviving it is no longer dangerous: the handle is a weak_ptr, so a
+	// reader that locks it after the composition is gone is told as much,
+	// where the raw pointer this used to be handed it freed memory. The
+	// drain below is what still earns this method its keep.
 	//
 	void DetachVideoComposition()
 	{
@@ -609,12 +728,87 @@ public:
 
 		std::lock_guard<std::mutex> lock(m_videoCompositionMutex);
 
-		m_videoCompositionBase = nullptr;
+		m_videoComposition.reset();
 	}
 
 	// char m_header[7] = "header"; // TODO: Remvoe debug marker
-	SEObsSceneManager *m_obsSceneManager = nullptr;
-	SEVideoCompositionBase *m_videoCompositionBase = nullptr;
+
+	//
+	// Weak, which is the only strength that is correct here: the scene
+	// manager owns this object -- it news it, and Release()s it in its
+	// own destructor -- so anything stronger is a two-node ring that
+	// refcounting cannot unwind.
+	//
+	// It was a raw back-pointer, which is worse than either: five
+	// file-static signal callbacks dereference it to call Update(), and
+	// nothing but the ordering inside ~SEObsSceneManager said the object
+	// was still there. CORE-757 lists it as the one hidden edge that
+	// mattered. Reach it through ObsSceneManager(), which locks.
+	//
+	std::weak_ptr<SEObsSceneManager> m_obsSceneManager;
+
+	//
+	// Two handles on one object, because the strength that is safe
+	// depends on who created this one. See the public constructor: the
+	// scene-manager path takes the strong one and the composition path
+	// cannot, since the composition manager owns the composition that
+	// owns this. VideoCompositionManager() prefers the strong handle and
+	// falls back to locking the weak one.
+	//
+	std::weak_ptr<SEVideoCompositionManager> m_videoCompositionManager;
+	std::shared_ptr<SEVideoCompositionManager>
+		m_videoCompositionManagerStrong;
+	//
+	// Weak for the same reason from the other direction: the composition
+	// manager owns the composition, and the composition owns this. Only
+	// ever asked whether the composition is still there -- the id it
+	// would otherwise be asked for is cached in the constructor -- so
+	// expired() is the whole of its job, and it can answer that
+	// truthfully where a raw pointer could not.
+	//
+	std::weak_ptr<SEVideoCompositionBase> m_videoComposition;
+
+	//
+	// Strong, for the same reason the composition manager is: the
+	// callbacks this object is handed to announce scene and scene-item
+	// changes to pages from the graphics thread and from the task-queue
+	// worker, and holding what they announce with for as long as they can
+	// fire is what replaced asking the singleton whether the plugin is
+	// still alive. No ring -- the dispatcher owns nothing here.
+	//
+	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
+
+public:
+	//
+	// For the file-static helpers that are handed this object as their
+	// callback context and need to look a composition up.
+	//
+	std::shared_ptr<SEVideoCompositionManager> VideoCompositionManager()
+	{
+		if (m_videoCompositionManagerStrong)
+			return m_videoCompositionManagerStrong;
+
+		return m_videoCompositionManager.lock();
+	}
+
+	std::shared_ptr<SEHostEventDispatcher> HostEventDispatcher()
+	{
+		return m_hostEventDispatcher;
+	}
+
+	//
+	// The scene manager that owns this, or null once it is gone. Locked
+	// per call rather than held, because it is the owner: see
+	// m_obsSceneManager. Gone is an ordinary answer on the teardown path
+	// rather than an error -- the callbacks that ask simply skip their
+	// Update().
+	//
+	std::shared_ptr<SEObsSceneManager> ObsSceneManager()
+	{
+		return m_obsSceneManager.lock();
+	}
+
+private:
 	obs_scene_t* m_scene = nullptr;
 	std::string m_videoCompositionId;
 	std::mutex m_videoCompositionMutex;

@@ -1,14 +1,21 @@
 #include "SEWidgetManager.hpp"
+
+#include "SEStatePersistence.hpp"
+#include "SEHostEventDispatcher.hpp"
+#include "ISEMenuManager.hpp"
 #include "SEUtils.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 
 #include <cassert>
 #include <mutex>
 
 #include <QApplication>
 
-SEWidgetManager::SEWidgetManager(QMainWindow *parent)
-	: m_parent(parent), m_nativeCentralWidget(nullptr)
+SEWidgetManager::SEWidgetManager(QMainWindow *parent,
+				 std::shared_ptr<SEApiServices> apiServices)
+	: m_parent(parent),
+	  m_nativeCentralWidget(nullptr),
+	  m_apiServices(apiServices)
 {
 	assert(parent);
 }
@@ -106,8 +113,9 @@ void SEWidgetManager::PushCentralWidget(
 	//if (m_currentCentralWidget) return;
 	if (m_nativeCentralWidget) return;
 
-	// This will be additionally enforced by OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED event
-	// handler in handle_obs_frontend_event defined in SEGlobalStateManager.cpp
+	// This will be additionally enforced by
+	// OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED event handler in
+	// handle_obs_frontend_event defined in SEMain.cpp
 	//obs_frontend_set_preview_program_mode(false);
 
 	// Make sure changes take effect by draining the event queue
@@ -220,27 +228,43 @@ bool SEWidgetManager::AddDockWidget(
 
 	class TrackedDockWidget : public QDockWidget {
 	public:
-		TrackedDockWidget(const QString &title,
-				  QWidget *parent = Q_NULLPTR,
-				  Qt::WindowFlags flags = Qt::WindowFlags())
-			: QDockWidget(title, parent, flags)
+		TrackedDockWidget(
+			std::shared_ptr<ISEHostEventDispatcher> dispatcher,
+			const QString &title, QWidget *parent = Q_NULLPTR,
+			Qt::WindowFlags flags = Qt::WindowFlags())
+			: QDockWidget(title, parent, flags),
+			  m_hostEventDispatcher(dispatcher)
 		{
 			setAttribute(Qt::WA_NativeWindow);
 		}
+
+	private:
+		//
+		// Held, not fetched: a local class has no enclosing object to
+		// reach through, and a dock outlives any particular call. Not
+		// a ring -- nothing the dispatcher holds owns a dock.
+		//
+		std::shared_ptr<ISEHostEventDispatcher> m_hostEventDispatcher;
 
 	protected:
 		virtual void resizeEvent(QResizeEvent *event) override
 		{
 			QDockWidget::resizeEvent(event);
 
-			AdviseHostUserInterfaceStateChanged();
+			if (m_hostEventDispatcher) {
+				m_hostEventDispatcher
+					->AdviseHostUserInterfaceStateChanged();
+			}
 		}
 
 		virtual void moveEvent(QMoveEvent *event) override
 		{
 			QDockWidget::moveEvent(event);
 
-			AdviseHostUserInterfaceStateChanged();
+			if (m_hostEventDispatcher) {
+				m_hostEventDispatcher
+					->AdviseHostUserInterfaceStateChanged();
+			}
 		}
 
 		virtual void closeEvent(QCloseEvent *event) override
@@ -264,7 +288,11 @@ bool SEWidgetManager::AddDockWidget(
 		}
 	};
 
-	QDockWidget *dock = new TrackedDockWidget(title, m_parent);
+	auto services = ApiServices();
+
+	QDockWidget *dock = new TrackedDockWidget(
+		services ? services->hostEventDispatcher : nullptr, title,
+		m_parent);
 
 	dock->setObjectName(QString(id));
 
@@ -326,46 +354,48 @@ bool SEWidgetManager::AddDockWidget(
 
 			m_dockWidgetAreas[savedId] = area;
 
-			QtPostTask([]() -> void {
-				if (!SEGlobalStateManager::
-					    IsInstanceAvailable())
+			QtPostTask([statePersistence =
+					    m_statePersistence]() -> void {
+				auto persistence = statePersistence.lock();
+
+				if (!persistence)
 					return;
 
-				SEGlobalStateManager::GetInstance()
-					->PersistState();
+				persistence->PersistState();
 			});
 		});
 
 	QObject::connect(dock, &QDockWidget::visibilityChanged, [this]() {
-		QtPostTask([]() -> void {
-			if (!SEGlobalStateManager::
-				    IsInstanceAvailable())
+		QtPostTask([statePersistence = m_statePersistence]() -> void {
+			auto persistence = statePersistence.lock();
+
+			if (!persistence)
 				return;
 
-			SEGlobalStateManager::GetInstance()
-				->PersistState();
+			persistence->PersistState();
 		});
 
+		//
+		// Captured, not fetched. This asked the singleton whether the
+		// plugin was still alive because it had no hold on what it
+		// wanted; now it takes the menu manager itself, weakly, so a
+		// task that lands after teardown finds an expired pointer
+		// instead of interrogating global state.
+		//
+		std::weak_ptr<ISEMenuManager> menuManager;
+
+		if (auto apiServices = ApiServices()) {
+			menuManager = apiServices->menuManager;
+		}
+
 		QtDelayTask(
-			[]() -> void {
-				if (!SEGlobalStateManager::
-					    IsInstanceAvailable())
+			[menuManager]() -> void {
+				auto menu = menuManager.lock();
+
+				if (!menu)
 					return;
 
-				if (!SEGlobalStateManager::
-					     GetInstance()
-						     ->IsInitialized())
-					return;
-
-				auto menuManager =
-					SEGlobalStateManager::
-						GetInstance()
-							->GetMenuManager();
-
-				if (!menuManager)
-					return;
-
-				menuManager->Update();
+				menu->Update();
 			},
 			1);
 	});
@@ -599,6 +629,15 @@ void SEWidgetManager::GetDockWidgetIdentifiers(
 	for (auto imap : m_dockWidgets) {
 		result.push_back(imap.first);
 	}
+}
+
+bool SEWidgetManager::HasDockWidget(const char *const id)
+{
+	assert(id);
+
+	std::lock_guard<std::recursive_mutex> guard(m_mutex);
+
+	return m_dockWidgets.count(id) > 0;
 }
 
 QDockWidget *SEWidgetManager::GetDockWidget(const char *const id)

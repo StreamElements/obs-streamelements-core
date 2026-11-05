@@ -1,5 +1,7 @@
 #pragma once
 
+#include "SECompositionServices.hpp"
+
 #include <obs.h>
 #include <obs.hpp>
 #include <obs-frontend-api.h>
@@ -19,6 +21,19 @@ public:
 };
 
 class SEAudioCompositionBase {
+public:
+	const SECompositionServices &CompositionServices()
+	{
+		return m_compositionServices;
+	}
+
+protected:
+	//
+	// What this composition announces with -- read by the announce
+	// helper in the implementation, which is handed the composition.
+	//
+	SECompositionServices m_compositionServices;
+
 public:
 	class CompositionInfo {
 	private:
@@ -124,9 +139,10 @@ private:
 	std::shared_mutex m_mutex;
 
 protected:
-	SEAudioCompositionBase(const std::string id,
-					   const std::string name)
-		: m_id(id), m_name(name)
+	SEAudioCompositionBase(const std::string id, const std::string name,
+					   const SECompositionServices &compositionServices)
+		: m_id(id), m_name(name),
+		  m_compositionServices(compositionServices)
 	{
 	}
 	virtual ~SEAudioCompositionBase() {}
@@ -161,18 +177,20 @@ private:
 
 public:
 	// ctor only usable by this class
-	SEObsNativeAudioComposition(Private)
-		: SEAudioCompositionBase("default", "Default")
+	SEObsNativeAudioComposition(Private, const SECompositionServices &compositionServices)
+		: SEAudioCompositionBase("default", "Default",
+					 compositionServices)
 	{
 	}
 
 	virtual ~SEObsNativeAudioComposition() {}
 
 public:
-	static std::shared_ptr<SEAudioCompositionBase> Create()
+	static std::shared_ptr<SEAudioCompositionBase>
+	Create(const SECompositionServices &compositionServices)
 	{
 		return std::make_shared<SEObsNativeAudioComposition>(
-			Private());
+			Private(), compositionServices);
 	}
 
 public:
@@ -206,7 +224,8 @@ public:
 	SECustomAudioComposition(
 		Private, std::string id, std::string name, std::string streamingAudioEncoderId,
 		obs_data_t *streamingAudioEncoderSettings,
-		obs_data_t *streamingAudioEncoderHotkeyData);
+		obs_data_t *streamingAudioEncoderHotkeyData,
+		const SECompositionServices &compositionServices);
 
 	virtual ~SECustomAudioComposition();
 
@@ -215,18 +234,20 @@ public:
 	Create(std::string id, std::string name,
 	       std::string streamingAudioEncoderId,
 	       obs_data_t *streamingAudioEncoderSettings,
-	       obs_data_t *streamingAudioEncoderHotkeyData)
+	       obs_data_t *streamingAudioEncoderHotkeyData,
+	       const SECompositionServices &compositionServices)
 	{
 		return std::make_shared<SECustomAudioComposition>(
 			Private(), id, name, streamingAudioEncoderId,
 			streamingAudioEncoderSettings,
-			streamingAudioEncoderHotkeyData);
+			streamingAudioEncoderHotkeyData, compositionServices);
 	}
 
 	static std::shared_ptr<SECustomAudioComposition>
 	Create(std::string id, std::string name,
 	       CefRefPtr<CefValue> streamingAudioEncoders,
-	       CefRefPtr<CefValue> recordingAudioEncoders);
+	       CefRefPtr<CefValue> recordingAudioEncoders,
+	       const SECompositionServices &compositionServices);
 
 private:
 	audio_t *m_audio = nullptr;

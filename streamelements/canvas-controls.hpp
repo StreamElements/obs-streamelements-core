@@ -7,16 +7,14 @@
 #include "canvas-draw.hpp"
 #include "canvas-mutate.hpp"
 
-#include "SEConfig.hpp"
+#include <obs-frontend-api.h>
 
 static config_t* obs_fe_user_config() {
-	auto config = SEConfig::GetInstance();
-
-	if (config) {
-		return config->GetObsUserConfig();
-	}
-
-	return nullptr;
+	//
+	// Straight from libobs: this only ever wanted OBS's own user config,
+	// which SEConfig was caching and handing back (CORE-757).
+	//
+	return obs_frontend_get_user_config();
 }
 
 static inline void setNoFocus(QColor& color)

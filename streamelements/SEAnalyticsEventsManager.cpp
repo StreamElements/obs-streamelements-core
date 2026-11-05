@@ -1,17 +1,18 @@
 #include "SEAnalyticsEventsManager.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEConfig.hpp"
 #include "SEUtils.hpp"
 
 #include <obs.h>
 #include <util/platform.h>
 #include <string>
 
-SEAnalyticsEventsManager::SEAnalyticsEventsManager(size_t numWorkers)
+SEAnalyticsEventsManager::SEAnalyticsEventsManager(
+	std::shared_ptr<SEConfig> config, size_t numWorkers)
 {
 	uint64_t now = os_gettime_ns();
 	m_startTime = now;
 	m_prevEventTime = now;
-	m_appId = SEConfig::GetInstance()->GetHeapAnalyticsAppId();
+	m_appId = config->GetHeapAnalyticsAppId();
 	m_sessionId = CreateGloballyUniqueIdString();
 	m_identity = GetComputerSystemUniqueId();
 

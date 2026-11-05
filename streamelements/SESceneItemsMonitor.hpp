@@ -28,10 +28,16 @@
 	 SE_ENABLE_SCENEITEM_CONTEXT_MENU ||                         \
 	 SE_ENABLE_SCENEITEM_RENDERING_SETTINGS)
 
+class SEAuxiliaryControlsBuilder;
+class SEConfig;
+
 class SESceneItemsMonitor : public QObject,
 					public SEObsAppMonitor {
 public:
-	SESceneItemsMonitor(QMainWindow *mainWindow);
+	SESceneItemsMonitor(QMainWindow *mainWindow,
+			    std::shared_ptr<SEAuxiliaryControlsBuilder>
+				    auxiliaryControlsBuilder,
+			    std::shared_ptr<SEConfig> config);
 	virtual ~SESceneItemsMonitor();
 
 	/* ==================================================== */
@@ -155,6 +161,30 @@ protected:
 
 private:
 	QPointer<QMainWindow> m_mainWindow;
+
+	//
+	// Builds the toolbar's auxiliary controls from the description a page
+	// sends. Public below, because the compiled-out scene-item UI
+	// extensions reach it from file-static helpers that hold the monitor
+	// rather than from members.
+	//
+	std::shared_ptr<SEAuxiliaryControlsBuilder> m_auxiliaryControls;
+	std::shared_ptr<SEConfig> m_config;
+
+public:
+	std::shared_ptr<SEAuxiliaryControlsBuilder> GetAuxiliaryControls()
+	{
+		return m_auxiliaryControls;
+	}
+
+	//
+	// Public for the same reason: the three file-static predicates below
+	// ask whether onboarding is in progress, and they are reached from an
+	// event filter that holds the monitor rather than from a member.
+	//
+	std::shared_ptr<SEConfig> GetConfig() { return m_config; }
+
+private:
 	QPointer<QListView> m_sceneItemsListView = nullptr;
 	QPointer<QToolBar> m_sceneItemsToolBar = nullptr;
 	QPointer<QAbstractItemModel> m_sceneItemsModel = nullptr;

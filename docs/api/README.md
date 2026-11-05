@@ -8,6 +8,13 @@ API revision 2025-10-07, file last saved 2025-10-09, Word revision 117 of a
 document started 2018-05-22. That document is no longer the source of truth;
 this tree is.
 
+!!! info "Looking for how the plug-in itself works?"
+    This reference documents the surface a page sees. The
+    [Architecture documentation](https://streamelements.github.io/obs-streamelements-core/architecture/)
+    documents what is behind it — lifecycle, services, the bridge that
+    carries these calls, compositions, outputs, UI, threading and
+    diagnostics.
+
 ## Start here
 
 | | |

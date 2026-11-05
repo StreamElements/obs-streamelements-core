@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ISEAnalyticsEventsManager.hpp"
+
 #include "SEUtils.hpp"
 #include "deps/moodycamel/concurrentqueue.h"
 #include "deps/moodycamel/blockingconcurrentqueue.h"
@@ -11,10 +13,18 @@
 
 #include <QDockWidget>
 
-class SEAnalyticsEventsManager
-{
+class SEConfig;
+
+class SEAnalyticsEventsManager : public ISEAnalyticsEventsManager {
 public:
-	SEAnalyticsEventsManager(size_t numWorkers = 4);
+	//
+	// The config is read once, here, for the analytics app id. Taken
+	// rather than fetched: this constructor runs early in Initialize(),
+	// which is exactly when a lazily built singleton would have been
+	// created as a side effect of reading it.
+	//
+	SEAnalyticsEventsManager(std::shared_ptr<SEConfig> config,
+				 size_t numWorkers = 4);
 	~SEAnalyticsEventsManager();
 
 	void trackSynchronousEvent(
@@ -29,9 +39,10 @@ public:
 		AddRawEvent(eventName, props, fields, true);
 	}
 
-	void trackEvent(const char *eventName,
-			json11::Json::object props = json11::Json::object{},
-			json11::Json::array fields = json11::Json::array{})
+	void
+	trackEvent(const char *eventName,
+		   json11::Json::object props = json11::Json::object{},
+		   json11::Json::array fields = json11::Json::array{}) override
 	{
 		if (!eventName) {
 			return;

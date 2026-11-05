@@ -1,0 +1,16 @@
+- Fix: OBS Studio could freeze completely when a scene was changed on a SE.Live canvas using a stinger transition — the window kept drawing but nothing responded, and the process had to be ended by hand
+- Fix: OBS Studio could freeze when a SE.Live canvas was looked up while another canvas was being added or removed
+- Fix: SE.Live could close OBS Studio instantly, without a crash report, when one of its pages sent an unexpected value to any of twenty-one plug-in functions
+- Fix: SE.Live panels could stop responding for the rest of the session after a single web request that never completed
+- Fix: a SE.Live dock could start up with no connection to OBS Studio, and stay unusable until it was reloaded
+- Fix: a SE.Live dialog requested without a description never answered, leaving the page waiting indefinitely
+- Fix: crashes when a scene or scene item changed while the canvas that owned it was being destroyed
+- Fix: OBS Studio could be left with scene collection autosave turned off, and a SE.Live progress window on screen, if a SE.Live operation was still open when OBS Studio closed
+- Fix: SE.Live's local file server checked request signatures against a key it had never initialised, so a signature it had not issued could be accepted
+- Fix: SE.Live ignored the system proxy bypass list, sending even requests to the local machine through a configured proxy
+- Fix: SE.Live leaked an internal listener, and any local web server its page had started, for every pop-up window and background panel opened; events could also be sent to panels that had already closed
+- Fix: small memory leak each time SE.Live scanned the settings folder for referenced files
+- Fix: saving a replay buffer clip from a SE.Live canvas leaked two internal references each time
+- Fix: adding a hotkey binding through the JavaScript API reported success when the binding had been rejected
+- Fix: on macOS, SE.Live's "open file location" did nothing instead of revealing the file in Finder
+- Infra: builds are now made against OBS Studio 33.0.1

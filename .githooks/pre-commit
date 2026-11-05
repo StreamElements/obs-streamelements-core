@@ -1,0 +1,103 @@
+#!/bin/sh
+#
+# Format the lines this commit touches, and nothing else.
+#
+# Why line ranges rather than whole files: the tree was formatted by older
+# clang-format releases, and a newer one reformats code nobody touched -- 19.1.5
+# rewrites 225 lines of tests/test_source_invariants.cpp on its own. Passing
+# --lines= keeps the hook's blast radius equal to the diff, so the version on
+# the machine stops mattering.
+#
+# Set SE_SKIP_FORMAT=1 to skip, or commit with --no-verify.
+#
+
+[ -n "$SE_SKIP_FORMAT" ] && exit 0
+
+CF="${CLANG_FORMAT:-}"
+if [ -z "$CF" ]; then
+	for c in clang-format \
+		"/c/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/bin/clang-format.exe" \
+		"/c/Program Files/LLVM/bin/clang-format.exe"; do
+		if command -v "$c" >/dev/null 2>&1; then CF="$c"; break; fi
+	done
+fi
+
+if [ -z "$CF" ]; then
+	echo "pre-commit: no clang-format found; set CLANG_FORMAT or install LLVM." >&2
+	echo "pre-commit: commit with SE_SKIP_FORMAT=1 to bypass." >&2
+	exit 1
+fi
+
+# Vendored and generated trees are off limits (see CLAUDE.md "Don't edit").
+excluded() {
+	case "$1" in
+	deps/* | streamelements/deps/* | CI/*/nsis/* | \
+		qrc_streamelements.cpp | *_autogen/* | CMakeFiles/* | \
+		RelWithDebInfo/* | *.dir/*)
+		return 0 ;;
+	esac
+	return 1
+}
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+formatted=""
+blocked=""
+
+for f in $staged; do
+	case "$f" in
+	*.c | *.cc | *.cpp | *.h | *.hpp | *.m | *.mm) ;;
+	*) continue ;;
+	esac
+
+	excluded "$f" && continue
+	[ -f "$f" ] || continue
+
+	# Changed line ranges, straight out of the staged diff.
+	ranges=$(git diff --cached -U0 -- "$f" |
+		sed -n 's/^@@ -[0-9,]* +\([0-9]*\),\([0-9]*\) @@.*/\1 \2/p;
+			s/^@@ -[0-9,]* +\([0-9]*\) @@.*/\1 1/p' |
+		while read -r start count; do
+			[ "$count" -eq 0 ] && continue
+			echo "--lines=$start:$((start + count - 1))"
+		done)
+
+	[ -z "$ranges" ] && continue
+
+	before=$(git hash-object "$f")
+
+	# A file with unstaged changes must not be re-staged: that would commit
+	# a version nobody reviewed. Check it instead and let the author decide.
+	if ! git diff --quiet -- "$f"; then
+		tmp=$(mktemp)
+		# shellcheck disable=SC2086
+		"$CF" -style=file -fallback-style=none $ranges "$f" >"$tmp"
+		cmp -s "$f" "$tmp" || blocked="$blocked $f"
+		rm -f "$tmp"
+		continue
+	fi
+
+	# shellcheck disable=SC2086
+	"$CF" -i -style=file -fallback-style=none $ranges "$f" || exit 1
+
+	if [ "$(git hash-object "$f")" != "$before" ]; then
+		git add -- "$f"
+		formatted="$formatted $f"
+	fi
+done
+
+if [ -n "$formatted" ]; then
+	echo "pre-commit: formatted and re-staged ($("$CF" --version)):"
+	for f in $formatted; do echo "    $f"; done
+fi
+
+if [ -n "$blocked" ]; then
+	echo "pre-commit: these have unstaged changes and need formatting," >&2
+	echo "pre-commit: so they were left alone rather than re-staged:" >&2
+	for f in $blocked; do echo "    $f" >&2; done
+	echo "pre-commit: format them yourself, or stage the rest of the file." >&2
+	exit 1
+fi
+
+exit 0

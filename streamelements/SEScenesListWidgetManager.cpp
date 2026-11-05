@@ -2,6 +2,7 @@
 #include "SEUtils.hpp"
 #include "SERemoteIconLoader.hpp"
 #include "SEConfig.hpp"
+#include "SEAuxiliaryControlsBuilder.hpp"
 
 #include <obs.h>
 #include <obs-frontend-api.h>
@@ -141,10 +142,9 @@ class SourceDataManager : public QObject {
 private:
 	std::map<obs_source_t *, ItemData *> m_itemData;
 
-protected:
+public:
 	SourceDataManager() {}
 
-public:
 	void clear()
 	{
 		for (auto kv : m_itemData) {
@@ -200,13 +200,7 @@ public:
 		return nullptr;
 	}
 
-	static SourceDataManager *instance() { return &s_instance; }
-
-private:
-	static SourceDataManager s_instance;
 };
-
-SourceDataManager SourceDataManager::s_instance;
 
 /* ================================================================= */
 /* ================================================================= */
@@ -292,9 +286,10 @@ protected:
 					m_manager->InvokeCurrentSceneDefaultContextMenu();
 				};
 
-				handled = DeserializeAndInvokeAction(
-					value, defaultAction,
-					defaultContextMenu);
+				handled = m_manager->GetAuxiliaryControls()
+						  ->DeserializeAndInvokeAction(
+							  value, defaultAction,
+							  defaultContextMenu);
 			}
 			#endif
 
@@ -336,7 +331,9 @@ protected:
 
 				QMenu menu; //(m_mainWindow);
 
-				handled = DeserializeMenu(value, menu,
+				handled = m_manager->GetAuxiliaryControls()
+						  ->DeserializeMenu(
+							  value, menu,
 							  defaultAction,
 							  defaultContextMenu);
 
@@ -366,8 +363,13 @@ protected:
 /* ================================================================= */
 
 SEScenesListWidgetManager::SEScenesListWidgetManager(
-	QMainWindow *mainWindow)
-	: m_mainWindow(mainWindow)
+	QMainWindow *mainWindow,
+	std::shared_ptr<SEAuxiliaryControlsBuilder> auxiliaryControlsBuilder,
+	std::shared_ptr<SEConfig> config)
+	: m_mainWindow(mainWindow),
+	  m_auxiliaryControls(auxiliaryControlsBuilder),
+	  m_config(config),
+	  m_sourceData(std::make_unique<SourceDataManager>())
 {
 	QDockWidget *scenesDock =
 		(QDockWidget *)m_mainWindow->findChild<QDockWidget *>(
@@ -628,7 +630,7 @@ SEScenesListWidgetManager::GetSceneIcon(obs_source_t *scene)
 void SEScenesListWidgetManager::SetSceneIcon(
 	obs_source_t *scene, CefRefPtr<CefValue> icon)
 {
-	auto data = SourceDataManager::instance()->data(scene);
+	auto data = m_sourceData->data(scene);
 	if (data) {
 		data->DeserializeIcon(icon);
 	}
@@ -654,7 +656,7 @@ SEScenesListWidgetManager::GetSceneDefaultAction(obs_source_t *scene)
 void SEScenesListWidgetManager::SetSceneDefaultAction(
 	obs_source_t *scene, CefRefPtr<CefValue> defaultAction)
 {
-	auto data = SourceDataManager::instance()->data(scene);
+	auto data = m_sourceData->data(scene);
 	if (data) {
 		data->DeserializeDefaultAction(defaultAction);
 	}
@@ -681,7 +683,7 @@ SEScenesListWidgetManager::GetSceneContextMenu(obs_source_t *scene)
 void SEScenesListWidgetManager::SetSceneContextMenu(
 	obs_source_t *scene, CefRefPtr<CefValue> contextMenu)
 {
-	auto data = SourceDataManager::instance()->data(scene);
+	auto data = m_sourceData->data(scene);
 	if (data) {
 		data->DeserializeContextMenu(contextMenu);
 	}
@@ -736,8 +738,9 @@ void SEScenesListWidgetManager::UpdateScenesToolbar()
 		m_scenesToolBarActions->GetList();
 
 	for (size_t index = 0; index < list->GetSize(); ++index) {
-		QWidget *control = DeserializeAuxiliaryControlWidget(
-			list->GetValue(index));
+		QWidget *control =
+			m_auxiliaryControls->DeserializeAuxiliaryControlWidget(
+				list->GetValue(index));
 
 		if (!control)
 			continue;
@@ -792,9 +795,9 @@ void SEScenesListWidgetManager::UpdateWidgets()
 		return;
 
 	bool isSignedIn =
-		!SEConfig::GetInstance()->IsOnBoardingMode();
+		!m_config->IsOnBoardingMode();
 
-	SourceDataManager::instance()->removeDataNotInList(sources);
+	m_sourceData->removeDataNotInList(sources);
 
 	for (int rowIndex = 0; rowIndex < m_nativeWidget->count() &&
 				rowIndex < sources.sources.num;
@@ -811,13 +814,13 @@ void SEScenesListWidgetManager::UpdateWidgets()
 		obs_source_t *scene = sources.sources.array[rowIndex];
 
 		ItemData *data =
-			SourceDataManager::instance()->data(scene);
+			m_sourceData->data(scene);
 
 		if (!data) {
 			data = new ItemData(
 				[this]() { ScheduleUpdateWidgets(); });
 
-			SourceDataManager::instance()->setData(scene,
+			m_sourceData->setData(scene,
 								data);
 
 			#if SE_ENABLE_SCENE_ICONS

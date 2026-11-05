@@ -10,8 +10,6 @@
 
 #include <mutex>
 
-SEPleaseWaitWindow *SEPleaseWaitWindow::s_instance = nullptr;
-
 SEPleaseWaitWindow::SEPleaseWaitWindow(QWidget *parent) : QDialog(parent),
     ui(new Ui::SEPleaseWaitWindow)
 {
@@ -28,22 +26,23 @@ SEPleaseWaitWindow::~SEPleaseWaitWindow()
     delete ui;
 }
 
-SEPleaseWaitWindow* SEPleaseWaitWindow::GetInstance()
+std::shared_ptr<SEPleaseWaitWindow>
+SEPleaseWaitWindow::Create(QWidget *parent)
 {
-	static std::mutex s_mutex;
+	//
+	// Two owners, and only one of them may delete: Qt owns it through
+	// the parent, and the services bundle holds this shared_ptr. The
+	// QPointer is how the deleter tells which got there first -- Qt
+	// zeroes it when the main window takes the widget down, and then
+	// there is nothing for us to free.
+	//
+	QPointer<SEPleaseWaitWindow> tracked = new SEPleaseWaitWindow(parent);
 
-	if (!s_instance) {
-		std::lock_guard<std::mutex> guard(s_mutex);
-
-		if (!s_instance) {
-			QMainWindow *mainWindow =
-				(QMainWindow *)obs_frontend_get_main_window();
-
-			s_instance = new SEPleaseWaitWindow(mainWindow);
-		}
-	}
-
-	return s_instance;
+	return std::shared_ptr<SEPleaseWaitWindow>(
+		tracked.data(), [tracked](SEPleaseWaitWindow *) {
+			if (tracked)
+				tracked->deleteLater();
+		});
 }
 
 void SEPleaseWaitWindow::Show()

@@ -1,7 +1,10 @@
 #include "SEBandwidthTestManager.hpp"
+#include "SEHostEventDispatcher.hpp"
 #include "SEUtils.hpp"
 
-SEBandwidthTestManager::SEBandwidthTestManager()
+SEBandwidthTestManager::SEBandwidthTestManager(
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
+	: m_hostEventDispatcher(hostEventDispatcher)
 {
 	m_isTestInProgress = false;
 	m_client = new SEBandwidthTestClient();
@@ -22,34 +25,73 @@ bool SEBandwidthTestManager::BeginBandwidthTest(CefRefPtr<CefValue> settingsValu
 
 	m_last_test_results.clear();
 
+	// Both arguments come straight from a page, and a typed getter on the
+	// CefValue model is `if (m_type != VTYPE_X) throw;` -- a bare throw
+	// outside a catch, so std::terminate rather than something catchable.
+	// Every read below is type-checked first, the list elements and the
+	// dictionary members included: HasKey() is not a type check, because
+	// GetString(k) is `m_map[k]->GetString()` and reaches the same getter.
+	if (settingsValue->GetType() != VTYPE_DICTIONARY ||
+	    serversValue->GetType() != VTYPE_LIST) {
+		return false;
+	}
+
 	CefRefPtr<CefDictionaryValue> settings = settingsValue->GetDictionary();
 	CefRefPtr<CefListValue> servers = serversValue->GetList();
 
 	if (settings.get() && servers.get() && servers->GetSize()) {
-		if (settings->HasKey("maxBitsPerSecond") && settings->HasKey("serverTestDurationSeconds")) {
+		if (settings->HasKey("maxBitsPerSecond") &&
+		    settings->GetType("maxBitsPerSecond") == VTYPE_INT &&
+		    settings->HasKey("serverTestDurationSeconds") &&
+		    settings->GetType("serverTestDurationSeconds") ==
+			    VTYPE_INT) {
 			int maxBitsPerSecond = settings->GetInt("maxBitsPerSecond");
 			int serverTestDurationSeconds = settings->GetInt("serverTestDurationSeconds");
 
 			m_last_test_servers.clear();
 
 			for (size_t i = 0; i < servers->GetSize(); ++i) {
+				// A wrongly typed element is skipped rather
+				// than failing the whole list, which is the
+				// rule removeDockingWidgetsByIds already
+				// follows for a list of ids.
+				if (servers->GetValue(i)->GetType() !=
+				    VTYPE_DICTIONARY) {
+					continue;
+				}
+
 				CefRefPtr<CefDictionaryValue> server =
 					servers->GetValue(i)->GetDictionary();
 
-				if (server.get() && server->HasKey("url") && server->HasKey("streamKey")) {
+				if (server.get() && server->HasKey("url") &&
+				    server->GetType("url") == VTYPE_STRING &&
+				    server->HasKey("streamKey") &&
+				    server->GetType("streamKey") ==
+					    VTYPE_STRING) {
 					SEBandwidthTestClient::Server item;
 
 					item.url = server->GetString("url");
 					item.streamKey = server->GetString("streamKey");
 
-					if (server->HasKey("useAuth") && server->GetBool("useAuth")) {
+					if (server->HasKey("useAuth") &&
+					    server->GetType("useAuth") ==
+						    VTYPE_BOOL &&
+					    server->GetBool("useAuth")) {
 						item.useAuth = true;
 
-						if (server->HasKey("authUsername")) {
+						if (server->HasKey(
+							    "authUsername") &&
+						    server->GetType(
+							    "authUsername") ==
+							    VTYPE_STRING) {
 							item.authUsername = server->GetString("authUsername");
 						}
 
-						if (server->HasKey("authPassword")) {
+						if (server->HasKey(
+							    "authPassword") &&
+						    server->GetType(
+							    "authPassword") ==
+							    VTYPE_STRING) {
 							item.authPassword = server->GetString("authPassword");
 						}
 					}
@@ -62,7 +104,7 @@ bool SEBandwidthTestManager::BeginBandwidthTest(CefRefPtr<CefValue> settingsValu
 				m_isTestInProgress = true;
 
 				// Signal test started
-				DispatchJSEventContainer(target, "hostBandwidthTestStarted", "null");
+				m_hostEventDispatcher->DispatchJSEventContainer(target, "hostBandwidthTestStarted", "null");
 
 				struct local_context {
 					SEBandwidthTestManager* self;
@@ -88,7 +130,8 @@ bool SEBandwidthTestManager::BeginBandwidthTest(CefRefPtr<CefValue> settingsValu
 						context->self->m_last_test_results = *results;
 
 						// Signal test progress
-						DispatchJSEventContainer(context->target, "hostBandwidthTestProgress", "null");
+						context->self->m_hostEventDispatcher
+							->DispatchJSEventContainer(context->target, "hostBandwidthTestProgress", "null");
 					},
 					[](std::vector<SEBandwidthTestClient::Result>* results, void* data) {
 						local_context* context = (local_context*)data;
@@ -101,7 +144,8 @@ bool SEBandwidthTestManager::BeginBandwidthTest(CefRefPtr<CefValue> settingsValu
 						context->self->m_isTestInProgress = false;
 
 						// Signal test completed
-						DispatchJSEventContainer(context->target, "hostBandwidthTestCompleted", "null");
+						context->self->m_hostEventDispatcher
+							->DispatchJSEventContainer(context->target, "hostBandwidthTestCompleted", "null");
 
 						delete context;
 					},

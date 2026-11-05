@@ -2,6 +2,11 @@
 
 Core SE.Live OBS plugin.
 
+Documentation: **[Architecture](docs/architecture/)** — how the plugin is put
+together · **[JavaScript OBS API](docs/api/)** — the `window.host` surface a
+page sees. Both are published on GitHub Pages; links and detail in the two
+sections below.
+
 # JavaScript OBS API
 
 The host API this plugin exposes to page JavaScript — 217 `window.host` calls,
@@ -13,11 +18,22 @@ That tree is the source of truth. It replaces `JavaScript OBS API Version
 [`tools/docx-to-markdown/`](tools/docx-to-markdown/) for how it was converted
 and verified.
 
+# Architecture
+
+How the plugin itself is put together — lifecycle, the service container and
+the injection rules, the host API bridge, compositions, outputs, UI,
+threading, diagnostics, build and testing — is documented in
+**[`docs/architecture/`](docs/architecture/)**, published beside the API
+reference at <a href="https://streamelements.github.io/obs-streamelements-core/architecture/" target="_blank">https://streamelements.github.io/obs-streamelements-core/architecture/</a>.
+
+Start with [the overview](docs/architecture/README.md); it has a map of the
+chapters and a table of where to start by what you are doing.
+
 # Building locally
 
 This plugin does not build on its own. It is built as part of an obs-studio
 tree, and it has a hard dependency on the `obs-browser` plugin being present
-as a sibling — `StreamElementsBrowserWidget.cpp` includes
+as a sibling — `SEBrowserWidget.cpp` includes
 `../../obs-browser/panel/browser-panel.hpp` by relative path.
 
 ## Layout
@@ -26,13 +42,23 @@ as a sibling — `StreamElementsBrowserWidget.cpp` includes
 obs-studio/
 ├── CMakeUserPresets.json          <- copy of this repo's CMakeUserPresets.json (Windows)
 └── plugins/
-    ├── CMakeLists.txt             <- must contain: add_obs_plugin(obs-streamelements-core)
+    ├── CMakeLists.txt             <- must contain: add_core_module(obs-streamelements-core)
     ├── obs-browser/               <- required
     └── obs-streamelements-core/   <- this repo
 ```
 
 Clone obs-studio with `--recursive` so `obs-browser` comes along. CI pins
-obs-studio to tag `31.1.2`; newer trees also work.
+obs-studio to tag `33.0.1`.
+
+Register the plugin in the obs-studio tree by adding one line to
+`plugins/CMakeLists.txt`, **before** its trailing `set_obs_core_modules()`:
+
+```cmake
+add_core_module(obs-streamelements-core)
+```
+
+On OBS 32 and earlier the macro is spelled `add_obs_plugin(...)` and there is no
+`set_obs_core_modules()`; the rename landed in 33.0.0.
 
 ## Windows
 

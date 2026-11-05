@@ -1,7 +1,10 @@
 #pragma once
 
+#include <memory>
 #include <string>
 #include <vector>
+
+class SEPerformanceHistoryTracker;
 
 //
 // Backend-agnostic crash-time collection.
@@ -102,6 +105,22 @@ public:
 	// Final by the time the constructor returns: the settings fetch that can
 	// replace the list is synchronous and happens there.
 	std::vector<std::string> GetModulesOfInterest() const;
+
+	//
+	// The performance tracker the CPU and memory histograms in the report
+	// come from. Set after construction, because this object is built
+	// inside the crash handler's constructor -- the first thing
+	// Initialize() does -- and the tracker does not exist yet.
+	//
+	// Null until then, and Collect() simply omits the histograms, which is
+	// what the availability check this replaced did on the shutdown path
+	// as well. The difference is that it now says so for one reason only:
+	// the tracker was never set, rather than "the plug-in is going away",
+	// which was true exactly when the report mattered most.
+	//
+	void SetPerformanceHistoryTracker(
+		std::shared_ptr<SEPerformanceHistoryTracker>
+			performanceHistoryTracker);
 
 	// Called from the exception path with the process already dying. Does no
 	// allocation it can avoid, touches no Qt, and must not throw.

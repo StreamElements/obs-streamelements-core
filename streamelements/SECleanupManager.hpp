@@ -1,16 +1,18 @@
 #pragma once
 
+#include "ISECleanupManager.hpp"
+
 #include <string>
 #include <map>
 #include <mutex>
 
-class SECleanupManager {
+class SECleanupManager : public ISECleanupManager {
 public:
 	SECleanupManager();
 	~SECleanupManager();
 
 public:
-	void AddPath(std::string path);
+	void AddPath(std::string path) override;
 
 public:
 	void Clean();

@@ -1,9 +1,12 @@
 #include <obs.hpp>
 #include <obs-frontend-api.h>
+#include <util/config-file.h>
 
 #include "SEUtils.hpp"
 #include "SEOutput.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEHostEventDispatcher.hpp"
+#include "SEVideoCompositionManager.hpp"
+#include "SEAudioCompositionManager.hpp"
 
 #include <ctime>
 
@@ -218,12 +221,20 @@ DeserializeVideoEncoders(CefRefPtr<CefDictionaryValue> rootDict)
 
 static void dispatch_list_change_event(SEOutputBase *output)
 {
+	auto dispatcher = output->HostEventDispatcher();
+
+	if (!dispatcher)
+		return;
+
 	if (output->GetOutputType() == StreamingOutput)
-		DispatchJSEventGlobal("hostStreamingOutputListChanged", "null");
+		dispatcher->DispatchJSEventGlobal(
+			"hostStreamingOutputListChanged", "null");
 	else if (output->GetOutputType() == RecordingOutput)
-		DispatchJSEventGlobal("hostRecordingOutputListChanged", "null");
+		dispatcher->DispatchJSEventGlobal(
+			"hostRecordingOutputListChanged", "null");
 	else
-		DispatchJSEventGlobal("hostReplayBufferOutputListChanged", "null");
+		dispatcher->DispatchJSEventGlobal(
+			"hostReplayBufferOutputListChanged", "null");
 }
 
 static void dispatch_event(
@@ -237,7 +248,9 @@ static void dispatch_event(
 
 	std::string json = CefWriteJSON(value, JSON_WRITER_DEFAULT).ToString();
 
-	DispatchJSEventGlobal(eventName, json);
+	if (auto dispatcher = output->HostEventDispatcher()) {
+		dispatcher->DispatchJSEventGlobal(eventName, json);
+	}
 }
 
 void SEOutputBase::handle_output_start(void *my_data,
@@ -558,7 +571,7 @@ void SEOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 	d->SetString("videoCompositionId", m_videoComposition->GetId());
 	d->SetString("audioCompositionId", m_audioComposition->GetId());
 	d->SetBool("isEnabled", IsEnabled());
-	d->SetBool("isActive", IsActive());
+	d->SetBool("isActive", IsActiveInternal());
 	d->SetBool("canDisable", CanDisable());
 	d->SetBool("canRemove", !IsObsNativeOutput());
 	d->SetBool("isObsNativeVideoComposition",
@@ -580,7 +593,7 @@ void SEOutputBase::SerializeOutput(CefRefPtr<CefValue>& output)
 	OBSOutputAutoRelease obs_output = GetOutput();
 	SETRACE_DECREF(obs_output.Get());
 
-	if (obs_output && IsActive()) {
+	if (obs_output && IsActiveInternal()) {
 		auto stats = CefDictionaryValue::Create();
 
 		stats->SetBool("canPause", obs_output_can_pause(obs_output));
@@ -658,13 +671,15 @@ SEOutputBase::SEOutputBase(
 	ObsStateDependencyType obsStateDependency,
 	std::shared_ptr<SEVideoCompositionBase> videoComposition,
 	std::shared_ptr<SEAudioCompositionBase> audioComposition,
-	CefRefPtr<CefDictionaryValue> auxData)
+	CefRefPtr<CefDictionaryValue> auxData,
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 	: m_id(id),
 	  m_name(name),
 	  m_obsOutputType(obsOutputType),
 	  m_obsStateDependency(obsStateDependency),
 	  m_videoComposition(videoComposition),
 	  m_audioComposition(audioComposition),
+	  m_hostEventDispatcher(hostEventDispatcher),
 	  m_enabled(false)
 {
 	m_auxData = auxData.get() ? auxData : CefDictionaryValue::Create();
@@ -698,6 +713,11 @@ bool SEOutputBase::IsActive()
 {
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
+	return IsActiveInternal();
+}
+
+bool SEOutputBase::IsActiveInternal()
+{
 	OBSOutputAutoRelease output = GetOutput();
 	SETRACE_DECREF(output.Get());
 
@@ -1047,7 +1067,11 @@ void SECustomStreamingOutput::SerializeOutputSettings(
 	output->SetDictionary(d);
 }
 
-std::shared_ptr <SECustomStreamingOutput> SECustomStreamingOutput::Create(CefRefPtr<CefValue> input)
+std::shared_ptr<SECustomStreamingOutput> SECustomStreamingOutput::Create(
+	CefRefPtr<CefValue> input,
+	SEVideoCompositionManager *videoCompositionManager,
+	SEAudioCompositionManager *audioCompositionManager,
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 {
 	if (!input.get())
 		return nullptr;
@@ -1107,27 +1131,21 @@ std::shared_ptr <SECustomStreamingOutput> SECustomStreamingOutput::Create(CefRef
 					   : "";
 
 	auto videoComposition =
-		SEGlobalStateManager::GetInstance()
-			->GetVideoCompositionManager()
-			->GetVideoCompositionById(videoCompositionId);
+		videoCompositionManager->GetVideoCompositionById(
+			videoCompositionId);
 
 	auto audioComposition =
-		SEGlobalStateManager::GetInstance()
-			->GetAudioCompositionManager()
-			->GetAudioCompositionById(audioCompositionId);
+		audioCompositionManager->GetAudioCompositionById(
+			audioCompositionId);
 
 	if (!videoComposition.get() && !videoCompositionId.size()) {
 		videoComposition =
-			SEGlobalStateManager::GetInstance()
-				->GetVideoCompositionManager()
-				->GetObsNativeVideoComposition();
+			videoCompositionManager->GetObsNativeVideoComposition();
 	}
 
 	if (!audioComposition.get() && !audioCompositionId.size()) {
 		audioComposition =
-			SEGlobalStateManager::GetInstance()
-				->GetAudioCompositionManager()
-				->GetObsNativeAudioComposition();
+			audioCompositionManager->GetObsNativeAudioComposition();
 	}
 
 	if (!videoComposition) {
@@ -1165,7 +1183,8 @@ std::shared_ptr <SECustomStreamingOutput> SECustomStreamingOutput::Create(CefRef
 
 	auto result = std::make_shared<SECustomStreamingOutput>(
 		id, name, videoComposition, audioComposition, audioTracks,
-		videoEncoders, service, bindToIP, auxData);
+		videoEncoders, service, bindToIP, auxData,
+		hostEventDispatcher);
 
 	result->SetEnabled(isEnabled);
 
@@ -1702,8 +1721,11 @@ void SECustomRecordingOutput::SerializeOutputSettings(
 	output->SetDictionary(m_recordingSettings);
 }
 
-std::shared_ptr<SECustomRecordingOutput>
-SECustomRecordingOutput::Create(CefRefPtr<CefValue> input)
+std::shared_ptr<SECustomRecordingOutput> SECustomRecordingOutput::Create(
+	CefRefPtr<CefValue> input,
+	SEVideoCompositionManager *videoCompositionManager,
+	SEAudioCompositionManager *audioCompositionManager,
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 {
 	if (!input.get())
 		return nullptr;
@@ -1746,14 +1768,12 @@ SECustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 				 : true;
 
 	auto videoComposition =
-		SEGlobalStateManager::GetInstance()
-			->GetVideoCompositionManager()
-			->GetVideoCompositionById(videoCompositionId);
+		videoCompositionManager->GetVideoCompositionById(
+			videoCompositionId);
 
 	auto audioComposition =
-		SEGlobalStateManager::GetInstance()
-			->GetAudioCompositionManager()
-			->GetAudioCompositionById(audioCompositionId);
+		audioCompositionManager->GetAudioCompositionById(
+			audioCompositionId);
 
 	auto recordingSettings = CefDictionaryValue::Create();
 
@@ -1765,16 +1785,12 @@ SECustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 
 	if (!videoComposition.get() && !videoCompositionId.size()) {
 		videoComposition =
-			SEGlobalStateManager::GetInstance()
-				->GetVideoCompositionManager()
-				->GetObsNativeVideoComposition();
+			videoCompositionManager->GetObsNativeVideoComposition();
 	}
 
 	if (!audioComposition.get() && !audioCompositionId.size()) {
 		audioComposition =
-			SEGlobalStateManager::GetInstance()
-				->GetAudioCompositionManager()
-				->GetObsNativeAudioComposition();
+			audioCompositionManager->GetObsNativeAudioComposition();
 	}
 
 	if (!videoComposition.get()) {
@@ -1790,7 +1806,7 @@ SECustomRecordingOutput::Create(CefRefPtr<CefValue> input)
 
 	auto result = std::make_shared<SECustomRecordingOutput>(
 		id, name, recordingSettings, videoComposition, audioComposition,
-		audioTracks, videoEncoders, auxData);
+		audioTracks, videoEncoders, auxData, hostEventDispatcher);
 
 	result->SetEnabled(isEnabled);
 
@@ -2193,8 +2209,11 @@ void SECustomReplayBufferOutput::SerializeOutputSettings(
 	output->SetDictionary(m_recordingSettings);
 }
 
-std::shared_ptr<SECustomReplayBufferOutput>
-SECustomReplayBufferOutput::Create(CefRefPtr<CefValue> input)
+std::shared_ptr<SECustomReplayBufferOutput> SECustomReplayBufferOutput::Create(
+	CefRefPtr<CefValue> input,
+	SEVideoCompositionManager *videoCompositionManager,
+	SEAudioCompositionManager *audioCompositionManager,
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher)
 {
 	if (!input.get())
 		return nullptr;
@@ -2237,14 +2256,12 @@ SECustomReplayBufferOutput::Create(CefRefPtr<CefValue> input)
 				 : true;
 
 	auto videoComposition =
-		SEGlobalStateManager::GetInstance()
-			->GetVideoCompositionManager()
-			->GetVideoCompositionById(videoCompositionId);
+		videoCompositionManager->GetVideoCompositionById(
+			videoCompositionId);
 
 	auto audioComposition =
-		SEGlobalStateManager::GetInstance()
-			->GetAudioCompositionManager()
-			->GetAudioCompositionById(audioCompositionId);
+		audioCompositionManager->GetAudioCompositionById(
+			audioCompositionId);
 
 	auto recordingSettings = CefDictionaryValue::Create();
 
@@ -2256,16 +2273,12 @@ SECustomReplayBufferOutput::Create(CefRefPtr<CefValue> input)
 
 	if (!videoComposition.get() && !videoCompositionId.size()) {
 		videoComposition =
-			SEGlobalStateManager::GetInstance()
-				->GetVideoCompositionManager()
-				->GetObsNativeVideoComposition();
+			videoCompositionManager->GetObsNativeVideoComposition();
 	}
 
 	if (!audioComposition.get() && !audioCompositionId.size()) {
 		audioComposition =
-			SEGlobalStateManager::GetInstance()
-				->GetAudioCompositionManager()
-				->GetObsNativeAudioComposition();
+			audioCompositionManager->GetObsNativeAudioComposition();
 	}
 
 	if (!videoComposition.get()) {
@@ -2281,7 +2294,7 @@ SECustomReplayBufferOutput::Create(CefRefPtr<CefValue> input)
 
 	auto result = std::make_shared<SECustomReplayBufferOutput>(
 		id, name, recordingSettings, videoComposition, audioComposition,
-		audioTracks, videoEncoders, auxData);
+		audioTracks, videoEncoders, auxData, hostEventDispatcher);
 
 	result->SetEnabled(isEnabled);
 
@@ -2318,13 +2331,25 @@ void SECustomReplayBufferOutput::handle_output_saved(
 	auto self =
 		static_cast<SECustomReplayBufferOutput *>(my_data);
 
-	if (!self->GetOutput())
+	//
+	// GetOutput() hands back an owned, SETRACE-counted reference on
+	// every override. This handler used to call it TWICE and discard
+	// both -- once for the null test and once as an argument to
+	// obs_output_get_proc_handler() -- which leaked two obs_output
+	// references and added two to the shutdown reference-count
+	// balance for every replay-buffer save. Acquire once, hold it,
+	// hand the count back: the idiom the rest of this file uses.
+	//
+	OBSOutputAutoRelease output = self->GetOutput();
+	SETRACE_DECREF(output.Get());
+
+	if (!output)
 		return;
 
 	auto eventArgs = CefDictionaryValue::Create();
 
 	calldata_t *proc_cd = SETRACE_ADDREF(calldata_create());
-	auto proc_handler = obs_output_get_proc_handler(self->GetOutput());
+	auto proc_handler = obs_output_get_proc_handler(output);
 	proc_handler_call(proc_handler, "get_last_replay", proc_cd);
 
 	const char *path = nullptr;

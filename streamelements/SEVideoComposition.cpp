@@ -7,7 +7,7 @@
 #include "SEUtils.hpp"
 #include "SEObsSceneManager.hpp"
 #include "SEMessageBus.hpp"
-#include "SEGlobalStateManager.hpp"
+#include "SEMain.hpp"
 
 #include "audio-wrapper-source.h"
 
@@ -92,32 +92,28 @@ static void transition_set_defaults(obs_source_t *transition, uint32_t width,
 	//obs_transition_set_scale_type(transition, OBS_TRANSITION_SCALE_ASPECT);
 }
 
-static void dispatch_external_event(std::string name, std::string args)
+//
+// Both audiences, always. Every announcement in this file went to pages and
+// to external controllers in the same breath, as two calls with identical
+// arguments -- fifteen pairs across the two composition files, which is
+// fifteen chances for them to drift apart. The composition carries what it
+// announces with, so it is what gets passed.
+//
+static void dispatch_event(SEVideoCompositionBase *self, std::string name, std::string args)
 {
-	std::string externalEventName =
-		name.c_str() + 4; /* remove 'host' prefix */
-	externalEventName[0] =
-		tolower(externalEventName[0]); /* lower case first letter */
-
-	SEMessageBus::GetInstance()->NotifyAllExternalEventListeners(
-		SEMessageBus::DEST_ALL_EXTERNAL,
-		SEMessageBus::SOURCE_APPLICATION, "OBS",
-		externalEventName,
-		CefParseJSON(args, JSON_PARSER_ALLOW_TRAILING_COMMAS));
-}
-
-static void dispatch_js_event(std::string name, std::string args)
-{
-	if (!SEGlobalStateManager::IsInstanceAvailable())
+	if (!self)
 		return;
 
-	auto apiServer = SEGlobalStateManager::GetInstance()
-				 ->GetWebsocketApiServer();
+	const auto &services = self->CompositionServices();
 
-	if (!apiServer)
-		return;
+	if (services.hostEventDispatcher) {
+		services.hostEventDispatcher->DispatchJSEventGlobal(name,
+								   args);
+	}
 
-	apiServer->DispatchJSEvent("system", name, args);
+	if (services.messageBus) {
+		services.messageBus->NotifyExternalHostEvent(name, args);
+	}
 }
 
 static void
@@ -144,8 +140,7 @@ dispatch_scene_changed_event(SEVideoCompositionBase *self,
 	std::string name = "hostActiveSceneChanged";
 	std::string args = json.dump();
 
-	dispatch_js_event(name, args);
-	dispatch_external_event(name, args);
+	dispatch_event(self, name, args);
 }
 
 static void
@@ -158,8 +153,7 @@ dispatch_scene_list_changed_event(SEVideoCompositionBase *self)
 	std::string name = "hostSceneListChanged";
 	std::string args = json.dump();
 
-	dispatch_js_event(name, args);
-	dispatch_external_event(name, args);
+	dispatch_event(self, name, args);
 }
 
 static void
@@ -172,8 +166,7 @@ dispatch_scenes_reset_begin_event(SEVideoCompositionBase *self)
 	std::string name = "hostVideoCompositionBeforeScenesReset";
 	std::string args = json.dump();
 
-	dispatch_js_event(name, args);
-	dispatch_external_event(name, args);
+	dispatch_event(self, name, args);
 }
 
 static void
@@ -186,8 +179,7 @@ dispatch_scenes_reset_end_event(SEVideoCompositionBase *self)
 	std::string name = "hostVideoCompositionAfterScenesReset";
 	std::string args = json.dump();
 
-	dispatch_js_event(name, args);
-	dispatch_external_event(name, args);
+	dispatch_event(self, name, args);
 }
 
 static void
@@ -212,8 +204,7 @@ dispatch_scene_item_list_changed_event(SEVideoCompositionBase *self,
 	std::string name = "hostSceneItemListChanged";
 	std::string args = json.dump();
 
-	dispatch_js_event(name, args);
-	dispatch_external_event(name, args);
+	dispatch_event(self, name, args);
 }
 
 static bool
@@ -332,8 +323,7 @@ dispatch_transition_changed_event(SEVideoCompositionBase *self)
 	std::string name = "hostActiveTransitionChanged";
 	std::string args = json.dump();
 
-	dispatch_js_event(name, args);
-	dispatch_external_event(name, args);
+	dispatch_event(self, name, args);
 
 	self->HandleTransitionChanged();
 }
@@ -346,6 +336,27 @@ static void handle_transition_change(void* my_data, calldata_t* cd)
 		static_cast<SEVideoCompositionBase *>(my_data);
 
 	dispatch_transition_changed_event(self);
+}
+
+//
+// The native composition's id, which is what hostActiveSceneChanging has
+// always carried -- even when the transition belongs to a custom
+// composition, because the handler is installed by the base class. Kept
+// as-is rather than reported as self->GetId(): a page may depend on it.
+//
+// For the native composition itself the manager handle is empty -- it is
+// built inside the manager's own constructor -- and its own id is the
+// answer anyway.
+//
+static std::string native_composition_id(SEVideoCompositionBase *self)
+{
+	if (auto manager =
+		    self->CompositionServices().videoCompositionManager.lock()) {
+		if (auto native = manager->GetObsNativeVideoComposition())
+			return native->GetId();
+	}
+
+	return self->GetId();
 }
 
 static void handle_transition_start(void *my_data, calldata_t *cd)
@@ -376,11 +387,7 @@ static void handle_transition_start(void *my_data, calldata_t *cd)
 
 	json11::Json json = json11::Json::object{
 		{"sceneId", GetIdFromPointer(destSource.Get())},
-		{"videoCompositionId",
-		 SEGlobalStateManager::GetInstance()
-			 ->GetVideoCompositionManager()
-			 ->GetObsNativeVideoComposition()
-			 ->GetId()},
+		{"videoCompositionId", native_composition_id(self)},
 		{"name", sourceName},
 		{"width", (int)obs_source_get_width(destSource)},
 		{"height", (int)obs_source_get_height(destSource)}};
@@ -388,8 +395,7 @@ static void handle_transition_start(void *my_data, calldata_t *cd)
 	std::string name = "hostActiveSceneChanging";
 	std::string args = json.dump();
 
-	dispatch_js_event(name, args);
-	dispatch_external_event(name, args);
+	dispatch_event(self, name, args);
 }
 
 static void handle_transition_stop(void *my_data, calldata_t *cd)
@@ -502,8 +508,7 @@ void SEVideoCompositionBase::SetName(std::string name)
 
 	auto json = CefWriteJSON(jsonValue, JSON_WRITER_DEFAULT);
 
-	dispatch_js_event("hostVideoCompositionChanged", json);
-	dispatch_external_event("hostVideoCompositionChanged", json);
+	dispatch_event(this, "hostVideoCompositionChanged", json);
 }
 
 static std::string GetUniqueSceneNameInternal(std::string name, SEVideoCompositionBase::scenes_t& scenes)
@@ -911,8 +916,10 @@ public:
 };
 
 SEObsNativeVideoComposition::SEObsNativeVideoComposition(
-	SEObsNativeVideoComposition::Private)
-	: SEVideoCompositionBase("obs_native_video_composition", "default", "Default")
+	SEObsNativeVideoComposition::Private,
+	const SECompositionServices &compositionServices)
+	: SEVideoCompositionBase("obs_native_video_composition", "default",
+				 "Default", compositionServices)
 {
 	m_rootSource = SETRACE_ADDREF(obs_source_create_private(
 		"cut_transition", "SE.Live OBS main canvas root source",
@@ -990,8 +997,7 @@ void SEObsNativeVideoComposition::SetTransition(
 
 	auto json = CefWriteJSON(jsonValue, JSON_WRITER_DEFAULT);
 
-	dispatch_js_event("hostVideoCompositionChanged", json);
-	dispatch_external_event("hostVideoCompositionChanged", json);
+	dispatch_event(this, "hostVideoCompositionChanged", json);
 }
 
 void SEObsNativeVideoComposition::SetTransitionDurationMilliseconds(
@@ -1004,8 +1010,7 @@ void SEObsNativeVideoComposition::SetTransitionDurationMilliseconds(
 
 	auto json = CefWriteJSON(jsonValue, JSON_WRITER_DEFAULT);
 
-	dispatch_js_event("hostVideoCompositionChanged", json);
-	dispatch_external_event("hostVideoCompositionChanged", json);
+	dispatch_event(this, "hostVideoCompositionChanged", json);
 }
 
 obs_source_t* SEObsNativeVideoComposition::GetTransitionRef()
@@ -1220,8 +1225,10 @@ SECustomVideoComposition::SECustomVideoComposition(
 	std::string name, uint32_t baseWidth, uint32_t baseHeight,
 	std::vector<std::string> &streamingVideoEncoderIds,
 	std::vector<OBSDataAutoRelease> &streamingVideoEncoderSettings,
-	std::vector<OBSDataAutoRelease> &streamingVideoEncoderHotkeyData)
-	: SEVideoCompositionBase("custom_video_composition",  id, name),
+	std::vector<OBSDataAutoRelease> &streamingVideoEncoderHotkeyData,
+	const SECompositionServices &compositionServices)
+	: SEVideoCompositionBase("custom_video_composition", id, name,
+				 compositionServices),
 	  m_baseWidth(baseWidth),
 	  m_baseHeight(baseHeight),
 	  m_transitionDurationMs(0)
@@ -1284,9 +1291,11 @@ SECustomVideoComposition::SECustomVideoComposition(
 	m_currentScene = SETRACE_ADDREF(obs_scene_get_ref(currentScene));
 	m_scenes.push_back(currentScene);
 
-	m_signalHandlerData = new SESignalHandlerData(nullptr, this);
-
-	add_scene_signals(currentScene, m_signalHandlerData);
+	//
+	// The signal data is built by AttachObsSignals(), which Create()
+	// calls once there is a shared_ptr to this object -- see its comment
+	// in the header.
+	//
 
 	transition_set_defaults(m_transition, m_baseWidth, m_baseHeight);
 
@@ -1543,10 +1552,34 @@ void SECustomVideoComposition::SerializeComposition(
 	output->SetDictionary(root);
 }
 
+void SECustomVideoComposition::AttachObsSignals()
+{
+	//
+	// An empty handle for the scene manager, which is the discriminator
+	// SESignalHandlerData reads: this path must not take a strong handle
+	// on the composition manager, because that manager owns this
+	// composition, which owns the signal data.
+	//
+	// weak_from_this() rather than this. The raw back-pointer it used to
+	// be outlived the composition whenever anything still held a
+	// reference to the data, which is the hazard
+	// DetachVideoComposition() exists to narrow; a weak handle answers
+	// it instead of depending on being detached in time.
+	//
+	m_signalHandlerData = new SESignalHandlerData(
+		std::weak_ptr<SEObsSceneManager>(),
+		m_compositionServices.videoCompositionManager,
+		weak_from_this(), m_compositionServices.hostEventDispatcher);
+
+	add_scene_signals(m_currentScene, m_signalHandlerData);
+}
+
 std::shared_ptr<SECustomVideoComposition>
 SECustomVideoComposition::Create(
 	std::string id, std::string name, uint32_t width, uint32_t height,
-       CefRefPtr<CefValue> streamingVideoEncoders, CefRefPtr<CefValue> recordingVideoEncoders)
+	CefRefPtr<CefValue> streamingVideoEncoders,
+	CefRefPtr<CefValue> recordingVideoEncoders,
+	const SECompositionServices &compositionServices)
 {
 
 	std::vector<std::string> streamingVideoEncoderIds;
@@ -1564,7 +1597,8 @@ SECustomVideoComposition::Create(
 		result = Create(id, name, width, height,
 				streamingVideoEncoderIds,
 				streamingVideoEncoderSettings,
-				streamingVideoEncoderHotkeyData);
+				streamingVideoEncoderHotkeyData,
+				compositionServices);
 	} catch(...) {
 		result = nullptr;
 
@@ -1611,6 +1645,13 @@ SECustomVideoComposition::Create(
 
 	if (exception)
 		std::rethrow_exception(exception);
+
+	//
+	// Now, and not inside the constructor: this is the first point at
+	// which there is a shared_ptr for the callback data to be weak about.
+	//
+	if (result)
+		result->AttachObsSignals();
 
 	return result;
 }
@@ -1700,21 +1741,27 @@ void SECustomVideoComposition::SetTransition(
 
 	transition_set_defaults(m_transition, m_baseWidth, m_baseHeight);
 
-	{
-		std::shared_lock<decltype(m_currentSceneMutex)> currentSceneLock(
-			m_currentSceneMutex);
+	//
+	// The current scene is read out BEFORE obs_transition_set() rather
+	// than around it, for the reason spelled out in SetCurrentScene():
+	// obs_transition_set() emits "transition_stop" synchronously when a
+	// transition is already active, and our handler re-enters
+	// m_currentSceneMutex through GetCurrentSceneRef(). Two shared
+	// acquires on one thread deadlock only when a writer arrives between
+	// them, so this site was latent where SetCurrentScene's was certain
+	// -- the same hazard either way.
+	//
+	OBSSceneAutoRelease currentScene =
+		SETRACE_AUTODECREF(GetCurrentSceneRef());
 
-		obs_transition_set(transition,
-				   obs_scene_get_source(m_currentScene));
-	}
+	obs_transition_set(transition, obs_scene_get_source(currentScene));
 
 	auto jsonValue = CefValue::Create();
 	SerializeComposition(jsonValue);
 
 	auto json = CefWriteJSON(jsonValue, JSON_WRITER_DEFAULT);
 
-	dispatch_js_event("hostVideoCompositionChanged", json);
-	dispatch_external_event("hostVideoCompositionChanged", json);
+	dispatch_event(this, "hostVideoCompositionChanged", json);
 	dispatch_transition_changed_event(this);
 }
 
@@ -1743,8 +1790,7 @@ void SECustomVideoComposition::SetTransitionDurationMilliseconds(
 
 	auto json = CefWriteJSON(jsonValue, JSON_WRITER_DEFAULT);
 
-	dispatch_js_event("hostVideoCompositionChanged", json);
-	dispatch_external_event("hostVideoCompositionChanged", json);
+	dispatch_event(this, "hostVideoCompositionChanged", json);
 	dispatch_transition_changed_event(this);
 }
 
@@ -1759,6 +1805,39 @@ bool SECustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 		if (scene == item) {
 			obs_scene_t *oldCurrentScene = nullptr;
 
+			//
+			// m_currentSceneMutex guards m_currentScene and
+			// nothing else, so the swap happens under it while the
+			// libobs calls below happen OUTSIDE it. That is not
+			// tidying: holding it across obs_transition_start()
+			// deadlocks OBS outright.
+			//
+			// obs_transition_set(), which obs_transition_start()
+			// calls, emits "transition_stop" SYNCHRONOUSLY on the
+			// calling thread whenever a transition is already
+			// active (libobs obs-source-transition.c). Our handler
+			// for that signal, handle_transition_stop(), calls
+			// GetCurrentSceneRef(), which takes a shared_lock on
+			// this same mutex. A shared acquire nested inside this
+			// thread's own exclusive hold is undefined behaviour,
+			// and MSVC backs std::shared_mutex with an SRWLOCK
+			// that Microsoft documents as non-recursive: it parks
+			// for ever and the OBS UI thread is gone.
+			//
+			// Reproduced live on a canvas whose transition was a
+			// stinger: the stinger branch below starts the
+			// transition twice, so the second call always finds
+			// one active and always signals. Any transition type
+			// reaches it, though -- two scene changes inside one
+			// transition's duration is enough -- which is why the
+			// fix is the lock scope rather than the stinger
+			// branch. HandleObsSceneCollectionCleanupComplete()
+			// was already written this way.
+			//
+			// Swapping first also means a handler that runs
+			// re-entrantly sees the scene being switched TO, which
+			// is what an active-scene-changed event should name.
+			//
 			{
 				std::unique_lock<decltype(m_currentSceneMutex)>
 					currentSceneLock(m_currentSceneMutex);
@@ -1766,52 +1845,65 @@ bool SECustomVideoComposition::SetCurrentScene(obs_scene_t* scene)
 				if (m_currentScene == scene)
 					return true;
 
-				{
-					auto source = obs_scene_get_source(
-						m_currentScene);
-					if (source) {
-						obs_source_dec_active(source);
-						obs_source_dec_showing(source);
-					}
-				}
+				//
+				// Takes over the reference m_currentScene
+				// held; released at the end of this block.
+				//
+				oldCurrentScene = m_currentScene;
+				m_currentScene = SETRACE_ADDREF(
+					obs_scene_get_ref(scene));
+			}
 
+			if (oldCurrentScene) {
+				auto source =
+					obs_scene_get_source(oldCurrentScene);
+
+				if (source) {
+					obs_source_dec_active(source);
+					obs_source_dec_showing(source);
+				}
+			}
+
+			obs_transition_start(
+				m_transition, OBS_TRANSITION_MODE_AUTO,
+				GetTransitionDurationMilliseconds(),
+				obs_scene_get_source(scene));
+
+			std::string transition_id =
+				obs_source_get_id(m_transition);
+
+			if (transition_id == "obs_stinger_transition") {
+				//
+				// You may be wondering what is going on here.
+				//
+				// Apparently, the STINGER transition, sets it's duration only after the
+				// first call to "obs_transition_start", and does not execute the first time it
+				// is being called, performing a CUT transition instead.
+				//
+				// Calling obs_transition_start() twice seems to fix this issue, and not
+				// interfere with other transition types.
+				//
+				// We will still execute it only for the STINGER transition just to be safe.
+				//
+				// NOTE: this second call is what makes the
+				// re-entrancy described above certain rather
+				// than occasional -- the first call leaves the
+				// transition active, so the second one always
+				// emits "transition_stop" inline.
+				//
 				obs_transition_start(
 					m_transition, OBS_TRANSITION_MODE_AUTO,
 					GetTransitionDurationMilliseconds(),
 					obs_scene_get_source(scene));
+			}
 
-				std::string transition_id =
-					obs_source_get_id(m_transition);
-
-				if (transition_id == "obs_stinger_transition") {
-					//
-					// You may be wondering what is going on here.
-					//
-					// Apparently, the STINGER transition, sets it's duration only after the
-					// first call to "obs_transition_start", and does not execute the first time it
-					// is being called, performing a CUT transition instead.
-					//
-					// Calling obs_transition_start() twice seems to fix this issue, and not
-					// interfere with other transition types.
-					//
-					// We will still execute it only for the STINGER transition just to be safe.
-					//
-					obs_transition_start(
-						m_transition,
-						OBS_TRANSITION_MODE_AUTO,
-						GetTransitionDurationMilliseconds(),
-						obs_scene_get_source(scene));
-				}
-
+			{
 				auto source = obs_scene_get_source(scene);
+
 				if (source) {
 					obs_source_inc_showing(source);
 					obs_source_inc_active(source);
 				}
-
-				oldCurrentScene = m_currentScene;
-				m_currentScene = SETRACE_ADDREF(
-					obs_scene_get_ref(scene));
 			}
 
 			if (oldCurrentScene) {
@@ -1978,8 +2070,7 @@ void SEObsNativeVideoCompositionWithCustomEncoders::SetTransition(
 
 	auto json = CefWriteJSON(jsonValue, JSON_WRITER_DEFAULT);
 
-	dispatch_js_event("hostVideoCompositionChanged", json);
-	dispatch_external_event("hostVideoCompositionChanged", json);
+	dispatch_event(this, "hostVideoCompositionChanged", json);
 }
 
 void SEObsNativeVideoCompositionWithCustomEncoders::
@@ -1992,8 +2083,7 @@ void SEObsNativeVideoCompositionWithCustomEncoders::
 
 	auto json = CefWriteJSON(jsonValue, JSON_WRITER_DEFAULT);
 
-	dispatch_js_event("hostVideoCompositionChanged", json);
-	dispatch_external_event("hostVideoCompositionChanged", json);
+	dispatch_event(this, "hostVideoCompositionChanged", json);
 }
 
 obs_source_t *SEObsNativeVideoCompositionWithCustomEncoders::GetTransitionRef()
@@ -2103,14 +2193,15 @@ SEObsNativeVideoCompositionWithCustomEncoders::GetCurrentSceneRef()
 SEObsNativeVideoCompositionWithCustomEncoders::
 		SEObsNativeVideoCompositionWithCustomEncoders(
 			SEObsNativeVideoCompositionWithCustomEncoders::Private,
-			std::string id,
+		const SECompositionServices &compositionServices, std::string id,
 		std::string name,
 		std::vector<std::string> & streamingVideoEncoderIds,
 		std::vector<OBSDataAutoRelease> & streamingVideoEncoderSettings,
 		std::vector<OBSDataAutoRelease> &
 			streamingVideoEncoderHotkeyData)
 		: SEVideoCompositionBase("custom_obs_native_video_composition",
-						     id, name)
+						     id, name,
+						     compositionServices)
 {
 		if (streamingVideoEncoderIds.size() !=
 			    streamingVideoEncoderSettings.size() ||
@@ -2225,7 +2316,8 @@ std::shared_ptr<SEObsNativeVideoCompositionWithCustomEncoders>
 SEObsNativeVideoCompositionWithCustomEncoders::Create(
 	std::string id, std::string name,
 	CefRefPtr<CefValue> streamingVideoEncoders,
-	CefRefPtr<CefValue> recordingVideoEncoders)
+	CefRefPtr<CefValue> recordingVideoEncoders,
+	const SECompositionServices &compositionServices)
 {
 
 	std::vector<std::string> streamingVideoEncoderIds;
@@ -2243,7 +2335,8 @@ SEObsNativeVideoCompositionWithCustomEncoders::Create(
 	try {
 		result = Create(id, name, streamingVideoEncoderIds,
 				streamingVideoEncoderSettings,
-				streamingVideoEncoderHotkeyData);
+				streamingVideoEncoderHotkeyData,
+				compositionServices);
 	} catch (...) {
 		result = nullptr;
 

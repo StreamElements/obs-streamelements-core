@@ -29,6 +29,13 @@ initialization has already finished.
 so through a configuration some other application installed, which Synapse
 distributes automatically. This is by design, not a defect.
 
+**A Chroma App higher in Synapse's App Priority List takes the device over.**
+When the viewer streams a game that is integrated with Chroma Apps, that app's
+lighting and haptics win and SE.Live's stop being rendered. That is Synapse
+arbitrating between applications rather than anything failing here, and
+**nothing on this page reports it** -- `status` is a closed vocabulary with no
+value for it, so a page cannot tell a pre-empted effect from one that rendered.
+
 ## `getAllRazerWyvrnEvents(ResultCallback<RazerWyvrnEventInfo[]>)`
 
 **Available since API version 6.8**

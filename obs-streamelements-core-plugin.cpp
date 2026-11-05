@@ -38,7 +38,7 @@ using namespace json11;
 /* ========================================================================= */
 
 #include <obs-frontend-api.h>
-#include "streamelements/SEGlobalStateManager.hpp"
+#include "streamelements/SEMain.hpp"
 #include "streamelements/SEUtils.hpp"
 
 /* ========================================================================= */
@@ -257,6 +257,13 @@ static void InstallObsCloseWatcher()
 	     "[obs-streamelements-core]: watching the OBS main window for close");
 }
 
+//
+// The plug-in's root object. Owned here, by the only code with any business
+// owning it: it was a singleton reached through SEMain::GetInstance() from 291
+// places, and the last of those was this file creating it (CORE-757).
+//
+static std::shared_ptr<SEMain> s_main;
+
 void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 {
 	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
@@ -280,9 +287,10 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 		{
 			StreamElementsInitializeScope initializeScope;
 
-			SEGlobalStateManager::GetInstance()
-				->Initialize(static_cast<QMainWindow *>(
-					obs_frontend_get_main_window()));
+			s_main = SEMain::Create();
+
+			s_main->Initialize(static_cast<QMainWindow *>(
+				obs_frontend_get_main_window()));
 		}
 
 		blog(LOG_INFO, "[obs-streamelements-core]: init done");
@@ -320,14 +328,24 @@ void handle_obs_frontend_event(enum obs_frontend_event event, void *data)
 			// tree, so do not run them at all. The process is
 			// exiting and about to be replaced by the updater; a
 			// leak is strictly better than a crash.
-			SEGlobalStateManager::Leak();
+			//
+			// Heap-allocated and never freed, so the refcount
+			// never reaches zero and no destructor runs -- not
+			// now, and not during static destruction at process
+			// exit either. This was SEMain::Leak(),
+			// which could only exist while the instance was
+			// static.
+			if (s_main)
+				new std::shared_ptr<SEMain>(s_main);
+
+			s_main = nullptr;
 			break;
 		}
 
 		// Shutdown StreamElements plug-in
 		blog(LOG_INFO, "[obs-streamelements-core]: shutting down");
 
-		SEGlobalStateManager::Destroy();
+		s_main = nullptr;
 		break;
 	default:
 		break;
@@ -375,6 +393,12 @@ MODULE_EXPORT void obs_module_unload(void)
 #if ENABLE_PLUGIN
 	log_remaining_objects();
 
+	//
+	// The services audit used to run here. It reports from the end of
+	// Shutdown() now, where the container is released: same question,
+	// asked at a point that can tell a service released on time from one
+	// released while the root was being destroyed.
+	//
 	blog(LOG_INFO, "[obs-streamelements-core]: shutdown complete");
 
 	SETRACE_DUMP();

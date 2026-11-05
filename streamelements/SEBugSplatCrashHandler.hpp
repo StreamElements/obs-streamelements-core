@@ -10,9 +10,12 @@
 //
 class SEBugSplatCrashHandler : public SECrashHandler {
 public:
-	SEBugSplatCrashHandler();
+	SEBugSplatCrashHandler(std::shared_ptr<SEConfig> config);
 	virtual ~SEBugSplatCrashHandler();
 
 public:
 	virtual void StopAsyncHangDetection() override;
+
+protected:
+	virtual void OnReportingServicesSet() override;
 };

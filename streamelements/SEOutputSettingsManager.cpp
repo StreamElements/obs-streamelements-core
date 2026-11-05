@@ -65,7 +65,37 @@ void SEOutputSettingsManager::GetEncoderProperties(
 	obs_encoder_release(SETRACE_DECREF(encoder));
 }
 
-void SEOutputSettingsManager::GetAvailableEncoders(CefRefPtr<CefValue>& result, obs_encoder_type* encoder_type)
+//
+// File-static rather than a private member, so that the one obs type left in
+// this class's surface stays on this side of the header. Its three callers
+// are below.
+//
+static void get_available_encoders_of_type(CefRefPtr<CefValue> &result,
+					   obs_encoder_type *encoder_type);
+
+void SEOutputSettingsManager::GetAvailableEncoders(CefRefPtr<CefValue> &result)
+{
+	get_available_encoders_of_type(result, nullptr);
+}
+
+void SEOutputSettingsManager::GetAvailableVideoEncoders(
+	CefRefPtr<CefValue> &result)
+{
+	obs_encoder_type type = OBS_ENCODER_VIDEO;
+
+	get_available_encoders_of_type(result, &type);
+}
+
+void SEOutputSettingsManager::GetAvailableAudioEncoders(
+	CefRefPtr<CefValue> &result)
+{
+	obs_encoder_type type = OBS_ENCODER_AUDIO;
+
+	get_available_encoders_of_type(result, &type);
+}
+
+static void get_available_encoders_of_type(CefRefPtr<CefValue> &result,
+					   obs_encoder_type *encoder_type)
 {
 	SYNC_ACCESS();
 
@@ -155,18 +185,35 @@ bool SEOutputSettingsManager::SetStreamingSettings(CefRefPtr<CefValue> input)
 {
 	SYNC_ACCESS();
 
-	if (!input.get()) return false;
+	// A typed getter on the CefValue model is `if (m_type != VTYPE_X) throw;`,
+	// a bare throw outside a catch -- std::terminate, not an exception. So
+	// every read of this page-supplied value is type-checked first, and note
+	// that !input.get() is a null check rather than a type check: a page's
+	// "x" arrives as a perfectly non-null VTYPE_STRING.
+	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
+		return false;
 	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
 
-	if (!d.get() || !d->HasKey("serverUrl") || !d->HasKey("streamKey")) {
+	if (!d.get() || !d->HasKey("serverUrl") ||
+	    d->GetType("serverUrl") != VTYPE_STRING ||
+	    !d->HasKey("streamKey") ||
+	    d->GetType("streamKey") != VTYPE_STRING) {
 		return false;
 	}
 
 	std::string serverUrl = d->GetString("serverUrl");
 	std::string streamKey = d->GetString("streamKey");
-	bool useAuth = d->HasKey("useAuth") && d->GetBool("useAuth");
-	std::string authUsername = (useAuth && d->HasKey("authUsername")) ? d->GetString("authUsername") : "";
-	std::string authPassword = (useAuth && d->HasKey("authPassword")) ? d->GetString("authPassword") : "";
+	bool useAuth = d->HasKey("useAuth") &&
+		       d->GetType("useAuth") == VTYPE_BOOL &&
+		       d->GetBool("useAuth");
+	std::string authUsername = (useAuth && d->HasKey("authUsername") &&
+				    d->GetType("authUsername") == VTYPE_STRING)
+					   ? d->GetString("authUsername")
+					   : "";
+	std::string authPassword = (useAuth && d->HasKey("authPassword") &&
+				    d->GetType("authPassword") == VTYPE_STRING)
+					   ? d->GetString("authPassword")
+					   : "";
 
 	StopAllOutputs();
 
@@ -220,20 +267,33 @@ bool SEOutputSettingsManager::SetEncodingSettings(CefRefPtr<CefValue> input)
 {
 	SYNC_ACCESS();
 
-	if (!input.get()) return false;
+	// Type-checked for the same reason as SetStreamingSettings above: an
+	// unchecked read of a page-supplied value is std::terminate, and
+	// HasKey() does not check a type -- GetInt(k) is `m_map[k]->GetInt()`,
+	// which lands on the throwing getter.
+	if (!input.get() || input->GetType() != VTYPE_DICTIONARY)
+		return false;
 	CefRefPtr<CefDictionaryValue> d = input->GetDictionary();
 
-	if (!d.get() ||
-		!d->HasKey("videoEncoderId") ||
-		!d->HasKey("videoBitsPerSecond") ||
-		!d->HasKey("videoFrameWidth") ||
-		!d->HasKey("videoFrameHeight") ||
-		!d->HasKey("videoFramesPerSecond") ||
-		!d->HasKey("videoKeyframeIntervalSeconds") ||
-		// !d->HasKey("audioEncoderId") ||
-		!d->HasKey("audioBitsPerSecond") ||
-		!d->HasKey("audioSamplesPerSecond") ||
-		!d->HasKey("audioChannels")) {
+	if (!d.get() || !d->HasKey("videoEncoderId") ||
+	    d->GetType("videoEncoderId") != VTYPE_STRING ||
+	    !d->HasKey("videoBitsPerSecond") ||
+	    d->GetType("videoBitsPerSecond") != VTYPE_INT ||
+	    !d->HasKey("videoFrameWidth") ||
+	    d->GetType("videoFrameWidth") != VTYPE_INT ||
+	    !d->HasKey("videoFrameHeight") ||
+	    d->GetType("videoFrameHeight") != VTYPE_INT ||
+	    !d->HasKey("videoFramesPerSecond") ||
+	    d->GetType("videoFramesPerSecond") != VTYPE_INT ||
+	    !d->HasKey("videoKeyframeIntervalSeconds") ||
+	    d->GetType("videoKeyframeIntervalSeconds") != VTYPE_INT ||
+	    // !d->HasKey("audioEncoderId") ||
+	    !d->HasKey("audioBitsPerSecond") ||
+	    d->GetType("audioBitsPerSecond") != VTYPE_INT ||
+	    !d->HasKey("audioSamplesPerSecond") ||
+	    d->GetType("audioSamplesPerSecond") != VTYPE_INT ||
+	    !d->HasKey("audioChannels") ||
+	    d->GetType("audioChannels") != VTYPE_INT) {
 		return false;
 	}
 

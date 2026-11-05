@@ -1,17 +1,19 @@
 #pragma once
 
+#include "ISEProfilesManager.hpp"
+
 #include "cef-headers.hpp"
 #include <mutex>
 
-class SEProfilesManager {
+class SEProfilesManager : public ISEProfilesManager {
 public:
 	SEProfilesManager();
 	~SEProfilesManager();
 
 public:
-	void SerializeAllProfiles(CefRefPtr<CefValue> &output);
-	void SerializeCurrentProfile(CefRefPtr<CefValue> &output);
-	bool DeserializeCurrentProfileById(CefRefPtr<CefValue> input);
+	void SerializeAllProfiles(CefRefPtr<CefValue> &output) override;
+	void SerializeCurrentProfile(CefRefPtr<CefValue> &output) override;
+	bool DeserializeCurrentProfileById(CefRefPtr<CefValue> input) override;
 
 private:
 	std::recursive_mutex m_mutex;

@@ -1,4 +1,6 @@
 #include "SERazerWyvrnManager.hpp"
+#include "SEHostEventDispatcher.hpp"
+#include "SELocalFilesystemHttpServer.hpp"
 #include "SEUtils.hpp"
 #include "Version.hpp"
 
@@ -97,7 +99,10 @@ std::string ReadWholeFile(const std::string &path)
 
 /* ========================================================================= */
 
-SERazerWyvrnManager::SERazerWyvrnManager()
+SERazerWyvrnManager::SERazerWyvrnManager(
+	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
+	std::shared_ptr<SELocalFilesystemHttpServer> httpServer)
+	: m_hostEventDispatcher(hostEventDispatcher), m_httpServer(httpServer)
 {
 #ifdef SE_ENABLE_WYVRN
 	m_status = SERazerWyvrnStatus::Initializing;
@@ -292,9 +297,9 @@ void SERazerWyvrnManager::DispatchStatusChanged()
 	// wait forever on the overwhelming majority of machines, which have no
 	// Razer software at all.
 	//
-	// DispatchJSEventGlobal already guards on IsInstanceAvailable() and on a
-	// null API server, which matters because ShuttingDown is reached exactly
-	// when the singleton may be going away.
+	// The null check below is the guard: ShuttingDown is reached exactly
+	// when teardown is under way, and this manager holds the dispatcher
+	// rather than fetching the server per call.
 	auto value = SerializeStatus();
 
 	const std::string json =
@@ -308,7 +313,10 @@ void SERazerWyvrnManager::DispatchStatusChanged()
 	blog(LOG_INFO, "obs-streamelements-core: WYVRN: status %s",
 	     json.c_str());
 
-	DispatchJSEventGlobal("hostRazerWyvrnStatusChanged", json);
+	if (m_hostEventDispatcher) {
+		m_hostEventDispatcher->DispatchJSEventGlobal(
+			"hostRazerWyvrnStatusChanged", json);
+	}
 }
 
 /* ========================================================================= */
@@ -338,8 +346,22 @@ void SERazerWyvrnManager::ThreadProc()
 		// cannot be memset or assigned wholesale - value-initialise and
 		// fill the fields.
 		wcscpy_s(info.Title, L"SE.Live");
+		// The note is carried here as well as in the app's
+		// registration with Razer, so the two descriptions match. It
+		// is the one behaviour a page cannot infer from this API:
+		// Synapse arbitrates between applications, and a Chroma App
+		// higher in its App Priority List takes the device over, so
+		// effects going quiet mid-session is that list working rather
+		// than SE.Live failing. Description is wchar_t[1024] and this
+		// is 246 characters, so wcscpy_s has room -- it would invoke
+		// the invalid parameter handler rather than truncate.
 		wcscpy_s(info.Description,
-			 L"StreamElements SE.Live plug-in for OBS Studio");
+			 L"StreamElements SE.Live plug-in for OBS Studio. "
+			 L"Note: When you stream a game that it is integrated "
+			 L"with Chroma Apps, your device's lighting and/or "
+			 L"haptics will be taken over by the corresponding "
+			 L"Chroma app if it is higher in the App Priority "
+			 L"List.");
 		wcscpy_s(info.Author.Name, L"StreamElements");
 		wcscpy_s(info.Author.Contact, L"https://streamelements.com");
 
@@ -684,7 +706,7 @@ SERazerWyvrnManager::FindChromaAsset(const Snapshot &snapshot,
 		// because the config already carries the suffix.
 		const std::string path = kv.second + "/" + effect + ".chroma";
 
-		if (os_file_exists(path.c_str()))
+		if (FileExists(path))
 			return {ChromaDeviceFromEffectName(effect), path};
 
 		break;
@@ -704,7 +726,7 @@ SERazerWyvrnManager::FindHapticAsset(const Snapshot &snapshot,
 
 		const std::string path = kv.second + "/" + effect + ".haps";
 
-		if (os_file_exists(path.c_str()))
+		if (FileExists(path))
 			return path;
 
 		break;
@@ -733,8 +755,8 @@ CefRefPtr<CefValue> SERazerWyvrnManager::SerializeStatus()
 }
 
 CefRefPtr<CefValue> SERazerWyvrnManager::SerializeEventInternal(
-	const Snapshot &snapshot,
-	const SERazerWyvrnEventInfo &event, bool components)
+	const Snapshot &snapshot, const SERazerWyvrnEventInfo &event,
+	bool components, SELocalFilesystemHttpServer *httpServer)
 {
 	CefRefPtr<CefValue> result = CefValue::Create();
 	CefRefPtr<CefDictionaryValue> d = CefDictionaryValue::Create();
@@ -765,13 +787,14 @@ CefRefPtr<CefValue> SERazerWyvrnManager::SerializeEventInternal(
 		// "this event has nothing to do with the keyboard".
 		c->SetString("device", asset.first);
 
-		if (!asset.second.empty()) {
+		if (!asset.second.empty() && httpServer) {
 			// A session-signed URL, so the page fetches the bytes
 			// through the local file server rather than being handed a
 			// raw filesystem path it could not use anyway.
-			c->SetString("url",
-				     CreateSessionSignedAbsolutePathURL(
-					     utf8_to_wstring(asset.second)));
+			c->SetString(
+				"url",
+				httpServer->CreateSessionSignedAbsolutePathURL(
+					utf8_to_wstring(asset.second)));
 		}
 		chroma->SetDictionary(chroma->GetSize(), c);
 	}
@@ -791,9 +814,11 @@ CefRefPtr<CefValue> SERazerWyvrnManager::SerializeEventInternal(
 		const std::string path = FindHapticAsset(snapshot, event.group,
 							 component.effect);
 
-		if (!path.empty()) {
-			h->SetString("url", CreateSessionSignedAbsolutePathURL(
-						    utf8_to_wstring(path)));
+		if (!path.empty() && httpServer) {
+			h->SetString(
+				"url",
+				httpServer->CreateSessionSignedAbsolutePathURL(
+					utf8_to_wstring(path)));
 		}
 
 		CefRefPtr<CefListValue> targeting = CefListValue::Create();
@@ -828,7 +853,8 @@ CefRefPtr<CefValue> SERazerWyvrnManager::SerializeEventInternal(
 CefRefPtr<CefValue> SERazerWyvrnManager::SerializeEvent(
 	const SERazerWyvrnEventInfo &event)
 {
-	return SerializeEventInternal(TakeSnapshot(false), event, true);
+	return SerializeEventInternal(TakeSnapshot(false), event, true,
+				      m_httpServer.get());
 }
 
 CefRefPtr<CefValue>
@@ -838,7 +864,7 @@ SERazerWyvrnManager::SerializeEvents(const std::string &groupFilter,
 {
 	// One snapshot for the whole list. Everything below is lock-free, which
 	// matters because serializing ~4,000 events means thousands of
-	// os_file_exists probes and URL signings; holding the mutex across that
+	// FileExists probes and URL signings; holding the mutex across that
 	// would stall every other caller for the duration.
 	const Snapshot snapshot = TakeSnapshot(false);
 
@@ -855,7 +881,8 @@ SERazerWyvrnManager::SerializeEvents(const std::string &groupFilter,
 
 		list->SetValue(list->GetSize(),
 			       SerializeEventInternal(snapshot, event,
-						      components));
+						      components,
+						      m_httpServer.get()));
 	}
 
 	result->SetList(list);

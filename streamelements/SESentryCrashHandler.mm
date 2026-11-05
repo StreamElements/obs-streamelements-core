@@ -40,6 +40,13 @@ static bool s_initialized = false;
 
 // Contact details from the last report the user filled in. Read once at startup
 // so the crash path never has to touch the config to prefill the prompt.
+//
+// The config PersistContactDetails() writes through. A file static because
+// that function is reached from the consent dialog's callbacks, which carry
+// no context; the constructor puts it here.
+//
+static std::shared_ptr<SEConfig> s_config;
+
 static std::string s_userName;
 static std::string s_userEmail;
 static std::string s_userDiscord;
@@ -198,7 +205,7 @@ static void PersistContactDetails(const std::string &name,
 				  const std::string &email,
 				  const std::string &discord)
 {
-	auto config = SEConfig::GetInstance();
+	auto config = s_config;
 
 	if (!config)
 		return;
@@ -743,7 +750,8 @@ static void InstallChainedHandlers()
 
 /* ================================================================= */
 
-SESentryCrashHandler::SESentryCrashHandler()
+SESentryCrashHandler::SESentryCrashHandler(std::shared_ptr<SEConfig> config)
+	: SECrashHandler(config)
 {
 	if (s_initialized)
 		return;
@@ -882,7 +890,7 @@ SESentryCrashHandler::SESentryCrashHandler()
 		return;
 	}
 
-	auto config = SEConfig::GetInstance();
+	s_config = config;
 
 	if (config) {
 		s_userName = config->GetCrashReportUserName();
@@ -1029,6 +1037,14 @@ SESentryCrashHandler::SESentryCrashHandler()
 	blog(LOG_INFO,
 	     "obs-streamelements-core: StreamElements: Crash Handler: Sentry initialized (%s)",
 	     release.c_str());
+}
+
+void SESentryCrashHandler::OnReportingServicesSet()
+{
+	if (s_crashContext) {
+		s_crashContext->SetPerformanceHistoryTracker(
+			m_performanceHistoryTracker);
+	}
 }
 
 void SESentryCrashHandler::StopAsyncHangDetection()

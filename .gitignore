@@ -67,6 +67,10 @@ tags
 #*.xml
 *.ipch
 *.css
+# ... but a stylesheet under docs/ is source, not build output. The blanket
+# rule above is from the Visual Studio era (see its neighbours) and would
+# silently drop the architecture site's figure styling.
+!docs/**/*.css
 *.xslt
 *.aps
 *.suo
