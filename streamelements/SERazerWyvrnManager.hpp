@@ -214,18 +214,23 @@ private:
 	void DispatchStatusChanged();
 
 	//
-	// One analytics event per terminal branch of the init decision,
-	// fired from the SDK thread the moment the outcome is known.
+	// Reports the result of the CoreInitSDK call, and nothing else:
+	// succeeded or refused, fired from the SDK thread the moment the
+	// call returns.
+	//
+	// Two outcomes, so two names, and the two paths that have no result
+	// to report do not call this at all -- a machine with no Razer SDK
+	// installed, and a shutdown that discarded the answer. Both are in
+	// the log instead.
 	//
 	// `status` is SERazerWyvrnStatusToString's spelling, deliberately:
 	// that closed vocabulary already goes to page JavaScript through
 	// getHostCapabilities and hostRazerWyvrnStatusChanged, and to the
-	// log. A fourth spelling of one set would be a thing to keep in step
+	// log. A third spelling of one set would be a thing to keep in step
 	// for nothing.
 	//
 	void TrackInitOutcome(const char *eventName, const char *status,
-			      bool sdkInitialized, int initApi, long initResult,
-			      double initMs);
+			      long initResult, double initMs);
 
 	// Caller must hold m_mutex.
 	void ScanEventsLocked();

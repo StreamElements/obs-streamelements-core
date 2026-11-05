@@ -404,20 +404,12 @@ void SERazerWyvrnManager::ThreadProc()
 		     initMs);
 
 		//
-		// Neither success nor failure: OBS closed inside the ~3.3 s
-		// CoreInitSDK takes, so the outcome was thrown away. Reported
-		// anyway, and under a name of its own, because without it the
-		// other two do not add up to the number of sessions that
-		// started an init -- and a gap with no event in it reads as
-		// telemetry being lost rather than as a cohort.
+		// Deliberately no analytics event. The only thing reported is
+		// the CoreInitSDK call's result, and on this path that result
+		// was discarded: shutdown had already published ShuttingDown,
+		// so whatever the call answered is not the state this session
+		// ended in. The log line above is the record of it.
 		//
-		// sdkInitialized is the datum worth having here: it says
-		// whether init had finished by the time we gave up on it.
-		//
-		TrackInitOutcome("se_live_razer_wyvrn_init_abandoned",
-				 SERazerWyvrnStatusToString(
-					 SERazerWyvrnStatus::ShuttingDown),
-				 sdkInitialized, initApi, initResult, initMs);
 	} else if (sdkInitialized) {
 		// The SDK asks for ~100 ms of settling before the first
 		// SetEventName.
@@ -430,9 +422,9 @@ void SERazerWyvrnManager::ThreadProc()
 		     initMs);
 
 		TrackInitOutcome(
-			"se_live_razer_wyvrn_initialized",
+			"selive_razer_wyvrn_initialized",
 			SERazerWyvrnStatusToString(SERazerWyvrnStatus::Ok),
-			true, initApi, initResult, initMs);
+			initResult, initMs);
 	} else {
 		SERazerWyvrnStatus status =
 			SERazerWyvrnStatus::InitFailed;
@@ -457,14 +449,26 @@ void SERazerWyvrnManager::ThreadProc()
 		     (unsigned long)initResult, initMs);
 
 		//
-		// The ordinary outcome on most machines, and the reason this
-		// event is worth having: dllNotFound is the count of users
-		// with no Razer software at all, which is the denominator for
-		// every question anyone will ask about this integration.
+		// Reported only when CoreInitSDK actually ran and refused.
 		//
-		TrackInitOutcome("se_live_razer_wyvrn_init_failed",
-				 SERazerWyvrnStatusToString(status), false,
-				 initApi, initResult, initMs);
+		// dllNotFound covers both the case where InitAPI never loaded
+		// the API layer -- so CoreInitSDK was never called at all --
+		// and the case where it answered RZRESULT_DLL_NOT_FOUND.
+		// Either way there is no Razer SDK on the machine to
+		// initialise, which is the ordinary state of the overwhelming
+		// majority of them and not an outcome of ours;
+		// dllInvalidSignature is the same thing with a DLL present but
+		// unusable. Neither is a failure and neither is reported.
+		//
+		// InitFailed is the one that is: the DLL was there, it was
+		// Razer-signed, and CoreInitSDK refused anyway. That is a
+		// small cohort by construction, and reporting the other two
+		// beside it would bury it.
+		//
+		if (status == SERazerWyvrnStatus::InitFailed)
+			TrackInitOutcome("selive_razer_wyvrn_init_failed",
+					 SERazerWyvrnStatusToString(status),
+					 initResult, initMs);
 	}
 
 	// --- service the mailbox --------------------------------------------
@@ -556,9 +560,8 @@ void SERazerWyvrnManager::ThreadProc()
 // the file arrive together. One more of them would buy nothing.
 //
 void SERazerWyvrnManager::TrackInitOutcome(const char *eventName,
-					   const char *status,
-					   bool sdkInitialized, int initApi,
-					   long initResult, double initMs)
+					   const char *status, long initResult,
+					   double initMs)
 {
 	//
 	// Null-tolerant on purpose. The root always passes the analytics
@@ -574,12 +577,18 @@ void SERazerWyvrnManager::TrackInitOutcome(const char *eventName,
 
 	fields.push_back(json11::Json::array{"wyvrn_status", status});
 
-	fields.push_back(json11::Json::array{
-		"wyvrn_sdk_initialized", sdkInitialized ? "true" : "false"});
-
-	snprintf(buf, sizeof(buf), "%d", initApi);
-	fields.push_back(json11::Json::array{"wyvrn_init_api_result", buf});
-
+	//
+	// Three fields, not five. Narrowing this to the CoreInitSDK result
+	// made two of the original set degenerate, in two different ways,
+	// and both went: an InitAPI result that is 0 at every surviving call
+	// site, because CoreInitSDK only runs when InitAPI succeeded; and a
+	// boolean that did vary but said nothing the event name had not
+	// already said. Either way somebody would have filtered on it.
+	//
+	// wyvrn_status is the third of that kind and stays, because it is
+	// the join: the log line spells the same status, so a support log
+	// and a dashboard row meet on one value.
+	//
 	//
 	// Hex, in the same spelling as the log line the branches above
 	// write, so a support log and a dashboard row can be matched up by
@@ -599,8 +608,8 @@ void SERazerWyvrnManager::TrackInitOutcome(const char *eventName,
 	//
 	// trackEvent, not trackSynchronousEvent: the queue is drained by the
 	// analytics manager's own destructor, which runs after Shutdown()
-	// has joined this thread, so even the abandoned path's event is
-	// posted without blocking the SDK thread on the network.
+	// has joined this thread, so the event is posted without blocking
+	// the SDK thread on the network.
 	//
 	m_analyticsEventsManager->trackEvent(eventName, json11::Json::object{},
 					     fields);

@@ -172,26 +172,31 @@ only read after. `check_the_analytics_managers_shared_state_is_atomic`
 pins all three.
 
 **The one subsystem whose outcome only analytics can see is Razer WYVRN.**
-Init runs on the SDK thread seconds after startup and ends in “unavailable”
-on the overwhelming majority of machines, so the status reaches a page that
-may not be loaded yet and a `LOG_INFO` line on the user’s own disk — neither
-of which answers how many users have Razer software at all.
-`SERazerWyvrnManager::TrackInitOutcome` fires one event per terminal branch
-of the init decision:
+Init runs on the SDK thread seconds after startup, so how it went reaches a
+page that may not be loaded yet and a `LOG_INFO` line on the user’s own
+disk, and nothing else. `SERazerWyvrnManager::TrackInitOutcome` reports the
+result of the `CoreInitSDK` call, and only that:
 
 | event | when |
 | --- | --- |
-| `se_live_razer_wyvrn_initialized` | `CoreInitSDK` succeeded |
-| `se_live_razer_wyvrn_init_failed` | it did not — `dllNotFound`, `dllInvalidSignature` or `initFailed` |
-| `se_live_razer_wyvrn_init_abandoned` | OBS closed inside the ~3.3 s init, so the outcome was discarded |
+| `selive_razer_wyvrn_initialized` | `CoreInitSDK` succeeded |
+| `selive_razer_wyvrn_init_failed` | it ran and refused — status `initFailed` |
 
 Each carries `wyvrn_status` from the same `SERazerWyvrnStatusToString` the
-page and the log use, plus `wyvrn_sdk_initialized`,
-`wyvrn_init_api_result`, `wyvrn_rzresult` and `wyvrn_init_duration_ms`. The
-third event exists so the three add up to the number of sessions that
-started an init; without it the gap reads as telemetry being lost rather
-than as a cohort. `check_wyvrn_init_reports_its_outcome_to_analytics` pins
-all three names and the field set.
+page and the log use, plus `wyvrn_rzresult` (hex, spelled as the log line
+spells it) and `wyvrn_init_duration_ms`.
+
+**Two paths deliberately report nothing**, because neither has a
+`CoreInitSDK` result: a machine with no usable Razer SDK — `dllNotFound`,
+which also covers `InitAPI` never loading the API layer, and
+`dllInvalidSignature` — and a shutdown that arrived while the call was still
+running and discarded its answer. So these two events **do not** add up to
+the number of sessions, by design: the denominator is machines that have
+the SDK, not machines that run SE.Live. Reporting the no-SDK case beside
+`initFailed` would bury the few genuinely broken installations under the
+overwhelming majority that simply have no Razer software.
+`check_wyvrn_init_reports_its_outcome_to_analytics` pins both names, the
+field set, and both silences.
 
 ## Related
 

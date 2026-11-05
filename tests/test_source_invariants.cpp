@@ -1748,20 +1748,28 @@ static void check_wyvrn_sdk_calls_stay_on_the_sdk_thread()
 	      "that ran CoreInitSDK");
 }
 
-// --- WYVRN init must report its outcome to analytics, on every path.
+// --- WYVRN must report the CoreInitSDK result, and only that.
 //
-// Init runs on the SDK thread seconds after startup and ends in
-// "unavailable" on the overwhelming majority of machines. Nothing outside
-// that machine can see it: the status goes to a page that may not be loaded
-// yet and to a LOG_INFO line on the user's own disk. The analytics event is
-// the only answer to "how many of our users have Razer software, and for how
-// many of those does the SDK actually come up" -- so a terminal branch that
-// forgets to fire one does not fail anything. It silently removes a cohort
-// from the numbers, and the gap reads as telemetry being lost.
+// Init runs on the SDK thread seconds after startup, and nothing outside the
+// machine can see how it went: the status goes to a page that may not be
+// loaded yet and to a LOG_INFO line on the user's own disk. The analytics
+// event is the only answer to "for the users who have the Razer SDK, does it
+// actually come up" -- so a branch that forgets to fire one does not fail
+// anything. It silently removes a cohort from the numbers.
 //
-// Three outcomes, three names: success, failure, and abandoned (OBS closed
-// inside the ~3.3 s CoreInitSDK takes, so the outcome was discarded). The
-// count is exact rather than a floor, so a fourth outcome -- or a second
+// Two outcomes, two names, two calls: CoreInitSDK succeeded, or it ran and
+// refused.
+//
+// The scope is the point, and it is the half a later change undoes while
+// believing it is widening the coverage. Two paths deliberately report
+// NOTHING, because neither has a CoreInitSDK result to report: a machine
+// with no usable Razer SDK -- dllNotFound, which also covers InitAPI never
+// loading the API layer, and dllInvalidSignature -- and a shutdown that
+// arrived while the call was still running and discarded its answer. So
+// these two events do not add up to the number of sessions, by design, and
+// the failure call has to stay guarded on InitFailed.
+//
+// The count is exact rather than a floor, so a third event -- or a second
 // kind of WYVRN telemetry on this thread -- has to come here and say what it
 // is.
 static void check_wyvrn_init_reports_its_outcome_to_analytics()
@@ -1786,13 +1794,12 @@ static void check_wyvrn_init_reports_its_outcome_to_analytics()
 		return;
 
 	//
-	// One name per terminal branch. They are the dashboard's
+	// One name per CoreInitSDK outcome. They are the dashboard's
 	// vocabulary, so a rename here is a rename there.
 	//
 	const char *const names[] = {
-		"\"se_live_razer_wyvrn_initialized\"",
-		"\"se_live_razer_wyvrn_init_failed\"",
-		"\"se_live_razer_wyvrn_init_abandoned\"",
+		"\"selive_razer_wyvrn_initialized\"",
+		"\"selive_razer_wyvrn_init_failed\"",
 	};
 
 	for (const char *const name : names) {
@@ -1800,7 +1807,7 @@ static void check_wyvrn_init_reports_its_outcome_to_analytics()
 
 		const std::string missing =
 			std::string("WYVRN: ThreadProc() must report ") + name +
-			" -- a terminal init branch with no analytics event "
+			" -- a CoreInitSDK outcome with no analytics event "
 			"drops that whole cohort out of the numbers, and "
 			"nothing else fails";
 
@@ -1834,19 +1841,43 @@ static void check_wyvrn_init_reports_its_outcome_to_analytics()
 		      vocabulary.c_str());
 	}
 
-	check(count_matches(body, std::regex(R"(TrackInitOutcome\()")) == 3,
-	      "WYVRN: exactly three TrackInitOutcome calls, one per terminal "
-	      "branch of the init decision. A fourth outcome -- or a second "
-	      "kind of WYVRN telemetry on this thread -- needs its own name "
-	      "and this count raised deliberately");
+	check(count_matches(body, std::regex(R"(TrackInitOutcome\()")) == 2,
+	      "WYVRN: exactly two TrackInitOutcome calls, one per CoreInitSDK "
+	      "outcome. A third event -- or a second kind of WYVRN telemetry "
+	      "on this thread -- needs its own name and this count raised "
+	      "deliberately");
+
+	//
+	// The scope, pinned, because it is what a later change undoes while
+	// believing it is widening the coverage: no usable SDK on the
+	// machine is not a CoreInitSDK result and must not be reported.
+	// Without the guard the failure event becomes a count of machines
+	// with no Razer software, which is most of them, and the few
+	// genuinely broken installations vanish inside it.
+	//
+	check(body.find("if (status == SERazerWyvrnStatus::InitFailed)") !=
+		      std::string::npos,
+	      "WYVRN: the failure event must stay guarded on InitFailed. "
+	      "dllNotFound and dllInvalidSignature mean there was no SDK to "
+	      "initialise -- not a failure, and not an outcome of the "
+	      "CoreInitSDK call this telemetry reports");
+
+	//
+	// And the other silent path: a shutdown that arrived mid-call
+	// discarded the answer, so there is no result to report.
+	//
+	check(body.find("ShuttingDown),") == std::string::npos,
+	      "WYVRN: the abandoned path must not report an outcome -- "
+	      "shutdown discarded whatever CoreInitSDK answered, so there is "
+	      "no result to send and ShuttingDown is not one");
 
 	//
 	// The field set is what a dashboard selects on. Renaming one here
 	// empties a column there rather than failing anything.
 	//
 	const char *const fields[] = {
-		"\"wyvrn_status\"",           "\"wyvrn_sdk_initialized\"",
-		"\"wyvrn_init_api_result\"",  "\"wyvrn_rzresult\"",
+		"\"wyvrn_status\"",
+		"\"wyvrn_rzresult\"",
 		"\"wyvrn_init_duration_ms\"",
 	};
 

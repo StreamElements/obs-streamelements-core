@@ -154,7 +154,7 @@ clang-format joining it onto one.
 | --- | --- |
 | `check_wyvrn_signature_check_is_not_disabled` | the SDK is never built with its Authenticode verification skipped |
 | `check_wyvrn_sdk_calls_stay_on_the_sdk_thread` | the Chroma stack beneath it is COM-based and thread-affine |
-| `check_wyvrn_init_reports_its_outcome_to_analytics` | all three terminal branches of the init decision fire their event, with the status vocabulary and field names the dashboard reads — a branch that forgets one removes a cohort from the numbers and fails nothing |
+| `check_wyvrn_init_reports_its_outcome_to_analytics` | both `CoreInitSDK` outcomes fire their event with the status vocabulary and field names the dashboard reads, and the two paths with no result — no usable SDK, and a shutdown mid-call — stay silent |
 | `check_the_analytics_managers_shared_state_is_atomic` | the event timestamp and the workers' stop flag are atomic, the timestamp is taken with one `exchange`, and the subtraction after it is guarded against the reordering that `exchange` does not prevent |
 
 ### Portability and hygiene
