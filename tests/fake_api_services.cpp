@@ -462,8 +462,8 @@ FakeApiServices::FakeApiServices()
 	// appears a few seconds into the session, after a 3.3-second SDK
 	// init. A test that wants the absent case clears this.
 	//
-	services->razerWyvrnManager =
-		std::make_shared<SERazerWyvrnManager>(nullptr, nullptr);
+	services->razerWyvrnManager = std::make_shared<SERazerWyvrnManager>(
+		nullptr, nullptr, nullptr);
 #endif
 }
 

@@ -1,6 +1,7 @@
 #include "SERazerWyvrnManager.hpp"
 #include "SEHostEventDispatcher.hpp"
 #include "SELocalFilesystemHttpServer.hpp"
+#include "ISEAnalyticsEventsManager.hpp"
 #include "SEUtils.hpp"
 #include "Version.hpp"
 
@@ -10,6 +11,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cstdio>
 #include <fstream>
 #include <sstream>
 
@@ -101,8 +103,11 @@ std::string ReadWholeFile(const std::string &path)
 
 SERazerWyvrnManager::SERazerWyvrnManager(
 	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
-	std::shared_ptr<SELocalFilesystemHttpServer> httpServer)
-	: m_hostEventDispatcher(hostEventDispatcher), m_httpServer(httpServer)
+	std::shared_ptr<SELocalFilesystemHttpServer> httpServer,
+	std::shared_ptr<ISEAnalyticsEventsManager> analyticsEventsManager)
+	: m_hostEventDispatcher(hostEventDispatcher),
+	  m_httpServer(httpServer),
+	  m_analyticsEventsManager(analyticsEventsManager)
 {
 #ifdef SE_ENABLE_WYVRN
 	m_status = SERazerWyvrnStatus::Initializing;
@@ -397,6 +402,22 @@ void SERazerWyvrnManager::ThreadProc()
 		blog(LOG_INFO,
 		     "obs-streamelements-core: WYVRN: shutdown arrived during init (%.0f ms); tearing down",
 		     initMs);
+
+		//
+		// Neither success nor failure: OBS closed inside the ~3.3 s
+		// CoreInitSDK takes, so the outcome was thrown away. Reported
+		// anyway, and under a name of its own, because without it the
+		// other two do not add up to the number of sessions that
+		// started an init -- and a gap with no event in it reads as
+		// telemetry being lost rather than as a cohort.
+		//
+		// sdkInitialized is the datum worth having here: it says
+		// whether init had finished by the time we gave up on it.
+		//
+		TrackInitOutcome("se_live_razer_wyvrn_init_abandoned",
+				 SERazerWyvrnStatusToString(
+					 SERazerWyvrnStatus::ShuttingDown),
+				 sdkInitialized, initApi, initResult, initMs);
 	} else if (sdkInitialized) {
 		// The SDK asks for ~100 ms of settling before the first
 		// SetEventName.
@@ -407,6 +428,11 @@ void SERazerWyvrnManager::ThreadProc()
 		blog(LOG_INFO,
 		     "obs-streamelements-core: WYVRN: initialized in %.0f ms",
 		     initMs);
+
+		TrackInitOutcome(
+			"se_live_razer_wyvrn_initialized",
+			SERazerWyvrnStatusToString(SERazerWyvrnStatus::Ok),
+			true, initApi, initResult, initMs);
 	} else {
 		SERazerWyvrnStatus status =
 			SERazerWyvrnStatus::InitFailed;
@@ -429,6 +455,16 @@ void SERazerWyvrnManager::ThreadProc()
 		     "obs-streamelements-core: WYVRN: unavailable (%s, InitAPI=%d, RZRESULT=0x%08lX) after %.0f ms",
 		     SERazerWyvrnStatusToString(status), initApi,
 		     (unsigned long)initResult, initMs);
+
+		//
+		// The ordinary outcome on most machines, and the reason this
+		// event is worth having: dllNotFound is the count of users
+		// with no Razer software at all, which is the denominator for
+		// every question anyone will ask about this integration.
+		//
+		TrackInitOutcome("se_live_razer_wyvrn_init_failed",
+				 SERazerWyvrnStatusToString(status), false,
+				 initApi, initResult, initMs);
 	}
 
 	// --- service the mailbox --------------------------------------------
@@ -498,6 +534,76 @@ void SERazerWyvrnManager::ThreadProc()
 	if (initApi == 0)
 		WyvrnSDK::WyvrnAPI::UninitAPI();
 #endif
+}
+
+/* ========================================================================= */
+
+//
+// One analytics event per init outcome, fired from the SDK thread the
+// moment the outcome is known.
+//
+// Why this exists at all: WYVRN init is invisible from outside the machine
+// it runs on. It happens on its own thread seconds after startup, it ends
+// in "unavailable" on the overwhelming majority of machines, and the only
+// record is a LOG_INFO line on the user's own disk. So "how many of our
+// users have Razer software, and of those, for how many does the SDK
+// actually come up" was a question nothing could answer.
+//
+// Unguarded, like SetStatus and DispatchStatusChanged beside it. CMake adds
+// this whole file to the sources only when STREAMELEMENTS_ENABLE_WYVRN is on,
+// and forces that off on every platform but Windows, so the per-function
+// #ifdef SE_ENABLE_WYVRN in here cannot actually be false -- the define and
+// the file arrive together. One more of them would buy nothing.
+//
+void SERazerWyvrnManager::TrackInitOutcome(const char *eventName,
+					   const char *status,
+					   bool sdkInitialized, int initApi,
+					   long initResult, double initMs)
+{
+	//
+	// Null-tolerant on purpose. The root always passes the analytics
+	// manager, but this runs on the SDK thread, where a null dereference
+	// takes OBS down with no dialog and nothing pointing at this file.
+	//
+	if (!m_analyticsEventsManager)
+		return;
+
+	char buf[64];
+
+	json11::Json::array fields = json11::Json::array{};
+
+	fields.push_back(json11::Json::array{"wyvrn_status", status});
+
+	fields.push_back(json11::Json::array{
+		"wyvrn_sdk_initialized", sdkInitialized ? "true" : "false"});
+
+	snprintf(buf, sizeof(buf), "%d", initApi);
+	fields.push_back(json11::Json::array{"wyvrn_init_api_result", buf});
+
+	//
+	// Hex, in the same spelling as the log line the branches above
+	// write, so a support log and a dashboard row can be matched up by
+	// eye rather than by arithmetic.
+	//
+	snprintf(buf, sizeof(buf), "0x%08lX", (unsigned long)initResult);
+	fields.push_back(json11::Json::array{"wyvrn_rzresult", buf});
+
+	snprintf(buf, sizeof(buf), "%.0f", initMs);
+	fields.push_back(json11::Json::array{"wyvrn_init_duration_ms", buf});
+
+	//
+	// Fields rather than props, following se_live_initialized -- the
+	// nearest precedent, and for the same reason: these are the detail
+	// of one event, not dimensions shared across the whole surface.
+	// Every value is a string, which is what the pipeline takes.
+	//
+	// trackEvent, not trackSynchronousEvent: the queue is drained by the
+	// analytics manager's own destructor, which runs after Shutdown()
+	// has joined this thread, so even the abandoned path's event is
+	// posted without blocking the SDK thread on the network.
+	//
+	m_analyticsEventsManager->trackEvent(eventName, json11::Json::object{},
+					     fields);
 }
 
 /* ========================================================================= */

@@ -1748,6 +1748,129 @@ static void check_wyvrn_sdk_calls_stay_on_the_sdk_thread()
 	      "that ran CoreInitSDK");
 }
 
+// --- WYVRN init must report its outcome to analytics, on every path.
+//
+// Init runs on the SDK thread seconds after startup and ends in
+// "unavailable" on the overwhelming majority of machines. Nothing outside
+// that machine can see it: the status goes to a page that may not be loaded
+// yet and to a LOG_INFO line on the user's own disk. The analytics event is
+// the only answer to "how many of our users have Razer software, and for how
+// many of those does the SDK actually come up" -- so a terminal branch that
+// forgets to fire one does not fail anything. It silently removes a cohort
+// from the numbers, and the gap reads as telemetry being lost.
+//
+// Three outcomes, three names: success, failure, and abandoned (OBS closed
+// inside the ~3.3 s CoreInitSDK takes, so the outcome was discarded). The
+// count is exact rather than a floor, so a fourth outcome -- or a second
+// kind of WYVRN telemetry on this thread -- has to come here and say what it
+// is.
+static void check_wyvrn_init_reports_its_outcome_to_analytics()
+{
+	const std::string src = strip_line_comments(
+		slurp("streamelements/SERazerWyvrnManager.cpp"));
+
+	const std::string body =
+		function_body(src, "void SERazerWyvrnManager::ThreadProc()");
+
+	check(!body.empty(),
+	      "WYVRN: SERazerWyvrnManager.cpp must define ThreadProc()");
+
+	const std::string track = function_body(
+		src, "void SERazerWyvrnManager::TrackInitOutcome(");
+
+	check(!track.empty(),
+	      "WYVRN: SERazerWyvrnManager.cpp must define TrackInitOutcome() "
+	      "-- it is the only report of how init went");
+
+	if (body.empty() || track.empty())
+		return;
+
+	//
+	// One name per terminal branch. They are the dashboard's
+	// vocabulary, so a rename here is a rename there.
+	//
+	const char *const names[] = {
+		"\"se_live_razer_wyvrn_initialized\"",
+		"\"se_live_razer_wyvrn_init_failed\"",
+		"\"se_live_razer_wyvrn_init_abandoned\"",
+	};
+
+	for (const char *const name : names) {
+		const auto at = body.find(name);
+
+		const std::string missing =
+			std::string("WYVRN: ThreadProc() must report ") + name +
+			" -- a terminal init branch with no analytics event "
+			"drops that whole cohort out of the numbers, and "
+			"nothing else fails";
+
+		check(at != std::string::npos, missing.c_str());
+
+		if (at == std::string::npos)
+			continue;
+
+		//
+		// Per call site rather than as a count over the whole body:
+		// the log line beside these calls also spells
+		// SERazerWyvrnStatusToString, so a count would stay satisfied
+		// by it while one call quietly passed a literal of its own.
+		// The argument list runs to the first ");" after the name --
+		// no argument in any of the three ends in one.
+		//
+		const auto close = body.find(");", at);
+		const std::string call = close == std::string::npos
+						 ? std::string()
+						 : body.substr(at, close - at);
+
+		const std::string vocabulary =
+			std::string("WYVRN: the ") + name +
+			" event must take its status from "
+			"SERazerWyvrnStatusToString, so the dashboard, "
+			"getHostCapabilities and the log cannot disagree "
+			"about what a status means";
+
+		check(call.find("SERazerWyvrnStatusToString") !=
+			      std::string::npos,
+		      vocabulary.c_str());
+	}
+
+	check(count_matches(body, std::regex(R"(TrackInitOutcome\()")) == 3,
+	      "WYVRN: exactly three TrackInitOutcome calls, one per terminal "
+	      "branch of the init decision. A fourth outcome -- or a second "
+	      "kind of WYVRN telemetry on this thread -- needs its own name "
+	      "and this count raised deliberately");
+
+	//
+	// The field set is what a dashboard selects on. Renaming one here
+	// empties a column there rather than failing anything.
+	//
+	const char *const fields[] = {
+		"\"wyvrn_status\"",           "\"wyvrn_sdk_initialized\"",
+		"\"wyvrn_init_api_result\"",  "\"wyvrn_rzresult\"",
+		"\"wyvrn_init_duration_ms\"",
+	};
+
+	for (const char *const field : fields) {
+		const std::string msg =
+			std::string(
+				"WYVRN: TrackInitOutcome must still send ") +
+			field +
+			" -- it is a column in the dashboard, and renaming "
+			"it here empties that column instead of failing";
+
+		check(track.find(field) != std::string::npos, msg.c_str());
+	}
+
+	//
+	// Guarded, because this runs on the SDK thread: a null dereference
+	// there takes OBS down with no dialog and nothing pointing here.
+	//
+	check(track.find("if (!m_analyticsEventsManager)") != std::string::npos,
+	      "WYVRN: TrackInitOutcome must bail on a null analytics manager "
+	      "-- it runs on the SDK thread, where a crash has no dialog and "
+	      "no obvious cause");
+}
+
 // --- A null config_t must never reach libobs.
 //
 // GetConfig() ignored config_open()'s result. libobs leaves the config null
@@ -6554,6 +6677,7 @@ int main()
 	check_no_config_handle_escapes_an_early_return();
 	check_wyvrn_signature_check_is_not_disabled();
 	check_wyvrn_sdk_calls_stay_on_the_sdk_thread();
+	check_wyvrn_init_reports_its_outcome_to_analytics();
 	check_config_never_hands_libobs_a_null_config();
 	check_rejected_signature_stops_the_handler();
 	check_injected_services_are_not_also_fetched_globally();

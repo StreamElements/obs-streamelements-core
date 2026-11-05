@@ -158,6 +158,32 @@ analytics and owns the machine and session unique ids that
 performance series the crash context attaches. Both are among the three the
 crash handler keeps alive.
 
+Events are queued and posted by a worker pool, so a caller never blocks on
+the network. `trackSynchronousEvent` is the exception and exists for the
+crash handler, which has no later to post from.
+
+**The one subsystem whose outcome only analytics can see is Razer WYVRN.**
+Init runs on the SDK thread seconds after startup and ends in “unavailable”
+on the overwhelming majority of machines, so the status reaches a page that
+may not be loaded yet and a `LOG_INFO` line on the user’s own disk — neither
+of which answers how many users have Razer software at all.
+`SERazerWyvrnManager::TrackInitOutcome` fires one event per terminal branch
+of the init decision:
+
+| event | when |
+| --- | --- |
+| `se_live_razer_wyvrn_initialized` | `CoreInitSDK` succeeded |
+| `se_live_razer_wyvrn_init_failed` | it did not — `dllNotFound`, `dllInvalidSignature` or `initFailed` |
+| `se_live_razer_wyvrn_init_abandoned` | OBS closed inside the ~3.3 s init, so the outcome was discarded |
+
+Each carries `wyvrn_status` from the same `SERazerWyvrnStatusToString` the
+page and the log use, plus `wyvrn_sdk_initialized`,
+`wyvrn_init_api_result`, `wyvrn_rzresult` and `wyvrn_init_duration_ms`. The
+third event exists so the three add up to the number of sessions that
+started an init; without it the gap reads as telemetry being lost rather
+than as a cohort. `check_wyvrn_init_reports_its_outcome_to_analytics` pins
+all three names and the field set.
+
 ## Related
 
 - [Module lifecycle](module-lifecycle.md) — why the dump needs a clean exit.

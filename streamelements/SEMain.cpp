@@ -579,8 +579,13 @@ void SEMain::Initialize(QMainWindow *obs_main_window)
 	// Start() returns immediately. CoreInitSDK costs a flat ~3.3 s, so it
 	// runs on the manager's own SDK thread and OBS start is not delayed;
 	// WYVRN becomes available a few seconds into the session.
+	//
+	// The analytics manager is handed in so the init outcome is reported:
+	// it is constructed far earlier in this function, which is what makes
+	// that possible without reordering anything.
 	m_razerWyvrnManager = std::make_shared<SERazerWyvrnManager>(
-		m_hostEventDispatcher, m_localFilesystemHttpServer);
+		m_hostEventDispatcher, m_localFilesystemHttpServer,
+		m_analyticsEventsManager);
 	m_razerWyvrnManager->Start();
 #endif
 
