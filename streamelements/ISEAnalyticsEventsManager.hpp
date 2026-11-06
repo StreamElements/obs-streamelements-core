@@ -4,8 +4,9 @@
 
 //
 // What a container consumer needs from the analytics events manager: one
-// method, and only SEAuxiliaryControlsBuilder calls it -- the docks menu
-// records a show/hide click.
+// method, and two callers: SEAuxiliaryControlsBuilder, where the docks menu
+// records a show/hide click, and SERazerWyvrnManager, which reports how SDK
+// init went from its own thread.
 //
 // This one is NOT reached by any handler body, which is why it was missing
 // from the set of fifteen interfaces that preceded it: that set was derived

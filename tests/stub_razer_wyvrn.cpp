@@ -6,8 +6,8 @@
 // It is a concrete class with a clean header (stdlib, its own config types
 // and the CefValue model, nothing else), so the same trick as
 // stub_concrete_services.cpp applies: the test supplies the definitions and
-// they report through the one journal. Its constructor's two parameters are
-// forward-declared types, so FakeApiServices passes null for both.
+// they report through the one journal. Its constructor's three parameters
+// are forward-declared types, so FakeApiServices passes null for all three.
 //
 // Only what the handler bodies call is defined here. The real class has a
 // dedicated SDK thread, a 3.3-second init and a 30 FPS cap, none of which a
@@ -22,7 +22,8 @@
 
 SERazerWyvrnManager::SERazerWyvrnManager(
 	std::shared_ptr<SEHostEventDispatcher>,
-	std::shared_ptr<SELocalFilesystemHttpServer>)
+	std::shared_ptr<SELocalFilesystemHttpServer>,
+	std::shared_ptr<ISEAnalyticsEventsManager>)
 {
 }
 

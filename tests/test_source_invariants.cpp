@@ -1748,6 +1748,244 @@ static void check_wyvrn_sdk_calls_stay_on_the_sdk_thread()
 	      "that ran CoreInitSDK");
 }
 
+// --- WYVRN must report the CoreInitSDK result, and only that.
+//
+// Init runs on the SDK thread seconds after startup, and nothing outside the
+// machine can see how it went: the status goes to a page that may not be
+// loaded yet and to a LOG_INFO line on the user's own disk. The analytics
+// event is the only answer to "for the users who have the Razer SDK, does it
+// actually come up" -- so a branch that forgets to fire one does not fail
+// anything. It silently removes a cohort from the numbers.
+//
+// Two outcomes, two names, two calls: CoreInitSDK succeeded, or it ran and
+// refused.
+//
+// The scope is the point, and it is the half a later change undoes while
+// believing it is widening the coverage. Two paths deliberately report
+// NOTHING, because neither has a CoreInitSDK result to report: a machine
+// with no usable Razer SDK -- dllNotFound, which also covers InitAPI never
+// loading the API layer, and dllInvalidSignature -- and a shutdown that
+// arrived while the call was still running and discarded its answer. So
+// these two events do not add up to the number of sessions, by design, and
+// the failure call has to stay guarded on InitFailed.
+//
+// The count is exact rather than a floor, so a third event -- or a second
+// kind of WYVRN telemetry on this thread -- has to come here and say what it
+// is.
+static void check_wyvrn_init_reports_its_outcome_to_analytics()
+{
+	const std::string src = strip_line_comments(
+		slurp("streamelements/SERazerWyvrnManager.cpp"));
+
+	const std::string body =
+		function_body(src, "void SERazerWyvrnManager::ThreadProc()");
+
+	check(!body.empty(),
+	      "WYVRN: SERazerWyvrnManager.cpp must define ThreadProc()");
+
+	const std::string track = function_body(
+		src, "void SERazerWyvrnManager::TrackInitOutcome(");
+
+	check(!track.empty(),
+	      "WYVRN: SERazerWyvrnManager.cpp must define TrackInitOutcome() "
+	      "-- it is the only report of how init went");
+
+	if (body.empty() || track.empty())
+		return;
+
+	//
+	// One name per CoreInitSDK outcome. They are the dashboard's
+	// vocabulary, so a rename here is a rename there.
+	//
+	const char *const names[] = {
+		"\"selive_razer_wyvrn_initialized\"",
+		"\"selive_razer_wyvrn_init_failed\"",
+	};
+
+	for (const char *const name : names) {
+		const auto at = body.find(name);
+
+		const std::string missing =
+			std::string("WYVRN: ThreadProc() must report ") + name +
+			" -- a CoreInitSDK outcome with no analytics event "
+			"drops that whole cohort out of the numbers, and "
+			"nothing else fails";
+
+		check(at != std::string::npos, missing.c_str());
+
+		if (at == std::string::npos)
+			continue;
+
+		//
+		// Per call site rather than as a count over the whole body:
+		// the log line beside these calls also spells
+		// SERazerWyvrnStatusToString, so a count would stay satisfied
+		// by it while one call quietly passed a literal of its own.
+		// The argument list runs to the first ");" after the name --
+		// no argument in any of the three ends in one.
+		//
+		const auto close = body.find(");", at);
+		const std::string call = close == std::string::npos
+						 ? std::string()
+						 : body.substr(at, close - at);
+
+		const std::string vocabulary =
+			std::string("WYVRN: the ") + name +
+			" event must take its status from "
+			"SERazerWyvrnStatusToString, so the dashboard, "
+			"getHostCapabilities and the log cannot disagree "
+			"about what a status means";
+
+		check(call.find("SERazerWyvrnStatusToString") !=
+			      std::string::npos,
+		      vocabulary.c_str());
+	}
+
+	check(count_matches(body, std::regex(R"(TrackInitOutcome\()")) == 2,
+	      "WYVRN: exactly two TrackInitOutcome calls, one per CoreInitSDK "
+	      "outcome. A third event -- or a second kind of WYVRN telemetry "
+	      "on this thread -- needs its own name and this count raised "
+	      "deliberately");
+
+	//
+	// The scope, pinned, because it is what a later change undoes while
+	// believing it is widening the coverage: no usable SDK on the
+	// machine is not a CoreInitSDK result and must not be reported.
+	// Without the guard the failure event becomes a count of machines
+	// with no Razer software, which is most of them, and the few
+	// genuinely broken installations vanish inside it.
+	//
+	check(body.find("if (status == SERazerWyvrnStatus::InitFailed)") !=
+		      std::string::npos,
+	      "WYVRN: the failure event must stay guarded on InitFailed. "
+	      "dllNotFound and dllInvalidSignature mean there was no SDK to "
+	      "initialise -- not a failure, and not an outcome of the "
+	      "CoreInitSDK call this telemetry reports");
+
+	//
+	// And the other silent path: a shutdown that arrived mid-call
+	// discarded the answer, so there is no result to report.
+	//
+	check(body.find("ShuttingDown),") == std::string::npos,
+	      "WYVRN: the abandoned path must not report an outcome -- "
+	      "shutdown discarded whatever CoreInitSDK answered, so there is "
+	      "no result to send and ShuttingDown is not one");
+
+	//
+	// The field set is what a dashboard selects on. Renaming one here
+	// empties a column there rather than failing anything.
+	//
+	const char *const fields[] = {
+		"\"wyvrn_status\"",
+		"\"wyvrn_rzresult\"",
+		"\"wyvrn_init_duration_ms\"",
+	};
+
+	for (const char *const field : fields) {
+		const std::string msg =
+			std::string(
+				"WYVRN: TrackInitOutcome must still send ") +
+			field +
+			" -- it is a column in the dashboard, and renaming "
+			"it here empties that column instead of failing";
+
+		check(track.find(field) != std::string::npos, msg.c_str());
+	}
+
+	//
+	// Guarded, because this runs on the SDK thread: a null dereference
+	// there takes OBS down with no dialog and nothing pointing here.
+	//
+	check(track.find("if (!m_analyticsEventsManager)") != std::string::npos,
+	      "WYVRN: TrackInitOutcome must bail on a null analytics manager "
+	      "-- it runs on the SDK thread, where a crash has no dialog and "
+	      "no obvious cause");
+}
+
+// --- The analytics manager's shared state must be atomic.
+//
+// AddRawEvent runs on whichever thread tracked the event: the Qt thread for
+// a dock click or the plug-in's own startup event, the crash handler's
+// thread for the synchronous one, and the WYVRN SDK thread for the init
+// outcome (CORE-1022). It used to read m_prevEventTime and then assign it,
+// which across those threads is unsynchronised access to a non-atomic
+// uint64_t -- undefined behaviour, not merely a stale "seconds since
+// previous event". The same shape sat three lines away on the worker
+// threads' stop flag, which the destructor writes while four of them read
+// it in a loop condition nothing stops the compiler hoisting.
+//
+// Both are atomic now, and the timestamp is taken with one exchange so that
+// "the previous event's time" is a value exactly one event can claim. An
+// atomic load followed by an atomic store would remove the undefined
+// behaviour and keep the lost update, which is why this check names the
+// operation and not just the type.
+static void check_the_analytics_managers_shared_state_is_atomic()
+{
+	const std::string hpp = strip_line_comments(
+		slurp("streamelements/SEAnalyticsEventsManager.hpp"));
+	const std::string cpp = strip_line_comments(
+		slurp("streamelements/SEAnalyticsEventsManager.cpp"));
+
+	check(hpp.find("std::atomic<uint64_t> m_prevEventTime") !=
+		      std::string::npos,
+	      "analytics: m_prevEventTime must be std::atomic<uint64_t> -- "
+	      "AddRawEvent read-modify-writes it from the Qt thread, the "
+	      "WYVRN SDK thread and the crash handler's thread");
+
+	check(hpp.find("std::atomic<bool> m_taskConsumersKeepRunning") !=
+		      std::string::npos,
+	      "analytics: m_taskConsumersKeepRunning must be "
+	      "std::atomic<bool> -- the destructor writes it while the four "
+	      "worker threads read it in their loop condition, and a plain "
+	      "bool there lets the compiler hoist the load out of the loop");
+
+	//
+	// m_startTime is the one that only looked shared: written once in the
+	// constructor's initialiser list and read-only afterwards. const
+	// keeps that true by compiler, and distinguishes it from the two
+	// above without a reader having to go and check.
+	//
+	check(hpp.find("const uint64_t m_startTime") != std::string::npos,
+	      "analytics: m_startTime must stay const -- it is read from "
+	      "every tracking thread, and const is what says it is never "
+	      "written after construction");
+
+	const std::string body = function_body(
+		cpp, "void SEAnalyticsEventsManager::AddRawEvent(");
+
+	check(!body.empty(),
+	      "analytics: AddRawEvent() not found -- has it moved?");
+
+	if (body.empty())
+		return;
+
+	check(body.find("m_prevEventTime.exchange(") != std::string::npos,
+	      "analytics: AddRawEvent must take the previous event's time "
+	      "with a single m_prevEventTime.exchange(now). A load followed "
+	      "by a store lets two events claim the same previous time and "
+	      "lose one of the updates");
+
+	//
+	// Negative: no separate write left anywhere in the body.
+	//
+	check(body.find("m_prevEventTime =") == std::string::npos &&
+		      body.find("m_prevEventTime.store(") == std::string::npos,
+	      "analytics: AddRawEvent must not write m_prevEventTime "
+	      "separately from reading it -- that is the same lost update "
+	      "with only the undefined behaviour taken out");
+
+	//
+	// And the underflow guard, which is the half a reviewer deletes as
+	// redundant.
+	//
+	check(body.find("now > prevEventTime") != std::string::npos,
+	      "analytics: the seconds-since-previous-event subtraction must "
+	      "be guarded. The exchange orders the writes, not the "
+	      "os_gettime_ns calls before them, so the losing thread can see "
+	      "a previous time later than its own now -- unsigned, that is "
+	      "~584 years instead of 0");
+}
+
 // --- A null config_t must never reach libobs.
 //
 // GetConfig() ignored config_open()'s result. libobs leaves the config null
@@ -6554,6 +6792,8 @@ int main()
 	check_no_config_handle_escapes_an_early_return();
 	check_wyvrn_signature_check_is_not_disabled();
 	check_wyvrn_sdk_calls_stay_on_the_sdk_thread();
+	check_wyvrn_init_reports_its_outcome_to_analytics();
+	check_the_analytics_managers_shared_state_is_atomic();
 	check_config_never_hands_libobs_a_null_config();
 	check_rejected_signature_stops_the_handler();
 	check_injected_services_are_not_also_fetched_globally();

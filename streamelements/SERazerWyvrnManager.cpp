@@ -1,6 +1,7 @@
 #include "SERazerWyvrnManager.hpp"
 #include "SEHostEventDispatcher.hpp"
 #include "SELocalFilesystemHttpServer.hpp"
+#include "ISEAnalyticsEventsManager.hpp"
 #include "SEUtils.hpp"
 #include "Version.hpp"
 
@@ -10,6 +11,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cstdio>
 #include <fstream>
 #include <sstream>
 
@@ -101,8 +103,11 @@ std::string ReadWholeFile(const std::string &path)
 
 SERazerWyvrnManager::SERazerWyvrnManager(
 	std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
-	std::shared_ptr<SELocalFilesystemHttpServer> httpServer)
-	: m_hostEventDispatcher(hostEventDispatcher), m_httpServer(httpServer)
+	std::shared_ptr<SELocalFilesystemHttpServer> httpServer,
+	std::shared_ptr<ISEAnalyticsEventsManager> analyticsEventsManager)
+	: m_hostEventDispatcher(hostEventDispatcher),
+	  m_httpServer(httpServer),
+	  m_analyticsEventsManager(analyticsEventsManager)
 {
 #ifdef SE_ENABLE_WYVRN
 	m_status = SERazerWyvrnStatus::Initializing;
@@ -397,6 +402,14 @@ void SERazerWyvrnManager::ThreadProc()
 		blog(LOG_INFO,
 		     "obs-streamelements-core: WYVRN: shutdown arrived during init (%.0f ms); tearing down",
 		     initMs);
+
+		//
+		// Deliberately no analytics event. The only thing reported is
+		// the CoreInitSDK call's result, and on this path that result
+		// was discarded: shutdown had already published ShuttingDown,
+		// so whatever the call answered is not the state this session
+		// ended in. The log line above is the record of it.
+		//
 	} else if (sdkInitialized) {
 		// The SDK asks for ~100 ms of settling before the first
 		// SetEventName.
@@ -407,6 +420,11 @@ void SERazerWyvrnManager::ThreadProc()
 		blog(LOG_INFO,
 		     "obs-streamelements-core: WYVRN: initialized in %.0f ms",
 		     initMs);
+
+		TrackInitOutcome(
+			"selive_razer_wyvrn_initialized",
+			SERazerWyvrnStatusToString(SERazerWyvrnStatus::Ok),
+			initResult, initMs);
 	} else {
 		SERazerWyvrnStatus status =
 			SERazerWyvrnStatus::InitFailed;
@@ -429,6 +447,28 @@ void SERazerWyvrnManager::ThreadProc()
 		     "obs-streamelements-core: WYVRN: unavailable (%s, InitAPI=%d, RZRESULT=0x%08lX) after %.0f ms",
 		     SERazerWyvrnStatusToString(status), initApi,
 		     (unsigned long)initResult, initMs);
+
+		//
+		// Reported only when CoreInitSDK actually ran and refused.
+		//
+		// dllNotFound covers both the case where InitAPI never loaded
+		// the API layer -- so CoreInitSDK was never called at all --
+		// and the case where it answered RZRESULT_DLL_NOT_FOUND.
+		// Either way there is no Razer SDK on the machine to
+		// initialise, which is the ordinary state of the overwhelming
+		// majority of them and not an outcome of ours;
+		// dllInvalidSignature is the same thing with a DLL present but
+		// unusable. Neither is a failure and neither is reported.
+		//
+		// InitFailed is the one that is: the DLL was there, it was
+		// Razer-signed, and CoreInitSDK refused anyway. That is a
+		// small cohort by construction, and reporting the other two
+		// beside it would bury it.
+		//
+		if (status == SERazerWyvrnStatus::InitFailed)
+			TrackInitOutcome("selive_razer_wyvrn_init_failed",
+					 SERazerWyvrnStatusToString(status),
+					 initResult, initMs);
 	}
 
 	// --- service the mailbox --------------------------------------------
@@ -498,6 +538,81 @@ void SERazerWyvrnManager::ThreadProc()
 	if (initApi == 0)
 		WyvrnSDK::WyvrnAPI::UninitAPI();
 #endif
+}
+
+/* ========================================================================= */
+
+//
+// One analytics event per init outcome, fired from the SDK thread the
+// moment the outcome is known.
+//
+// Why this exists at all: WYVRN init is invisible from outside the machine
+// it runs on. It happens on its own thread seconds after startup, it ends
+// in "unavailable" on the overwhelming majority of machines, and the only
+// record is a LOG_INFO line on the user's own disk. So "how many of our
+// users have Razer software, and of those, for how many does the SDK
+// actually come up" was a question nothing could answer.
+//
+// Unguarded, like SetStatus and DispatchStatusChanged beside it. CMake adds
+// this whole file to the sources only when STREAMELEMENTS_ENABLE_WYVRN is on,
+// and forces that off on every platform but Windows, so the per-function
+// #ifdef SE_ENABLE_WYVRN in here cannot actually be false -- the define and
+// the file arrive together. One more of them would buy nothing.
+//
+void SERazerWyvrnManager::TrackInitOutcome(const char *eventName,
+					   const char *status, long initResult,
+					   double initMs)
+{
+	//
+	// Null-tolerant on purpose. The root always passes the analytics
+	// manager, but this runs on the SDK thread, where a null dereference
+	// takes OBS down with no dialog and nothing pointing at this file.
+	//
+	if (!m_analyticsEventsManager)
+		return;
+
+	char buf[64];
+
+	json11::Json::array fields = json11::Json::array{};
+
+	fields.push_back(json11::Json::array{"wyvrn_status", status});
+
+	//
+	// Three fields, not five. Narrowing this to the CoreInitSDK result
+	// made two of the original set degenerate, in two different ways,
+	// and both went: an InitAPI result that is 0 at every surviving call
+	// site, because CoreInitSDK only runs when InitAPI succeeded; and a
+	// boolean that did vary but said nothing the event name had not
+	// already said. Either way somebody would have filtered on it.
+	//
+	// wyvrn_status is the third of that kind and stays, because it is
+	// the join: the log line spells the same status, so a support log
+	// and a dashboard row meet on one value.
+	//
+	//
+	// Hex, in the same spelling as the log line the branches above
+	// write, so a support log and a dashboard row can be matched up by
+	// eye rather than by arithmetic.
+	//
+	snprintf(buf, sizeof(buf), "0x%08lX", (unsigned long)initResult);
+	fields.push_back(json11::Json::array{"wyvrn_rzresult", buf});
+
+	snprintf(buf, sizeof(buf), "%.0f", initMs);
+	fields.push_back(json11::Json::array{"wyvrn_init_duration_ms", buf});
+
+	//
+	// Fields rather than props, following se_live_initialized -- the
+	// nearest precedent, and for the same reason: these are the detail
+	// of one event, not dimensions shared across the whole surface.
+	// Every value is a string, which is what the pipeline takes.
+	//
+	// trackEvent, not trackSynchronousEvent: the queue is drained by the
+	// analytics manager's own destructor, which runs after Shutdown()
+	// has joined this thread, so the event is posted without blocking
+	// the SDK thread on the network.
+	//
+	m_analyticsEventsManager->trackEvent(eventName, json11::Json::object{},
+					     fields);
 }
 
 /* ========================================================================= */

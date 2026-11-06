@@ -158,6 +158,46 @@ analytics and owns the machine and session unique ids that
 performance series the crash context attaches. Both are among the three the
 crash handler keeps alive.
 
+Events are queued and posted by a worker pool, so a caller never blocks on
+the network. `trackSynchronousEvent` is the exception and exists for the
+crash handler, which has no later to post from.
+
+**`trackEvent` is called from several threads at once** — the Qt thread,
+the WYVRN SDK thread, the crash handler's — so the manager's two pieces
+of shared mutable state are `std::atomic`: the previous event's
+timestamp, taken with a single `exchange` so that one event claims it,
+and the worker threads' stop flag, which the destructor writes while they
+read it. `m_startTime` is `const` instead, because it is written once and
+only read after. `check_the_analytics_managers_shared_state_is_atomic`
+pins all three.
+
+**The one subsystem whose outcome only analytics can see is Razer WYVRN.**
+Init runs on the SDK thread seconds after startup, so how it went reaches a
+page that may not be loaded yet and a `LOG_INFO` line on the user’s own
+disk, and nothing else. `SERazerWyvrnManager::TrackInitOutcome` reports the
+result of the `CoreInitSDK` call, and only that:
+
+| event | when |
+| --- | --- |
+| `selive_razer_wyvrn_initialized` | `CoreInitSDK` succeeded |
+| `selive_razer_wyvrn_init_failed` | it ran and refused — status `initFailed` |
+
+Each carries `wyvrn_status` from the same `SERazerWyvrnStatusToString` the
+page and the log use, plus `wyvrn_rzresult` (hex, spelled as the log line
+spells it) and `wyvrn_init_duration_ms`.
+
+**Two paths deliberately report nothing**, because neither has a
+`CoreInitSDK` result: a machine with no usable Razer SDK — `dllNotFound`,
+which also covers `InitAPI` never loading the API layer, and
+`dllInvalidSignature` — and a shutdown that arrived while the call was still
+running and discarded its answer. So these two events **do not** add up to
+the number of sessions, by design: the denominator is machines that have
+the SDK, not machines that run SE.Live. Reporting the no-SDK case beside
+`initFailed` would bury the few genuinely broken installations under the
+overwhelming majority that simply have no Razer software.
+`check_wyvrn_init_reports_its_outcome_to_analytics` pins both names, the
+field set, and both silences.
+
 ## Related
 
 - [Module lifecycle](module-lifecycle.md) — why the dump needs a clean exit.

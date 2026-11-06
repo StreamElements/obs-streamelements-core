@@ -80,6 +80,7 @@ SERazerWyvrnStatusToString(SERazerWyvrnStatus status);
 
 class SEHostEventDispatcher;
 class SELocalFilesystemHttpServer;
+class ISEAnalyticsEventsManager;
 
 class SERazerWyvrnManager {
 public:
@@ -87,9 +88,24 @@ public:
 	// The HTTP server signs the asset URLs SerializeEventInternal hands a
 	// page, which was this class's last reach for global state.
 	//
+	// The analytics manager reports the init outcome, and nothing else.
+	// That outcome is the one thing about this subsystem nobody can see
+	// from outside the machine it runs on: init happens on a thread of
+	// its own seconds after startup and ends in "unavailable" on the
+	// overwhelming majority of machines, so the status reaches a page
+	// that may not be loaded yet and a log line on the user's own disk.
+	// Neither answers how many users have Razer software at all.
+	//
+	// Forward-declared like the other two. ISEAnalyticsEventsManager.hpp
+	// pulls in json11, and this header is deliberately clean enough to
+	// compile in tests/ -- stdlib, its own config types and the CefValue
+	// model, nothing else.
+	//
 	SERazerWyvrnManager(
 		std::shared_ptr<SEHostEventDispatcher> hostEventDispatcher,
-		std::shared_ptr<SELocalFilesystemHttpServer> httpServer);
+		std::shared_ptr<SELocalFilesystemHttpServer> httpServer,
+		std::shared_ptr<ISEAnalyticsEventsManager>
+			analyticsEventsManager);
 	~SERazerWyvrnManager();
 
 	//
@@ -191,10 +207,30 @@ public:
 private:
 	std::shared_ptr<SEHostEventDispatcher> m_hostEventDispatcher;
 	std::shared_ptr<SELocalFilesystemHttpServer> m_httpServer;
+	std::shared_ptr<ISEAnalyticsEventsManager> m_analyticsEventsManager;
 
 	void ThreadProc();
 	void SetStatus(SERazerWyvrnStatus status, long result);
 	void DispatchStatusChanged();
+
+	//
+	// Reports the result of the CoreInitSDK call, and nothing else:
+	// succeeded or refused, fired from the SDK thread the moment the
+	// call returns.
+	//
+	// Two outcomes, so two names, and the two paths that have no result
+	// to report do not call this at all -- a machine with no Razer SDK
+	// installed, and a shutdown that discarded the answer. Both are in
+	// the log instead.
+	//
+	// `status` is SERazerWyvrnStatusToString's spelling, deliberately:
+	// that closed vocabulary already goes to page JavaScript through
+	// getHostCapabilities and hostRazerWyvrnStatusChanged, and to the
+	// log. A third spelling of one set would be a thing to keep in step
+	// for nothing.
+	//
+	void TrackInitOutcome(const char *eventName, const char *status,
+			      long initResult, double initMs);
 
 	// Caller must hold m_mutex.
 	void ScanEventsLocked();
