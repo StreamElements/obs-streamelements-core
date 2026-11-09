@@ -230,7 +230,7 @@ jobs:
           azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
           endpoint: https://eus.codesigning.azure.net/
           signing-account-name: SE-Live
-          certificate-profile-name: SE-Live
+          certificate-profile-name: StreamElements
           files-folder: '${{ github.workspace }}'
           files-folder-filter: exe,dll,msi
           file-digest: SHA256
