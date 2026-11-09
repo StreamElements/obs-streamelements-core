@@ -179,8 +179,8 @@ result of the `CoreInitSDK` call, and only that:
 
 | event | when |
 | --- | --- |
-| `selive_razer_wyvrn_initialized` | `CoreInitSDK` succeeded |
-| `selive_razer_wyvrn_init_failed` | it ran and refused — status `initFailed` |
+| `se_live_razer_wyvrn_initialized` | `CoreInitSDK` succeeded |
+| `se_live_razer_wyvrn_init_failed` | it ran and refused — status `initFailed` |
 
 Each carries `wyvrn_status` from the same `SERazerWyvrnStatusToString` the
 page and the log use, plus `wyvrn_rzresult` (hex, spelled as the log line

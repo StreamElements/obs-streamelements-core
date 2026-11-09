@@ -422,7 +422,7 @@ void SERazerWyvrnManager::ThreadProc()
 		     initMs);
 
 		TrackInitOutcome(
-			"selive_razer_wyvrn_initialized",
+			"se_live_razer_wyvrn_initialized",
 			SERazerWyvrnStatusToString(SERazerWyvrnStatus::Ok),
 			initResult, initMs);
 	} else {
@@ -466,7 +466,7 @@ void SERazerWyvrnManager::ThreadProc()
 		// beside it would bury it.
 		//
 		if (status == SERazerWyvrnStatus::InitFailed)
-			TrackInitOutcome("selive_razer_wyvrn_init_failed",
+			TrackInitOutcome("se_live_razer_wyvrn_init_failed",
 					 SERazerWyvrnStatusToString(status),
 					 initResult, initMs);
 	}
