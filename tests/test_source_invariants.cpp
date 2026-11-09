@@ -6756,6 +6756,87 @@ static void check_the_dispatch_gate_opens_before_the_first_browser_widget()
 	}
 }
 
+// --- The Windows module must be packaged where the installer reads it.
+//
+// OBS 33.0.0 moved every in-tree MODULE_LIBRARY (upstream 4ab64d00d,
+// "cmake: Change name of core module output directory"): the binary to
+// core/<module>/ and its data from data/obs-plugins/<module> to
+// core/<module>/data beside it. That is right for a module built *into*
+// OBS and wrong for us -- SE.Live ships as a third-party plugin, and OBS
+// 33 loads those from the legacy pair, unconditionally, in
+// frontend/plugin-manager/PluginModuleLoader_Windows.cpp:
+//
+//     kLegacyPortableBinaryPath  ../../obs-plugins/64bit/
+//     kLegacyPortableDataPath    ../../data/obs-plugins/%module%
+//
+// which is exactly what main.nsi writes into the user's OBS. So
+// CMakeLists.txt relocates the rundir output back to that pair, and the
+// zip CI builds from the rundir has to carry it. When it did not, every
+// File line in main.nsi that reads those paths found an empty directory,
+// which is a hard NSIS error: packaging aborted, no installer was
+// produced, and no release could be cut.
+//
+// This is pinned here because nothing else can catch it. The windows
+// job's artifact upload is gated on `github.event_name != 'pull_request'`
+// and the installer downloads one mutable "latest" path, so
+// build-installer on a PR packages whatever master last published --
+// never the PR's own output. Every pre-merge run of the OBS 33.0.1 pin
+// therefore validated the *old* 32.x artifact against the new workflow
+// and passed; the break appeared only once master itself overwrote the
+// bucket. A green installer check on a PR says nothing about that PR.
+//
+// It is also the thing that makes CORE-2972 -- moving to
+// ProgramData\obs-studio\plugins\<module>, which OBS 34 requires -- a
+// deliberate edit rather than a silent one. Deleting this block fails
+// here, and whoever replaces it has to say what the new destinations are
+// and change main.nsi in the same breath.
+static void check_the_windows_module_is_packaged_where_the_installer_reads_it()
+{
+	auto cmake = slurp("CMakeLists.txt");
+
+	// Anchored on the copy of the module itself, because the three
+	// crash-runtime copies above it already name this destination --
+	// matching the path alone would pass with the module left under
+	// core/, which is the exact failure being pinned.
+	std::regex dll(
+		R"([$]<TARGET_FILE:obs-streamelements-core>"\s*"[^"]*rundir/[$]<CONFIG(URATION)?>/obs-plugins/[$][{]BITS[}]bit)");
+
+	std::regex pdb(
+		R"([$]<TARGET_PDB_FILE:obs-streamelements-core>"\s*"[^"]*rundir/[$]<CONFIG(URATION)?>/obs-plugins/[$][{]BITS[}]bit)");
+
+	std::regex data(
+		R"(copy_directory\s*"[^"]*/data"\s*"[^"]*rundir/[$]<CONFIG(URATION)?>/data/obs-plugins/obs-streamelements-core")");
+
+	// And the 33.x location has to be removed, not merely duplicated
+	// away from: obs-module.c skips a module already loaded under the
+	// same name, so shipping both copies would load one and report the
+	// other as skipped, with enumeration order deciding which -- and
+	// the zip would carry the whole data tree twice.
+	std::regex removed(
+		R"(-E\s+rm\s+-rf\s*"[^"]*rundir/[$]<CONFIG(URATION)?>/core/obs-streamelements-core")");
+
+	check(count_matches(cmake, dll) == 1,
+	      "packaging: CMakeLists.txt must copy the module binary into "
+	      "rundir/<cfg>/obs-plugins/64bit -- main.nsi reads the DLL from "
+	      "there, and OBS 33 leaves it under core/<module>/ instead");
+
+	check(count_matches(cmake, pdb) == 1,
+	      "packaging: CMakeLists.txt must copy the module PDB into "
+	      "rundir/<cfg>/obs-plugins/64bit, beside the DLL -- main.nsi "
+	      "reads it from there and the crash handlers need it uploaded");
+
+	check(count_matches(cmake, data) == 1,
+	      "packaging: CMakeLists.txt must copy the module data into "
+	      "rundir/<cfg>/data/obs-plugins/obs-streamelements-core -- OBS 33 "
+	      "puts it under core/<module>/data, which main.nsi does not read, "
+	      "and an empty File /r source aborts NSIS outright");
+
+	check(count_matches(cmake, removed) == 1,
+	      "packaging: CMakeLists.txt must remove "
+	      "rundir/<cfg>/core/obs-streamelements-core after relocating it, "
+	      "so the zip carries exactly one copy of the module");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -6834,6 +6915,7 @@ int main()
 	check_counted_references_are_given_back_to_the_counter();
 	check_contract_default_arguments_agree_with_their_overrides();
 	check_the_dispatch_gate_opens_before_the_first_browser_widget();
+	check_the_windows_module_is_packaged_where_the_installer_reads_it();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",
