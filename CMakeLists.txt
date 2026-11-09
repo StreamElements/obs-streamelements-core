@@ -1294,6 +1294,68 @@ if(BUILD_OUT_OF_TREE)
 	install_obs_plugin_with_data(obs-streamelements-core data)
 else()
 	set_target_properties_obs(obs-streamelements-core PROPERTIES FOLDER "plugins/streamelements" PREFIX "")
+
+	if(WIN32)
+		# Put the module back where a third-party plugin belongs.
+		#
+		# OBS 33.0.0 moved every MODULE_LIBRARY in the tree -- upstream
+		# 4ab64d00d, "cmake: Change name of core module output
+		# directory". Three edits in that one commit, all of which hit
+		# us: OBS_PLUGIN_DESTINATION went from obs-plugins/64bit to
+		# core, the module binary gained a per-target subdirectory, and
+		# the MODULE_LIBRARY arm of target_install_resources moved
+		# module data from data/obs-plugins/<module> to <module>/data
+		# beside the binary. So set_target_properties_obs above fills
+		#
+		#     rundir/<cfg>/core/obs-streamelements-core/{dll,pdb}
+		#     rundir/<cfg>/core/obs-streamelements-core/data/
+		#
+		# which is right for a module built *into* OBS and wrong for
+		# us. We ship as a third-party plugin, and OBS 33 loads those
+		# from the legacy pair -- unconditionally, in
+		# frontend/plugin-manager/PluginModuleLoader_Windows.cpp:
+		#
+		#     kLegacyPortableBinaryPath  ../../obs-plugins/64bit/
+		#     kLegacyPortableDataPath    ../../data/obs-plugins/%module%
+		#
+		# That pair is exactly what the installer writes into the
+		# user's OBS, so the rundir CI zips has to carry it too: the
+		# File lines in CI/obs-streamelements-installer/main.nsi read
+		# these paths out of the zip, and an empty source directory is
+		# a hard NSIS error that aborts packaging with no installer
+		# produced. It also means a locally built rundir loads the
+		# plugin by the same path a user's install does.
+		#
+		# Moved, not copied. obs-module.c:519 skips a module already
+		# loaded under the same name, so shipping both copies would
+		# load one and report the other as skipped, with enumeration
+		# order deciding which -- and the zip would carry the whole
+		# data tree twice.
+		#
+		# Idempotent against OBS 32.x, where these already are the
+		# destinations and no core/ directory is ever created.
+		#
+		# The PDB is guarded the way upstream's own _target_install_obs
+		# guards it, because $<TARGET_PDB_FILE:...> is empty in a
+		# configuration that produces no debug info.
+		add_custom_command(TARGET obs-streamelements-core POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E make_directory
+			"${CMAKE_BINARY_DIR}/rundir/$<CONFIG>/obs-plugins/${BITS}bit"
+			COMMAND ${CMAKE_COMMAND} -E copy
+			"$<TARGET_FILE:obs-streamelements-core>"
+			"${CMAKE_BINARY_DIR}/rundir/$<CONFIG>/obs-plugins/${BITS}bit/"
+			COMMAND ${CMAKE_COMMAND} -E
+			$<IF:$<CONFIG:Debug,RelWithDebInfo,Release>,copy,true>
+			"$<TARGET_PDB_FILE:obs-streamelements-core>"
+			"${CMAKE_BINARY_DIR}/rundir/$<CONFIG>/obs-plugins/${BITS}bit/"
+			COMMAND ${CMAKE_COMMAND} -E copy_directory
+			"${CMAKE_CURRENT_SOURCE_DIR}/data"
+			"${CMAKE_BINARY_DIR}/rundir/$<CONFIG>/data/obs-plugins/obs-streamelements-core"
+			COMMAND ${CMAKE_COMMAND} -E rm -rf
+			"${CMAKE_BINARY_DIR}/rundir/$<CONFIG>/core/obs-streamelements-core"
+			VERBATIM
+		)
+	endif()
 endif()
 
 if (ENABLE_ANGELSCRIPT)
