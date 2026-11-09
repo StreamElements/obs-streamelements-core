@@ -360,7 +360,7 @@ jobs:
           azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
           endpoint: https://eus.codesigning.azure.net/
           signing-account-name: SE-Live
-          certificate-profile-name: SE-Live
+          certificate-profile-name: StreamElements
           files-folder: '${{ env.ROOT }}'
           files-folder-filter: exe,dll,msi
           file-digest: SHA256
@@ -395,6 +395,46 @@ jobs:
           cd /d ${{ env.ROOT }}
 
           signtool verify /pa /v "${{ env.ROOT }}\\obs-streamelements-setup*.exe"
+
+      # signtool verify /pa above proves the chain is trusted. It does not say who
+      # signed. The certificate profile name is the only input that selects the
+      # publisher identity, so a name left stale still signs successfully -- under
+      # the previous publisher -- and every check above it still passes. Signing is
+      # master-only (SIGN_WINDOWS_BINARIES requires refs/heads/master), so no PR can
+      # exercise any of this: without this assertion the first evidence of a wrong
+      # identity would be a user reading the publisher in the UAC prompt.
+      #
+      # A glob that matches nothing is a success as far as most tools are concerned,
+      # which is how the upload step once shipped a stale installer. Count what was
+      # actually examined and fail on zero.
+      - name: Assert the Windows signing identity
+        if: ${{ env.SIGN_WINDOWS_BINARIES == 'true' }}
+        shell: pwsh
+        run: |
+          $expected = 'STREAMELEMENTS PTE. LTD.'
+          $root = '${{ env.ROOT }}'
+          $pattern = Join-Path $root 'obs-streamelements-setup*.exe'
+          $files = @(Get-ChildItem -Path $pattern -File -ErrorAction SilentlyContinue)
+          if ($files.Count -eq 0) {
+            throw "No installer matched $pattern"
+          }
+          $bad = 0
+          foreach ($f in $files) {
+            $sig = Get-AuthenticodeSignature -LiteralPath $f.FullName
+            $subject = if ($sig.SignerCertificate) { $sig.SignerCertificate.Subject }
+                       else { '<no signer certificate>' }
+            Write-Output "$($f.Name): $($sig.Status) | $subject"
+            if ($sig.Status -ne 'Valid') {
+              Write-Output "::error::$($f.Name): signature status is $($sig.Status)"
+              $bad++
+            } elseif ($subject -notlike "*$expected*") {
+              Write-Output "::error::$($f.Name): unexpected publisher, expected the subject to contain '$expected'"
+              $bad++
+            }
+          }
+          if ($bad -gt 0) {
+            throw "$bad file(s) failed the signing identity assertion"
+          }
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
