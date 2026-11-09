@@ -1798,8 +1798,8 @@ static void check_wyvrn_init_reports_its_outcome_to_analytics()
 	// vocabulary, so a rename here is a rename there.
 	//
 	const char *const names[] = {
-		"\"selive_razer_wyvrn_initialized\"",
-		"\"selive_razer_wyvrn_init_failed\"",
+		"\"se_live_razer_wyvrn_initialized\"",
+		"\"se_live_razer_wyvrn_init_failed\"",
 	};
 
 	for (const char *const name : names) {
