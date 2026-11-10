@@ -198,7 +198,16 @@ jobs:
 
 
 
-            curl -f -kL -o ${{ env.ROOT }}\..\obs-streamelements-uninstaller\obs-streamelements-uninstaller.exe https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/qa/obs-streamelements-uninstaller.exe -f --retry 5 -C -
+            rem The uninstaller is a product of its own, so it comes from its own
+            rem folder. obs-streamelements/windows/qa/ holds a file by this name too
+            rem and nothing in the pipeline writes it: the copy sitting there was
+            rem signed 2026-07-15 and was still being bundled into every installer
+            rem four months later, three commits behind the uninstaller source and
+            rem under the previous publisher identity. The only paths
+            rem build-obs-streamelements-uninstaller.yml writes are
+            rem obs-streamelements-uninstaller/windows/ signed, qa and latest, and
+            rem build-installer needs that job, so this reads the same run's output.
+            curl -f -kL -o ${{ env.ROOT }}\..\obs-streamelements-uninstaller\obs-streamelements-uninstaller.exe https://cdn.streamelements.com/obs/dist/obs-streamelements-uninstaller/windows/qa/obs-streamelements-uninstaller.exe -f --retry 5 -C -
 
 
 
