@@ -42,23 +42,26 @@ as a sibling — `SEBrowserWidget.cpp` includes
 obs-studio/
 ├── CMakeUserPresets.json          <- copy of this repo's CMakeUserPresets.json (Windows)
 └── plugins/
-    ├── CMakeLists.txt             <- must contain: add_core_module(obs-streamelements-core)
+    ├── CMakeLists.txt             <- must contain: add_obs_plugin(obs-streamelements-core)
     ├── obs-browser/               <- required
     └── obs-streamelements-core/   <- this repo
 ```
 
 Clone obs-studio with `--recursive` so `obs-browser` comes along. CI pins
-obs-studio to tag `33.0.1`.
+obs-studio to tag `32.2.2`, the oldest OBS we support. That is deliberate:
+libobs refuses to load a module built against a newer libobs than its own, so
+building against the newest OBS makes the artifact inert on every older host.
 
 Register the plugin in the obs-studio tree by adding one line to
-`plugins/CMakeLists.txt`, **before** its trailing `set_obs_core_modules()`:
+`plugins/CMakeLists.txt`:
 
 ```cmake
-add_core_module(obs-streamelements-core)
+add_obs_plugin(obs-streamelements-core)
 ```
 
-On OBS 32 and earlier the macro is spelled `add_obs_plugin(...)` and there is no
-`set_obs_core_modules()`; the rename landed in 33.0.0.
+On OBS 33.0.0 and later the macro is spelled `add_core_module(...)` and the line
+must go **before** that file's trailing `set_obs_core_modules()`; the rename
+landed in 33.0.0.
 
 ## Windows
 

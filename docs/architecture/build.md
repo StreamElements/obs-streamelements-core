@@ -16,18 +16,60 @@ it from here).
 This is the single most common build failure, and it is in the *host* tree, not
 in this repository.
 
+At the pinned tag — 32.2.2 — the macro is **`add_obs_plugin`**, and that is
+what both CI jobs write. The spelling tracks the pin, so it changes if the pin
+does.
+
 **OBS 33.0.0 renamed `add_obs_plugin` to `add_core_module`**, and replaced the
 removed `obs_add_core_module()` runtime call with a list baked at configure
 time by `set_obs_core_modules()`, which generates `libobs/obs-core-modules.c`
 — and libobs links it.
 
-So anything that **replaces** `plugins/CMakeLists.txt` — as the Windows CI job
-does, to build only libobs and this plug-in — must write **both** lines, or
-libobs fails on a missing source file, with an error that has nothing to do
-with this plug-in. Appending to upstream's file instead (what the macOS job
-does) needs only the rename. `set_obs_core_modules()` also appears twice in
-upstream's file; the other is the early return under
+So on a 33.x tree anything that **replaces** `plugins/CMakeLists.txt` — as
+the Windows CI job does, to build only libobs and this plug-in — must write
+**both** lines, or libobs fails on a missing source file, with an error that
+has nothing to do with this plug-in. Appending to upstream's file instead (what
+the macOS job does) needs only the rename. `set_obs_core_modules()` also
+appears twice in upstream's file; the other is the early return under
 `if(NOT ENABLE_CORE_MODULES)`, so an insertion has to target the last one.
+
+## The pin is a compatibility floor, not "the version that ships"
+
+libobs rejects a module whose baked `LIBOBS_API_VER` is greater than its own.
+`OBS_DECLARE_MODULE()` in `obs-streamelements-core-plugin.cpp` exports
+`obs_module_ver()` returning `LIBOBS_API_VER` as it stood in the headers the
+DLL compiled against, and `obs_open_module` compares it:
+
+```c
+/* Reject plugins compiled with a newer libobs. Patch version (lower 16-bit) is ignored. */
+uint32_t ver = mod.ver ? mod.ver() & 0xFFFF0000 : 0;
+if (ver > LIBOBS_API_VER) {
+        blog(LOG_WARNING, "Module '%s' compiled with newer libobs %d.%d", ...);
+        return MODULE_INCOMPATIBLE_VER;
+}
+```
+
+That returns before `load_state = OBS_MODULE_ENABLED`, so **none** of the
+plug-in runs: no crash, no dialog, no line in our own log, and the module is
+simply absent from the host log's `Loaded Modules` list. The only trace is that
+one `LOG_WARNING` from libobs, and scenes referencing our source types then log
+`Source ID '...' not found`.
+
+The comparison is one-directional — a module built against an older libobs
+loads on a newer host without complaint — so the pin has to be the **oldest**
+OBS we support, never the newest. `26.11.10.1096` was built against 33.0.1 and
+was therefore inert on every OBS 32.x install.
+
+Two consequences worth keeping together:
+
+- The patch byte is masked, so a 32.2.2 build still loads on 32.2.0 and
+  32.2.1. `OBS_REQUIRE_VERSION` in `CI/obs-streamelements-installer/common.nsh`
+  may sit below the pin inside one `major.minor`, and must be raised with it
+  across one.
+- `OBS_DOWNLOAD_VERSION` in that same file is the OBS the installer fetches
+  when none is present, so it must never be older than `CHECKOUT` — otherwise
+  a fresh install provisions a host that cannot load the payload the installer
+  is about to write.
 
 The only obs-provided helpers this repository's `CMakeLists.txt` calls are
 `set_target_properties_obs` and `find_qt`; both exist at 32.2.1 and 33.0.1.
@@ -124,7 +166,8 @@ enforced by the hook, not by the pipeline.
 | `release.yml`, `upload-obs-symbols.yml`, the installer/uninstaller builds, `claude*.yml` | release plumbing and review automation |
 
 `build.yml` pins OBS to a tag in the `CHECKOUT` env of **both** the `windows`
-and `macos` jobs — keep them equal. It currently pins `33.0.1`.
+and `macos` jobs — keep them equal. It currently pins `32.2.2`; that choice
+is a floor, for the reason given above.
 
 It also passes a `BUILD_OPTIONS` list of `-DENABLE_*=OFF` flags meant to narrow
 an artifact-only build. **Do not reuse those locally, and do not trust them
