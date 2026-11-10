@@ -96,7 +96,7 @@ jobs:
 
 
 
-            curl -kL -o ${{ github.workspace }}\..\obs-streamelements-uninstaller\obs-streamelements-uninstaller.exe https://cdn.streamelements.com/obs/dist/obs-streamelements/windows/qa/obs-streamelements-uninstaller.exe -f --retry 5 -C -
+            curl -kL -o ${{ github.workspace }}\..\obs-streamelements-uninstaller\obs-streamelements-uninstaller.exe https://cdn.streamelements.com/obs/dist/obs-streamelements-uninstaller/windows/qa/obs-streamelements-uninstaller.exe -f --retry 5 -C -
 
 
 
