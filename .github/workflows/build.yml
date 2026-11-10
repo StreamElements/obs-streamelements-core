@@ -251,11 +251,22 @@ jobs:
     if: needs.version.outputs.is_workflow_automation != 'true'
 
     env:
-      # OBS 33.0.1, matching what ships. 33.0.0 renamed add_obs_plugin to
-      # add_core_module -- see the plugin-install step below -- and asks for
-      # newer prebuilt dependencies (CEF 7871, obs-deps 2026-10-23), which
-      # the configure step fetches on its own from CMakePresets.json.
-      CHECKOUT: 33.0.1
+      # Build against the OLDEST supported OBS, never the newest. libobs
+      # rejects a module whose baked LIBOBS_API_VER is greater than its own --
+      # obs-module.c, logged as "compiled with newer libobs" and returning
+      # MODULE_INCOMPATIBLE_VER before any of our code runs -- while a module
+      # built against an OLDER libobs loads on a newer host without complaint.
+      # The check is one-directional, so this pin is a compatibility floor and
+      # not a statement about what ships. Pinned at 33.0.1 the artifact was
+      # silently inert on every OBS 32.x install: no crash, no dialog, and
+      # nothing at all in our own log.
+      #
+      # The gate masks the patch byte, so a 32.2.2 build still loads on 32.2.0
+      # and 32.2.1. Keep this in step with OBS_REQUIRE_VERSION and
+      # OBS_DOWNLOAD_VERSION in CI/obs-streamelements-installer/common.nsh: the
+      # installer must not be able to put this artifact on a host that cannot
+      # load it, which is the invariant CORE-600 established.
+      CHECKOUT: 32.2.2
       GITHUB_WORKSPACE: $GITHUB_WORKSPACE
 
       # Redefined here rather than taken from the workflow-level env, because
@@ -292,21 +303,24 @@ jobs:
 
       # This REPLACES plugins/CMakeLists.txt rather than appending to it, so
       # that the unconditional `cmake --build` below compiles libobs and this
-      # plugin and nothing else. That is also why set_obs_core_modules() has
-      # to be written out by hand: it is upstream's last line, it generates
-      # libobs/obs-core-modules.c from obs-core-modules.c.in, and libobs
+      # plugin and nothing else.
+      #
+      # add_obs_plugin is the spelling the pinned OBS provides --
+      # cmake/common/helpers_common.cmake at 32.2.2 -- so this line tracks
+      # CHECKOUT above. OBS 33.0.0 renamed it to add_core_module and replaced
+      # the removed obs_add_core_module() runtime call with a list baked at
+      # configure time by set_obs_core_modules(), which generates
+      # libobs/obs-core-modules.c from obs-core-modules.c.in -- and libobs
       # links the result (libobs/CMakeLists.txt links OBS::libobs-core-modules).
-      # Overwrite the file without it and libobs fails to build on a missing
-      # source. OBS 33.0.0 renamed add_obs_plugin to add_core_module and
-      # introduced that generated list in place of the removed
-      # obs_add_core_module() runtime call.
+      # On a 33.x pin this step must therefore write BOTH lines, or libobs
+      # fails to build on a missing source, with an error that has nothing to
+      # do with this plugin.
       - name: Install plugin into OBS tree
         shell: cmd
         run: |
           mkdir C:\local\obs-studio\plugins\obs-streamelements-core
           xcopy "%GITHUB_WORKSPACE%\*.*" "C:\local\obs-studio\plugins\obs-streamelements-core" /S /E /I /Y
-          echo add_core_module(obs-streamelements-core) > C:\local\obs-studio\plugins\CMakeLists.txt
-          echo set_obs_core_modules() >> C:\local\obs-studio\plugins\CMakeLists.txt
+          echo add_obs_plugin(obs-streamelements-core) > C:\local\obs-studio\plugins\CMakeLists.txt
 
       # Symbol upload is best-effort: BugSplat being unreachable must not fail a build
       # that otherwise compiled and signed correctly. The only consequence is that crash
@@ -437,11 +451,11 @@ jobs:
     if: needs.version.outputs.is_workflow_automation != 'true'
 
     env:
-      # OBS 33.0.1, matching what ships. 33.0.0 renamed add_obs_plugin to
-      # add_core_module -- see the plugin-install step below -- and asks for
-      # newer prebuilt dependencies (CEF 7871, obs-deps 2026-10-23), which
-      # the configure step fetches on its own from CMakePresets.json.
-      CHECKOUT: 33.0.1
+      # Keep equal to the windows job's CHECKOUT, and see the reasoning there:
+      # the pin is a compatibility floor, because libobs refuses a module built
+      # against a newer libobs than its own and accepts one built against an
+      # older.
+      CHECKOUT: 32.2.2
 
       # See the matching comment in the windows job: job-level env is the only
       # scope that can read `needs`, so the release-notes gate has to be applied
@@ -480,14 +494,18 @@ jobs:
       # Appends to upstream's plugins/CMakeLists.txt rather than replacing it,
       # unlike the windows job: xcodebuild below builds the
       # obs-streamelements-core scheme alone, so configuring the other modules
-      # costs nothing and upstream's own set_obs_core_modules() still runs.
-      # Landing after that call means this plugin is absent from the baked
-      # core-module list, which is correct -- it ships as a third-party plugin
-      # in obs-plugins, not as a module built into OBS.
+      # costs nothing.
+      #
+      # add_obs_plugin is the spelling the pinned OBS provides; on a 33.x pin it
+      # is add_core_module, and appending still works there because upstream's
+      # own set_obs_core_modules() has already run by that point. Either way
+      # this plugin stays out of the baked core-module list, which is correct --
+      # it ships as a third-party plugin in obs-plugins, not as a module built
+      # into OBS.
       - name: Install plugin
         run: |
           cp -R "$GITHUB_WORKSPACE" ~/src/obs-studio/plugins/obs-streamelements-core
-          echo "add_core_module(obs-streamelements-core)" >> ~/src/obs-studio/plugins/CMakeLists.txt
+          echo "add_obs_plugin(obs-streamelements-core)" >> ~/src/obs-studio/plugins/CMakeLists.txt
 
       - name: Prepare bugsplat Framework # we store it as a ZIP since on Windows the resulting paths of the unpacked archive are just way too long
         run: |

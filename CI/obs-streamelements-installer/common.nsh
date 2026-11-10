@@ -10,7 +10,12 @@
 # !define OBS_DOWNLOAD_VERSION "27.2.4"
 #!define OBS_DOWNLOAD_URL_64 "https://cdn-fastly.obsproject.com/downloads/OBS-Studio-${OBS_DOWNLOAD_VERSION}-Full-Installer-x64.exe"
 #!define OBS_DOWNLOAD_URL_32 "https://cdn-fastly.obsproject.com/downloads/OBS-Studio-${OBS_DOWNLOAD_VERSION}-Full-Installer-x86.exe"
-!define OBS_DOWNLOAD_VERSION "32.2.1"
+# Must never be older than the OBS the plug-in is built against -- the
+# CHECKOUT env of both jobs in .github/workflows/build.yml. libobs refuses a
+# module built against a newer libobs than its own, so downloading an older
+# OBS than CHECKOUT installs a host that cannot load the payload this
+# installer is about to write.
+!define OBS_DOWNLOAD_VERSION "32.2.2"
 !define OBS_DOWNLOAD_URL_64 "https://cdn-fastly.obsproject.com/downloads/OBS-Studio-${OBS_DOWNLOAD_VERSION}-Windows-x64-Installer.exe"
 # OBS Studio has published no 32-bit build since 27.2.4, which cannot satisfy
 # OBS_REQUIRE_VERSION. This URL is only ever reached on a 32-bit host, or beside
@@ -20,6 +25,10 @@
 !define MSVC_REDIST_X64_URL "https://cdn.streamelements.com/obs/dist/third-party/microsoft/vs2019/vcredist_x64.exe"
 !define MSVC_REDIST_X86_URL "https://cdn.streamelements.com/obs/dist/third-party/microsoft/vs2019/vcredist_x86.exe"
 
+# May sit below OBS_DOWNLOAD_VERSION, but only inside one major.minor:
+# libobs masks the patch byte when it compares a module's baked version
+# against its own, so a 32.2.2 build still loads on 32.2.0 and 32.2.1.
+# Raising CHECKOUT to a new major.minor requires raising this too (CORE-600).
 !define OBS_REQUIRE_VERSION "32.2.0"
 
 !define MSG_DOWNLOAD_ERROR_RETRY "Failed downloading installation package.$\r$\n$\r$\nClick Retry to resume downloading or Cancel to abort."
