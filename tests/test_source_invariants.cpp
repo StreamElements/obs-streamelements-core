@@ -6837,6 +6837,65 @@ static void check_the_windows_module_is_packaged_where_the_installer_reads_it()
 	      "so the zip carries exactly one copy of the module");
 }
 
+// --- The two docs sites draw their figures with the same stylesheet, and
+// it exists twice because it has to.
+//
+// docs/architecture/ and docs/analytics/ are two MkDocs sites, and a site
+// can only reference files inside its own `docs_dir` -- `extra_css` with
+// `../architecture/assets/diagrams.css` is not a path MkDocs will resolve,
+// and `strict: true` turns that into a build failure rather than a missing
+// stylesheet. So the file is a copy.
+//
+// A copy drifts. The figures in both trees use the same class vocabulary
+// (se-box, se-id, se-edge, se-head and the rest), so an edit to one copy
+// silently changes how one site draws and not the other -- and nothing
+// about a figure's source says which stylesheet it got. Equality is the
+// cheapest way to keep that from happening quietly: whoever changes the
+// palette has to change both, which is exactly the intent.
+//
+// Byte-for-byte, read in binary, because the point is that the two files
+// are interchangeable -- a difference of line endings alone would still be
+// two files to keep in step.
+static void check_the_diagram_stylesheets_stay_identical()
+{
+	const char *const paths[] = {"docs/architecture/assets/diagrams.css",
+				     "docs/analytics/assets/diagrams.css"};
+
+	std::string contents[2];
+
+	for (int i = 0; i < 2; ++i) {
+		const std::string full =
+			std::string(se_tests::kRepoRoot) + "/" + paths[i];
+
+		std::ifstream in(full, std::ios::binary);
+
+		check(static_cast<bool>(in),
+		      (std::string("cannot open ") + paths[i] +
+		       " -- both docs sites reference it as extra_css, so a "
+		       "missing copy is a broken figure on one of them")
+			      .c_str());
+
+		if (!in)
+			return;
+
+		std::stringstream ss;
+		ss << in.rdbuf();
+		contents[i] = ss.str();
+	}
+
+	// Non-vacuity: two empty reads would compare equal.
+	check(contents[0].size() > 1000,
+	      "docs/architecture/assets/diagrams.css is implausibly short -- "
+	      "this invariant would then pass on two near-empty files");
+
+	check(contents[0] == contents[1],
+	      "the two diagrams.css copies have diverged: "
+	      "docs/analytics/assets/diagrams.css must stay a byte-for-byte "
+	      "copy of docs/architecture/assets/diagrams.css, because both "
+	      "docs sites draw figures with the same classes and a MkDocs "
+	      "site cannot reference a file outside its own docs_dir");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -6916,6 +6975,7 @@ int main()
 	check_contract_default_arguments_agree_with_their_overrides();
 	check_the_dispatch_gate_opens_before_the_first_browser_widget();
 	check_the_windows_module_is_packaged_where_the_installer_reads_it();
+	check_the_diagram_stylesheets_stay_identical();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

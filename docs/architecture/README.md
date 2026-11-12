@@ -5,9 +5,11 @@ is put together, and why it is put together that way.
 
 This is the companion to the
 [JavaScript OBS API reference](https://streamelements.github.io/obs-streamelements-core/api/),
-which documents the surface a page sees. These pages document what is behind
-it: who creates what, in which order, on which thread, under which lock, and
-which of those arrangements are load-bearing rather than incidental.
+which documents the surface a page sees, and to the
+[Analytics catalogue](https://streamelements.github.io/obs-streamelements-core/analytics/),
+which documents what leaves the machine. These pages document what is behind
+both: who creates what, in which order, on which thread, under which lock,
+and which of those arrangements are load-bearing rather than incidental.
 
 ## The ten-minute version
 
@@ -143,7 +145,7 @@ Three facts about this diagram are worth more than the diagram:
   CMake switches, and why the OBS version matters.
 - **[Testing](testing.md)** — the two kinds of test, mutation testing, and the
   live end-to-end harness.
-- **[Enforced invariants](invariants.md)** — the 74 architectural rules the
+- **[Enforced invariants](invariants.md)** — the 78 architectural rules the
   test suite enforces, grouped by what they protect.
 
 ## How to read the code

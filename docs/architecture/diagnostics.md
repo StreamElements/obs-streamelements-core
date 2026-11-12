@@ -152,6 +152,11 @@ Log lines worth grepping for after any run:
 
 ## Analytics and performance history
 
+This is the mechanism only. The event catalogue — all 22 names across the
+plug-in, the installer and the uninstaller, and the payload each one carries
+— is the third documentation site:
+[Analytics](https://streamelements.github.io/obs-streamelements-core/analytics/).
+
 `SEAnalyticsEventsManager` (`ISEAnalyticsEventsManager`) carries product
 analytics and owns the machine and session unique ids that
 `ISEHostInfoProvider` reports. `SEPerformanceHistoryTracker` keeps the rolling
@@ -203,3 +208,5 @@ field set, and both silences.
 - [Module lifecycle](module-lifecycle.md) — why the dump needs a clean exit.
 - [Outputs and encoders](outputs.md) — the counted-reference pattern.
 - [Testing](testing.md) — the live harness that reads all of this back.
+- [Analytics](https://streamelements.github.io/obs-streamelements-core/analytics/)
+  — the events this manager sends, and what each payload contains.

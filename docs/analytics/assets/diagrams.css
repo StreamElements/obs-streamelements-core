@@ -1,0 +1,168 @@
+/* Styling for the hand-authored SVG figures in these pages.
+ *
+ * Shapes and labels are drawn in `currentColor`, so one set of geometry
+ * serves both palettes: whatever text colour Material sets on the page is
+ * what the diagram inherits, and a surface is an opacity of that same
+ * colour rather than a second value to keep in step.
+ *
+ * Only four things are real tokens, because each needs a different value on
+ * a light and a dark ground instead of an opacity: the surface fill, the
+ * rule colour, the accent that marks the one element a figure is about, and
+ * the tint behind an accented row. Everything else follows the page.
+ *
+ * Material's own `--md-*` variables are deliberately not used for the
+ * accent. `--md-primary-fg-color` is the same teal in both schemes, and it
+ * is chosen to sit under white header text, so it is too dark to read as a
+ * line on a dark ground.
+ */
+
+:root {
+  --se-fig-surface: rgba(0, 0, 0, 0.035);
+  --se-fig-rule: rgba(0, 0, 0, 0.3);
+  --se-fig-accent: #00796b;
+  --se-fig-accent-wash: rgba(0, 121, 107, 0.09);
+}
+
+[data-md-color-scheme="slate"] {
+  --se-fig-surface: rgba(255, 255, 255, 0.05);
+  --se-fig-rule: rgba(255, 255, 255, 0.32);
+  --se-fig-accent: #4ddbc4;
+  --se-fig-accent-wash: rgba(77, 219, 196, 0.1);
+}
+
+/* A narrow screen scrolls the figure sideways rather than scaling its labels
+ * down to nothing: `min-width` holds the drawing at a legible size and the
+ * wrapper takes the overflow. */
+.se-fig {
+  margin: 1.8em 0;
+}
+
+.se-fig .se-fig-scroll {
+  overflow-x: auto;
+}
+
+.se-fig svg {
+  display: block;
+  width: 100%;
+  min-width: 680px;
+  height: auto;
+  margin: 0 auto;
+}
+
+/* Material centres figures and italicises captions at 24rem, which is too
+ * narrow and too decorative for a caption that states what the figure
+ * claims. */
+.md-typeset .se-fig figcaption {
+  max-width: 44rem;
+  margin: 0.9em auto 0;
+  font-style: normal;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  text-align: left;
+  opacity: 0.8;
+}
+
+/* Boxes and the faint frame that groups a set of them. */
+.se-fig .se-box {
+  fill: var(--se-fig-surface);
+  stroke: var(--se-fig-rule);
+  stroke-width: 1;
+}
+
+.se-fig .se-box-em {
+  fill: var(--se-fig-accent-wash);
+  stroke: var(--se-fig-accent);
+  stroke-width: 1.5;
+}
+
+.se-fig .se-frame {
+  fill: none;
+  stroke: var(--se-fig-rule);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  opacity: 0.7;
+}
+
+/* Text. Identifiers are set in the code face, prose in the body face. */
+.se-fig .se-id {
+  fill: currentColor;
+  font-family: var(--md-code-font-family, ui-monospace, monospace);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.se-fig .se-id-sm {
+  fill: currentColor;
+  font-family: var(--md-code-font-family, ui-monospace, monospace);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.se-fig .se-ttl {
+  fill: currentColor;
+  font-family: var(--md-text-font-family, system-ui, sans-serif);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.se-fig .se-sub {
+  fill: currentColor;
+  font-family: var(--md-text-font-family, system-ui, sans-serif);
+  font-size: 11.5px;
+  opacity: 0.72;
+}
+
+.se-fig .se-note {
+  fill: currentColor;
+  font-family: var(--md-text-font-family, system-ui, sans-serif);
+  font-size: 11.5px;
+  opacity: 0.78;
+}
+
+.se-fig .se-note-em {
+  fill: var(--se-fig-accent);
+  font-family: var(--md-text-font-family, system-ui, sans-serif);
+  font-size: 11.5px;
+  font-weight: 600;
+  opacity: 1;
+}
+
+.se-fig .se-cap {
+  fill: currentColor;
+  font-family: var(--md-text-font-family, system-ui, sans-serif);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  opacity: 0.55;
+}
+
+/* Edges, and the arrowheads drawn as polygons so there is no `url(#id)`
+ * fragment to survive Material's instant navigation. */
+.se-fig .se-edge {
+  fill: none;
+  stroke: var(--se-fig-rule);
+  stroke-width: 1.4;
+}
+
+.se-fig .se-edge-em {
+  fill: none;
+  stroke: var(--se-fig-accent);
+  stroke-width: 1.8;
+}
+
+.se-fig .se-edge-weak {
+  fill: none;
+  stroke: var(--se-fig-accent);
+  stroke-width: 1.8;
+  stroke-dasharray: 6 4;
+}
+
+.se-fig .se-head {
+  fill: var(--se-fig-rule);
+  stroke: none;
+}
+
+.se-fig .se-head-em {
+  fill: var(--se-fig-accent);
+  stroke: none;
+}

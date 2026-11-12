@@ -4,8 +4,9 @@ Core SE.Live OBS plugin.
 
 Documentation: **[Architecture](docs/architecture/)** — how the plugin is put
 together · **[JavaScript OBS API](docs/api/)** — the `window.host` surface a
-page sees. Both are published on GitHub Pages; links and detail in the two
-sections below.
+page sees · **[Analytics](docs/analytics/)** — every event we report and its
+payload. All three are published on GitHub Pages; links and detail in the
+three sections below.
 
 # JavaScript OBS API
 
@@ -28,6 +29,24 @@ reference at <a href="https://streamelements.github.io/obs-streamelements-core/a
 
 Start with [the overview](docs/architecture/README.md); it has a map of the
 chapters and a table of where to start by what you are doing.
+
+# Analytics
+
+Every analytics event SE.Live reports — 22 names across three producers, the
+plugin, the Windows installer and the Windows uninstaller — and the exact
+payload each one carries is documented in
+**[`docs/analytics/`](docs/analytics/)**, published beside the other two at
+<a href="https://streamelements.github.io/obs-streamelements-core/analytics/" target="_blank">https://streamelements.github.io/obs-streamelements-core/analytics/</a>.
+
+Start with [the overview](docs/analytics/README.md). If you are about to
+write a query, read
+[Reading the data](docs/analytics/reading-the-data.md) first — it lists the
+places where the obvious reading of a field is wrong, and the rates whose
+denominator is not what it looks like.
+
+The events land in the SE.Live analytics dashboard: <a href="https://observatory.streamelements.dev/superset/dashboard/p/EwdyM758jQG/" target="_blank">https://observatory.streamelements.dev/superset/dashboard/p/EwdyM758jQG/</a>
+(internal, Superset). The docs stop at the wire — what the dashboard does
+with the payloads after that is defined there, not here.
 
 # Building locally
 
