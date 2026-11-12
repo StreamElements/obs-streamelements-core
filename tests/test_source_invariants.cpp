@@ -6896,6 +6896,142 @@ static void check_the_diagram_stylesheets_stay_identical()
 	      "site cannot reference a file outside its own docs_dir");
 }
 
+//
+// CORE-4627 / SELIVE-1M. A video_t belongs to a canvas mix, and
+// obs_reset_video() frees every mix. Worse, it only clears and rebuilds the
+// canvases its reset path can reach, and it cannot reach a PRIVATE one:
+// obs_free_canvas_mixes() (libobs/obs-canvas.c) and restore_canvases()
+// (libobs/obs.c) walk obs->data.canvases -- a table built with the hh_uuid
+// handle -- using the hh handle, which a private canvas is never added to.
+// Measured live: our three private canvases kept byte-identical canvas->mix
+// pointers while the mix count dropped from 7 to 4, and making one canvas
+// named (the only variable changed) made OBS restore it correctly.
+//
+// Two rules follow. This pins the first: nothing may keep a video_t, because
+// the one it kept is freed. Caching one is how SELIVE-1M handed NVENC freed
+// memory, where init_encoder_base divides by voi->fps_den. The second rule --
+// rebuild the canvas's mix when OBS resets video -- is pinned by the
+// non-vacuity checks at the end.
+//
+static void check_no_video_output_handle_is_cached()
+{
+	const char *const dirs[] = {"/streamelements",
+				    "/streamelements/SEUtils"};
+
+	int scanned = 0;
+	std::string offenders;
+
+	for (const char *const dir : dirs) {
+		const std::string path = std::string(se_tests::kRepoRoot) + dir;
+
+		std::error_code ec;
+		std::filesystem::directory_iterator it(path, ec);
+
+		check(!ec, (std::string("cannot read ") + dir +
+			    " -- this invariant would then pass vacuously")
+				   .c_str());
+
+		for (std::filesystem::directory_iterator end; it != end && !ec;
+		     it.increment(ec)) {
+			const std::filesystem::path &p = it->path();
+			const std::string ext = p.extension().string();
+
+			if (ext != ".cpp" && ext != ".hpp" && ext != ".mm")
+				continue;
+
+			const std::string rel = std::string(dir).substr(1) +
+						"/" + p.filename().string();
+
+			std::string src;
+
+			if (!try_slurp(rel, src))
+				continue;
+
+			++scanned;
+
+			//
+			// Members only. A video_t that arrives as a parameter
+			// is fine -- it is used and dropped; this tree names
+			// those video/resolveVideo, never m_*.
+			//
+			const std::string stripped = strip_line_comments(src);
+
+			for (const char *needle :
+			     {"video_t *m_", "video_t* m_", "video_t *  m_"}) {
+				if (stripped.find(needle) != std::string::npos)
+					offenders += rel + " ";
+			}
+		}
+	}
+
+	check(scanned > 20,
+	      "scanned implausibly few sources -- this invariant would then "
+	      "pass vacuously");
+
+	check(offenders.empty(),
+	      (std::string("a video_t is cached in a member: ") + offenders +
+	       "-- obs_reset_video() frees the mix that owns it and never "
+	       "rebuilds a private canvas's, so a stored handle dangles for "
+	       "the rest of the process. Resolve it at the point of use "
+	       "instead, and rebuild the canvas on canvas_video_reset")
+		      .c_str());
+
+	//
+	// The second rule, and the non-vacuity for the first: reading live
+	// from the canvas is only safe because the composition rebuilds the
+	// mix when OBS resets video. Without the rebuild, obs_canvas_get_video
+	// reads through a dangling canvas->mix.
+	//
+	const std::string comp = strip_line_comments(
+		slurp("streamelements/SEVideoComposition.cpp"));
+
+	//
+	// All whitespace removed, not collapsed, and the needles likewise:
+	// clang-format decides on its own whether these calls fit on one
+	// line, and a reflow must not be able to turn a passing invariant
+	// into a failing one.
+	//
+	std::string flat;
+	flat.reserve(comp.size());
+
+	for (std::size_t i = 0; i < comp.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(comp[i])))
+			flat += comp[i];
+	}
+
+	check(flat.find("obs_canvas_get_video(") != std::string::npos,
+	      "SEVideoComposition.cpp no longer resolves the video output from "
+	      "the canvas -- the ban above would then be vacuous");
+
+	//
+	// Named in full, connect AND disconnect. Matching the signal name
+	// alone is not enough: the first version of this check passed with
+	// the subscription deleted, because the name still appeared in the
+	// destructor's disconnect.
+	//
+	check(flat.find("signal_handler_connect(obs_get_signal_handler(),"
+			"\"canvas_video_reset\",handle_canvas_video_reset,"
+			"this);") != std::string::npos,
+	      "SEVideoComposition.cpp no longer subscribes to "
+	      "canvas_video_reset -- without it nothing learns that OBS freed "
+	      "this canvas's mix, and reading the canvas becomes a "
+	      "use-after-free (CORE-4627)");
+
+	check(flat.find("signal_handler_disconnect(obs_get_signal_handler(),"
+			"\"canvas_video_reset\",handle_canvas_video_reset,"
+			"this);") != std::string::npos,
+	      "SEVideoComposition.cpp no longer unsubscribes from "
+	      "canvas_video_reset -- the handler takes `this` raw, so a live "
+	      "subscription past the destructor is a use-after-free "
+	      "(CORE-4627)");
+
+	check(flat.find("obs_canvas_reset_video(") != std::string::npos,
+	      "SEVideoComposition.cpp no longer rebuilds its canvas's video "
+	      "mix -- OBS does not rebuild a private canvas's, so outputs on "
+	      "the composition can never start after a video reset "
+	      "(CORE-4627)");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -6976,6 +7112,7 @@ int main()
 	check_the_dispatch_gate_opens_before_the_first_browser_widget();
 	check_the_windows_module_is_packaged_where_the_installer_reads_it();
 	check_the_diagram_stylesheets_stay_identical();
+	check_no_video_output_handle_is_cached();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

@@ -1127,8 +1127,12 @@ class SECustomVideoCompositionInfo
 private:
 	SEVideoCompositionEventListener *m_listener;
 
-	video_t *m_video = nullptr;
 	//obs_view_t *m_view = nullptr;
+	//
+	// The canvas, not its video_t: the video output is resolved from this
+	// on every GetVideo() because OBS replaces it on a video reset.
+	// CORE-4627.
+	//
 	obs_canvas_t *m_canvas = nullptr;
 	std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider>> m_streamingVideoEncoders;
 	std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider>>
@@ -1142,24 +1146,22 @@ private:
 public:
 	SECustomVideoCompositionInfo(
 		std::shared_ptr<SEVideoCompositionBase> owner,
-		SEVideoCompositionEventListener *listener,
-		std::string holder,
-		video_t *video, uint32_t baseWidth, uint32_t baseHeight,
+		SEVideoCompositionEventListener *listener, std::string holder,
+		uint32_t baseWidth, uint32_t baseHeight,
 		std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider>>
 			streamingVideoEncoders,
 		std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider>>
 			recordingVideoEncoders,
-		obs_canvas_t* canvas
+		obs_canvas_t *canvas
 		/* obs_view_t *view*/)
-		: SEVideoCompositionBase::CompositionInfo(
-			  owner, listener, holder),
+		: SEVideoCompositionBase::CompositionInfo(owner, listener,
+							  holder),
 		  m_compositionOwner(owner),
-		  m_video(video),
 		  m_baseWidth(baseWidth),
 		  m_baseHeight(baseHeight),
 		  m_listener(listener),
 		  m_canvas(canvas)
-		  //m_view(view)
+	//m_view(view)
 	{
 		for (auto encoder : streamingVideoEncoders) {
 			m_streamingVideoEncoders.push_back(encoder);
@@ -1198,7 +1200,43 @@ public:
 public:
 	virtual bool IsObsNative() { return false; }
 
-	virtual video_t *GetVideo() { return m_video; }
+	//
+	// Resolved from the canvas on every call, never cached. The canvas
+	// object outlives a video reset; the video_t inside it does not --
+	// obs_reset_video() frees every canvas mix and builds new ones, so a
+	// pointer taken once at construction dangles. CORE-4627.
+	//
+	// A null canvas means this info renders the native OBS canvas -- see
+	// the nullptr handed in by
+	// SEObsNativeVideoCompositionWithCustomEncoders. Both branches read
+	// live; neither is cached.
+	virtual video_t *GetVideo()
+	{
+		video_t *video = m_canvas ? obs_canvas_get_video(m_canvas)
+					  : obs_get_video();
+
+		if (!video) {
+			//
+			// The canvas is alive but has no video mix. OBS only
+			// restores a canvas mix after obs_reset_video() when
+			// obs_canvas_has_valid_video_info() holds for it (see
+			// restore_canvases in libobs/obs.c), and it reports
+			// nothing when it skips one -- so this is the only
+			// place the condition becomes visible. Outputs on this
+			// composition cannot start until it is restored.
+			// CORE-4627.
+			//
+			blog(LOG_ERROR,
+			     "[obs-streamelements-core]: video composition '%s' has no video output: its canvas ('%s') has no mix, outputs on it cannot start",
+			     GetComposition()
+				     ? GetComposition()->GetId().c_str()
+				     : "(no composition)",
+			     m_canvas ? obs_canvas_get_name(m_canvas)
+				      : "(none)");
+		}
+
+		return video;
+	}
 
 	virtual void GetVideoBaseDimensions(uint32_t *videoWidth,
 					    uint32_t *videoHeight)
@@ -1279,8 +1317,6 @@ SECustomVideoComposition::SECustomVideoComposition(
 	m_canvas = SETRACE_ADDREF(obs_canvas_create_private(
 		GetId().c_str(), &ovi, PROGRAM | EPHEMERAL));
 
-	m_video = obs_canvas_get_video(m_canvas);
-
 	obs_transition_set(m_rootSource, m_transition);
 
 	//obs_view_set_source(m_view, 0, m_rootSource);
@@ -1353,14 +1389,17 @@ SECustomVideoComposition::SECustomVideoComposition(
 			FormatString(
 				"SECustomVideoComposition::ctor(streamingVideoEncoder[%d])",
 				idx),
-			SELazyOBSVideoEncoderProvider::CreateEncoderAllocator::
-				Create(streamingVideoEncoderIds[idx],
-				       FormatString(
-					       "%s: streaming video encoder %d",
-					       name.c_str(), idx + 1),
-				       settings,
-				       streamingVideoEncoderHotkeyData[idx],
-				       m_baseWidth, m_baseHeight, m_video));
+			SELazyOBSVideoEncoderProvider::CreateEncoderAllocator::Create(
+				streamingVideoEncoderIds[idx],
+				FormatString("%s: streaming video encoder %d",
+					     name.c_str(), idx + 1),
+				settings, streamingVideoEncoderHotkeyData[idx],
+				m_baseWidth, m_baseHeight,
+				[canvas = m_canvas]() -> video_t * {
+					return canvas ? obs_canvas_get_video(
+								canvas)
+						      : nullptr;
+				}));
 
 		m_streamingVideoEncoders.push_back(encoderProvider);
 	}
@@ -1392,13 +1431,18 @@ void SECustomVideoComposition::SetRecordingEncoders(
 			FormatString(
 				"SECustomVideoComposition::SetRecordingEncoders(recordingVideoEncoder[%d])",
 				idx),
-			SELazyOBSVideoEncoderProvider::CreateEncoderAllocator::
-				Create(recordingVideoEncoderIds[idx],
-				       FormatString("%s: recording video encoder %d",
-						    GetName().c_str(), idx + 1),
-				       recordingVideoEncoderSettings[idx],
-				       recordingVideoEncoderHotkeyData[idx],
-				       m_baseWidth, m_baseHeight, m_video));
+			SELazyOBSVideoEncoderProvider::CreateEncoderAllocator::Create(
+				recordingVideoEncoderIds[idx],
+				FormatString("%s: recording video encoder %d",
+					     GetName().c_str(), idx + 1),
+				recordingVideoEncoderSettings[idx],
+				recordingVideoEncoderHotkeyData[idx],
+				m_baseWidth, m_baseHeight,
+				[canvas = m_canvas]() -> video_t * {
+					return canvas ? obs_canvas_get_video(
+								canvas)
+						      : nullptr;
+				}));
 
 		m_recordingVideoEncoders.push_back(encoderProvider);
 	}
@@ -1406,10 +1450,16 @@ void SECustomVideoComposition::SetRecordingEncoders(
 
 SECustomVideoComposition::~SECustomVideoComposition()
 {
+	//
+	// First, before anything else is torn down: the handler takes `this`
+	// raw, so it must not be reachable past this point. CORE-4627.
+	//
+	signal_handler_disconnect(obs_get_signal_handler(),
+				  "canvas_video_reset",
+				  handle_canvas_video_reset, this);
+
 	m_streamingVideoEncoders.clear();
 	m_recordingVideoEncoders.clear();
-
-	m_video = nullptr;
 
 	if (m_audioWrapperSource) {
 		// Release output channel
@@ -1501,9 +1551,9 @@ SECustomVideoComposition::GetCompositionInfo(
 	std::shared_lock<decltype(m_mutex)> lock(m_mutex);
 
 	return std::make_shared<SECustomVideoCompositionInfo>(
-		shared_from_this(), listener, holder, m_video, m_baseWidth,
-		m_baseHeight, m_streamingVideoEncoders,
-		m_recordingVideoEncoders, m_canvas /*m_view*/);
+		shared_from_this(), listener, holder, m_baseWidth, m_baseHeight,
+		m_streamingVideoEncoders, m_recordingVideoEncoders,
+		m_canvas /*m_view*/);
 }
 
 obs_scene_t *SECustomVideoComposition::GetCurrentScene()
@@ -1572,6 +1622,95 @@ void SECustomVideoComposition::AttachObsSignals()
 		weak_from_this(), m_compositionServices.hostEventDispatcher);
 
 	add_scene_signals(m_currentScene, m_signalHandlerData);
+
+	//
+	// Armed here, with the rest of the signals, and disconnected first
+	// thing in the destructor. See the comment on
+	// handle_canvas_video_reset: this is what keeps our private canvas's
+	// video mix alive across an obs_reset_video(). CORE-4627.
+	//
+	signal_handler_connect(obs_get_signal_handler(), "canvas_video_reset",
+			       handle_canvas_video_reset, this);
+}
+
+void SECustomVideoComposition::handle_canvas_video_reset(void *data,
+							 calldata_t *cd)
+{
+	SEAsyncCallContextMarker asyncMarker(__FILE__, __LINE__);
+
+	auto *self = static_cast<SECustomVideoComposition *>(data);
+
+	auto *canvas = (obs_canvas_t *)calldata_ptr(cd, "canvas");
+
+	//
+	// Only a reset of the MAIN canvas means obs_reset_video() ran, which
+	// is the thing that frees our mix. Our own canvas emits this signal
+	// too, from the repair below, so returning early here is also what
+	// keeps that from recursing.
+	//
+	auto *mainCanvas = SETRACE_ADDREF(obs_get_main_canvas());
+
+	const bool isMain = (mainCanvas && mainCanvas == canvas);
+
+	obs_canvas_release(SETRACE_DECREF(mainCanvas));
+
+	if (!isMain)
+		return;
+
+	self->RepairCanvasVideo();
+}
+
+void SECustomVideoComposition::RepairCanvasVideo()
+{
+	//
+	// The canvas handle is read under the lock and libobs is called
+	// outside it: holding a composition lock across a libobs call that
+	// emits signals synchronously is what deadlocked SetCurrentScene
+	// (CORE-4627 is not that bug, but it is the same trap).
+	//
+	obs_canvas_t *canvas = nullptr;
+
+	{
+		std::unique_lock<decltype(m_mutex)> lock(m_mutex);
+
+		canvas = m_canvas;
+	}
+
+	if (!canvas)
+		return;
+
+	obs_video_info ovi;
+
+	if (!obs_get_video_info(&ovi)) {
+		blog(LOG_ERROR,
+		     "[obs-streamelements-core]: video composition '%s': cannot read OBS video info, its video mix stays unavailable",
+		     GetId().c_str());
+
+		return;
+	}
+
+	ovi.base_width = m_baseWidth;
+	ovi.base_height = m_baseHeight;
+	ovi.output_width = m_baseWidth;
+	ovi.output_height = m_baseHeight;
+
+	//
+	// Safe against the dangling canvas->mix this exists to repair:
+	// obs_canvas_video_active() and obs_canvas_clear_mix() only ever
+	// compare that pointer, never dereference it, so the stale handle is
+	// cleared without a double free and a fresh mix is registered.
+	//
+	if (!obs_canvas_reset_video(canvas, &ovi)) {
+		blog(LOG_ERROR,
+		     "[obs-streamelements-core]: video composition '%s': failed rebuilding its video mix after an OBS video reset",
+		     GetId().c_str());
+
+		return;
+	}
+
+	blog(LOG_INFO,
+	     "[obs-streamelements-core]: video composition '%s': rebuilt its video mix after an OBS video reset",
+	     GetId().c_str());
 }
 
 std::shared_ptr<SECustomVideoComposition>
@@ -2029,10 +2168,10 @@ SEObsNativeVideoCompositionWithCustomEncoders::GetCompositionInfo(
 	obs_get_video_info(&ovi);
 
 	return std::make_shared<SECustomVideoCompositionInfo>(
-		shared_from_this(), listener, holder, obs_get_video(),
-		ovi.base_width,
+		shared_from_this(), listener, holder, ovi.base_width,
 		ovi.base_height, m_streamingVideoEncoders,
-		m_recordingVideoEncoders, nullptr /* render native OBS canvas */);
+		m_recordingVideoEncoders,
+		nullptr /* render native OBS canvas */);
 }
 
 obs_scene_t *SEObsNativeVideoCompositionWithCustomEncoders::AddScene(
@@ -2222,16 +2361,22 @@ SEObsNativeVideoCompositionWithCustomEncoders::
 
 			auto encoderProvider = std::make_shared<
 				SELazyOBSVideoEncoderProvider>(
-				FormatString("SEObsNativeVideoCompositionWithCustomEncoders::ctor(streamingVideoEncoders[%d])", idx),
+				FormatString(
+					"SEObsNativeVideoCompositionWithCustomEncoders::ctor(streamingVideoEncoders[%d])",
+					idx),
 				SELazyOBSVideoEncoderProvider::
 					CreateEncoderAllocator::Create(
 						streamingVideoEncoderIds[idx],
-						FormatString("%s: streaming video encoder %d", name.c_str(), idx + 1),
+						FormatString(
+							"%s: streaming video encoder %d",
+							name.c_str(), idx + 1),
 						settings,
 						streamingVideoEncoderHotkeyData
 							[idx],
 						ovi.base_width, ovi.base_height,
-						obs_get_video()));
+						[]() -> video_t * {
+							return obs_get_video();
+						}));
 
 			m_streamingVideoEncoders.push_back(encoderProvider);
 		}
@@ -2294,19 +2439,22 @@ void SEObsNativeVideoCompositionWithCustomEncoders::SetRecordingEncoders(
 
 	for (size_t idx = 0; idx < recordingVideoEncoderSettings.size();
 	     ++idx) {
-		auto encoderProvider =
-			std::make_shared<SELazyOBSVideoEncoderProvider>(
-				FormatString("SEObsNativeVideoCompositionWithCustomEncoders::SetRecordingEncoders(recordingVideoEncoder[%d])", idx),
-				SELazyOBSVideoEncoderProvider::
-							 CreateEncoderAllocator::Create(
-					recordingVideoEncoderIds[idx],
+		auto encoderProvider = std::make_shared<
+			SELazyOBSVideoEncoderProvider>(
+			FormatString(
+				"SEObsNativeVideoCompositionWithCustomEncoders::SetRecordingEncoders(recordingVideoEncoder[%d])",
+				idx),
+			SELazyOBSVideoEncoderProvider::CreateEncoderAllocator::
+				Create(recordingVideoEncoderIds[idx],
 				       FormatString(
 					       "%s: recoding video encoder %d",
 					       GetName().c_str(), idx + 1),
-					recordingVideoEncoderSettings[idx],
-					recordingVideoEncoderHotkeyData[idx],
-					ovi.base_width, ovi.base_height,
-					obs_get_video()));
+				       recordingVideoEncoderSettings[idx],
+				       recordingVideoEncoderHotkeyData[idx],
+				       ovi.base_width, ovi.base_height,
+				       []() -> video_t * {
+					       return obs_get_video();
+				       }));
 
 		m_recordingVideoEncoders.push_back(encoderProvider);
 	}

@@ -1,7 +1,7 @@
 # Enforced invariants
 
 `tests/test_source_invariants.cpp` opens the production sources and asserts
-that a fixed pattern is absent — or that a required one is present. **78
+that a fixed pattern is absent — or that a required one is present. **79
 checks** run from its `main()`. They exist because this plug-in's worst bugs
 are not type errors: they are a lock held one line too long, a strong pointer
 where a weak one belonged, an `#ifdef` that silently stopped meaning anything.
@@ -98,6 +98,7 @@ clang-format joining it onto one.
 | `check_signal_handler_data_holds_its_owners_weakly` | and does not keep its owners alive |
 | `check_signal_handler_data_holds_the_composition_per_path` | strongly when the scene manager created it, weakly when the composition did, and the difference is deliberate |
 | `check_the_scene_manager_is_attached_where_it_is_built` | a constructor cannot hand out a weak handle to itself, so attachment is where construction is |
+| `check_no_video_output_handle_is_cached` | nothing keeps a `video_t`, and the composition rebuilds its canvas’s mix on `canvas_video_reset` — OBS frees every mix on a video reset but never restores a *private* canvas’s, so a stored handle dangles for the rest of the process (CORE-4627) |
 
 ### Outputs and encoders
 

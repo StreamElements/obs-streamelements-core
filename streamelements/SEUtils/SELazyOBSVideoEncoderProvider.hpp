@@ -19,6 +19,8 @@
 
 #include <obs.h>
 
+#include <functional>
+
 // OBSEncoderAutoRelease and OBSDataAutoRelease
 #include <obs.hpp>
 #include <obs-module.h>
@@ -173,23 +175,33 @@ public:
 		obs_data_t *m_hotkeys = nullptr;
 		uint32_t m_width;
 		uint32_t m_height;
-		video_t *m_video;
+
+		//
+		// Resolved on every allocation, never captured. obs_reset_video()
+		// frees every canvas mix -- obs_free_canvas_mixes() is
+		// unconditional and covers private canvases too -- and then
+		// builds new ones, so a video_t captured at construction time
+		// dangles for the rest of the process and is handed to every
+		// encoder this allocator creates. CORE-4627.
+		//
+		std::function<video_t *()> m_resolveVideo;
 
 	public:
 		static std::shared_ptr<CreateEncoderAllocator>
 		Create(std::string id, std::string name, obs_data_t *settings,
 		       obs_data_t *hotkeys, uint32_t width, uint32_t height,
-		       video_t *video)
+		       std::function<video_t *()> resolveVideo)
 		{
 			return std::make_shared<CreateEncoderAllocator>(
 				Private{}, id, name, settings, hotkeys, width,
-				height, video);
+				height, resolveVideo);
 		}
 
 		CreateEncoderAllocator(Private, std::string id,
 				       std::string name, obs_data_t *settings,
 				       obs_data_t *hotkeys, uint32_t width,
-				       uint32_t height, video_t *video)
+				       uint32_t height,
+				       std::function<video_t *()> resolveVideo)
 			: SELazyOBSVideoEncoderAllocatorBase(FormatString(
 				  "CreateEncoderAllocator: [%d x %d] %s - %s",
 				  width, height, id.c_str(), name.c_str()))
@@ -198,7 +210,7 @@ public:
 			m_name = name;
 			m_width = width;
 			m_height = height;
-			m_video = video;
+			m_resolveVideo = resolveVideo;
 
 			if (hotkeys) {
 				obs_data_addref(SETRACE_ADDREF(hotkeys));
@@ -250,6 +262,28 @@ public:
 
 		virtual obs_encoder_t *AllocRef() override
 		{
+			//
+			// Resolved before anything is created, so that a reset
+			// in flight refuses the encoder instead of binding it
+			// to a dead or absent video output. Returning an
+			// encoder with no video is not an option: a null
+			// encoder->media crashes in libobs just as a stale one
+			// does -- get_mix_for_video(NULL) finds no mix and
+			// obs_encoder_video_tex_active() dereferences it
+			// anyway, and video_output_get_info(NULL) is read
+			// unchecked by nvenc's init_encoder_base(). CORE-4627.
+			//
+			video_t *video = m_resolveVideo ? m_resolveVideo()
+							: nullptr;
+
+			if (!video) {
+				blog(LOG_ERROR,
+				     "[obs-streamelements-core]: no video output available, refusing to create video encoder: %s",
+				     slug().c_str());
+
+				return nullptr;
+			}
+
 			auto created_encoder = obs_video_encoder_create(
 				m_id.c_str(), m_name.c_str(), m_settings,
 				m_hotkeys);
@@ -280,7 +314,7 @@ public:
 			obs_encoder_set_scaled_size(created_encoder, m_width,
 						    m_height);
 
-			obs_encoder_set_video(created_encoder, m_video);
+			obs_encoder_set_video(created_encoder, video);
 
 			return created_encoder;
 		}
