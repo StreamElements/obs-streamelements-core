@@ -14,3 +14,4 @@
 - Fix: adding a hotkey binding through the JavaScript API reported success when the binding had been rejected
 - Fix: on macOS, SE.Live's "open file location" did nothing instead of revealing the file in Finder
 - Infra: builds are now made against OBS Studio 33.0.1
+- New: a SE.Live canvas's Backtrack can now be saved with a keyboard shortcut -- bind it under Settings > Hotkeys, "SE.Live Backtrack: Save replay"

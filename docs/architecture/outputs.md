@@ -29,6 +29,23 @@ three values.
 encoding settings, streaming settings, and the available encoder catalogues.
 17 host API methods reach it.
 
+## A Backtrack has its own "Save replay" hotkey
+
+OBS's "Save Replay" hotkey only reaches OBS's own replay buffer, so a
+`SECustomReplayBufferOutput` -- the Backtrack of a SE.Live canvas -- owns an
+`SEReplayBufferHotkey`. It registers a frontend hotkey named
+`SELive.Backtrack.SaveReplay.<output id>` (see
+`SEReplayBufferHotkeyNaming.hpp`) that calls `TriggerSaveReplayBuffer()`, so it
+is listed under Settings > Hotkeys and does nothing while the output is
+inactive.
+
+OBS persists only the hotkeys it registered itself, so the class stores the
+bindings: one JSON file per output id under `replay-buffer-hotkeys/` in the
+module config directory, written from the UI thread (the
+`hotkey_bindings_changed` signal can arrive with libobs's hotkey lock held, and
+saving takes it) and once more on destruction. The output resets the hotkey
+first in its destructor, so no key press can reach a half-destroyed output.
+
 ## OBS's own single stream has exactly one owner
 
 `SEHostStreamingManager` is the one class in the plug-in that calls

@@ -4,7 +4,9 @@
 #include "SEObsOutputType.hpp"
 #include "SEVideoComposition.hpp"
 #include "SEAudioComposition.hpp"
+#include "SEReplayBufferHotkey.hpp"
 
+#include <memory>
 #include <shared_mutex>
 
 //
@@ -902,6 +904,8 @@ private:
 		SELazyOBSVideoEncoderProvider::SELazyOBSEncoderReference>>
 		m_videoEncoders;
 
+	std::unique_ptr<SEReplayBufferHotkey> m_saveReplayHotkey;
+
 public:
 	SECustomReplayBufferOutput(
 		std::string id, std::string name,
@@ -921,9 +925,18 @@ public:
 		  m_audioTracks(audioTracks),
 		  m_videoEncoderTemplates(videoEncoders)
 	{
+		// Lets the user bind a key (Settings > Hotkeys) to save this
+		// canvas' Backtrack, as OBS's own hotkey does for the native
+		// replay buffer. Registered even while inactive, so it can be
+		// bound before going live; pressing it then does nothing.
+		m_saveReplayHotkey = std::make_unique<SEReplayBufferHotkey>(
+			id, name, [this]() { TriggerSaveReplayBuffer(); });
 	}
 
 	virtual ~SECustomReplayBufferOutput() {
+		// First, so no key press can reach a half-destroyed output.
+		m_saveReplayHotkey.reset();
+
 		Stop();
 	}
 

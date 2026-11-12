@@ -107,6 +107,13 @@ se_add_test(test_overlay_url_utils
   "${REPO_ROOT}/streamelements/SEUtils/SEOverlayUrlUtils.cpp"
 )
 
+# --- Behavioural test: Backtrack "Save replay" hotkey naming ----------------
+#
+# Header-only and libobs-free: the hotkey name and the file stem an output id
+# from the web is turned into.
+se_add_test(test_replay_buffer_hotkey_naming
+  test_replay_buffer_hotkey_naming.cpp
+)
 # --- Behavioural test: the libcurl wrappers --------------------------------
 #
 # The one test here that is not self-contained: it links libcurl and runs a

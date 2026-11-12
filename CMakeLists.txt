@@ -578,6 +578,7 @@ set(obs-streamelements-core_SOURCES
 	streamelements/SEDialogApiMessageHandler.cpp
 	streamelements/SEBrowserDialog.cpp
 	streamelements/SEHotkeyManager.cpp
+	streamelements/SEReplayBufferHotkey.cpp
 	streamelements/SEReportIssueDialog.cpp
 	streamelements/SESecretRedactor.cpp
 	streamelements/SEProgressDialog.cpp
@@ -797,6 +798,8 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SEBrowserDialog.hpp
 	streamelements/ISEHotkeyManager.hpp
 	streamelements/SEHotkeyManager.hpp
+	streamelements/SEReplayBufferHotkey.hpp
+	streamelements/SEReplayBufferHotkeyNaming.hpp
 	streamelements/SEReportIssueDialog.hpp
 	streamelements/SESecretRedactor.hpp
 	streamelements/SEProgressDialog.hpp
