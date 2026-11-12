@@ -711,7 +711,32 @@ private:
 private:
 	std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider>> m_streamingVideoEncoders;
 	std::vector<std::shared_ptr<SELazyOBSVideoEncoderProvider>> m_recordingVideoEncoders;
-	video_t *m_video = nullptr;
+
+	//
+	// No cached video_t here on purpose. It is resolved from m_canvas at
+	// the point of use, because obs_reset_video() frees every canvas mix
+	// and builds new ones. CORE-4627.
+	//
+
+	//
+	// obs_reset_video() frees every video mix, but it only clears and
+	// rebuilds the canvases its reset path can reach -- and it cannot
+	// reach a PRIVATE one. Canvases go into obs->data.canvases via
+	// HASH_ADD_UUID (the hh_uuid handle), while obs_free_canvas_mixes()
+	// (libobs/obs-canvas.c:290) and restore_canvases() (libobs/obs.c:677)
+	// walk that same head with the hh handle, which a private canvas is
+	// never added to. So our canvas keeps a pointer to a mix that
+	// obs_free_video() has already freed, and nothing ever rebuilds it:
+	// measured as canvas->mix unchanged while the mix count dropped from
+	// 7 to 4, and confirmed by making the canvas named, after which OBS
+	// restores it correctly.
+	//
+	// We therefore rebuild it ourselves, on the global canvas_video_reset
+	// signal that the main canvas emits on every obs_reset_video().
+	// CORE-4627.
+	//
+	static void handle_canvas_video_reset(void *data, calldata_t *cd);
+	void RepairCanvasVideo();
 
 	obs_source_t* m_transition = nullptr;
 	obs_source_t *m_rootSource = nullptr;

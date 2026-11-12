@@ -104,6 +104,25 @@ public:
 				Reset();
 
 				if (m_obsEncoderInfo.get()) {
+					//
+					// Resolved before the encoder exists,
+					// so a video reset in flight refuses
+					// the encoder rather than binding it
+					// to an absent video output. A null
+					// encoder->media faults in libobs the
+					// same way a stale one does.
+					// CORE-4627.
+					//
+					video_t *video = m_videoCompositionBase
+								 ->GetVideo();
+
+					if (!video) {
+						blog(LOG_ERROR,
+						     "[obs-streamelements-core]: no video output available, refusing to create output video encoder");
+
+						return nullptr;
+					}
+
 					result =
 						SETRACE_AUTODECREF(DeserializeObsVideoEncoder(
 						m_obsEncoderInfo));
@@ -135,10 +154,8 @@ public:
 						obs_encoder_set_scaled_size(
 							result, width, height);
 
-						obs_encoder_set_video(
-							result,
-							m_videoCompositionBase
-								->GetVideo());
+						obs_encoder_set_video(result,
+								      video);
 
 						m_customEncoder = SETRACE_ADDREF(
 							obs_encoder_get_ref(

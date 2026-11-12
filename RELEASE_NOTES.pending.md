@@ -1,0 +1,1 @@
+- Fix: OBS Studio could crash when starting a stream or recording from a SE.Live canvas, after OBS Studio’s video settings had been changed earlier in the same session
