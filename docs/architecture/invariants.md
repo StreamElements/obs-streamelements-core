@@ -1,7 +1,7 @@
 # Enforced invariants
 
 `tests/test_source_invariants.cpp` opens the production sources and asserts
-that a fixed pattern is absent — or that a required one is present. **76
+that a fixed pattern is absent — or that a required one is present. **78
 checks** run from its `main()`. They exist because this plug-in's worst bugs
 are not type errors: they are a lock held one line too long, a strong pointer
 where a weak one belonged, an `#ifdef` that silently stopped meaning anything.
@@ -163,6 +163,7 @@ clang-format joining it onto one.
 | --- | --- |
 | `check_every_source_file_ends_with_a_newline` | clang promotes `-Wnewline-eof` to an error under `-Werror`; one missing byte failed a macOS build out of 95 translation units |
 | `check_no_platform_guard_uses_the_bare_APPLE_macro` | `APPLE` is a CMake variable, not a compiler define — three `#ifdef APPLE` branches had never been compiled, and one made a host API method answer false on macOS while doing nothing |
+| `check_the_diagram_stylesheets_stay_identical` | `docs/analytics/assets/diagrams.css` must stay a byte-for-byte copy of the architecture one: a MkDocs site cannot reference a file outside its own `docs_dir`, so the stylesheet both sites' figures use exists twice |
 
 ### CI and release plumbing
 

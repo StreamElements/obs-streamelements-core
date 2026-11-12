@@ -22,8 +22,19 @@ columns. The figures are hand-authored inline SVG drawn in `currentColor` so one
 drawing serves the light and the dark palette — the few values that cannot be an
 opacity of the page foreground live in `docs/architecture/assets/diagrams.css`.
 
-`docs/api/` is the other half and a separate site: it documents the surface a
-page sees, so a new or changed `window.host` method needs an edit in both trees.
+`docs/api/` is a separate site: it documents the surface a page sees, so a new
+or changed `window.host` method needs an edit in both trees.
+
+`docs/analytics/` is the third site, built with `mkdocs build -f
+mkdocs.analytics.yml` and published at `/analytics/`. It is the only
+description of the analytics pipeline that exists — the 22 event names across
+the plug-in, the installer and the uninstaller, and the payload each carries —
+so **a new, renamed or removed event, or a changed field, updates it in the
+same commit**, including the NSIS side. Its `assets/diagrams.css` is a
+byte-for-byte copy of the architecture one, because a MkDocs site can only
+reference files inside its own `docs_dir`;
+`check_the_diagram_stylesheets_stay_identical` keeps the two in step. Same
+79-column prose rule.
 
 ## Build
 

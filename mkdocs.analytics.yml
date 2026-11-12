@@ -1,0 +1,100 @@
+# Builds docs/analytics/ into the /analytics/ section of the GitHub Pages
+# site, beside the JavaScript OBS API reference at /api/ and the
+# architecture chapters at /architecture/.
+#
+# A THIRD MkDocs site, for the same reason there is a second one: each site
+# is published under its own `site_url` and keeps its own nav, its own
+# search index and its own stable URLs. See the header of
+# mkdocs.architecture.yml for the argument in full.
+#
+# Cross-site links are ABSOLUTE https URLs. Each build only knows its own
+# docs_dir, so `../architecture/...` is a link MkDocs cannot resolve, and
+# with `strict: true` an unresolved link fails the build. An external URL
+# is not validated.
+
+site_name: Analytics
+site_description: >-
+  Every analytics event SE.Live reports -- from the plug-in, the installer
+  and the uninstaller -- and the exact payload each one carries.
+site_url: https://streamelements.github.io/obs-streamelements-core/analytics/
+repo_url: https://github.com/StreamElements/obs-streamelements-core
+edit_uri: edit/master/docs/analytics/
+
+docs_dir: docs/analytics
+site_dir: _site/analytics
+
+# Same settings as the other two builds, and for the same reason: these
+# pages cross-reference each other heavily, so a renamed heading or a moved
+# file should fail here rather than publish a dead link.
+strict: true
+validation:
+  links:
+    absolute_links: relative_to_docs
+    unrecognized_links: warn
+    anchors: warn
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.top
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - toc:
+      permalink: true
+  - tables
+  - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+plugins:
+  - search
+
+# A byte-for-byte copy of docs/architecture/assets/diagrams.css, because a
+# MkDocs site can only reference files inside its own docs_dir and these
+# two sites draw their figures the same way.
+# check_the_diagram_stylesheets_stay_identical keeps the copies in step.
+extra_css:
+  - assets/diagrams.css
+
+# An explicit nav, like the architecture build. The envelope and the
+# identity rules come before the catalogues because every catalogue entry
+# is read against them.
+nav:
+  - Overview: README.md
+  - The envelope: envelope.md
+  - Identity and sessions: identity.md
+  - Plug-in events: plugin.md
+  - Installer events: installer.md
+  - Uninstaller events: uninstaller.md
+  - Reading the data: reading-the-data.md
+  - Adding an event: adding-an-event.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/StreamElements/obs-streamelements-core
