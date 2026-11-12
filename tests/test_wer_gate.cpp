@@ -60,6 +60,13 @@ struct Crash {
 	// Module names on the crashed thread, innermost first.
 	std::vector<std::string> stack;
 
+	// What the registration block carries alongside seHandlerActive:
+	// stack pointer of the OUTERMOST handler frame, and the stack address
+	// of each frame above. Zero means the field was not published, in
+	// which case the gate behaves exactly as it did before.
+	unsigned long long handlerStackPointer = 0;
+	std::vector<unsigned long long> stackPointers;
+
 	// What the registration block carried.
 	std::vector<std::string> modulesOfInterest = {"obs-streamelements-core",
 						      "obs-streamelements"};
@@ -73,6 +80,7 @@ struct Trace {
 	bool walkedStack = false;
 	bool forwarded = false;
 	int skippedLeadingOwnFrames = 0;
+	int skippedHandlerCallees = 0;
 };
 
 static bool IsNativeWerException(unsigned long code)
@@ -138,8 +146,26 @@ static bool Decide(const Crash &crash, Trace &trace)
 	bool ours = false;
 	bool skippingOwnLeadingFrames = crash.handlerWasActive;
 
-	for (const auto &frame : crash.stack) {
+	for (size_t i = 0; i < crash.stack.size(); ++i) {
+		const std::string &frame = crash.stack[i];
 		const bool isOurs = IsModuleOfInterest(crash, frame);
+
+		// Anything at or below the outermost handler frame is something
+		// the handler itself called -- ntdll's heap reporter, OBS's
+		// message box -- and says nothing about whose crash this is.
+		// The leading-run skip cannot cover this: a fail-fast inside the
+		// handler puts ntdll innermost, so the skip disengages on the
+		// first frame and our handler frame further down is then read as
+		// proof the crash is ours. That is SELIVE-8K.
+		if (crash.handlerWasActive && crash.handlerStackPointer &&
+		    i < crash.stackPointers.size() &&
+		    crash.stackPointers[i] <= crash.handlerStackPointer) {
+			++trace.skippedHandlerCallees;
+			// Past the handler's own region now, so the leading-run
+			// skip has done its job and must not eat a genuine frame.
+			skippingOwnLeadingFrames = false;
+			continue;
+		}
 
 		if (skippingOwnLeadingFrames) {
 			if (isOurs) {
@@ -465,6 +491,64 @@ static void check_ungated_module_would_claim_other_peoples_crashes()
 	      "CORE-864: the gate must decline all three, which is the entire difference between registering ours and registering sentry's");
 }
 
+// SELIVE-8K: 4,338 users on one title. The real fault was libobs's
+// should_silence_monitored_source; heap corruption then fired inside OBS's
+// OWN message box while our handler sat mid-stack. Innermost is ntdll, so the
+// leading-run skip never engages and our handler frame is read as evidence.
+// Sentry then titles the event by the innermost frame: RtlReportFatalFailure.
+static void check_fail_fast_inside_our_handler_behind_ntdll_frames_is_declined()
+{
+	Crash crash;
+	crash.code = STATUS_HEAP_CORRUPTION;
+	crash.handlerWasActive = true;
+	crash.handlerStackPointer = 0x1000;
+	crash.stack = {
+		"ntdll",                   // RtlReportFatalFailure
+		"ntdll",                   // RtlFreeHeap
+		"user32",                  // MessageBoxA
+		"obs",                     // OBS's own crash handler
+		"obs-streamelements-core", // OUR handler
+		"kernelbase",              // UnhandledExceptionFilter
+		"obs",                     // the real fault, in libobs
+		"obs",
+	};
+	// Stacks grow down: handler callees are BELOW the boundary, callers above.
+	crash.stackPointers = {0x800,  0x840,  0x880,  0x8c0,
+			       0x1000, 0x1040, 0x1080, 0x10c0};
+
+	Trace trace;
+
+	check(!Decide(crash, trace),
+	      "CORE-968: a fail-fast inside our handler is not ours, however many non-ours frames precede it");
+	check(trace.skippedHandlerCallees == 5,
+	      "CORE-968: the handler frame and everything it called must be skipped");
+	check(!trace.forwarded,
+	      "CORE-968: such a crash must never reach sentry's module");
+}
+
+// The other half again: the boundary must not swallow a real one.
+static void check_the_boundary_still_claims_a_genuine_fault()
+{
+	Crash crash;
+	crash.code = STATUS_HEAP_CORRUPTION;
+	crash.handlerWasActive = true;
+	crash.handlerStackPointer = 0x1000;
+	crash.stack = {
+		"ntdll",                   // reporter, inside the handler
+		"obs-streamelements-core", // OUR handler
+		"obs-streamelements-core", // where it actually faulted
+		"obs",
+	};
+	crash.stackPointers = {0x800, 0x1000, 0x1040, 0x1080};
+
+	Trace trace;
+
+	check(Decide(crash, trace),
+	      "CORE-968: the boundary must not hide a fault genuinely in our code above it");
+	check(trace.forwarded,
+	      "CORE-968: it must still be forwarded to sentry's module");
+}
+
 int main()
 {
 	check_fastfail_in_our_module_is_claimed();
@@ -479,6 +563,8 @@ int main()
 	check_crash_inside_our_own_handler_is_declined();
 	check_crash_in_our_code_still_claimed_below_the_handler();
 	check_the_skip_is_conditional_on_the_handler_running();
+	check_fail_fast_inside_our_handler_behind_ntdll_frames_is_declined();
+	check_the_boundary_still_claims_a_genuine_fault();
 
 	check_no_prior_consent_is_required();
 

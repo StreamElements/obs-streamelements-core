@@ -263,6 +263,13 @@ SEWerStackTouchesModuleOfInterest(HANDLE process, HANDLE thread,
 	BOOL skippingOwnLeadingFrames = registration->seHandlerActive ? TRUE
 								      : FALSE;
 
+	// Where our handler's outermost frame is. Everything at or below it on
+	// the stack is something the handler called, whatever module it is in.
+	const ULONG64 handlerStackPointer =
+		registration->seHandlerActive
+			? (ULONG64)registration->seHandlerStackPointer
+			: 0;
+
 	if (skippingOwnLeadingFrames) {
 		SEWerLog(
 			"our crash handler was running; skipping its frames before judging");
@@ -316,6 +323,23 @@ SEWerStackTouchesModuleOfInterest(HANDLE process, HANDLE thread,
 
 		const BOOL ours =
 			SEWerIsModuleOfInterest(registration, moduleName);
+
+		// Stacks grow down, so a frame at or below the handler's own
+		// frame is one the handler called. The leading-run skip cannot
+		// cover this case: a fail-fast inside the handler puts ntdll
+		// innermost, the skip disengages immediately, and our handler
+		// frame further down is then mistaken for the fault (SELIVE-8K).
+		if (handlerStackPointer && frame.AddrStack.Offset &&
+		    frame.AddrStack.Offset <= handlerStackPointer) {
+			SEWerLog(
+				"frame %d is in %s -- at or below our handler's frame; the handler called it, so it is not evidence",
+				index, moduleName);
+
+			// Past the handler's own region now, so the leading-run
+			// skip has done its job and must not eat a real frame.
+			skippingOwnLeadingFrames = FALSE;
+			continue;
+		}
 
 		if (skippingOwnLeadingFrames) {
 			if (ours) {
