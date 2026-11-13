@@ -295,6 +295,30 @@ se_add_test(test_crash_oom_handler
 se_add_test(test_crash_context_advance
   test_crash_context_advance.cpp)
 
+# --- Behavioural test: the SAME correction, with the real unwind ----------
+#
+# The test above models the decision. This one compiles the production walk
+# and runs it over a stack built here, so every RtlLookupFunctionEntry and
+# RtlVirtualUnwind in it is the shipping one -- which is the half the model
+# says, in its own header comment, that it cannot speak to.
+#
+# Possible only since the walk moved out of SESentryCrashHandler.cpp, whose
+# include closure is libobs, Qt and sentry. SECrashPlumbingUnwind.cpp depends
+# on windows.h and nothing else.
+#
+# Windows x64 only: the unwind API IS the subject here, so there is nothing
+# to run elsewhere rather than something to skip.
+if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+  se_add_test(test_crash_plumbing_unwind
+    test_crash_plumbing_unwind.cpp
+    "${REPO_ROOT}/streamelements/SECrashPlumbingUnwind.cpp"
+  )
+else()
+  message(STATUS
+    "not Windows x64: skipping test_crash_plumbing_unwind. The decision it "
+    "exercises is modelled by test_crash_context_advance everywhere.")
+endif()
+
 # --- Behavioural test: a queued task must not call a virtual on a widget
 #     Qt has already destroyed. SEPleaseWaitWindow posted lambdas capturing
 #     a raw `this`, which reaches _purecall on a dual-owned QDialog. ---

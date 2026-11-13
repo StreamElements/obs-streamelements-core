@@ -604,10 +604,40 @@ static void check_sentry_is_handed_the_fault_not_our_handler()
 	check(flat.find("if(fromAbortDoor){") != std::string::npos,
 	      "CORE-2267: the correction must be gated on the abort door; an SEH CONTEXT comes from the OS at the fault point and must not be advanced");
 
+	// The door list IS the definition of the correction, and it stayed with
+	// the handler when the walk moved out to its own translation unit. A
+	// leg dropped from here is a whole class of event quietly going back to
+	// being titled after our own frames, with nothing else failing.
+	check(flat.find("(constvoid*)&SentryAbortHandler") != std::string::npos,
+	      "CORE-2267: the plumbing list must still name SentryAbortHandler, or the abort door's innermost frame is never skipped");
+
+	check(flat.find("(constvoid*)&SentryPurecallHandler") !=
+		      std::string::npos,
+	      "CORE-2267: the plumbing list must still name SentryPurecallHandler, or every purecall event is titled after it");
+
+	check(flat.find("(constvoid*)&abort") != std::string::npos,
+	      "CORE-2267: the plumbing list must still name abort");
+
+	check(flat.find("(constvoid*)&raise") != std::string::npos,
+	      "CORE-2267: the plumbing list must still name raise");
+
+	check(flat.find("(constvoid*)&_purecall") != std::string::npos,
+	      "CORE-2267: the plumbing list must still name _purecall");
+
+	// The walk itself. A translation unit of its own since the follow-up,
+	// depending on windows.h and nothing else, so that tests/ can compile
+	// it and drive the real RtlVirtualUnwind over a real stack.
+	auto walk = strip_line_comments(
+		slurp("streamelements/SECrashPlumbingUnwind.cpp"));
+
+	std::string walkFlat;
+	for (size_t i = 0; i < walk.size(); ++i)
+		if (!std::isspace(static_cast<unsigned char>(walk[i])))
+			walkFlat += walk[i];
+
 	// Fail-safe: the fallback is the whole safety argument.
 	auto body = function_body(
-		cpp,
-		"bool AdvanceContextPastCrashPlumbingImpl(CONTEXT *context)");
+		walk, "bool AdvanceContextPastPlumbingImpl(CONTEXT *context,");
 
 	check(!body.empty(),
 	      "CORE-2267: the context-advance implementation must be present");
@@ -623,11 +653,12 @@ static void check_sentry_is_handed_the_fault_not_our_handler()
 	check(fb.find("if(!entry)returnfalse;") != std::string::npos,
 	      "CORE-2267: a frame with no RUNTIME_FUNCTION must abandon the walk rather than be guessed past");
 
-	check(fb.find("IsCrashPlumbingFrame(work.Rip)||work.Rip==context->Rip") !=
+	check(fb.find("IsPlumbingFrame(work.Rip,plumbing,plumbingCount)||work.Rip==context->Rip") !=
 		      std::string::npos,
-	      "CORE-2267: a walk that never escapes our own machinery, or that moves nothing, must keep the original context");
+	      "CORE-2267: a walk that never escapes the listed functions, or that moves nothing, must keep the original context");
 
-	check(flat.find("__except(EXCEPTION_EXECUTE_HANDLER){returnfalse;}") !=
+	check(walkFlat.find(
+		      "__except(EXCEPTION_EXECUTE_HANDLER){returnfalse;}") !=
 		      std::string::npos,
 	      "CORE-2267: the walk runs on a stack that may be why the process is dying, so it must be guarded and fall back on a fault");
 }

@@ -3,6 +3,7 @@
 #include "SEConfig.hpp"
 #include "SECrashConsentDialog.hpp"
 #include "SECrashContext.hpp"
+#include "SECrashPlumbingUnwind.hpp"
 #include "SEWerRegistration.h"
 #include "SEUtils.hpp"
 
@@ -1466,38 +1467,27 @@ static void __cdecl SentryPurecallHandler(void)
 // any of those returns false and the caller keeps the ORIGINAL context. The
 // worst case is exactly today's behaviour, never a worse one.
 //
-// What it is NOT: verified in the field. The model below it is tested and
-// mutation-proven, but RtlVirtualUnwind running inside a dying process is
-// precisely the part no test here can exercise.
+// The walk itself is in SECrashPlumbingUnwind.cpp, which depends on nothing
+// but windows.h so that tests/ can compile it and drive the real
+// RtlVirtualUnwind over a real stack -- the half a model of the decision
+// cannot speak to, and says so. What stays unverified is narrower than it
+// was: not the unwind, but the unwind running inside a dying process.
 //
 #if defined(_M_AMD64)
 
 extern "C" int __cdecl _purecall(void);
 
-static PVOID FunctionBaseOf(DWORD64 address)
+static bool AdvanceContextPastCrashPlumbing(CONTEXT *context)
 {
-	DWORD64 imageBase = 0;
-
-	PRUNTIME_FUNCTION entry =
-		RtlLookupFunctionEntry(address, &imageBase, NULL);
-
-	if (!entry)
-		return NULL;
-
-	return (PVOID)(imageBase + entry->BeginAddress);
-}
-
-static bool IsCrashPlumbingFrame(DWORD64 rip)
-{
-	PVOID base = FunctionBaseOf(rip);
-
-	if (!base)
-		return false;
-
 	// The whole abort door, in the order it stacks up:
 	//   SentryAbortHandler <- raise <- abort <- SentryPurecallHandler
 	//     <- _purecall <- the code that actually broke
 	// and, without the purecall leg, the plain abort() case.
+	//
+	// This list IS the definition of the door, which is why it stays here
+	// rather than travelling with the walk: a leg added above without a
+	// line here would be walked straight past, and every event on that
+	// path would go back to being titled after it.
 	const void *const plumbing[] = {
 		(const void *)&SentryAbortHandler,
 		(const void *)&SentryPurecallHandler,
@@ -1506,65 +1496,8 @@ static bool IsCrashPlumbingFrame(DWORD64 rip)
 		(const void *)&_purecall,
 	};
 
-	for (size_t i = 0; i < sizeof(plumbing) / sizeof(plumbing[0]); ++i) {
-		if (!plumbing[i])
-			continue;
-
-		if (FunctionBaseOf((DWORD64)(uintptr_t)plumbing[i]) == base)
-			return true;
-	}
-
-	return false;
-}
-
-static bool AdvanceContextPastCrashPlumbingImpl(CONTEXT *context)
-{
-	CONTEXT work = *context;
-	DWORD64 lastSp = work.Rsp;
-
-	// Bounded: the door is five frames deep at most, so anything past a
-	// handful means the walk is not describing the stack we think it is.
-	for (int depth = 0; depth < 8; ++depth) {
-		if (!IsCrashPlumbingFrame(work.Rip))
-			break;
-
-		DWORD64 imageBase = 0;
-		PRUNTIME_FUNCTION entry =
-			RtlLookupFunctionEntry(work.Rip, &imageBase, NULL);
-
-		if (!entry)
-			return false;
-
-		PVOID handlerData = NULL;
-		DWORD64 establisherFrame = 0;
-
-		RtlVirtualUnwind(UNW_FLAG_NHANDLER, imageBase, work.Rip, entry,
-				 &work, &handlerData, &establisherFrame, NULL);
-
-		// Stacks grow down, so a frame we unwound TO must sit above the
-		// one we came from. Anything else means the walk is lost.
-		if (!work.Rip || work.Rsp <= lastSp)
-			return false;
-
-		lastSp = work.Rsp;
-	}
-
-	// Never got clear of our own machinery, or nothing moved at all.
-	if (IsCrashPlumbingFrame(work.Rip) || work.Rip == context->Rip)
-		return false;
-
-	*context = work;
-	return true;
-}
-
-static bool AdvanceContextPastCrashPlumbing(CONTEXT *context)
-{
-	// The stack this walks may be the reason the process is dying.
-	__try {
-		return AdvanceContextPastCrashPlumbingImpl(context);
-	} __except (EXCEPTION_EXECUTE_HANDLER) {
-		return false;
-	}
+	return SEAdvanceContextPastPlumbing(
+		context, plumbing, sizeof(plumbing) / sizeof(plumbing[0]));
 }
 
 #endif // _M_AMD64
