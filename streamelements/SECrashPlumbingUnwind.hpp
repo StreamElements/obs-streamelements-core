@@ -42,4 +42,19 @@
 bool SEAdvanceContextPastPlumbing(CONTEXT *context, const void *const *plumbing,
 				  size_t plumbingCount);
 
+//
+// True when `instructionPointer` lies inside one of the listed functions,
+// by the same exact function-entry match the walk above uses.
+//
+// Exposed because the in-process module-of-interest gate needs the same
+// question answered: on the abort door the innermost frames are the CRT's
+// (`raise`, `abort`), so a gate that skips only frames belonging to this
+// plug-in skips nothing and then latches on our own handler two frames
+// down. Matching the DOOR rather than the MODULE is what separates the
+// handler from the fault, and it is exact -- a module-name rule would also
+// skip a genuine fault in our own code, which is silent under-reporting.
+//
+bool SEIsCrashPlumbingFrame(DWORD64 instructionPointer,
+			    const void *const *plumbing, size_t plumbingCount);
+
 #endif // _M_AMD64

@@ -1068,8 +1068,9 @@ static void RegisterWerModule(uint64_t sentryInitThreadId,
 //   - crash.kind falls back to "abort" rather than "exception".
 //
 #if defined(_M_AMD64)
-// Defined below, with the abort door whose frames it skips.
+// Both defined below, beside the abort door they describe.
 static bool AdvanceContextPastCrashPlumbing(CONTEXT *context);
+static const void *const *CrashPlumbingFunctions(size_t *count);
 #endif
 
 static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
@@ -1137,10 +1138,28 @@ static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
 		}
 	}
 
-	if (s_crashContext)
+	if (s_crashContext) {
+#if defined(_M_AMD64)
+		// What the leading-frame skip needs in order to recognise the
+		// CRT frames the door runs through. Without it the skip stops
+		// on `raise` -- innermost on the purecall door, and not ours --
+		// having skipped nothing, and the gate then latches on our own
+		// handler frame and claims every abort in the process
+		// (SELIVE-230).
+		if (fromAbortDoor) {
+			size_t plumbingCount = 0;
+			const void *const *plumbing =
+				CrashPlumbingFunctions(&plumbingCount);
+
+			s_crashContext->SetCrashPlumbingFunctions(
+				plumbing, plumbingCount);
+		}
+#endif
+
 		s_crashContext->WalkStack(
 			pExceptionInfo->ContextRecord,
 			/*skipOwnLeadingFrames=*/fromAbortDoor);
+	}
 
 	// Stops host API calls from running once we are on the crash path. The
 	// consent prompt below is modal, and a modal message loop keeps
@@ -1477,18 +1496,27 @@ static void __cdecl SentryPurecallHandler(void)
 
 extern "C" int __cdecl _purecall(void);
 
-static bool AdvanceContextPastCrashPlumbing(CONTEXT *context)
+//
+// The whole abort door, in the order it stacks up:
+//   SentryAbortHandler <- raise <- abort <- SentryPurecallHandler
+//     <- _purecall <- the code that actually broke
+// and, without the purecall leg, the plain abort() case.
+//
+// This list IS the definition of the door, which is why it stays here
+// rather than travelling with the code that consumes it: a leg added
+// above without a line here would be walked straight past.
+//
+// TWO things consume it now, and they are the two halves of the same
+// confusion. The context advance uses it so sentry is told where the
+// FAULT is rather than where our handler is; the module-of-interest gate
+// uses it so it can tell our handler's frames from the fault's, which
+// frame ownership alone cannot do once the innermost frames are the CRT's
+// (SELIVE-230). One list, so the two can never disagree about what the
+// door is.
+//
+static const void *const *CrashPlumbingFunctions(size_t *count)
 {
-	// The whole abort door, in the order it stacks up:
-	//   SentryAbortHandler <- raise <- abort <- SentryPurecallHandler
-	//     <- _purecall <- the code that actually broke
-	// and, without the purecall leg, the plain abort() case.
-	//
-	// This list IS the definition of the door, which is why it stays here
-	// rather than travelling with the walk: a leg added above without a
-	// line here would be walked straight past, and every event on that
-	// path would go back to being titled after it.
-	const void *const plumbing[] = {
+	static const void *const plumbing[] = {
 		(const void *)&SentryAbortHandler,
 		(const void *)&SentryPurecallHandler,
 		(const void *)&abort,
@@ -1496,8 +1524,18 @@ static bool AdvanceContextPastCrashPlumbing(CONTEXT *context)
 		(const void *)&_purecall,
 	};
 
-	return SEAdvanceContextPastPlumbing(
-		context, plumbing, sizeof(plumbing) / sizeof(plumbing[0]));
+	if (count)
+		*count = sizeof(plumbing) / sizeof(plumbing[0]);
+
+	return plumbing;
+}
+
+static bool AdvanceContextPastCrashPlumbing(CONTEXT *context)
+{
+	size_t count = 0;
+	const void *const *plumbing = CrashPlumbingFunctions(&count);
+
+	return SEAdvanceContextPastPlumbing(context, plumbing, count);
 }
 
 #endif // _M_AMD64

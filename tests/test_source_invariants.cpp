@@ -564,10 +564,95 @@ static void check_abort_path_drops_own_frames()
 		check(verdict != std::string::npos && verdict > skip,
 		      "CORE-860: the skip must be applied before the module-of-interest verdict");
 
+		// Both branches of the armed skip must disengage -- the one that
+		// matches the abort door and the ownership-only fallback -- and
+		// both before the verdict. Counted rather than measured as a byte
+		// distance: the region legitimately grew a branch for SELIVE-230,
+		// and a window would have to be re-guessed every time it changes.
 		auto stops = cpp.find("m_skippingOwnFrames = false;", skip);
-		check(stops != std::string::npos && stops - skip < 200,
-		      "CORE-860: skipping must stop at the first frame that is not ours");
+		check(stops != std::string::npos && stops < verdict,
+		      "CORE-860: skipping must stop before the module-of-interest verdict is taken");
+
+		size_t disengages = 0;
+		for (auto at = cpp.find("m_skippingOwnFrames = false;", skip);
+		     at != std::string::npos && at < verdict;
+		     at = cpp.find("m_skippingOwnFrames = false;", at + 1))
+			++disengages;
+
+		check(disengages == 2,
+		      "CORE-860/SELIVE-230: each branch of the armed skip -- door-matching and the ownership-only fallback -- must disengage at the first frame it does not recognise; a branch that never disengages would consume the whole stack and decline every crash");
 	}
+	std::string gateFlatEarly;
+	for (size_t i = 0; i < cpp.size(); ++i)
+		if (!std::isspace(static_cast<unsigned char>(cpp[i])))
+			gateFlatEarly += cpp[i];
+
+	//
+	// SELIVE-230: ownership alone cannot find the leading run.
+	//
+	// On the purecall door the innermost frames are the CRT's -- `raise`,
+	// then `abort` -- so a skip defined as "while the frame is ours"
+	// disengages on frame 0 having skipped nothing, and the verdict then
+	// latches on SentryPurecallHandler two frames down. The door is matched
+	// by function entry instead.
+	//
+	check(cpp.find("SEIsCrashPlumbingFrame(entry.offset") !=
+		      std::string::npos,
+	      "SELIVE-230: the armed skip must recognise the abort door's own functions; ownership alone disengages on `raise` having skipped nothing, and the gate then claims every abort in the process");
+
+	// Present is not enough: the branch has to be REACHABLE. Pinning only
+	// the call let `if (m_plumbing && m_plumbingCount)` become `if (false)`
+	// with the call sitting dead inside it, and the check stayed green --
+	// found by mutation while writing this, not by reading it.
+	check(gateFlatEarly.find("if(m_plumbing&&m_plumbingCount){") !=
+		      std::string::npos,
+	      "SELIVE-230: the door-matching branch must be taken whenever a door is supplied; a branch guarded on anything else leaves the call in place and the rule inert");
+
+	const std::string &gateFlat = gateFlatEarly;
+
+	// And it must be the door ALONE. Our handler frames are door functions
+	// already, so or-ing ownership back in buys nothing and loses
+	// something: a genuine fault of ours sitting directly below _purecall
+	// would be skipped with the door, and we would silently stop reporting
+	// our own crashes. This is exactly the shape a later tidy-up collapses
+	// into one condition, which is why it is pinned.
+	check(gateFlat.find(
+		      "IsModuleOfInterest(entry.moduleName)||SEIsCrashPlumbingFrame") ==
+			      std::string::npos &&
+		      gateFlat.find(
+			      "SEIsCrashPlumbingFrame(entry.offset,m_plumbing,m_plumbingCount)||IsModuleOfInterest") ==
+			      std::string::npos,
+	      "SELIVE-230: the armed skip must match the door ALONE when one is supplied; or-ing ownership back in swallows a genuine fault of ours directly below _purecall, which is silent under-reporting and worse than the over-reporting it cures");
+
+	// The handler must actually supply the door, and only on the abort
+	// path: an SEH CONTEXT is taken by the OS at the fault point, where we
+	// are not on the stack at all, and must be judged as it stands.
+	auto handlerSrc = strip_line_comments(
+		slurp("streamelements/SESentryCrashHandler.cpp"));
+
+	std::string handlerFlat;
+	for (size_t i = 0; i < handlerSrc.size(); ++i)
+		if (!std::isspace(static_cast<unsigned char>(handlerSrc[i])))
+			handlerFlat += handlerSrc[i];
+
+	const size_t supplies =
+		handlerFlat.find("s_crashContext->SetCrashPlumbingFunctions(");
+
+	check(supplies != std::string::npos,
+	      "SELIVE-230: the handler must hand the door to the crash context before the walk, or the gate falls back to the ownership-only rule and nothing changes");
+
+	if (supplies != std::string::npos) {
+		const size_t from = supplies > 200 ? supplies - 200 : 0;
+
+		check(handlerFlat.find("if(fromAbortDoor)", from) < supplies,
+		      "SELIVE-230: the door must be supplied only on the abort path; an SEH crash's CONTEXT comes from the OS at the fault point and must not have frames skipped");
+	}
+
+	// One list, so the gate and the context advance can never disagree
+	// about what the door is.
+	check(handlerFlat.find("CrashPlumbingFunctions(&plumbingCount)") !=
+		      std::string::npos,
+	      "SELIVE-230: the gate must take the door from the same CrashPlumbingFunctions() the context advance uses");
 }
 
 // Defined further down, with the scene-signal checks that first needed it.

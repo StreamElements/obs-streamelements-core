@@ -77,6 +77,15 @@ static bool AdvanceContextPastPlumbingImpl(CONTEXT *context,
 	return true;
 }
 
+bool SEIsCrashPlumbingFrame(DWORD64 instructionPointer,
+			    const void *const *plumbing, size_t plumbingCount)
+{
+	if (!plumbing || !plumbingCount)
+		return false;
+
+	return IsPlumbingFrame(instructionPointer, plumbing, plumbingCount);
+}
+
 bool SEAdvanceContextPastPlumbing(CONTEXT *context, const void *const *plumbing,
 				  size_t plumbingCount)
 {
