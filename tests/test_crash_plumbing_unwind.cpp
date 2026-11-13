@@ -15,9 +15,16 @@
 // those functions instead of at SentryAbortHandler and friends. Every
 // RtlLookupFunctionEntry and RtlVirtualUnwind below is the shipping one.
 //
-// The half that remains untestable is the other clause: inside a dying
-// process. A stack corrupt enough to fault the unwinder cannot be arranged
-// here, which is what the production __try is for.
+// The __try around the production walk is exercised too, which the first
+// version of this file said could not be done. Pointing `Rsp` at reserved,
+// never-committed memory makes RtlVirtualUnwind fault on demand in an
+// otherwise healthy process, so the guard, the abandonment and the untouched
+// context are all observed rather than argued.
+//
+// What stays out of reach is the rest of that clause: a process genuinely
+// dying, where the heap is corrupt enough that the fault lands somewhere
+// else entirely. The mechanism is covered; the surrounding catastrophe is
+// not.
 //
 // Mutation-proven, and the gap is worth recording rather than hiding: four
 // mutations of the production walk, three caught here -- the depth cap, the
@@ -309,6 +316,92 @@ static void check_a_null_list_is_refused()
 	      "a null context must be refused");
 }
 
+// --- A fault INSIDE the unwinder is caught ---------------------------------
+//
+// The production walk is wrapped in __try/__except because "the stack this
+// walks may be the reason the process is dying". That guard was written as
+// untestable, and the header of this file said so. It is not: the unwinder
+// reads the frame at `Rsp`, so pointing `Rsp` at memory that is reserved but
+// never committed makes RtlVirtualUnwind fault deterministically, on demand,
+// in a process that is otherwise perfectly healthy.
+//
+// What this does NOT reproduce is a process that is genuinely dying -- a heap
+// so corrupt that the fault arrives somewhere else entirely. What it does
+// prove is the specific thing the guard exists for: the unwinder raising an
+// exception part-way through, the walk abandoning it, the caller getting
+// `false` and the original context, and the process carrying on. Reaching the
+// assertion after this call is itself most of the result.
+static void check_a_fault_inside_the_unwinder_is_caught()
+{
+	// Reserved, never committed: every access faults, and unlike a null
+	// pointer it is a plausible stack address, so the unwinder gets as far
+	// as actually reading a frame.
+	void *reserved =
+		VirtualAlloc(NULL, 0x10000, MEM_RESERVE, PAGE_NOACCESS);
+
+	check(reserved != NULL,
+	      "test setup: a reserved page is needed to fault the unwinder");
+
+	if (!reserved)
+		return;
+
+	Run(kDoor, sizeof(kDoor) / sizeof(kDoor[0]), Breaker);
+
+	CONTEXT corrupt = g_captured;
+
+	// Rip stays on a real plumbing frame, so the walk enters its loop and
+	// reaches RtlVirtualUnwind rather than bailing on the first test.
+	corrupt.Rsp = (DWORD64)(uintptr_t)reserved + 0x8000;
+
+	const DWORD64 ripBefore = corrupt.Rip;
+	const DWORD64 rspBefore = corrupt.Rsp;
+
+	const bool moved = SEAdvanceContextPastPlumbing(
+		&corrupt, kDoor, sizeof(kDoor) / sizeof(kDoor[0]));
+
+	// Reaching this line at all is the headline: an unguarded walk would
+	// have taken the process down with an access violation.
+	check(!moved,
+	      "a fault inside RtlVirtualUnwind must be caught and reported as 'did not advance', never allowed to escape");
+
+	check(corrupt.Rip == ripBefore && corrupt.Rsp == rspBefore,
+	      "and the caller's context must come back exactly as it was handed over, so the fallback is the uncorrected behaviour rather than a half-advanced one");
+
+	VirtualFree(reserved, 0, MEM_RELEASE);
+}
+
+// --- Non-vacuity: that address really is unreadable -------------------------
+//
+// If the reservation above were quietly readable, the case would pass by
+// never faulting at all, which is the same shape as a test that asserts
+// nothing. This confirms the premise rather than assuming it.
+static void check_the_reserved_page_really_faults()
+{
+	void *reserved =
+		VirtualAlloc(NULL, 0x10000, MEM_RESERVE, PAGE_NOACCESS);
+
+	if (!reserved) {
+		check(false, "test setup: reservation failed");
+		return;
+	}
+
+	bool faulted = false;
+
+	__try {
+		volatile const unsigned char *probe =
+			(volatile const unsigned char *)reserved + 0x8000;
+
+		(void)*probe;
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+		faulted = true;
+	}
+
+	check(faulted,
+	      "non-vacuity: the address handed to the unwinder above must genuinely be unreadable, or that case proves nothing");
+
+	VirtualFree(reserved, 0, MEM_RELEASE);
+}
+
 /* ================================================================= */
 
 int main()
@@ -320,6 +413,8 @@ int main()
 	check_a_walk_that_never_escapes_keeps_the_original();
 	check_an_empty_list_moves_nothing();
 	check_a_null_list_is_refused();
+	check_the_reserved_page_really_faults();
+	check_a_fault_inside_the_unwinder_is_caught();
 
 	if (failures) {
 		std::fprintf(stderr, "%d check(s) failed\n", failures);

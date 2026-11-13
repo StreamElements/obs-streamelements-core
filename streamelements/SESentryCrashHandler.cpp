@@ -1489,8 +1489,15 @@ static void __cdecl SentryPurecallHandler(void)
 // The walk itself is in SECrashPlumbingUnwind.cpp, which depends on nothing
 // but windows.h so that tests/ can compile it and drive the real
 // RtlVirtualUnwind over a real stack -- the half a model of the decision
-// cannot speak to, and says so. What stays unverified is narrower than it
-// was: not the unwind, but the unwind running inside a dying process.
+// cannot speak to, and says so.
+//
+// The __try below it is exercised too, which was also written off as
+// untestable: pointing Rsp at reserved, never-committed memory faults the
+// unwinder on demand, and removing the guard takes the test process down
+// with an ACCESS_VIOLATION, so it is the guard that catches it. What stays
+// unverified is now only the surrounding catastrophe -- a process already
+// dying, where the fault lands somewhere else entirely -- rather than the
+// mechanism.
 //
 #if defined(_M_AMD64)
 
