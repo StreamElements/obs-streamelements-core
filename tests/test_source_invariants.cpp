@@ -697,6 +697,85 @@ static void check_queued_window_tasks_do_not_capture_a_raw_this()
 	check(flat.find("if(self)self->open();") != std::string::npos &&
 		      flat.find("if(self)self->hide();") != std::string::npos,
 	      "both posted tasks must test the handle before dereferencing it; capturing a QPointer and then using it unconditionally fixes nothing");
+
+	// The same hazard, one level up, and reached the other way round.
+	//
+	// SEWidgetManager connects two lambdas to every dock's signals with the
+	// THREE-argument QObject::connect, so the connection's lifetime follows
+	// the DOCK -- there is no context object, because the manager is not a
+	// QObject. ~SEWidgetManager then calls removeDockWidget() and hide(),
+	// which emit SYNCHRONOUSLY, from the BASE destructor: the derived part
+	// is gone and the vtable is demoted to one where
+	// SerializeDockingWidgets() is pure virtual, which is exactly what the
+	// PersistState() those handlers schedule ends up calling through
+	// SEStatePersistence's borrowed raw pointer. SELIVE-215.
+	auto manager = strip_line_comments(
+		slurp("streamelements/SEWidgetManager.cpp"));
+
+	std::string managerFlat;
+	for (size_t i = 0; i < manager.size(); ++i)
+		if (!std::isspace(static_cast<unsigned char>(manager[i])))
+			managerFlat += manager[i];
+
+	check(managerFlat.find("&QDockWidget::visibilityChanged,[this]()") ==
+		      std::string::npos,
+	      "SEWidgetManager must not connect a dock's visibilityChanged to a lambda capturing a bare `this`: the connection belongs to the dock, and ~SEWidgetManager emits it from the base destructor");
+
+	check(managerFlat.find("[savedId,dock,this](Qt::DockWidgetArea") ==
+		      std::string::npos,
+	      "SEWidgetManager must not connect a dock's dockLocationChanged to a lambda capturing a bare `this`, for the same reason");
+
+	// Non-vacuous: the guard must exist and must be tested.
+	check(managerFlat.find("std::weak_ptr<bool>alive=m_alive;") !=
+		      std::string::npos,
+	      "the dock handlers must take a weak liveness token before being connected");
+
+	// BOTH handlers, counted rather than merely present: a guard removed
+	// from one of the two is exactly the mutation a "does it appear"
+	// check waves through, and that is how this one was found.
+	size_t guards = 0;
+	for (size_t at = managerFlat.find("if(!live||!*live)return;");
+	     at != std::string::npos;
+	     at = managerFlat.find("if(!live||!*live)return;", at + 1))
+		++guards;
+
+	check(guards == 2,
+	      "both dock handlers must test the token before touching the manager; capturing it and then using `this` unconditionally fixes nothing, and guarding only one of the two leaves the other reachable");
+
+	check(slurp("streamelements/SEWidgetManager.hpp")
+			      .find("std::shared_ptr<bool> m_alive") !=
+		      std::string::npos,
+	      "SEWidgetManager must own the liveness token its dock handlers hold weakly");
+
+	// And the destructor must disarm BEFORE it touches a dock, because
+	// removeDockWidget() and hide() both emit synchronously.
+	auto destructor =
+		function_body(manager, "SEWidgetManager::~SEWidgetManager()");
+
+	check(!destructor.empty(),
+	      "SELIVE-215: the widget manager's destructor must be present");
+
+	std::string destructorFlat;
+	for (size_t i = 0; i < destructor.size(); ++i)
+		if (!std::isspace(static_cast<unsigned char>(destructor[i])))
+			destructorFlat += destructor[i];
+
+	const size_t disarm = destructorFlat.find("*m_alive=false;");
+	const size_t removes = destructorFlat.find("removeDockWidget(dock)");
+
+	check(disarm != std::string::npos,
+	      "~SEWidgetManager must disarm its dock handlers");
+
+	check(removes != std::string::npos,
+	      "non-vacuity: the destructor must still remove its docks, or the ordering below is comparing against nothing");
+
+	check(disarm < removes,
+	      "~SEWidgetManager must disarm BEFORE it removes or hides a dock: both emit synchronously, so a disarm placed after them runs too late to stop the handler it exists to stop");
+
+	check(destructorFlat.find(
+		      "QObject::disconnect(dock,nullptr,nullptr,nullptr);") !=
+		      std::string::npos,
+	      "~SEWidgetManager must sever each dock's signals before removing it");
 }
 
 // --- CORE-2267 / CORE-967: the abort door must not report one death twice.

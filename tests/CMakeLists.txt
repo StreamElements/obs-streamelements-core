@@ -325,6 +325,14 @@ endif()
 se_add_test(test_please_wait_window_lifetime
   test_please_wait_window_lifetime.cpp)
 
+# --- Behavioural test: a dock's signal handlers must not re-enter a manager
+#     that is being destroyed. SEWidgetManager connects two lambdas per dock
+#     with the three-argument QObject::connect, so the connection outlives
+#     the manager; ~SEWidgetManager then emits from the BASE destructor,
+#     where SerializeDockingWidgets() is already pure. SELIVE-215. ---
+se_add_test(test_dock_signal_lifetime
+  test_dock_signal_lifetime.cpp)
+
 # --- Behavioural test: the abort door must not report one process death
 #     twice. The re-entrant hand-back to sentry's displaced handler produced
 #     1,604 events titled after handle_sigabrt, bypassing the module gate

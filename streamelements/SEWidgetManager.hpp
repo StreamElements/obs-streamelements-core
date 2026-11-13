@@ -91,6 +91,27 @@ protected:
 	//
 	std::weak_ptr<SEStatePersistence> m_statePersistence;
 
+	//
+	// Liveness token for the lambdas connected to each dock's signals.
+	//
+	// Those connections use the THREE-argument QObject::connect, so their
+	// lifetime follows the DOCK rather than this manager -- and this
+	// manager is not a QObject, so there is no context object to hand it.
+	//
+	// ~SEWidgetManager hides and removes every dock, and both of those emit
+	// synchronously, from the BASE destructor: the derived part is already
+	// gone and the vtable has been demoted to one where
+	// SerializeDockingWidgets() is pure virtual -- which is exactly where
+	// the PersistState() those handlers schedule arrives, through the raw
+	// pointer SEStatePersistence borrows back to this manager. That is a
+	// _purecall, and it is what SELIVE-215 carries (CORE-2267).
+	//
+	// A dock can also outlive the manager rather than the other way round:
+	// SEDeleteDockWidgetWhenSafe() deliberately LEAKS one when UI teardown
+	// is not safe, and a leaked dock keeps its connections.
+	//
+	std::shared_ptr<bool> m_alive = std::make_shared<bool>(true);
+
 public:
 	void SetStatePersistence(
 		std::shared_ptr<SEStatePersistence> statePersistence)
