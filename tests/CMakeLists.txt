@@ -289,6 +289,13 @@ se_add_test(test_crash_suppresses_queued_tasks
 se_add_test(test_crash_oom_handler
   test_crash_oom_handler.cpp)
 
+# --- Behavioural test: the abort door must not report one process death
+#     twice. The re-entrant hand-back to sentry's displaced handler produced
+#     1,604 events titled after handle_sigabrt, bypassing the module gate
+#     and the consent prompt. ---
+se_add_test(test_abort_door_reentry
+  test_abort_door_reentry.cpp)
+
 # --- Behavioural test: CORE-865 (the lazy encoder provider must acquire and
 #     release its encoder once per OBJECT, not once per consumer) ---
 se_add_test(test_lazy_encoder_refcount

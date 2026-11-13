@@ -1349,12 +1349,41 @@ static void __cdecl SentryAbortHandler(int signum)
 
 	HandleFatalException(&pointers, true);
 
-	// Only reachable on re-entry -- HandleFatalException terminates the
-	// process on the first pass through. Hand back to sentry so a crash is
-	// still reported, then make sure abort() cannot return to its caller.
-	if (s_sentryAbortHandler)
+	// Reached only if HandleFatalException() returned, and on the first pass
+	// it never does -- every path through its outermost branch ends in
+	// TerminateProcess(). So arriving here means this is a RE-ENTRANT abort:
+	// an outer pass is still in flight, further up this same stack.
+	//
+	// That happens routinely, and the mechanism is worth stating because it is
+	// not obvious. The crash path puts modal windows up -- our consent prompt,
+	// and then OBS's own MessageBoxA in main_crash_handler(). A modal message
+	// loop keeps pumping, so Qt timers and posted events keep firing on a
+	// process that is already half destroyed, and a second pure virtual call
+	// lands inside the first crash. SELIVE-3J carries both sequences in one
+	// trace: _purecall -> SentryPurecallHandler -> abort, twice, with
+	// MessageBoxA between them.
+	//
+	// Handing that to sentry's displaced handler used to be unconditional, and
+	// it manufactured a second event for the same process death -- one that
+	// skips the module-of-interest gate AND the consent prompt, because both
+	// of those live in HandleFatalException() above. 1,604 events across 813
+	// machines arrived that way, titled "handle_sigabrt" after sentry's own
+	// handler frame rather than after anything that broke. That is the largest
+	// crash family in the project, and not one of them is a crash.
+	//
+	// The safety net it was written for is still worth having, so it is kept
+	// and merely conditioned correctly: s_insideExceptionFilter is back to 0
+	// only when the pass that just returned was the OUTERMOST one -- i.e. our
+	// own path failed to run to completion, which would be a bug in it.
+	// Degrading to sentry's old behaviour then is better than silence.
+	// Degrading to it on an ordinary re-entry is just a duplicate report the
+	// user was never asked about.
+	if (InterlockedCompareExchange(&s_insideExceptionFilter, 0L, 0L) ==
+		    0L &&
+	    s_sentryAbortHandler)
 		s_sentryAbortHandler(signum);
 
+	// Make sure abort() cannot return to its caller.
 	TerminateProcess(GetCurrentProcess(), 3);
 }
 

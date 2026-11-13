@@ -145,7 +145,7 @@ Three facts about this diagram are worth more than the diagram:
   CMake switches, and why the OBS version matters.
 - **[Testing](testing.md)** — the two kinds of test, mutation testing, and the
   live end-to-end harness.
-- **[Enforced invariants](invariants.md)** — the 80 architectural rules the
+- **[Enforced invariants](invariants.md)** — the 81 architectural rules the
   test suite enforces, grouped by what they protect.
 
 ## How to read the code

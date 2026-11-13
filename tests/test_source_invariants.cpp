@@ -570,6 +570,63 @@ static void check_abort_path_drops_own_frames()
 	}
 }
 
+// Defined further down, with the scene-signal checks that first needed it.
+static std::string function_body(const std::string &src,
+				 const std::string &marker);
+
+// --- CORE-2267 / CORE-967: the abort door must not report one death twice.
+//
+// HandleFatalException() never returns on the first pass -- every path through
+// its outermost branch ends in TerminateProcess(). So the code after it in
+// SentryAbortHandler() runs only on RE-ENTRY, which the crash path provokes
+// routinely: the consent prompt and OBS's own MessageBoxA both pump a modal
+// message loop, Qt timers keep firing on a half-destroyed process, and a
+// second pure virtual call aborts inside the first crash.
+//
+// Handing that to sentry's displaced handler unconditionally emitted a second
+// event for the same death -- one that skipped the module-of-interest gate and
+// the consent prompt, because both live in HandleFatalException(). It produced
+// 1,604 events across 813 machines, titled "handle_sigabrt" after sentry's own
+// handler frame rather than after anything that broke.
+//
+// The chain is kept for the case it was written for -- our own path returning
+// instead of terminating, which would be a bug in it -- and conditioned on the
+// depth being back to zero, which is the only way to tell the two apart.
+static void check_the_abort_door_does_not_report_a_reentry()
+{
+	auto cpp = strip_line_comments(
+		slurp("streamelements/SESentryCrashHandler.cpp"));
+
+	auto body = function_body(
+		cpp, "void __cdecl SentryAbortHandler(int signum)");
+
+	check(!body.empty(),
+	      "CORE-2267: SentryAbortHandler() must be present to be checked");
+
+	std::string flat;
+	for (size_t i = 0; i < body.size(); ++i)
+		if (!std::isspace(static_cast<unsigned char>(body[i])))
+			flat += body[i];
+
+	check(flat.find("HandleFatalException(&pointers,true)") !=
+		      std::string::npos,
+	      "CORE-2267: the abort door must route through HandleFatalException(), which is where the module gate and the consent prompt live");
+
+	// The rule.
+	check(flat.find(
+		      "InterlockedCompareExchange(&s_insideExceptionFilter,0L,0L)==0L&&s_sentryAbortHandler") !=
+		      std::string::npos,
+	      "CORE-2267: the hand-back to sentry's displaced SIGABRT handler must be conditioned on s_insideExceptionFilter being back to 0; an unconditional chain reports every re-entrant abort a second time, bypassing both the module-of-interest gate and the consent prompt");
+
+	// And the shape it must never go back to.
+	check(flat.find("true);if(s_sentryAbortHandler)") == std::string::npos,
+	      "CORE-2267: the hand-back must not sit directly on HandleFatalException() returning -- that is the unconditional form, and returning is exactly what a re-entrant abort does");
+
+	check(flat.find("TerminateProcess(GetCurrentProcess(),3)") !=
+		      std::string::npos,
+	      "CORE-967: the abort door must terminate; abort() returning to its caller is undefined behaviour");
+}
+
 // --- CORE-861: a failing sentry_init() must say why, and must not depend on
 // the process working directory.
 //
@@ -7097,6 +7154,7 @@ int main()
 	check_obs_close_is_watched();
 	check_both_sentry_doors_are_owned();
 	check_abort_path_drops_own_frames();
+	check_the_abort_door_does_not_report_a_reentry();
 	check_sentry_init_is_diagnosable();
 	check_queued_tasks_suppressed_during_crash();
 	check_oom_handler_observes_and_chains();
