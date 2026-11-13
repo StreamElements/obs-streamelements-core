@@ -574,6 +574,42 @@ static void check_abort_path_drops_own_frames()
 static std::string function_body(const std::string &src,
 				 const std::string &marker);
 
+// --- A queued task must not call a virtual on a destroyed widget.
+//
+// SEPleaseWaitWindow is dual-owned -- Qt through the parent, the services
+// bundle through a shared_ptr -- and Create() guards its deleter with a
+// QPointer because either can get there first. Show() and Hide() posted
+// lambdas capturing a raw `this`, and both open() and hide() reach the
+// virtual QWidget::setVisible. A queued call landing after destruction
+// dispatches through a rewound vtable and reaches _purecall -> abort, which
+// is the SELIVE-3J shape and a contributor to the 1,668-event purecall
+// family.
+static void check_queued_window_tasks_do_not_capture_a_raw_this()
+{
+	auto cpp = strip_line_comments(
+		slurp("streamelements/SEPleaseWaitWindow.cpp"));
+
+	std::string flat;
+	for (size_t i = 0; i < cpp.size(); ++i)
+		if (!std::isspace(static_cast<unsigned char>(cpp[i])))
+			flat += cpp[i];
+
+	check(flat.find("QtPostTask([this]") == std::string::npos,
+	      "SEPleaseWaitWindow must not post a task capturing a raw `this`: it is dual-owned, so Qt can destroy it before the task runs, and open()/hide() then dispatch QWidget::setVisible through a rewound vtable into _purecall");
+
+	// Non-vacuous: the posts must still exist, and must be guarded.
+	check(flat.find("QPointer<SEPleaseWaitWindow>self(this);") !=
+		      std::string::npos,
+	      "SEPleaseWaitWindow::Show/Hide must take a QPointer before posting; Qt zeroes it on destruction, which is what makes the queued task safe");
+
+	check(flat.find("QtPostTask([self]") != std::string::npos,
+	      "the posted task must capture the tracked handle by value");
+
+	check(flat.find("if(self)self->open();") != std::string::npos &&
+		      flat.find("if(self)self->hide();") != std::string::npos,
+	      "both posted tasks must test the handle before dereferencing it; capturing a QPointer and then using it unconditionally fixes nothing");
+}
+
 // --- CORE-2267 / CORE-967: the abort door must not report one death twice.
 //
 // HandleFatalException() never returns on the first pass -- every path through
@@ -7155,6 +7191,7 @@ int main()
 	check_both_sentry_doors_are_owned();
 	check_abort_path_drops_own_frames();
 	check_the_abort_door_does_not_report_a_reentry();
+	check_queued_window_tasks_do_not_capture_a_raw_this();
 	check_sentry_init_is_diagnosable();
 	check_queued_tasks_suppressed_during_crash();
 	check_oom_handler_observes_and_chains();

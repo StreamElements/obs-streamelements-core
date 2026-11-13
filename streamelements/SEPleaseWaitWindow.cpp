@@ -45,16 +45,43 @@ SEPleaseWaitWindow::Create(QWidget *parent)
 		});
 }
 
+//
+// Both of these post to the Qt thread, and the window can be gone by the time
+// the task runs. Create() says so in as many words -- two owners, either of
+// which may get there first -- and it protects the DELETER with a QPointer
+// while these two captured a raw `this`.
+//
+// What that costs: open() and hide() both reach QWidget::setVisible, which is
+// virtual. A queued call landing on a destroyed QDialog dispatches through a
+// vtable that destruction has already rewound, and the CRT calls _purecall ->
+// abort. That is the exact shape of SELIVE-3J, whose innermost real frames are
+// QMetaCallEvent::placeMetaCall -> the lambda -> QWidget::setVisible ->
+// QLayout::activate -> _purecall.
+//
+// A QPointer is zeroed by Qt the moment the object is destroyed, so the task
+// becomes a no-op instead of a virtual call on a corpse. Same idiom Create()
+// already uses, now applied on the path that actually dispatches.
+//
 void SEPleaseWaitWindow::Show()
 {
 	if (os_atomic_inc_long(&m_showCount) == 1) {
-		QtPostTask([this]() { this->open(); });
+		QPointer<SEPleaseWaitWindow> self(this);
+
+		QtPostTask([self]() {
+			if (self)
+				self->open();
+		});
 	}
 }
 
 void SEPleaseWaitWindow::Hide()
 {
 	if (os_atomic_dec_long(&m_showCount) == 0) {
-		QtPostTask([this]() { this->hide(); });
+		QPointer<SEPleaseWaitWindow> self(this);
+
+		QtPostTask([self]() {
+			if (self)
+				self->hide();
+		});
 	}
 }

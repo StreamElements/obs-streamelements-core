@@ -1,7 +1,7 @@
 # Enforced invariants
 
 `tests/test_source_invariants.cpp` opens the production sources and asserts
-that a fixed pattern is absent — or that a required one is present. **81
+that a fixed pattern is absent — or that a required one is present. **82
 checks** run from its `main()`. They exist because this plug-in's worst bugs
 are not type errors: they are a lock held one line too long, a strong pointer
 where a weak one belonged, an `#ifdef` that silently stopped meaning anything.
@@ -126,6 +126,7 @@ clang-format joining it onto one.
 | --- | --- |
 | `check_both_sentry_doors_are_owned` | `sentry_init()` installs an SEH filter **and** a `SIGABRT` handler; owning only the first sent every `abort()` somewhere else |
 | `check_abort_path_drops_own_frames` | the SIGABRT handler captures its own context, so our frames are on every abort in the process |
+| `check_queued_window_tasks_do_not_capture_a_raw_this` | a dual-owned `QDialog` can be destroyed before its posted task runs; `open()`/`hide()` are virtual, so a raw capture reaches `_purecall` |
 | `check_the_abort_door_does_not_report_a_reentry` | the crash path pumps a modal loop, so a second `abort()` lands inside the first; chaining to sentry there reported one death twice, past the gate and the prompt |
 | `check_wer_skip_is_conditional_on_the_handler_flag` | …and dropping them must stay conditional, because when the fault is inside our handler they are there legitimately |
 | `check_wer_gate_judges_below_the_handler_frame` | …and the leading run is not enough: a fail-fast inside the handler puts ntdll innermost, so the gate must discard everything at or below the handler's own frame |

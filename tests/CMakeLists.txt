@@ -289,6 +289,12 @@ se_add_test(test_crash_suppresses_queued_tasks
 se_add_test(test_crash_oom_handler
   test_crash_oom_handler.cpp)
 
+# --- Behavioural test: a queued task must not call a virtual on a widget
+#     Qt has already destroyed. SEPleaseWaitWindow posted lambdas capturing
+#     a raw `this`, which reaches _purecall on a dual-owned QDialog. ---
+se_add_test(test_please_wait_window_lifetime
+  test_please_wait_window_lifetime.cpp)
+
 # --- Behavioural test: the abort door must not report one process death
 #     twice. The re-entrant hand-back to sentry's displaced handler produced
 #     1,604 events titled after handle_sigabrt, bypassing the module gate
