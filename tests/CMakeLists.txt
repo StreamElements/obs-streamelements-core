@@ -289,6 +289,12 @@ se_add_test(test_crash_suppresses_queued_tasks
 se_add_test(test_crash_oom_handler
   test_crash_oom_handler.cpp)
 
+# --- Behavioural test: the abort door must hand sentry the fault rather
+#     than our own handler frames. Models the frame-skip decision and every
+#     condition that must fall back to the original context. ---
+se_add_test(test_crash_context_advance
+  test_crash_context_advance.cpp)
+
 # --- Behavioural test: a queued task must not call a virtual on a widget
 #     Qt has already destroyed. SEPleaseWaitWindow posted lambdas capturing
 #     a raw `this`, which reaches _purecall on a dual-owned QDialog. ---

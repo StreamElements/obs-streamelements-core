@@ -574,6 +574,64 @@ static void check_abort_path_drops_own_frames()
 static std::string function_body(const std::string &src,
 				 const std::string &marker);
 
+// --- CORE-2267: sentry must be handed the fault, not our handler.
+//
+// The abort door captures its CONTEXT inside SentryAbortHandler, so without
+// a correction every event it produces is titled after our own plumbing.
+// WalkStack() gets skipOwnLeadingFrames; the event must get the equivalent.
+//
+// Two halves matter and both are pinned: sentry gets the advanced context,
+// and OBS's own filter does NOT -- its crash log should describe the process
+// as the OS saw it.
+static void check_sentry_is_handed_the_fault_not_our_handler()
+{
+	auto cpp = strip_line_comments(
+		slurp("streamelements/SESentryCrashHandler.cpp"));
+
+	std::string flat;
+	for (size_t i = 0; i < cpp.size(); ++i)
+		if (!std::isspace(static_cast<unsigned char>(cpp[i])))
+			flat += cpp[i];
+
+	check(flat.find("s_sentryExceptionFilter(&sentryPointers)") !=
+		      std::string::npos,
+	      "CORE-2267: sentry's filter must receive the corrected pointers, or every abort-door event is titled after our own handler frames");
+
+	check(flat.find("s_hostExceptionFilter(pExceptionInfo)") !=
+		      std::string::npos,
+	      "CORE-2267: OBS's own filter must keep the ORIGINAL pointers; its crash log should describe the process as the OS saw it");
+
+	check(flat.find("if(fromAbortDoor){") != std::string::npos,
+	      "CORE-2267: the correction must be gated on the abort door; an SEH CONTEXT comes from the OS at the fault point and must not be advanced");
+
+	// Fail-safe: the fallback is the whole safety argument.
+	auto body = function_body(
+		cpp,
+		"bool AdvanceContextPastCrashPlumbingImpl(CONTEXT *context)");
+
+	check(!body.empty(),
+	      "CORE-2267: the context-advance implementation must be present");
+
+	std::string fb;
+	for (size_t i = 0; i < body.size(); ++i)
+		if (!std::isspace(static_cast<unsigned char>(body[i])))
+			fb += body[i];
+
+	check(fb.find("work.Rsp<=lastSp") != std::string::npos,
+	      "CORE-2267: the walk must abandon when the stack pointer fails to strictly increase -- that is the tell that an unwind has lost the stack");
+
+	check(fb.find("if(!entry)returnfalse;") != std::string::npos,
+	      "CORE-2267: a frame with no RUNTIME_FUNCTION must abandon the walk rather than be guessed past");
+
+	check(fb.find("IsCrashPlumbingFrame(work.Rip)||work.Rip==context->Rip") !=
+		      std::string::npos,
+	      "CORE-2267: a walk that never escapes our own machinery, or that moves nothing, must keep the original context");
+
+	check(flat.find("__except(EXCEPTION_EXECUTE_HANDLER){returnfalse;}") !=
+		      std::string::npos,
+	      "CORE-2267: the walk runs on a stack that may be why the process is dying, so it must be guarded and fall back on a fault");
+}
+
 // --- A queued task must not call a virtual on a destroyed widget.
 //
 // SEPleaseWaitWindow is dual-owned -- Qt through the parent, the services
@@ -633,8 +691,19 @@ static void check_the_abort_door_does_not_report_a_reentry()
 	auto cpp = strip_line_comments(
 		slurp("streamelements/SESentryCrashHandler.cpp"));
 
-	auto body = function_body(
-		cpp, "void __cdecl SentryAbortHandler(int signum)");
+	// The file forward-declares this as well as defining it, so anchor on
+	// the LAST occurrence -- the definition. Anchoring on the first picks up
+	// the declaration and then walks into the next function's body.
+	const std::string marker =
+		"void __cdecl SentryAbortHandler(int signum)";
+	const auto defPos = cpp.rfind(marker);
+
+	check(defPos != std::string::npos,
+	      "CORE-2267: SentryAbortHandler() must be present to be checked");
+
+	auto body = defPos == std::string::npos
+			    ? std::string()
+			    : function_body(cpp.substr(defPos), marker);
 
 	check(!body.empty(),
 	      "CORE-2267: SentryAbortHandler() must be present to be checked");
@@ -7192,6 +7261,7 @@ int main()
 	check_abort_path_drops_own_frames();
 	check_the_abort_door_does_not_report_a_reentry();
 	check_queued_window_tasks_do_not_capture_a_raw_this();
+	check_sentry_is_handed_the_fault_not_our_handler();
 	check_sentry_init_is_diagnosable();
 	check_queued_tasks_suppressed_during_crash();
 	check_oom_handler_observes_and_chains();

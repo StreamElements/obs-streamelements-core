@@ -1066,6 +1066,11 @@ static void RegisterWerModule(uint64_t sentryInitThreadId,
 //
 //   - crash.kind falls back to "abort" rather than "exception".
 //
+#if defined(_M_AMD64)
+// Defined below, with the abort door whose frames it skips.
+static bool AdvanceContextPastCrashPlumbing(CONTEXT *context);
+#endif
+
 static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
 				 bool fromAbortDoor)
 {
@@ -1160,6 +1165,36 @@ static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
 	}
 
 	if (InterlockedIncrement(&s_insideExceptionFilter) == 1L) {
+		//
+		// What sentry gets. Only sentry: OBS's own filter below keeps
+		// the original, because its crash log should describe the
+		// process as the OS saw it, and the WalkStack() above has
+		// already made its own correction for our archive.
+		//
+		// On the SEH door there is nothing to correct -- the CONTEXT
+		// comes from the OS at the fault point, where we are not on
+		// the stack at all -- so this only ever runs for the abort
+		// door, and falls back to the original on any doubt.
+		//
+		EXCEPTION_POINTERS sentryPointers = *pExceptionInfo;
+
+#if defined(_M_AMD64)
+		CONTEXT sentryContext;
+		EXCEPTION_RECORD sentryRecord;
+
+		if (fromAbortDoor) {
+			sentryContext = *pExceptionInfo->ContextRecord;
+
+			if (AdvanceContextPastCrashPlumbing(&sentryContext)) {
+				sentryRecord = *pExceptionInfo->ExceptionRecord;
+				sentryRecord.ExceptionAddress =
+					(PVOID)sentryContext.Rip;
+
+				sentryPointers.ContextRecord = &sentryContext;
+				sentryPointers.ExceptionRecord = &sentryRecord;
+			}
+		}
+#endif
 		// The gate. A stack that never passed through our code is not
 		// ours to report: we skip sentry's filter entirely, so no event
 		// and no minidump are produced, and go straight to the host
@@ -1204,7 +1239,8 @@ static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
 					// uploads the minidump out of process.
 					// Returns once the daemon has captured
 					// it, or on timeout.
-					s_sentryExceptionFilter(pExceptionInfo);
+					s_sentryExceptionFilter(
+						&sentryPointers);
 				}
 
 				// Before the host filter: OBS puts its own
@@ -1404,6 +1440,134 @@ static void __cdecl SentryPurecallHandler(void)
 
 	abort();
 }
+
+//
+// The abort door hands sentry a CONTEXT captured inside our own handler, so
+// every event it produces is titled after our plumbing rather than after the
+// fault. Sentry titles a native event by its innermost frame, and on this door
+// the innermost frames are always some permutation of SentryAbortHandler,
+// raise, abort, SentryPurecallHandler and _purecall. Measured over 90 days,
+// that is what puts thousands of unrelated faults under a handful of titles
+// and makes the issue list unreadable (CORE-2267).
+//
+// WalkStack() already corrects for this on OUR copy of the stack, via
+// skipOwnLeadingFrames. The event did not get the same correction. This closes
+// that asymmetry: it walks the synthetic context forward until the frame is no
+// longer one of ours, and sentry is handed THAT.
+//
+// Deliberately exact, not heuristic. A frame is skipped only when its function
+// entry is byte-identical to one of a fixed set of known plumbing functions --
+// never because of the module it lives in, which would also match the real
+// fault whenever the fault is in our code.
+//
+// Fails safe in every direction. No function entry, an unwind that throws, a
+// null instruction pointer, a stack pointer that does not strictly increase,
+// more than a handful of frames, or never leaving our own machinery at all --
+// any of those returns false and the caller keeps the ORIGINAL context. The
+// worst case is exactly today's behaviour, never a worse one.
+//
+// What it is NOT: verified in the field. The model below it is tested and
+// mutation-proven, but RtlVirtualUnwind running inside a dying process is
+// precisely the part no test here can exercise.
+//
+#if defined(_M_AMD64)
+
+extern "C" int __cdecl _purecall(void);
+
+static PVOID FunctionBaseOf(DWORD64 address)
+{
+	DWORD64 imageBase = 0;
+
+	PRUNTIME_FUNCTION entry =
+		RtlLookupFunctionEntry(address, &imageBase, NULL);
+
+	if (!entry)
+		return NULL;
+
+	return (PVOID)(imageBase + entry->BeginAddress);
+}
+
+static bool IsCrashPlumbingFrame(DWORD64 rip)
+{
+	PVOID base = FunctionBaseOf(rip);
+
+	if (!base)
+		return false;
+
+	// The whole abort door, in the order it stacks up:
+	//   SentryAbortHandler <- raise <- abort <- SentryPurecallHandler
+	//     <- _purecall <- the code that actually broke
+	// and, without the purecall leg, the plain abort() case.
+	const void *const plumbing[] = {
+		(const void *)&SentryAbortHandler,
+		(const void *)&SentryPurecallHandler,
+		(const void *)&abort,
+		(const void *)&raise,
+		(const void *)&_purecall,
+	};
+
+	for (size_t i = 0; i < sizeof(plumbing) / sizeof(plumbing[0]); ++i) {
+		if (!plumbing[i])
+			continue;
+
+		if (FunctionBaseOf((DWORD64)(uintptr_t)plumbing[i]) == base)
+			return true;
+	}
+
+	return false;
+}
+
+static bool AdvanceContextPastCrashPlumbingImpl(CONTEXT *context)
+{
+	CONTEXT work = *context;
+	DWORD64 lastSp = work.Rsp;
+
+	// Bounded: the door is five frames deep at most, so anything past a
+	// handful means the walk is not describing the stack we think it is.
+	for (int depth = 0; depth < 8; ++depth) {
+		if (!IsCrashPlumbingFrame(work.Rip))
+			break;
+
+		DWORD64 imageBase = 0;
+		PRUNTIME_FUNCTION entry =
+			RtlLookupFunctionEntry(work.Rip, &imageBase, NULL);
+
+		if (!entry)
+			return false;
+
+		PVOID handlerData = NULL;
+		DWORD64 establisherFrame = 0;
+
+		RtlVirtualUnwind(UNW_FLAG_NHANDLER, imageBase, work.Rip, entry,
+				 &work, &handlerData, &establisherFrame, NULL);
+
+		// Stacks grow down, so a frame we unwound TO must sit above the
+		// one we came from. Anything else means the walk is lost.
+		if (!work.Rip || work.Rsp <= lastSp)
+			return false;
+
+		lastSp = work.Rsp;
+	}
+
+	// Never got clear of our own machinery, or nothing moved at all.
+	if (IsCrashPlumbingFrame(work.Rip) || work.Rip == context->Rip)
+		return false;
+
+	*context = work;
+	return true;
+}
+
+static bool AdvanceContextPastCrashPlumbing(CONTEXT *context)
+{
+	// The stack this walks may be the reason the process is dying.
+	__try {
+		return AdvanceContextPastCrashPlumbingImpl(context);
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+		return false;
+	}
+}
+
+#endif // _M_AMD64
 
 /* ================================================================= */
 

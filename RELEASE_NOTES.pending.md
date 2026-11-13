@@ -1,3 +1,4 @@
 - Fix: OBS Studio could crash when starting a stream or recording from a SE.Live canvas, after OBS Studio’s video settings had been changed earlier in the same session
 - Fix: a single crash could be reported twice, and the second report was uploaded without asking for consent
 - Fix: OBS Studio could crash while a SE.Live “please wait” window was being closed, typically as OBS Studio shut down
+- Fix: crash reports are now grouped and named by the code that actually failed, instead of by the crash reporter itself
