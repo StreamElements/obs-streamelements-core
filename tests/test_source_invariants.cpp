@@ -1227,6 +1227,55 @@ static void check_wer_skip_is_conditional_on_the_handler_flag()
 // Measured before and after with a standalone harness: the DialogBox version
 // dispatched 202 foreign messages while the prompt was up; the isolated loop
 // dispatched 0, with the dialog behaving identically.
+//
+// --- CORE-968, second half: the gate judges BELOW the handler's frame.
+//
+// seHandlerActive alone is not enough. A fail-fast raised inside our handler --
+// heap corruption, which is how most of these arrive -- puts ntdll's reporter
+// innermost, so the leading-run skip disengages on the very first frame, skips
+// nothing, and our handler frame further down is then read as proof the crash
+// is ours. Measured on SELIVE-8K: 4,338 users' crashes, almost all of them
+// libobs's or OBS's own, claimed and reported under a single title taken from
+// ntdll's innermost frame.
+//
+// So the handler publishes WHERE it is, and the module discards everything at
+// or below that frame. This is exactly the shape a later tidy-up would unify
+// back into the leading-run skip, which is why it is pinned here.
+//
+static void check_wer_gate_judges_below_the_handler_frame()
+{
+	auto header = slurp("streamelements/SEWerRegistration.h");
+
+	check(header.find("uint64_t seHandlerStackPointer;") !=
+		      std::string::npos,
+	      "CORE-968: the registration block must carry the handler's frame address");
+
+	auto handler = slurp("streamelements/SESentryCrashHandler.cpp");
+
+	check(handler.find("s_werRegistration.seHandlerStackPointer =") !=
+		      std::string::npos,
+	      "CORE-968: the crash handler must publish where its frame is");
+	check(handler.find("s_werRegistration.seHandlerStackPointer = 0;") !=
+		      std::string::npos,
+	      "CORE-968: it must also clear it, or a later crash is judged against a stale frame");
+
+	// The comparison can wrap, so flatten before looking for it.
+	std::string src =
+		strip_line_comments(slurp("streamelements/SEWerModule.cpp"));
+
+	std::string flat;
+	flat.reserve(src.size());
+
+	for (std::size_t i = 0; i < src.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(src[i])))
+			flat += src[i];
+	}
+
+	check(flat.find("frame.AddrStack.Offset<=handlerStackPointer") !=
+		      std::string::npos,
+	      "CORE-968: the module must discard frames at or below the handler's own frame");
+}
+
 static void check_consent_prompt_does_not_pump_foreign_messages()
 {
 	auto dialog = slurp("streamelements/SECrashConsentDialog.cpp");
@@ -7062,6 +7111,7 @@ int main()
 	check_every_emitted_output_is_declared();
 	check_full_release_adopts_before_cancelling();
 	check_wer_skip_is_conditional_on_the_handler_flag();
+	check_wer_gate_judges_below_the_handler_frame();
 	check_consent_prompt_does_not_pump_foreign_messages();
 	check_no_dock_is_added_to_an_invalid_area();
 	check_widget_teardown_leaves_the_paint_tree();

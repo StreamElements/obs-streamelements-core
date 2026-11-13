@@ -1149,6 +1149,16 @@ static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
 	// module needs to know is that our handler is on the stack at all.
 	s_werRegistration.seHandlerActive = 1;
 
+	// And WHERE it is, for the outermost invocation only: that frame is the
+	// boundary the WER gate judges against (CORE-968). A re-entrant call
+	// must not move it inwards, or the frames of the first invocation stop
+	// being recognised as crash-handling machinery.
+	if (!s_werRegistration.seHandlerStackPointer) {
+		volatile char frameProbe = 0;
+		s_werRegistration.seHandlerStackPointer =
+			(uint64_t)(uintptr_t)&frameProbe;
+	}
+
 	if (InterlockedIncrement(&s_insideExceptionFilter) == 1L) {
 		// The gate. A stack that never passed through our code is not
 		// ours to report: we skip sentry's filter entirely, so no event
@@ -1222,8 +1232,10 @@ static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
 
 	// Only the outermost call clears it; a nested one leaving does not mean
 	// the handler is off the stack.
-	if (InterlockedDecrement(&s_insideExceptionFilter) == 0L)
+	if (InterlockedDecrement(&s_insideExceptionFilter) == 0L) {
 		s_werRegistration.seHandlerActive = 0;
+		s_werRegistration.seHandlerStackPointer = 0;
+	}
 
 	return EXCEPTION_CONTINUE_SEARCH;
 }

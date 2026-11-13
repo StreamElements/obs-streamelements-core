@@ -1,7 +1,7 @@
 # Enforced invariants
 
 `tests/test_source_invariants.cpp` opens the production sources and asserts
-that a fixed pattern is absent — or that a required one is present. **79
+that a fixed pattern is absent — or that a required one is present. **80
 checks** run from its `main()`. They exist because this plug-in's worst bugs
 are not type errors: they are a lock held one line too long, a strong pointer
 where a weak one belonged, an `#ifdef` that silently stopped meaning anything.
@@ -127,6 +127,7 @@ clang-format joining it onto one.
 | `check_both_sentry_doors_are_owned` | `sentry_init()` installs an SEH filter **and** a `SIGABRT` handler; owning only the first sent every `abort()` somewhere else |
 | `check_abort_path_drops_own_frames` | the SIGABRT handler captures its own context, so our frames are on every abort in the process |
 | `check_wer_skip_is_conditional_on_the_handler_flag` | …and dropping them must stay conditional, because when the fault is inside our handler they are there legitimately |
+| `check_wer_gate_judges_below_the_handler_frame` | …and the leading run is not enough: a fail-fast inside the handler puts ntdll innermost, so the gate must discard everything at or below the handler's own frame |
 | `check_sentry_init_is_diagnosable` | a failing `sentry_init()` says why, and does not depend on the working directory |
 | `check_sentry_wer_is_not_beside_the_host_executable` | sentry's WER module must never sit next to `obs64.exe`, or it claims every fast-fail in the process |
 | `check_wer_module_gates_before_forwarding` | ours gates first: it runs in `WerFault.exe` with no way to ask anything afterwards |

@@ -40,7 +40,9 @@
 
 // Bumped when the layout below changes. The module refuses anything it does not
 // recognise rather than reading a struct it does not understand.
-#define SE_WER_VERSION 1U
+// 2: adds seHandlerStackPointer (CORE-968, second half). The module
+// requires an exact match, so a mismatched pair fails closed.
+#define SE_WER_VERSION 2U
 
 // The gate list. Thirty-two names is well past what the remote settings.json
 // has ever carried, and the block is read cross-process in one shot, so the
@@ -93,6 +95,22 @@ typedef struct {
 	// because sentry's wer_default_path() looks next to the host
 	// executable and we deliberately do not ship it there.
 	wchar_t seSentryWerPath[MAX_PATH];
+
+	// Stack pointer of the OUTERMOST crash-handler frame; 0 when none.
+	//
+	// seHandlerActive says our handler is on the stack. This says WHERE,
+	// and that turns out to be the load-bearing half. Everything at or
+	// below this address is something the handler itself called -- ntdll's
+	// heap reporter, OBS's message box -- and is not evidence about whose
+	// crash this is.
+	//
+	// The leading-run skip alone cannot see that: a fail-fast raised inside
+	// the handler puts ntdll innermost, so the skip disengages on the very
+	// first frame, skips nothing, and our handler frame further down is
+	// then read as proof the crash is ours. Measured on SELIVE-8K, where
+	// 4,338 users' crashes -- libobs's and OBS's own -- were claimed and
+	// reported under one title taken from ntdll's innermost frame.
+	uint64_t seHandlerStackPointer;
 } SEWerRegistration;
 #pragma pack(pop)
 
