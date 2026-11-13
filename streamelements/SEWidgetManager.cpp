@@ -38,6 +38,14 @@ SEWidgetManager::SEWidgetManager(QMainWindow *parent,
 //
 SEWidgetManager::~SEWidgetManager()
 {
+	// FIRST, before anything below hides or removes a dock.
+	//
+	// Both of those emit synchronously, and this is the BASE destructor:
+	// the derived part is gone and the vtable is demoted to one where
+	// SerializeDockingWidgets() is pure virtual. A handler that ran here
+	// would schedule exactly that call (SELIVE-215).
+	*m_alive = false;
+
 	while (DestroyCurrentCentralWidget()) {
 		// NOP
 	}
@@ -65,6 +73,12 @@ SEWidgetManager::~SEWidgetManager()
 			     pair.first.c_str());
 			continue;
 		}
+
+		// Sever this dock's signals before touching it. m_alive above
+		// already makes the handlers no-ops; this stops them being
+		// entered at all, and a dock on its way out has nothing worth
+		// reporting.
+		QObject::disconnect(dock, nullptr, nullptr, nullptr);
 
 		if (m_parent)
 			m_parent->removeDockWidget(dock);
@@ -343,9 +357,18 @@ bool SEWidgetManager::AddDockWidget(
 
 	std::string savedId = id;
 
+	// Both handlers below outlive this manager by construction: the
+	// connection belongs to the dock. See m_alive.
+	std::weak_ptr<bool> alive = m_alive;
+
 	QObject::connect(
 		dock, &QDockWidget::dockLocationChanged,
-		[savedId, dock, this](Qt::DockWidgetArea area) {
+		[savedId, dock, this, alive](Qt::DockWidgetArea area) {
+			auto live = alive.lock();
+
+			if (!live || !*live)
+				return;
+
 			std::lock_guard<std::recursive_mutex> guard(m_mutex);
 
 			if (!m_dockWidgets.count(savedId)) {
@@ -365,7 +388,12 @@ bool SEWidgetManager::AddDockWidget(
 			});
 		});
 
-	QObject::connect(dock, &QDockWidget::visibilityChanged, [this]() {
+	QObject::connect(dock, &QDockWidget::visibilityChanged, [this, alive]() {
+		auto live = alive.lock();
+
+		if (!live || !*live)
+			return;
+
 		QtPostTask([statePersistence = m_statePersistence]() -> void {
 			auto persistence = statePersistence.lock();
 

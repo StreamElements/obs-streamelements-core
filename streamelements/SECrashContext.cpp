@@ -26,6 +26,11 @@
 #include <io.h>
 #include <windows.h>
 #include <winuser.h>
+
+// After <windows.h>, deliberately: this header needs it, and pulling it in
+// above would put it ahead of cef-headers.hpp, whose httplib must precede
+// <windows.h> or winsock2 redefines half of ws2def.h.
+#include "SECrashPlumbingUnwind.hpp"
 #include <QString>
 #else
 #include <unistd.h>
@@ -239,6 +244,39 @@ public:
 	// itself clears.
 	void SetSkipLeadingOwnFrames(bool skip) { m_skippingOwnFrames = skip; }
 
+	//
+	// The crash-plumbing functions, matched by exact function entry.
+	//
+	// The skip above assumes the innermost frame is ours. On the purecall
+	// door it is not -- the stack is
+	//
+	//     raise <- abort <- SentryPurecallHandler <- _purecall <- the fault
+	//
+	// so the skip disengages on `raise`, which is ucrtbase and not ours,
+	// having skipped nothing; the verdict then latches on
+	// SentryPurecallHandler two frames further down. That is the same
+	// rubber stamp the comment above describes, reached by a route frame
+	// OWNERSHIP cannot see. Measured on SELIVE-230, whose attached crash
+	// archive begins at `raise` and whose actual fault is a pure virtual
+	// call inside a third-party DirectShow capture filter.
+	//
+	// Matching the DOOR rather than the MODULE is what fixes it, and the
+	// distinction is load-bearing: skipping the CRT frames by module name
+	// would also skip a genuine fault in our own code, which is silent
+	// under-reporting and strictly worse than the over-reporting it cures.
+	// These are five named functions, matched byte-for-byte on their
+	// function entry rather than by name or by module.
+	//
+	// Optional: with no list supplied the old ownership-only rule stands,
+	// so nothing changes on a build that does not pass one.
+	//
+	void SetCrashPlumbingFunctions(const void *const *plumbing,
+				       size_t count)
+	{
+		m_plumbing = plumbing;
+		m_plumbingCount = count;
+	}
+
 protected:
 	bool IsModuleOfInterest(const char *moduleName) const
 	{
@@ -262,10 +300,35 @@ protected:
 			return;
 
 		if (m_skippingOwnFrames) {
-			if (IsModuleOfInterest(entry.moduleName))
-				return;
+#if defined(_M_AMD64)
+			if (m_plumbing && m_plumbingCount) {
+				//
+				// The door ONLY -- deliberately not "or a frame of
+				// ours". Our handler frames ARE door functions, so
+				// ownership adds nothing here and takes something
+				// away: on `_purecall <- our own destructor` the
+				// ownership test would skip the genuine faulting
+				// frame too, and we would silently stop reporting
+				// our own crashes. Caught by
+				// check_the_door_rule_still_reports_our_own_purecall
+				// while this was being written, not afterwards.
+				//
+				if (SEIsCrashPlumbingFrame(entry.offset,
+							   m_plumbing,
+							   m_plumbingCount))
+					return;
 
-			m_skippingOwnFrames = false;
+				m_skippingOwnFrames = false;
+			} else
+#endif
+			{
+				// No door supplied: the ownership-only rule, exactly
+				// as it shipped.
+				if (IsModuleOfInterest(entry.moduleName))
+					return;
+
+				m_skippingOwnFrames = false;
+			}
 		}
 
 #define LOCAL_SPACE "\t"
@@ -293,6 +356,8 @@ public:
 
 private:
 	bool m_skippingOwnFrames = false;
+	const void *const *m_plumbing = nullptr;
+	size_t m_plumbingCount = 0;
 };
 
 #else
@@ -488,6 +553,23 @@ SECrashContext::~SECrashContext()
 	delete m_impl;
 
 	m_impl = nullptr;
+}
+
+void SECrashContext::SetCrashPlumbingFunctions(const void *const *plumbing,
+					       size_t count)
+{
+#if defined(WIN32) && defined(_M_AMD64)
+	if (!m_impl || !m_impl->stackWalker)
+		return;
+
+	m_impl->stackWalker->SetCrashPlumbingFunctions(plumbing, count);
+#else
+	// Nothing to do: the macOS walker has no equivalent, and the defect
+	// this repairs was measured on Windows. Accepting the call and doing
+	// nothing keeps the header platform-neutral.
+	UNUSED_PARAMETER(plumbing);
+	UNUSED_PARAMETER(count);
+#endif
 }
 
 void SECrashContext::WalkStack(void *contextRecord,

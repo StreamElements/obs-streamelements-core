@@ -83,6 +83,17 @@ public:
 	// the fault point and must leave this false.
 	void WalkStack(void *contextRecord, bool skipOwnLeadingFrames = false);
 
+	// The crash-plumbing functions the abort door runs through, by
+	// address. Supplying them is what lets the leading-frame skip above
+	// recognise the CRT's `raise`/`abort` -- which are INNERMOST on the
+	// purecall door, so a skip that only knows about our own frames skips
+	// nothing and the gate rubber-stamps every abort in the process
+	// (SELIVE-230).
+	//
+	// Call before WalkStack(). Windows x64 only; a no-op elsewhere.
+	void SetCrashPlumbingFunctions(const void *const *plumbing,
+				       size_t count);
+
 	// The module-of-interest verdict: false means the crashing stack never
 	// passed through our code and the report must be suppressed entirely.
 	// This is the gate that keeps other plugins' crashes out, and it is a

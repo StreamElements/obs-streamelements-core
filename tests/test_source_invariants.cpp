@@ -564,10 +564,367 @@ static void check_abort_path_drops_own_frames()
 		check(verdict != std::string::npos && verdict > skip,
 		      "CORE-860: the skip must be applied before the module-of-interest verdict");
 
+		// Both branches of the armed skip must disengage -- the one that
+		// matches the abort door and the ownership-only fallback -- and
+		// both before the verdict. Counted rather than measured as a byte
+		// distance: the region legitimately grew a branch for SELIVE-230,
+		// and a window would have to be re-guessed every time it changes.
 		auto stops = cpp.find("m_skippingOwnFrames = false;", skip);
-		check(stops != std::string::npos && stops - skip < 200,
-		      "CORE-860: skipping must stop at the first frame that is not ours");
+		check(stops != std::string::npos && stops < verdict,
+		      "CORE-860: skipping must stop before the module-of-interest verdict is taken");
+
+		size_t disengages = 0;
+		for (auto at = cpp.find("m_skippingOwnFrames = false;", skip);
+		     at != std::string::npos && at < verdict;
+		     at = cpp.find("m_skippingOwnFrames = false;", at + 1))
+			++disengages;
+
+		check(disengages == 2,
+		      "CORE-860/SELIVE-230: each branch of the armed skip -- door-matching and the ownership-only fallback -- must disengage at the first frame it does not recognise; a branch that never disengages would consume the whole stack and decline every crash");
 	}
+	std::string gateFlatEarly;
+	for (size_t i = 0; i < cpp.size(); ++i)
+		if (!std::isspace(static_cast<unsigned char>(cpp[i])))
+			gateFlatEarly += cpp[i];
+
+	//
+	// SELIVE-230: ownership alone cannot find the leading run.
+	//
+	// On the purecall door the innermost frames are the CRT's -- `raise`,
+	// then `abort` -- so a skip defined as "while the frame is ours"
+	// disengages on frame 0 having skipped nothing, and the verdict then
+	// latches on SentryPurecallHandler two frames down. The door is matched
+	// by function entry instead.
+	//
+	check(cpp.find("SEIsCrashPlumbingFrame(entry.offset") !=
+		      std::string::npos,
+	      "SELIVE-230: the armed skip must recognise the abort door's own functions; ownership alone disengages on `raise` having skipped nothing, and the gate then claims every abort in the process");
+
+	// Present is not enough: the branch has to be REACHABLE. Pinning only
+	// the call let `if (m_plumbing && m_plumbingCount)` become `if (false)`
+	// with the call sitting dead inside it, and the check stayed green --
+	// found by mutation while writing this, not by reading it.
+	check(gateFlatEarly.find("if(m_plumbing&&m_plumbingCount){") !=
+		      std::string::npos,
+	      "SELIVE-230: the door-matching branch must be taken whenever a door is supplied; a branch guarded on anything else leaves the call in place and the rule inert");
+
+	const std::string &gateFlat = gateFlatEarly;
+
+	// And it must be the door ALONE. Our handler frames are door functions
+	// already, so or-ing ownership back in buys nothing and loses
+	// something: a genuine fault of ours sitting directly below _purecall
+	// would be skipped with the door, and we would silently stop reporting
+	// our own crashes. This is exactly the shape a later tidy-up collapses
+	// into one condition, which is why it is pinned.
+	check(gateFlat.find(
+		      "IsModuleOfInterest(entry.moduleName)||SEIsCrashPlumbingFrame") ==
+			      std::string::npos &&
+		      gateFlat.find(
+			      "SEIsCrashPlumbingFrame(entry.offset,m_plumbing,m_plumbingCount)||IsModuleOfInterest") ==
+			      std::string::npos,
+	      "SELIVE-230: the armed skip must match the door ALONE when one is supplied; or-ing ownership back in swallows a genuine fault of ours directly below _purecall, which is silent under-reporting and worse than the over-reporting it cures");
+
+	// The handler must actually supply the door, and only on the abort
+	// path: an SEH CONTEXT is taken by the OS at the fault point, where we
+	// are not on the stack at all, and must be judged as it stands.
+	auto handlerSrc = strip_line_comments(
+		slurp("streamelements/SESentryCrashHandler.cpp"));
+
+	std::string handlerFlat;
+	for (size_t i = 0; i < handlerSrc.size(); ++i)
+		if (!std::isspace(static_cast<unsigned char>(handlerSrc[i])))
+			handlerFlat += handlerSrc[i];
+
+	const size_t supplies =
+		handlerFlat.find("s_crashContext->SetCrashPlumbingFunctions(");
+
+	check(supplies != std::string::npos,
+	      "SELIVE-230: the handler must hand the door to the crash context before the walk, or the gate falls back to the ownership-only rule and nothing changes");
+
+	if (supplies != std::string::npos) {
+		const size_t from = supplies > 200 ? supplies - 200 : 0;
+
+		check(handlerFlat.find("if(fromAbortDoor)", from) < supplies,
+		      "SELIVE-230: the door must be supplied only on the abort path; an SEH crash's CONTEXT comes from the OS at the fault point and must not have frames skipped");
+	}
+
+	// One list, so the gate and the context advance can never disagree
+	// about what the door is.
+	check(handlerFlat.find("CrashPlumbingFunctions(&plumbingCount)") !=
+		      std::string::npos,
+	      "SELIVE-230: the gate must take the door from the same CrashPlumbingFunctions() the context advance uses");
+}
+
+// Defined further down, with the scene-signal checks that first needed it.
+static std::string function_body(const std::string &src,
+				 const std::string &marker);
+
+// --- CORE-2267: sentry must be handed the fault, not our handler.
+//
+// The abort door captures its CONTEXT inside SentryAbortHandler, so without
+// a correction every event it produces is titled after our own plumbing.
+// WalkStack() gets skipOwnLeadingFrames; the event must get the equivalent.
+//
+// Two halves matter and both are pinned: sentry gets the advanced context,
+// and OBS's own filter does NOT -- its crash log should describe the process
+// as the OS saw it.
+static void check_sentry_is_handed_the_fault_not_our_handler()
+{
+	auto cpp = strip_line_comments(
+		slurp("streamelements/SESentryCrashHandler.cpp"));
+
+	std::string flat;
+	for (size_t i = 0; i < cpp.size(); ++i)
+		if (!std::isspace(static_cast<unsigned char>(cpp[i])))
+			flat += cpp[i];
+
+	check(flat.find("s_sentryExceptionFilter(&sentryPointers)") !=
+		      std::string::npos,
+	      "CORE-2267: sentry's filter must receive the corrected pointers, or every abort-door event is titled after our own handler frames");
+
+	check(flat.find("s_hostExceptionFilter(pExceptionInfo)") !=
+		      std::string::npos,
+	      "CORE-2267: OBS's own filter must keep the ORIGINAL pointers; its crash log should describe the process as the OS saw it");
+
+	check(flat.find("if(fromAbortDoor){") != std::string::npos,
+	      "CORE-2267: the correction must be gated on the abort door; an SEH CONTEXT comes from the OS at the fault point and must not be advanced");
+
+	// The door list IS the definition of the correction, and it stayed with
+	// the handler when the walk moved out to its own translation unit. A
+	// leg dropped from here is a whole class of event quietly going back to
+	// being titled after our own frames, with nothing else failing.
+	check(flat.find("(constvoid*)&SentryAbortHandler") != std::string::npos,
+	      "CORE-2267: the plumbing list must still name SentryAbortHandler, or the abort door's innermost frame is never skipped");
+
+	check(flat.find("(constvoid*)&SentryPurecallHandler") !=
+		      std::string::npos,
+	      "CORE-2267: the plumbing list must still name SentryPurecallHandler, or every purecall event is titled after it");
+
+	check(flat.find("(constvoid*)&abort") != std::string::npos,
+	      "CORE-2267: the plumbing list must still name abort");
+
+	check(flat.find("(constvoid*)&raise") != std::string::npos,
+	      "CORE-2267: the plumbing list must still name raise");
+
+	check(flat.find("(constvoid*)&_purecall") != std::string::npos,
+	      "CORE-2267: the plumbing list must still name _purecall");
+
+	// The walk itself. A translation unit of its own since the follow-up,
+	// depending on windows.h and nothing else, so that tests/ can compile
+	// it and drive the real RtlVirtualUnwind over a real stack.
+	auto walk = strip_line_comments(
+		slurp("streamelements/SECrashPlumbingUnwind.cpp"));
+
+	std::string walkFlat;
+	for (size_t i = 0; i < walk.size(); ++i)
+		if (!std::isspace(static_cast<unsigned char>(walk[i])))
+			walkFlat += walk[i];
+
+	// Fail-safe: the fallback is the whole safety argument.
+	auto body = function_body(
+		walk, "bool AdvanceContextPastPlumbingImpl(CONTEXT *context,");
+
+	check(!body.empty(),
+	      "CORE-2267: the context-advance implementation must be present");
+
+	std::string fb;
+	for (size_t i = 0; i < body.size(); ++i)
+		if (!std::isspace(static_cast<unsigned char>(body[i])))
+			fb += body[i];
+
+	check(fb.find("work.Rsp<=lastSp") != std::string::npos,
+	      "CORE-2267: the walk must abandon when the stack pointer fails to strictly increase -- that is the tell that an unwind has lost the stack");
+
+	check(fb.find("if(!entry)returnfalse;") != std::string::npos,
+	      "CORE-2267: a frame with no RUNTIME_FUNCTION must abandon the walk rather than be guessed past");
+
+	check(fb.find("IsPlumbingFrame(work.Rip,plumbing,plumbingCount)||work.Rip==context->Rip") !=
+		      std::string::npos,
+	      "CORE-2267: a walk that never escapes the listed functions, or that moves nothing, must keep the original context");
+
+	check(walkFlat.find(
+		      "__except(EXCEPTION_EXECUTE_HANDLER){returnfalse;}") !=
+		      std::string::npos,
+	      "CORE-2267: the walk runs on a stack that may be why the process is dying, so it must be guarded and fall back on a fault");
+}
+
+// --- A queued task must not call a virtual on a destroyed widget.
+//
+// SEPleaseWaitWindow is dual-owned -- Qt through the parent, the services
+// bundle through a shared_ptr -- and Create() guards its deleter with a
+// QPointer because either can get there first. Show() and Hide() posted
+// lambdas capturing a raw `this`, and both open() and hide() reach the
+// virtual QWidget::setVisible. A queued call landing after destruction
+// dispatches through a rewound vtable and reaches _purecall -> abort, which
+// is the SELIVE-3J shape and a contributor to the 1,668-event purecall
+// family.
+static void check_queued_window_tasks_do_not_capture_a_raw_this()
+{
+	auto cpp = strip_line_comments(
+		slurp("streamelements/SEPleaseWaitWindow.cpp"));
+
+	std::string flat;
+	for (size_t i = 0; i < cpp.size(); ++i)
+		if (!std::isspace(static_cast<unsigned char>(cpp[i])))
+			flat += cpp[i];
+
+	check(flat.find("QtPostTask([this]") == std::string::npos,
+	      "SEPleaseWaitWindow must not post a task capturing a raw `this`: it is dual-owned, so Qt can destroy it before the task runs, and open()/hide() then dispatch QWidget::setVisible through a rewound vtable into _purecall");
+
+	// Non-vacuous: the posts must still exist, and must be guarded.
+	check(flat.find("QPointer<SEPleaseWaitWindow>self(this);") !=
+		      std::string::npos,
+	      "SEPleaseWaitWindow::Show/Hide must take a QPointer before posting; Qt zeroes it on destruction, which is what makes the queued task safe");
+
+	check(flat.find("QtPostTask([self]") != std::string::npos,
+	      "the posted task must capture the tracked handle by value");
+
+	check(flat.find("if(self)self->open();") != std::string::npos &&
+		      flat.find("if(self)self->hide();") != std::string::npos,
+	      "both posted tasks must test the handle before dereferencing it; capturing a QPointer and then using it unconditionally fixes nothing");
+
+	// The same hazard, one level up, and reached the other way round.
+	//
+	// SEWidgetManager connects two lambdas to every dock's signals with the
+	// THREE-argument QObject::connect, so the connection's lifetime follows
+	// the DOCK -- there is no context object, because the manager is not a
+	// QObject. ~SEWidgetManager then calls removeDockWidget() and hide(),
+	// which emit SYNCHRONOUSLY, from the BASE destructor: the derived part
+	// is gone and the vtable is demoted to one where
+	// SerializeDockingWidgets() is pure virtual, which is exactly what the
+	// PersistState() those handlers schedule ends up calling through
+	// SEStatePersistence's borrowed raw pointer. SELIVE-215.
+	auto manager = strip_line_comments(
+		slurp("streamelements/SEWidgetManager.cpp"));
+
+	std::string managerFlat;
+	for (size_t i = 0; i < manager.size(); ++i)
+		if (!std::isspace(static_cast<unsigned char>(manager[i])))
+			managerFlat += manager[i];
+
+	check(managerFlat.find("&QDockWidget::visibilityChanged,[this]()") ==
+		      std::string::npos,
+	      "SEWidgetManager must not connect a dock's visibilityChanged to a lambda capturing a bare `this`: the connection belongs to the dock, and ~SEWidgetManager emits it from the base destructor");
+
+	check(managerFlat.find("[savedId,dock,this](Qt::DockWidgetArea") ==
+		      std::string::npos,
+	      "SEWidgetManager must not connect a dock's dockLocationChanged to a lambda capturing a bare `this`, for the same reason");
+
+	// Non-vacuous: the guard must exist and must be tested.
+	check(managerFlat.find("std::weak_ptr<bool>alive=m_alive;") !=
+		      std::string::npos,
+	      "the dock handlers must take a weak liveness token before being connected");
+
+	// BOTH handlers, counted rather than merely present: a guard removed
+	// from one of the two is exactly the mutation a "does it appear"
+	// check waves through, and that is how this one was found.
+	size_t guards = 0;
+	for (size_t at = managerFlat.find("if(!live||!*live)return;");
+	     at != std::string::npos;
+	     at = managerFlat.find("if(!live||!*live)return;", at + 1))
+		++guards;
+
+	check(guards == 2,
+	      "both dock handlers must test the token before touching the manager; capturing it and then using `this` unconditionally fixes nothing, and guarding only one of the two leaves the other reachable");
+
+	check(slurp("streamelements/SEWidgetManager.hpp")
+			      .find("std::shared_ptr<bool> m_alive") !=
+		      std::string::npos,
+	      "SEWidgetManager must own the liveness token its dock handlers hold weakly");
+
+	// And the destructor must disarm BEFORE it touches a dock, because
+	// removeDockWidget() and hide() both emit synchronously.
+	auto destructor =
+		function_body(manager, "SEWidgetManager::~SEWidgetManager()");
+
+	check(!destructor.empty(),
+	      "SELIVE-215: the widget manager's destructor must be present");
+
+	std::string destructorFlat;
+	for (size_t i = 0; i < destructor.size(); ++i)
+		if (!std::isspace(static_cast<unsigned char>(destructor[i])))
+			destructorFlat += destructor[i];
+
+	const size_t disarm = destructorFlat.find("*m_alive=false;");
+	const size_t removes = destructorFlat.find("removeDockWidget(dock)");
+
+	check(disarm != std::string::npos,
+	      "~SEWidgetManager must disarm its dock handlers");
+
+	check(removes != std::string::npos,
+	      "non-vacuity: the destructor must still remove its docks, or the ordering below is comparing against nothing");
+
+	check(disarm < removes,
+	      "~SEWidgetManager must disarm BEFORE it removes or hides a dock: both emit synchronously, so a disarm placed after them runs too late to stop the handler it exists to stop");
+
+	check(destructorFlat.find(
+		      "QObject::disconnect(dock,nullptr,nullptr,nullptr);") !=
+		      std::string::npos,
+	      "~SEWidgetManager must sever each dock's signals before removing it");
+}
+
+// --- CORE-2267 / CORE-967: the abort door must not report one death twice.
+//
+// HandleFatalException() never returns on the first pass -- every path through
+// its outermost branch ends in TerminateProcess(). So the code after it in
+// SentryAbortHandler() runs only on RE-ENTRY, which the crash path provokes
+// routinely: the consent prompt and OBS's own MessageBoxA both pump a modal
+// message loop, Qt timers keep firing on a half-destroyed process, and a
+// second pure virtual call aborts inside the first crash.
+//
+// Handing that to sentry's displaced handler unconditionally emitted a second
+// event for the same death -- one that skipped the module-of-interest gate and
+// the consent prompt, because both live in HandleFatalException(). It produced
+// 2,044 events across 1,275 machines, titled "handle_sigabrt" after sentry's
+// own handler frame rather than after anything that broke.
+//
+// The chain is kept for the case it was written for -- our own path returning
+// instead of terminating, which would be a bug in it -- and conditioned on the
+// depth being back to zero, which is the only way to tell the two apart.
+static void check_the_abort_door_does_not_report_a_reentry()
+{
+	auto cpp = strip_line_comments(
+		slurp("streamelements/SESentryCrashHandler.cpp"));
+
+	// The file forward-declares this as well as defining it, so anchor on
+	// the LAST occurrence -- the definition. Anchoring on the first picks up
+	// the declaration and then walks into the next function's body.
+	const std::string marker =
+		"void __cdecl SentryAbortHandler(int signum)";
+	const auto defPos = cpp.rfind(marker);
+
+	check(defPos != std::string::npos,
+	      "CORE-2267: SentryAbortHandler() must be present to be checked");
+
+	auto body = defPos == std::string::npos
+			    ? std::string()
+			    : function_body(cpp.substr(defPos), marker);
+
+	check(!body.empty(),
+	      "CORE-2267: SentryAbortHandler() must be present to be checked");
+
+	std::string flat;
+	for (size_t i = 0; i < body.size(); ++i)
+		if (!std::isspace(static_cast<unsigned char>(body[i])))
+			flat += body[i];
+
+	check(flat.find("HandleFatalException(&pointers,true)") !=
+		      std::string::npos,
+	      "CORE-2267: the abort door must route through HandleFatalException(), which is where the module gate and the consent prompt live");
+
+	// The rule.
+	check(flat.find(
+		      "InterlockedCompareExchange(&s_insideExceptionFilter,0L,0L)==0L&&s_sentryAbortHandler") !=
+		      std::string::npos,
+	      "CORE-2267: the hand-back to sentry's displaced SIGABRT handler must be conditioned on s_insideExceptionFilter being back to 0; an unconditional chain reports every re-entrant abort a second time, bypassing both the module-of-interest gate and the consent prompt");
+
+	// And the shape it must never go back to.
+	check(flat.find("true);if(s_sentryAbortHandler)") == std::string::npos,
+	      "CORE-2267: the hand-back must not sit directly on HandleFatalException() returning -- that is the unconditional form, and returning is exactly what a re-entrant abort does");
+
+	check(flat.find("TerminateProcess(GetCurrentProcess(),3)") !=
+		      std::string::npos,
+	      "CORE-967: the abort door must terminate; abort() returning to its caller is undefined behaviour");
 }
 
 // --- CORE-861: a failing sentry_init() must say why, and must not depend on
@@ -7097,6 +7454,9 @@ int main()
 	check_obs_close_is_watched();
 	check_both_sentry_doors_are_owned();
 	check_abort_path_drops_own_frames();
+	check_the_abort_door_does_not_report_a_reentry();
+	check_queued_window_tasks_do_not_capture_a_raw_this();
+	check_sentry_is_handed_the_fault_not_our_handler();
 	check_sentry_init_is_diagnosable();
 	check_queued_tasks_suppressed_during_crash();
 	check_oom_handler_observes_and_chains();

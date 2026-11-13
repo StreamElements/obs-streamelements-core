@@ -3,6 +3,7 @@
 #include "SEConfig.hpp"
 #include "SECrashConsentDialog.hpp"
 #include "SECrashContext.hpp"
+#include "SECrashPlumbingUnwind.hpp"
 #include "SEWerRegistration.h"
 #include "SEUtils.hpp"
 
@@ -1066,6 +1067,12 @@ static void RegisterWerModule(uint64_t sentryInitThreadId,
 //
 //   - crash.kind falls back to "abort" rather than "exception".
 //
+#if defined(_M_AMD64)
+// Both defined below, beside the abort door they describe.
+static bool AdvanceContextPastCrashPlumbing(CONTEXT *context);
+static const void *const *CrashPlumbingFunctions(size_t *count);
+#endif
+
 static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
 				 bool fromAbortDoor)
 {
@@ -1131,10 +1138,28 @@ static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
 		}
 	}
 
-	if (s_crashContext)
+	if (s_crashContext) {
+#if defined(_M_AMD64)
+		// What the leading-frame skip needs in order to recognise the
+		// CRT frames the door runs through. Without it the skip stops
+		// on `raise` -- innermost on the purecall door, and not ours --
+		// having skipped nothing, and the gate then latches on our own
+		// handler frame and claims every abort in the process
+		// (SELIVE-230).
+		if (fromAbortDoor) {
+			size_t plumbingCount = 0;
+			const void *const *plumbing =
+				CrashPlumbingFunctions(&plumbingCount);
+
+			s_crashContext->SetCrashPlumbingFunctions(
+				plumbing, plumbingCount);
+		}
+#endif
+
 		s_crashContext->WalkStack(
 			pExceptionInfo->ContextRecord,
 			/*skipOwnLeadingFrames=*/fromAbortDoor);
+	}
 
 	// Stops host API calls from running once we are on the crash path. The
 	// consent prompt below is modal, and a modal message loop keeps
@@ -1160,6 +1185,36 @@ static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
 	}
 
 	if (InterlockedIncrement(&s_insideExceptionFilter) == 1L) {
+		//
+		// What sentry gets. Only sentry: OBS's own filter below keeps
+		// the original, because its crash log should describe the
+		// process as the OS saw it, and the WalkStack() above has
+		// already made its own correction for our archive.
+		//
+		// On the SEH door there is nothing to correct -- the CONTEXT
+		// comes from the OS at the fault point, where we are not on
+		// the stack at all -- so this only ever runs for the abort
+		// door, and falls back to the original on any doubt.
+		//
+		EXCEPTION_POINTERS sentryPointers = *pExceptionInfo;
+
+#if defined(_M_AMD64)
+		CONTEXT sentryContext;
+		EXCEPTION_RECORD sentryRecord;
+
+		if (fromAbortDoor) {
+			sentryContext = *pExceptionInfo->ContextRecord;
+
+			if (AdvanceContextPastCrashPlumbing(&sentryContext)) {
+				sentryRecord = *pExceptionInfo->ExceptionRecord;
+				sentryRecord.ExceptionAddress =
+					(PVOID)sentryContext.Rip;
+
+				sentryPointers.ContextRecord = &sentryContext;
+				sentryPointers.ExceptionRecord = &sentryRecord;
+			}
+		}
+#endif
 		// The gate. A stack that never passed through our code is not
 		// ours to report: we skip sentry's filter entirely, so no event
 		// and no minidump are produced, and go straight to the host
@@ -1204,7 +1259,8 @@ static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
 					// uploads the minidump out of process.
 					// Returns once the daemon has captured
 					// it, or on timeout.
-					s_sentryExceptionFilter(pExceptionInfo);
+					s_sentryExceptionFilter(
+						&sentryPointers);
 				}
 
 				// Before the host filter: OBS puts its own
@@ -1349,12 +1405,41 @@ static void __cdecl SentryAbortHandler(int signum)
 
 	HandleFatalException(&pointers, true);
 
-	// Only reachable on re-entry -- HandleFatalException terminates the
-	// process on the first pass through. Hand back to sentry so a crash is
-	// still reported, then make sure abort() cannot return to its caller.
-	if (s_sentryAbortHandler)
+	// Reached only if HandleFatalException() returned, and on the first pass
+	// it never does -- every path through its outermost branch ends in
+	// TerminateProcess(). So arriving here means this is a RE-ENTRANT abort:
+	// an outer pass is still in flight, further up this same stack.
+	//
+	// That happens routinely, and the mechanism is worth stating because it is
+	// not obvious. The crash path puts modal windows up -- our consent prompt,
+	// and then OBS's own MessageBoxA in main_crash_handler(). A modal message
+	// loop keeps pumping, so Qt timers and posted events keep firing on a
+	// process that is already half destroyed, and a second pure virtual call
+	// lands inside the first crash. SELIVE-3J carries both sequences in one
+	// trace: _purecall -> SentryPurecallHandler -> abort, twice, with
+	// MessageBoxA between them.
+	//
+	// Handing that to sentry's displaced handler used to be unconditional, and
+	// it manufactured a second event for the same process death -- one that
+	// skips the module-of-interest gate AND the consent prompt, because both
+	// of those live in HandleFatalException() above. 2,044 events across
+	// 1,275 machines arrived that way, titled "handle_sigabrt" after sentry's
+	// handler frame rather than after anything that broke. That is the largest
+	// crash family in the project, and not one of them is a crash.
+	//
+	// The safety net it was written for is still worth having, so it is kept
+	// and merely conditioned correctly: s_insideExceptionFilter is back to 0
+	// only when the pass that just returned was the OUTERMOST one -- i.e. our
+	// own path failed to run to completion, which would be a bug in it.
+	// Degrading to sentry's old behaviour then is better than silence.
+	// Degrading to it on an ordinary re-entry is just a duplicate report the
+	// user was never asked about.
+	if (InterlockedCompareExchange(&s_insideExceptionFilter, 0L, 0L) ==
+		    0L &&
+	    s_sentryAbortHandler)
 		s_sentryAbortHandler(signum);
 
+	// Make sure abort() cannot return to its caller.
 	TerminateProcess(GetCurrentProcess(), 3);
 }
 
@@ -1375,6 +1460,92 @@ static void __cdecl SentryPurecallHandler(void)
 
 	abort();
 }
+
+//
+// The abort door hands sentry a CONTEXT captured inside our own handler, so
+// every event it produces is titled after our plumbing rather than after the
+// fault. Sentry titles a native event by its innermost frame, and on this door
+// the innermost frames are always some permutation of SentryAbortHandler,
+// raise, abort, SentryPurecallHandler and _purecall. Measured over 90 days,
+// that is what puts thousands of unrelated faults under a handful of titles
+// and makes the issue list unreadable (CORE-2267).
+//
+// WalkStack() already corrects for this on OUR copy of the stack, via
+// skipOwnLeadingFrames. The event did not get the same correction. This closes
+// that asymmetry: it walks the synthetic context forward until the frame is no
+// longer one of ours, and sentry is handed THAT.
+//
+// Deliberately exact, not heuristic. A frame is skipped only when its function
+// entry is byte-identical to one of a fixed set of known plumbing functions --
+// never because of the module it lives in, which would also match the real
+// fault whenever the fault is in our code.
+//
+// Fails safe in every direction. No function entry, an unwind that throws, a
+// null instruction pointer, a stack pointer that does not strictly increase,
+// more than a handful of frames, or never leaving our own machinery at all --
+// any of those returns false and the caller keeps the ORIGINAL context. The
+// worst case is exactly today's behaviour, never a worse one.
+//
+// The walk itself is in SECrashPlumbingUnwind.cpp, which depends on nothing
+// but windows.h so that tests/ can compile it and drive the real
+// RtlVirtualUnwind over a real stack -- the half a model of the decision
+// cannot speak to, and says so.
+//
+// The __try below it is exercised too, which was also written off as
+// untestable: pointing Rsp at reserved, never-committed memory faults the
+// unwinder on demand, and removing the guard takes the test process down
+// with an ACCESS_VIOLATION, so it is the guard that catches it. What stays
+// unverified is now only the surrounding catastrophe -- a process already
+// dying, where the fault lands somewhere else entirely -- rather than the
+// mechanism.
+//
+#if defined(_M_AMD64)
+
+extern "C" int __cdecl _purecall(void);
+
+//
+// The whole abort door, in the order it stacks up:
+//   SentryAbortHandler <- raise <- abort <- SentryPurecallHandler
+//     <- _purecall <- the code that actually broke
+// and, without the purecall leg, the plain abort() case.
+//
+// This list IS the definition of the door, which is why it stays here
+// rather than travelling with the code that consumes it: a leg added
+// above without a line here would be walked straight past.
+//
+// TWO things consume it now, and they are the two halves of the same
+// confusion. The context advance uses it so sentry is told where the
+// FAULT is rather than where our handler is; the module-of-interest gate
+// uses it so it can tell our handler's frames from the fault's, which
+// frame ownership alone cannot do once the innermost frames are the CRT's
+// (SELIVE-230). One list, so the two can never disagree about what the
+// door is.
+//
+static const void *const *CrashPlumbingFunctions(size_t *count)
+{
+	static const void *const plumbing[] = {
+		(const void *)&SentryAbortHandler,
+		(const void *)&SentryPurecallHandler,
+		(const void *)&abort,
+		(const void *)&raise,
+		(const void *)&_purecall,
+	};
+
+	if (count)
+		*count = sizeof(plumbing) / sizeof(plumbing[0]);
+
+	return plumbing;
+}
+
+static bool AdvanceContextPastCrashPlumbing(CONTEXT *context)
+{
+	size_t count = 0;
+	const void *const *plumbing = CrashPlumbingFunctions(&count);
+
+	return SEAdvanceContextPastPlumbing(context, plumbing, count);
+}
+
+#endif // _M_AMD64
 
 /* ================================================================= */
 

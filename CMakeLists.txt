@@ -685,6 +685,7 @@ if (ENABLE_SENTRY)
 	else()
 		list(APPEND obs-streamelements-core_SOURCES
 			streamelements/SESentryCrashHandler.cpp
+			streamelements/SECrashPlumbingUnwind.cpp
 		)
 	endif()
 
@@ -809,6 +810,7 @@ set(obs-streamelements-core_HEADERS
 	streamelements/SECrashConsentDialog.hpp
 	streamelements/SEBugSplatCrashHandler.hpp
 	streamelements/SESentryCrashHandler.hpp
+	streamelements/SECrashPlumbingUnwind.hpp
 	streamelements/SEWerRegistration.h
 	streamelements/ISEMessageBus.hpp
 	streamelements/SEMessageBus.hpp

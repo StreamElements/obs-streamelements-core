@@ -289,6 +289,57 @@ se_add_test(test_crash_suppresses_queued_tasks
 se_add_test(test_crash_oom_handler
   test_crash_oom_handler.cpp)
 
+# --- Behavioural test: the abort door must hand sentry the fault rather
+#     than our own handler frames. Models the frame-skip decision and every
+#     condition that must fall back to the original context. ---
+se_add_test(test_crash_context_advance
+  test_crash_context_advance.cpp)
+
+# --- Behavioural test: the SAME correction, with the real unwind ----------
+#
+# The test above models the decision. This one compiles the production walk
+# and runs it over a stack built here, so every RtlLookupFunctionEntry and
+# RtlVirtualUnwind in it is the shipping one -- which is the half the model
+# says, in its own header comment, that it cannot speak to.
+#
+# Possible only since the walk moved out of SESentryCrashHandler.cpp, whose
+# include closure is libobs, Qt and sentry. SECrashPlumbingUnwind.cpp depends
+# on windows.h and nothing else.
+#
+# Windows x64 only: the unwind API IS the subject here, so there is nothing
+# to run elsewhere rather than something to skip.
+if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+  se_add_test(test_crash_plumbing_unwind
+    test_crash_plumbing_unwind.cpp
+    "${REPO_ROOT}/streamelements/SECrashPlumbingUnwind.cpp"
+  )
+else()
+  message(STATUS
+    "not Windows x64: skipping test_crash_plumbing_unwind. The decision it "
+    "exercises is modelled by test_crash_context_advance everywhere.")
+endif()
+
+# --- Behavioural test: a queued task must not call a virtual on a widget
+#     Qt has already destroyed. SEPleaseWaitWindow posted lambdas capturing
+#     a raw `this`, which reaches _purecall on a dual-owned QDialog. ---
+se_add_test(test_please_wait_window_lifetime
+  test_please_wait_window_lifetime.cpp)
+
+# --- Behavioural test: a dock's signal handlers must not re-enter a manager
+#     that is being destroyed. SEWidgetManager connects two lambdas per dock
+#     with the three-argument QObject::connect, so the connection outlives
+#     the manager; ~SEWidgetManager then emits from the BASE destructor,
+#     where SerializeDockingWidgets() is already pure. SELIVE-215. ---
+se_add_test(test_dock_signal_lifetime
+  test_dock_signal_lifetime.cpp)
+
+# --- Behavioural test: the abort door must not report one process death
+#     twice. The re-entrant hand-back to sentry's displaced handler produced
+#     1,604 events titled after handle_sigabrt, bypassing the module gate
+#     and the consent prompt. ---
+se_add_test(test_abort_door_reentry
+  test_abort_door_reentry.cpp)
+
 # --- Behavioural test: CORE-865 (the lazy encoder provider must acquire and
 #     release its encoder once per OBJECT, not once per consumer) ---
 se_add_test(test_lazy_encoder_refcount
