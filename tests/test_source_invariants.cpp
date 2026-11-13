@@ -586,8 +586,8 @@ static std::string function_body(const std::string &src,
 // Handing that to sentry's displaced handler unconditionally emitted a second
 // event for the same death -- one that skipped the module-of-interest gate and
 // the consent prompt, because both live in HandleFatalException(). It produced
-// 1,604 events across 813 machines, titled "handle_sigabrt" after sentry's own
-// handler frame rather than after anything that broke.
+// 2,044 events across 1,275 machines, titled "handle_sigabrt" after sentry's
+// own handler frame rather than after anything that broke.
 //
 // The chain is kept for the case it was written for -- our own path returning
 // instead of terminating, which would be a bug in it -- and conditioned on the

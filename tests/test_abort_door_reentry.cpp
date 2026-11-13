@@ -6,10 +6,12 @@
 //     abort       handle_sigabrt        1,426       813
 //     purecall    handle_sigabrt          178       172
 //
-// 1,604 events titled after `handle_sigabrt` -- sentry-native's own SIGABRT
-// handler frame. Not one of them is a crash in `handle_sigabrt`; it is the
-// innermost frame on the stack, and Sentry titles a native event by its
-// innermost frame.
+// Those are the two largest splits of a family that is 2,044 events across
+// 1,275 machines in all -- every one of them titled after `handle_sigabrt`,
+// sentry-native's own SIGABRT handler frame. Not one is a crash in
+// `handle_sigabrt`; it is merely the innermost frame on the stack, and Sentry
+// titles a native event by its innermost frame. Once we displace that handler
+// at init, the chain below is the only thing that can still call it.
 //
 // They were produced here. `SentryAbortHandler` called sentry's displaced
 // handler unconditionally once `HandleFatalException()` returned, and the only
@@ -145,7 +147,7 @@ static void check_a_first_pass_never_reaches_the_hand_back()
 
 // --- The regression: a re-entrant abort must not report again --------------
 //
-// This is the 1,604-event case. Our consent prompt or OBS's MessageBoxA is up,
+// This is the 2,044-event case. Our consent prompt or OBS's MessageBoxA is up,
 // the modal loop dispatches a Qt timer, a second pure virtual call aborts on
 // the same thread, and the abort door is entered again beneath the first.
 static void check_a_reentrant_abort_does_not_emit_a_second_event()

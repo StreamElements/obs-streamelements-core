@@ -1366,8 +1366,8 @@ static void __cdecl SentryAbortHandler(int signum)
 	// Handing that to sentry's displaced handler used to be unconditional, and
 	// it manufactured a second event for the same process death -- one that
 	// skips the module-of-interest gate AND the consent prompt, because both
-	// of those live in HandleFatalException() above. 1,604 events across 813
-	// machines arrived that way, titled "handle_sigabrt" after sentry's own
+	// of those live in HandleFatalException() above. 2,044 events across
+	// 1,275 machines arrived that way, titled "handle_sigabrt" after sentry's
 	// handler frame rather than after anything that broke. That is the largest
 	// crash family in the project, and not one of them is a crash.
 	//
