@@ -783,6 +783,54 @@ bool SEOutputBase::Start()
 
 	std::unique_lock<decltype(m_mutex)> lock(m_mutex);
 
+	//
+	// Refuse before libobs gets the chance to divide by it.
+	//
+	// obs-nvenc's init_encoder_base() does
+	//
+	//     keyint = keyint_sec * voi->fps_num / voi->fps_den;
+	//
+	// on whatever video_t the encoder is attached to, with no check of its
+	// own, so a composition whose video carries fps_den == 0 takes the whole
+	// process down the moment the user goes live. That is SELIVE-1M: 148
+	// machines in 90 days, every one an EXCEPTION_INT_DIVIDE_BY_ZERO inside
+	// obs-nvenc.dll with this Start() a few frames below it. A null video
+	// would fault in the same function one line earlier, so both are refused
+	// here.
+	//
+	// CORE-4627 removed one way to get there -- a cached video_t that OBS
+	// frees on a video reset. This is the guard rather than the cure, and it
+	// sits here because Start() is the only caller of StartInternal() for
+	// all six output classes: whatever zeroes the frame rate, the outcome
+	// becomes a refused start with a reason instead of a dead OBS.
+	//
+	// Nothing that works is refused. A video output with no frame rate
+	// encodes nothing.
+	//
+	if (m_videoCompositionInfo) {
+		video_t *video = m_videoCompositionInfo->GetVideo();
+
+		const struct video_output_info *voi =
+			video ? video_output_get_info(video) : nullptr;
+
+		if (!voi || !voi->fps_den) {
+			blog(LOG_ERROR,
+			     "obs-streamelements-core: refusing to start output '%s': its video composition '%s' has no usable frame rate (%s)",
+			     GetId().c_str(),
+			     m_videoComposition
+				     ? m_videoComposition->GetId().c_str()
+				     : "(none)",
+			     !video ? "composition has no video output"
+				    : (!voi ? "video output has no info"
+					    : "frame rate denominator is zero"));
+
+			SetError(
+				"Video composition has no usable frame rate: its video output cannot encode");
+
+			return false;
+		}
+	}
+
 	return StartInternal(m_videoCompositionInfo, m_audioCompositionInfo);
 }
 
