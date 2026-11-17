@@ -7438,6 +7438,189 @@ static void check_no_video_output_handle_is_cached()
 	      "(CORE-4627)");
 }
 
+// --- CORE-4619: the three OBS version pins must stay consistent.
+//
+// libobs refuses a module whose baked LIBOBS_API_VER is GREATER than its own
+// -- obs-module.c, logged as "compiled with newer libobs" and returning
+// MODULE_INCOMPATIBLE_VER before a line of our code runs -- and accepts one
+// built against an older libobs. The check is one-directional and, from our
+// side, entirely silent: no crash, no dialog, nothing in our own log.
+//
+// 26.11.10.1096 shipped that way and was inert on every OBS 32.x install.
+// Three constants in two files decide whether that can happen again:
+//
+//   CHECKOUT              .github/workflows/build.yml, the windows AND the
+//                         macos job
+//   OBS_REQUIRE_VERSION   CI/obs-streamelements-installer/common.nsh
+//   OBS_DOWNLOAD_VERSION  CI/obs-streamelements-installer/common.nsh
+//
+// Every one of them already carried a comment telling the reader to keep it
+// in step with the others. Prose is exactly what failed, which is why this
+// reads the numbers.
+static std::vector<int> version_parts(const std::string &text)
+{
+	std::vector<int> parts;
+	std::size_t at = 0;
+
+	for (;;) {
+		auto dot = text.find('.', at);
+		auto piece = text.substr(at, dot == std::string::npos
+						     ? std::string::npos
+						     : dot - at);
+
+		parts.push_back(piece.empty() ? 0 : std::stoi(piece));
+
+		if (dot == std::string::npos)
+			break;
+
+		at = dot + 1;
+	}
+
+	return parts;
+}
+
+// -1 / 0 / 1, comparing component by component with a missing component read
+// as zero, so "32.2" and "32.2.0" are the same version rather than different
+// strings.
+static int version_compare(const std::string &a, const std::string &b)
+{
+	auto left = version_parts(a);
+	auto right = version_parts(b);
+
+	for (std::size_t i = 0; i < left.size() || i < right.size(); ++i) {
+		int l = i < left.size() ? left[i] : 0;
+		int r = i < right.size() ? right[i] : 0;
+
+		if (l != r)
+			return l < r ? -1 : 1;
+	}
+
+	return 0;
+}
+
+static std::string version_major_minor(const std::string &v)
+{
+	auto parts = version_parts(v);
+
+	if (parts.size() < 2)
+		return v;
+
+	return std::to_string(parts[0]) + "." + std::to_string(parts[1]);
+}
+
+static void check_the_obs_version_pins_stay_consistent()
+{
+	auto wf = slurp(".github/workflows/build.yml");
+	auto nsh = slurp("CI/obs-streamelements-installer/common.nsh");
+
+	//
+	// Anchored on a newline followed by whitespace ONLY. That is what keeps
+	// the commented-out `# !define OBS_DOWNLOAD_VERSION "27.2.4"` at the top
+	// of common.nsh -- five majors below the pin, and the first match in the
+	// file -- out of the parse.
+	//
+	std::regex checkoutRe(
+		R"RX(\n[ \t]*CHECKOUT:[ \t]*([0-9]+(?:\.[0-9]+)*)[ \t]*(?:\n|#))RX");
+
+	std::vector<std::string> checkouts;
+
+	for (auto it = std::sregex_iterator(wf.begin(), wf.end(), checkoutRe);
+	     it != std::sregex_iterator(); ++it)
+		checkouts.push_back((*it)[1].str());
+
+	//
+	// Exactly two: one per job. A third would mean a job this check has
+	// never reasoned about; one would mean a job stopped pinning and now
+	// builds against whatever the runner last checked out.
+	//
+	check(checkouts.size() == 2,
+	      "CORE-4619: build.yml must pin CHECKOUT in exactly two jobs (windows and macos) -- a different count means the OBS pin moved somewhere this check cannot see");
+
+	auto read_define = [&nsh](const char *name) {
+		std::regex re(std::string(R"RX(\n[ \t]*!define[ \t]+)RX") +
+			      name + R"RX([ \t]+"([0-9]+(?:\.[0-9]+)*)")RX");
+
+		std::vector<std::string> found;
+
+		for (auto it = std::sregex_iterator(nsh.begin(), nsh.end(), re);
+		     it != std::sregex_iterator(); ++it)
+			found.push_back((*it)[1].str());
+
+		return found;
+	};
+
+	auto requires_ = read_define("OBS_REQUIRE_VERSION");
+	auto downloads = read_define("OBS_DOWNLOAD_VERSION");
+
+	check(requires_.size() == 1,
+	      "CORE-600: common.nsh must define OBS_REQUIRE_VERSION exactly once");
+	check(downloads.size() == 1,
+	      "CORE-4619: common.nsh must define OBS_DOWNLOAD_VERSION exactly once (the commented-out 27.2.4 line does not count)");
+
+	if (checkouts.size() != 2 || requires_.size() != 1 ||
+	    downloads.size() != 1)
+		return;
+
+	const std::string &checkout = checkouts[0];
+	const std::string &required = requires_[0];
+	const std::string &download = downloads[0];
+
+	//
+	// 1. The two jobs build one artifact. A split pin ships a Windows DLL
+	//    and a macOS one with different compatibility floors, and only one
+	//    of them is the floor anybody reasoned about.
+	//
+	check(checkouts[0] == checkouts[1],
+	      (std::string(
+		       "CORE-4619: both jobs in build.yml must check out the same OBS tag -- found windows=") +
+	       checkouts[0] + " macos=" + checkouts[1])
+		      .c_str());
+
+	//
+	// 2. The load gate masks the patch byte, so a 32.2.2 build loads on
+	//    32.2.0 and 32.2.1 -- and on nothing in 32.1.x. A requirement a
+	//    minor below the pin is precisely what lets the installer put the
+	//    payload on a host that cannot load it (CORE-600).
+	//
+	check(version_major_minor(required) == version_major_minor(checkout),
+	      (std::string("CORE-600: OBS_REQUIRE_VERSION (") + required +
+	       ") must share CHECKOUT's (" + checkout +
+	       ") major.minor -- the load gate masks only the patch byte, so a requirement below that minor admits hosts that refuse the module outright")
+		      .c_str());
+
+	//
+	// 3. The installer offers to install OBS itself. Fetching one older
+	//    than the pin installs a host that cannot load the payload the
+	//    installer is about to write beside it.
+	//
+	check(version_compare(download, checkout) >= 0,
+	      (std::string("CORE-4619: OBS_DOWNLOAD_VERSION (") + download +
+	       ") must never be older than CHECKOUT (" + checkout +
+	       ") -- the installer would fetch a host that refuses the module it then installs")
+		      .c_str());
+
+	//
+	// 4. And the other end of the same download: a requirement above what
+	//    we fetch means the installer downloads an OBS its own version
+	//    check then rejects.
+	//
+	check(version_compare(required, download) <= 0,
+	      (std::string("CORE-600: OBS_REQUIRE_VERSION (") + required +
+	       ") must not be newer than OBS_DOWNLOAD_VERSION (" + download +
+	       ") -- the installer would fetch an OBS it then refuses to accept")
+		      .c_str());
+
+	//
+	// The define is only worth checking if the URL is built from it. A
+	// hard-coded version in the URL would let the number above be raised
+	// while the installer keeps fetching the old host.
+	//
+	check(nsh.find(
+		      "OBS-Studio-${OBS_DOWNLOAD_VERSION}-Windows-x64-Installer.exe") !=
+		      std::string::npos,
+	      "CORE-4619: the x64 download URL must interpolate ${OBS_DOWNLOAD_VERSION} -- a literal version there makes the define above decorative");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -7523,6 +7706,7 @@ int main()
 	check_the_windows_module_is_packaged_where_the_installer_reads_it();
 	check_the_diagram_stylesheets_stay_identical();
 	check_no_video_output_handle_is_cached();
+	check_the_obs_version_pins_stay_consistent();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

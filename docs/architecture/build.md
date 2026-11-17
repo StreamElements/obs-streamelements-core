@@ -71,6 +71,13 @@ Two consequences worth keeping together:
   a fresh install provisions a host that cannot load the payload the installer
   is about to write.
 
+Those two rules, the equality of the two `CHECKOUT` values and the one that
+closes the loop — a requirement no newer than what the installer downloads, or
+it fetches an OBS it then refuses — were prose in three files and nothing
+checked them, which is how `1096` shipped.
+`check_the_obs_version_pins_stay_consistent` parses all three constants and
+asserts all four (CORE-4673); see [Enforced invariants](invariants.md).
+
 The only obs-provided helpers this repository's `CMakeLists.txt` calls are
 `set_target_properties_obs` and `find_qt`; both exist at 32.2.1 and 33.0.1.
 
