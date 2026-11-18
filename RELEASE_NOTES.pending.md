@@ -1,3 +1,0 @@
-- Fix: if a SE.Live canvas ever loses its video, starting a stream or recording on it now fails with a message instead of closing OBS Studio
-- Fix: saving a Backtrack clip no longer leaves the output's resources behind, which repeated saves used to accumulate and a clean shutdown then reported as a leak
-- Fix: a hotkey pressed while OBS Studio is shutting down could crash it on the way out
