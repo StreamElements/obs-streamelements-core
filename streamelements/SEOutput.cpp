@@ -2412,11 +2412,24 @@ void SECustomReplayBufferOutput::handle_output_saved(
 
 bool SECustomReplayBufferOutput::TriggerSaveReplayBuffer()
 {
-	if (!IsActive() || !GetOutput())
+	if (!IsActive())
+		return false;
+
+	//
+	// Once, and handed back. GetOutput() returns an owned,
+	// SETRACE-counted reference, so the shape this replaces -- one call
+	// for the null test and a second as an argument -- leaked two
+	// obs_output references per save, from the Backtrack button in the
+	// dock. The obs refcount was wrong too, not only the counter
+	// (CORE-4678).
+	//
+	OBSOutputAutoRelease output = SETRACE_AUTODECREF(GetOutput());
+
+	if (!output)
 		return false;
 
 	calldata_t *cd = SETRACE_ADDREF(calldata_create());
-	auto proc_handler = obs_output_get_proc_handler(GetOutput());
+	auto proc_handler = obs_output_get_proc_handler(output);
 
 	proc_handler_call(proc_handler, "save", cd);
 

@@ -6784,6 +6784,108 @@ static void check_counted_references_are_given_back_to_the_counter()
 		       ": the unpaired form is back -- " + site.why)
 			      .c_str());
 	}
+
+	//
+	// And the shape that was actually wrong, which neither the scan above
+	// nor the named sites could see: a bare call whose result is discarded.
+	//
+	// The scan at the top of this function says so in its own comment --
+	// it inspects only `...AutoRelease x = Getter()`, because "an argument
+	// pass-through is not this check's business". True of the sites it was
+	// written for, false of the mistake that was made:
+	// TriggerSaveReplayBuffer() called GetOutput() once for a null test and
+	// again as an argument, leaking two obs_output references per replay
+	// save, and the check that exists to stop exactly that stayed green
+	// (CORE-4678).
+	//
+	// Classified by the character in front of the call, on
+	// whitespace-stripped source. Every legitimate site across these five
+	// files is preceded by `=` (parked in a local), `->` or `.` (a call on
+	// an object), `::` or `*` (a definition or a declaration), `return`
+	// (ownership handed straight on), or the `(` of a SETRACE wrapper. Only
+	// two were preceded by `!` or by the `(` of anything else, and both
+	// were the defect -- so the rule is the classification itself rather
+	// than a list of names.
+	//
+	std::size_t calls = 0;
+
+	for (const char *file : files) {
+		const std::string src = strip_line_comments(slurp(file));
+
+		std::string flat;
+		flat.reserve(src.size());
+
+		for (std::size_t i = 0; i < src.size(); ++i) {
+			if (!std::isspace(static_cast<unsigned char>(src[i])))
+				flat += src[i];
+		}
+
+		for (const char *getter : getters) {
+			const std::string needle = std::string(getter) + "(";
+
+			for (std::size_t at = flat.find(needle);
+			     at != std::string::npos;
+			     at = flat.find(needle, at + 1)) {
+				++calls;
+
+				if (at == 0)
+					continue;
+
+				const char pre = flat[at - 1];
+
+				check(pre != '!',
+				      (std::string(
+					       "a SETRACE-counted reference from ") +
+				       getter +
+				       "() is taken for a null test and then dropped, in " +
+				       file +
+				       " -- park it in an OBS*AutoRelease once and test that local instead")
+					      .c_str());
+
+				if (pre != '(')
+					continue;
+
+				//
+				// The identifier in front of that `(`. A SETRACE
+				// wrapper is the one legitimate enclosing call:
+				// anything else receives the reference and has no
+				// way to give it back.
+				//
+				const std::size_t id_end = at - 1;
+				std::size_t id_begin = id_end;
+
+				while (id_begin > 0 &&
+				       (std::isalnum(static_cast<unsigned char>(
+						flat[id_begin - 1])) ||
+					flat[id_begin - 1] == '_'))
+					--id_begin;
+
+				const std::string enclosing = flat.substr(
+					id_begin, id_end - id_begin);
+
+				check(enclosing == "SETRACE_ADDREF" ||
+					      enclosing ==
+						      "SETRACE_AUTODECREF" ||
+					      enclosing == "SETRACE_DECREF",
+				      (std::string(
+					       "a SETRACE-counted reference from ") +
+				       getter + "() is passed straight into " +
+				       (enclosing.empty()
+						? std::string("an expression")
+						: enclosing) +
+				       "() and never handed back, in " + file +
+				       " -- park it in an OBS*AutoRelease and pass that local instead")
+					      .c_str());
+			}
+		}
+	}
+
+	//
+	// 58 of them after CORE-4678. A rename that stopped matching would
+	// otherwise make the rule above silently vacuous.
+	//
+	check(calls >= 50,
+	      "expected at least 50 counted-getter call sites across the composition, scene and output sources; fewer were found, so the bare-call rule is no longer looking at the right shape");
 }
 
 //
