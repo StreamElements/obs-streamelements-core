@@ -29,6 +29,36 @@ three values.
 encoding settings, streaming settings, and the available encoder catalogues.
 17 host API methods reach it.
 
+## Every start passes one gate
+
+`SEOutputBase::Start()` is the only caller of `StartInternal()`, for all six
+classes. That makes it the one place a precondition can be enforced once, and
+there is one: the composition's video must have a usable frame rate.
+
+obs-nvenc's `init_encoder_base()` divides by it —
+
+```c
+keyint = keyint_sec * voi->fps_num / voi->fps_den;
+```
+
+— with no check of its own, so an output started on a composition whose video
+carries `fps_den == 0` kills the process at the moment the user goes live.
+`SELIVE-1M` is 148 machines in 90 days of exactly that, as an
+`EXCEPTION_INT_DIVIDE_BY_ZERO` inside `obs-nvenc.dll`. CORE-4627 removed one
+way to arrive there — a cached `video_t` that OBS frees on a video reset — and
+the gate is the guard rather than the cure, because the division happens
+whatever zeroed the value. Worth knowing while reading this:
+`obs_canvas_has_valid_video_info()` tests dimensions and colour format and
+**not** the frame rate, so a canvas carrying a zero is still "valid" to libobs
+and is still restored after `obs_reset_video()`.
+
+A refused start logs the composition and the reason at `LOG_ERROR` and sets an
+error the page can read. Nothing that works is refused: a video output with no
+frame rate encodes nothing.
+`check_no_output_starts_without_a_usable_frame_rate` pins the gate — including
+that it runs *before* `StartInternal()`, and that its condition can actually
+fire (CORE-4674).
+
 ## OBS's own single stream has exactly one owner
 
 `SEHostStreamingManager` is the one class in the plug-in that calls

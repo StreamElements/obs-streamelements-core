@@ -1,0 +1,1 @@
+- Fix: if a SE.Live canvas ever loses its video, starting a stream or recording on it now fails with a message instead of closing OBS Studio

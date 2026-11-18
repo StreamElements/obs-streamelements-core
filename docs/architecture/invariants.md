@@ -1,7 +1,7 @@
 # Enforced invariants
 
 `tests/test_source_invariants.cpp` opens the production sources and asserts
-that a fixed pattern is absent — or that a required one is present. **84
+that a fixed pattern is absent — or that a required one is present. **85
 checks** run from its `main()`. They exist because this plug-in's worst bugs
 are not type errors: they are a lock held one line too long, a strong pointer
 where a weak one belonged, an `#ifdef` that silently stopped meaning anything.
@@ -108,6 +108,7 @@ clang-format joining it onto one.
 | `check_counted_references_are_given_back_to_the_counter` | a counted getter parked in an `OBS*AutoRelease` must be paired, or the leak signal lies |
 | `check_c2_video_encoder_template_match` | `IsMatchingIndex` compares with `==`; the original assigned with `=` and returned the truthiness of the assignment |
 | `check_c6_audio_encoder_bounds` | `>=`, not `>`: valid indices are `[0, MAX_AUDIO_MIXES)` |
+| `check_no_output_starts_without_a_usable_frame_rate` | `Start()` refuses a composition whose video has `fps_den == 0`, before `StartInternal()` and with a condition that can fire — obs-nvenc divides by that value |
 
 ### UI and widgets
 

@@ -7621,6 +7621,124 @@ static void check_the_obs_version_pins_stay_consistent()
 	      "CORE-4619: the x64 download URL must interpolate ${OBS_DOWNLOAD_VERSION} -- a literal version there makes the define above decorative");
 }
 
+// --- CORE-4674: no output may be started on a video with no frame rate.
+//
+// obs-nvenc's init_encoder_base() divides by the frame rate of whatever
+// video_t the encoder is attached to, with no check of its own:
+//
+//     keyint = keyint_sec * voi->fps_num / voi->fps_den;
+//
+// so a composition whose video carries fps_den == 0 kills the process the
+// moment the user goes live. SELIVE-1M is 148 machines in 90 days of exactly
+// that, as EXCEPTION_INT_DIVIDE_BY_ZERO inside obs-nvenc.dll with
+// SEOutputBase::Start() a few frames below it.
+//
+// CORE-4627 removed one upstream cause. This pins the guard, which is a
+// different thing: Start() is the only caller of StartInternal() for all six
+// output classes, so the frame rate is checked once, where every output
+// passes, whatever zeroed it.
+//
+// The ordering assertion is the one that matters. A check placed after the
+// start would read as diligence and prevent nothing.
+static void check_no_output_starts_without_a_usable_frame_rate()
+{
+	auto body = function_body(
+		strip_line_comments(slurp("streamelements/SEOutput.cpp")),
+		"bool SEOutputBase::Start()");
+
+	check(!body.empty(),
+	      "CORE-4674: SEOutputBase::Start() must exist -- it is the single funnel every output's start passes through");
+
+	if (body.empty())
+		return;
+
+	//
+	// Flattened, so wrapping the call across four lines -- or clang-format
+	// joining it onto one -- cannot defeat the patterns below.
+	//
+	std::string flat;
+	flat.reserve(body.size());
+
+	for (char c : body) {
+		if (!std::isspace(static_cast<unsigned char>(c)))
+			flat += c;
+	}
+
+	const auto video = flat.find("GetVideo()");
+	const auto info = flat.find("video_output_get_info(");
+	const auto den = flat.find("fps_den");
+	const auto refuse = flat.find("returnfalse;", den);
+	const auto start = flat.find("StartInternal(");
+
+	check(video != std::string::npos,
+	      "CORE-4674: Start() must ask the composition for its video output");
+	check(info != std::string::npos,
+	      "CORE-4674: Start() must read the video output's info -- the frame rate is not reachable any other way");
+	check(den != std::string::npos,
+	      "CORE-4674: Start() must test fps_den, the exact value obs-nvenc divides by");
+
+	//
+	// Non-vacuity. Without this the ordering check below is satisfied by a
+	// Start() that no longer starts anything.
+	//
+	check(start != std::string::npos,
+	      "CORE-4674: Start() must still call StartInternal() -- otherwise this check passes against an output that never starts");
+
+	if (den == std::string::npos || start == std::string::npos)
+		return;
+
+	//
+	// Reachability, not presence. `if (false && !voi->fps_den)` leaves
+	// every pattern above matching and the guard dead, which is how a
+	// previous check in this file passed against a branch that could not
+	// fire.
+	//
+	check(refuse != std::string::npos && refuse < start,
+	      "CORE-4674: the fps_den test must lead to `return false;` before StartInternal() is reached -- a guard that does not refuse is decoration");
+
+	//
+	// And the condition itself has to be able to fire. Every pattern above
+	// still matches `if (false && !voi->fps_den)`: the text is there, the
+	// `return false;` is there, the order is right, and the guard is dead.
+	// So the conjunction is read rather than assumed.
+	//
+	const auto condBegin = flat.rfind("if(", den);
+	const auto condEnd = flat.find("){", den);
+
+	const bool framed = condBegin != std::string::npos &&
+			    condEnd != std::string::npos && condBegin < den &&
+			    den < condEnd;
+
+	check(framed,
+	      "CORE-4674: the fps_den test must sit inside an `if` condition, not in a comment or a log line");
+
+	if (framed) {
+		const auto cond = flat.substr(condBegin, condEnd - condBegin);
+
+		check(cond.find("false") == std::string::npos &&
+			      cond.find("0&&") == std::string::npos &&
+			      cond.find("&&0") == std::string::npos,
+		      "CORE-4674: the guard's condition carries a constant-false conjunct, so it can never fire -- every other check here still passes against that");
+	}
+
+	check(den < start,
+	      "CORE-4674: the frame-rate check must come BEFORE StartInternal() -- after it, libobs has already been handed the zero");
+
+	//
+	// The error has to be legible from the page and from the log. A silent
+	// false is indistinguishable from "the service rejected us".
+	//
+	// Both searches start at the fps_den test, and that is not pedantry:
+	// the first version searched the whole body, Start() opens with
+	// SetError(""), and deleting the guard's own SetError() left the check
+	// green. Mutation said so; reading it did not.
+	//
+	check(flat.find("SetError(", den) < start,
+	      "CORE-4674: a refused start must set an error the page can read -- it must be the SetError INSIDE the guard, not the SetError(\"\") that opens Start()");
+	check(flat.find("LOG_ERROR", den) < start,
+	      "CORE-4674: a refused start must be logged at LOG_ERROR -- this is the only trace when a user reports that Go Live does nothing");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -7707,6 +7825,7 @@ int main()
 	check_the_diagram_stylesheets_stay_identical();
 	check_no_video_output_handle_is_cached();
 	check_the_obs_version_pins_stay_consistent();
+	check_no_output_starts_without_a_usable_frame_rate();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",
