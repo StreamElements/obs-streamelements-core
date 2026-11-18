@@ -196,6 +196,23 @@ SEHotkeyManager::~SEHotkeyManager()
 			this
 		);
 	}
+
+	//
+	// Every hotkey registered above holds `this` as its libobs
+	// callback data, and libobs keeps a registration until it is
+	// unregistered -- obs_shutdown() stops the hotkey thread at
+	// obs.c:1422, long AFTER the module teardown that destroys this
+	// object. Leaving them registered left libobs calling into freed
+	// memory for the whole of that window, 25 ms at a time
+	// (CORE-4679).
+	//
+	// AFTER the disconnect loop, and that order is load-bearing:
+	// obs_hotkey_unregister() raises `hotkey_unregister`, which
+	// hotkey_change_handler answers with
+	// AdviseHostHotkeyBindingsChanged() -- a QtPostTask out of a
+	// destructor, once per hotkey, during teardown.
+	//
+	RemoveAllManagedHotkeyBindings();
 }
 
 bool SEHotkeyManager::SerializeHotkeyBindings(CefRefPtr<CefValue>& output, bool onlyManagedBindings)

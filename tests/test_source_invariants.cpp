@@ -7996,6 +7996,104 @@ static void check_only_the_hotkey_manager_registers_hotkeys()
 	}
 }
 
+// --- CORE-4679: a hotkey registration must not outlive its registrar.
+//
+// libobs keeps a hotkey registration, and the routing slot, until something
+// takes them back. Nothing did. obs_shutdown() stops the hotkey thread at
+// obs.c:1422 -- after applicationShutdown() and a QUEUED OBSApp::quit, so
+// long after the module teardown that destroys these two managers -- and the
+// thread polls every 25 ms under the hotkey lock. This plug-in also asks for
+// background presses (obs_hotkey_enable_background_press(true) in SEMain), so
+// a key held while OBS closes is dispatched regardless of focus. Both of the
+// pointers libobs held were freed by then.
+//
+// Three paths, two fixes:
+//
+//   1. ~SEHotkeyManager now unregisters what it registered. ~57 hotkeys on a
+//      real profile each held `this` as hotkey->data. This also disarms the
+//      third path -- hotkey_routing_func posts
+//      QtPostTask(obs_hotkey_trigger_routed_callback(id, pressed)), and that
+//      libobs function looks the hotkey up by id, so after unregistration it
+//      misses and returns.
+//
+//   2. ShutdownHotkeys() gives the routing slot back.
+//
+// The second rule below is the interesting one. libobs dispatches
+//
+//     if (!reroute_hotkeys) hotkey->func(hotkey->data, ...);
+//     else if (router_func) router_func(router_func_data, ...);
+//
+// so rerouting ON with a null router is the one state in which neither
+// branch fires. Disabling rerouting instead is the obvious tidy-up and it
+// re-points delivery at every hotkey's own callback -- which is exactly what
+// rerouting had been masking. That is why this check bans it rather than
+// merely requiring the reset.
+static void check_hotkey_registrations_do_not_outlive_their_registrar()
+{
+	const std::string hk = strip_line_comments(
+		slurp("streamelements/SEHotkeyManager.cpp"));
+
+	const std::string dtor =
+		function_body(hk, "SEHotkeyManager::~SEHotkeyManager()");
+
+	check(!dtor.empty(),
+	      "CORE-4679: ~SEHotkeyManager() not found -- update this invariant");
+
+	const auto unregister = dtor.find("RemoveAllManagedHotkeyBindings");
+
+	check(unregister != std::string::npos,
+	      "CORE-4679: ~SEHotkeyManager() must unregister the hotkeys it registered -- libobs keeps each registration, with `this` as its callback data, until obs_shutdown() stops the hotkey thread long after this object is gone");
+
+	const auto disconnect = dtor.find("signal_handler_disconnect");
+
+	check(disconnect != std::string::npos,
+	      "CORE-4679: ~SEHotkeyManager() must still disconnect its signal handlers");
+
+	check(disconnect < unregister,
+	      "CORE-4679: the signal disconnect must come BEFORE the unregister in ~SEHotkeyManager() -- obs_hotkey_unregister() raises `hotkey_unregister`, which hotkey_change_handler answers with AdviseHostHotkeyBindingsChanged(), i.e. a QtPostTask out of a destructor, once per hotkey, during teardown");
+
+	const std::string ui = strip_line_comments(
+		slurp("streamelements/SENativeObsUIControlsManager.cpp"));
+
+	const std::string shutdown = function_body(
+		ui, "SENativeObsUIControlsManager::ShutdownHotkeys()");
+
+	check(!shutdown.empty(),
+	      "CORE-4679: SENativeObsUIControlsManager::ShutdownHotkeys() not found -- update this invariant");
+
+	//
+	// Whitespace removed, so clang-format cannot decide whether this
+	// passes by choosing to wrap the call.
+	//
+	std::string flat;
+	flat.reserve(shutdown.size());
+
+	for (std::size_t i = 0; i < shutdown.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(shutdown[i])))
+			flat += shutdown[i];
+	}
+
+	check(flat.find(
+		      "obs_hotkey_set_callback_routing_func(nullptr,nullptr)") !=
+		      std::string::npos,
+	      "CORE-4679: ShutdownHotkeys() must give the routing slot back -- InitHotkeys() hands libobs `this`, and obs->hotkeys.router_func_data stays that freed pointer until obs_shutdown() stops the hotkey thread");
+
+	check(flat.find("obs_hotkey_enable_callback_rerouting(false)") ==
+		      std::string::npos,
+	      "CORE-4679: ShutdownHotkeys() must NOT disable rerouting -- libobs falls back to hotkey->func(hotkey->data, ...) when rerouting is off, so this would re-point delivery at every still-registered hotkey's own callback. Rerouting ON with a null router is the one state in which neither branch fires");
+
+	//
+	// Non-vacuity: the enabling call must still be where it was, or the
+	// ban above is banning something nothing was going to do anyway.
+	//
+	const std::string init = function_body(
+		ui, "SENativeObsUIControlsManager::InitHotkeys()");
+
+	check(init.find("obs_hotkey_enable_callback_rerouting(true)") !=
+		      std::string::npos,
+	      "CORE-4679: InitHotkeys() no longer enables callback rerouting -- if that changed, the reasoning in ShutdownHotkeys() and in this check has to change with it");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -8084,6 +8182,7 @@ int main()
 	check_the_obs_version_pins_stay_consistent();
 	check_no_output_starts_without_a_usable_frame_rate();
 	check_only_the_hotkey_manager_registers_hotkeys();
+	check_hotkey_registrations_do_not_outlive_their_registrar();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

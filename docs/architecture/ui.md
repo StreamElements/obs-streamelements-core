@@ -220,7 +220,7 @@ The manager connects **once** to four signals — `hotkey_layout_change`,
 `hotkey_register`, `hotkey_unregister`, `hotkey_bindings_changed` — and
 answers all four by advising pages that the bindings changed.
 
-!!! warning "The callback routing slot is global, single, and not released"
+!!! warning "The routing slot is global and single, and must be given back"
     `obs_hotkey_set_callback_routing_func` has one slot per process, and
     `SENativeObsUIControlsManager` owns it: it claims
     `OBSBasic.StartStreaming`, and reposts every other press through
@@ -228,11 +228,25 @@ answers all four by advising pages that the bindings changed.
     callback in this plug-in arrives on the Qt thread, and a second caller
     of that setter would silently take the first one's presses.
 
-    `ShutdownHotkeys()` disconnects the `hotkey_register` signal but does
-    not reset the slot, and never calls
-    `obs_hotkey_enable_callback_rerouting(false)` — so after that manager is
-    destroyed libobs still holds the function and a dangling `this`. Found
-    while writing this page, not known to have fired, and not fixed here.
+    Giving it back at teardown is not optional, and the shape of it is the
+    part worth reading. `ShutdownHotkeys()` resets the slot to null and
+    deliberately leaves rerouting **enabled** — libobs dispatches
+    `if (!reroute_hotkeys) hotkey->func(...); else if (router_func)
+    router_func(...);`, so rerouting on with a null router is the one
+    state in which *neither* branch fires. Disabling rerouting instead is
+    the obvious tidy-up, and it re-points delivery at every hotkey's own
+    callback — which is what rerouting had been masking: `~SEHotkeyManager`
+    now unregisters its hotkeys for that reason, after its signal
+    disconnect rather than before it, since `obs_hotkey_unregister()`
+    raises a signal the manager itself answers with a `QtPostTask`.
+
+    Both halves were live until CORE-4679. `obs_shutdown()` stops the
+    hotkey thread long after the module teardown that destroys these
+    managers, the thread polls every 25 ms, and this plug-in asks for
+    background presses — so a key held while OBS closed was dispatched
+    through freed pointers.
+    `check_hotkey_registrations_do_not_outlive_their_registrar` pins both,
+    the ban on disabling rerouting included.
 
 ## State persistence
 
