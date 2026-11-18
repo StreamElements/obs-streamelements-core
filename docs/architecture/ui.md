@@ -181,11 +181,65 @@ same name. (An undefined name in an `#if` evaluates to `0`, so a guard whose
 define has drifted out of reach compiles green and silently stops meaning
 anything — which is exactly what nearly happened here.)
 
+## Hotkeys have one registrar
+
+`SEHotkeyManager` is the only class in the plug-in that registers an OBS
+hotkey — one `obs_hotkey_register_frontend` call, in
+`DeserializeSingleHotkeyBinding`. A page asks for one with
+`addHotkeyBinding({name, description, eventDetail, triggers})`; the manager
+refuses a duplicate name both against its own maps and against every other
+module's, by walking `obs_enum_hotkeys` and comparing `obs_hotkey_get_name`,
+and it applies key combinations through `obs_hotkey_load_bindings` inside
+`obs_hotkey_update_atomic` rather than directly.
+
+A press is announced to every page as `hostHotkeyPressed` /
+`hostHotkeyReleased`, carrying the `eventDetail` the registration supplied.
+That is the whole mechanism, and it is the part worth knowing before
+reaching for C++: **a hotkey here runs page JavaScript, not native code.** A
+feature that wants a key — "save this canvas's Backtrack" — registers the
+binding from the page and answers the event with
+`triggerReplayBufferOutputSaveById`. Nothing native is needed, and the
+capability has been there since API version 1.3.
+
+**OBS persists only the hotkeys it registered itself; SE.Live persists the
+rest in one place, not per feature.**
+`SerializeHotkeyBindings(…, onlyManagedBindings=true)` picks out the ones in
+the manager's maps, they travel in the startup state below, and the next
+launch re-registers each by name and re-applies its triggers.
+
+A second, per-feature store is the mistake
+`check_only_the_hotkey_manager_registers_hotkeys` exists to prevent, and the
+reason that mistake is tempting is worth spelling out: a hotkey registered
+outside the manager is absent from its maps, so the serializer above skips
+it and its bindings never reach the state — which looks like "OBS does not
+persist plug-in hotkeys, so I need a store of my own" — while
+`setHotkeyBindingTriggers` still rebinds it by id from a page, so the two
+then disagree about one hotkey.
+
+The manager connects **once** to four signals — `hotkey_layout_change`,
+`hotkey_register`, `hotkey_unregister`, `hotkey_bindings_changed` — and
+answers all four by advising pages that the bindings changed.
+
+!!! warning "The callback routing slot is global, single, and not released"
+    `obs_hotkey_set_callback_routing_func` has one slot per process, and
+    `SENativeObsUIControlsManager` owns it: it claims
+    `OBSBasic.StartStreaming`, and reposts every other press through
+    `QtPostTask(obs_hotkey_trigger_routed_callback)`. So every hotkey
+    callback in this plug-in arrives on the Qt thread, and a second caller
+    of that setter would silently take the first one's presses.
+
+    `ShutdownHotkeys()` disconnects the `hotkey_register` signal but does
+    not reset the slot, and never calls
+    `obs_hotkey_enable_callback_rerouting(false)` — so after that manager is
+    destroyed libobs still holds the function and a dangling `this`. Found
+    while writing this page, not known to have fired, and not fixed here.
+
 ## State persistence
 
 `SEStatePersistence` serialises what must survive a restart: docks, workers,
-the central widget, UI state. It **borrows** the four managers it serialises as
-raw pointers rather than owning them
+the central widget, the hotkey bindings a page registered, and UI state.
+It **borrows** the four managers it serialises as raw pointers rather than
+owning them
 (`check_state_persistence_borrows_the_managers_it_serializes`), and the widget
 manager holds *it* weakly
 (`check_widget_manager_does_not_own_state_persistence`). Both for the same

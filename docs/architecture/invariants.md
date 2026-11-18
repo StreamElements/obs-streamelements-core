@@ -1,7 +1,7 @@
 # Enforced invariants
 
 `tests/test_source_invariants.cpp` opens the production sources and asserts
-that a fixed pattern is absent — or that a required one is present. **85
+that a fixed pattern is absent — or that a required one is present. **86
 checks** run from its `main()`. They exist because this plug-in's worst bugs
 are not type errors: they are a lock held one line too long, a strong pointer
 where a weak one belonged, an `#ifdef` that silently stopped meaning anything.
@@ -120,6 +120,7 @@ clang-format joining it onto one.
 | `check_no_dock_is_added_to_an_invalid_area` | `Qt::NoDockWidgetArea` is not a valid `addDockWidget()` argument |
 | `check_menu_manager_update_guarded` | `Update()` is not called on a null manager during construction |
 | `check_non_modal_dialogs_are_closed_by_their_owner` | the dialog manager's destructor both rejects and satisfies every parked promise |
+| `check_only_the_hotkey_manager_registers_hotkeys` | `SEHotkeyManager` is the only class that registers an OBS hotkey, and `SENativeObsUIControlsManager` the only one that takes libobs's single callback routing slot |
 
 ### Crash reporting (CORE-860 … CORE-968)
 

@@ -7739,6 +7739,161 @@ static void check_no_output_starts_without_a_usable_frame_rate()
 	      "CORE-4674: a refused start must be logged at LOG_ERROR -- this is the only trace when a user reports that Go Live does nothing");
 }
 
+// --- CORE-4677: a hotkey has exactly one registrar.
+//
+// SEHotkeyManager is the only class that registers an OBS hotkey, and
+// SENativeObsUIControlsManager is the only one that takes libobs's callback
+// routing slot. Neither fact was written down anywhere, and PR #196 is what
+// that cost: 385 lines of C++ -- a second registrar, a third persistence
+// store, one signal handler per output and a libobs callback registered from
+// a constructor -- for a feature a page does in ten lines through
+// window.host, and has been able to since API version 1.3 in 2018.
+//
+// A second registrar is not a style question. Its hotkey is absent from the
+// manager's name->id maps, so SerializeHotkeyBindings(.., true) skips it and
+// its bindings never reach the startup state -- which is how a feature ends
+// up inventing a store of its own -- while setHotkeyBindingTriggers still
+// rebinds it by id from a page, so the two disagree about one hotkey. It also
+// bypasses the duplicate-name guard that walks obs_enum_hotkeys.
+//
+// The routing slot is worse than redundant: obs_hotkey_set_callback_routing_func
+// has one slot per process, so a second caller silently takes the first one's
+// presses.
+//
+// Presence in the owner is asserted as well as absence everywhere else, for
+// the three tokens that appear today. Without that, this check would pass
+// against a tree in which nobody registers a hotkey at all.
+static void check_only_the_hotkey_manager_registers_hotkeys()
+{
+	struct rule {
+		const char *token;
+		const char *owner;
+		bool must_appear;
+	};
+
+	//
+	// The register_* family is listed in full rather than only the one
+	// spelling in use, so a hotkey added through a different libobs entry
+	// point lands in the same place or fails here.
+	//
+	static const rule rules[] = {
+		{"obs_hotkey_register_frontend", "SEHotkeyManager.cpp", true},
+		{"obs_hotkey_pair_register_frontend", "SEHotkeyManager.cpp",
+		 false},
+		{"obs_hotkey_register_source", "SEHotkeyManager.cpp", false},
+		{"obs_hotkey_pair_register_source", "SEHotkeyManager.cpp",
+		 false},
+		{"obs_hotkey_register_output", "SEHotkeyManager.cpp", false},
+		{"obs_hotkey_register_encoder", "SEHotkeyManager.cpp", false},
+		{"obs_hotkey_register_service", "SEHotkeyManager.cpp", false},
+		{"obs_hotkey_set_callback_routing_func",
+		 "SENativeObsUIControlsManager.cpp", true},
+		{"obs_hotkey_enable_callback_rerouting",
+		 "SENativeObsUIControlsManager.cpp", true},
+	};
+
+	constexpr std::size_t kRules = sizeof(rules) / sizeof(rules[0]);
+
+	const char *const dirs[] = {"/streamelements",
+				    "/streamelements/SEUtils",
+				    "/streamelements/updater",
+				    "/streamelements/restore-script-host"};
+
+	std::size_t owner_hits[kRules] = {0};
+	int scanned = 0;
+
+	for (const char *const dir : dirs) {
+		const std::string path = std::string(se_tests::kRepoRoot) + dir;
+
+		std::error_code ec;
+		std::filesystem::directory_iterator it(path, ec);
+
+		check(!ec, (std::string("CORE-4677: cannot read ") + dir +
+			    " -- this invariant would then pass vacuously")
+				   .c_str());
+
+		for (std::filesystem::directory_iterator end; it != end && !ec;
+		     it.increment(ec)) {
+			const std::filesystem::path &p = it->path();
+			const std::string ext = p.extension().string();
+
+			if (ext != ".cpp" && ext != ".hpp" && ext != ".mm")
+				continue;
+
+			std::ifstream in(p.string());
+
+			if (!in)
+				continue;
+
+			std::stringstream ss;
+			ss << in.rdbuf();
+
+			//
+			// Comments stripped first: this file's own rules name
+			// every token, and so does the prose in
+			// SEHotkeyManager.hpp.
+			//
+			const std::string stripped =
+				strip_line_comments(ss.str());
+			const std::string name = p.filename().string();
+
+			//
+			// Whitespace removed, and each token matched WITH its
+			// opening parenthesis. Both halves are load-bearing: a
+			// bare substring search also matches
+			// obs_hotkey_register_frontend_RENAMED, so the presence
+			// half below passed against a tree in which the owner
+			// had renamed its call away. Mutation testing found
+			// that; reading the check did not.
+			//
+			std::string src;
+			src.reserve(stripped.size());
+
+			for (std::size_t i = 0; i < stripped.size(); ++i) {
+				if (!std::isspace(static_cast<unsigned char>(
+					    stripped[i])))
+					src += stripped[i];
+			}
+
+			++scanned;
+
+			for (std::size_t i = 0; i < kRules; ++i) {
+				const std::string needle =
+					std::string(rules[i].token) + "(";
+
+				if (src.find(needle) == std::string::npos)
+					continue;
+
+				if (name == rules[i].owner) {
+					++owner_hits[i];
+					continue;
+				}
+
+				check(false,
+				      (std::string("CORE-4677: ") + name +
+				       " calls " + rules[i].token +
+				       "() -- only " + rules[i].owner +
+				       " may; a page registers a hotkey with addHotkeyBinding() and answers hostHotkeyPressed, so a feature that wants a key needs no C++ at all")
+					      .c_str());
+			}
+		}
+	}
+
+	check(scanned > 100,
+	      "CORE-4677: scanned too few sources under streamelements/ to be believable -- update this invariant");
+
+	for (std::size_t i = 0; i < kRules; ++i) {
+		if (!rules[i].must_appear)
+			continue;
+
+		check(owner_hits[i] != 0,
+		      (std::string("CORE-4677: ") + rules[i].owner +
+		       " no longer calls " + rules[i].token + "()" +
+		       " -- if the owner moved, move the rule with it, because this check passes vacuously otherwise")
+			      .c_str());
+	}
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -7826,6 +7981,7 @@ int main()
 	check_no_video_output_handle_is_cached();
 	check_the_obs_version_pins_stay_consistent();
 	check_no_output_starts_without_a_usable_frame_rate();
+	check_only_the_hotkey_manager_registers_hotkeys();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",
