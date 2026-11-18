@@ -1,7 +1,7 @@
 # Enforced invariants
 
 `tests/test_source_invariants.cpp` opens the production sources and asserts
-that a fixed pattern is absent — or that a required one is present. **83
+that a fixed pattern is absent — or that a required one is present. **84
 checks** run from its `main()`. They exist because this plug-in's worst bugs
 are not type errors: they are a lock held one line too long, a strong pointer
 where a weak one belonged, an `#ifdef` that silently stopped meaning anything.
@@ -176,6 +176,7 @@ clang-format joining it onto one.
 | --- | --- |
 | `check_every_emitted_output_is_declared` | a composite action exposes only the outputs it names |
 | `check_full_release_adopts_before_cancelling` | a full release adopts the issues of the releases it overtakes before any of them are cancelled |
+| `check_the_obs_version_pins_stay_consistent` | both jobs check out the same OBS tag, `OBS_REQUIRE_VERSION` shares its `major.minor`, and `OBS_DOWNLOAD_VERSION` is newer than neither the pin nor the requirement |
 
 ## When a check fails
 
