@@ -6784,6 +6784,108 @@ static void check_counted_references_are_given_back_to_the_counter()
 		       ": the unpaired form is back -- " + site.why)
 			      .c_str());
 	}
+
+	//
+	// And the shape that was actually wrong, which neither the scan above
+	// nor the named sites could see: a bare call whose result is discarded.
+	//
+	// The scan at the top of this function says so in its own comment --
+	// it inspects only `...AutoRelease x = Getter()`, because "an argument
+	// pass-through is not this check's business". True of the sites it was
+	// written for, false of the mistake that was made:
+	// TriggerSaveReplayBuffer() called GetOutput() once for a null test and
+	// again as an argument, leaking two obs_output references per replay
+	// save, and the check that exists to stop exactly that stayed green
+	// (CORE-4678).
+	//
+	// Classified by the character in front of the call, on
+	// whitespace-stripped source. Every legitimate site across these five
+	// files is preceded by `=` (parked in a local), `->` or `.` (a call on
+	// an object), `::` or `*` (a definition or a declaration), `return`
+	// (ownership handed straight on), or the `(` of a SETRACE wrapper. Only
+	// two were preceded by `!` or by the `(` of anything else, and both
+	// were the defect -- so the rule is the classification itself rather
+	// than a list of names.
+	//
+	std::size_t calls = 0;
+
+	for (const char *file : files) {
+		const std::string src = strip_line_comments(slurp(file));
+
+		std::string flat;
+		flat.reserve(src.size());
+
+		for (std::size_t i = 0; i < src.size(); ++i) {
+			if (!std::isspace(static_cast<unsigned char>(src[i])))
+				flat += src[i];
+		}
+
+		for (const char *getter : getters) {
+			const std::string needle = std::string(getter) + "(";
+
+			for (std::size_t at = flat.find(needle);
+			     at != std::string::npos;
+			     at = flat.find(needle, at + 1)) {
+				++calls;
+
+				if (at == 0)
+					continue;
+
+				const char pre = flat[at - 1];
+
+				check(pre != '!',
+				      (std::string(
+					       "a SETRACE-counted reference from ") +
+				       getter +
+				       "() is taken for a null test and then dropped, in " +
+				       file +
+				       " -- park it in an OBS*AutoRelease once and test that local instead")
+					      .c_str());
+
+				if (pre != '(')
+					continue;
+
+				//
+				// The identifier in front of that `(`. A SETRACE
+				// wrapper is the one legitimate enclosing call:
+				// anything else receives the reference and has no
+				// way to give it back.
+				//
+				const std::size_t id_end = at - 1;
+				std::size_t id_begin = id_end;
+
+				while (id_begin > 0 &&
+				       (std::isalnum(static_cast<unsigned char>(
+						flat[id_begin - 1])) ||
+					flat[id_begin - 1] == '_'))
+					--id_begin;
+
+				const std::string enclosing = flat.substr(
+					id_begin, id_end - id_begin);
+
+				check(enclosing == "SETRACE_ADDREF" ||
+					      enclosing ==
+						      "SETRACE_AUTODECREF" ||
+					      enclosing == "SETRACE_DECREF",
+				      (std::string(
+					       "a SETRACE-counted reference from ") +
+				       getter + "() is passed straight into " +
+				       (enclosing.empty()
+						? std::string("an expression")
+						: enclosing) +
+				       "() and never handed back, in " + file +
+				       " -- park it in an OBS*AutoRelease and pass that local instead")
+					      .c_str());
+			}
+		}
+	}
+
+	//
+	// 58 of them after CORE-4678. A rename that stopped matching would
+	// otherwise make the rule above silently vacuous.
+	//
+	check(calls >= 50,
+	      "expected at least 50 counted-getter call sites across the composition, scene and output sources; fewer were found, so the bare-call rule is no longer looking at the right shape");
 }
 
 //
@@ -7739,6 +7841,259 @@ static void check_no_output_starts_without_a_usable_frame_rate()
 	      "CORE-4674: a refused start must be logged at LOG_ERROR -- this is the only trace when a user reports that Go Live does nothing");
 }
 
+// --- CORE-4677: a hotkey has exactly one registrar.
+//
+// SEHotkeyManager is the only class that registers an OBS hotkey, and
+// SENativeObsUIControlsManager is the only one that takes libobs's callback
+// routing slot. Neither fact was written down anywhere, and PR #196 is what
+// that cost: 385 lines of C++ -- a second registrar, a third persistence
+// store, one signal handler per output and a libobs callback registered from
+// a constructor -- for a feature a page does in ten lines through
+// window.host, and has been able to since API version 1.3 in 2018.
+//
+// A second registrar is not a style question. Its hotkey is absent from the
+// manager's name->id maps, so SerializeHotkeyBindings(.., true) skips it and
+// its bindings never reach the startup state -- which is how a feature ends
+// up inventing a store of its own -- while setHotkeyBindingTriggers still
+// rebinds it by id from a page, so the two disagree about one hotkey. It also
+// bypasses the duplicate-name guard that walks obs_enum_hotkeys.
+//
+// The routing slot is worse than redundant: obs_hotkey_set_callback_routing_func
+// has one slot per process, so a second caller silently takes the first one's
+// presses.
+//
+// Presence in the owner is asserted as well as absence everywhere else, for
+// the three tokens that appear today. Without that, this check would pass
+// against a tree in which nobody registers a hotkey at all.
+static void check_only_the_hotkey_manager_registers_hotkeys()
+{
+	struct rule {
+		const char *token;
+		const char *owner;
+		bool must_appear;
+	};
+
+	//
+	// The register_* family is listed in full rather than only the one
+	// spelling in use, so a hotkey added through a different libobs entry
+	// point lands in the same place or fails here.
+	//
+	static const rule rules[] = {
+		{"obs_hotkey_register_frontend", "SEHotkeyManager.cpp", true},
+		{"obs_hotkey_pair_register_frontend", "SEHotkeyManager.cpp",
+		 false},
+		{"obs_hotkey_register_source", "SEHotkeyManager.cpp", false},
+		{"obs_hotkey_pair_register_source", "SEHotkeyManager.cpp",
+		 false},
+		{"obs_hotkey_register_output", "SEHotkeyManager.cpp", false},
+		{"obs_hotkey_register_encoder", "SEHotkeyManager.cpp", false},
+		{"obs_hotkey_register_service", "SEHotkeyManager.cpp", false},
+		{"obs_hotkey_set_callback_routing_func",
+		 "SENativeObsUIControlsManager.cpp", true},
+		{"obs_hotkey_enable_callback_rerouting",
+		 "SENativeObsUIControlsManager.cpp", true},
+	};
+
+	constexpr std::size_t kRules = sizeof(rules) / sizeof(rules[0]);
+
+	const char *const dirs[] = {"/streamelements",
+				    "/streamelements/SEUtils",
+				    "/streamelements/updater",
+				    "/streamelements/restore-script-host"};
+
+	std::size_t owner_hits[kRules] = {0};
+	int scanned = 0;
+
+	for (const char *const dir : dirs) {
+		const std::string path = std::string(se_tests::kRepoRoot) + dir;
+
+		std::error_code ec;
+		std::filesystem::directory_iterator it(path, ec);
+
+		check(!ec, (std::string("CORE-4677: cannot read ") + dir +
+			    " -- this invariant would then pass vacuously")
+				   .c_str());
+
+		for (std::filesystem::directory_iterator end; it != end && !ec;
+		     it.increment(ec)) {
+			const std::filesystem::path &p = it->path();
+			const std::string ext = p.extension().string();
+
+			if (ext != ".cpp" && ext != ".hpp" && ext != ".mm")
+				continue;
+
+			std::ifstream in(p.string());
+
+			if (!in)
+				continue;
+
+			std::stringstream ss;
+			ss << in.rdbuf();
+
+			//
+			// Comments stripped first: this file's own rules name
+			// every token, and so does the prose in
+			// SEHotkeyManager.hpp.
+			//
+			const std::string stripped =
+				strip_line_comments(ss.str());
+			const std::string name = p.filename().string();
+
+			//
+			// Whitespace removed, and each token matched WITH its
+			// opening parenthesis. Both halves are load-bearing: a
+			// bare substring search also matches
+			// obs_hotkey_register_frontend_RENAMED, so the presence
+			// half below passed against a tree in which the owner
+			// had renamed its call away. Mutation testing found
+			// that; reading the check did not.
+			//
+			std::string src;
+			src.reserve(stripped.size());
+
+			for (std::size_t i = 0; i < stripped.size(); ++i) {
+				if (!std::isspace(static_cast<unsigned char>(
+					    stripped[i])))
+					src += stripped[i];
+			}
+
+			++scanned;
+
+			for (std::size_t i = 0; i < kRules; ++i) {
+				const std::string needle =
+					std::string(rules[i].token) + "(";
+
+				if (src.find(needle) == std::string::npos)
+					continue;
+
+				if (name == rules[i].owner) {
+					++owner_hits[i];
+					continue;
+				}
+
+				check(false,
+				      (std::string("CORE-4677: ") + name +
+				       " calls " + rules[i].token +
+				       "() -- only " + rules[i].owner +
+				       " may; a page registers a hotkey with addHotkeyBinding() and answers hostHotkeyPressed, so a feature that wants a key needs no C++ at all")
+					      .c_str());
+			}
+		}
+	}
+
+	check(scanned > 100,
+	      "CORE-4677: scanned too few sources under streamelements/ to be believable -- update this invariant");
+
+	for (std::size_t i = 0; i < kRules; ++i) {
+		if (!rules[i].must_appear)
+			continue;
+
+		check(owner_hits[i] != 0,
+		      (std::string("CORE-4677: ") + rules[i].owner +
+		       " no longer calls " + rules[i].token + "()" +
+		       " -- if the owner moved, move the rule with it, because this check passes vacuously otherwise")
+			      .c_str());
+	}
+}
+
+// --- CORE-4679: a hotkey registration must not outlive its registrar.
+//
+// libobs keeps a hotkey registration, and the routing slot, until something
+// takes them back. Nothing did. obs_shutdown() stops the hotkey thread at
+// obs.c:1422 -- after applicationShutdown() and a QUEUED OBSApp::quit, so
+// long after the module teardown that destroys these two managers -- and the
+// thread polls every 25 ms under the hotkey lock. This plug-in also asks for
+// background presses (obs_hotkey_enable_background_press(true) in SEMain), so
+// a key held while OBS closes is dispatched regardless of focus. Both of the
+// pointers libobs held were freed by then.
+//
+// Three paths, two fixes:
+//
+//   1. ~SEHotkeyManager now unregisters what it registered. ~57 hotkeys on a
+//      real profile each held `this` as hotkey->data. This also disarms the
+//      third path -- hotkey_routing_func posts
+//      QtPostTask(obs_hotkey_trigger_routed_callback(id, pressed)), and that
+//      libobs function looks the hotkey up by id, so after unregistration it
+//      misses and returns.
+//
+//   2. ShutdownHotkeys() gives the routing slot back.
+//
+// The second rule below is the interesting one. libobs dispatches
+//
+//     if (!reroute_hotkeys) hotkey->func(hotkey->data, ...);
+//     else if (router_func) router_func(router_func_data, ...);
+//
+// so rerouting ON with a null router is the one state in which neither
+// branch fires. Disabling rerouting instead is the obvious tidy-up and it
+// re-points delivery at every hotkey's own callback -- which is exactly what
+// rerouting had been masking. That is why this check bans it rather than
+// merely requiring the reset.
+static void check_hotkey_registrations_do_not_outlive_their_registrar()
+{
+	const std::string hk = strip_line_comments(
+		slurp("streamelements/SEHotkeyManager.cpp"));
+
+	const std::string dtor =
+		function_body(hk, "SEHotkeyManager::~SEHotkeyManager()");
+
+	check(!dtor.empty(),
+	      "CORE-4679: ~SEHotkeyManager() not found -- update this invariant");
+
+	const auto unregister = dtor.find("RemoveAllManagedHotkeyBindings");
+
+	check(unregister != std::string::npos,
+	      "CORE-4679: ~SEHotkeyManager() must unregister the hotkeys it registered -- libobs keeps each registration, with `this` as its callback data, until obs_shutdown() stops the hotkey thread long after this object is gone");
+
+	const auto disconnect = dtor.find("signal_handler_disconnect");
+
+	check(disconnect != std::string::npos,
+	      "CORE-4679: ~SEHotkeyManager() must still disconnect its signal handlers");
+
+	check(disconnect < unregister,
+	      "CORE-4679: the signal disconnect must come BEFORE the unregister in ~SEHotkeyManager() -- obs_hotkey_unregister() raises `hotkey_unregister`, which hotkey_change_handler answers with AdviseHostHotkeyBindingsChanged(), i.e. a QtPostTask out of a destructor, once per hotkey, during teardown");
+
+	const std::string ui = strip_line_comments(
+		slurp("streamelements/SENativeObsUIControlsManager.cpp"));
+
+	const std::string shutdown = function_body(
+		ui, "SENativeObsUIControlsManager::ShutdownHotkeys()");
+
+	check(!shutdown.empty(),
+	      "CORE-4679: SENativeObsUIControlsManager::ShutdownHotkeys() not found -- update this invariant");
+
+	//
+	// Whitespace removed, so clang-format cannot decide whether this
+	// passes by choosing to wrap the call.
+	//
+	std::string flat;
+	flat.reserve(shutdown.size());
+
+	for (std::size_t i = 0; i < shutdown.size(); ++i) {
+		if (!std::isspace(static_cast<unsigned char>(shutdown[i])))
+			flat += shutdown[i];
+	}
+
+	check(flat.find(
+		      "obs_hotkey_set_callback_routing_func(nullptr,nullptr)") !=
+		      std::string::npos,
+	      "CORE-4679: ShutdownHotkeys() must give the routing slot back -- InitHotkeys() hands libobs `this`, and obs->hotkeys.router_func_data stays that freed pointer until obs_shutdown() stops the hotkey thread");
+
+	check(flat.find("obs_hotkey_enable_callback_rerouting(false)") ==
+		      std::string::npos,
+	      "CORE-4679: ShutdownHotkeys() must NOT disable rerouting -- libobs falls back to hotkey->func(hotkey->data, ...) when rerouting is off, so this would re-point delivery at every still-registered hotkey's own callback. Rerouting ON with a null router is the one state in which neither branch fires");
+
+	//
+	// Non-vacuity: the enabling call must still be where it was, or the
+	// ban above is banning something nothing was going to do anyway.
+	//
+	const std::string init = function_body(
+		ui, "SENativeObsUIControlsManager::InitHotkeys()");
+
+	check(init.find("obs_hotkey_enable_callback_rerouting(true)") !=
+		      std::string::npos,
+	      "CORE-4679: InitHotkeys() no longer enables callback rerouting -- if that changed, the reasoning in ShutdownHotkeys() and in this check has to change with it");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -7826,6 +8181,8 @@ int main()
 	check_no_video_output_handle_is_cached();
 	check_the_obs_version_pins_stay_consistent();
 	check_no_output_starts_without_a_usable_frame_rate();
+	check_only_the_hotkey_manager_registers_hotkeys();
+	check_hotkey_registrations_do_not_outlive_their_registrar();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

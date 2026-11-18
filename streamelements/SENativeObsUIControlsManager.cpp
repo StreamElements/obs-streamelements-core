@@ -648,6 +648,33 @@ void SENativeObsUIControlsManager::ShutdownHotkeys()
 		hotkey_change_handler,
 		this
 	);
+
+	//
+	// Give the slot back. InitHotkeys() handed libobs this pointer and
+	// nothing took it away, so obs->hotkeys.router_func_data stayed a
+	// freed `this` from here until obs_shutdown() stops the hotkey
+	// thread -- which it does at obs.c:1422, after applicationShutdown()
+	// and a QUEUED OBSApp::quit, so well after module teardown. The
+	// thread polls every 25 ms, and this plug-in itself asks for
+	// background presses (obs_hotkey_enable_background_press(true) in
+	// SEMain), so a key held while OBS closes is dispatched (CORE-4679).
+	//
+	// Both setters take the same libobs hotkey lock the dispatch thread
+	// holds across query_hotkeys(), so this closes the window rather
+	// than narrowing it.
+	//
+	// Rerouting is deliberately left ENABLED. libobs dispatches
+	//
+	//     if (!reroute_hotkeys) hotkey->func(hotkey->data, ...);
+	//     else if (router_func) router_func(router_func_data, ...);
+	//
+	// so rerouting on with a null router is the one state in which
+	// NEITHER branch fires. Calling
+	// obs_hotkey_enable_callback_rerouting(false) here instead -- the
+	// obvious tidy-up -- would re-point delivery at every hotkey's own
+	// callback, which is the thing rerouting has been masking.
+	//
+	obs_hotkey_set_callback_routing_func(nullptr, nullptr);
 }
 
 void SENativeObsUIControlsManager::BeginStartStreaming()
