@@ -17,7 +17,7 @@ ctest --test-dir tests/build -C Debug --output-on-failure
 
 It is **not** part of the plug-in build (`-DSE_ENABLE_TESTS=ON`, or configure
 `tests/` directly). `se_add_test(<name> <sources>)` in `tests/CMakeLists.txt`
-registers each target; there are **18**, one of which (`test_http_utils`) is
+registers each target; there are **25**, one of which (`test_http_utils`) is
 conditional on libcurl being found. `tests.yml` runs the suite on Windows and
 macOS, so a red ctest blocks a PR.
 
