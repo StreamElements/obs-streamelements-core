@@ -1174,14 +1174,46 @@ static LONG HandleFatalException(PEXCEPTION_POINTERS pExceptionInfo,
 	// module needs to know is that our handler is on the stack at all.
 	s_werRegistration.seHandlerActive = 1;
 
-	// And WHERE it is, for the outermost invocation only: that frame is the
-	// boundary the WER gate judges against (CORE-968). A re-entrant call
-	// must not move it inwards, or the frames of the first invocation stop
-	// being recognised as crash-handling machinery.
+	// And WHERE the crash machinery starts, for the outermost invocation
+	// only: the boundary the WER gate judges against (CORE-968). A
+	// re-entrant call must not move it inwards, or the frames of the first
+	// invocation stop being recognised as crash-handling machinery.
+	//
+	// The boundary sits just below the frame that actually FAULTED, not
+	// inside this function (CORE-4749). On the abort door this function's
+	// callers are plumbing too -- SentryAbortHandler, raise, abort,
+	// SentryPurecallHandler, _purecall -- and a boundary placed here left
+	// them above it. When a second fault then landed inside the host's
+	// crash dialog, the module skipped everything up to here, met
+	// SentryAbortHandler, and claimed a crash the in-process gate had
+	// just declined. That is SELIVE-47, SELIVE-20Y and SELIVE-25S on
+	// 26.11.18.1130: Qt purecalls with no frame of ours, reported anyway.
+	//
+	// The fault frame is the same one sentry is handed below: the advanced
+	// context on the abort door, the OS's own context on the SEH door. So
+	// the WER gate now judges exactly the stack the in-process gate did,
+	// and the two cannot disagree about the same death.
+	//
+	// The probe stays as the fallback for an advance that could not run:
+	// it is the previous boundary, so the worst case is the previous
+	// behaviour and never a worse one.
 	if (!s_werRegistration.seHandlerStackPointer) {
-		volatile char frameProbe = 0;
-		s_werRegistration.seHandlerStackPointer =
-			(uint64_t)(uintptr_t)&frameProbe;
+		uint64_t boundary = 0;
+
+#if defined(_M_AMD64)
+		CONTEXT faultFrame = *pExceptionInfo->ContextRecord;
+
+		if (!fromAbortDoor ||
+		    AdvanceContextPastCrashPlumbing(&faultFrame))
+			boundary = SEStackBoundaryBelowFrame(&faultFrame);
+#endif
+
+		if (!boundary) {
+			volatile char frameProbe = 0;
+			boundary = (uint64_t)(uintptr_t)&frameProbe;
+		}
+
+		s_werRegistration.seHandlerStackPointer = boundary;
 	}
 
 	if (InterlockedIncrement(&s_insideExceptionFilter) == 1L) {

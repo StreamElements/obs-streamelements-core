@@ -90,10 +90,21 @@ static bool g_moved = false;
 static const void *const *g_plumbing = NULL;
 static size_t g_plumbingCount = 0;
 
+// Where a local of each named frame lived, recorded by that frame. A local
+// sits inside its function's own frame, which lies wholly below its caller's
+// stack pointer -- so these are real addresses to measure a boundary against
+// (CORE-4749).
+static volatile const void *g_localInHandler = NULL;
+static volatile const void *g_localInPurecall = NULL;
+static volatile const void *g_localInBreaker = NULL;
+
 // Stands in for SentryAbortHandler: captures the context and runs the walk,
 // exactly where the production handler does.
 __declspec(noinline) static void Handler(void)
 {
+	volatile char probe = 0;
+	g_localInHandler = (const void *)&probe;
+
 	RtlCaptureContext(&g_captured);
 
 	g_advanced = g_captured;
@@ -125,6 +136,9 @@ __declspec(noinline) static void PurecallHandler(void)
 
 __declspec(noinline) static void Purecall(void)
 {
+	volatile char probe = 0;
+	g_localInPurecall = (const void *)&probe;
+
 	PurecallHandler();
 	g_sink += 5;
 }
@@ -132,6 +146,9 @@ __declspec(noinline) static void Purecall(void)
 // The code that actually broke. Nothing below this is plumbing.
 __declspec(noinline) static void Breaker(void)
 {
+	volatile char probe = 0;
+	g_localInBreaker = (const void *)&probe;
+
 	Purecall();
 	g_sink += 6;
 }
@@ -404,6 +421,76 @@ static void check_the_reserved_page_really_faults()
 
 /* ================================================================= */
 
+// --- CORE-4749: the WER boundary, on a real stack --------------------------
+//
+// test_wer_gate.cpp shows what the module decides for a given boundary. This
+// shows the boundary itself is where it must be, using the shipping unwind
+// and the shipping arithmetic: strictly below the frame that faulted, and at
+// or above every frame of the door beneath it.
+//
+// And it shows the old placement was not, on the same stack. The old
+// boundary was a local inside the handler; here that is Handler's probe.
+// The outermost frame of the door, Purecall, sits ABOVE it -- which is
+// exactly how SentryAbortHandler and SentryPurecallHandler ended up judged
+// as evidence.
+static void check_the_wer_boundary_sits_below_the_fault_frame()
+{
+	g_localInHandler = NULL;
+	g_localInPurecall = NULL;
+	g_localInBreaker = NULL;
+
+	Run(kDoor, sizeof(kDoor) / sizeof(kDoor[0]), Breaker);
+
+	check(g_moved,
+	      "non-vacuity: the advance must have run, or the boundary below is computed from the handler's own frame");
+
+	const DWORD64 boundary = SEStackBoundaryBelowFrame(&g_advanced);
+
+	const DWORD64 handler = (DWORD64)(uintptr_t)g_localInHandler;
+	const DWORD64 purecall = (DWORD64)(uintptr_t)g_localInPurecall;
+	const DWORD64 breaker = (DWORD64)(uintptr_t)g_localInBreaker;
+
+	check(handler && purecall && breaker,
+	      "non-vacuity: every frame must have recorded where it lives");
+
+	check(boundary != 0,
+	      "CORE-4749: a real fault frame must yield a boundary");
+
+	check(boundary < breaker,
+	      "CORE-4749: the fault frame must be ABOVE the boundary, so the module judges it -- a genuine fault in our code is still claimed");
+
+	// The sharper form of the line above, and the one that pins the "- 1".
+	// The module compares each frame's STACK POINTER against the boundary
+	// with <=, and the fault frame's stack pointer is exactly the advanced
+	// context's. A boundary equal to it would discard the fault frame
+	// itself, and a genuine fault in our code would then go unclaimed.
+	check(boundary < g_advanced.Rsp,
+	      "CORE-4749: the boundary must be strictly below the fault frame's own stack pointer, or the module discards the fault with the machinery");
+
+	check(purecall <= boundary,
+	      "CORE-4749: the outermost frame of the door must be at or below the boundary, so the module discards it");
+
+	check(handler <= boundary,
+	      "CORE-4749: and so must the handler, innermost of all");
+
+	// The defect, measured on the same stack: the old boundary left the
+	// door's outer frames above the line.
+	check(purecall > handler,
+	      "CORE-4749 negative control: a boundary taken from a local inside the handler leaves the outer door frames above it, where the module judges them");
+}
+
+static void check_no_frame_means_no_boundary()
+{
+	check(SEStackBoundaryBelowFrame(NULL) == 0,
+	      "CORE-4749: no frame must mean no boundary, which the caller falls back from");
+
+	CONTEXT empty;
+	std::memset(&empty, 0, sizeof(empty));
+
+	check(SEStackBoundaryBelowFrame(&empty) == 0,
+	      "CORE-4749: a zero stack pointer must not wrap to the top of the address space");
+}
+
 int main()
 {
 	check_every_listed_function_has_an_entry();
@@ -415,6 +502,8 @@ int main()
 	check_a_null_list_is_refused();
 	check_the_reserved_page_really_faults();
 	check_a_fault_inside_the_unwinder_is_caught();
+	check_the_wer_boundary_sits_below_the_fault_frame();
+	check_no_frame_means_no_boundary();
 
 	if (failures) {
 		std::fprintf(stderr, "%d check(s) failed\n", failures);
