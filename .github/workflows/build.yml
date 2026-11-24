@@ -369,7 +369,8 @@ jobs:
           cd /d C:\local\obs-studio
           rem Keep /WX, but not the two third-party warnings that VS2026
           rem promotes to C2220 before our own sources are reached.
-          cmake --build build_x64 --config RelWithDebInfo -- /p:AdditionalOptions="/wd4244 /wd4047"
+          set "CL=/wd4244 /wd4047 %CL%"
+          cmake --build build_x64 --config RelWithDebInfo
 
       - name: Upload BugSplat Symbols
         if: ${{ env.UPLOAD_SYMBOLS == 'true' && env.SE_CRASH_HANDLER == 'bugsplat' }}

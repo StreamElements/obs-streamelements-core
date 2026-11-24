@@ -185,11 +185,12 @@ replaces `plugins/CMakeLists.txt`, which is what actually narrows the build.
 Pre-existing and harmless; fixing it means deciding what CI should build, which
 is a bigger change than it looks.
 
-The Windows build also passes `/wd4244` and `/wd4047` through MSBuild's
-`AdditionalOptions`. The `windows-2025-vs2026` toolchain otherwise promotes
+The Windows build also prepends `/wd4244` and `/wd4047` to the compiler's `CL`
+environment variable. The `windows-2025-vs2026` toolchain otherwise promotes
 those two third-party warnings to C2220 under `/WX`, before our own sources are
-reached. Keeping the suppression to those two IDs leaves every other warning
-enabled and requires no edit to OBS or vendored sentry-native.
+reached. Appending the suppressions through `CL` applies them to every C and
+C++ compilation while leaving every other warning enabled, and requires no
+edit to OBS or vendored sentry-native.
 
 ### Documentation builds
 
