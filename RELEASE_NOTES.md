@@ -1,2 +1,0 @@
-- Fix: OBS Studio could crash during shutdown while a page-created local HTTP server still had an unanswered request
-- Fix: OBS Studio could crash when a SE.Live dialog was closed while its browser was still shutting down
