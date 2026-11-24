@@ -1,6 +1,8 @@
 #include "SEProfilesManager.hpp"
 #include "SEUtils.hpp"
+#include "SEUtils/SEProfileNameUtils.hpp"
 #include <string.h>
+#include <vector>
 #include <obs.h>
 #include <obs-frontend-api.h>
 #include <util/config-file.h>
@@ -82,20 +84,29 @@ bool SEProfilesManager::DeserializeCurrentProfileById(
 
 	std::lock_guard<decltype(m_mutex)> guard(m_mutex);
 
-	std::string actualId = "";
+	//
+	// `id` is whatever the page kept from getAllProfiles, and that is the
+	// profile's DIRECTORY name, not the name OBS answers to. Both are
+	// accepted: resolving them is SEResolveProfileName's whole job, and
+	// it returns the name obs_frontend_set_current_profile wants.
+	//
+	// Before this, a page that round-tripped what it was given got
+	// `false` for any profile whose name OBS had to change to make a
+	// directory -- "TWITCH Warlock" is TWITCH_Warlock on disk, and the
+	// two were compared as unrelated strings.
+	//
+	std::vector<std::string> available;
 
 	char **profiles = obs_frontend_get_profiles();
 
-	for (size_t index = 0; profiles[index] && !actualId.size(); ++index) {
-		if (strcasecmp(profiles[index], id.c_str()) == 0) {
-			actualId = profiles[index];
-			break;
-		}
-	}
+	for (size_t index = 0; profiles[index]; ++index)
+		available.push_back(profiles[index]);
 
 	bfree(profiles);
 
-	if (!actualId.size())
+	const std::string actualId = SEResolveProfileName(available, id);
+
+	if (actualId.empty())
 		return false;
 
 	obs_frontend_set_current_profile(actualId.c_str());

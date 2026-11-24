@@ -1,0 +1,1 @@
+- Fix: switching profiles through the host API failed for any profile whose name OBS changed to make a directory, such as "TWITCH Warlock" (the id `getAllProfiles` returns was rejected by `setCurrentProfile`)

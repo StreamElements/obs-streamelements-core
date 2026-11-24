@@ -107,6 +107,24 @@ se_add_test(test_overlay_url_utils
   "${REPO_ROOT}/streamelements/SEUtils/SEOverlayUrlUtils.cpp"
 )
 
+# --- Behavioural test: profile id -> OBS profile name ----------------------
+#
+# getAllProfiles publishes a profile's DIRECTORY as its id and the name
+# inside basic.ini as its name, while obs_frontend_set_current_profile only
+# speaks the name. The handler compared one against the other, so every
+# profile whose directory differs from its name -- "TWITCH Warlock" is
+# TWITCH_Warlock on disk -- could not be switched to. Found live
+# 2026-11-24; see CORE-4742.
+#
+# Self-contained: the header and the .cpp are pure std::string work, which
+# is why the resolution lives in its own file rather than in
+# SEPathUtils.cpp, where it would have dragged in libobs and cef-headers
+# and no test could have reached it.
+se_add_test(test_profile_name_utils
+  test_profile_name_utils.cpp
+  "${REPO_ROOT}/streamelements/SEUtils/SEProfileNameUtils.cpp"
+)
+
 # --- Behavioural test: the libcurl wrappers --------------------------------
 #
 # The one test here that is not self-contained: it links libcurl and runs a
