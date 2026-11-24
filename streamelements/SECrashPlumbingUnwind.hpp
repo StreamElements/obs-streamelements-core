@@ -57,4 +57,28 @@ bool SEAdvanceContextPastPlumbing(CONTEXT *context, const void *const *plumbing,
 bool SEIsCrashPlumbingFrame(DWORD64 instructionPointer,
 			    const void *const *plumbing, size_t plumbingCount);
 
+//
+// The WER gate's boundary for a fault whose frame `faultFrame` describes:
+// one byte below that frame's stack pointer, or 0 when there is no frame.
+//
+// The module discards every frame at or below the boundary as "something
+// the crash handler called", and judges the rest. So the boundary has to sit
+// strictly between the fault frame and the first frame of crash machinery
+// beneath it. Rsp - 1 does exactly that: the fault frame's own stack pointer
+// is above it and is judged, and every callee -- _purecall,
+// SentryPurecallHandler, abort, raise, SentryAbortHandler,
+// HandleFatalException, and whatever the host's handler calls after them --
+// pushed at least a return address below it.
+//
+// It used to be the address of a local inside HandleFatalException, which
+// left that function's CALLERS above the boundary. On the abort door those
+// callers are ours, so a fail-fast raised anywhere inside the handler was
+// claimed on the strength of SentryAbortHandler's frame (CORE-4749).
+//
+// `faultFrame` is the context sentry is already handed: the abort door's
+// context after SEAdvanceContextPastPlumbing, or the OS's own context on the
+// SEH door, which already describes the fault.
+//
+DWORD64 SEStackBoundaryBelowFrame(const CONTEXT *faultFrame);
+
 #endif // _M_AMD64

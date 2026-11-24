@@ -1616,6 +1616,19 @@ static void check_wer_gate_judges_below_the_handler_frame()
 		      std::string::npos,
 	      "CORE-968: it must also clear it, or a later crash is judged against a stale frame");
 
+	// WHERE it publishes (CORE-4749). A local inside HandleFatalException
+	// left the abort door's own frames -- SentryAbortHandler and
+	// SentryPurecallHandler, both ours -- above the line, and foreign
+	// purecalls were claimed on their strength. The boundary must come
+	// from the fault frame: the door's context advanced past its
+	// plumbing, the same frame sentry is handed.
+	check(handler.find("SEStackBoundaryBelowFrame(&faultFrame)") !=
+		      std::string::npos,
+	      "CORE-4749: the WER boundary must be measured from the fault frame, not from a local inside the handler");
+	check(handler.find("AdvanceContextPastCrashPlumbing(&faultFrame)") !=
+		      std::string::npos,
+	      "CORE-4749: on the abort door that frame is only reached by advancing past the plumbing first");
+
 	// The comparison can wrap, so flatten before looking for it.
 	std::string src =
 		strip_line_comments(slurp("streamelements/SEWerModule.cpp"));

@@ -324,15 +324,21 @@ SEWerStackTouchesModuleOfInterest(HANDLE process, HANDLE thread,
 		const BOOL ours =
 			SEWerIsModuleOfInterest(registration, moduleName);
 
-		// Stacks grow down, so a frame at or below the handler's own
-		// frame is one the handler called. The leading-run skip cannot
-		// cover this case: a fail-fast inside the handler puts ntdll
+		// Stacks grow down, and the boundary sits one byte below the
+		// frame that faulted, so a frame at or below it is crash
+		// machinery: the abort door, our handler, and whatever the host
+		// handler called after them. The leading-run skip cannot cover
+		// this case: a fail-fast inside the handler puts ntdll
 		// innermost, the skip disengages immediately, and our handler
 		// frame further down is then mistaken for the fault (SELIVE-8K).
+		//
+		// Once past the boundary the next frame judged is the fault
+		// itself, which is why disarming the skip here is right: if the
+		// fault frame is ours, it is the evidence (CORE-4749).
 		if (handlerStackPointer && frame.AddrStack.Offset &&
 		    frame.AddrStack.Offset <= handlerStackPointer) {
 			SEWerLog(
-				"frame %d is in %s -- at or below our handler's frame; the handler called it, so it is not evidence",
+				"frame %d is in %s -- below the faulting frame; crash machinery, so it is not evidence",
 				index, moduleName);
 
 			// Past the handler's own region now, so the leading-run

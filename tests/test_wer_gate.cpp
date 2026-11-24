@@ -60,10 +60,10 @@ struct Crash {
 	// Module names on the crashed thread, innermost first.
 	std::vector<std::string> stack;
 
-	// What the registration block carries alongside seHandlerActive:
-	// stack pointer of the OUTERMOST handler frame, and the stack address
-	// of each frame above. Zero means the field was not published, in
-	// which case the gate behaves exactly as it did before.
+	// What the registration block carries alongside seHandlerActive: the
+	// boundary -- since CORE-4749 one byte below the frame that faulted --
+	// and the stack address of each frame. Zero means the field was not
+	// published, in which case the gate behaves exactly as it did before.
 	unsigned long long handlerStackPointer = 0;
 	std::vector<unsigned long long> stackPointers;
 
@@ -549,6 +549,162 @@ static void check_the_boundary_still_claims_a_genuine_fault()
 	      "CORE-968: it must still be forwarded to sentry's module");
 }
 
+// --- CORE-4749: WHERE the boundary sits -----------------------------------
+//
+// The decision above is the module's and is unchanged. What changed is the
+// value the plug-in publishes, and these cases are about that value.
+//
+// The shape is SELIVE-25S / SELIVE-20Y / SELIVE-47 on 26.11.18.1130, read off
+// the events. A purecall in Qt layout code -- no frame of ours -- goes in
+// through the abort door. The in-process gate walks past the plumbing, finds
+// nothing of ours and DECLINES: no prompt, no event. HandleFatalException
+// then hands the process to OBS, whose MessageBoxA pumps it; Qt repaints, a
+// second purecall fires, ucrt has already reset SIGABRT to SIG_DFL, so
+// abort() fast-fails and this module is asked. Innermost first:
+//
+//   ucrtbase  abort                 \
+//   ours      SentryPurecallHandler  |  the second purecall,
+//   vcruntime _purecall              |  inside OBS's dialog
+//   Qt6Widgets x2                    |
+//   user32    MessageBoxA ...        |
+//   obs64     main_crash_handler     |
+//   obs       exception_handler     /
+//   ours      HandleFatalException   <- the OLD boundary was a local in here
+//   ours      SentryAbortHandler     \
+//   ucrtbase  raise                  |  the abort door, ABOVE the old
+//   ucrtbase  abort                  |  boundary
+//   ours      SentryPurecallHandler  |
+//   vcruntime _purecall             /
+//   Qt6Widgets                       <- the frame that faulted: NEW boundary
+//   Qt6Widgets                          is one byte below it
+//   obs64
+//
+static const std::vector<std::string> kReentrantPurecallStack = {
+	"ucrtbase",
+	"obs-streamelements-core",
+	"vcruntime140",
+	"Qt6Widgets",
+	"Qt6Widgets",
+	"user32",
+	"obs64",
+	"obs",
+	"obs-streamelements-core",
+	"obs-streamelements-core",
+	"ucrtbase",
+	"ucrtbase",
+	"obs-streamelements-core",
+	"vcruntime140",
+	"Qt6Widgets",
+	"Qt6Widgets",
+	"obs64",
+};
+
+static const std::vector<unsigned long long> kReentrantPurecallStackPointers = {
+	0x700, 0x710, 0x720, 0x730, 0x740, 0x800, 0x880, 0x8c0, 0x900,
+	0x940, 0x980, 0x9a0, 0x9c0, 0x9e0, 0xa00, 0xa40, 0xa80,
+};
+
+// Index 8 is HandleFatalException (0x900); a local in its frame sits a
+// little above its stack pointer and below its caller's.
+static const unsigned long long kOldBoundaryInsideHandler = 0x908;
+
+// Index 14 is the Qt frame that called _purecall the FIRST time.
+static const unsigned long long kFaultFrameStackPointer = 0xa00;
+
+// The negative control. With the boundary inside HandleFatalException, this
+// foreign crash is claimed -- on SentryAbortHandler, the first frame above
+// it. That is the defect, demonstrated, so a reversion has to fail a check
+// that names what it costs.
+static void check_old_boundary_claims_a_foreign_reentrant_purecall()
+{
+	Crash crash;
+	crash.code = STATUS_STACK_BUFFER_OVERRUN;
+	crash.handlerWasActive = true;
+	crash.handlerStackPointer = kOldBoundaryInsideHandler;
+	crash.stack = kReentrantPurecallStack;
+	crash.stackPointers = kReentrantPurecallStackPointers;
+
+	Trace trace;
+
+	check(Decide(crash, trace),
+	      "CORE-4749 negative control: a boundary inside HandleFatalException leaves the abort door above it, and the foreign purecall is claimed");
+}
+
+// The fix. One byte below the fault frame, everything that is crash machinery
+// -- both abort doors and OBS's dialog in between -- is discarded, and what is
+// left is the stack the in-process gate already judged and declined.
+static void check_fault_frame_boundary_declines_a_foreign_reentrant_purecall()
+{
+	Crash crash;
+	crash.code = STATUS_STACK_BUFFER_OVERRUN;
+	crash.handlerWasActive = true;
+	crash.handlerStackPointer = kFaultFrameStackPointer - 1;
+	crash.stack = kReentrantPurecallStack;
+	crash.stackPointers = kReentrantPurecallStackPointers;
+
+	Trace trace;
+
+	check(!Decide(crash, trace),
+	      "CORE-4749: with the boundary below the fault frame, a purecall in Qt with no frame of ours must be declined");
+	check(trace.skippedHandlerCallees == 14,
+	      "CORE-4749: all fourteen frames of crash machinery -- both doors and the dialog -- must be discarded, and nothing above them");
+	check(!trace.forwarded,
+	      "CORE-4749: so sentry's module is never asked, and no event is made");
+}
+
+// The other half: the same boundary rule must still claim a genuine purecall
+// in our own code. The fault frame is ours, sits exactly AT the line's upper
+// side, and is the first frame judged.
+static void check_fault_frame_boundary_still_claims_our_own_purecall()
+{
+	std::vector<std::string> stack = kReentrantPurecallStack;
+	stack[14] = "obs-streamelements-core"; // the fault is ours this time
+
+	Crash crash;
+	crash.code = STATUS_STACK_BUFFER_OVERRUN;
+	crash.handlerWasActive = true;
+	crash.handlerStackPointer = kFaultFrameStackPointer - 1;
+	crash.stack = stack;
+	crash.stackPointers = kReentrantPurecallStackPointers;
+
+	Trace trace;
+
+	check(Decide(crash, trace),
+	      "CORE-4749: a purecall genuinely in our code must still be claimed -- the fault frame is above the boundary and is ours");
+	check(trace.forwarded, "CORE-4749: and forwarded to sentry's module");
+}
+
+// The boundary rule on the SEH door, where the OS's context already describes
+// the fault: a fail-fast inside the handler while it reports an access
+// violation in libobs is discarded down to libobs's frame, and declined.
+static void check_fault_frame_boundary_on_the_seh_door()
+{
+	Crash crash;
+	crash.code = STATUS_HEAP_CORRUPTION;
+	crash.handlerWasActive = true;
+	crash.stack = {
+		"ntdll",                   // RtlReportFatalFailure
+		"user32",                  // MessageBoxA
+		"obs",                     // OBS's own crash handler
+		"obs-streamelements-core", // HandleFatalException
+		"obs-streamelements-core", // SentryExceptionFilter
+		"kernelbase",              // UnhandledExceptionFilter
+		"ntdll",                   // the dispatcher
+		"obs",                     // the real fault, in libobs
+		"obs",
+	};
+	crash.stackPointers = {0x800, 0x840, 0x880, 0x8c0, 0x900,
+			       0x940, 0x980, 0xa00, 0xa40};
+	crash.handlerStackPointer = 0xa00 - 1;
+
+	Trace trace;
+
+	check(!Decide(crash, trace),
+	      "CORE-4749: on the SEH door the same rule discards our filter frames too, which the old boundary only did when the filter was tail-called");
+	check(trace.skippedHandlerCallees == 7,
+	      "CORE-4749: everything below libobs's frame is discarded");
+}
+
 int main()
 {
 	check_fastfail_in_our_module_is_claimed();
@@ -565,6 +721,11 @@ int main()
 	check_the_skip_is_conditional_on_the_handler_running();
 	check_fail_fast_inside_our_handler_behind_ntdll_frames_is_declined();
 	check_the_boundary_still_claims_a_genuine_fault();
+
+	check_old_boundary_claims_a_foreign_reentrant_purecall();
+	check_fault_frame_boundary_declines_a_foreign_reentrant_purecall();
+	check_fault_frame_boundary_still_claims_our_own_purecall();
+	check_fault_frame_boundary_on_the_seh_door();
 
 	check_no_prior_consent_is_required();
 

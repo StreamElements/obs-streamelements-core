@@ -135,7 +135,7 @@ clang-format joining it onto one.
 | `check_sentry_is_handed_the_fault_not_our_handler` | the abort door captures its context inside our handler, so without a correction every event is titled after our own plumbing |
 | `check_the_abort_door_does_not_report_a_reentry` | the crash path pumps a modal loop, so a second `abort()` lands inside the first; chaining to sentry there reported one death twice, past the gate and the prompt |
 | `check_wer_skip_is_conditional_on_the_handler_flag` | …and dropping them must stay conditional, because when the fault is inside our handler they are there legitimately |
-| `check_wer_gate_judges_below_the_handler_frame` | …and the leading run is not enough: a fail-fast inside the handler puts ntdll innermost, so the gate must discard everything at or below the handler's own frame |
+| `check_wer_gate_judges_below_the_handler_frame` | …and the leading run is not enough: a fail-fast inside the handler puts ntdll innermost, so the gate must discard all crash machinery — and the boundary is measured one byte below the frame that *faulted*, not inside the handler, or the abort door's own frames sit above it and a foreign crash is claimed on them (CORE-4749) |
 | `check_sentry_init_is_diagnosable` | a failing `sentry_init()` says why, and does not depend on the working directory |
 | `check_sentry_wer_is_not_beside_the_host_executable` | sentry's WER module must never sit next to `obs64.exe`, or it claims every fast-fail in the process |
 | `check_wer_module_gates_before_forwarding` | ours gates first: it runs in `WerFault.exe` with no way to ask anything afterwards |
