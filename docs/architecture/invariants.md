@@ -1,7 +1,7 @@
 # Enforced invariants
 
 `tests/test_source_invariants.cpp` opens the production sources and asserts
-that a fixed pattern is absent — or that a required one is present. **87
+that a fixed pattern is absent — or that a required one is present. **89
 checks** run from its `main()`. They exist because this plug-in's worst bugs
 are not type errors: they are a lock held one line too long, a strong pointer
 where a weak one belonged, an `#ifdef` that silently stopped meaning anything.
@@ -64,6 +64,7 @@ clang-format joining it onto one.
 | `check_the_config_is_owned_and_closed_explicitly` | the ini is owned, and closed on purpose |
 | `check_the_config_is_closed_before_the_queue_is_drained` | both orders look harmless and one of them loses the user's layout |
 | `check_the_dispatch_gate_opens_before_the_first_browser_widget` | `ready` is set above the block that creates widgets, so a page can never find it false |
+| `check_message_bus_drains_http_workers_before_member_teardown` | listener HTTP servers are cleared in the message-bus destructor body, joining workers before their waiting-request map, mutex and dispatcher are destroyed (CORE-4732) |
 
 ### The host API
 
@@ -120,6 +121,7 @@ clang-format joining it onto one.
 | `check_no_dock_is_added_to_an_invalid_area` | `Qt::NoDockWidgetArea` is not a valid `addDockWidget()` argument |
 | `check_menu_manager_update_guarded` | `Update()` is not called on a null manager during construction |
 | `check_non_modal_dialogs_are_closed_by_their_owner` | the dialog manager's destructor both rejects and satisfies every parked promise |
+| `check_dialog_browser_teardown_is_reentry_safe` | a dialog tracks its browser with `QPointer`, clears the member before CEF's nested event loop, and revalidates the local before either deletion form (CORE-4733) |
 | `check_only_the_hotkey_manager_registers_hotkeys` | `SEHotkeyManager` is the only class that registers an OBS hotkey, and `SENativeObsUIControlsManager` the only one that takes libobs's single callback routing slot |
 | `check_hotkey_registrations_do_not_outlive_their_registrar` | the destructor unregisters its hotkeys after disconnecting its signals, and the routing slot is given back with rerouting left enabled — disabling it re-points delivery at every hotkey's own callback |
 

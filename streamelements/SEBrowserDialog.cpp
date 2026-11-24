@@ -65,28 +65,38 @@ void SEBrowserDialog::closeEvent(QCloseEvent* e)
 
 void SEBrowserDialog::DestroyBrowser(std::string reason)
 {
-	if (!m_browser)
+	QPointer<SEBrowserWidget> browser = m_browser;
+	m_browser = nullptr;
+
+	if (!browser)
 		return;
 
 	blog(LOG_INFO,
 	     "[obs-streamelements-core]: SEBrowserDialog::DestroyBrowser('%s'): %s",
 	     reason.c_str(), m_url.c_str());
 
-	layout()->removeWidget(m_browser);
+	layout()->removeWidget(browser);
 
-	m_browser->DestroyBrowser();
+	if (!browser)
+		return;
+
+	// CEF close runs a nested event loop. The member is already clear, so a
+	// re-entrant close cannot schedule a second deletion; the tracked local
+	// also tells us if Qt destroys the browser during that loop.
+	browser->DestroyBrowser();
+
+	if (!browser)
+		return;
 
 	if (m_ownerTeardown) {
 		//
 		// No event loop is coming back to run a deferred delete; see
 		// NoteOwnerTeardown().
 		//
-		delete m_browser;
+		delete browser.data();
 	} else {
-		m_browser->deleteLater();
+		browser->deleteLater();
 	}
-
-	m_browser = nullptr;
 }
 
 void SEBrowserDialog::showEvent(QShowEvent* event)
