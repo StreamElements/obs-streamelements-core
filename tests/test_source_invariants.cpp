@@ -1616,6 +1616,19 @@ static void check_wer_gate_judges_below_the_handler_frame()
 		      std::string::npos,
 	      "CORE-968: it must also clear it, or a later crash is judged against a stale frame");
 
+	// WHERE it publishes (CORE-4749). A local inside HandleFatalException
+	// left the abort door's own frames -- SentryAbortHandler and
+	// SentryPurecallHandler, both ours -- above the line, and foreign
+	// purecalls were claimed on their strength. The boundary must come
+	// from the fault frame: the door's context advanced past its
+	// plumbing, the same frame sentry is handed.
+	check(handler.find("SEStackBoundaryBelowFrame(&faultFrame)") !=
+		      std::string::npos,
+	      "CORE-4749: the WER boundary must be measured from the fault frame, not from a local inside the handler");
+	check(handler.find("AdvanceContextPastCrashPlumbing(&faultFrame)") !=
+		      std::string::npos,
+	      "CORE-4749: on the abort door that frame is only reached by advancing past the plumbing first");
+
 	// The comparison can wrap, so flatten before looking for it.
 	std::string src =
 		strip_line_comments(slurp("streamelements/SEWerModule.cpp"));
@@ -8094,6 +8107,76 @@ static void check_hotkey_registrations_do_not_outlive_their_registrar()
 	      "CORE-4679: InitHotkeys() no longer enables callback rerouting -- if that changed, the reasoning in ShutdownHotkeys() and in this check has to change with it");
 }
 
+// CORE-4732 / SELIVE-KN: HTTP workers must be stopped and joined before
+// C++ starts destroying the callback state they use. Reverse member
+// destruction otherwise destroys the waiting-request map and mutex first.
+static void check_message_bus_drains_http_workers_before_member_teardown()
+{
+	const std::string source =
+		strip_line_comments(slurp("streamelements/SEMessageBus.cpp"));
+	const std::string dtor =
+		function_body(source, "SEMessageBus::~SEMessageBus()");
+
+	check(!dtor.empty(),
+	      "CORE-4732: SEMessageBus destructor not found -- update this invariant");
+	check(dtor.find("m_listener_http_servers.clear();") !=
+		      std::string::npos,
+	      "CORE-4732: ~SEMessageBus must clear m_listener_http_servers in its body, stopping and joining HTTP workers before the waiting-request map and mutex are destroyed");
+
+	const std::string header =
+		strip_line_comments(slurp("streamelements/SEMessageBus.hpp"));
+	check(header.find("m_listener_http_servers") != std::string::npos &&
+		      header.find("m_waiting_http_requests") !=
+			      std::string::npos,
+	      "CORE-4732: the server and waiting-request members must remain for this teardown invariant to be meaningful");
+}
+
+// CORE-4733 / SELIVE-4N: CEF close pumps Qt events. A re-entrant dialog
+// close must find no browser member, and the outer call must use a tracked
+// local in case Qt destroys the browser during that nested loop.
+static void check_dialog_browser_teardown_is_reentry_safe()
+{
+	const std::string header = strip_line_comments(
+		slurp("streamelements/SEBrowserDialog.hpp"));
+
+	check(header.find("QPointer<SEBrowserWidget> m_browser") !=
+		      std::string::npos,
+	      "CORE-4733: SEBrowserDialog::m_browser must be QPointer so Qt parent destruction is tracked");
+	check(header.find("SEBrowserWidget* m_browser") == std::string::npos,
+	      "CORE-4733: SEBrowserDialog must not keep a raw browser member");
+
+	const std::string body =
+		function_body(strip_line_comments(slurp(
+				      "streamelements/SEBrowserDialog.cpp")),
+			      "SEBrowserDialog::DestroyBrowser");
+
+	check(!body.empty(),
+	      "CORE-4733: SEBrowserDialog::DestroyBrowser not found -- update this invariant");
+	check(body.find("QPointer<SEBrowserWidget> browser = m_browser;") !=
+		      std::string::npos,
+	      "CORE-4733: DestroyBrowser must take a tracked local browser handle");
+
+	const auto clear = body.find("m_browser = nullptr;");
+	const auto close = body.find("browser->DestroyBrowser();");
+	check(clear != std::string::npos && close != std::string::npos &&
+		      clear < close,
+	      "CORE-4733: m_browser must be cleared before CEF teardown can re-enter dialog close");
+
+	const auto check_after_close = body.find("if (!browser)", close);
+	const auto deferred_delete =
+		body.find("browser->deleteLater();", close);
+	check(close != std::string::npos &&
+		      check_after_close != std::string::npos &&
+		      deferred_delete != std::string::npos &&
+		      check_after_close < deferred_delete,
+	      "CORE-4733: the tracked local must be checked after CEF teardown before deleteLater()");
+	check(body.find("delete browser.data();") != std::string::npos,
+	      "CORE-4733: owner teardown must retain exactly one immediate deletion path");
+	check(body.find("m_browser->deleteLater") == std::string::npos &&
+		      body.find("delete m_browser") == std::string::npos,
+	      "CORE-4733: browser deletion must go through the checked local handle, never m_browser");
+}
+
 int main()
 {
 	check_c2_video_encoder_template_match();
@@ -8183,6 +8266,8 @@ int main()
 	check_no_output_starts_without_a_usable_frame_rate();
 	check_only_the_hotkey_manager_registers_hotkeys();
 	check_hotkey_registrations_do_not_outlive_their_registrar();
+	check_message_bus_drains_http_workers_before_member_teardown();
+	check_dialog_browser_teardown_is_reentry_safe();
 
 	if (failures) {
 		std::fprintf(stderr, "%d source invariant(s) violated\n",

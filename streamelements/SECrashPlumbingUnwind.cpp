@@ -101,4 +101,15 @@ bool SEAdvanceContextPastPlumbing(CONTEXT *context, const void *const *plumbing,
 	}
 }
 
+DWORD64 SEStackBoundaryBelowFrame(const CONTEXT *faultFrame)
+{
+	// No frame, or a stack pointer of zero, means there is nothing to
+	// stand below. Zero is also the "no boundary" value the module
+	// already understands, so the caller can fall back cleanly.
+	if (!faultFrame || !faultFrame->Rsp)
+		return 0;
+
+	return faultFrame->Rsp - 1;
+}
+
 #endif // _M_AMD64

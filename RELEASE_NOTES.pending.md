@@ -1,1 +1,4 @@
 - Fix: switching profiles through the host API failed for any profile whose name OBS changed to make a directory, such as "TWITCH Warlock" (the id `getAllProfiles` returns was rejected by `setCurrentProfile`)
+- Fix: OBS Studio could crash during shutdown while a page-created local HTTP server still had an unanswered request
+- Fix: OBS Studio could crash when a SE.Live dialog was closed while its browser was still shutting down
+- Fix: crash reports could be sent for crashes in OBS or Qt that SE.Live had no part in, when OBS crashed a second time inside its own crash dialog

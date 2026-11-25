@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QDialog>
+#include <QPointer>
 
 #include "cef-headers.hpp"
 
@@ -59,7 +60,7 @@ public:
 	}
 
 private:
-	SEBrowserWidget* m_browser = nullptr;
+	QPointer<SEBrowserWidget> m_browser = nullptr;
 	std::string m_result;
 
 	//

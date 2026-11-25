@@ -196,6 +196,14 @@ listeners receive `DEST_ALL_LOCAL & ~DEST_BROWSER_SOURCE` under the fixed name
 `hostEventReceived`; external listeners get `DEST_ALL_EXTERNAL`, only the
 `data`, and the caller's own event name.
 
+Browser-scoped HTTP listeners run callbacks on cpp-httplib worker threads. A
+request can remain pending for 15 seconds while it waits for a page response.
+`~SEMessageBus()` therefore clears `m_listener_http_servers` in its body:
+destroying those servers stops and joins the workers before reverse member
+destruction can retire the waiting-request map, its mutex or the event
+dispatcher beneath them (CORE-4732). The destructor must not hold the listener
+lock while joining.
+
 ## Related
 
 - [The data model](data-model.md) — what `CefValue` is here.

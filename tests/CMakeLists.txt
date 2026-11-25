@@ -368,6 +368,16 @@ se_add_test(test_lazy_encoder_refcount
 se_add_test(test_wer_gate
   test_wer_gate.cpp)
 
+# --- Behavioural test: CORE-4732 / SELIVE-KN (HTTP workers must be joined
+#     before the message bus destroys their callback state) ---
+se_add_test(test_message_bus_lifetime
+  test_message_bus_lifetime.cpp)
+
+# --- Behavioural test: CORE-4733 / SELIVE-4N (dialog browser teardown must
+#     survive re-entrant Qt events and Qt-driven browser destruction) ---
+se_add_test(test_browser_dialog_lifetime
+  test_browser_dialog_lifetime.cpp)
+
 # --- Source-invariant test: catches re-introduction of any of the
 #     bug patterns this PR fixes. ---
 se_add_test(test_source_invariants

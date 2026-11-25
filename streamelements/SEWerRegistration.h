@@ -96,13 +96,22 @@ typedef struct {
 	// executable and we deliberately do not ship it there.
 	wchar_t seSentryWerPath[MAX_PATH];
 
-	// Stack pointer of the OUTERMOST crash-handler frame; 0 when none.
+	// One byte below the stack pointer of the frame that FAULTED, for the
+	// outermost handler invocation; 0 when none. The field keeps its name
+	// for layout compatibility.
 	//
-	// seHandlerActive says our handler is on the stack. This says WHERE,
-	// and that turns out to be the load-bearing half. Everything at or
-	// below this address is something the handler itself called -- ntdll's
-	// heap reporter, OBS's message box -- and is not evidence about whose
-	// crash this is.
+	// seHandlerActive says our handler is on the stack. This says WHERE
+	// the crash machinery begins, and that turns out to be the load-bearing
+	// half. Everything at or below this address is the machinery -- our
+	// abort door, our handler, ntdll's heap reporter, OBS's message box --
+	// and is not evidence about whose crash this is.
+	//
+	// It used to be a local inside HandleFatalException. That left the
+	// handler's own callers on the abort door -- SentryAbortHandler and
+	// SentryPurecallHandler, both ours -- above the line, and a fail-fast
+	// inside OBS's crash dialog was claimed on their strength (CORE-4749).
+	// Measured from the fault frame instead, the module judges exactly the
+	// stack the in-process gate judged.
 	//
 	// The leading-run skip alone cannot see that: a fail-fast raised inside
 	// the handler puts ntdll innermost, so the skip disengages on the very

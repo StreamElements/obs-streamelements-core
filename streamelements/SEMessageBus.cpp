@@ -15,7 +15,11 @@ SEMessageBus::SEMessageBus(
 
 SEMessageBus::~SEMessageBus()
 {
-
+	// Stop and join HTTP workers while their callback dependencies are
+	// still alive. Member destruction is in reverse declaration order, so
+	// without this drain the waiting-request map and mutex disappear before
+	// the servers stop calling back into this object.
+	m_listener_http_servers.clear();
 }
 
 std::shared_ptr<SEMessageBus> SEMessageBus::Create(

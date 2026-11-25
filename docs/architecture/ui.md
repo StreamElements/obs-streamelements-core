@@ -150,6 +150,15 @@ because of a crash:
   one cannot be open when the destructor runs. It is also why the API call
   lock is per translation unit — see
   [the host API bridge](host-api-bridge.md).
+- Both dialog kinds hold their browser in `QPointer<SEBrowserWidget>`.
+  `DestroyBrowser()` copies that handle locally and clears the member before
+  calling CEF, whose close handshake runs a nested Qt event loop. A re-entrant
+  close therefore finds nothing to delete, while the local handle becomes null
+  if Qt destroys the browser through its parent. The post-close validity check
+  precedes both ordinary `deleteLater()` and owner-teardown `delete`.
+  `check_dialog_browser_teardown_is_reentry_safe` pins that ordering
+  (CORE-4733); replacing normal deferred deletion with an unconditional direct
+  delete is not an equivalent fix.
 
 ## Menus and auxiliary controls
 
